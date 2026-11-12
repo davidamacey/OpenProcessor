@@ -21,9 +21,9 @@ from test_labeling_flow import CLASSES as ITEM_CLASSES, register_base
 ROUTES = [
     '/p/default/dashboard',
     '/p/default/ingest',
-    '/p/default/clusters',
-    f'/p/default/clusters?class={REGION_CLASS}',
-    '/p/default/clusters/1',
+    '/p/default/workspace?view=clusters',
+    f'/p/default/workspace?view=clusters&class_name={REGION_CLASS}',
+    '/p/default/workspace?view=clusters&scope=cluster:1',
     '/p/default/review',
     '/p/default/review?tab=regions',
     '/p/default/classes',
@@ -138,13 +138,13 @@ def test_region_surfaces_absent(stub, page, app_url):
 
     # /clusters?class=<region class>: the normal class-filtered grid, not
     # a region gallery.
-    page.goto(f'{app_url}/p/default/clusters?class={REGION_CLASS}')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&class_name={REGION_CLASS}')
     page.get_by_test_id('class-filter-chip').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_load_state('networkidle', timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_role('button', name=re.compile('⟳')).count() == 0
 
     # /clusters/[id]: crop cards offer no sub-box editor.
-    page.goto(f'{app_url}/p/default/clusters/1')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:1')
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
     page.wait_for_load_state('networkidle', timeout=ACTION_TIMEOUT_MS)
     assert page.locator('button[aria-label^="Edit "]').count() == 0

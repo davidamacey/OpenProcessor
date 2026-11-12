@@ -54,8 +54,9 @@ def test_ignore_reason_menu_stays_inside_the_viewport_at_430(stub, page, app_url
     )
     stub.on('GET', r'/clusters(\?|$)', cluster_list())
 
-    page.goto(f'{app_url}/p/default/clusters/cl-fixture-0064')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:cl-fixture-0064')
     page.locator('[data-testid="class-name"]').first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.locator('img').first.click()
     page.get_by_role('button', name='Choose ignore reason').click()
     wait_for_paint(page)
     box = page.evaluate(
@@ -90,6 +91,6 @@ def test_clusters_error_state_shows_no_counts(stub, page, app_url):
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
     stub.on('GET', r'/clusters(\?|$)', (500, {'detail': 'boom'}))
 
-    page.goto(f'{app_url}/p/default/clusters')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters')
     page.get_by_test_id('clusters-error').wait_for(timeout=ACTION_TIMEOUT_MS)
     assert page.locator('[data-testid="clusters-footer-count"]').count() == 0

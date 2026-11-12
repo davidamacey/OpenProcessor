@@ -206,7 +206,7 @@ def serve_locked_cluster(stub: Any, locked_ids: set[str]) -> None:
 
 def test_lock_badge_only_on_a_locked_label(stub, page, app_url):
     serve_locked_cluster(stub, {'crop-1'})
-    page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:{CLUSTER_UID}')
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
     badges = page.get_by_test_id('label-locked-badge')
     expect(badges).to_have_count(1, timeout=ACTION_TIMEOUT_MS)
@@ -256,7 +256,7 @@ def test_image_reprocess_from_a_cluster_card(stub, page, app_url):
 
     stub.on('POST', r'/images/img-0/reprocess$', reprocess)
 
-    page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:{CLUSTER_UID}')
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
     names = page.get_by_test_id('class-name')
     expect(names).to_have_text(['widget', 'widget', 'widget'], timeout=ACTION_TIMEOUT_MS)
@@ -319,7 +319,7 @@ def test_import_provenance_rows_in_details(stub, page, app_url):
         {'total': 3, 'next_cursor': None, 'limit': 60, 'crops': [imported, *others]},
     )
 
-    page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:{CLUSTER_UID}')
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
     card = page.locator('div.group').filter(has=page.locator('button[aria-pressed]')).first
     card.hover()

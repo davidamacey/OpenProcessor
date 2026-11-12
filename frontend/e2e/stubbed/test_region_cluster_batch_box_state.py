@@ -123,7 +123,7 @@ def test_cluster_triage_uses_batch_box_state_with_per_box_targets(stub, page, ap
 
     stub.on('POST', r'/regions/batch_status(\?|$)', batch_status_handler)
 
-    page.goto(f'{app_url}/p/default/clusters?class={REGION_CLASS}')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&class_name={REGION_CLASS}')
 
     cluster_card = page.locator('button:has-text("aaaa0007")')
     cluster_card.wait_for(timeout=ACTION_TIMEOUT_MS)

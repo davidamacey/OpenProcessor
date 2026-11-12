@@ -147,7 +147,7 @@ def test_failed_badge_on_a_card(stub, page, app_url):
             'crops': [_crop(0, 'failed'), _crop(1, 'embedded')],
         },
     )
-    page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:{CLUSTER_UID}')
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
     badges = page.get_by_test_id('embedding-state-badge')
     expect(badges).to_have_count(1)
@@ -172,7 +172,7 @@ def test_unembedded_banner_on_an_ordered_cluster_view(stub, page, app_url):
             'suggested_reprocess': SUGGESTED,
         },
     )
-    page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:{CLUSTER_UID}')
     banner = page.get_by_test_id('unembedded-banner')
     banner.wait_for(timeout=ACTION_TIMEOUT_MS)
     expect(banner).to_contain_text('1 items in scope have no vector and are not ranked')
@@ -259,7 +259,7 @@ def test_reprocess_embed_options_and_served_detail(stub, page, app_url):
         }
 
     stub.on('POST', r'/reprocess$', reprocess)
-    page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:{CLUSTER_UID}')
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
     page.keyboard.press('a')
     page.get_by_test_id('reprocess-open').first.click()

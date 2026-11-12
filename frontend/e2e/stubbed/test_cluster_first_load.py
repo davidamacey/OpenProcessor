@@ -28,7 +28,7 @@ def test_first_page_of_a_slow_cluster_says_what_it_is_doing(stub, page, app_url)
 
     page.route('**/crops?*cluster_uid=*', hold)
 
-    page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:{CLUSTER_UID}')
     hint = page.get_by_test_id('cluster-slow-load-hint')
     expect(hint).to_contain_text(
         'A large cluster can take a few seconds.', timeout=ACTION_TIMEOUT_MS
@@ -97,7 +97,7 @@ def test_empty_clusters_page_says_a_built_partition_waits_and_activates_it(stub,
     stub.on('PUT', r'/clusters/activation$', activate)
     stub.on('GET', r'/jobs/job-act$', job('job-act', 'completed'))
 
-    page.goto(f'{app_url}/p/default/clusters')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters')
     message = page.get_by_test_id('clusters-empty-message')
     expect(message).to_contain_text('not serving yet', timeout=ACTION_TIMEOUT_MS)
     expect(message).not_to_contain_text('auto-label pipeline')
@@ -118,7 +118,7 @@ def test_empty_clusters_page_with_no_partition_points_at_clustering(stub, page, 
             empty_message='No clustering run has been served yet. Run clustering from the Dashboard.',
         ),
     )
-    page.goto(f'{app_url}/p/default/clusters')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters')
     expect(page.get_by_test_id('clusters-empty-message')).to_contain_text(
         'No clustering run', timeout=ACTION_TIMEOUT_MS
     )

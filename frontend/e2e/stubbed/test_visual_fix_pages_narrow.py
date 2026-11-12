@@ -83,7 +83,7 @@ def test_crop_card_class_name_is_readable_at_800(stub, page, app_url):
         {'total': 6, 'next_cursor': None, 'limit': 60, 'crops': [_crop(i) for i in range(6)]},
     )
 
-    page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:{CLUSTER_UID}')
     name = page.locator('[data-testid="class-name"]').first
     name.wait_for(timeout=ACTION_TIMEOUT_MS)
     wait_for_paint(page)  # layout settle for the following overflow/bbox check
@@ -139,7 +139,7 @@ def test_region_gallery_chips_stay_inside_their_cards_at_800(stub, page, app_url
     rows = [{**i, 'row_key': f'{i["crop_id"]}#item'} for i in items]
     stub.on('GET', r'/regions(\?|$)', {'items': rows, 'total': 4})
 
-    page.goto(f'{app_url}/p/default/clusters?class={REGION_CLASS}')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&class_name={REGION_CLASS}')
     page.locator('[data-testid="slot-text-value"]').first.wait_for(timeout=ACTION_TIMEOUT_MS)
     wait_for_paint(page)  # layout settle for the following overflow/bbox check
 
@@ -182,7 +182,7 @@ def test_ignored_mode_hides_cluster_grid_controls(stub, page, app_url):
 
     stub.on('GET', r'/regions(\?|$)', {'items': [], 'total': 0})
 
-    page.goto(f'{app_url}/p/default/clusters')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters')
     sort = page.get_by_test_id('cluster-sort')
     sort.wait_for(timeout=ACTION_TIMEOUT_MS)
 

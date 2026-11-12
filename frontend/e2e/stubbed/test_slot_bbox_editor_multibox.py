@@ -110,7 +110,7 @@ def test_cropcard_pencil_opens_multibox_editor_and_saves_with_no_region_status(s
 
     stub.on('PUT', r'/crops/([^/]+)/regions$', region_put)
 
-    page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:{CLUSTER_UID}')
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
 
     thumbnail = page.locator('img').first
@@ -199,7 +199,7 @@ def test_region_edit_and_crop_dialog_draw_the_served_names(stub, page, app_url):
     stub.on('GET', r'/images/[^/]+/file(\?|$)', (200, PLACEHOLDER_PHOTO, 'image/svg+xml'))
     stub.on('GET', r'/crops/[^/]+/history$', {'crop_id': 'tag-1', 'entries': []})
 
-    page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:{CLUSTER_UID}')
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
     page.locator('img').first.hover()
     page.locator('button[aria-label="Edit widget tag"]').click()

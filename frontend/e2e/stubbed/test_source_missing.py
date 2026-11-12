@@ -76,7 +76,7 @@ def _no_visible_image(page) -> None:
 def test_crop_card_shows_source_not_mounted(stub, page, app_url, size):
     page.set_viewport_size(SIZES[size])
     serve_cluster_grid(stub)
-    page.goto(f'{app_url}/p/default/clusters/1')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:1')
     badges = page.get_by_role('status').filter(has_text='Source not mounted')
     expect(badges.first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     expect(badges).to_have_count(3)

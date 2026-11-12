@@ -92,7 +92,7 @@ def test_cluster_header_refreshes_validated_count_after_labeling(stub, page, app
 
     stub_label_op(stub, r'/crops/batch_label$', 'op-label-1', method='PUT')
 
-    page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:{CLUSTER_UID}')
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
 
     header = page.get_by_title('validated · labeled · cluster total')
@@ -168,7 +168,7 @@ def test_cluster_header_says_when_the_card_lookup_failed(stub, page, app_url):
         r'/crops(\?|$)',
         {'total': 1, 'next_cursor': None, 'limit': 60, 'crops': [crop(0)]},
     )
-    page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:{CLUSTER_UID}')
     expect(page.get_by_test_id('cluster-card-error')).to_contain_text(
         'not in the serving partition', timeout=ACTION_TIMEOUT_MS
     )

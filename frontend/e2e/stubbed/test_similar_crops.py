@@ -72,7 +72,8 @@ def shoot(page, name: str, frame=None) -> None:
 
 def assert_results(page, seen: list[str]) -> None:
     page.wait_for_url(
-        lambda url: url.endswith('/p/default/clusters?similar_to=crop-0'), timeout=ACTION_TIMEOUT_MS
+        lambda url: url.endswith('/p/default/workspace?view=clusters&similar_to=crop-0'),
+        timeout=ACTION_TIMEOUT_MS,
     )
     expect(page.get_by_test_id('search-summary')).to_contain_text('2', timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_text('91%').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
@@ -81,7 +82,7 @@ def assert_results(page, seen: list[str]) -> None:
 
 def test_more_like_this_from_cluster_card(stub, page, app_url):
     seen = serve_similar(stub)
-    page.goto(f'{app_url}/p/default/clusters/1')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:1')
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
     card = page.locator('[data-testid="crop-similar"]').first
     page.get_by_test_id('card-hover-controls').first.hover()
@@ -119,7 +120,7 @@ def test_more_like_this_unembedded_shows_served_message(stub, page, app_url):
         stub,
         similar=(409, {'detail': {'error': 'crop_not_embedded', 'message': message}}),
     )
-    page.goto(f'{app_url}/p/default/clusters?similar_to=crop-0')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&similar_to=crop-0')
     expect(page.get_by_test_id('similar-error')).to_have_text(message, timeout=ACTION_TIMEOUT_MS)
     errors = [c for c in stub.console_errors if c.startswith('pageerror')]
     assert not errors, errors[:3]
@@ -127,7 +128,7 @@ def test_more_like_this_unembedded_shows_served_message(stub, page, app_url):
 
 def test_more_like_this_hidden_when_semantic_search_off(stub, page, app_url):
     serve_similar(stub, methods=SEMANTIC_OFF)
-    page.goto(f'{app_url}/p/default/clusters/1')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:1')
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_test_id('crop-similar').count() == 0
 
@@ -168,7 +169,7 @@ def test_text_search_in_a_picked_embedding_space_sends_space_and_fuse(stub, page
         }
 
     stub.on('GET', r'/search/text(\?|$)', text_search)
-    page.goto(f'{app_url}/p/default/clusters')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters')
     box = page.get_by_placeholder('Search, e.g. "blurry closeup"')
     picker = page.get_by_test_id('search-space-picker')
     expect(picker).to_be_visible(timeout=ACTION_TIMEOUT_MS)
@@ -205,7 +206,7 @@ def test_back_to_clusters_fits_at_430(stub, page, app_url):
     )
     page.set_viewport_size({'width': 430, 'height': 932})
     long_id = '0b9f3c1e-7a42-4d6b-9c58-2e1f6a7d3b90_crop_000123'
-    page.goto(f'{app_url}/p/default/clusters?similar_to={long_id}')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&similar_to={long_id}')
     back = page.get_by_role('button', name='Back to clusters')
     expect(back).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     wait_for_paint(page)

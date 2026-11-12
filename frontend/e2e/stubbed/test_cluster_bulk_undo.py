@@ -76,7 +76,7 @@ def test_cluster_bulk_label_then_single_undo_queues_one_op_undo(stub, page, app_
             'POST', pattern, lambda request, match: unexpected.append(match.string) or (200, {})
         )
 
-    page.goto(f'{app_url}/p/default/clusters/{CLUSTER_UID}')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:{CLUSTER_UID}')
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
 
     # Select two crops, then bulk-label them via the class hotkey (no drag).

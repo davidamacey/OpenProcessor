@@ -50,8 +50,9 @@ CLASSES = [
 ROUTES: list[tuple[str, str]] = [
     ('/dashboard', 'h1'),
     ('/ingest', 'h1'),
-    ('/clusters', 'h1'),
-    ('/clusters/cl-fixture-0064', "[data-testid='class-name']"),
+    ('/workspace?view=clusters', 'h1'),
+    ('/workspace?view=clusters&scope=cluster:cl-fixture-0064', "[data-testid='class-name']"),
+    ('/workspace?view=detections', "[data-testid='detections-view']"),
     ('/review?tab=all', "[data-testid='queue-counter']"),
     ('/review?tab=uncertainty', "[data-testid='queue-counter']"),
     ('/review?tab=model_disagreements', "[data-testid='queue-counter']"),

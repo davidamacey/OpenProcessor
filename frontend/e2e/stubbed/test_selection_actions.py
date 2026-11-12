@@ -31,7 +31,7 @@ def _setup(stub, page, app_url) -> None:
         r'/crops(\?|$)',
         {'total': 2, 'next_cursor': None, 'limit': 48, 'crops': [item(0), item(1)]},
     )
-    page.goto(f'{app_url}/p/default/clusters?class_name=widget&mode=matching')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&class_name=widget&mode=matching')
     page.get_by_test_id('matching-total').wait_for(timeout=ACTION_TIMEOUT_MS)
 
 

@@ -193,7 +193,7 @@ def show_plan_form(page) -> None:
 
 def test_panel_is_collapsed_until_opened_and_shows_the_served_plan(stub, page, app_url):
     serve_plan_form(stub)
-    page.goto(f'{app_url}/p/default/clusters')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters')
     toggle = page.get_by_test_id('loop-panel-toggle')
     expect(toggle).to_have_attribute('aria-expanded', 'false', timeout=ACTION_TIMEOUT_MS)
     show_plan_form(page)
@@ -203,7 +203,7 @@ def test_panel_is_collapsed_until_opened_and_shows_the_served_plan(stub, page, a
 
 def test_finished_loop_shows_totals_and_node_members(stub, page, app_url):
     serve_loop(stub, 'completed')
-    page.goto(f'{app_url}/p/default/clusters')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters')
     show_finished_loop(page)
     expect(page.get_by_test_id('loop-propagated')).to_contain_text('2,100')
     expect(page.get_by_test_id('loop-members-count')).to_contain_text('2 member ids loaded')
@@ -218,7 +218,7 @@ def test_running_loop_offers_what_the_served_control_block_allows(stub, page, ap
         return loop_state('running')
 
     stub.on('POST', r'/assist/loops/loop_abc123/pause$', pause)
-    page.goto(f'{app_url}/p/default/clusters')
+    page.goto(f'{app_url}/p/default/workspace?view=clusters')
     open_panel(page)
     expect(page.get_by_test_id('loop-pause')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id('loop-cancel')).to_be_visible()

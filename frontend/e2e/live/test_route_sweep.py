@@ -94,8 +94,9 @@ def _route_slug(path: str) -> str:
 ROUTES: list[tuple[str, str]] = [
     ('/dashboard', 'h1:has-text("Dashboard")'),
     ('/ingest', 'h1:has-text("Ingest")'),
-    ('/clusters', 'h1:has-text("Clusters")'),
-    ('/clusters?class={region_class}', 'h1:has-text("Clusters")'),
+    ('/workspace?view=clusters', 'h1:has-text("Clusters")'),
+    ('/workspace?view=clusters&class_name={region_class}', 'h1:has-text("Clusters")'),
+    ('/workspace?view=detections', '[data-testid="detections-view"]'),
     ('/review?tab=all', '[data-testid="queue-counter"]'),
     ('/review?tab=uncertainty', '[data-testid="queue-counter"]'),
     ('/review?tab=model_disagreements', '[data-testid="queue-counter"]'),

@@ -158,6 +158,25 @@ class Stub:
             },
         )
         self.on('GET', r'/class_sources(\?|$)', {'class_sources': []})
+        # The Workspace reads the curation loop (its default view) and the ignore
+        # reasons on every visit, and counts its selection through the server.
+        self.on(
+            'GET',
+            r'/next_steps(\?|$)',
+            fill('WorkflowSteps', steps=[], next=None, workspace_default_view='clusters'),
+        )
+        self.on(
+            'GET',
+            r'/exclude_reasons(\?|$)',
+            fill(
+                'ExcludeReasonList',
+                reasons=[
+                    {'id': 'ignore', 'label': 'Ignore (generic)'},
+                    {'id': 'blurry', 'label': 'Blurry'},
+                ],
+            ),
+        )
+        self.on('POST', r'/selection/summary$', self._selection_summary)
         self.on(
             'GET',
             r'/regions/statuses(\?|$)',
@@ -367,6 +386,21 @@ class Stub:
     @staticmethod
     def _empty_facets(_request: Any, match: re.Match[str]) -> HandlerResult:
         return (200, cluster_facets(match.group(1)))
+
+    @staticmethod
+    def _selection_summary(request: Any, _match: re.Match[str]) -> HandlerResult:
+        body = request.post_data_json or {}
+        n = len(body.get('crop_ids') or [])
+        return (
+            200,
+            fill(
+                'SelectionSummary',
+                detections=n,
+                images=n,
+                clusters=1 if n else 0,
+                summary_text=f'{n} detections in {n} images',
+            ),
+        )
 
     @staticmethod
     def _card(_request: Any, match: re.Match[str]) -> HandlerResult:
