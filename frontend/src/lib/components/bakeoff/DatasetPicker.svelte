@@ -25,7 +25,7 @@
 
 {#snippet row(d: EvalDataset)}
   <label
-    class="flex items-start gap-2 rounded px-1 py-1 text-xs hover:bg-surface-2/50"
+    class="flex items-start gap-2 rounded px-1 py-1 text-meta hover:bg-surface-2/50"
     data-testid="dataset-row"
     data-dataset-id={d.id}
   >
@@ -78,7 +78,7 @@
     {#each grouped.exports as d (d.id)}
       {@render row(d)}
     {:else}
-      <p class="px-1 text-xs text-fg-3">No export with a test split yet.</p>
+      <p class="px-1 text-meta text-fg-3">No export with a test split yet.</p>
     {/each}
   </div>
   {#each grouped.external as g (g.group)}

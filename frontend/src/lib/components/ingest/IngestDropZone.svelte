@@ -66,7 +66,7 @@
   role="region"
   aria-label="Drop images or a folder here"
 >
-  <p class="mb-3 text-sm text-fg-2">Drag files or a folder here</p>
+  <p class="mb-3 text-body text-fg-2">Drag files or a folder here</p>
   <div class="flex justify-center gap-2">
     <button
       class="btn btn-sm"

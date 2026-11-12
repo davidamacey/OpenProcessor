@@ -72,15 +72,15 @@
 </script>
 
 <section
-  class="flex flex-col gap-3 rounded border border-line bg-surface-1/40 p-3 text-sm"
+  class="flex flex-col gap-3 rounded border border-line bg-surface-1/40 p-3 text-body"
   data-testid="profile-impact"
   aria-label="Activation impact"
 >
-  <p class="text-xs text-fg-2">
+  <p class="text-meta text-fg-2">
     Items already processed keep their results. Only items still waiting are detected with
     the active profile.
   </p>
-  <dl class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-0.5 text-xs sm:max-w-md">
+  <dl class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-0.5 text-meta sm:max-w-md">
     {#each IMPACT_ROWS as r (r.key)}
       <dt class="text-fg-2">{r.label}</dt>
       <dd class="text-right font-mono" data-testid="impact-{r.key}">
@@ -89,7 +89,7 @@
     {/each}
   </dl>
   {#if impact.by_profile.length > 0}
-    <table class="text-xs sm:max-w-md" data-testid="impact-by-profile">
+    <table class="text-meta sm:max-w-md" data-testid="impact-by-profile">
       <thead class="text-left text-fg-3">
         <tr>
           <th class="py-0.5 pr-3 font-normal">Produced by</th>
@@ -119,7 +119,7 @@
       {:else}
         {@const f = flow}
         {#if f.busy && !f.dryRun && !f.result}
-          <p class="text-xs text-fg-3">Checking what would re-run…</p>
+          <p class="text-meta text-fg-3">Checking what would re-run…</p>
         {/if}
         {#if f.dryRun && !f.result}
           <div class="space-y-1" data-testid="rerun-dry-run">
@@ -147,7 +147,7 @@
           <div class="space-y-1" data-testid="rerun-result">
             <ReprocessCounts res={f.result} {scopeLabel} />
             {#if f.job}
-              <p class="text-xs text-fg-2" data-testid="rerun-job">
+              <p class="text-meta text-fg-2" data-testid="rerun-job">
                 Job <code class="font-mono">{f.job.job_id}</code>:
                 {datasetsAvailability.statusLabel(f.job.status)}
                 {#if f.job.error}<span class="text-danger-text">
@@ -158,7 +158,7 @@
           </div>
         {/if}
         {#if f.error && !confirming}
-          <p class="text-xs text-danger-text" data-testid="rerun-error">{f.error}</p>
+          <p class="text-meta text-danger-text" data-testid="rerun-error">{f.error}</p>
         {/if}
       {/if}
     </div>

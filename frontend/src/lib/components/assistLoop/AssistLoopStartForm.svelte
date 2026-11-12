@@ -39,7 +39,7 @@
   }}
 >
   <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-    <label class="flex flex-col gap-1 text-xs text-fg-2">
+    <label class="flex flex-col gap-1 text-meta text-fg-2">
       VLM crop budget
       <input
         class="input"
@@ -51,7 +51,7 @@
         data-testid="loop-budget"
       />
     </label>
-    <label class="flex flex-col gap-1 text-xs text-fg-2">
+    <label class="flex flex-col gap-1 text-meta text-fg-2">
       Smallest cluster to work on
       <input
         class="input"
@@ -62,7 +62,7 @@
         data-testid="loop-min-root"
       />
     </label>
-    <label class="flex flex-col gap-1 text-xs text-fg-2">
+    <label class="flex flex-col gap-1 text-meta text-fg-2">
       Homogeneity to show (theta)
       <input
         class="input"
@@ -75,7 +75,7 @@
         data-testid="loop-theta"
       />
     </label>
-    <label class="flex flex-col gap-1 text-xs text-fg-2">
+    <label class="flex flex-col gap-1 text-meta text-fg-2">
       Split depth
       <input
         class="input"
@@ -87,7 +87,7 @@
         data-testid="loop-depth"
       />
     </label>
-    <label class="flex flex-col gap-1 text-xs text-fg-2">
+    <label class="flex flex-col gap-1 text-meta text-fg-2">
       Seed
       <input
         class="input"
@@ -99,7 +99,7 @@
     </label>
   </div>
 
-  <div class="flex flex-wrap items-start gap-x-6 gap-y-3 text-xs">
+  <div class="flex flex-wrap items-start gap-x-6 gap-y-3 text-meta">
     <VlmRunPicker
       vlm={ctl.vlm}
       acknowledgeExternal={ctl.acknowledgeExternal}
@@ -139,11 +139,11 @@
   </div>
 
   <div
-    class="rounded border border-line bg-surface-1/40 p-3 text-xs"
+    class="rounded border border-line bg-surface-1/40 p-3 text-meta"
     aria-live="polite"
     data-testid="loop-plan"
   >
-    <h3 class="mb-1 text-sm font-medium text-fg-1">Dry run</h3>
+    <h3 class="mb-1 text-body font-medium text-fg-1">Dry run</h3>
     {#if ctl.planError}
       <p class="text-danger-text" data-testid="loop-plan-error">{ctl.planError}</p>
     {:else if plan}
@@ -214,7 +214,7 @@
   </div>
 
   {#if ctl.actionError}
-    <p class="text-xs text-danger-text" role="alert" data-testid="loop-action-error">
+    <p class="text-meta text-danger-text" role="alert" data-testid="loop-action-error">
       {ctl.actionError}
     </p>
   {/if}
@@ -228,7 +228,7 @@
     >
       Start the loop
     </button>
-    <span class="text-xs text-fg-3">
+    <span class="text-meta text-fg-3">
       Writes machine labels (not validated, kept out of the export until reviewed). A
       rollback restores them.
     </span>

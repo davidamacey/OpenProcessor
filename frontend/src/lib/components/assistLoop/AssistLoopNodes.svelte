@@ -28,9 +28,9 @@
   const THUMBS_SHOWN = 48;
 </script>
 
-<div class="flex flex-col gap-2 text-xs" data-testid="loop-nodes">
+<div class="flex flex-col gap-2 text-meta" data-testid="loop-nodes">
   <div class="flex flex-wrap items-center gap-3">
-    <h3 class="text-sm font-medium text-fg-1">Clusters and parts</h3>
+    <h3 class="text-body font-medium text-fg-1">Clusters and parts</h3>
     <label class="flex items-center gap-1.5 text-fg-2">
       Show
       <select

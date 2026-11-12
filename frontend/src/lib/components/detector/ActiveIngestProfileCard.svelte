@@ -22,28 +22,28 @@
 </script>
 
 <section class="surface space-y-2 p-4" data-testid="active-ingest-profile">
-  <h2 class="text-sm font-semibold">Detector (ingest profile)</h2>
+  <h2 class="text-body font-semibold">Detector (ingest profile)</h2>
   {#if error}
-    <p class="text-xs text-danger-text" data-testid="active-ingest-profile-error">
+    <p class="text-meta text-danger-text" data-testid="active-ingest-profile-error">
       {error}
     </p>
   {:else if profile === null}
-    <p class="text-xs text-fg-2">Loading the active ingest profile.</p>
+    <p class="text-meta text-fg-2">Loading the active ingest profile.</p>
   {:else if profile.active.name === null}
-    <p class="text-xs text-fg-2" data-testid="active-ingest-profile-none">
+    <p class="text-meta text-fg-2" data-testid="active-ingest-profile-none">
       No ingest profile is active (source {profile.source}); ingest uses the deployment's
       default detector{#if detector}:
         <span class="font-mono text-fg-1">{detector.model}</span>
         (version {detector.version}){/if}.
     </p>
   {:else}
-    <p class="text-xs text-fg-2" data-testid="active-ingest-profile-name">
+    <p class="text-meta text-fg-2" data-testid="active-ingest-profile-name">
       Active profile
       <span class="font-mono text-fg-1">{profile.active.name}</span>
       {#if profile.active.revision !== null}(revision {profile.active.revision}){/if}.
     </p>
   {/if}
-  <p class="text-xs text-fg-3">
+  <p class="text-meta text-fg-3">
     The detector a project ingests with is chosen by its active ingest profile, not by
     this policy. See
     <a class="text-accent-text hover:underline" href={DOCS} target="_blank" rel="noopener"

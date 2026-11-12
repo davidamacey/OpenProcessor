@@ -62,7 +62,7 @@
     panelClass="max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-line-strong bg-surface-0 p-6 shadow-2xl"
   >
     <div class="mb-4 flex items-center justify-between">
-      <h2 class="text-lg font-semibold text-white">Keyboard Shortcuts</h2>
+      <h2 class="text-title font-semibold text-white">Keyboard Shortcuts</h2>
       <div class="flex items-center gap-2">
         {#if keymapAvailability.available !== false}
           <a
@@ -82,15 +82,15 @@
     </div>
 
     <section class="mb-5">
-      <h3 class="mb-2 text-xs font-semibold tracking-wide text-fg-2 uppercase">
+      <h3 class="mb-2 text-meta font-semibold tracking-wide text-fg-2 uppercase">
         {scopeLabel} actions
       </h3>
       {#if shortcuts.length === 0}
-        <p class="text-sm text-fg-3">No shortcuts on this page.</p>
+        <p class="text-body text-fg-3">No shortcuts on this page.</p>
       {:else}
         <ul class="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
           {#each shortcuts as s (s.scope + ':' + s.description)}
-            <li class="flex items-center justify-between gap-3 text-sm">
+            <li class="flex items-center justify-between gap-3 text-body">
               <span class="text-fg-2">{s.description}</span>
               <span class="flex gap-1">
                 {#each s.keys as k (k)}
@@ -105,7 +105,7 @@
 
     <section class="mb-5">
       <h3
-        class="mb-2 flex items-center gap-2 text-xs font-semibold tracking-wide text-fg-2 uppercase"
+        class="mb-2 flex items-center gap-2 text-meta font-semibold tracking-wide text-fg-2 uppercase"
       >
         Class hotkeys
         <span class="text-caption font-normal normal-case text-fg-3">
@@ -113,11 +113,11 @@
         </span>
       </h3>
       {#if editableClasses.length === 0}
-        <p class="text-sm text-fg-3">No classes defined yet.</p>
+        <p class="text-body text-fg-3">No classes defined yet.</p>
       {:else}
         <ul class="grid grid-cols-1 gap-y-1 sm:grid-cols-2 sm:gap-x-4">
           {#each editableClasses as cls (cls.id)}
-            <li class="flex items-center justify-between gap-3 text-sm">
+            <li class="flex items-center justify-between gap-3 text-body">
               <span
                 class="truncate text-fg-2"
                 title={cls.group ? `${cls.group} / ${cls.name}` : cls.name}
@@ -147,7 +147,7 @@
                 onblur={(e) => {
                   void setHotkey(cls, (e.currentTarget as HTMLInputElement).value);
                 }}
-                class="w-10 rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-center font-mono text-xs uppercase text-accent-text focus:border-accent focus:outline-none disabled:opacity-50"
+                class="w-10 rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-center font-mono text-meta uppercase text-accent-text focus:border-accent focus:outline-none disabled:opacity-50"
                 aria-label={`hotkey for ${cls.name}`}
               />
             </li>
@@ -157,15 +157,17 @@
     </section>
 
     <section>
-      <h3 class="mb-2 text-xs font-semibold tracking-wide text-fg-2 uppercase">Always</h3>
+      <h3 class="mb-2 text-meta font-semibold tracking-wide text-fg-2 uppercase">
+        Always
+      </h3>
       <ul class="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-        <li class="flex items-center justify-between gap-3 text-sm">
+        <li class="flex items-center justify-between gap-3 text-body">
           <span class="text-fg-2">{keymapStore.label('global.shortcuts_overlay')}</span>
           <kbd class="font-mono text-caption"
             >{keymapStore.glyph('global.shortcuts_overlay')}</kbd
           >
         </li>
-        <li class="flex items-center justify-between gap-3 text-sm">
+        <li class="flex items-center justify-between gap-3 text-body">
           <span class="text-fg-2">{keymapStore.label('global.close_overlay')}</span>
           <kbd class="font-mono text-caption"
             >{keymapStore.glyph('global.close_overlay')}</kbd

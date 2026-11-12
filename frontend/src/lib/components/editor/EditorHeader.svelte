@@ -33,21 +33,21 @@
 >
   <a
     href={resolve(backHref)}
-    class="inline-flex items-center gap-1 text-sm text-info-text hover:underline"
+    class="inline-flex items-center gap-1 text-body text-info-text hover:underline"
     data-testid="editor-back"
   >
     <Icon name="chevron-left" size={14} />Workspace
   </a>
-  <h1 class="min-w-0 truncate text-sm font-medium text-fg-1" title={fileName}>
+  <h1 class="min-w-0 truncate text-body font-medium text-fg-1" title={fileName}>
     {fileName}
   </h1>
   {#if index !== null && total !== null}
-    <span class="text-xs text-fg-2" data-testid="editor-position">
+    <span class="text-meta text-fg-2" data-testid="editor-position">
       {index + 1} of {total}
     </span>
   {/if}
   <span
-    class="ml-auto text-xs {status === 'saved' || status === 'saving'
+    class="ml-auto text-meta {status === 'saved' || status === 'saving'
       ? 'text-fg-2'
       : 'text-warn-text'}"
     role="status"
@@ -59,7 +59,7 @@
 </header>
 {#if message && (status === 'conflict' || status === 'failed')}
   <p
-    class="border-b border-warn/40 bg-warn/10 px-3 py-1.5 text-sm text-warn-text"
+    class="border-b border-warn/40 bg-warn/10 px-3 py-1.5 text-body text-warn-text"
     role="alert"
     data-testid="save-message"
   >

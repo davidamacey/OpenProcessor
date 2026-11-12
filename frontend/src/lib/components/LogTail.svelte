@@ -95,7 +95,7 @@
 
 <div class="flex flex-col rounded-md border border-line bg-surface-0">
   <div class="flex items-center justify-between gap-3 border-b border-line px-3 py-1.5">
-    <h3 class="text-xs font-semibold tracking-wide text-fg-2 uppercase">
+    <h3 class="text-meta font-semibold tracking-wide text-fg-2 uppercase">
       Live log <span class="font-mono text-caption text-fg-3">tail {lines}</span>
     </h3>
     <div class="flex items-center gap-2 text-caption text-fg-3">
@@ -118,7 +118,7 @@
     </div>
   </div>
   {#if error}
-    <p class="px-3 py-2 text-xs text-danger-text">log fetch failed: {error}</p>
+    <p class="px-3 py-2 text-meta text-danger-text">log fetch failed: {error}</p>
   {/if}
   <div
     bind:this={scroller}

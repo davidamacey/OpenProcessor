@@ -33,7 +33,7 @@
   }
 </script>
 
-<div class="space-y-4 text-xs" data-testid="import-options">
+<div class="space-y-4 text-meta" data-testid="import-options">
   <fieldset>
     <legend class="mb-1 font-semibold text-fg-2">Processing</legend>
     <label class="flex items-start gap-2 py-0.5">

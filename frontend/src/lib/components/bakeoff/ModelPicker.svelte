@@ -96,7 +96,7 @@
     <p class="text-caption uppercase tracking-wide text-fg-3">Trained runs</p>
     {#each trained as t (t.run_id)}
       <div
-        class="rounded px-1 py-1 text-xs hover:bg-surface-2/50"
+        class="rounded px-1 py-1 text-meta hover:bg-surface-2/50"
         data-testid="run-row"
         data-run-id={t.run_id}
       >
@@ -150,7 +150,7 @@
         {/each}
       </div>
     {:else}
-      <p class="px-1 text-xs text-fg-3">No finished training run with a checkpoint.</p>
+      <p class="px-1 text-meta text-fg-3">No finished training run with a checkpoint.</p>
     {/each}
   </div>
 
@@ -158,7 +158,7 @@
     <p class="text-caption uppercase tracking-wide text-fg-3">Baselines</p>
     {#each baselines as b (b.name)}
       <label
-        class="flex items-center gap-1.5 rounded px-1 py-1 text-xs hover:bg-surface-2/50"
+        class="flex items-center gap-1.5 rounded px-1 py-1 text-meta hover:bg-surface-2/50"
         data-testid="baseline-row"
       >
         <input
@@ -173,7 +173,7 @@
         {/if}
       </label>
     {:else}
-      <p class="px-1 text-xs text-fg-3">This profile registers no baselines.</p>
+      <p class="px-1 text-meta text-fg-3">This profile registers no baselines.</p>
     {/each}
   </div>
 
@@ -181,7 +181,7 @@
     <div>
       <p class="text-caption uppercase tracking-wide text-fg-3">Custom</p>
       {#each customRefs as c, i (i)}
-        <div class="flex items-center gap-1.5 px-1 py-1 text-xs">
+        <div class="flex items-center gap-1.5 px-1 py-1 text-meta">
           <span class="font-mono text-fg-1">{c.display_name ?? c.name}</span>
           <span class="rounded bg-surface-2 px-1 text-caption text-fg-2">{c.backend}</span
           >
@@ -195,7 +195,7 @@
     </div>
   {/if}
 
-  <details class="rounded border border-line px-2 py-1 text-xs">
+  <details class="rounded border border-line px-2 py-1 text-meta">
     <summary class="cursor-pointer text-fg-2">Add a custom model</summary>
     <div class="mt-2 grid grid-cols-2 gap-2">
       <label class="flex flex-col gap-0.5"

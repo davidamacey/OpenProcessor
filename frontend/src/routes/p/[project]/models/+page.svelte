@@ -162,8 +162,8 @@
        runs into the description. -->
   <header class="mb-6 flex flex-wrap items-end justify-between gap-3">
     <div class="min-w-0 flex-1 basis-80">
-      <h1 class="text-xl font-semibold tracking-tight">Models</h1>
-      <p class="mt-1 text-sm text-fg-2">
+      <h1 class="text-h1 font-semibold tracking-tight">Models</h1>
+      <p class="mt-1 text-body text-fg-2">
         Inference services that drive the labeling pipeline. Locally-hosted models run on
         the GPU box; each registered VLM endpoint is listed as its own row, and which one
         a project uses is chosen on Settings → Models. Models other projects shared with
@@ -172,7 +172,7 @@
       </p>
     </div>
     <div
-      class="flex shrink-0 items-center gap-3 text-xs text-fg-3"
+      class="flex shrink-0 items-center gap-3 text-meta text-fg-3"
       data-testid="models-status"
     >
       {#if lastUpdated}
@@ -191,16 +191,16 @@
 
   {#if error}
     <div
-      class="mb-4 rounded border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger-text"
+      class="mb-4 rounded border border-danger/40 bg-danger/10 px-3 py-2 text-body text-danger-text"
     >
       Failed to load models: {error}
     </div>
   {/if}
 
   {#if loading && models.length === 0}
-    <p class="text-sm text-fg-3">Loading…</p>
+    <p class="text-body text-fg-3">Loading…</p>
   {:else if models.length === 0}
-    <p class="text-sm text-fg-3">No models reported.</p>
+    <p class="text-body text-fg-3">No models reported.</p>
   {:else}
     <ul class="grid grid-cols-1 gap-4 md:grid-cols-2">
       {#each models as m, i (`${i}:${m.name}`)}
@@ -209,7 +209,7 @@
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <h2
-                  class="min-w-0 break-words text-base font-semibold text-white"
+                  class="min-w-0 break-words text-title font-semibold text-white"
                   title={m.friendly_name}
                 >
                   {m.friendly_name}
@@ -224,7 +224,7 @@
                   {pill(m).label}
                 </span>
               </div>
-              <p class="mt-1 truncate font-mono text-xs text-fg-3" title={m.name}>
+              <p class="mt-1 truncate font-mono text-meta text-fg-3" title={m.name}>
                 {m.name}{m.version ? ` (v${m.version})` : ''}
               </p>
             </div>
@@ -248,16 +248,18 @@
             {/if}
           </div>
 
-          <p class="mb-3 text-sm text-fg-2">{m.role}</p>
+          <p class="mb-3 text-body text-fg-2">{m.role}</p>
 
-          <dl class="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-line pt-3 text-sm">
+          <dl
+            class="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-line pt-3 text-body"
+          >
             <div>
               <dt class="text-caption uppercase tracking-wide text-fg-3">Type</dt>
               <dd class="text-fg-1">{m.model_type}</dd>
             </div>
             <div>
               <dt class="text-caption uppercase tracking-wide text-fg-3">Endpoint</dt>
-              <dd class="truncate font-mono text-xs text-fg-2" title={m.endpoint ?? ''}>
+              <dd class="truncate font-mono text-meta text-fg-2" title={m.endpoint ?? ''}>
                 {m.endpoint ?? '—'}
               </dd>
             </div>
@@ -273,7 +275,7 @@
               <div class="col-span-2">
                 <dt class="text-caption uppercase tracking-wide text-fg-3">Model</dt>
                 <dd
-                  class="truncate font-mono text-xs text-fg-2"
+                  class="truncate font-mono text-meta text-fg-2"
                   title={m.model ?? ''}
                   data-testid="model-vlm-model"
                 >
@@ -317,7 +319,7 @@
           {/if}
 
           {#if m.kind === 'vlm' && vlmAvailability.available === true}
-            <p class="mt-3 text-xs">
+            <p class="mt-3 text-meta">
               <a
                 class="text-accent-text hover:underline"
                 href={resolve(projectHref('/settings/models'))}
@@ -337,7 +339,7 @@
             <div class="mt-3 flex justify-end border-t border-line pt-3">
               <button
                 type="button"
-                class="rounded border px-2 py-1 text-xs transition {unloadButtonState(
+                class="rounded border px-2 py-1 text-meta transition {unloadButtonState(
                   m,
                 ) === 'force-required'
                   ? 'border-danger-line bg-danger-soft text-danger-text hover:bg-danger-soft'

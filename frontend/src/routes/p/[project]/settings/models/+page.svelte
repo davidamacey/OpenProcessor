@@ -81,11 +81,11 @@
     <h1 class="text-h1 font-semibold text-fg-1">Models</h1>
     <span class="grow"></span>
     <a
-      class="text-xs text-accent-text hover:underline"
+      class="text-meta text-accent-text hover:underline"
       href={resolve(projectHref('/settings'))}>Back to settings</a
     >
   </header>
-  <p class="text-sm text-fg-2">
+  <p class="text-body text-fg-2">
     The VLM reads crops and proposes labels. Register the endpoints it can run on, test
     them, and choose which one this project uses.
   </p>
@@ -104,7 +104,7 @@
         onrollback={() => models.rollback()}
         ondeactivate={() => models.deactivate()}
       />
-      <p class="text-xs text-fg-2" data-testid="vlm-health">
+      <p class="text-meta text-fg-2" data-testid="vlm-health">
         {#if health}
           VLM service for this project: {health.reachable ? 'reachable' : 'not reachable'}
           {#if health.model}· model <span class="font-mono">{health.model}</span>{/if}
@@ -120,7 +120,7 @@
 
     <section id="endpoints" class="surface flex flex-col gap-3 p-4">
       <div class="flex flex-wrap items-center gap-3">
-        <h2 class="text-base font-semibold">Endpoints (deployment-wide)</h2>
+        <h2 class="text-title font-semibold">Endpoints (deployment-wide)</h2>
         <span class="grow"></span>
         <a
           class="btn btn-sm"
@@ -129,11 +129,11 @@
         >
       </div>
       {#if models.loadError && !models.list}
-        <p class="text-sm text-danger-text" data-testid="vlm-load-error">
+        <p class="text-body text-danger-text" data-testid="vlm-load-error">
           {models.loadError}
         </p>
       {:else if !models.list}
-        <p class="text-sm text-fg-3">Loading…</p>
+        <p class="text-body text-fg-3">Loading…</p>
       {:else}
         <VlmEndpointsTable
           list={models.list}
@@ -155,13 +155,13 @@
     </section>
 
     <section id="local-model" class="surface flex flex-col gap-3 p-4">
-      <h2 class="text-base font-semibold">Local model</h2>
+      <h2 class="text-title font-semibold">Local model</h2>
       {#if models.catalogError && !models.catalog}
-        <p class="text-sm text-danger-text" data-testid="vlm-catalog-error">
+        <p class="text-body text-danger-text" data-testid="vlm-catalog-error">
           {models.catalogError}
         </p>
       {:else if !models.catalog}
-        <p class="text-sm text-fg-3">Loading…</p>
+        <p class="text-body text-fg-3">Loading…</p>
       {:else}
         <LocalVlmPanel
           catalog={models.catalog}
@@ -175,13 +175,13 @@
     </section>
 
     <section id="model-choices" class="surface flex flex-col gap-3 p-4">
-      <h2 class="text-base font-semibold">All model choices</h2>
+      <h2 class="text-title font-semibold">All model choices</h2>
       {#if models.modelChoicesError}
-        <p class="text-sm text-danger-text" data-testid="model-choices-error">
+        <p class="text-body text-danger-text" data-testid="model-choices-error">
           {models.modelChoicesError}
         </p>
       {:else if !models.modelChoices}
-        <p class="text-sm text-fg-3">Loading…</p>
+        <p class="text-body text-fg-3">Loading…</p>
       {:else}
         <ModelChoicesTable
           choices={models.modelChoices}
@@ -233,14 +233,14 @@
     onconfirm={() => void doDelete()}
     oncancel={() => (deleting = null)}
   >
-    <p class="text-xs text-fg-2">
+    <p class="text-meta text-fg-2">
       Deletes the stored endpoint and its revisions. A project that runs it blocks this.
     </p>
     {#if models.deleteError}
       <p class="text-danger-text" data-testid="vlm-delete-error">{models.deleteError}</p>
     {/if}
     {#if models.deleteProjects.length > 0}
-      <p class="text-xs text-fg-2" data-testid="vlm-delete-projects">
+      <p class="text-meta text-fg-2" data-testid="vlm-delete-projects">
         Used by: <span class="font-mono">{models.deleteProjects.join(', ')}</span>
       </p>
     {/if}

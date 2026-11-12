@@ -18,13 +18,13 @@
 </script>
 
 <section class="space-y-3" data-testid="combine-step-options">
-  <h2 class="text-sm font-semibold text-fg-1">3. Options</h2>
-  <p class="text-xs text-fg-3">Anything you leave alone uses the server's default.</p>
+  <h2 class="text-body font-semibold text-fg-1">3. Options</h2>
+  <p class="text-meta text-fg-3">Anything you leave alone uses the server's default.</p>
   <div class="grid gap-3 sm:grid-cols-2">
-    <label class="block text-sm">
-      <span class="mb-1 block text-xs text-fg-2">Duplicate images</span>
+    <label class="block text-body">
+      <span class="mb-1 block text-meta text-fg-2">Duplicate images</span>
       <select
-        class="w-full rounded border border-line-strong bg-surface-1 px-2 py-1.5 text-sm text-fg-1"
+        class="w-full rounded border border-line-strong bg-surface-1 px-2 py-1.5 text-body text-fg-1"
         data-testid="combine-opt-dedup"
         value={wizard.options.dedup ?? ''}
         onchange={(e) => {
@@ -36,15 +36,15 @@
         {#each DEDUP as v (v)}<option value={v}>{combineLabel(v)}</option>{/each}
       </select>
     </label>
-    <label class="block text-sm">
-      <span class="mb-1 block text-xs text-fg-2">Duplicate box overlap (IoU)</span>
+    <label class="block text-body">
+      <span class="mb-1 block text-meta text-fg-2">Duplicate box overlap (IoU)</span>
       <input
         type="number"
         min="0"
         max="1"
         step="0.01"
         placeholder="Server default"
-        class="w-full rounded border border-line-strong bg-surface-1 px-2 py-1.5 text-sm text-fg-1"
+        class="w-full rounded border border-line-strong bg-surface-1 px-2 py-1.5 text-body text-fg-1"
         data-testid="combine-opt-iou"
         value={wizard.options.dedup_iou ?? ''}
         oninput={(e) => {
@@ -53,10 +53,10 @@
         }}
       />
     </label>
-    <label class="block text-sm">
-      <span class="mb-1 block text-xs text-fg-2">Test split</span>
+    <label class="block text-body">
+      <span class="mb-1 block text-meta text-fg-2">Test split</span>
       <select
-        class="w-full rounded border border-line-strong bg-surface-1 px-2 py-1.5 text-sm text-fg-1"
+        class="w-full rounded border border-line-strong bg-surface-1 px-2 py-1.5 text-body text-fg-1"
         data-testid="combine-opt-holdout"
         value={wizard.options.holdout ?? ''}
         onchange={(e) => {
@@ -68,10 +68,10 @@
         {#each HOLDOUT as v (v)}<option value={v}>{combineLabel(v)}</option>{/each}
       </select>
     </label>
-    <label class="block text-sm">
-      <span class="mb-1 block text-xs text-fg-2">Copy settings from</span>
+    <label class="block text-body">
+      <span class="mb-1 block text-meta text-fg-2">Copy settings from</span>
       <select
-        class="w-full rounded border border-line-strong bg-surface-1 px-2 py-1.5 text-sm text-fg-1"
+        class="w-full rounded border border-line-strong bg-surface-1 px-2 py-1.5 text-body text-fg-1"
         data-testid="combine-opt-settings-from"
         value={wizard.options.settings_from ?? ''}
         onchange={(e) => {

@@ -108,7 +108,7 @@
   data-type={field.type}
 >
   <div class="flex flex-wrap items-baseline gap-2">
-    <label class="text-sm font-medium text-fg-1" for={id}>{field.label}</label>
+    <label class="text-body font-medium text-fg-1" for={id}>{field.label}</label>
     <code class="font-mono text-caption text-fg-3">{field.field}</code>
     {#if field.advanced}
       <span class="rounded border border-line-strong px-1 text-caption text-fg-2"
@@ -116,7 +116,7 @@
       >
     {/if}
   </div>
-  {#if field.help}<p class="text-xs text-fg-2">{field.help}</p>{/if}
+  {#if field.help}<p class="text-meta text-fg-2">{field.help}</p>{/if}
   <p class="text-caption text-fg-3" data-testid="field-facts">
     default: <span class="font-mono">{valueText(field.default)}</span>
     {#if rangeText}· {rangeText}{/if}
@@ -128,7 +128,7 @@
   {/if}
 
   {#if field.type === 'bool'}
-    <label class="flex items-center gap-2 text-sm">
+    <label class="flex items-center gap-2 text-body">
       <input
         {id}
         type="checkbox"
@@ -188,7 +188,7 @@
     <div class="flex flex-wrap items-center gap-1" data-testid="field-list">
       {#each list as item, idx (idx)}
         <span
-          class="flex items-center gap-1 rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 font-mono text-xs"
+          class="flex items-center gap-1 rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 font-mono text-meta"
           data-testid="list-item"
           >{choices?.find((c) => c.id === item)?.label ?? String(item)}
           {#if !readonly}
@@ -201,7 +201,7 @@
           {/if}
         </span>
       {/each}
-      {#if list.length === 0}<span class="text-xs text-fg-3">none</span>{/if}
+      {#if list.length === 0}<span class="text-meta text-fg-3">none</span>{/if}
     </div>
     {#if !readonly}
       <div class="flex flex-wrap items-center gap-2">
@@ -257,7 +257,7 @@
   {:else if !known.includes(field.type)}
     <textarea
       {id}
-      class="input min-h-16 w-full resize-y font-mono text-xs"
+      class="input min-h-16 w-full resize-y font-mono text-meta"
       value={JSON.stringify(value ?? null)}
       {readonly}
       data-testid="field-json"

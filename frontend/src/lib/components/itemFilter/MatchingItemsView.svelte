@@ -71,7 +71,10 @@
   ] as const;
 </script>
 
-<div class="mb-3 flex flex-wrap items-center gap-2 text-xs" data-testid="matching-header">
+<div
+  class="mb-3 flex flex-wrap items-center gap-2 text-meta"
+  data-testid="matching-header"
+>
   <span class="text-fg-2">
     <strong class="text-fg-1" data-testid="matching-total"
       >{pager.total.toLocaleString()}</strong
@@ -114,13 +117,13 @@
 </div>
 
 {#if pager.loading && pager.items.length === 0}
-  <p class="text-sm text-fg-3">Loading...</p>
+  <p class="text-body text-fg-3">Loading...</p>
 {:else if pager.error}
-  <p class="text-sm text-danger-text" role="alert" data-testid="matching-error">
+  <p class="text-body text-danger-text" role="alert" data-testid="matching-error">
     {pager.error}
   </p>
 {:else if pager.items.length === 0}
-  <p class="text-sm text-fg-3">No items match this filter.</p>
+  <p class="text-body text-fg-3">No items match this filter.</p>
 {:else}
   <CropResultGrid items={pager.items} {sel} {ondetail} />
   <div
@@ -131,7 +134,7 @@
     class="mt-4 h-1"
     aria-hidden="true"
   ></div>
-  <p class="mt-2 font-mono text-xs text-fg-3" data-testid="matching-footer">
+  <p class="mt-2 font-mono text-meta text-fg-3" data-testid="matching-footer">
     {pager.items.length} / {pager.total}
   </p>
 {/if}

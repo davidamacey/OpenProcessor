@@ -346,7 +346,7 @@
 
 {#if noWebgl}
   <p
-    class="surface p-6 text-sm text-warn-text"
+    class="surface p-6 text-body text-warn-text"
     role="status"
     data-testid="map-webgl-unsupported"
   >
@@ -356,7 +356,7 @@
 {/if}
 {#if loadError}
   <p
-    class="surface p-6 text-sm text-warn-text"
+    class="surface p-6 text-body text-warn-text"
     role="status"
     data-testid="map-load-error"
   >

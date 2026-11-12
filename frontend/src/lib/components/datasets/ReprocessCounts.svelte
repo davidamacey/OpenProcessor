@@ -23,7 +23,7 @@
     typeof v === 'boolean' ? (v ? 'yes' : 'no') : String(v);
 </script>
 
-<table class="w-full text-left text-xs" data-testid="reprocess-counts">
+<table class="w-full text-left text-meta" data-testid="reprocess-counts">
   <thead class="text-fg-3">
     <tr>
       <th class="py-0.5 pr-3">Scope</th>

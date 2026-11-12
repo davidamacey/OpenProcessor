@@ -23,7 +23,7 @@
   const num = (v: number | null | undefined): string => (v == null ? '—' : String(v));
 </script>
 
-<div class="flex flex-col gap-2 text-xs" data-testid="vlm-probe">
+<div class="flex flex-col gap-2 text-meta" data-testid="vlm-probe">
   <div class="flex flex-wrap items-center gap-2">
     <span
       class="rounded border px-1.5 py-0.5 {probe.ok

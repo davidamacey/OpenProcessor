@@ -91,7 +91,7 @@
 </script>
 
 <section
-  class="surface flex flex-col gap-2 p-4 text-sm"
+  class="surface flex flex-col gap-2 p-4 text-body"
   data-testid="config-active-panel"
   aria-label={copy.title}
 >
@@ -112,11 +112,11 @@
           >{refText(a.active)}</span
         >
       {/if}
-      {#if a.source}<span class="text-xs text-fg-3" data-testid="active-source"
+      {#if a.source}<span class="text-meta text-fg-3" data-testid="active-source"
           >({sourceLabels?.[a.source] ?? a.source})</span
         >{/if}
       {#if a.activated_at}
-        <span class="text-xs text-fg-3" title={a.activated_at}
+        <span class="text-meta text-fg-3" title={a.activated_at}
           >since {formatTimestamp(a.activated_at)}</span
         >
       {/if}
@@ -142,7 +142,7 @@
     </div>
     {#if a.stale}
       <p
-        class="rounded border border-warn/40 bg-warn/10 px-2 py-1 text-xs text-warn-text"
+        class="rounded border border-warn/40 bg-warn/10 px-2 py-1 text-meta text-warn-text"
         data-testid="active-stale"
       >
         The server could not refresh its config and is showing its last known state.
@@ -150,7 +150,7 @@
     {/if}
     {#if a.applied && a.applied.length > 0}
       <div class="overflow-x-auto">
-        <table class="text-xs" data-testid="active-applied">
+        <table class="text-meta" data-testid="active-applied">
           <thead class="text-left text-fg-3">
             <tr>
               <th class="py-0.5 pr-3 font-normal">Process</th>
@@ -187,7 +187,7 @@
       </div>
     {/if}
     {#if ctl.actionError && !confirming}
-      <p class="text-xs text-danger-text" data-testid="active-action-error">
+      <p class="text-meta text-danger-text" data-testid="active-action-error">
         {ctl.actionError}
       </p>
     {/if}
@@ -207,7 +207,7 @@
       →
       <strong class="font-mono">{refText(ctl.active.previous)}</strong>
     </p>
-    <p class="text-xs text-fg-2">{copy.rollbackBlurb}</p>
+    <p class="text-meta text-fg-2">{copy.rollbackBlurb}</p>
     {#if ctl.actionError}<p class="text-danger-text" data-testid="rollback-error">
         {ctl.actionError}
       </p>{/if}
@@ -228,7 +228,7 @@
       →
       <strong>{copy.noneText}</strong>
     </p>
-    <p class="text-xs text-fg-2">{copy.deactivate.blurb}</p>
+    <p class="text-meta text-fg-2">{copy.deactivate.blurb}</p>
     {#if ctl.actionError}<p class="text-danger-text" data-testid="deactivate-error">
         {ctl.actionError}
       </p>{/if}

@@ -158,7 +158,7 @@
 
   {#if !healthStore.ok}
     <div
-      class="rounded-md border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger-text"
+      class="rounded-md border border-danger/40 bg-danger/10 px-4 py-3 text-body text-danger-text"
     >
       <strong>API unavailable.</strong> Check that the OpenProcessor API is reachable from
       <code class="font-mono"
@@ -180,7 +180,7 @@
 
   <!-- Quick actions -->
   <section class="surface flex flex-wrap items-center gap-2 p-4">
-    <h2 class="mr-3 text-sm font-semibold text-fg-2">Quick actions</h2>
+    <h2 class="mr-3 text-body font-semibold text-fg-2">Quick actions</h2>
     <VlmQuickAction primary={nextId === 'label'} />
     <button class="btn" type="button" onclick={openExportConfirm}>
       Export Dataset (YOLO)
@@ -207,7 +207,7 @@
   <!-- Class balance (D2, visual audit 2026-09-24): ClassBalanceChart. -->
   <section class="surface p-4">
     {#if !legacyStats}
-      <p class="text-sm text-fg-3">Loading...</p>
+      <p class="text-body text-fg-3">Loading...</p>
     {:else}
       <ClassBalanceChart
         rows={legacyStats.per_class}
@@ -219,9 +219,9 @@
 
   <!-- Recent activity -->
   <section class="surface p-4">
-    <h2 class="mb-3 text-sm font-semibold text-fg-2">Recent labels (last 20)</h2>
+    <h2 class="mb-3 text-body font-semibold text-fg-2">Recent labels (last 20)</h2>
     {#if recent.length === 0}
-      <p class="text-sm text-fg-3">No recent labels.</p>
+      <p class="text-body text-fg-3">No recent labels.</p>
     {:else}
       <ul class="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-10">
         {#each recent as crop (crop.id)}
@@ -257,22 +257,22 @@
        synchronous full-dataset YOLO export, and show the served result
        (or error) once it resolves — no "job started" fiction. -->
   <Modal label="Export dataset confirm" onclose={closeExportConfirm}>
-    <h3 class="mb-3 text-base font-semibold">Export dataset (YOLO)</h3>
+    <h3 class="mb-3 text-title font-semibold">Export dataset (YOLO)</h3>
     {#if !exportResult && !exportError}
-      <p class="mb-4 text-xs text-fg-3">
+      <p class="mb-4 text-meta text-fg-3">
         Runs the full YOLO export pipeline synchronously (resize, stratified split
         honoring the frozen test holdout, manifest write) — this can take a while and the
         page will wait for it to finish.
       </p>
     {/if}
     {#if exportRunning}
-      <p class="mb-4 text-xs text-fg-2">Exporting… this may take a few minutes.</p>
+      <p class="mb-4 text-meta text-fg-2">Exporting… this may take a few minutes.</p>
     {/if}
     {#if exportError}
-      <p class="mb-4 text-xs text-danger-text">Export failed: {exportError}</p>
+      <p class="mb-4 text-meta text-danger-text">Export failed: {exportError}</p>
     {/if}
     {#if exportResult}
-      <dl class="mb-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+      <dl class="mb-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-meta">
         <dt class="text-fg-3">Status</dt>
         <dd class="font-mono text-fg-1">{exportResult.status}</dd>
         {#if exportResult.export_dir}

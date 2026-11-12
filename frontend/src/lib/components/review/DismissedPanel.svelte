@@ -28,16 +28,16 @@
     panelClass="w-full max-w-lg overflow-hidden rounded-lg border border-line-strong bg-surface-1 shadow-xl"
   >
     <div class="flex items-center justify-between border-b border-line px-3 py-2">
-      <span class="text-sm font-medium text-fg-1">Dismissed crops</span>
+      <span class="text-body font-medium text-fg-1">Dismissed crops</span>
       <button
         type="button"
-        class="text-xs text-fg-3 hover:text-fg-2"
+        class="text-meta text-fg-3 hover:text-fg-2"
         onclick={() => (dismissed.dismissedPanelOpen = false)}
       >
         close
       </button>
     </div>
-    <ul class="max-h-96 overflow-y-auto py-1 text-sm">
+    <ul class="max-h-96 overflow-y-auto py-1 text-body">
       {#if dismissedLoading}
         <li class="px-3 py-2 text-fg-3">Loading…</li>
       {:else if dismissedError}
@@ -52,7 +52,7 @@
           <span class="truncate text-fg-2">{crop.class_name ?? crop.id}</span>
           <button
             type="button"
-            class="shrink-0 rounded border border-line-strong px-2 py-0.5 text-xs text-fg-2 hover:border-accent hover:text-accent-text"
+            class="shrink-0 rounded border border-line-strong px-2 py-0.5 text-meta text-fg-2 hover:border-accent hover:text-accent-text"
             onclick={() => undismiss(crop)}
           >
             Restore

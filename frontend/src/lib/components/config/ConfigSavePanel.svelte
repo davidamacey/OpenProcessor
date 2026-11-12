@@ -32,9 +32,9 @@
   });
 </script>
 
-<section class="surface flex flex-col gap-2 p-4 text-sm" aria-label="Save">
+<section class="surface flex flex-col gap-2 p-4 text-body" aria-label="Save">
   {#if report || ed.validating}
-    <div class="flex flex-wrap items-center gap-2 text-xs" data-testid="report-counts">
+    <div class="flex flex-wrap items-center gap-2 text-meta" data-testid="report-counts">
       <span class={counts.errors > 0 ? 'text-danger-text' : 'text-fg-2'}
         >{counts.errors} error{counts.errors === 1 ? '' : 's'}</span
       >
@@ -46,7 +46,9 @@
     </div>
   {/if}
   {#if ed.validateError}
-    <p class="text-xs text-danger-text">Could not check the draft: {ed.validateError}</p>
+    <p class="text-meta text-danger-text">
+      Could not check the draft: {ed.validateError}
+    </p>
   {/if}
   {#if ed.editable}
     <div class="flex flex-wrap gap-2">
@@ -64,22 +66,22 @@
         onclick={() => void ed.reloadLatest()}>Discard edits</button
       >
     </div>
-    <p class="text-xs text-fg-3">
+    <p class="text-meta text-fg-3">
       {ed.dirty ? 'Unsaved edits.' : 'No unsaved edits.'} Saving writes a new revision; it doesn't
       change the active {noun}.
     </p>
   {/if}
   {#if ed.saveError}
-    <p class="text-xs text-danger-text" data-testid="save-error">{ed.saveError}</p>
+    <p class="text-meta text-danger-text" data-testid="save-error">{ed.saveError}</p>
     {#if ed.saveReasons.length > 0}
-      <ul class="list-disc pl-5 text-xs text-danger-text" data-testid="save-reasons">
+      <ul class="list-disc pl-5 text-meta text-danger-text" data-testid="save-reasons">
         {#each ed.saveReasons as r (r)}<li class="font-mono">{r}</li>{/each}
       </ul>
     {/if}
   {/if}
   {#if ed.conflict}
     <div
-      class="space-y-2 rounded border border-warn/40 bg-warn/10 p-2 text-xs text-warn-text"
+      class="space-y-2 rounded border border-warn/40 bg-warn/10 p-2 text-meta text-warn-text"
       data-testid="save-conflict"
     >
       <p>{ed.conflict.message}</p>
@@ -102,7 +104,7 @@
   {/if}
   {#if ed.remoteChanged}
     <div
-      class="space-y-2 rounded border border-info/40 bg-info/10 p-2 text-xs text-info-text"
+      class="space-y-2 rounded border border-info/40 bg-info/10 p-2 text-meta text-info-text"
       data-testid="remote-changed"
     >
       <p>This {noun} changed on the server while you were editing.</p>

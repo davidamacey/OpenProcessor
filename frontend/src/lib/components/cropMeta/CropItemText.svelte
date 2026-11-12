@@ -43,7 +43,7 @@
         {/each}
       </div>
     {/if}
-    <ul class="space-y-0.5 text-xs">
+    <ul class="space-y-0.5 text-meta">
       {#each crop.item_text_lines as line, i (i)}
         <li class="flex items-center gap-1.5">
           <span

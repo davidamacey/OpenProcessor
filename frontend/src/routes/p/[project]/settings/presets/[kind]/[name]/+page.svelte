@@ -42,23 +42,23 @@
 
 <div class="flex flex-col gap-4">
   {#if !kind || !ed}
-    <p class="text-sm text-fg-2" data-testid="preset-unknown-kind">
+    <p class="text-body text-fg-2" data-testid="preset-unknown-kind">
       There is no such kind of preset.
     </p>
     <a
-      class="text-xs text-accent-text hover:underline"
+      class="text-meta text-accent-text hover:underline"
       href={resolve(projectHref('/settings'))}>Back to settings</a
     >
   {:else}
     <header class="flex flex-wrap items-baseline gap-3">
       <h1 class="font-mono text-h1 font-semibold text-fg-1">{name}</h1>
       {#if ed.doc}
-        <span class="text-sm text-fg-2" data-testid="config-meta">
+        <span class="text-body text-fg-2" data-testid="config-meta">
           {kind.noun} · revision {ed.doc.revision}
         </span>
         {#each ed.active.entries.filter((e) => e.state === 'active' && e.name === name) as e (e.axis ?? 'deployment')}
           <span
-            class="rounded border border-success/40 bg-success/10 px-1.5 text-xs text-success-text"
+            class="rounded border border-success/40 bg-success/10 px-1.5 text-meta text-success-text"
             data-testid="preset-active-chip"
             >active{ed.active.axisLabel(e.axis)
               ? ` · ${ed.active.axisLabel(e.axis)}`
@@ -68,34 +68,34 @@
       {/if}
       <span class="grow"></span>
       <a
-        class="text-xs text-accent-text hover:underline"
+        class="text-meta text-accent-text hover:underline"
         href={resolve(projectHref(presetPath(kind)))}>All {kind.title.toLowerCase()}</a
       >
     </header>
 
     {#if ed.loadError && !ed.doc}
-      <p class="text-sm text-danger-text" data-testid="preset-load-error">
+      <p class="text-body text-danger-text" data-testid="preset-load-error">
         {ed.loadError}
       </p>
     {:else if !ed.doc}
-      <p class="text-sm text-fg-3">Loading…</p>
+      <p class="text-body text-fg-3">Loading…</p>
     {:else}
       <PresetActiveSummary active={ed.active} />
 
       <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
         <section class="surface flex min-w-0 flex-col gap-3 p-4" aria-label="Body">
           <ConfigDescriptionField {ed} />
-          <label class="flex flex-col gap-1 text-xs text-fg-2">
+          <label class="flex flex-col gap-1 text-meta text-fg-2">
             Body (JSON)
             <textarea
-              class="input min-h-96 font-mono text-xs"
+              class="input min-h-96 font-mono text-meta"
               spellcheck="false"
               value={ed.bodyText}
               oninput={(e) => ed.setBodyText(e.currentTarget.value)}
               data-testid="preset-body"></textarea>
           </label>
           {#if ed.bodyError}
-            <p class="text-xs text-warn-text" data-testid="preset-body-error">
+            <p class="text-meta text-warn-text" data-testid="preset-body-error">
               {ed.bodyError}
             </p>
           {/if}

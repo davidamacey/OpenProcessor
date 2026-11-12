@@ -38,17 +38,20 @@
 </script>
 
 {#if issues.length === 0}
-  <p class="text-xs text-fg-3" data-testid="dataset-issues-none">No issues.</p>
+  <p class="text-meta text-fg-3" data-testid="dataset-issues-none">No issues.</p>
 {:else}
   <div class="space-y-3" data-testid="dataset-issues">
     {#each groups as g (g.id)}
       <section data-testid="dataset-issues-{g.id}">
-        <h4 class="mb-1 text-xs font-semibold tracking-wide text-fg-2 uppercase">
+        <h4 class="mb-1 text-meta font-semibold tracking-wide text-fg-2 uppercase">
           {g.title}
         </h4>
         <ul class="space-y-1">
           {#each g.items as issue (issue.id)}
-            <li class="rounded border px-3 py-2 text-xs {g.tone}" data-code={issue.code}>
+            <li
+              class="rounded border px-3 py-2 text-meta {g.tone}"
+              data-code={issue.code}
+            >
               <div class="flex flex-wrap items-baseline gap-2">
                 <span class="font-semibold"
                   >{labelByCode.get(issue.code) ?? issue.code}</span

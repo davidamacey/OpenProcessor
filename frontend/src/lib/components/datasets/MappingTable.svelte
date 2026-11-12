@@ -47,7 +47,7 @@
 </script>
 
 <div class="overflow-x-auto">
-  <table class="w-full text-left text-xs" data-testid="mapping-table">
+  <table class="w-full text-left text-meta" data-testid="mapping-table">
     <thead class="text-fg-3">
       <tr>
         <th class="px-2 py-1">Dataset class</th>

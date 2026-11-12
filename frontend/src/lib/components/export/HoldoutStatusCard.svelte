@@ -23,8 +23,8 @@
 <!-- Test holdout status card -->
 <section class="surface p-4">
   <header class="mb-2 flex flex-wrap items-center gap-3">
-    <h2 class="text-sm font-semibold text-fg-2">Test holdout</h2>
-    <span class="text-xs text-fg-3">
+    <h2 class="text-body font-semibold text-fg-2">Test holdout</h2>
+    <span class="text-meta text-fg-3">
       red badge: a class with frozen test crops that the server flags deficient (below {holdout?.min_test_per_class ??
         '…'}). Classes with no validated crops have no test crops and are not flagged.
     </span>
@@ -35,14 +35,14 @@
       </button>
     {:else}
       <span
-        class="rounded-md border border-success/40 bg-success/10 px-2 py-1 text-xs text-success-text"
+        class="rounded-md border border-success/40 bg-success/10 px-2 py-1 text-meta text-success-text"
       >
         frozen — {totalTestCrops.toLocaleString()} crops
       </span>
     {/if}
   </header>
   {#if testFrozen}
-    <div class="flex flex-wrap items-center gap-3 text-xs">
+    <div class="flex flex-wrap items-center gap-3 text-meta">
       <span class="text-fg-2">
         {totalTestCrops.toLocaleString()} test crops across
         {(holdout?.by_class?.length ?? 0).toString()} classes.
@@ -57,7 +57,7 @@
       {/if}
     </div>
   {:else}
-    <p class="text-xs text-fg-3">
+    <p class="text-meta text-fg-3">
       Test set is not yet frozen. Freezing is one-shot per dataset version.
     </p>
   {/if}

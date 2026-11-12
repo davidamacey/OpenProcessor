@@ -20,7 +20,7 @@
 
 {#each rows as r (r.id)}
   <dt class="text-fg-3">{r.label}</dt>
-  <dd class="break-all font-mono text-xs text-fg-1" data-testid="vlm-provenance-{r.id}">
+  <dd class="break-all font-mono text-meta text-fg-1" data-testid="vlm-provenance-{r.id}">
     {r.value}
   </dd>
 {/each}

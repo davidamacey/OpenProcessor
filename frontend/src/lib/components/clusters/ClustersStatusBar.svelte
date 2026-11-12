@@ -29,35 +29,35 @@
      a completely different pager, but this footer never switched to
      match. -->
 <div
-  class="flex items-center justify-between gap-3 border-t border-line px-4 py-2 text-sm"
+  class="flex items-center justify-between gap-3 border-t border-line px-4 py-2 text-body"
 >
   {#if matchingModeActive}
-    <span class="font-mono text-xs text-fg-2">matching items</span>
+    <span class="font-mono text-meta text-fg-2">matching items</span>
   {:else if modes.ignoredModeActive}
-    <span class="font-mono text-xs text-fg-3" data-testid="clusters-footer-count">
+    <span class="font-mono text-meta text-fg-3" data-testid="clusters-footer-count">
       {modes.ignoredItems.length} / {modes.ignoredTotal} ignored crops
     </span>
-    <span class="font-mono text-xs text-fg-2">
+    <span class="font-mono text-meta text-fg-2">
       {modes.ignoredLoading ? 'loading…' : 'ignored bucket'}
     </span>
   {:else if slotGallery}
-    <span class="font-mono text-xs text-fg-3">
+    <span class="font-mono text-meta text-fg-3">
       {slotGallery.pager.items.length} / {slotGallery.pager.total}
     </span>
-    <span class="font-mono text-xs text-fg-2">
+    <span class="font-mono text-meta text-fg-2">
       {#if slotGallery.pager.loadingMore}loading more…{:else if slotGallery.pager.hasMore}scroll
         for more{:else}all loaded{/if}
     </span>
   {:else if list.clusterPager.error}
     <!-- A failed load has no honest count; the grid shows the error. -->
   {:else}
-    <span class="font-mono text-xs text-fg-3" data-testid="clusters-footer-count">
+    <span class="font-mono text-meta text-fg-3" data-testid="clusters-footer-count">
       {list.gridItems.length} / {list.total +
         (classFilter == null && !list.filterActive
           ? slotInventory.slotInventoryCards.length
           : 0)}
     </span>
-    <span class="font-mono text-xs text-fg-2">
+    <span class="font-mono text-meta text-fg-2">
       {#if list.repsLoading}loading more…{:else if list.hasMoreCards}scroll for more{:else}all
         shown{/if}
     </span>

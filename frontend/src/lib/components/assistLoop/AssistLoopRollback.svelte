@@ -21,12 +21,12 @@
 </script>
 
 <section
-  class="flex flex-col gap-2 text-xs"
+  class="flex flex-col gap-2 text-meta"
   aria-label="Rollback"
   data-testid="loop-rollback"
 >
   <div class="flex flex-wrap items-center gap-3">
-    <h3 class="text-sm font-medium text-fg-1">Rollback</h3>
+    <h3 class="text-body font-medium text-fg-1">Rollback</h3>
     {#if !ctl.rollbackPlan}
       <button
         type="button"

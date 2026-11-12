@@ -65,7 +65,7 @@
   class="max-h-full overflow-auto rounded border border-line"
   data-testid="data-table-scroll"
 >
-  <table class="w-full border-collapse text-xs" data-testid="data-table">
+  <table class="w-full border-collapse text-meta" data-testid="data-table">
     <thead class="sticky top-0 z-10 bg-surface-1">
       <tr>
         <th scope="col" class="w-8 px-2 py-1"><span class="sr-only">Select</span></th>

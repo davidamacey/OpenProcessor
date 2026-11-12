@@ -12,7 +12,7 @@
 </script>
 
 <div class="overflow-auto rounded border border-line {className}">
-  <table class="w-full text-xs">
+  <table class="w-full text-meta">
     <thead
       class="sticky top-0 border-b border-line bg-surface-0 text-left uppercase text-fg-3"
     >

@@ -23,7 +23,7 @@
 >
   {#each toastStore.toasts as t (t.id)}
     <div
-      class="pointer-events-auto rounded-md border px-3 py-2 text-sm shadow-lg backdrop-blur {kindClass(
+      class="pointer-events-auto rounded-md border px-3 py-2 text-body shadow-lg backdrop-blur {kindClass(
         t.kind,
       )}"
     >

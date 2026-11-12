@@ -60,7 +60,7 @@
     />
   </div>
   {#if ws.matching}
-    <span class="text-xs text-fg-2" data-testid="matching-note">
+    <span class="text-meta text-fg-2" data-testid="matching-note">
       <strong class="text-fg-1">{ws.matching.total.toLocaleString()}</strong>
       matching<HiddenItemsNote hidden={ws.matching.hidden} />
     </span>

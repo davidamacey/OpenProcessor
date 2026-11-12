@@ -90,14 +90,14 @@
   </PageHeader>
 
   <div
-    class="rounded border border-line-strong bg-surface-1/60 px-4 py-3 text-sm text-fg-2"
+    class="rounded border border-line-strong bg-surface-1/60 px-4 py-3 text-body text-fg-2"
   >
     These are deployment-wide. There is no per-user setting and no undo. Every operator on
     this Cropwright instance gets what you save here.
   </div>
 
   {#if curationSettingsStore.loading && !curationSettingsStore.loaded}
-    <section class="surface p-6 text-sm text-fg-3">Loading settings…</section>
+    <section class="surface p-6 text-body text-fg-3">Loading settings…</section>
   {:else if curationSettingsStore.error}
     <div data-testid="settings-load-error">
       <ErrorState
@@ -117,10 +117,10 @@
   {:else}
     <section class="surface flex flex-col gap-5 p-5">
       <div class="flex items-center justify-between">
-        <h2 class="text-base font-semibold">Active defaults</h2>
+        <h2 class="text-title font-semibold">Active defaults</h2>
         {#if curationSettingsStore.settings.updated_at}
           <span
-            class="text-xs text-fg-3"
+            class="text-meta text-fg-3"
             title={curationSettingsStore.settings.updated_at}
           >
             last changed {formatTimestamp(curationSettingsStore.settings.updated_at)}
@@ -142,9 +142,9 @@
           class="flex flex-col gap-1.5 border-t border-line pt-4 first:border-0 first:pt-0"
         >
           <div class="flex flex-wrap items-center gap-2">
-            <span class="w-44 shrink-0 text-sm font-medium">{copy.label}</span>
+            <span class="w-44 shrink-0 text-body font-medium">{copy.label}</span>
             {#if options.length === 0}
-              <span class="text-sm text-fg-3">no options advertised</span>
+              <span class="text-body text-fg-3">no options advertised</span>
             {:else}
               <select
                 class="select"
@@ -216,12 +216,12 @@
               </button>
             {/if}
           </div>
-          <p class="text-xs text-fg-2">{copy.blurb}</p>
-          <p class="text-xs text-fg-3">
+          <p class="text-meta text-fg-2">{copy.blurb}</p>
+          <p class="text-meta text-fg-3">
             {pinned ? 'pinned' : "inherited from the backend's built-in default"}
           </p>
           {#if options.some((o) => settingsOptionView(spec, o).disabled)}
-            <p class="text-xs text-fg-2" data-testid="settings-ack-hint">
+            <p class="text-meta text-fg-2" data-testid="settings-ack-hint">
               An endpoint that sends crops outside this deployment is acknowledged when it
               is activated.
               <a
@@ -232,7 +232,7 @@
           {/if}
           {#if saveErrors[spec.axis]}
             <p
-              class="rounded border border-danger/40 bg-danger/10 px-2 py-1 text-xs text-danger-text"
+              class="rounded border border-danger/40 bg-danger/10 px-2 py-1 text-meta text-danger-text"
               data-testid="settings-save-error"
             >
               {saveErrors[spec.axis]}
@@ -250,15 +250,15 @@
 
     {#if advisoryVisible}
       <section class="surface flex flex-col gap-4 border-dashed p-5">
-        <h2 class="text-base font-semibold text-fg-2">Not settable on this backend</h2>
-        <p class="text-xs text-fg-2">
+        <h2 class="text-title font-semibold text-fg-2">Not settable on this backend</h2>
+        <p class="text-meta text-fg-2">
           The backend does not accept a shared default for these axes (it marks them not
           settable). Shown here so you can see what is active.
         </p>
         {#each advisoryAxes(strategiesStore.methods) as spec (spec.axis)}
           {@const options = axisOptions(strategiesStore.methods, spec)}
           {#if options.length > 0}
-            <div class="flex flex-wrap items-center gap-2 text-sm">
+            <div class="flex flex-wrap items-center gap-2 text-body">
               <span class="w-44 shrink-0 font-medium text-fg-2"
                 >{axisCopy(strategiesStore.methods, spec).label}</span
               >
@@ -281,13 +281,13 @@
 
 {#if confirmSpec}
   <Modal label="Confirm shared default" onclose={closeConfirm}>
-    <h3 class="mb-3 text-base font-semibold">
+    <h3 class="mb-3 text-title font-semibold">
       {confirmMode === 'clear' ? 'Clear shared default' : 'Set shared default'}: {axisCopy(
         strategiesStore.methods,
         confirmSpec,
       ).label}
     </h3>
-    <p class="mb-3 text-sm text-fg-2">
+    <p class="mb-3 text-body text-fg-2">
       {effectiveDefaultId(
         curationSettingsStore.settings,
         strategiesStore.methods,
@@ -295,17 +295,17 @@
       ) ?? '(none)'} →
       <strong>{confirmMode === 'clear' ? "each caller's own default" : pendingId}</strong>
     </p>
-    <p class="mb-3 text-xs text-fg-2">
+    <p class="mb-3 text-meta text-fg-2">
       {axisCopy(strategiesStore.methods, confirmSpec).blurb}
     </p>
     {#if confirmMode === 'clear'}
-      <p class="mb-3 text-xs text-fg-2">
+      <p class="mb-3 text-meta text-fg-2">
         Removes this axis's pinned override entirely — every caller that reads it falls
         back to its own built-in default instead of the shared one.
       </p>
     {:else if confirmSpec.irreversibleWarning}
       <div
-        class="mb-3 rounded border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn-text"
+        class="mb-3 rounded border border-warn/40 bg-warn/10 px-3 py-2 text-meta text-warn-text"
       >
         {confirmSpec.irreversibleWarning}
       </div>

@@ -81,7 +81,7 @@
   <h1 class="sr-only">Gallery</h1>
   <BulkBar {ws} onapplied={() => void gallery.loadFirst()} />
   <div class="min-h-0 flex-1 overflow-auto p-4">
-    <div class="mb-3 flex flex-wrap items-center gap-3 text-xs text-fg-2">
+    <div class="mb-3 flex flex-wrap items-center gap-3 text-meta text-fg-2">
       <p data-testid="gallery-header">
         <strong class="text-fg-1" data-testid="gallery-total"
           >{gallery.total.toLocaleString()}</strong
@@ -137,7 +137,7 @@
         onlightbox={(card) => void ws.openLightbox(card.image_id, card.file_name)}
         onloadmore={() => void gallery.loadMore()}
       />
-      <p class="mt-2 font-mono text-xs text-fg-3" data-testid="gallery-footer">
+      <p class="mt-2 font-mono text-meta text-fg-3" data-testid="gallery-footer">
         {gallery.cards.length} / {gallery.total}
       </p>
     </ViewState>

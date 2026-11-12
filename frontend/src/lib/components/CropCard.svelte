@@ -436,7 +436,7 @@
           : ''}
       </span>
       <span
-        class="min-w-0 grow truncate text-xs text-fg-1"
+        class="min-w-0 grow truncate text-meta text-fg-1"
         title={crop.class_name ?? ''}
         data-testid="class-name"
       >
@@ -444,7 +444,7 @@
       </span>
     {:else}
       <span
-        class="min-w-0 grow truncate text-xs text-warn-text/90"
+        class="min-w-0 grow truncate text-meta text-warn-text/90"
         data-testid="class-name"
       >
         Unlabeled
@@ -483,7 +483,9 @@
   {/if}
 
   {#if crop.vlm_suggested_class_id != null && !crop.class_validated}
-    <div class="flex items-center gap-1 border-t border-line bg-warn/5 px-2 py-1 text-xs">
+    <div
+      class="flex items-center gap-1 border-t border-line bg-warn/5 px-2 py-1 text-meta"
+    >
       <span
         class="grow truncate text-warn-text"
         title={crop.vlm_suggested_class_name ?? ''}
@@ -518,7 +520,7 @@
     </div>
   {:else if crop.vlm_suggested_class_name && !crop.class_validated}
     <div
-      class="border-t border-line bg-warn/5 px-2 py-1 text-xs text-warn-text"
+      class="border-t border-line bg-warn/5 px-2 py-1 text-meta text-warn-text"
       title="The VLM proposed a class that isn't in the registry yet"
     >
       VLM suggests new class: {crop.vlm_suggested_class_name}
@@ -574,7 +576,7 @@
     {/if}
     <button
       type="button"
-      class="absolute -top-3 -right-3 rounded-full border border-line-strong bg-surface-1 px-2 py-1 text-sm text-white"
+      class="absolute -top-3 -right-3 rounded-full border border-line-strong bg-surface-1 px-2 py-1 text-body text-white"
       onclick={() => (expanded = false)}
       aria-label="Close"
     >

@@ -20,14 +20,14 @@
 
 <section class="surface flex flex-col gap-2 p-4" data-testid={testId}>
   <div>
-    <h3 class="text-sm font-semibold text-fg-1">{title}</h3>
-    <p class="text-xs text-fg-3">{blurb}</p>
+    <h3 class="text-body font-semibold text-fg-1">{title}</h3>
+    <p class="text-meta text-fg-3">{blurb}</p>
   </div>
   {#if stats.length === 0}
-    <p class="text-sm text-fg-3">No audited crops yet.</p>
+    <p class="text-body text-fg-3">No audited crops yet.</p>
   {:else}
     <div class="overflow-x-auto">
-      <table class="w-full text-left text-xs">
+      <table class="w-full text-left text-meta">
         <thead class="text-fg-3">
           <tr>
             <th class="py-1 pr-3 font-medium">Class</th>

@@ -26,7 +26,7 @@
     view.facetBand?.min === b.min && view.facetBand?.max === b.max;
 
   const chip = (on: boolean): string =>
-    `btn-sm border text-xs transition-colors ${
+    `btn-sm border text-meta transition-colors ${
       on
         ? 'border-accent/60 bg-accent/20 text-accent-text'
         : 'border-line-strong bg-surface-1 text-fg-2 hover:border-accent/40'
@@ -35,7 +35,7 @@
 
 {#if view.facetsError}
   <p
-    class="border-b border-line px-4 py-1.5 text-xs text-warn-text"
+    class="border-b border-line px-4 py-1.5 text-meta text-warn-text"
     role="alert"
     data-testid="cluster-facets-error"
   >
@@ -44,7 +44,7 @@
 {:else if facets}
   <details
     bind:open
-    class="border-b border-line px-4 py-2 text-xs"
+    class="border-b border-line px-4 py-2 text-meta"
     data-testid="cluster-facets"
   >
     <summary class="cursor-pointer text-fg-2">

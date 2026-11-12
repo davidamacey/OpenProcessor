@@ -103,8 +103,8 @@
   >
     <div class="flex min-h-0 grow flex-col gap-4 overflow-y-auto p-5">
       <header class="flex flex-col gap-1">
-        <h2 class="text-base font-semibold">Assist: {ctl.opener.title}</h2>
-        <p class="text-xs text-fg-3">
+        <h2 class="text-title font-semibold">Assist: {ctl.opener.title}</h2>
+        <p class="text-meta text-fg-3">
           The VLM suggests; it never overwrites a label a human or an import set, or an
           item held out for testing.
         </p>
@@ -112,10 +112,10 @@
 
       {#if !ctl.run}
         <fieldset class="flex flex-col gap-1.5">
-          <legend class="mb-1 text-sm font-medium text-fg-1">What the VLM sees</legend>
+          <legend class="mb-1 text-body font-medium text-fg-1">What the VLM sees</legend>
           {#each ctl.choices as c (c)}
             <label
-              class="flex cursor-pointer items-start gap-2 rounded border px-3 py-2 text-sm {ctl.choice ===
+              class="flex cursor-pointer items-start gap-2 rounded border px-3 py-2 text-body {ctl.choice ===
               c
                 ? 'border-accent/60 bg-accent/10'
                 : 'border-line hover:border-line-strong'}"
@@ -132,7 +132,7 @@
                 <span class="font-medium text-fg-1"
                   >{CHOICE_LABEL[c]}{c === 'selected' ? selectedCount() : ''}</span
                 >
-                <span class="text-xs text-fg-2">{CHOICE_HINT[c]}</span>
+                <span class="text-meta text-fg-2">{CHOICE_HINT[c]}</span>
               </span>
             </label>
           {/each}
@@ -141,7 +141,7 @@
               class="grid grid-cols-1 gap-2 sm:grid-cols-3"
               data-testid="assist-sample-opts"
             >
-              <label class="flex flex-col gap-1 text-xs text-fg-2">
+              <label class="flex flex-col gap-1 text-meta text-fg-2">
                 Sample size
                 <input
                   class="input"
@@ -153,7 +153,7 @@
                   data-testid="assist-size"
                 />
               </label>
-              <label class="flex flex-col gap-1 text-xs text-fg-2">
+              <label class="flex flex-col gap-1 text-meta text-fg-2">
                 Seed
                 <input
                   class="input"
@@ -168,11 +168,11 @@
         </fieldset>
 
         <fieldset class="flex flex-col gap-1.5">
-          <legend class="mb-1 text-sm font-medium text-fg-1">What to do</legend>
+          <legend class="mb-1 text-body font-medium text-fg-1">What to do</legend>
           <div class="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
             {#each ctl.allowedActions as a (a)}
               <label
-                class="flex cursor-pointer items-start gap-2 rounded border px-3 py-2 text-sm {ctl.actions.includes(
+                class="flex cursor-pointer items-start gap-2 rounded border px-3 py-2 text-body {ctl.actions.includes(
                   a,
                 )
                   ? 'border-accent/60 bg-accent/10'
@@ -187,13 +187,13 @@
                 />
                 <span class="flex min-w-0 flex-col gap-0.5">
                   <span class="font-medium text-fg-1">{ACTION_LABEL[a].name}</span>
-                  <span class="text-xs text-fg-2">{ACTION_LABEL[a].hint}</span>
+                  <span class="text-meta text-fg-2">{ACTION_LABEL[a].hint}</span>
                 </span>
               </label>
             {/each}
           </div>
           {#if ctl.target?.kind === 'cluster' && ctl.actions.includes('classify')}
-            <label class="flex flex-col gap-1 pl-1 text-xs text-fg-2">
+            <label class="flex flex-col gap-1 pl-1 text-meta text-fg-2">
               Agreement needed to propose a label
               <input
                 class="input w-32"
@@ -214,7 +214,7 @@
           {/if}
           {#if ctl.actions.includes('segment')}
             <div
-              class="flex flex-col gap-1 pl-1 text-xs text-fg-2"
+              class="flex flex-col gap-1 pl-1 text-meta text-fg-2"
               data-testid="assist-segment-verify"
             >
               <span class="text-fg-2">New boxes from the segmenter</span>
@@ -244,9 +244,9 @@
           {/if}
         </fieldset>
 
-        <fieldset class="flex flex-col gap-2 text-sm">
-          <legend class="mb-1 text-sm font-medium text-fg-1">Which VLM</legend>
-          <div class="flex flex-wrap items-center gap-3 text-xs">
+        <fieldset class="flex flex-col gap-2 text-body">
+          <legend class="mb-1 text-body font-medium text-fg-1">Which VLM</legend>
+          <div class="flex flex-wrap items-center gap-3 text-meta">
             <VlmRunPicker
               vlm={ctl.vlm}
               acknowledgeExternal={ctl.acknowledgeExternal}
@@ -292,7 +292,7 @@
       {/if}
 
       {#if ctl.startError}
-        <p class="text-xs text-danger-text" data-testid="assist-start-error">
+        <p class="text-meta text-danger-text" data-testid="assist-start-error">
           {ctl.startError}
         </p>
       {/if}

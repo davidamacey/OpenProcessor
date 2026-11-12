@@ -45,11 +45,11 @@
     class="flex h-screen flex-col items-center justify-center gap-3 bg-surface-0 px-6 text-center text-fg-1"
     data-testid="projects-blocking-error"
   >
-    <p class="text-lg font-semibold">Can't reach the backend's project list</p>
-    <p class="max-w-md text-sm text-fg-2">{data.projectsError}</p>
+    <p class="text-title font-semibold">Can't reach the backend's project list</p>
+    <p class="max-w-md text-body text-fg-2">{data.projectsError}</p>
     <button
       type="button"
-      class="rounded border border-line-strong px-3 py-1.5 text-sm hover:border-fg-3"
+      class="rounded border border-line-strong px-3 py-1.5 text-body hover:border-fg-3"
       onclick={() => window.location.reload()}
     >
       Retry
@@ -59,7 +59,7 @@
   {@render children?.()}
   {#if updated.current}
     <div
-      class="fixed right-3 bottom-3 z-80 flex items-center gap-3 rounded border border-line-strong bg-surface-1 px-3 py-2 text-sm text-fg-1"
+      class="fixed right-3 bottom-3 z-80 flex items-center gap-3 rounded border border-line-strong bg-surface-1 px-3 py-2 text-body text-fg-1"
       role="status"
       data-testid="new-version-banner"
     >

@@ -82,7 +82,7 @@
 <div class="flex h-full min-h-0 flex-1 flex-col" data-testid="map-view">
   <h1 class="sr-only">Map</h1>
   {#if ctl.meta?.available}
-    <p class="flex flex-wrap items-center gap-x-3 px-4 py-2 text-xs text-fg-2">
+    <p class="flex flex-wrap items-center gap-x-3 px-4 py-2 text-meta text-fg-2">
       <span data-testid="map-located">{ctl.meta.n_located.toLocaleString()} located</span>
       <span aria-hidden="true">·</span>
       {#if ctl.meta.n_without_location > 0}
@@ -112,14 +112,14 @@
     </p>
   {/if}
   {#if ctl.loadingMeta}
-    <p class="p-4 text-sm text-fg-3" role="status">Loading…</p>
+    <p class="p-4 text-body text-fg-3" role="status">Loading…</p>
   {:else if ctl.metaError}
-    <div class="flex flex-col items-start gap-3 p-4 text-sm">
+    <div class="flex flex-col items-start gap-3 p-4 text-body">
       <p class="text-danger-text" role="alert" data-testid="map-error">{ctl.metaError}</p>
       <button type="button" class="btn" onclick={() => void ctl.loadMeta()}>Retry</button>
     </div>
   {:else if ctl.meta && !ctl.meta.available}
-    <p class="p-6 text-sm text-fg-2" data-testid="map-unavailable">
+    <p class="p-6 text-body text-fg-2" data-testid="map-unavailable">
       {#if ctl.meta.location_policy === 'drop'}
         This project does not store where photos were taken (its location policy is
         <code>drop</code>).
@@ -129,22 +129,22 @@
     </p>
   {:else if ctl.meta}
     {#if ctl.cellsError}
-      <p class="px-4 text-xs text-danger-text" role="alert">{ctl.cellsError}</p>
+      <p class="px-4 text-meta text-danger-text" role="alert">{ctl.cellsError}</p>
     {/if}
     {#if ctl.cells?.truncated}
-      <p class="px-4 text-xs text-warn-text" data-testid="map-truncated">
+      <p class="px-4 text-meta text-warn-text" data-testid="map-truncated">
         More cells match than fit on the map; zoom in to see them.
       </p>
     {/if}
     {#if ctl.cells?.join_truncated}
-      <p class="px-4 text-xs text-warn-text" data-testid="map-join-truncated">
+      <p class="px-4 text-meta text-warn-text" data-testid="map-join-truncated">
         The filter matches more photos than the map can use at once; narrow it to see all
         of them.
       </p>
     {/if}
     {#if ctl.cells?.features.length}
       <!-- The canvas is a pointing device; this is the same cells for the keyboard and screen readers. -->
-      <details class="px-4 pb-1 text-xs text-fg-2" data-testid="map-cell-list">
+      <details class="px-4 pb-1 text-meta text-fg-2" data-testid="map-cell-list">
         <summary class="cursor-pointer">
           Cells in view ({ctl.cells.features.length.toLocaleString()})
         </summary>

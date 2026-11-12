@@ -97,12 +97,12 @@
   data-field={field.field}
 >
   <div class="flex flex-wrap items-baseline gap-2">
-    <label class="text-sm font-medium text-fg-1" for="pack-field-{field.field}"
+    <label class="text-body font-medium text-fg-1" for="pack-field-{field.field}"
       >{field.label}</label
     >
     <code class="font-mono text-caption text-fg-3">{field.field}</code>
   </div>
-  {#if field.help}<p class="text-xs text-fg-2">{field.help}</p>{/if}
+  {#if field.help}<p class="text-meta text-fg-2">{field.help}</p>{/if}
 
   {#if field.allowed_placeholders.length > 0 || field.expected_reply_keys.length > 0 || field.optional_reply_keys.length > 0}
     <div class="flex flex-wrap items-center gap-1 text-caption">
@@ -167,7 +167,7 @@
           {/if}
         </div>
       {:else}
-        <p class="text-xs text-fg-3">No patterns.</p>
+        <p class="text-meta text-fg-3">No patterns.</p>
       {/each}
       {#if !readonly}
         <button
@@ -211,7 +211,7 @@
           {/if}
         </div>
       {:else}
-        <p class="text-xs text-fg-3">No entries.</p>
+        <p class="text-meta text-fg-3">No entries.</p>
       {/each}
       {#if !readonly}
         <button
@@ -225,7 +225,7 @@
   {:else if isText}
     <textarea
       id="pack-field-{field.field}"
-      class="input min-h-24 w-full resize-y font-mono text-xs {hasError
+      class="input min-h-24 w-full resize-y font-mono text-meta {hasError
         ? 'border-danger/60'
         : ''}"
       rows={Math.min(14, Math.max(3, text.split('\n').length + 1))}
@@ -236,7 +236,7 @@
     ></textarea>
   {:else}
     <div data-testid="pack-unknown" class="space-y-1">
-      <p class="text-xs text-warn-text">
+      <p class="text-meta text-warn-text">
         Unsupported field kind “{field.kind}”: shown read-only and saved unchanged.
       </p>
       <pre

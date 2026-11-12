@@ -28,7 +28,7 @@
 
 <section class="surface space-y-3 p-4" data-testid="detections-summary">
   <div class="flex items-center gap-3">
-    <h2 class="text-sm font-semibold text-fg-2">Detections</h2>
+    <h2 class="text-body font-semibold text-fg-2">Detections</h2>
     <span class="grow"></span>
     <button
       type="button"
@@ -48,9 +48,9 @@
       />
     </div>
   {:else if !s}
-    <p class="text-xs text-fg-3">Loading...</p>
+    <p class="text-meta text-fg-3">Loading...</p>
   {:else}
-    <div class="flex flex-wrap items-center gap-3 text-xs">
+    <div class="flex flex-wrap items-center gap-3 text-meta">
       <span class="font-mono text-fg-1" data-testid="detections-total"
         >{fmt(s.total)} detections</span
       >
@@ -75,7 +75,7 @@
     </div>
 
     {#if s.by_label.length > 0}
-      <table class="w-full text-left text-xs" data-testid="detections-by-label">
+      <table class="w-full text-left text-meta" data-testid="detections-by-label">
         <thead class="text-fg-3">
           <tr>
             <th class="py-0.5 pr-3 font-normal">Label</th>
@@ -97,7 +97,7 @@
       </table>
     {/if}
     {#if s.labels_truncated}
-      <p class="text-xs text-fg-3" data-testid="detections-truncated">
+      <p class="text-meta text-fg-3" data-testid="detections-truncated">
         The label list is truncated; only the labels with the most detections are shown.
       </p>
     {/if}

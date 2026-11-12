@@ -16,15 +16,15 @@
 </script>
 
 <div>
-  <h3 class="mb-2 text-sm font-semibold text-fg-1">Region detection worklog</h3>
+  <h3 class="mb-2 text-body font-semibold text-fg-1">Region detection worklog</h3>
   {#if error}
-    <p class="text-xs text-danger-text">
+    <p class="text-meta text-danger-text">
       Detection worklog unavailable (backend: {error})
     </p>
   {:else if !drain}
-    <p class="text-xs text-fg-3">Loading…</p>
+    <p class="text-meta text-fg-3">Loading…</p>
   {:else}
-    <div class="flex gap-4 text-xs">
+    <div class="flex gap-4 text-meta">
       <div>
         <div class="text-fg-3">Pending detection</div>
         <div class="font-mono text-fg-1">{drain.pending_detection}</div>
@@ -57,7 +57,7 @@
     {#if drain.stall_reason}
       <!-- V-1: why the worklog can't drain, served verbatim. -->
       <p
-        class="mt-2 rounded border border-warn/40 bg-warn/10 px-2 py-1 text-xs text-warn-text"
+        class="mt-2 rounded border border-warn/40 bg-warn/10 px-2 py-1 text-meta text-warn-text"
         data-testid="region-drain-stall-reason"
       >
         Stalled: {drain.stall_reason}

@@ -21,7 +21,7 @@
 
 <details class="relative" data-testid="column-picker">
   <summary
-    class="cursor-pointer rounded border border-line-strong px-2 py-1 text-xs text-fg-2 hover:text-fg-1"
+    class="cursor-pointer rounded border border-line-strong px-2 py-1 text-meta text-fg-2 hover:text-fg-1"
   >
     Columns
   </summary>
@@ -30,7 +30,7 @@
   >
     <legend class="sr-only">Columns shown</legend>
     {#each vocabulary as c (c.id)}
-      <label class="flex items-center gap-2 text-xs text-fg-1">
+      <label class="flex items-center gap-2 text-meta text-fg-1">
         <input
           type="checkbox"
           checked={chosen.includes(c.id)}

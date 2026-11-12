@@ -36,7 +36,7 @@
     {#if Body && target}
       <Body {ws} id={target.id} />
     {:else}
-      <p class="text-sm text-fg-3">Select something to see its details.</p>
+      <p class="text-body text-fg-3">Select something to see its details.</p>
     {/if}
   </aside>
 {/if}

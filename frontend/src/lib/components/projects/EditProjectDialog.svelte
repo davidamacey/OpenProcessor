@@ -73,35 +73,35 @@
 
 {#if project && base}
   <Modal label="Edit project" {onclose} data-testid="edit-project-dialog">
-    <h3 class="mb-1 text-base font-semibold">Edit project</h3>
-    <p class="mb-3 font-mono text-xs text-fg-3">{base.slug}</p>
+    <h3 class="mb-1 text-title font-semibold">Edit project</h3>
+    <p class="mb-3 font-mono text-meta text-fg-3">{base.slug}</p>
     <form
       onsubmit={async (e) => {
         e.preventDefault();
         await submit();
       }}
     >
-      <label class="mb-3 block text-sm">
-        <span class="mb-1 block text-xs text-fg-2">Display name</span>
+      <label class="mb-3 block text-body">
+        <span class="mb-1 block text-meta text-fg-2">Display name</span>
         <input
           type="text"
           bind:value={displayName}
           data-testid="edit-project-name"
-          class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 text-sm text-fg-1 focus:border-accent focus:outline-none"
+          class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 text-body text-fg-1 focus:border-accent focus:outline-none"
         />
       </label>
-      <label class="mb-3 block text-sm">
-        <span class="mb-1 block text-xs text-fg-2">Description</span>
+      <label class="mb-3 block text-body">
+        <span class="mb-1 block text-meta text-fg-2">Description</span>
         <textarea
           bind:value={description}
           rows="2"
           data-testid="edit-project-description"
-          class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 text-sm text-fg-1 focus:border-accent focus:outline-none"
+          class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 text-body text-fg-1 focus:border-accent focus:outline-none"
         ></textarea>
       </label>
 
       {#if errorText}
-        <div class="mb-3 text-xs text-danger-text" data-testid="edit-project-error">
+        <div class="mb-3 text-meta text-danger-text" data-testid="edit-project-error">
           <p>{errorText}</p>
           {#if conflict}
             <button

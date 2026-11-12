@@ -36,7 +36,7 @@
 
 {#if role !== 'none' || model.class_mapping}
   <div
-    class="mt-3 space-y-2 border-t border-line pt-3 text-xs"
+    class="mt-3 space-y-2 border-t border-line pt-3 text-meta"
     data-testid="model-sharing-{model.name}"
   >
     {#if role === 'foreign' && model.project}

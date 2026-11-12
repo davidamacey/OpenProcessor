@@ -76,14 +76,14 @@
     message={c.stack.message}
   />
   {#if c.filmstrip?.message}
-    <p class="border-b border-line px-3 py-1.5 text-xs text-fg-2">
+    <p class="border-b border-line px-3 py-1.5 text-meta text-fg-2">
       {c.filmstrip.message}
     </p>
   {/if}
 
   {#if c.drop}
     <div
-      class="flex flex-wrap items-center gap-2 border-b border-warn/40 bg-warn/10 px-3 py-1.5 text-sm text-warn-text"
+      class="flex flex-wrap items-center gap-2 border-b border-warn/40 bg-warn/10 px-3 py-1.5 text-body text-warn-text"
       role="alert"
       data-testid="drop-regions"
     >
@@ -149,7 +149,7 @@
         >
           <button
             type="button"
-            class="flex w-full items-center justify-between px-3 py-2 text-sm text-fg-1 lg:hidden"
+            class="flex w-full items-center justify-between px-3 py-2 text-body text-fg-1 lg:hidden"
             aria-expanded={objectsOpen}
             aria-controls="editor-objects"
             data-testid="objects-toggle"

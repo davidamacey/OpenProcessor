@@ -113,7 +113,7 @@
 <div class="relative min-w-0 shrink" bind:this={root} data-testid="project-switcher">
   <button
     type="button"
-    class="flex max-w-[min(16rem,55vw)] min-w-0 items-center gap-1.5 rounded border border-line px-2 py-1 text-sm text-fg-1 hover:border-line-strong"
+    class="flex max-w-[min(16rem,55vw)] min-w-0 items-center gap-1.5 rounded border border-line px-2 py-1 text-body text-fg-1 hover:border-line-strong"
     aria-haspopup="listbox"
     aria-expanded={open}
     title="Switch project"
@@ -158,7 +158,7 @@
       <input
         bind:this={filterInput}
         type="text"
-        class="block w-full rounded-t border-b border-line-strong bg-surface-0 px-3 py-1.5 text-sm text-fg-1 placeholder:text-fg-3 focus:outline-none"
+        class="block w-full rounded-t border-b border-line-strong bg-surface-0 px-3 py-1.5 text-body text-fg-1 placeholder:text-fg-3 focus:outline-none"
         placeholder="Find a project…"
         role="combobox"
         aria-label="Find a project"
@@ -186,7 +186,7 @@
           {#each picker.recents as r (r.slug)}
             <button
               type="button"
-              class="block w-full truncate px-3 py-1 text-left text-sm text-fg-2 hover:bg-surface-2"
+              class="block w-full truncate px-3 py-1 text-left text-body text-fg-2 hover:bg-surface-2"
               data-testid="project-recent-{r.slug}"
               onclick={() => choose(r.slug)}>{r.display_name}</button
             >
@@ -199,7 +199,7 @@
             role="option"
             tabindex="-1"
             aria-selected={i === picker.active}
-            class="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-sm {i ===
+            class="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left text-body {i ===
             picker.active
               ? 'bg-surface-2'
               : ''} {p.slug === current?.slug ? 'text-white' : 'text-fg-2'}"
@@ -219,11 +219,11 @@
               >
             {/if}
             {#if p.slug === current?.slug}
-              <span class="shrink-0 text-xs text-fg-3">current</span>
+              <span class="shrink-0 text-meta text-fg-3">current</span>
             {/if}
           </div>
         {:else}
-          <p class="px-3 py-2 text-xs text-fg-3" role="status">
+          <p class="px-3 py-2 text-meta text-fg-3" role="status">
             {#if picker.error}{picker.error}{:else if picker.loading}Loading…{:else}No
               project matches "{picker.query}".{/if}
           </p>
@@ -249,7 +249,7 @@
       <div class="my-1 border-t border-line"></div>
       <a
         href={resolve('/projects')}
-        class="block px-3 py-1.5 text-sm text-fg-2 hover:bg-surface-2 hover:text-white"
+        class="block px-3 py-1.5 text-body text-fg-2 hover:bg-surface-2 hover:text-white"
         data-testid="project-switcher-manage"
         onclick={() => (open = false)}>Manage projects…</a
       >

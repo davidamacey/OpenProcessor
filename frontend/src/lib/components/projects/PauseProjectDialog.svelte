@@ -59,11 +59,11 @@
     {onclose}
     data-testid="pause-project-dialog"
   >
-    <h3 class="mb-1 text-base font-semibold">
+    <h3 class="mb-1 text-title font-semibold">
       {target.pause ? 'Pause pipeline' : 'Resume pipeline'}
     </h3>
-    <p class="mb-3 font-mono text-xs text-fg-3">{target.project.slug}</p>
-    <p class="mb-3 text-sm text-fg-2" data-testid="pause-project-text">
+    <p class="mb-3 font-mono text-meta text-fg-3">{target.project.slug}</p>
+    <p class="mb-3 text-body text-fg-2" data-testid="pause-project-text">
       {#if target.pause}
         Pause {target.project.display_name}'s pipeline? Workers skip this project until
         it's resumed. Nothing is deleted, and labeling in the app keeps working.
@@ -73,7 +73,7 @@
       {/if}
     </p>
     {#if errorText}
-      <p class="mb-3 text-xs text-danger-text" data-testid="pause-project-error">
+      <p class="mb-3 text-meta text-danger-text" data-testid="pause-project-error">
         {errorText}
       </p>
     {/if}

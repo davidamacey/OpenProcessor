@@ -47,15 +47,21 @@
   data-testid="ingest-profile-picker"
   bind:this={section}
 >
-  <h2 class="text-sm font-semibold" tabindex="-1" bind:this={heading}>Ingest profiles</h2>
+  <h2 class="text-body font-semibold" tabindex="-1" bind:this={heading}>
+    Ingest profiles
+  </h2>
   {#if ctl.loadError}
-    <p class="text-xs text-danger-text" role="alert" data-testid="ingest-profiles-error">
+    <p
+      class="text-meta text-danger-text"
+      role="alert"
+      data-testid="ingest-profiles-error"
+    >
       {ctl.loadError}
     </p>
   {:else if ctl.list === null}
-    <p class="text-xs text-fg-2">Loading ingest profiles.</p>
+    <p class="text-meta text-fg-2">Loading ingest profiles.</p>
   {:else if ctl.list.profiles.length === 0}
-    <p class="text-xs text-fg-2" data-testid="ingest-profiles-empty">
+    <p class="text-meta text-fg-2" data-testid="ingest-profiles-empty">
       No ingest profiles are stored for this project.
     </p>
   {:else}
@@ -66,7 +72,7 @@
     >
       {#each ctl.list.profiles as p (p.name)}
         <li
-          class="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-xs"
+          class="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-meta"
           tabindex="-1"
           data-testid="ingest-profile-row"
           data-name={p.name}
@@ -105,7 +111,7 @@
 
   {#if refusal}
     <div
-      class="space-y-2 rounded border border-danger/40 bg-danger/10 p-3 text-xs text-danger-text"
+      class="space-y-2 rounded border border-danger/40 bg-danger/10 p-3 text-meta text-danger-text"
       data-testid="ingest-profile-refusal"
       role="alert"
       tabindex="-1"
@@ -136,7 +142,7 @@
 
   {#if ctl.followUpError}
     <p
-      class="text-xs text-danger-text"
+      class="text-meta text-danger-text"
       role="alert"
       data-testid="ingest-profile-followup-error"
     >
@@ -147,7 +153,7 @@
 
   <div role="status" data-testid="ingest-profile-status">
     {#if !refusal && ctl.lastValidation && ctl.lastValidation.warnings.length > 0}
-      <div class="space-y-1 text-xs" data-testid="ingest-profile-warnings">
+      <div class="space-y-1 text-meta" data-testid="ingest-profile-warnings">
         <p class="text-warn-text">Activated, with warnings.</p>
         <ConfigIssueList issues={ctl.lastValidation.warnings} showField />
       </div>

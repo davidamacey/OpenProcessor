@@ -17,7 +17,7 @@
   let { row, flow, lead }: Props = $props();
 </script>
 
-<td class="py-1.5 pr-3 text-xs text-fg-3">
+<td class="py-1.5 pr-3 text-meta text-fg-3">
   {row.updated_at ? formatTimestamp(row.updated_at) : '—'}
 </td>
 <td class="py-1.5 text-right whitespace-nowrap">

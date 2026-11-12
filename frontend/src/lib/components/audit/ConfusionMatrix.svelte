@@ -20,17 +20,17 @@
 
 <section class="surface flex flex-col gap-2 p-4" data-testid="audit-confusion">
   <div>
-    <h3 class="text-sm font-semibold text-fg-1">Detector class vs human class</h3>
-    <p class="text-xs text-fg-3">
+    <h3 class="text-body font-semibold text-fg-1">Detector class vs human class</h3>
+    <p class="text-meta text-fg-3">
       Rows are what the detector said, columns are what a human chose. Crops on the
       outlined cells agree.
     </p>
   </div>
   {#if rows.length === 0}
-    <p class="text-sm text-fg-3">No audited crops yet.</p>
+    <p class="text-body text-fg-3">No audited crops yet.</p>
   {:else}
     <div class="overflow-x-auto">
-      <table class="text-left text-xs">
+      <table class="text-left text-meta">
         <thead class="text-fg-3">
           <tr>
             <th class="sticky left-0 bg-surface-1 py-1 pr-3 font-medium">Detector</th>

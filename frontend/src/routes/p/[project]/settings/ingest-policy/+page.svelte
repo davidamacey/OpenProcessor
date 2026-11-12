@@ -56,21 +56,21 @@
     <h1 class="text-h1 font-semibold text-fg-1">Ingest policy</h1>
     <span class="grow"></span>
     <a
-      class="text-xs text-accent-text hover:underline"
+      class="text-meta text-accent-text hover:underline"
       href={resolve(projectHref('/settings'))}>Back to settings</a
     >
   </header>
-  <p class="text-sm text-fg-2">
+  <p class="text-body text-fg-2">
     Which detections an ingest keeps, and which of those get a vector. The policy changes
     only future ingests; embed detections already stored from the dashboard.
   </p>
 
   {#if editor.loadError}
-    <p class="text-sm text-danger-text" data-testid="policy-load-error">
+    <p class="text-body text-danger-text" data-testid="policy-load-error">
       {editor.loadError}
     </p>
   {:else if editor.loading}
-    <p class="text-sm text-fg-3">Loading...</p>
+    <p class="text-body text-fg-3">Loading...</p>
   {:else}
     <ActiveIngestProfileCard
       profile={editor.activeProfile}
@@ -83,12 +83,12 @@
 
     {#if editor.conflict}
       <div
-        class="space-y-2 rounded border border-warn-line bg-warn-soft p-3 text-sm text-warn-text"
+        class="space-y-2 rounded border border-warn-line bg-warn-soft p-3 text-body text-warn-text"
         data-testid="policy-conflict"
       >
         <p>The policy changed since you opened it.</p>
         {#each editor.saveLines as line, i (i)}
-          <p class="text-xs">{line}</p>
+          <p class="text-meta">{line}</p>
         {/each}
         <div class="flex gap-2">
           <button
@@ -106,7 +106,7 @@
         </div>
       </div>
     {:else if editor.saveLines.length > 0}
-      <div class="space-y-1 text-sm text-danger-text" data-testid="policy-save-error">
+      <div class="space-y-1 text-body text-danger-text" data-testid="policy-save-error">
         {#each editor.saveLines as line, i (i)}
           <p>{line}</p>
         {/each}
@@ -115,7 +115,7 @@
 
     {#if editor.unknownNames.length > 0}
       <div
-        class="rounded border border-warn-line bg-warn-soft p-3 text-xs text-warn-text"
+        class="rounded border border-warn-line bg-warn-soft p-3 text-meta text-warn-text"
         data-testid="policy-unknown-names"
       >
         <p>These names are not in the detector's labels or the registry; saved anyway:</p>
@@ -135,7 +135,7 @@
         disabled={!editor.dirty || editor.saving}
         onclick={() => (confirming = true)}>Save policy</button
       >
-      <span class="text-xs text-fg-3">Revision {editor.revision}</span>
+      <span class="text-meta text-fg-3">Revision {editor.revision}</span>
     </div>
   {/if}
 </div>
@@ -148,7 +148,7 @@
     onconfirm={() => void doSave()}
     oncancel={() => (confirming = false)}
   >
-    <p class="text-sm text-fg-2">
+    <p class="text-body text-fg-2">
       Future ingests will keep and embed detections under this policy. Detections already
       stored are not changed.
     </p>

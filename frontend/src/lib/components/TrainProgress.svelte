@@ -56,7 +56,7 @@
 
 <section class="rounded-md border border-line bg-surface-1 p-4">
   <header class="mb-3 flex flex-wrap items-center gap-3">
-    <h2 class="font-mono text-sm text-white">{status.job_id}</h2>
+    <h2 class="font-mono text-body text-white">{status.job_id}</h2>
     <span
       class="rounded-sm border px-1.5 py-0.5 text-caption font-medium uppercase tracking-wide {statePillClass(
         status.state,
@@ -89,7 +89,7 @@
     {/if}
   </header>
 
-  <div class="mb-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
+  <div class="mb-3 grid grid-cols-1 gap-2 text-body sm:grid-cols-2 lg:grid-cols-4">
     <div>
       <dt class="text-caption uppercase tracking-wide text-fg-3">Epoch</dt>
       <dd class="font-mono text-fg-1">
@@ -133,7 +133,7 @@
     <div class="flex flex-wrap gap-2">
       {#each status.gpu as g, i (g.index ?? i)}
         <span
-          class="rounded-md border border-line-strong bg-surface-0 px-2 py-1 font-mono text-xs text-fg-2"
+          class="rounded-md border border-line-strong bg-surface-0 px-2 py-1 font-mono text-meta text-fg-2"
           title="GPU {g.index ?? i} utilization / memory"
         >
           GPU {g.index ?? i}

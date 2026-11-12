@@ -25,7 +25,7 @@
   }}
 >
   <div class="flex flex-wrap items-end gap-3">
-    <label class="text-xs text-fg-2">
+    <label class="text-meta text-fg-2">
       Name
       <input
         class="input input-sm block"
@@ -35,7 +35,7 @@
       />
     </label>
     {#if creating}
-      <fieldset class="flex gap-3 text-xs text-fg-2">
+      <fieldset class="flex gap-3 text-meta text-fg-2">
         <label class="flex items-center gap-1">
           <input
             type="radio"
@@ -60,7 +60,7 @@
   </div>
 
   {#if creating && list && !list.s3_configured}
-    <p class="text-xs text-warn-text" data-testid="s3-off">
+    <p class="text-meta text-warn-text" data-testid="s3-off">
       S3 is off on this deployment: the API's OP_S3_ALLOWED lists no bucket.
     </p>
   {/if}
@@ -68,7 +68,7 @@
   {#if creating}
     {#if controller.form.backend === 's3'}
       <div class="flex flex-wrap items-end gap-3">
-        <label class="text-xs text-fg-2">
+        <label class="text-meta text-fg-2">
           Bucket
           <input
             class="input input-sm block font-mono"
@@ -76,7 +76,7 @@
             bind:value={controller.form.bucket}
           />
         </label>
-        <label class="text-xs text-fg-2">
+        <label class="text-meta text-fg-2">
           Prefix
           <input
             class="input input-sm block font-mono"
@@ -87,16 +87,16 @@
         </label>
       </div>
       {#if list && list.s3_allowed.length > 0}
-        <p class="text-xs text-fg-3">
+        <p class="text-meta text-fg-3">
           Allowed by this deployment:
           <span class="font-mono">{list.s3_allowed.join(', ')}</span>
         </p>
       {/if}
     {:else}
-      <label class="block text-xs text-fg-2">
+      <label class="block text-meta text-fg-2">
         Folder (a path inside the API container, under a source root)
         <input
-          class="input block w-full font-mono text-xs"
+          class="input block w-full font-mono text-meta"
           data-testid="source-folder"
           bind:value={controller.form.folder}
         />
@@ -104,7 +104,7 @@
     {/if}
   {/if}
 
-  <fieldset class="space-y-2 text-xs text-fg-2">
+  <fieldset class="space-y-2 text-meta text-fg-2">
     <legend class="text-fg-2">Triggers</legend>
     <div class="flex flex-wrap items-center gap-2">
       <label class="flex items-center gap-1">
@@ -155,7 +155,7 @@
     {/if}
   </fieldset>
 
-  <details class="text-xs text-fg-2">
+  <details class="text-meta text-fg-2">
     <summary class="cursor-pointer">Options</summary>
     <div class="mt-2 flex flex-wrap items-end gap-3">
       <label>
@@ -194,7 +194,7 @@
   </details>
 
   {#if controller.actionError}
-    <p class="text-xs text-danger-text" data-testid="source-form-error">
+    <p class="text-meta text-danger-text" data-testid="source-form-error">
       {controller.actionError}
     </p>
   {/if}

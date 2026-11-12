@@ -26,7 +26,7 @@
       data-testid="test-leg"
       data-leg={leg.leg}
     >
-      <p class="flex flex-wrap items-baseline gap-2 text-xs">
+      <p class="flex flex-wrap items-baseline gap-2 text-meta">
         <span class="font-semibold text-fg-1">{humanizeId(leg.leg)}</span>
         <span
           class="rounded border px-1.5 {leg.status === 'error'
@@ -44,7 +44,7 @@
         {/if}
       </p>
       {#if (leg.candidates ?? []).length > 0}
-        <table class="mt-1 w-full text-left text-xs">
+        <table class="mt-1 w-full text-left text-meta">
           <thead class="text-fg-3">
             <tr>
               <th class="py-0.5 pr-3">Candidate</th>

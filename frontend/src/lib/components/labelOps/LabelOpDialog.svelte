@@ -49,12 +49,15 @@
   panelClass="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg border border-line bg-surface-0 p-5 shadow-2xl"
   data-testid="label-op-dialog"
 >
-  <h2 class="text-lg font-semibold">
+  <h2 class="text-title font-semibold">
     {op.kind === 'label' ? 'Label' : 'Move'} operation
   </h2>
-  <p class="break-all font-mono text-xs text-fg-3">{op.op_id}</p>
+  <p class="break-all font-mono text-meta text-fg-3">{op.op_id}</p>
 
-  <dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm" data-testid="label-op-facts">
+  <dl
+    class="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-body"
+    data-testid="label-op-facts"
+  >
     {#each facts as [k, v] (k)}
       <dt class="text-fg-2">{k}</dt>
       <dd class="font-mono text-fg-1">{v}</dd>
@@ -62,9 +65,9 @@
   </dl>
 
   {#if op.last_undo}
-    <section class="mt-4 text-sm" data-testid="label-op-last-undo">
+    <section class="mt-4 text-body" data-testid="label-op-last-undo">
       <h3 class="font-medium">Last undo, {formatTimestamp(op.last_undo.at)}</h3>
-      <ul class="mt-1 text-xs text-fg-2">
+      <ul class="mt-1 text-meta text-fg-2">
         <li>Restored: <span class="font-mono">{op.last_undo.restored}</span></li>
         <li>
           Already undone: <span class="font-mono">{op.last_undo.already_undone}</span>
@@ -86,7 +89,7 @@
 
   {#if ctl.undoError}
     <p
-      class="mt-4 text-sm text-danger-text"
+      class="mt-4 text-body text-danger-text"
       role="alert"
       data-testid="label-op-undo-error"
     >
@@ -97,16 +100,16 @@
   {#if ctl.result && (ctl.phase === 'ready' || ctl.phase === 'done')}
     {@const r = ctl.result}
     <section
-      class="mt-4 rounded border border-line-strong p-3 text-sm"
+      class="mt-4 rounded border border-line-strong p-3 text-body"
       data-testid="label-op-result"
     >
       <h3 class="font-medium">
         {r.dry_run ? 'Dry run: nothing has been written' : 'Undo finished'}
       </h3>
-      <p class="mt-1 text-xs text-fg-2">
+      <p class="mt-1 text-meta text-fg-2">
         Matched <span class="font-mono" data-testid="label-op-matched">{r.matched}</span> items.
       </p>
-      <ul class="mt-2 flex flex-col gap-0.5 text-xs">
+      <ul class="mt-2 flex flex-col gap-0.5 text-meta">
         {#each OUTCOMES as [key, label] (key)}
           <li
             class="flex justify-between gap-3 text-fg-2"
@@ -117,7 +120,7 @@
         {/each}
       </ul>
       {#if r.conflict_ids.length}
-        <div class="mt-2 text-xs" data-testid="label-op-conflict-ids">
+        <div class="mt-2 text-meta" data-testid="label-op-conflict-ids">
           <p class="text-warn-text">Conflicting items:</p>
           <ul class="max-h-24 overflow-y-auto break-all font-mono text-fg-2">
             {#each r.conflict_ids as id (id)}
@@ -149,7 +152,7 @@
       >
     {/if}
     {#if ctl.phase === 'writing'}
-      <span class="self-center text-xs text-fg-2" role="status">Undoing…</span>
+      <span class="self-center text-meta text-fg-2" role="status">Undoing…</span>
     {/if}
     <button type="button" class="btn" disabled={busy} onclick={() => ctl.close()}
       >Close</button

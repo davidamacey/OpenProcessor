@@ -73,7 +73,7 @@
 
 {#if crop.class_excluded}
   <div
-    class="mb-3 rounded border border-warn/40 bg-warn/10 px-2 py-1.5 text-xs text-warn-text"
+    class="mb-3 rounded border border-warn/40 bg-warn/10 px-2 py-1.5 text-meta text-warn-text"
   >
     <span class="font-medium">Ignored</span>
     {#if crop.excluded_reason}
@@ -87,7 +87,7 @@
   </div>
 {/if}
 
-<dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
+<dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-meta">
   {#if !embedded}
     <dt class="text-fg-3">Class</dt>
     <dd class="text-fg-1">

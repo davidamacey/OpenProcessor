@@ -29,15 +29,15 @@
       >
         {preflight.blocked ? 'blocked' : 'ok'}
       </span>
-      <span class="text-xs text-fg-2">{preflight.summary ?? ''}</span>
+      <span class="text-meta text-fg-2">{preflight.summary ?? ''}</span>
     {/if}
   </header>
   {#if !preflight && !preflighting}
-    <p class="text-xs text-fg-3" data-testid="preflight-empty">
+    <p class="text-meta text-fg-3" data-testid="preflight-empty">
       Not checked yet. Run the preflight to check the dataset before a run.
     </p>
   {:else if preflight && preflight.checks.length === 0}
-    <p class="text-xs text-fg-3" data-testid="preflight-empty">
+    <p class="text-meta text-fg-3" data-testid="preflight-empty">
       No checks were reported for this dataset.
     </p>
   {/if}
@@ -66,7 +66,7 @@
 
 {#snippet row(c: PreflightCheck)}
   <li
-    class="flex items-start gap-2 rounded border px-2 py-1.5 text-xs {checkSeverityClass(
+    class="flex items-start gap-2 rounded border px-2 py-1.5 text-meta {checkSeverityClass(
       c.severity,
     )}"
   >

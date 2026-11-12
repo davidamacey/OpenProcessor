@@ -41,7 +41,7 @@
     aria-labelledby="loop-panel-heading"
     data-testid="loop-panel"
   >
-    <h2 id="loop-panel-heading" class="text-sm font-medium text-fg-1">
+    <h2 id="loop-panel-heading" class="text-body font-medium text-fg-1">
       <button
         type="button"
         class="flex items-center gap-2 text-left"
@@ -61,7 +61,11 @@
     {#if open}
       <div id="loop-panel-body" class="mt-3 flex flex-col gap-5 pb-3">
         {#if ctl.loadError}
-          <p class="text-xs text-danger-text" role="alert" data-testid="loop-load-error">
+          <p
+            class="text-meta text-danger-text"
+            role="alert"
+            data-testid="loop-load-error"
+          >
             {ctl.loadError}
           </p>
         {/if}

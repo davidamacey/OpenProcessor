@@ -17,11 +17,11 @@
   )}
   {#if rows.length > 0}
     <details class="mb-3 rounded border border-line" open>
-      <summary class="cursor-pointer px-3 py-2 text-xs font-semibold text-fg-2">
+      <summary class="cursor-pointer px-3 py-2 text-meta font-semibold text-fg-2">
         {ctx.label}
         <span class="ml-1 font-normal text-fg-3">{ctx.description}</span>
       </summary>
-      <table class="w-full text-xs">
+      <table class="w-full text-meta">
         <tbody>
           {#each rows as action (action.id)}
             {@const field = `overrides.${action.id}`}

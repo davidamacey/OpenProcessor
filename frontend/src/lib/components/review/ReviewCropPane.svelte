@@ -89,7 +89,7 @@
   class="flex h-[35vh] flex-col surface p-2 lg:h-auto lg:min-h-0"
   data-testid="review-source-panel"
 >
-  <div class="mb-2 flex items-center gap-2 px-1 text-xs text-fg-2">
+  <div class="mb-2 flex items-center gap-2 px-1 text-meta text-fg-2">
     <span>source</span>
     <span class="grow"></span>
     <span class="font-mono">{current.source ?? ''}</span>
@@ -108,14 +108,14 @@
         spotlight
       />
     {:else}
-      <p class="text-xs text-fg-3">No source image is recorded for this item.</p>
+      <p class="text-meta text-fg-3">No source image is recorded for this item.</p>
     {/if}
   </div>
 </div>
 
 <!-- Crop + meta -->
 <div class="flex flex-col surface p-2 lg:min-h-0" data-testid="review-crop-panel">
-  <div class="mb-2 flex items-center gap-2 px-1 text-xs text-fg-2">
+  <div class="mb-2 flex items-center gap-2 px-1 text-meta text-fg-2">
     <span>crop</span>
     <Segmented
       label="Crop view"
@@ -286,7 +286,7 @@
     {#if loader.semanticSearchAvailable}
       <!-- A link, not a button: it navigates and opens in a new tab. -->
       <a
-        class="btn-sm mt-2 inline-block border border-line-strong bg-surface-1 text-xs text-fg-1 hover:bg-surface-2"
+        class="btn-sm mt-2 inline-block border border-line-strong bg-surface-1 text-meta text-fg-1 hover:bg-surface-2"
         href={resolve(similarHref(current.id))}
         data-testid="review-similar">More like this</a
       >

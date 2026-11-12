@@ -73,16 +73,16 @@
 
 {#if model}
   <Modal label="Model sharing" {onclose} data-testid="share-model-dialog">
-    <h3 class="mb-1 text-base font-semibold">
+    <h3 class="mb-1 text-title font-semibold">
       {model.shared ? 'Stop sharing' : 'Share with other projects'}
     </h3>
-    <p class="mb-3 break-all font-mono text-xs text-fg-3">{model.name}</p>
-    <p class="mb-3 text-sm text-fg-2" data-testid="share-model-text">
+    <p class="mb-3 break-all font-mono text-meta text-fg-3">{model.name}</p>
+    <p class="mb-3 text-body text-fg-2" data-testid="share-model-text">
       {model.shared ? unshareConfirmText(model.name) : shareConfirmText(model.name)}
     </p>
 
     {#if errorText}
-      <div class="mb-3 text-xs text-danger-text" data-testid="share-model-error">
+      <div class="mb-3 text-meta text-danger-text" data-testid="share-model-error">
         <p>{errorText}</p>
         {#if conflict}
           <p class="mt-1 text-fg-2" data-testid="share-model-reloaded">

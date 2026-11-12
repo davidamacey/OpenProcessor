@@ -26,10 +26,10 @@
 
 <!-- Export controls + downloads + training command -->
 <section class="surface p-4">
-  <h2 class="mb-3 text-sm font-semibold text-fg-2">Export to staging</h2>
+  <h2 class="mb-3 text-body font-semibold text-fg-2">Export to staging</h2>
   <NearDupStalePanel refresh={run.nearDup} />
   <div class="flex flex-wrap items-end gap-3">
-    <label class="text-xs">
+    <label class="text-meta">
       <span class="mb-1 block text-fg-2">Version tag (optional)</span>
       <input
         type="text"
@@ -39,7 +39,7 @@
       />
     </label>
     <label
-      class="flex cursor-pointer items-center gap-2 pb-1.5 text-xs text-fg-2"
+      class="flex cursor-pointer items-center gap-2 pb-1.5 text-meta text-fg-2"
       title="Drop any exported image that still has an unvalidated or otherwise unlabeled object on it, instead of letting the detector learn that object as background."
     >
       <input
@@ -50,7 +50,7 @@
       Only images whose every object is labeled
     </label>
     <label
-      class="flex cursor-pointer items-center gap-2 pb-1.5 text-xs text-fg-2"
+      class="flex cursor-pointer items-center gap-2 pb-1.5 text-meta text-fg-2"
       title="Keep one item per near-duplicate group. Needs a current near-duplicate run."
     >
       <input
@@ -118,7 +118,7 @@
 
   {#if run.exportBlocked && run.blockingReasons.length > 0}
     <ul
-      class="mt-2 list-inside list-disc text-xs text-warn-text"
+      class="mt-2 list-inside list-disc text-meta text-warn-text"
       data-testid="export-blocking-reasons"
     >
       {#each run.blockingReasons as reason, i (i)}
@@ -130,7 +130,7 @@
   <ExportItemFilter state={run.exportFilter} />
 
   {#if run.exportState}
-    <div class="mt-3 text-xs text-fg-2">
+    <div class="mt-3 text-meta text-fg-2">
       Last status: <span class="font-mono text-fg-1">{run.exportState.status}</span>
       {#if run.exportState.last_run}
         · {formatTimestamp(run.exportState.last_run)}
@@ -143,7 +143,7 @@
       {/if}
     </div>
     {#if run.exportState.status === 'success'}
-      <p class="mt-2 text-xs text-fg-2">
+      <p class="mt-2 text-meta text-fg-2">
         Next: <a
           href={resolve(projectHref('/train'))}
           class="text-accent-text underline hover:text-accent-text"
@@ -159,7 +159,7 @@
          (formatCount); with none of them served (no export yet) this
          whole block doesn't render rather than showing blanks. -->
     {#if run.exportState.image_count != null || run.exportState.object_count != null || run.exportState.class_count != null || run.exportState.split_counts}
-      <div class="mt-3 flex flex-wrap gap-2 text-xs">
+      <div class="mt-3 flex flex-wrap gap-2 text-meta">
         {#if run.exportState.image_count != null || run.exportState.object_count != null}
           <span class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1">
             <span class="ml-1 font-mono text-fg-1"
@@ -234,7 +234,7 @@
          export (formatCount renders "—"); the whole block hides when
          nothing here was ever recorded. -->
     {#if run.exportState.require_fully_labeled_images != null || run.exportState.unlabeled_items_on_exported_images != null || run.exportState.images_with_unlabeled_items != null || run.exportState.images_dropped_not_fully_labeled != null || run.exportState.skipped_items != null}
-      <div class="mt-2 flex flex-wrap gap-2 text-xs text-fg-2">
+      <div class="mt-2 flex flex-wrap gap-2 text-meta text-fg-2">
         {#if run.exportState.require_fully_labeled_images != null}
           <span class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1">
             require_fully_labeled_images: <span class="font-mono text-fg-1"
@@ -286,7 +286,7 @@
     {/if}
 
     {#if run.exportState.class_split_counts && run.exportState.class_split_counts.length > 0}
-      <details class="mt-3 text-xs">
+      <details class="mt-3 text-meta">
         <summary class="cursor-pointer text-fg-2 hover:text-fg-1">
           Per-class object counts ({run.exportClassSplit.withObjects.length} classes with objects)
         </summary>

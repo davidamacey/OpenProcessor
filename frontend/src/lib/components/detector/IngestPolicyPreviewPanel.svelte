@@ -22,36 +22,36 @@
 </script>
 
 <section class="surface space-y-2 p-4" data-testid="policy-preview">
-  <h2 class="text-sm font-semibold">Cost preview</h2>
-  <p class="text-xs text-fg-3">
+  <h2 class="text-body font-semibold">Cost preview</h2>
+  <p class="text-meta text-fg-3">
     For detections already stored; the policy changes only future ingests.
   </p>
   {#if editor.previewError}
-    <p class="text-xs text-danger-text" data-testid="policy-preview-error">
+    <p class="text-meta text-danger-text" data-testid="policy-preview-error">
       {editor.previewError}
     </p>
   {:else if p}
     {#if editor.previewStale}
-      <p class="text-xs text-warn-text" data-testid="policy-preview-stale">
+      <p class="text-meta text-warn-text" data-testid="policy-preview-stale">
         Recomputing for the edited policy; the figures below are for the previous one.
       </p>
     {/if}
     <p
-      class="text-sm text-fg-1 {editor.previewStale ? 'opacity-40' : ''}"
+      class="text-body text-fg-1 {editor.previewStale ? 'opacity-40' : ''}"
       data-testid="policy-preview-summary"
     >
       {summary}
     </p>
-    <p class="text-xs text-fg-2" data-testid="policy-preview-labeled">
+    <p class="text-meta text-fg-2" data-testid="policy-preview-labeled">
       {labeledText}
     </p>
     {#if p.truncated}
-      <p class="text-xs text-fg-2" data-testid="policy-preview-truncated">
+      <p class="text-meta text-fg-2" data-testid="policy-preview-truncated">
         Estimated from {p.scanned} detections.
       </p>
     {/if}
     {#if p.by_class.length > 0}
-      <table class="w-full text-left text-xs">
+      <table class="w-full text-left text-meta">
         <thead class="text-fg-3">
           <tr>
             <th class="pr-3">class</th>
@@ -71,6 +71,6 @@
       </table>
     {/if}
   {:else if editor.previewing}
-    <p class="text-xs text-fg-3">Estimating...</p>
+    <p class="text-meta text-fg-3">Estimating...</p>
   {/if}
 </section>

@@ -93,11 +93,11 @@
   <DatasetsGate>
     {#snippet children(formats)}
       {#if job.loadError && !job.job}
-        <p class="text-sm text-danger-text" data-testid="job-load-error">
+        <p class="text-body text-danger-text" data-testid="job-load-error">
           {job.loadError}
         </p>
       {:else if !job.job}
-        <p class="text-sm text-fg-3">Loading…</p>
+        <p class="text-body text-fg-3">Loading…</p>
       {:else}
         {@const j = job.job}
         <section
@@ -105,19 +105,19 @@
           data-testid="import-job"
         >
           <div class="flex flex-wrap items-center gap-3">
-            <span class="text-sm font-semibold text-fg-1">{j.name ?? j.import_id}</span>
+            <span class="text-body font-semibold text-fg-1">{j.name ?? j.import_id}</span>
             <span
-              class="rounded border border-line-strong px-2 py-0.5 text-xs text-fg-1"
+              class="rounded border border-line-strong px-2 py-0.5 text-meta text-fg-1"
               data-testid="job-status"
               data-status={j.status}>{job.statusLabel(formats.status_labels)}</span
             >
-            <span class="text-xs text-fg-3">
+            <span class="text-meta text-fg-3">
               {formats.formats.find((f) => f.format === j.source.format)?.label ??
                 j.source.format}
               · <code class="font-mono">{j.source.root}</code>
             </span>
             <a
-              class="ml-auto text-xs text-accent-text underline hover:text-accent-text"
+              class="ml-auto text-meta text-accent-text underline hover:text-accent-text"
               data-testid="review-imported-link"
               href={resolve(
                 projectHref(
@@ -134,7 +134,7 @@
                 style="width: {pct(j.progress.images_done, j.progress.images_total)}%"
               ></div>
             </div>
-            <p class="mt-1 text-xs text-fg-2">
+            <p class="mt-1 text-meta text-fg-2">
               {j.progress.images_done.toLocaleString()} / {j.progress.images_total.toLocaleString()}
               images · {j.progress.chunks_done} / {j.progress.chunks_total} chunks
               {#if j.progress.images_failed > 0}
@@ -151,7 +151,7 @@
 
           {#if j.waiting_for}
             <p
-              class="rounded border border-warn-line bg-warn-soft p-2 text-xs text-warn-text"
+              class="rounded border border-warn-line bg-warn-soft p-2 text-meta text-warn-text"
               data-testid="job-waiting"
             >
               Waiting for: {j.waiting_for}
@@ -160,7 +160,7 @@
 
           {#if j.error}
             <p
-              class="rounded border border-danger-line bg-danger-soft p-2 text-sm text-danger-text"
+              class="rounded border border-danger-line bg-danger-soft p-2 text-body text-danger-text"
               data-testid="job-error"
             >
               {j.error}
@@ -168,7 +168,7 @@
           {/if}
 
           {#if job.loadError}
-            <p class="text-xs text-warn-text">Could not refresh: {job.loadError}</p>
+            <p class="text-meta text-warn-text">Could not refresh: {job.loadError}</p>
           {/if}
 
           <div class="flex flex-wrap gap-2">
@@ -193,23 +193,23 @@
             {/if}
           </div>
           {#if job.refusalReasons.length > 0}
-            <ul class="text-xs text-fg-3" data-testid="job-action-reasons">
+            <ul class="text-meta text-fg-3" data-testid="job-action-reasons">
               {#each job.refusalReasons as [name, reason] (name)}
                 <li>{name}: {reason}</li>
               {/each}
             </ul>
           {/if}
           {#if job.actionError && !confirm && !pendingStep}
-            <p class="text-sm text-danger-text" data-testid="job-action-error">
+            <p class="text-body text-danger-text" data-testid="job-action-error">
               {job.actionError}
             </p>
           {/if}
         </section>
 
         <section class="rounded-lg border border-line p-4">
-          <h2 class="mb-2 text-sm font-semibold text-fg-1">Report</h2>
+          <h2 class="mb-2 text-body font-semibold text-fg-1">Report</h2>
           <dl
-            class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3 lg:grid-cols-5"
+            class="grid grid-cols-2 gap-x-4 gap-y-1 text-meta sm:grid-cols-3 lg:grid-cols-5"
           >
             {#each REPORT_ROWS as [key, label] (key)}
               <div>
@@ -221,7 +221,7 @@
             {/each}
           </dl>
           {#if Object.keys(j.report.disagreements.counts).length > 0}
-            <p class="mt-2 text-xs text-fg-2">
+            <p class="mt-2 text-meta text-fg-2">
               Disagreements:
               {#each Object.entries(j.report.disagreements.counts) as [k, n], i (k)}{k}
                 {n.toLocaleString()}{i <
@@ -237,9 +237,9 @@
             class="space-y-2 rounded-lg border border-line p-4"
             data-testid="next-steps"
           >
-            <h2 class="text-sm font-semibold text-fg-1">Next steps</h2>
+            <h2 class="text-body font-semibold text-fg-1">Next steps</h2>
             {#each j.next_steps as step (step.action + step.path)}
-              <div class="flex flex-wrap items-center gap-2 text-xs">
+              <div class="flex flex-wrap items-center gap-2 text-meta">
                 <button
                   type="button"
                   class="btn btn-sm"
@@ -252,8 +252,8 @@
         {/if}
 
         <section class="rounded-lg border border-line p-4">
-          <h2 class="mb-2 text-sm font-semibold text-fg-1">Class mapping</h2>
-          <table class="text-xs">
+          <h2 class="mb-2 text-body font-semibold text-fg-1">Class mapping</h2>
+          <table class="text-meta">
             <tbody>
               {#each j.mapping as m (m.dataset_class)}
                 <tr class="border-t border-line">
@@ -272,7 +272,7 @@
 
         {#if j.issues_summary.length > 0}
           <section class="rounded-lg border border-line p-4">
-            <h2 class="mb-2 text-sm font-semibold text-fg-1">Issues</h2>
+            <h2 class="mb-2 text-body font-semibold text-fg-1">Issues</h2>
             <DatasetIssueList issues={j.issues_summary} catalog={formats.issues} />
           </section>
         {/if}
@@ -284,10 +284,10 @@
               void job.loadIssues(1);
           }}
         >
-          <summary class="cursor-pointer text-sm font-semibold text-fg-1"
+          <summary class="cursor-pointer text-body font-semibold text-fg-1"
             >All issues</summary
           >
-          <div class="mt-2 space-y-2 text-xs">
+          <div class="mt-2 space-y-2 text-meta">
             <select
               class="select select-sm"
               aria-label="Filter issues by code"
@@ -320,8 +320,10 @@
               void job.loadEntries(1);
           }}
         >
-          <summary class="cursor-pointer text-sm font-semibold text-fg-1">Images</summary>
-          <div class="mt-2 space-y-2 text-xs">
+          <summary class="cursor-pointer text-body font-semibold text-fg-1"
+            >Images</summary
+          >
+          <div class="mt-2 space-y-2 text-meta">
             <div class="flex flex-wrap gap-2">
               {#each [['split', 'Split'], ['label_state', 'Label state'], ['status', 'Status']] as [key, label] (key)}
                 <input
@@ -370,7 +372,7 @@
             {/if}
           </div>
         </details>
-        {#if job.tablesError}<p class="text-xs text-danger-text">
+        {#if job.tablesError}<p class="text-meta text-danger-text">
             {job.tablesError}
           </p>{/if}
 
@@ -434,7 +436,7 @@
             {#if job.undoReport}
               {@const r = job.undoReport}
               <dl
-                class="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs"
+                class="grid grid-cols-2 gap-x-4 gap-y-0.5 text-meta"
                 data-testid="undo-report"
               >
                 <dt class="text-fg-3">Items deleted</dt>
@@ -461,12 +463,12 @@
                 </p>
               {/if}
               {#if r.classes_deprecated.length > 0}
-                <p class="text-xs text-fg-2">
+                <p class="text-meta text-fg-2">
                   Classes to deprecate: {r.classes_deprecated.join(', ')}
                 </p>
               {/if}
             {:else if !job.actionError}
-              <p class="text-xs text-fg-3">Counting what the undo would change…</p>
+              <p class="text-meta text-fg-3">Counting what the undo would change…</p>
             {/if}
             {#if job.actionError}<p class="text-danger-text">{job.actionError}</p>{/if}
           </ConfirmDialog>
@@ -480,7 +482,7 @@
             oncancel={() => (pendingStep = null)}
           >
             <p>{pendingStep.reason}</p>
-            <p class="font-mono text-xs text-fg-3">
+            <p class="font-mono text-meta text-fg-3">
               {pendingStep.method}
               {pendingStep.path}
             </p>
@@ -502,7 +504,7 @@
   go: (p: number) => void;
 })}
   {@const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))}
-  <div class="flex items-center gap-2 text-xs text-fg-2">
+  <div class="flex items-center gap-2 text-meta text-fg-2">
     <button type="button" class="btn btn-sm" disabled={p <= 1} onclick={() => go(p - 1)}
       >Prev</button
     >

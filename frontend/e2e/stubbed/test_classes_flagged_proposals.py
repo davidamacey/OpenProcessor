@@ -104,7 +104,9 @@ def test_classes_flagged_terms_are_listed_with_no_create_action(stub, page, app_
         ('suv', 'existing class'),
         ('abstract_blur', 'not an object'),
     ):
-        row = rows.filter(has=page.locator('div.text-sm', has_text=re.compile(rf'^{label}$'))).first
+        row = rows.filter(
+            has=page.locator('div.text-body', has_text=re.compile(rf'^{label}$'))
+        ).first
         text = row.inner_text()
         assert reason in text, (label, text)
         assert row.get_by_text('Create class & assign').count() == 0, label

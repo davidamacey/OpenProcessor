@@ -78,14 +78,14 @@
     />
     {#if expandedPoint?.class_name}
       <p
-        class="absolute inset-x-0 bottom-0 bg-black/70 px-2 py-1 text-center text-sm text-fg-1"
+        class="absolute inset-x-0 bottom-0 bg-black/70 px-2 py-1 text-center text-body text-fg-1"
       >
         {expandedPoint.class_name}
       </p>
     {/if}
     <button
       type="button"
-      class="absolute -top-3 -right-3 rounded-full border border-line-strong bg-surface-1 px-2 py-1 text-sm text-white"
+      class="absolute -top-3 -right-3 rounded-full border border-line-strong bg-surface-1 px-2 py-1 text-body text-white"
       onclick={(e) => {
         e.stopPropagation();
         expandedPreviewId = null;

@@ -122,10 +122,13 @@
     >
       <Icon name="arrow-left" size={14} class="mr-1 -mt-0.5 inline-block" />All clusters
     </button>
-    <h1 class="flex items-baseline gap-2 text-lg font-semibold" data-testid="scope-title">
+    <h1
+      class="flex items-baseline gap-2 text-title font-semibold"
+      data-testid="scope-title"
+    >
       {#if view.clusterName}
         <span class="capitalize text-fg-1">{view.clusterName}</span>
-        <span class="font-mono text-sm font-normal text-fg-3" title={view.clusterUid}
+        <span class="font-mono text-body font-normal text-fg-3" title={view.clusterUid}
           >{displayNoText(view.cluster ?? {})}</span
         >
       {:else}
@@ -133,12 +136,12 @@
           >Cluster {displayNoText(view.cluster ?? {})}</span
         >
         {#if view.cluster?.is_unlabeled}
-          <span class="text-sm font-normal text-warn-text/80">unlabeled</span>
+          <span class="text-body font-normal text-warn-text/80">unlabeled</span>
         {/if}
       {/if}
     </h1>
     {#if view.cardError}
-      <span class="text-xs text-warn-text" data-testid="cluster-card-error"
+      <span class="text-meta text-warn-text" data-testid="cluster-card-error"
         >Cluster details unavailable: {view.cardError}</span
       >
     {/if}
@@ -196,7 +199,7 @@
   <ClusterFacetBar {view} />
   {#if clusterAssist.loadError}
     <p
-      class="border-b border-line px-4 py-1.5 text-xs text-warn-text"
+      class="border-b border-line px-4 py-1.5 text-meta text-warn-text"
       data-testid="cluster-assist-error"
     >
       VLM proposals unavailable: {clusterAssist.loadError}

@@ -172,7 +172,7 @@
 <section class="rounded-md border border-line bg-surface-1">
   <button
     type="button"
-    class="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-surface-2"
+    class="flex w-full items-center gap-3 px-3 py-2 text-left text-body hover:bg-surface-2"
     onclick={() => (expanded = !expanded)}
     aria-expanded={expanded}
   >
@@ -182,12 +182,12 @@
       class="text-fg-3"
     />
     <span class="font-semibold text-fg-1">Classes to train</span>
-    <span class="grow text-xs text-fg-2">{summary}</span>
+    <span class="grow text-meta text-fg-2">{summary}</span>
   </button>
 
   {#if lackingSelected.length > 0}
     <div
-      class="flex flex-wrap items-center gap-2 border-t border-line px-3 py-2 text-xs text-warn-text"
+      class="flex flex-wrap items-center gap-2 border-t border-line px-3 py-2 text-meta text-warn-text"
       data-testid="lacking-data-row"
     >
       <span>
@@ -214,7 +214,7 @@
           type="search"
           bind:value={query}
           placeholder="Search classes…"
-          class="min-w-0 flex-1 rounded-md border border-line-strong bg-surface-0 px-2 py-1.5 text-sm text-fg-1 focus:border-accent focus:outline-none"
+          class="min-w-0 flex-1 rounded-md border border-line-strong bg-surface-0 px-2 py-1.5 text-body text-fg-1 focus:border-accent focus:outline-none"
         />
         <button type="button" class="btn" onclick={selectAll}>Select all</button>
         <button type="button" class="btn" onclick={clearAll}>Clear</button>
@@ -228,7 +228,7 @@
             <button
               type="button"
               title={p.description}
-              class="rounded-md border border-line-strong bg-surface-0 px-2 py-0.5 text-xs text-fg-1 hover:border-accent hover:bg-accent/10"
+              class="rounded-md border border-line-strong bg-surface-0 px-2 py-0.5 text-meta text-fg-1 hover:border-accent hover:bg-accent/10"
               onclick={() => applyPreset(p)}
             >
               {p.label}
@@ -240,14 +240,14 @@
       <!-- Class list -->
       <div class="max-h-72 overflow-auto rounded border border-line bg-surface-0">
         {#if filtered.length === 0}
-          <p class="px-3 py-3 text-xs text-fg-3">No classes match.</p>
+          <p class="px-3 py-3 text-meta text-fg-3">No classes match.</p>
         {:else}
           <ul class="divide-y divide-line">
             {#each filtered as cls (cls.id)}
               {@const checked = allMode || selectedSet.has(cls.id)}
               <li>
                 <label
-                  class="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-surface-1"
+                  class="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-body hover:bg-surface-1"
                 >
                   <input
                     type="checkbox"
@@ -266,7 +266,7 @@
                       >needs {cls.trainable_gap}</span
                     >
                   {/if}
-                  <span class="font-mono text-xs text-fg-2">
+                  <span class="font-mono text-meta text-fg-2">
                     {(cls.validated_count ?? 0).toLocaleString()}
                   </span>
                 </label>
@@ -277,8 +277,8 @@
       </div>
 
       <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
-        <p class="text-xs text-fg-2">{summary}</p>
-        <label class="flex cursor-pointer items-center gap-2 text-xs text-fg-2">
+        <p class="text-meta text-fg-2">{summary}</p>
+        <label class="flex cursor-pointer items-center gap-2 text-meta text-fg-2">
           <input
             type="checkbox"
             checked={singleCls}

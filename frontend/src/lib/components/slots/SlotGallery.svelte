@@ -40,7 +40,7 @@
   >
     <!-- Filter strip: detector / verified / score / text-search. -->
     <div
-      class="flex flex-wrap items-center gap-3 rounded-md border border-line bg-surface-1/40 px-3 py-2 text-xs"
+      class="flex flex-wrap items-center gap-3 rounded-md border border-line bg-surface-1/40 px-3 py-2 text-meta"
     >
       <label class="flex items-center gap-1.5">
         <span class="text-fg-2">Detector</span>
@@ -270,7 +270,7 @@
        outliers without leaving the gallery (no /review round-trip). -->
     {#if gallery.sel.size > 0}
       <div
-        class="flex flex-wrap items-center gap-2 rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-xs"
+        class="flex flex-wrap items-center gap-2 rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-meta"
       >
         <span class="font-medium text-accent-text">{gallery.sel.size} selected</span>
         {#if gallery.selectedCluster != null}
@@ -338,7 +338,7 @@
   <!-- /sticky header -->
 
   {#if gallery.pager.error}
-    <p class="text-sm text-danger-text">API unavailable: {gallery.pager.error}</p>
+    <p class="text-body text-danger-text">API unavailable: {gallery.pager.error}</p>
   {:else if !gallery.suspectedFpView && !gallery.viewingAll && gallery.selectedCluster == null && gallery.clusters.length > 0}
     <!-- Region cluster cards. Click one to open its regions (with the
          bulk toolbar). False positives are a box state, not a cluster:
@@ -361,7 +361,7 @@
                 />
               {/each}
             </div>
-            <div class="flex items-center justify-between gap-1 p-2 text-xs">
+            <div class="flex items-center justify-between gap-1 p-2 text-meta">
               <span class="font-mono font-semibold text-fg-1" title={c.uid}
                 >{displayNoText(c) || c.uid.slice(0, 8)}</span
               >
@@ -380,9 +380,9 @@
       {/each}
     </ul>
   {:else if gallery.pager.loading && gallery.pager.items.length === 0}
-    <p class="text-sm text-fg-3">Loading {label.plural}...</p>
+    <p class="text-body text-fg-3">Loading {label.plural}...</p>
   {:else if gallery.pager.items.length === 0}
-    <p class="text-sm text-fg-3">
+    <p class="text-body text-fg-3">
       No {label.plural} match the current filters. The re-detection drain may still be populating
       provenance — fresh rows appear here as the worker processes them.
     </p>
@@ -417,7 +417,7 @@
       aria-hidden="true"
     ></div>
     {#if gallery.pager.loadingMore}
-      <p class="py-2 text-center text-xs text-fg-3">Loading more…</p>
+      <p class="py-2 text-center text-meta text-fg-3">Loading more…</p>
     {/if}
   {/if}
 </div>

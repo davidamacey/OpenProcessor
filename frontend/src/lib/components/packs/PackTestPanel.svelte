@@ -46,16 +46,16 @@
 
 {#if testable.length > 0}
   <section
-    class="surface flex flex-col gap-3 p-4 text-sm"
+    class="surface flex flex-col gap-3 p-4 text-body"
     data-testid="pack-test-panel"
     aria-label="Test on a crop"
   >
-    <h2 class="text-base font-semibold">Test on a crop</h2>
-    <p class="text-xs text-fg-2">
+    <h2 class="text-title font-semibold">Test on a crop</h2>
+    <p class="text-meta text-fg-2">
       Runs one call on real crops and shows what the VLM answered. Nothing is written.
     </p>
     <div class="grid gap-2 sm:grid-cols-2">
-      <label class="flex flex-col gap-1 text-xs text-fg-2">
+      <label class="flex flex-col gap-1 text-meta text-fg-2">
         Call
         <select class="select select-sm" bind:value={t.call} data-testid="test-call">
           {#each testable as c (c.id)}
@@ -63,7 +63,7 @@
           {/each}
         </select>
       </label>
-      <label class="flex flex-col gap-1 text-xs text-fg-2">
+      <label class="flex flex-col gap-1 text-meta text-fg-2">
         Pack version
         <select class="select select-sm" bind:value={t.source} data-testid="test-source">
           {#if !savedOnly}<option value="draft">Unsaved draft</option>{/if}
@@ -72,7 +72,7 @@
           >
         </select>
       </label>
-      <label class="flex flex-col gap-1 text-xs text-fg-2 sm:col-span-2">
+      <label class="flex flex-col gap-1 text-meta text-fg-2 sm:col-span-2">
         Crop ids (from review or browse, separated by commas or spaces)
         <input
           class="input input-sm font-mono {t.missingCropIds.length > 0
@@ -93,7 +93,7 @@
           </span>
         {/if}
       </label>
-      <label class="flex flex-col gap-1 text-xs text-fg-2">
+      <label class="flex flex-col gap-1 text-meta text-fg-2">
         Boxes on the crop
         <select class="select select-sm" bind:value={t.useRegionBox}>
           <option value="">Server default</option>
@@ -114,7 +114,7 @@
     <TestRunOutcome {t} onrun={run}>
       {#snippet result(r)}
         <TestRefs pack={r.pack} vlm={r.vlm} latencyMs={r.latency_ms} />
-        <p class="text-xs" data-testid="test-parse-status">
+        <p class="text-meta" data-testid="test-parse-status">
           {#if r.parse_ok}
             <span class="rounded border border-success/40 px-1.5 text-success-text"
               >parsed</span
@@ -134,7 +134,7 @@
           />
         {/if}
         <details>
-          <summary class="cursor-pointer text-xs text-fg-2">Prompt sent</summary>
+          <summary class="cursor-pointer text-meta text-fg-2">Prompt sent</summary>
           <p class="mt-1 text-caption text-fg-3">System</p>
           <pre
             class="max-h-60 overflow-auto rounded bg-surface-1 p-2 text-caption whitespace-pre-wrap"
@@ -145,14 +145,14 @@
             data-testid="test-prompt-user">{r.prompt.user_text ?? ''}</pre>
         </details>
         <div>
-          <p class="text-xs text-fg-3">Raw reply</p>
+          <p class="text-meta text-fg-3">Raw reply</p>
           <pre
             class="max-h-60 overflow-auto rounded bg-surface-1 p-2 text-caption whitespace-pre-wrap"
             data-testid="test-raw-reply">{r.raw_reply ?? ''}</pre>
         </div>
         {#if r.reasoning}
           <div>
-            <p class="text-xs text-fg-3">Reasoning</p>
+            <p class="text-meta text-fg-3">Reasoning</p>
             <pre
               class="max-h-40 overflow-auto rounded bg-surface-1 p-2 text-caption whitespace-pre-wrap">{r.reasoning}</pre>
           </div>
@@ -163,7 +163,7 @@
             data-testid="test-result-item"
             data-crop-id={res.crop_id}
           >
-            <div class="flex flex-wrap items-center gap-2 text-xs">
+            <div class="flex flex-wrap items-center gap-2 text-meta">
               <img
                 src={getThumbUrl(res.crop_id, 96)}
                 alt="crop {res.crop_id}"
@@ -173,7 +173,7 @@
               {#if res.box_id}<code class="font-mono text-fg-2">{res.box_id}</code>{/if}
             </div>
             {#if res.skipped}
-              <p class="text-xs text-warn-text" data-testid="test-skipped">
+              <p class="text-meta text-warn-text" data-testid="test-skipped">
                 {res.skipped}
               </p>
             {:else if res.parsed != null}

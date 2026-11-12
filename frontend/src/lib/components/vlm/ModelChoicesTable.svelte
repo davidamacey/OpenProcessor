@@ -22,12 +22,12 @@
 </script>
 
 {#if choices.length === 0}
-  <p class="text-sm text-fg-3" data-testid="model-choices-empty">
+  <p class="text-body text-fg-3" data-testid="model-choices-empty">
     No model choices served.
   </p>
 {:else}
   <div class="overflow-x-auto">
-    <table class="w-full text-left text-xs" data-testid="model-choices">
+    <table class="w-full text-left text-meta" data-testid="model-choices">
       <thead class="text-fg-3">
         <tr>
           <th class="py-1 pr-3 font-normal">Choice</th>

@@ -21,13 +21,13 @@
 </script>
 
 <div class="space-y-4" data-testid="preview-summary">
-  <p class="text-xs text-fg-2">
+  <p class="text-meta text-fg-2">
     <span class="text-fg-1">{formatLabel}</span> at
     <code class="font-mono">{preview.root}</code>
   </p>
 
   <div class="overflow-x-auto">
-    <table class="w-full text-left text-xs" data-testid="preview-splits">
+    <table class="w-full text-left text-meta" data-testid="preview-splits">
       <thead class="text-fg-3">
         <tr>
           <th class="px-2 py-1">Split</th>
@@ -53,7 +53,7 @@
     </table>
   </div>
 
-  <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
+  <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-meta sm:grid-cols-3">
     <div>
       <dt class="text-fg-3">Images</dt>
       <dd class="font-mono">{preview.totals.images.toLocaleString()}</dd>
@@ -82,7 +82,7 @@
 
   {#if preview.op_export}
     {@const op = preview.op_export}
-    <div class="rounded border border-line p-3 text-xs" data-testid="op-export-facts">
+    <div class="rounded border border-line p-3 text-meta" data-testid="op-export-facts">
       <h4 class="mb-1 font-semibold text-fg-2">OpenProcessor export</h4>
       <dl class="grid grid-cols-2 gap-x-4 gap-y-0.5 sm:grid-cols-3">
         <div>
@@ -119,7 +119,7 @@
 
   {#if preview.region}
     {@const r = preview.region}
-    <div class="rounded border border-line p-3 text-xs" data-testid="preview-region">
+    <div class="rounded border border-line p-3 text-meta" data-testid="preview-region">
       <h4 class="mb-1 font-semibold text-fg-2">Region labels</h4>
       <p class="text-fg-2">
         Profile <span class="text-fg-1">{r.profile.name}</span>, region class

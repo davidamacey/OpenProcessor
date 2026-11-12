@@ -116,7 +116,7 @@
 <div class="border-t border-line">
   <button
     type="button"
-    class="flex w-full items-center gap-1.5 px-3 py-2 text-left text-xs text-fg-2 hover:bg-surface-2/50"
+    class="flex w-full items-center gap-1.5 px-3 py-2 text-left text-meta text-fg-2 hover:bg-surface-2/50"
     onclick={toggle}
     aria-expanded={open}
   >
@@ -125,7 +125,7 @@
   </button>
 
   {#if open}
-    <div class="space-y-4 border-t border-line bg-surface-0/40 px-3 py-3 text-xs">
+    <div class="space-y-4 border-t border-line bg-surface-0/40 px-3 py-3 text-meta">
       <!-- T5 (visual audit 2026-09-24): the sticky table header can cover
            the run's own row while this panel is open, so name the run here. -->
       <p class="font-mono text-caption text-fg-2" data-testid="run-results-title">
@@ -254,7 +254,7 @@
               per-class: <span class="text-fg-1">{evalSplitLabel(evalData)}</span>
             </p>
             <div class="overflow-auto rounded border border-line">
-              <table class="w-full text-xs">
+              <table class="w-full text-meta">
                 <thead
                   class="border-b border-line bg-surface-0 text-left uppercase text-fg-3"
                 >
@@ -434,7 +434,7 @@
 
           {#if remapRows.length > 0}
             <div class="mt-2 overflow-auto rounded border border-line">
-              <table class="w-full text-xs">
+              <table class="w-full text-meta">
                 <thead
                   class="border-b border-line bg-surface-0 text-left uppercase text-fg-3"
                 >
@@ -477,7 +477,7 @@
     />
     <button
       type="button"
-      class="absolute -top-3 -right-3 rounded-full border border-line-strong bg-surface-1 px-2 py-1 text-sm text-white"
+      class="absolute -top-3 -right-3 rounded-full border border-line-strong bg-surface-1 px-2 py-1 text-body text-white"
       onclick={(e) => {
         e.stopPropagation();
         matrixLightboxOpen = false;

@@ -59,7 +59,7 @@
   <DatasetsGate>
     {#snippet children(formats)}
       <div
-        class="flex flex-wrap gap-1 text-xs"
+        class="flex flex-wrap gap-1 text-meta"
         role="group"
         aria-label="Filter by status"
       >
@@ -86,13 +86,13 @@
       </div>
 
       {#if error}
-        <p class="text-sm text-danger-text">{error}</p>
+        <p class="text-body text-danger-text">{error}</p>
       {:else if !list}
-        <p class="text-sm text-fg-3">Loading…</p>
+        <p class="text-body text-fg-3">Loading…</p>
       {:else if list.items.length === 0}
-        <p class="text-sm text-fg-3" data-testid="imports-empty">No imports.</p>
+        <p class="text-body text-fg-3" data-testid="imports-empty">No imports.</p>
       {:else}
-        <table class="w-full text-left text-xs" data-testid="imports-list">
+        <table class="w-full text-left text-meta" data-testid="imports-list">
           <thead class="text-fg-3">
             <tr>
               <th class="py-1 pr-3">Import</th>
@@ -124,7 +124,7 @@
           </tbody>
         </table>
         {#if pages > 1}
-          <div class="flex items-center gap-2 text-xs text-fg-2">
+          <div class="flex items-center gap-2 text-meta text-fg-2">
             <button
               type="button"
               class="btn btn-sm"

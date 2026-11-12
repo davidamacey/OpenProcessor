@@ -41,10 +41,10 @@
 
 {#if controller.available}
   <details class="surface mt-4 p-4" data-testid="seed-panel">
-    <summary class="cursor-pointer text-sm font-semibold text-fg-1">
+    <summary class="cursor-pointer text-body font-semibold text-fg-1">
       Create classes from the detector
     </summary>
-    <div class="mt-3 space-y-3 text-xs">
+    <div class="mt-3 space-y-3 text-meta">
       <p class="text-fg-2">
         Choose detector labels to turn into classes. With none chosen, every label is
         used.
@@ -138,7 +138,7 @@
     onconfirm={() => void doCreate()}
     oncancel={() => (confirming = false)}
   >
-    <p class="text-sm text-fg-2">
+    <p class="text-body text-fg-2">
       {controller.result.created.length} new classes will be added to the registry, one per
       detector label listed in the preview.
     </p>

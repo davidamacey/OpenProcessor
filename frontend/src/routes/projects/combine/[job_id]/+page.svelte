@@ -77,31 +77,33 @@
 
 <div class="flex min-h-screen flex-col bg-surface-0 text-fg-1">
   <header class="flex h-12 shrink-0 items-center gap-4 border-b border-line px-4">
-    <span class="text-sm font-semibold tracking-tight">{appName}</span>
+    <span class="text-body font-semibold tracking-tight">{appName}</span>
     <span class="text-fg-3">/</span>
-    <a href={resolve('/projects')} class="text-sm text-fg-2 hover:text-white">Projects</a>
+    <a href={resolve('/projects')} class="text-body text-fg-2 hover:text-white"
+      >Projects</a
+    >
     <span class="text-fg-3">/</span>
-    <h1 class="text-sm text-fg-1">Combine job</h1>
+    <h1 class="text-body text-fg-1">Combine job</h1>
   </header>
 
   <main class="mx-auto w-full max-w-4xl flex-1 space-y-4 p-4">
     {#if job.notFound}
-      <p class="text-sm text-danger-text" data-testid="combine-job-not-found">
+      <p class="text-body text-danger-text" data-testid="combine-job-not-found">
         {job.notFound}
       </p>
     {:else if !served}
       {#if job.loadError}
-        <p class="text-sm text-danger-text" data-testid="combine-job-error">
+        <p class="text-body text-danger-text" data-testid="combine-job-error">
           {job.loadError}
         </p>
       {:else}
-        <p class="text-sm text-fg-3">Loading…</p>
+        <p class="text-body text-fg-3">Loading…</p>
       {/if}
     {:else}
       <section class="space-y-2 rounded border border-line p-3" data-testid="combine-job">
         <div class="flex flex-wrap items-center gap-2">
           <span
-            class="rounded px-1.5 py-0.5 text-xs {job.completed
+            class="rounded px-1.5 py-0.5 text-meta {job.completed
               ? 'bg-success-soft text-success-text'
               : job.failed
                 ? 'bg-danger-soft text-danger-text'
@@ -110,7 +112,7 @@
             data-status={served.status}>{combineLabel(served.status)}</span
           >
           {#if served.phase}
-            <span class="text-xs text-fg-2" data-testid="combine-job-phase"
+            <span class="text-meta text-fg-2" data-testid="combine-job-phase"
               >Phase: {combineLabel(served.phase)}</span
             >
           {/if}
@@ -119,7 +121,7 @@
         </div>
 
         <div data-testid="combine-job-progress">
-          <p class="text-xs text-fg-2">
+          <p class="text-meta text-fg-2">
             {formatCount(served.done)} of {formatCount(served.total)}
             {#if pct !== null}<span class="text-fg-3">({pct}%)</span>{/if}
           </p>
@@ -130,7 +132,7 @@
           {/if}
         </div>
 
-        <dl class="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-0.5 text-xs">
+        <dl class="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-0.5 text-meta">
           <dt class="text-fg-3">Target</dt>
           <dd class="font-mono text-fg-1" data-testid="combine-job-target">
             {served.target ?? '—'}
@@ -147,19 +149,19 @@
 
         {#if served.error}
           <p
-            class="rounded border border-danger-line bg-danger-soft px-2 py-1 text-xs text-danger-text"
+            class="rounded border border-danger-line bg-danger-soft px-2 py-1 text-meta text-danger-text"
             data-testid="combine-job-served-error"
           >
             {served.error}
           </p>
         {/if}
         {#if job.loadError}
-          <p class="text-xs text-danger-text" data-testid="combine-job-error">
+          <p class="text-meta text-danger-text" data-testid="combine-job-error">
             {job.loadError}
           </p>
         {/if}
         {#if job.actionError}
-          <p class="text-xs text-danger-text" data-testid="combine-job-action-error">
+          <p class="text-meta text-danger-text" data-testid="combine-job-action-error">
             {job.actionError}
           </p>
         {/if}
@@ -221,7 +223,10 @@
       </section>
 
       {#if (served.next_steps ?? []).length > 0 && job.completed}
-        <ul class="space-y-0.5 text-xs text-fg-3" data-testid="combine-next-step-reasons">
+        <ul
+          class="space-y-0.5 text-meta text-fg-3"
+          data-testid="combine-next-step-reasons"
+        >
           {#each served.next_steps ?? [] as step (step.action)}
             {#if step.reason}<li>{combineLabel(step.action)}: {step.reason}</li>{/if}
           {/each}
@@ -234,9 +239,9 @@
 
       {#if reportRows.length > 0}
         <section data-testid="combine-job-report">
-          <h2 class="mb-1 text-sm font-semibold text-fg-1">Report</h2>
+          <h2 class="mb-1 text-body font-semibold text-fg-1">Report</h2>
           <div class="overflow-x-auto rounded border border-line">
-            <table class="w-full text-xs">
+            <table class="w-full text-meta">
               <tbody>
                 {#each reportRows as [k, v] (k)}
                   <tr class="border-t border-line first:border-t-0">
@@ -282,7 +287,7 @@
     oncancel={() => (pendingStep = null)}
   >
     {#if pendingStep.reason}<p>{pendingStep.reason}</p>{/if}
-    <p class="text-xs text-fg-2">
+    <p class="text-meta text-fg-2">
       Runs <code class="font-mono"
         >{pendingStep.method.toUpperCase()} {pendingStep.path}</code
       >

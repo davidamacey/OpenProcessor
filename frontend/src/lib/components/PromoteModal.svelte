@@ -118,7 +118,7 @@
 
 {#if open}
   <Modal label="Promote to Triton" {onclose}>
-    <h3 class="mb-3 text-base font-semibold">Promote to Triton</h3>
+    <h3 class="mb-3 text-title font-semibold">Promote to Triton</h3>
     {#if jobId}
       <p class="mb-3 truncate font-mono text-caption text-fg-3" title={jobId}>
         {jobId}
@@ -126,8 +126,8 @@
     {/if}
 
     {#if following && ctl.job}
-      <div data-testid="promote-progress" class="mb-3 text-sm">
-        <p class="mb-2 text-xs text-fg-2">
+      <div data-testid="promote-progress" class="mb-3 text-body">
+        <p class="mb-2 text-meta text-fg-2">
           Promoting <span class="font-mono">{ctl.job.triton_name}</span> — takes 2 to 3 minutes.
           You can close this; it keeps running.
         </p>
@@ -136,7 +136,7 @@
             <li
               data-testid={`promote-phase-${phase}`}
               aria-current={i === phaseIndex ? 'step' : undefined}
-              class="flex items-center gap-2 text-xs {ctl.job.status === 'failed'
+              class="flex items-center gap-2 text-meta {ctl.job.status === 'failed'
                 ? 'text-fg-3'
                 : i < phaseIndex
                   ? 'text-success-text'
@@ -163,7 +163,7 @@
         </ol>
         {#if ctl.failureText}
           <p
-            class="mt-3 rounded-md border border-danger/40 bg-danger/10 p-2 text-xs text-danger-text"
+            class="mt-3 rounded-md border border-danger/40 bg-danger/10 p-2 text-meta text-danger-text"
             data-testid="promote-failed"
             role="alert"
           >
@@ -171,7 +171,7 @@
           </p>
         {/if}
         {#if ctl.error}
-          <p class="mt-3 text-xs text-danger-text" role="alert">{ctl.error}</p>
+          <p class="mt-3 text-meta text-danger-text" role="alert">{ctl.error}</p>
         {/if}
       </div>
       <div class="flex items-center justify-end gap-2">
@@ -191,15 +191,15 @@
           await submit();
         }}
       >
-        <label class="mb-3 block text-sm">
-          <span class="mb-1 block text-xs text-fg-2">Triton model name</span>
+        <label class="mb-3 block text-body">
+          <span class="mb-1 block text-meta text-fg-2">Triton model name</span>
           <input
             type="text"
             bind:value={tritonName}
             required
             placeholder="model_name"
             pattern="[A-Za-z0-9_-]+"
-            class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 font-mono text-sm text-fg-1 focus:border-accent focus:outline-none"
+            class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 font-mono text-body text-fg-1 focus:border-accent focus:outline-none"
           />
           <span class="mt-1 block text-caption text-fg-3">
             Alphanumeric + underscore + hyphen. Becomes the Triton model directory name.
@@ -207,17 +207,17 @@
         </label>
 
         <div class="mb-3 grid grid-cols-2 gap-3">
-          <label class="block text-sm">
-            <span class="mb-1 block text-xs text-fg-2">Max batch size</span>
+          <label class="block text-body">
+            <span class="mb-1 block text-meta text-fg-2">Max batch size</span>
             <input
               type="number"
               min="1"
               max="64"
               bind:value={maxBatch}
-              class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 text-sm text-fg-1 focus:border-accent focus:outline-none"
+              class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 text-body text-fg-1 focus:border-accent focus:outline-none"
             />
           </label>
-          <div class="flex flex-col gap-1.5 pt-5 text-xs text-fg-2">
+          <div class="flex flex-col gap-1.5 pt-5 text-meta text-fg-2">
             <label class="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -239,7 +239,7 @@
 
         {#if gate}
           <div
-            class="mb-3 rounded-md border border-danger/40 bg-danger/10 p-2 text-xs text-danger-text"
+            class="mb-3 rounded-md border border-danger/40 bg-danger/10 p-2 text-meta text-danger-text"
             data-testid="promote-gate"
           >
             <p class="font-medium">{gate.message}</p>
@@ -261,7 +261,7 @@
             {/if}
           </div>
           {#if gate.force_allowed}
-            <label class="mb-3 flex items-center gap-2 text-xs text-warn-text">
+            <label class="mb-3 flex items-center gap-2 text-meta text-warn-text">
               <input
                 type="checkbox"
                 bind:checked={force}
@@ -273,10 +273,10 @@
           {/if}
         {/if}
         {#if error}
-          <p class="mb-3 text-xs text-danger-text">{error}</p>
+          <p class="mb-3 text-meta text-danger-text">{error}</p>
         {/if}
         {#if ctl.error}
-          <p class="mb-3 text-xs text-danger-text" role="alert">{ctl.error}</p>
+          <p class="mb-3 text-meta text-danger-text" role="alert">{ctl.error}</p>
         {/if}
 
         <div class="flex items-center justify-end gap-2">

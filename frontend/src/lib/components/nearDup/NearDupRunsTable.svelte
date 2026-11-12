@@ -9,12 +9,12 @@
 </script>
 
 <section class="surface flex flex-col gap-2 p-4" data-testid="near-dup-runs">
-  <h2 class="text-base font-semibold">Run history</h2>
+  <h2 class="text-title font-semibold">Run history</h2>
   {#if runs.length === 0}
-    <p class="text-xs text-fg-2" data-testid="near-dup-runs-empty">No runs yet.</p>
+    <p class="text-meta text-fg-2" data-testid="near-dup-runs-empty">No runs yet.</p>
   {:else}
     <div class="overflow-x-auto">
-      <table class="w-full text-left text-xs">
+      <table class="w-full text-left text-meta">
         <thead class="text-fg-2">
           <tr>
             <th class="py-1 pr-3 font-medium">Started</th>

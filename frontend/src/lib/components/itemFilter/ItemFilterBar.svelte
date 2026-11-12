@@ -41,7 +41,7 @@
     inline = ['class_name', 'open_vocab_set', 'source_prompt'],
     error = null,
     onchange,
-    rootClass = 'flex min-w-0 flex-wrap items-center gap-3 text-xs',
+    rootClass = 'flex min-w-0 flex-wrap items-center gap-3 text-meta',
   }: Props = $props();
 
   const controls = $derived(
@@ -90,7 +90,7 @@
       <summary class="chip cursor-pointer list-none text-fg-2">
         More filters{moreActive > 0 ? ` (${moreActive})` : ''}
       </summary>
-      <div class="mt-2 flex flex-wrap items-center gap-3 text-xs">
+      <div class="mt-2 flex flex-wrap items-center gap-3 text-meta">
         {#each moreControls as spec (spec.param)}
           <ServedFilterField {spec} value={filter.valueOf(spec.param)} onchange={set} />
         {/each}
@@ -129,7 +129,7 @@
 </div>
 {#if error}
   <p
-    class="mt-1 w-full text-xs text-danger-text"
+    class="mt-1 w-full text-meta text-danger-text"
     role="alert"
     data-testid="item-filter-error"
   >

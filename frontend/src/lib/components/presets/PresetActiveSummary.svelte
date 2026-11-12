@@ -15,8 +15,8 @@
   const label = (axis: string | null): string => active.axisLabel(axis) || 'Deployment';
 </script>
 
-<section class="surface flex flex-col gap-2 p-4 text-sm" aria-label="Active">
-  <h2 class="text-base font-semibold">Active</h2>
+<section class="surface flex flex-col gap-2 p-4 text-body" aria-label="Active">
+  <h2 class="text-title font-semibold">Active</h2>
   {#if active.loadError}
     <p class="text-danger-text" data-testid="preset-active-error">{active.loadError}</p>
   {:else if active.entries.length === 0}
@@ -25,12 +25,12 @@
     <ul class="flex flex-col gap-1" data-testid="preset-active">
       {#each active.entries as e (e.axis ?? 'deployment')}
         <li class="flex flex-wrap items-baseline gap-2" data-testid="preset-active-row">
-          <span class="w-36 shrink-0 text-xs text-fg-2">{label(e.axis)}</span>
+          <span class="w-36 shrink-0 text-meta text-fg-2">{label(e.axis)}</span>
           {#if e.state === 'active' && e.name}
             <span class="font-mono">{e.name}</span>
-            <span class="font-mono text-xs text-fg-2">r{e.revision}</span>
+            <span class="font-mono text-meta text-fg-2">r{e.revision}</span>
             {#if e.activated_at}
-              <span class="text-xs text-fg-3"
+              <span class="text-meta text-fg-3"
                 >since {formatTimestamp(e.activated_at)}</span
               >
             {/if}

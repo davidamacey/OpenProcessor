@@ -92,12 +92,12 @@
     <AssistLoopBudgetEdit {ctl} onclose={() => (editingBudget = false)} />
   {/if}
   <div
-    class="flex flex-col gap-4 text-xs"
+    class="flex flex-col gap-4 text-meta"
     data-testid="loop-run"
     data-status={loop.status}
   >
     <div class="flex flex-wrap items-center gap-3">
-      <p class="text-sm text-fg-1" role="status" data-testid="loop-status">
+      <p class="text-body text-fg-1" role="status" data-testid="loop-status">
         {STATUS_TEXT[loop.status] ?? loop.status}
         {#if loop.status === 'paused' && loop.pause_reason}
           <span class="text-fg-2"
@@ -203,25 +203,25 @@
       >
         <div>
           <dt class="text-fg-3">Labels propagated</dt>
-          <dd class="font-mono text-base text-fg-1" data-testid="loop-propagated">
+          <dd class="font-mono text-title text-fg-1" data-testid="loop-propagated">
             {formatCount(loop.totals.items_propagated)}
           </dd>
         </div>
         <div>
           <dt class="text-fg-3">Labeled by the VLM directly</dt>
-          <dd class="font-mono text-base text-fg-1">
+          <dd class="font-mono text-title text-fg-1">
             {formatCount(loop.totals.items_direct)}
           </dd>
         </div>
         <div>
           <dt class="text-fg-3">Clusters left for review</dt>
-          <dd class="font-mono text-base text-fg-1">
+          <dd class="font-mono text-title text-fg-1">
             {formatCount(loop.totals.clusters_left_for_review)}
           </dd>
         </div>
         <div>
           <dt class="text-fg-3">Items left for review</dt>
-          <dd class="font-mono text-base text-fg-1">
+          <dd class="font-mono text-title text-fg-1">
             {formatCount(loop.totals.items_left_for_review)}
           </dd>
         </div>
@@ -239,7 +239,7 @@
 
     {#if loop.levels.length > 0}
       <table class="w-full text-left" data-testid="loop-levels">
-        <caption class="mb-1 text-left text-sm font-medium text-fg-1"
+        <caption class="mb-1 text-left text-body font-medium text-fg-1"
           >Progress by level</caption
         >
         <thead class="text-fg-3">
@@ -275,7 +275,7 @@
 
     {#if loop.audit}
       <div data-testid="loop-audit" data-audit-status={loop.audit.status}>
-        <h3 class="mb-1 text-sm font-medium text-fg-1">Second opinion</h3>
+        <h3 class="mb-1 text-body font-medium text-fg-1">Second opinion</h3>
         {#if loop.audit.status === 'off'}
           <p class="text-fg-2">
             Off: no second model re-checked the labels this loop propagated.

@@ -19,7 +19,7 @@
   let { rows, selectedCropId, onselect, onclass, ondelete }: Props = $props();
 
   const small =
-    'rounded-sm border border-line-strong px-1.5 py-0.5 text-xs text-fg-1 hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-info focus-visible:outline-none';
+    'rounded-sm border border-line-strong px-1.5 py-0.5 text-meta text-fg-1 hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-info focus-visible:outline-none';
 </script>
 
 <ul
@@ -38,7 +38,7 @@
     >
       <button
         type="button"
-        class="flex w-full items-center gap-2 text-left text-sm text-fg-1 focus-visible:ring-2 focus-visible:ring-info focus-visible:outline-none"
+        class="flex w-full items-center gap-2 text-left text-body text-fg-1 focus-visible:ring-2 focus-visible:ring-info focus-visible:outline-none"
         aria-current={selected ? 'true' : undefined}
         onclick={() => onselect(row.cropId)}
       >
@@ -51,7 +51,7 @@
         </span>
         {#if row.locked}
           <span
-            class="rounded-sm border border-line-strong px-1 text-xs text-fg-2"
+            class="rounded-sm border border-line-strong px-1 text-meta text-fg-2"
             title={row.lockLabel ?? 'Locked'}
             data-testid="object-locked"
           >
@@ -59,10 +59,10 @@
           </span>
         {/if}
         {#if row.regionCount > 0}
-          <span class="text-xs text-fg-2">{row.regionCount} regions</span>
+          <span class="text-meta text-fg-2">{row.regionCount} regions</span>
         {/if}
         {#if row.deleted}
-          <span class="text-xs text-fg-2" data-testid="object-deleted">Deleted</span>
+          <span class="text-meta text-fg-2" data-testid="object-deleted">Deleted</span>
         {/if}
       </button>
       {#if selected && !row.deleted}
@@ -87,7 +87,7 @@
       {/if}
     </li>
   {:else}
-    <li class="px-2 py-3 text-sm text-fg-2" data-testid="object-list-empty">
+    <li class="px-2 py-3 text-body text-fg-2" data-testid="object-list-empty">
       No objects yet. Draw one to start.
     </li>
   {/each}

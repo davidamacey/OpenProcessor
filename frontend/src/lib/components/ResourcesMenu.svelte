@@ -34,7 +34,7 @@
     {/snippet}
     <div data-testid="resources-list">
       {#each links as l (l.id)}
-        <ResourceLinkItem view={l} class="px-3 py-1.5 text-sm hover:bg-surface-2" />
+        <ResourceLinkItem view={l} class="px-3 py-1.5 text-body hover:bg-surface-2" />
       {/each}
     </div>
   </Popover>

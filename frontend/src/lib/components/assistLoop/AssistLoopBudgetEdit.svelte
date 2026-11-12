@@ -45,11 +45,11 @@
 </script>
 
 <Modal label="Edit the loop budget" {onclose} data-testid="loop-budget-dialog">
-  <h3 class="text-sm font-medium text-fg-1">Edit the loop budget</h3>
-  <p class="mt-1 text-xs text-fg-2">
+  <h3 class="text-body font-medium text-fg-1">Edit the loop budget</h3>
+  <p class="mt-1 text-meta text-fg-2">
     Hard caps; the loop never goes past one. Editing does not resume a paused loop.
   </p>
-  <div class="mt-3 flex flex-col gap-3 text-xs">
+  <div class="mt-3 flex flex-col gap-3 text-meta">
     <label class="flex flex-col gap-1">
       <span class="text-fg-2">VLM crops</span>
       <input
@@ -82,7 +82,11 @@
     </label>
   </div>
   {#if ctl.actionError}
-    <p class="mt-3 text-xs text-danger-text" role="alert" data-testid="loop-budget-error">
+    <p
+      class="mt-3 text-meta text-danger-text"
+      role="alert"
+      data-testid="loop-budget-error"
+    >
       {ctl.actionError}
     </p>
   {/if}

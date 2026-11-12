@@ -16,13 +16,13 @@
   let { evaluation, error }: Props = $props();
 </script>
 
-<div class="flex flex-col gap-2 text-sm" data-testid="space-evaluation">
+<div class="flex flex-col gap-2 text-body" data-testid="space-evaluation">
   {#if error}
     <p class="text-danger-text" data-testid="evaluation-error">{error}</p>
   {:else if !evaluation}
     <p class="text-fg-3">Loading…</p>
   {:else}
-    <p class="text-xs text-fg-2" data-testid="evaluation-summary">
+    <p class="text-meta text-fg-2" data-testid="evaluation-summary">
       {#if evaluation.evaluations.length === 0}
         No evaluation of <span class="font-mono">{evaluation.space_key}</span> has been recorded.
       {:else}
@@ -43,7 +43,7 @@
         data-testid="evaluation-run"
         data-verdict={e.verdict}
       >
-        <header class="flex flex-wrap items-baseline gap-2 text-xs">
+        <header class="flex flex-wrap items-baseline gap-2 text-meta">
           <span class="font-mono">{e.candidate_space_key}</span>
           <span class="text-fg-3">against</span>
           <span class="font-mono">{e.baseline_space_key}</span>
@@ -62,7 +62,7 @@
             >{e.protocol} · {formatTimestamp(e.created_at)} · {e.created_by}</span
           >
         </header>
-        <dl class="grid grid-cols-[minmax(0,max-content)_1fr] gap-x-3 text-xs">
+        <dl class="grid grid-cols-[minmax(0,max-content)_1fr] gap-x-3 text-meta">
           {#each metricRows(e.metrics) as m (m.path)}
             <dt class="font-mono break-all text-fg-2">{m.path}</dt>
             <dd class="font-mono" data-testid="evaluation-metric">{m.value}</dd>

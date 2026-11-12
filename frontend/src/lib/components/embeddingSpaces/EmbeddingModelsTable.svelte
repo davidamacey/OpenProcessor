@@ -10,9 +10,9 @@
 </script>
 
 <section class="surface relative min-w-0 overflow-x-auto p-4" aria-label="Encoders">
-  <h2 class="mb-2 text-base font-semibold">Encoders this deployment can serve</h2>
-  <table class="w-full text-left text-sm" data-testid="model-table">
-    <thead class="text-xs text-fg-3">
+  <h2 class="mb-2 text-title font-semibold">Encoders this deployment can serve</h2>
+  <table class="w-full text-left text-body" data-testid="model-table">
+    <thead class="text-meta text-fg-3">
       <tr>
         <th class="py-1 pr-3 font-normal">Encoder</th>
         <th class="py-1 pr-3 font-normal">Modalities</th>
@@ -29,14 +29,14 @@
           data-testid="model-row"
           data-model={m.model_key}
         >
-          <td class="py-1.5 pr-3 font-mono text-xs">{m.model_key} v{m.version}</td>
-          <td class="py-1.5 pr-3 text-xs">{m.modalities.join(', ')}</td>
-          <td class="py-1.5 pr-3 font-mono text-xs">{m.native_dim}</td>
-          <td class="py-1.5 pr-3 font-mono text-xs"
+          <td class="py-1.5 pr-3 font-mono text-meta">{m.model_key} v{m.version}</td>
+          <td class="py-1.5 pr-3 text-meta">{m.modalities.join(', ')}</td>
+          <td class="py-1.5 pr-3 font-mono text-meta">{m.native_dim}</td>
+          <td class="py-1.5 pr-3 font-mono text-meta"
             >{m.matryoshka_dims.join(', ') || '—'}</td
           >
-          <td class="py-1.5 pr-3 text-xs">{m.licence}</td>
-          <td class="py-1.5 text-xs">
+          <td class="py-1.5 pr-3 text-meta">{m.licence}</td>
+          <td class="py-1.5 text-meta">
             {#if m.available}yes{:else}<span class="text-warn-text"
                 >no{m.unavailable_reason ? `: ${m.unavailable_reason}` : ''}</span
               >{/if}

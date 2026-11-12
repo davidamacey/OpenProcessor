@@ -21,16 +21,16 @@
 </script>
 
 <div class="mt-4 border-t border-line pt-3" data-testid="region-stage-panel">
-  <h3 class="mb-2 text-sm font-semibold text-fg-1">Region stage</h3>
+  <h3 class="mb-2 text-body font-semibold text-fg-1">Region stage</h3>
   {#if stage.loadError && !stage.state}
-    <p class="text-xs text-danger-text" data-testid="region-stage-error">
+    <p class="text-meta text-danger-text" data-testid="region-stage-error">
       Region stage unavailable: {stage.loadError}
     </p>
   {:else if !stage.state}
-    <p class="text-xs text-fg-3">Loading…</p>
+    <p class="text-meta text-fg-3">Loading…</p>
   {:else}
     {@const s = stage.state}
-    <div class="flex flex-wrap items-center gap-2 text-xs">
+    <div class="flex flex-wrap items-center gap-2 text-meta">
       <span
         class="rounded border px-1.5 py-0.5 {s.paused
           ? 'border-warn/40 bg-warn/10 text-warn-text'
@@ -53,12 +53,12 @@
       >
     </div>
     {#if s.pipeline_paused}
-      <p class="mt-2 text-xs text-warn-text" data-testid="region-stage-pipeline-paused">
+      <p class="mt-2 text-meta text-warn-text" data-testid="region-stage-pipeline-paused">
         This project's whole pipeline is paused, so the region stage is not running either
         way.
       </p>
     {/if}
-    <div class="mt-2 flex flex-wrap gap-4 text-xs">
+    <div class="mt-2 flex flex-wrap gap-4 text-meta">
       <div>
         <div class="text-fg-3">Pending detection</div>
         <div class="font-mono text-fg-1" data-testid="region-stage-pending-detection">

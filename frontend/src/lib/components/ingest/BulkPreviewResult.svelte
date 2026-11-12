@@ -41,7 +41,7 @@
 </script>
 
 <section
-  class="space-y-2 rounded border border-line p-3 text-xs"
+  class="space-y-2 rounded border border-line p-3 text-meta"
   data-testid="bulk-preview"
 >
   <p class="font-mono break-all text-fg-2">{preview.target}</p>
@@ -54,7 +54,7 @@
       at least the figures; the source holds more.
     </p>
   {/if}
-  <p class="text-sm text-fg-1" data-testid="bulk-preview-total">
+  <p class="text-body text-fg-1" data-testid="bulk-preview-total">
     {preview.files} files · {formatBytes(preview.total_bytes)}
   </p>
   <table class="w-full max-w-sm text-fg-2">

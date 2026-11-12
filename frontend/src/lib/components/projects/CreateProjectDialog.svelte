@@ -76,15 +76,15 @@
 
 {#if open}
   <Modal label="Create project" {onclose} data-testid="create-project-dialog">
-    <h3 class="mb-3 text-base font-semibold">Create project</h3>
+    <h3 class="mb-3 text-title font-semibold">Create project</h3>
     <form
       onsubmit={async (e) => {
         e.preventDefault();
         await submit();
       }}
     >
-      <label class="mb-3 block text-sm">
-        <span class="mb-1 block text-xs text-fg-2"
+      <label class="mb-3 block text-body">
+        <span class="mb-1 block text-meta text-fg-2"
           >Slug (used in the URL, can't change)</span
         >
         <input
@@ -93,7 +93,7 @@
           required
           autocomplete="off"
           data-testid="create-project-slug"
-          class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 font-mono text-sm text-fg-1 focus:border-accent focus:outline-none"
+          class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 font-mono text-body text-fg-1 focus:border-accent focus:outline-none"
         />
         {#if slugHint}
           <span
@@ -106,29 +106,29 @@
           >
         {/if}
       </label>
-      <label class="mb-3 block text-sm">
-        <span class="mb-1 block text-xs text-fg-2">Display name</span>
+      <label class="mb-3 block text-body">
+        <span class="mb-1 block text-meta text-fg-2">Display name</span>
         <input
           type="text"
           bind:value={displayName}
           required
           data-testid="create-project-name"
-          class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 text-sm text-fg-1 focus:border-accent focus:outline-none"
+          class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 text-body text-fg-1 focus:border-accent focus:outline-none"
         />
       </label>
-      <label class="mb-3 block text-sm">
-        <span class="mb-1 block text-xs text-fg-2">Description (optional)</span>
+      <label class="mb-3 block text-body">
+        <span class="mb-1 block text-meta text-fg-2">Description (optional)</span>
         <textarea
           bind:value={description}
           rows="2"
           data-testid="create-project-description"
-          class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 text-sm text-fg-1 focus:border-accent focus:outline-none"
+          class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 text-body text-fg-1 focus:border-accent focus:outline-none"
         ></textarea>
       </label>
 
       {#if capacity && capacity.status !== 'ok'}
         <p
-          class="mb-3 rounded border px-2 py-1.5 text-xs {blocked
+          class="mb-3 rounded border px-2 py-1.5 text-meta {blocked
             ? 'border-danger-line bg-danger-soft text-danger-text'
             : 'border-warn-line bg-warn-soft text-warn-text'}"
           data-testid="create-project-capacity"
@@ -141,7 +141,7 @@
       {/if}
 
       {#if errorText}
-        <p class="mb-3 text-xs text-danger-text" data-testid="create-project-error">
+        <p class="mb-3 text-meta text-danger-text" data-testid="create-project-error">
           {errorText}
         </p>
       {/if}

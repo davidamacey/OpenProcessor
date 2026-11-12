@@ -34,13 +34,13 @@
 >
   <header class="flex flex-wrap items-baseline justify-between gap-2">
     <div class="min-w-0">
-      <h3 class="text-sm font-semibold text-fg-1">{source.name}</h3>
-      <p class="font-mono text-xs break-all text-fg-2">{source.location}</p>
+      <h3 class="text-body font-semibold text-fg-1">{source.name}</h3>
+      <p class="font-mono text-meta break-all text-fg-2">{source.location}</p>
     </div>
     <span class="chip">{source.backend === 's3' ? 'S3' : 'folder'}</span>
   </header>
 
-  <div class="flex flex-wrap gap-2 text-xs" data-testid="source-counts">
+  <div class="flex flex-wrap gap-2 text-meta" data-testid="source-counts">
     <span class="chip">pending {source.counts.pending}</span>
     <span class="chip">ingested {source.counts.done}</span>
     <span class="chip {source.counts.failed > 0 ? 'border-warn-line text-warn-text' : ''}"
@@ -53,13 +53,13 @@
   </div>
 
   {#if source.scan.active}
-    <p class="text-xs text-accent-text" data-testid="source-scan">
+    <p class="text-meta text-accent-text" data-testid="source-scan">
       {scanText(source.scan)}
     </p>
   {/if}
 
   <dl
-    class="grid grid-cols-1 gap-x-4 gap-y-1 text-xs sm:grid-cols-2"
+    class="grid grid-cols-1 gap-x-4 gap-y-1 text-meta sm:grid-cols-2"
     data-testid="source-triggers"
   >
     {#if triggers.watch?.enabled}
@@ -112,7 +112,7 @@
   </dl>
 
   {#if source.last_run}
-    <p class="text-xs text-fg-2" data-testid="source-last-run">
+    <p class="text-meta text-fg-2" data-testid="source-last-run">
       Last run
       <span class={STATUS_TONE[source.last_run.status] ?? ''}
         >{source.last_run.status.replaceAll('_', ' ')}</span
@@ -124,14 +124,14 @@
         >{/if}
     </p>
   {:else if source.scan.last}
-    <p class="text-xs text-fg-2">
+    <p class="text-meta text-fg-2">
       Last scan {formatWhen(source.scan.last.finished_at)}: {source.scan.last.listed} listed,
       {source.scan.last.queued} new.
     </p>
   {/if}
 
   {#if source.errors && source.errors.length > 0}
-    <details class="text-xs" data-testid="source-errors">
+    <details class="text-meta" data-testid="source-errors">
       <summary class="cursor-pointer text-danger-text"
         >{source.errors.length} object{source.errors.length === 1 ? '' : 's'} with errors</summary
       >
@@ -181,7 +181,7 @@
       Remove
     </button>
     {#if !source.can_run && source.blocked_message}
-      <span class="text-xs text-warn-text" data-testid="source-blocked"
+      <span class="text-meta text-warn-text" data-testid="source-blocked"
         >{source.blocked_message}</span
       >
     {/if}

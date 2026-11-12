@@ -44,8 +44,8 @@
   onclose={oncancel}
   panelClass="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg border border-line bg-surface-0 p-5 shadow-2xl"
 >
-  <h3 class="mb-3 text-base font-semibold text-fg-1">{title}</h3>
-  <div class="mb-4 space-y-2 text-sm text-fg-2">
+  <h3 class="mb-3 text-title font-semibold text-fg-1">{title}</h3>
+  <div class="mb-4 space-y-2 text-body text-fg-2">
     {@render children()}
   </div>
   <div class="flex justify-end gap-2">

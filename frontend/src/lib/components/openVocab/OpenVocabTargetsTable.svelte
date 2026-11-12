@@ -74,8 +74,8 @@
 
 <section class="flex flex-col gap-3" data-testid="open-vocab-targets">
   <div class="flex flex-wrap items-baseline gap-3">
-    <h2 class="text-sm font-semibold text-fg-1">Targets</h2>
-    <span class="text-xs text-fg-2" data-testid="targets-facts">{facts}</span>
+    <h2 class="text-body font-semibold text-fg-1">Targets</h2>
+    <span class="text-meta text-fg-2" data-testid="targets-facts">{facts}</span>
     <span class="grow"></span>
     {#if !readonly}
       <button type="button" class="btn btn-sm" data-testid="target-add" onclick={onadd}
@@ -85,7 +85,7 @@
   </div>
 
   {#if targets.length === 0}
-    <p class="text-sm text-fg-2" data-testid="targets-empty">
+    <p class="text-body text-fg-2" data-testid="targets-empty">
       No targets yet. Add one to say what to look for.
     </p>
   {/if}
@@ -98,8 +98,9 @@
     {#each targets as t, i (i)}
       <li class="rounded border border-line p-3" data-testid="target-row" data-index={i}>
         <div class="mb-2 flex flex-wrap items-center gap-2">
-          <span class="font-mono text-xs text-fg-3">#{i}</span>
-          <span class="truncate text-sm text-fg-1">{t.prompt || 'untitled target'}</span>
+          <span class="font-mono text-meta text-fg-3">#{i}</span>
+          <span class="truncate text-body text-fg-1">{t.prompt || 'untitled target'}</span
+          >
           <span class="grow"></span>
           {#if !readonly}
             <button
@@ -131,10 +132,10 @@
           {#each basic as r (r.field)}
             {#if r.field === 'class_name'}
               <div class="flex flex-col gap-1.5" data-testid="target-class-cell">
-                <label class="text-sm font-medium text-fg-1" for="target-{i}-class-name"
+                <label class="text-body font-medium text-fg-1" for="target-{i}-class-name"
                   >{r.label}</label
                 >
-                {#if r.help}<p class="text-xs text-fg-2">{r.help}</p>{/if}
+                {#if r.help}<p class="text-meta text-fg-2">{r.help}</p>{/if}
                 <input
                   id="target-{i}-class-name"
                   class="input input-sm max-w-md font-mono"
@@ -156,7 +157,7 @@
                 {/if}
                 {#each issuesForTargetField(report, i, r.field) as iss (iss.id)}
                   <p
-                    class="text-xs {iss.severity === 'error'
+                    class="text-meta {iss.severity === 'error'
                       ? 'text-danger-text'
                       : 'text-warn-text'}"
                     data-testid="cell-issue"
@@ -183,7 +184,7 @@
         {#if advanced.length > 0}
           <button
             type="button"
-            class="mt-2 text-xs text-accent-text hover:underline"
+            class="mt-2 text-meta text-accent-text hover:underline"
             data-testid="target-advanced-toggle"
             onclick={() => (open[i] = !open[i])}
             >{open[i] ? 'Hide' : 'Show'} advanced ({advanced.length})</button

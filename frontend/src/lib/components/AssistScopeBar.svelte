@@ -112,7 +112,7 @@
   }
 </script>
 
-<div class="inline-flex flex-wrap items-center gap-1.5 text-xs">
+<div class="inline-flex flex-wrap items-center gap-1.5 text-meta">
   {#if !expanded}
     <button
       type="button"

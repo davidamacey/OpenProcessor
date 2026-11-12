@@ -23,7 +23,7 @@
 
 {#if tabs.queueFilterSpecs.length > 0}
   <div
-    class="flex min-w-0 flex-wrap items-center gap-3 border-b border-line bg-surface-1/40 px-4 py-2 text-xs"
+    class="flex min-w-0 flex-wrap items-center gap-3 border-b border-line bg-surface-1/40 px-4 py-2 text-meta"
     data-testid="queue-filters"
   >
     {#each tabs.queueFilterSpecs as spec (spec.param)}

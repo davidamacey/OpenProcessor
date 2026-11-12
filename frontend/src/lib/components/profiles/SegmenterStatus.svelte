@@ -16,7 +16,7 @@
 </script>
 
 <div
-  class="rounded border border-line bg-surface-1/40 p-2 text-xs"
+  class="rounded border border-line bg-surface-1/40 p-2 text-meta"
   data-testid="segmenter-status"
 >
   {#if segmenters.length === 0}

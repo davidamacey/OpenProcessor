@@ -93,7 +93,7 @@
 
 <div class="mx-auto flex h-full max-w-7xl flex-col gap-4 p-6">
   <header class="flex flex-wrap items-center gap-3">
-    <h1 class="text-2xl font-semibold tracking-tight">Export dataset</h1>
+    <h1 class="text-h1 font-semibold tracking-tight">Export dataset</h1>
     <span class="grow"></span>
     <button class="btn" type="button" onclick={() => void loadAll()} disabled={loading}>
       {loading ? 'Refreshing…' : 'Refresh'}
@@ -108,13 +108,13 @@
 
   <!-- HDD source distribution -->
   {#if stats?.dataset_error}
-    <section class="surface border-warn/40 bg-warn/10 p-3 text-xs text-warn-text">
+    <section class="surface border-warn/40 bg-warn/10 p-3 text-meta text-warn-text">
       Dataset totals unavailable: {stats.dataset_error}
     </section>
   {:else if hddSources.length > 0}
     <section class="surface p-4">
-      <h2 class="mb-2 text-sm font-semibold text-fg-2">Source distribution</h2>
-      <ul class="flex flex-wrap gap-2 text-xs">
+      <h2 class="mb-2 text-body font-semibold text-fg-2">Source distribution</h2>
+      <ul class="flex flex-wrap gap-2 text-meta">
         {#each hddSources as src (src.key)}
           <li class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1">
             <span class="font-mono text-fg-2">{src.key}</span>

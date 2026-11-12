@@ -20,7 +20,7 @@
   const pick = $derived(fromTestVlmSelection(selection));
 </script>
 
-<div class="text-xs" data-testid="test-vlm-picker">
+<div class="text-meta" data-testid="test-vlm-picker">
   <VlmRunPicker
     vlm={pick.vlm}
     acknowledgeExternal={pick.acknowledgeExternal}

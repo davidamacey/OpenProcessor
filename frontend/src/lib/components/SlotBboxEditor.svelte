@@ -120,7 +120,7 @@
   panelClass="flex w-full max-w-3xl flex-col gap-3 rounded-lg border border-line bg-surface-0 p-4 shadow-2xl"
 >
   <header class="flex items-baseline justify-between">
-    <h3 class="text-base font-semibold text-fg-1">
+    <h3 class="text-title font-semibold text-fg-1">
       Edit {activeSlot?.label.singular ?? 'box'}
     </h3>
     <span class="font-mono text-caption text-fg-3">{crop.id}</span>
@@ -189,7 +189,7 @@
   <div class="flex items-center justify-end gap-2">
     <button
       type="button"
-      class="rounded-md border border-line-strong px-3 py-1.5 text-sm text-fg-1 hover:bg-surface-2"
+      class="rounded-md border border-line-strong px-3 py-1.5 text-body text-fg-1 hover:bg-surface-2"
       onclick={onclose}
       disabled={multiBox.busy}
     >
@@ -197,7 +197,7 @@
     </button>
     <button
       type="button"
-      class="rounded-md border border-accent/60 bg-accent/20 px-3 py-1.5 text-sm font-medium text-accent-text hover:bg-accent/30 disabled:opacity-50"
+      class="rounded-md border border-accent/60 bg-accent/20 px-3 py-1.5 text-body font-medium text-accent-text hover:bg-accent/30 disabled:opacity-50"
       onclick={saveMultiBox}
       disabled={multiBox.busy}
     >

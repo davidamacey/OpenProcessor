@@ -111,7 +111,7 @@
       {/if}
     </p>
 
-    <div class="flex flex-wrap items-center gap-3 text-xs">
+    <div class="flex flex-wrap items-center gap-3 text-meta">
       <label class="flex items-center gap-1.5">
         <span class="text-fg-2">Limit to</span>
         <input

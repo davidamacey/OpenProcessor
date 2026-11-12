@@ -68,7 +68,7 @@
   });
 </script>
 
-<dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
+<dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-meta">
   {#if currentSlotRejectionReason}
     {@const reasonKind = regionVocabularyStore.rejectionReasonKind(
       currentSlotRejectionReason,

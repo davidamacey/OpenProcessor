@@ -87,23 +87,23 @@
       >{refText({ name: target.name, revision: target.revision })}</strong
     >
   </p>
-  <p class="text-xs text-fg-2">{blurb}</p>
+  <p class="text-meta text-fg-2">{blurb}</p>
   {#if ack?.warning}
     <p
-      class="rounded border border-danger/40 bg-danger/10 px-2 py-1 text-xs text-danger-text"
+      class="rounded border border-danger/40 bg-danger/10 px-2 py-1 text-meta text-danger-text"
       data-testid="activate-external-warning"
     >
       {ack.warning}
     </p>
   {/if}
   {#if showAck}
-    <label class="flex items-center gap-2 text-xs text-danger-text">
+    <label class="flex items-center gap-2 text-meta text-danger-text">
       <input type="checkbox" bind:checked={acknowledged} data-testid="activate-ack" />
       I understand crops will be sent outside this deployment
     </label>
   {/if}
   {#if ed.dirty && !ed.viewing}
-    <p class="text-xs text-warn-text" data-testid="activate-unsaved-note">
+    <p class="text-meta text-warn-text" data-testid="activate-unsaved-note">
       This activates the saved revision; your unsaved edits are not included.
     </p>
   {/if}
@@ -114,7 +114,7 @@
     <p class="text-danger-text" data-testid="activate-error">{ed.active.actionError}</p>
   {/if}
   {#if ed.active.activateReport?.force_allowed}
-    <label class="flex items-center gap-2 text-xs text-warn-text">
+    <label class="flex items-center gap-2 text-meta text-warn-text">
       <input type="checkbox" bind:checked={force} data-testid="activate-force" />
       Activate anyway (the server allows overriding these errors)
     </label>

@@ -23,7 +23,7 @@
         type="button"
         role="tab"
         aria-selected={current === v.id}
-        class="rounded px-3 py-1 text-sm {current === v.id
+        class="rounded px-3 py-1 text-body {current === v.id
           ? 'bg-surface-2 text-white'
           : 'text-fg-2 hover:text-white'}"
         data-testid="view-tab-{v.id}"

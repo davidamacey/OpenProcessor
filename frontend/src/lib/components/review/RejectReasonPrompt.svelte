@@ -36,7 +36,7 @@
     scrim="bg-black/50"
     panelClass="w-full max-w-sm overflow-hidden rounded-lg border border-line-strong bg-surface-1 p-3 shadow-xl"
   >
-    <label class="mb-2 block text-sm text-fg-2" for="reject-reason-input">
+    <label class="mb-2 block text-body text-fg-2" for="reject-reason-input">
       Reason for rejecting this {activeSlot?.label.singular ?? 'item'} (optional):
     </label>
     <input
@@ -53,7 +53,7 @@
           cancelRejectReasonPrompt();
         }
       }}
-      class="w-full rounded-md border border-line-strong bg-surface-0 px-2 py-1.5 text-sm focus:border-accent focus:outline-none"
+      class="w-full rounded-md border border-line-strong bg-surface-0 px-2 py-1.5 text-body focus:border-accent focus:outline-none"
       placeholder={`e.g. blurry, wrong angle, not a ${activeSlot?.label.singular ?? 'match'}…`}
     />
     <div class="mt-3 flex justify-end gap-2">

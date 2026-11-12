@@ -34,15 +34,15 @@
 
 <div data-testid="bakeoff-matrix">
   <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-    <h3 class="text-sm font-medium text-fg-2">
+    <h3 class="text-body font-medium text-fg-2">
       Model × dataset{matrix.rank_by ? ` · ranked by ${metricLabel(matrix.rank_by)}` : ''}
     </h3>
-    <label class="text-xs text-fg-2">
+    <label class="text-meta text-fg-2">
       metric
       <select
         value={metric}
         onchange={(e) => (picked = e.currentTarget.value)}
-        class="ml-1 rounded border border-line-strong bg-surface-0 px-2 py-1 text-xs"
+        class="ml-1 rounded border border-line-strong bg-surface-0 px-2 py-1 text-meta"
         data-testid="matrix-metric"
       >
         {#each matrix.metrics as m (m)}
@@ -52,8 +52,8 @@
     </label>
   </div>
   <div class="overflow-x-auto rounded-lg border border-line">
-    <table class="w-full text-sm">
-      <thead class="bg-surface-1 text-xs text-fg-2">
+    <table class="w-full text-body">
+      <thead class="bg-surface-1 text-meta text-fg-2">
         <tr>
           <th class="px-3 py-2 text-left">Model</th>
           {#each matrix.datasets as ds (ds.id)}
@@ -73,7 +73,7 @@
       <tbody>
         {#each matrix.models as m (m.model)}
           <tr class="border-t border-line hover:bg-surface-2/40" data-model={m.model}>
-            <td class="px-3 py-2 text-xs">
+            <td class="px-3 py-2 text-meta">
               <span class="font-mono">{m.display_name}</span>
               <span class="ml-1 text-caption text-fg-3">{m.source}</span>
             </td>
@@ -100,7 +100,7 @@
       </tbody>
     </table>
   </div>
-  <p class="mt-2 text-xs text-fg-3">
+  <p class="mt-2 text-meta text-fg-3">
     {metricUnit(metric)}; the best value per dataset is
     <span class="font-bold text-success-text">bold</span> (every tied model); #n is the served
     rank.

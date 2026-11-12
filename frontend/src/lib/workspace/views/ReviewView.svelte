@@ -109,13 +109,15 @@
     data-testid="review-body"
   >
     {#if queue.loading && queue.items.length === 0}
-      <p class="col-span-full text-sm text-fg-3">Loading...</p>
+      <p class="col-span-full text-body text-fg-3">Loading...</p>
     {:else if tabs.awaitingDeepLink}
       <!-- Page 1 (item #1) may already be loaded underneath this: don't render it, or the
            operator briefly sees and could act on the wrong item while the target is located. -->
-      <p class="col-span-full text-sm text-fg-3">Locating crop…</p>
+      <p class="col-span-full text-body text-fg-3">Locating crop…</p>
     {:else if queue.error}
-      <p class="col-span-full text-sm text-danger-text">API unavailable: {queue.error}</p>
+      <p class="col-span-full text-body text-danger-text">
+        API unavailable: {queue.error}
+      </p>
     {:else if !current}
       <ReviewEmptyQueue
         emptyMessage={loader.emptyMessage}

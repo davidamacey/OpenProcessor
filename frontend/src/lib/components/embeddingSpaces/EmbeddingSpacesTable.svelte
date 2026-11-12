@@ -29,9 +29,9 @@
   data-testid="space-table"
   data-target={target}
 >
-  <h2 class="mb-2 text-base font-semibold">{target} spaces</h2>
-  <table class="w-full text-left text-sm">
-    <thead class="text-xs text-fg-3">
+  <h2 class="mb-2 text-title font-semibold">{target} spaces</h2>
+  <table class="w-full text-left text-body">
+    <thead class="text-meta text-fg-3">
       <tr>
         <th class="py-1 pr-3 font-normal">Space</th>
         <th class="py-1 pr-3 font-normal">Encoder</th>
@@ -52,21 +52,21 @@
           data-testid="space-row"
           data-space={s.space_key}
         >
-          <td class="py-1.5 pr-3 font-mono text-xs">{s.space_key}</td>
-          <td class="py-1.5 pr-3 text-xs">{s.model_key} v{s.model_version}</td>
-          <td class="py-1.5 pr-3 font-mono text-xs">{s.dim}</td>
-          <td class="py-1.5 pr-3 text-xs" data-testid="space-role">{s.role}</td>
-          <td class="py-1.5 pr-3 text-xs" data-testid="space-status">{s.status}</td>
-          <td class="py-1.5 pr-3 text-xs text-fg-2"
+          <td class="py-1.5 pr-3 font-mono text-meta">{s.space_key}</td>
+          <td class="py-1.5 pr-3 text-meta">{s.model_key} v{s.model_version}</td>
+          <td class="py-1.5 pr-3 font-mono text-meta">{s.dim}</td>
+          <td class="py-1.5 pr-3 text-meta" data-testid="space-role">{s.role}</td>
+          <td class="py-1.5 pr-3 text-meta" data-testid="space-status">{s.status}</td>
+          <td class="py-1.5 pr-3 text-meta text-fg-2"
             >{s.ready_at ? formatTimestamp(s.ready_at) : '—'}</td
           >
-          <td class="py-1.5 pr-3 font-mono text-xs">{s.docs_with_vector ?? '—'}</td>
+          <td class="py-1.5 pr-3 font-mono text-meta">{s.docs_with_vector ?? '—'}</td>
           <td class="py-1.5 pr-3">
             {#if run}
               <ReindexRunProgress {run} />
             {:else if s.run_status}
               <span
-                class="flex flex-wrap items-center gap-2 text-xs"
+                class="flex flex-wrap items-center gap-2 text-meta"
                 data-testid="last-run"
               >
                 <span
@@ -76,7 +76,7 @@
                 <span class="text-fg-2">{s.run_mode}</span>
               </span>
             {:else}
-              <span class="text-xs text-fg-3">—</span>
+              <span class="text-meta text-fg-3">—</span>
             {/if}
           </td>
           <td class="py-1.5">

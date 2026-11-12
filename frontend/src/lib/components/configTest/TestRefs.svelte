@@ -20,7 +20,7 @@
   let { pack = null, packLabel = 'Pack', vlm = null, latencyMs = null }: Props = $props();
 </script>
 
-<dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs" data-testid="test-refs">
+<dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-meta" data-testid="test-refs">
   {#if pack}
     <dt class="text-fg-3">{packLabel}</dt>
     <dd class="font-mono" data-testid="test-pack-ref">{refText(pack)}</dd>

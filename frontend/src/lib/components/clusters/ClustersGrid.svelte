@@ -50,7 +50,7 @@
     <!-- Global dataset-wide search results — a mode swap over the card
          grid, not a new page. Infinite scroll is not offered: {API_PREFIX}/search/text isn't
          paginated the way the cluster grid's sentinel expects. -->
-    <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
+    <div class="mb-3 flex flex-wrap items-center gap-2 text-meta">
       <span class="flex items-center gap-2 text-fg-2" data-testid="search-summary">
         <strong class="text-fg-1">{modes.searchTotal.toLocaleString()}</strong>
         {#if modes.similarTo}
@@ -84,11 +84,11 @@
       </button>
     </div>
     {#if modes.similarError}
-      <p class="text-sm text-warn-text" role="status" data-testid="similar-error">
+      <p class="text-body text-warn-text" role="status" data-testid="similar-error">
         {modes.similarError}
       </p>
     {:else if modes.searchResults.length === 0}
-      <p class="text-sm text-fg-3">
+      <p class="text-body text-fg-3">
         {modes.similarTo || modes.imageQueryName
           ? 'No similar crops in this scope.'
           : 'No crops matched that search.'}
@@ -130,7 +130,7 @@
   {:else if modes.ignoredModeActive}
     <!-- Ignored bucket (G7): excluded crops, restorable via
          batch_unexclude. Same mode-swap pattern as search above. -->
-    <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
+    <div class="mb-3 flex flex-wrap items-center gap-2 text-meta">
       <span class="text-fg-2">
         <strong class="text-fg-1">{modes.ignoredTotal.toLocaleString()}</strong>
         ignored crop{modes.ignoredTotal === 1 ? '' : 's'}
@@ -154,9 +154,9 @@
       </button>
     </div>
     {#if modes.ignoredLoading && modes.ignoredItems.length === 0}
-      <p class="text-sm text-fg-3">Loading...</p>
+      <p class="text-body text-fg-3">Loading...</p>
     {:else if modes.ignoredItems.length === 0}
-      <p class="text-sm text-fg-3">Nothing ignored.</p>
+      <p class="text-body text-fg-3">Nothing ignored.</p>
     {:else}
       <CropResultGrid
         items={modes.ignoredItems}
@@ -177,7 +177,7 @@
     {/if}
   {:else if modes.itemTextModeActive}
     <!-- Item-text search results (G8). -->
-    <div class="mb-3 flex flex-wrap items-center gap-2 text-xs">
+    <div class="mb-3 flex flex-wrap items-center gap-2 text-meta">
       <span class="text-fg-2">
         <strong class="text-fg-1">{modes.itemTextTotal.toLocaleString()}</strong>
         result{modes.itemTextTotal === 1 ? '' : 's'} for
@@ -194,14 +194,14 @@
       </button>
     </div>
     {#if modes.itemTextLoading && modes.itemTextItems.length === 0}
-      <p class="text-sm text-fg-3">Loading...</p>
+      <p class="text-body text-fg-3">Loading...</p>
     {:else if modes.itemTextError}
       <!-- m18: the 400 detail is already shown next to the input in
            ClustersToolbar — showing the empty-state copy here too read as
            two contradictory messages ("here's why it failed" AND
            "0 results… no crops matched"). Show only the error. -->
     {:else if modes.itemTextItems.length === 0}
-      <p class="text-sm text-fg-3">No crops matched that text.</p>
+      <p class="text-body text-fg-3">No crops matched that text.</p>
     {:else}
       <CropResultGrid
         items={modes.itemTextItems}
@@ -222,9 +222,9 @@
          slotGalleryController.svelte.ts. -->
     <SlotGallery gallery={slotGallery} />
   {:else if list.clusterPager.loading && list.gridItems.length === 0}
-    <p class="text-sm text-fg-3" role="status">Loading clusters…</p>
+    <p class="text-body text-fg-3" role="status">Loading clusters…</p>
   {:else if list.clusterPager.error}
-    <div class="text-sm text-danger-text" role="alert" data-testid="clusters-error">
+    <div class="text-body text-danger-text" role="alert" data-testid="clusters-error">
       <p>Could not load clusters: {list.clusterPager.error}</p>
       <button
         type="button"
@@ -236,7 +236,7 @@
     </div>
   {:else if list.gridItems.length === 0}
     {#if list.filterActive}
-      <div class="text-sm text-fg-2" data-testid="clusters-filtered-empty">
+      <div class="text-body text-fg-2" data-testid="clusters-filtered-empty">
         <p>No clusters match these filters.</p>
         <button
           type="button"
@@ -267,7 +267,7 @@
   {:else}
     {#if list.truncated}
       <p
-        class="mb-3 rounded border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn-text"
+        class="mb-3 rounded border border-warn/40 bg-warn/10 px-3 py-2 text-meta text-warn-text"
         role="status"
         data-testid="clusters-truncated"
       >

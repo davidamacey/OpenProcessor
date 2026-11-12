@@ -23,10 +23,10 @@
 
 {#snippet models(list: VocabModel[], testid: string)}
   {#if list.length === 0}
-    <p class="text-xs text-fg-3">None served.</p>
+    <p class="text-meta text-fg-3">None served.</p>
   {:else}
     <div class="overflow-x-auto">
-      <table class="w-full text-left text-xs" data-testid={testid}>
+      <table class="w-full text-left text-meta" data-testid={testid}>
         <thead class="text-fg-3">
           <tr>
             <th class="py-0.5 pr-3 font-normal">Model</th>
@@ -69,32 +69,32 @@
   {/if}
 {/snippet}
 
-<div class="flex flex-col gap-4 text-sm" data-testid="vocabulary-panel">
+<div class="flex flex-col gap-4 text-body" data-testid="vocabulary-panel">
   <section class="flex flex-col gap-1">
-    <h3 class="text-sm font-semibold text-fg-1">Detectors</h3>
+    <h3 class="text-body font-semibold text-fg-1">Detectors</h3>
     {@render models(vocab.detectors, 'vocab-detectors')}
   </section>
 
   <section class="flex flex-col gap-1">
-    <h3 class="text-sm font-semibold text-fg-1">Segmenters</h3>
+    <h3 class="text-body font-semibold text-fg-1">Segmenters</h3>
     <SegmenterStatus segmenters={vocab.segmenters} />
   </section>
 
   <section class="flex flex-col gap-1">
-    <h3 class="text-sm font-semibold text-fg-1">
-      OCR <span class="text-xs font-normal text-fg-2"
+    <h3 class="text-body font-semibold text-fg-1">
+      OCR <span class="text-meta font-normal text-fg-2"
         >({vocab.ocr.available ? 'available' : 'not available'})</span
       >
     </h3>
     {#each ocrLists as l (l.id)}
-      <p class="text-xs text-fg-2">{l.label}</p>
+      <p class="text-meta text-fg-2">{l.label}</p>
       {@render models(l.models, `vocab-ocr-${l.id}`)}
     {/each}
   </section>
 
   <section class="flex flex-col gap-1">
-    <h3 class="text-sm font-semibold text-fg-1">Text-reading modes</h3>
-    <ul class="space-y-0.5 text-xs" data-testid="vocab-text-modes">
+    <h3 class="text-body font-semibold text-fg-1">Text-reading modes</h3>
+    <ul class="space-y-0.5 text-meta" data-testid="vocab-text-modes">
       {#each vocab.text_reader_modes as m (m.id)}
         <li>
           <span class="text-fg-1">{m.label}</span>
@@ -110,12 +110,12 @@
   </section>
 
   <section class="flex flex-col gap-1">
-    <h3 class="text-sm font-semibold text-fg-1">VLM endpoints</h3>
+    <h3 class="text-body font-semibold text-fg-1">VLM endpoints</h3>
     {#if vocab.vlm.endpoints.length === 0}
-      <p class="text-xs text-fg-3">No VLM is configured.</p>
+      <p class="text-meta text-fg-3">No VLM is configured.</p>
     {:else}
       <div class="overflow-x-auto">
-        <table class="w-full text-left text-xs" data-testid="vocab-vlm">
+        <table class="w-full text-left text-meta" data-testid="vocab-vlm">
           <thead class="text-fg-3">
             <tr>
               <th class="py-0.5 pr-3 font-normal">Endpoint</th>

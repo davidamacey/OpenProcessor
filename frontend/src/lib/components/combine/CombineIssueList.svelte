@@ -24,7 +24,7 @@
     {#each issues as i (i.id)}
       {@const severity = i.severity ?? 'error'}
       <li
-        class="rounded border px-2 py-1 text-xs {TONE[severity] ?? TONE.error}"
+        class="rounded border px-2 py-1 text-meta {TONE[severity] ?? TONE.error}"
         data-testid="combine-issue"
         data-code={i.code}
         data-severity={severity}

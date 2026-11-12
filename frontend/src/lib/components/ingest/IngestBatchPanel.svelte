@@ -90,10 +90,10 @@
 
 <div class="space-y-3">
   <div>
-    <p class="text-xs text-fg-3">
+    <p class="text-meta text-fg-3">
       Paths must be under one of these folders on the server:
     </p>
-    <ul class="mt-1 text-xs text-fg-2">
+    <ul class="mt-1 text-meta text-fg-2">
       {#each config.batchSourceRoots as root (root)}
         <li class="font-mono">{root}</li>
       {/each}
@@ -101,21 +101,21 @@
   </div>
 
   <div class="flex flex-wrap items-end gap-3">
-    <label class="text-xs text-fg-2">
+    <label class="text-meta text-fg-2">
       Source tag
       <input class="input input-sm block" bind:value={source} disabled={submitting} />
     </label>
   </div>
 
-  <label class="block text-xs text-fg-2">
+  <label class="block text-meta text-fg-2">
     Image paths (one per line, absolute paths inside the API container)
     <textarea
-      class="input block h-24 w-full font-mono text-xs"
+      class="input block h-24 w-full font-mono text-meta"
       bind:value={pathsText}
       disabled={submitting}></textarea>
   </label>
   {#if overLimit}
-    <p class="text-xs text-danger-text">
+    <p class="text-meta text-danger-text">
       {paths.length} paths exceeds this backend's per-request limit of {config.batchMaxItems}
       — split into smaller batches.
     </p>
@@ -135,11 +135,11 @@
   </div>
 
   {#if submitError}
-    <p class="text-xs text-danger-text">{submitError}</p>
+    <p class="text-meta text-danger-text">{submitError}</p>
   {/if}
 
   {#if result}
-    <div class="flex flex-wrap gap-2 text-xs">
+    <div class="flex flex-wrap gap-2 text-meta">
       <span class="chip">status {result.status}</span>
       <span class="chip">successful {result.summary.successful}</span>
       <span class="chip">duplicate {result.summary.duplicates}</span>
@@ -162,7 +162,10 @@
     </div>
 
     {#if notEmbedded.length > 0}
-      <ul class="max-h-32 overflow-y-auto text-xs" data-testid="batch-not-embedded-list">
+      <ul
+        class="max-h-32 overflow-y-auto text-meta"
+        data-testid="batch-not-embedded-list"
+      >
         {#each notEmbedded as r, i (i)}
           <li class="border-b border-line py-1 font-mono">
             {r.image_path}
@@ -177,7 +180,7 @@
 
     {#if secondaryFailures.length > 0}
       <!-- d72cc63: these images ingested with primary-detector crops only. -->
-      <ul class="max-h-32 overflow-y-auto text-xs" data-testid="batch-secondary-list">
+      <ul class="max-h-32 overflow-y-auto text-meta" data-testid="batch-secondary-list">
         {#each secondaryFailures as r, i (i)}
           <li class="border-b border-line py-1 font-mono">
             {r.image_path}
@@ -190,7 +193,7 @@
     {/if}
 
     {#if errorKindCounts.length > 0}
-      <div class="flex flex-wrap gap-1 text-xs">
+      <div class="flex flex-wrap gap-1 text-meta">
         <button
           class="chip {errorKindFilter === null ? 'bg-accent-soft text-accent-text' : ''}"
           type="button"
@@ -210,7 +213,7 @@
           </button>
         {/each}
       </div>
-      <ul class="max-h-48 overflow-y-auto text-xs">
+      <ul class="max-h-48 overflow-y-auto text-meta">
         {#each visibleFailures as r, i (i)}
           <li class="border-b border-line py-1 font-mono">
             {r.image_path}

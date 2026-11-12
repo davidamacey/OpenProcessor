@@ -67,7 +67,7 @@
 
 {#if project}
   <Modal label="Copy settings" {onclose} data-testid="clone-settings-dialog">
-    <h3 class="mb-3 text-base font-semibold">
+    <h3 class="mb-3 text-title font-semibold">
       Copy settings into {project.display_name}
     </h3>
     <form
@@ -76,12 +76,12 @@
         await submit();
       }}
     >
-      <label class="mb-3 block text-sm">
-        <span class="mb-1 block text-xs text-fg-2">From project</span>
+      <label class="mb-3 block text-body">
+        <span class="mb-1 block text-meta text-fg-2">From project</span>
         <select
           bind:value={from}
           data-testid="clone-settings-from"
-          class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 text-sm text-fg-1"
+          class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 text-body text-fg-1"
         >
           <option value="" disabled>Choose a project…</option>
           {#each sources as s (s.slug)}
@@ -89,8 +89,8 @@
           {/each}
         </select>
       </label>
-      <fieldset class="mb-3 text-sm">
-        <legend class="mb-1 text-xs text-fg-2">What to copy</legend>
+      <fieldset class="mb-3 text-body">
+        <legend class="mb-1 text-meta text-fg-2">What to copy</legend>
         {#each axisOptions as a (a)}
           <label class="flex items-center gap-2 text-fg-2">
             <input
@@ -99,12 +99,12 @@
               data-testid="clone-settings-axis-{a}"
               onchange={(e) => toggle(a, (e.currentTarget as HTMLInputElement).checked)}
             />
-            <span class="font-mono text-xs">{a}</span>
+            <span class="font-mono text-meta">{a}</span>
           </label>
         {/each}
       </fieldset>
       {#if errorText}
-        <p class="mb-3 text-xs text-danger-text" data-testid="clone-settings-error">
+        <p class="mb-3 text-meta text-danger-text" data-testid="clone-settings-error">
           {errorText}
         </p>
       {/if}

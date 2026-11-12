@@ -166,7 +166,7 @@
 <section class="rounded-md border border-line bg-surface-1">
   <button
     type="button"
-    class="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-surface-2"
+    class="flex w-full items-center gap-3 px-3 py-2 text-left text-body hover:bg-surface-2"
     onclick={() => (expanded = !expanded)}
     aria-expanded={expanded}
   >
@@ -176,7 +176,7 @@
       class="text-fg-3"
     />
     <span class="font-semibold text-fg-1">Augmentation</span>
-    <span class="grow text-xs text-fg-2">
+    <span class="grow text-meta text-fg-2">
       {#if !enabled}
         disabled
       {:else}
@@ -187,7 +187,7 @@
   </button>
 
   {#if expanded}
-    <div class="space-y-3 border-t border-line p-3 text-sm">
+    <div class="space-y-3 border-t border-line p-3 text-body">
       <label class="flex items-center gap-2 text-fg-1">
         <input
           type="checkbox"
@@ -201,12 +201,12 @@
       {#if enabled}
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label class="block">
-            <span class="mb-1 block text-xs text-fg-2">Preset</span>
+            <span class="mb-1 block text-meta text-fg-2">Preset</span>
             {#if presetsResponse}
               <select
                 value={spec.preset ?? servedDefault}
                 onchange={(e) => setPreset((e.currentTarget as HTMLSelectElement).value)}
-                class="w-full rounded-md border border-line-strong bg-surface-0 px-2 py-1.5 text-sm text-fg-1 focus:border-accent focus:outline-none"
+                class="w-full rounded-md border border-line-strong bg-surface-0 px-2 py-1.5 text-body text-fg-1 focus:border-accent focus:outline-none"
               >
                 {#each presetsResponse.presets as p (p.id)}
                   <option value={p.id} title={p.description}>
@@ -235,7 +235,7 @@
           </label>
 
           <label class="block">
-            <span class="mb-1 block text-xs text-fg-2">
+            <span class="mb-1 block text-meta text-fg-2">
               Multiplier <span class="font-mono text-fg-3">×{spec.multiplier ?? 1}</span>
             </span>
             <input
@@ -255,7 +255,7 @@
           <legend class="px-1 text-caption uppercase tracking-wide text-fg-3">
             Per-class oversampling
           </legend>
-          <div class="mb-2 flex gap-3 text-xs text-fg-2">
+          <div class="mb-2 flex gap-3 text-meta text-fg-2">
             <label class="flex cursor-pointer items-center gap-1.5">
               <input
                 type="radio"
@@ -297,14 +297,14 @@
                 bind:value={manualText}
                 onblur={commitManual}
                 rows="4"
-                class="w-full rounded-md border border-line-strong bg-surface-0 px-2 py-1.5 font-mono text-xs text-fg-1 focus:border-accent focus:outline-none"
+                class="w-full rounded-md border border-line-strong bg-surface-0 px-2 py-1.5 font-mono text-meta text-fg-1 focus:border-accent focus:outline-none"
                 placeholder="81:8
 47:5"></textarea>
             </label>
           {:else if oversampleMode === 'auto'}
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label class="block">
-                <span class="mb-1 block text-xs text-fg-2">Target count per class</span>
+                <span class="mb-1 block text-meta text-fg-2">Target count per class</span>
                 <input
                   type="number"
                   min="100"
@@ -314,11 +314,11 @@
                     setAutoBalance({
                       target_count: Number((e.currentTarget as HTMLInputElement).value),
                     })}
-                  class="w-full rounded-md border border-line-strong bg-surface-0 px-2 py-1.5 text-sm text-fg-1 focus:border-accent focus:outline-none"
+                  class="w-full rounded-md border border-line-strong bg-surface-0 px-2 py-1.5 text-body text-fg-1 focus:border-accent focus:outline-none"
                 />
               </label>
               <label class="block">
-                <span class="mb-1 block text-xs text-fg-2">Max multiplier (cap)</span>
+                <span class="mb-1 block text-meta text-fg-2">Max multiplier (cap)</span>
                 <input
                   type="number"
                   min="1"
@@ -328,7 +328,7 @@
                     setAutoBalance({
                       max_multiplier: Number((e.currentTarget as HTMLInputElement).value),
                     })}
-                  class="w-full rounded-md border border-line-strong bg-surface-0 px-2 py-1.5 text-sm text-fg-1 focus:border-accent focus:outline-none"
+                  class="w-full rounded-md border border-line-strong bg-surface-0 px-2 py-1.5 text-body text-fg-1 focus:border-accent focus:outline-none"
                 />
               </label>
             </div>

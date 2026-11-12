@@ -53,15 +53,15 @@
 </script>
 
 <div class="flex flex-col gap-2" data-testid="vlm-endpoints">
-  <p class="text-xs text-fg-2">
+  <p class="text-meta text-fg-2">
     The registry is shared by every project; activation is per project. External policy:
     <span class="font-mono text-fg-1" data-testid="vlm-external-policy"
       >{list.external_policy}</span
     >.
   </p>
   <div class="overflow-x-auto">
-    <table class="w-full text-left text-sm" data-testid="vlm-endpoints-table">
-      <thead class="text-xs text-fg-3">
+    <table class="w-full text-left text-body" data-testid="vlm-endpoints-table">
+      <thead class="text-meta text-fg-3">
         <tr>
           <th class="py-1 pr-3 font-normal">Name</th>
           <th class="py-1 pr-3 font-normal">Status</th>
@@ -87,7 +87,7 @@
                   projectHref(`/settings/models/vlm/${encodeURIComponent(e.name)}`),
                 )}>{e.name}</a
               >
-              <span class="block text-xs text-fg-3"
+              <span class="block text-meta text-fg-3"
                 >{label(list.labels.source, e.source)}{e.revision != null
                   ? ` · r${e.revision}`
                   : ''}</span
@@ -99,10 +99,10 @@
                 >
               {/if}
             </td>
-            <td class="py-1.5 pr-3 text-xs" data-testid="vlm-endpoint-status"
+            <td class="py-1.5 pr-3 text-meta" data-testid="vlm-endpoint-status"
               >{label(list.labels.status, e.status)}</td
             >
-            <td class="py-1.5 pr-3 text-xs">
+            <td class="py-1.5 pr-3 text-meta">
               {label(list.labels.locality, e.locality)}
               {#if e.sends_images_externally}
                 <span
@@ -112,8 +112,8 @@
                 >
               {/if}
             </td>
-            <td class="py-1.5 pr-3 font-mono text-xs">{e.model}</td>
-            <td class="py-1.5 pr-3 text-xs">
+            <td class="py-1.5 pr-3 font-mono text-meta">{e.model}</td>
+            <td class="py-1.5 pr-3 text-meta">
               <span class="block break-all font-mono text-fg-2">{e.base_url}</span>
               {#if e.catalog_id}<span class="block text-fg-3"
                   >catalog <span class="font-mono">{e.catalog_id}</span></span
@@ -127,10 +127,10 @@
                 >
               {/if}
             </td>
-            <td class="py-1.5 pr-3 text-xs text-fg-2" title={e.last_probe_at ?? ''}
+            <td class="py-1.5 pr-3 text-meta text-fg-2" title={e.last_probe_at ?? ''}
               >{formatTimestamp(e.last_probe_at)}</td
             >
-            <td class="py-1.5 pr-3 text-xs" data-testid="vlm-active-in">
+            <td class="py-1.5 pr-3 text-meta" data-testid="vlm-active-in">
               {#each e.active_in ?? [] as slug (slug)}
                 <span
                   class="mr-1 inline-block rounded border px-1 font-mono {slug ===
@@ -183,12 +183,12 @@
             <tr data-testid="vlm-probe-row" data-name={e.name}>
               <td colspan="8" class="pb-2">
                 <details open class="rounded border border-line p-2">
-                  <summary class="cursor-pointer text-xs text-fg-2"
+                  <summary class="cursor-pointer text-meta text-fg-2"
                     >Probe result for <span class="font-mono">{e.name}</span></summary
                   >
                   {#if probeErrors[e.name]}
                     <p
-                      class="mt-1 text-xs text-danger-text"
+                      class="mt-1 text-meta text-danger-text"
                       data-testid="vlm-probe-error"
                     >
                       {probeErrors[e.name]}

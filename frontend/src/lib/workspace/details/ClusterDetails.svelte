@@ -15,12 +15,12 @@
   );
 </script>
 
-<section class="space-y-2 text-sm" data-testid="cluster-details">
-  <h2 class="text-xs font-semibold tracking-wide text-fg-2 uppercase">Cluster</h2>
+<section class="space-y-2 text-body" data-testid="cluster-details">
+  <h2 class="text-meta font-semibold tracking-wide text-fg-2 uppercase">Cluster</h2>
   {#if card}
     <p class="text-fg-1">
       Cluster {displayNoText(card)}
-      <span class="font-mono text-xs text-fg-3">{card.uid}</span>
+      <span class="font-mono text-meta text-fg-3">{card.uid}</span>
     </p>
     <p class="text-fg-2" data-testid="cluster-details-name">
       size {card.size.toLocaleString()} ·
@@ -44,7 +44,7 @@
       }}>Label all {card.size.toLocaleString()} in this cluster…</Button
     >
     {#if card.label_agreement != null}
-      <p class="font-mono text-xs text-fg-2" data-testid="cluster-agreement">
+      <p class="font-mono text-meta text-fg-2" data-testid="cluster-agreement">
         agreement {(card.label_agreement * 100).toFixed(0)}%
         {#if card.labelled_share != null}
           · labelled {(card.labelled_share * 100).toFixed(0)}%

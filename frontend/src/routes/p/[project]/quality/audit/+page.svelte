@@ -50,9 +50,9 @@
   {/if}
 
   {#if audit.loading && !audit.report}
-    <section class="surface p-6 text-sm text-fg-3">Loading…</section>
+    <section class="surface p-6 text-body text-fg-3">Loading…</section>
   {:else if audit.loadError}
-    <section class="surface flex flex-col gap-3 p-6 text-sm">
+    <section class="surface flex flex-col gap-3 p-6 text-body">
       <p class="text-danger-text" data-testid="audit-load-error">{audit.loadError}</p>
       <button type="button" class="btn w-fit" onclick={() => void audit.load()}
         >Retry</button
@@ -72,18 +72,18 @@
   {:else if audit.report}
     {@const r = audit.report}
     <section
-      class="surface flex flex-wrap items-center gap-x-6 gap-y-2 p-4 text-sm"
+      class="surface flex flex-wrap items-center gap-x-6 gap-y-2 p-4 text-body"
       data-testid="audit-summary"
     >
       <span
-        ><span class="font-mono text-lg" data-testid="audit-audited">{r.audited}</span>
+        ><span class="font-mono text-title" data-testid="audit-audited">{r.audited}</span>
         <span class="text-fg-2">labeled by a human</span></span
       >
       <span
-        ><span class="font-mono text-lg" data-testid="audit-pending">{r.pending}</span>
+        ><span class="font-mono text-title" data-testid="audit-pending">{r.pending}</span>
         <span class="text-fg-2">still waiting</span></span
       >
-      <ul class="flex flex-wrap gap-2 text-xs" data-testid="audit-outcomes">
+      <ul class="flex flex-wrap gap-2 text-meta" data-testid="audit-outcomes">
         {#each Object.entries(r.outcomes) as [outcome, n] (outcome)}
           <li class="rounded border border-line-strong px-1.5 py-0.5 text-fg-2">
             {humanizeId(outcome)}: <span class="font-mono">{n}</span>
@@ -111,7 +111,7 @@
 
     <ConfusionMatrix confusion={r.confusion} />
 
-    <section class="surface flex flex-wrap items-center gap-3 p-4 text-sm">
+    <section class="surface flex flex-wrap items-center gap-3 p-4 text-body">
       {#if r.pending > 0}
         <a
           class="btn"

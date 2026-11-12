@@ -33,7 +33,7 @@
 </script>
 
 <div
-  class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface-1/40 px-4 py-2 text-xs"
+  class="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface-1/40 px-4 py-2 text-meta"
   role="group"
   aria-label="Cluster sort and filters"
   data-testid="cluster-list-filters"
@@ -119,7 +119,7 @@
       {#each list.flagVocabulary as f (f.id)}
         <button
           type="button"
-          class="btn-sm border text-xs transition-colors {filter.flag.includes(f.id)
+          class="btn-sm border text-meta transition-colors {filter.flag.includes(f.id)
             ? 'border-danger/60 bg-danger/20 text-danger-text'
             : 'border-line-strong bg-surface-1 text-fg-2 hover:border-danger/40'}"
           aria-pressed={filter.flag.includes(f.id)}

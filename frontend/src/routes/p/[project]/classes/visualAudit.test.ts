@@ -146,7 +146,7 @@ describe('L2: every proposal term is actionable, biggest first', () => {
   it('lists flagged and un-flagged terms in one list, sorted by count', async () => {
     const el = await render();
     const labels = [...el.querySelectorAll('[data-testid="proposal-row"]')].map((r) =>
-      r.querySelector('.text-sm')?.textContent?.trim(),
+      r.querySelector('.text-body')?.textContent?.trim(),
     );
     expect(labels).toEqual(['widget_c', 'widget_bs', 'classic_widget']);
   });

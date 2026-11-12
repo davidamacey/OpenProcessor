@@ -14,13 +14,15 @@
 </script>
 
 {#if ed.revisions}
-  <section class="surface flex flex-col gap-2 p-4 text-sm" aria-label="Revisions">
-    <h2 class="text-sm font-semibold">Revisions</h2>
-    {#if ed.revisionError}<p class="text-xs text-danger-text">{ed.revisionError}</p>{/if}
+  <section class="surface flex flex-col gap-2 p-4 text-body" aria-label="Revisions">
+    <h2 class="text-body font-semibold">Revisions</h2>
+    {#if ed.revisionError}<p class="text-meta text-danger-text">
+        {ed.revisionError}
+      </p>{/if}
     <ul class="space-y-1" data-testid="revisions">
       {#each ed.revisions as r (r.revision)}
         <li
-          class="flex flex-wrap items-center gap-2 text-xs"
+          class="flex flex-wrap items-center gap-2 text-meta"
           data-testid="revision-row"
           data-revision={r.revision}
         >

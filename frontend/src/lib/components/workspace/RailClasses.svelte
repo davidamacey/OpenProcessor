@@ -117,7 +117,7 @@
 <!-- Narrow screens: a short strip above the content, so the page keeps the full width.
      md and up: the fixed 16rem column beside it. -->
 <section class="relative flex min-h-0 flex-1 flex-col" aria-label="Classes">
-  <h2 class="p-3 pb-1 text-xs font-semibold tracking-wide text-fg-2 uppercase">
+  <h2 class="p-3 pb-1 text-meta font-semibold tracking-wide text-fg-2 uppercase">
     Classes
   </h2>
   {#if classesStore.thresholds.warn_below > 0}
@@ -151,17 +151,17 @@
 
   <div class="flex-1 overflow-y-auto">
     {#if classesStore.loading && classesStore.classes.length === 0}
-      <div class="p-4 text-sm text-fg-3">Loading classes...</div>
+      <div class="p-4 text-body text-fg-3">Loading classes...</div>
     {:else if classesStore.error}
-      <div class="p-4 text-sm text-danger-text">API unavailable</div>
+      <div class="p-4 text-body text-danger-text">API unavailable</div>
     {:else if classes.length === 0}
-      <div class="p-4 text-sm text-fg-3">No classes</div>
+      <div class="p-4 text-body text-fg-3">No classes</div>
     {:else}
       <ul class="py-1">
         <li>
           <button
             type="button"
-            class="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm hover:bg-surface-1 {selectedName ===
+            class="flex w-full items-center justify-between px-3 py-1.5 text-left text-body hover:bg-surface-1 {selectedName ===
             null
               ? 'bg-surface-2 text-white'
               : 'text-fg-2'}"
@@ -201,7 +201,7 @@
               <div class="flex min-w-0 grow">
                 <button
                   type="button"
-                  class="flex min-h-9 grow items-center justify-between gap-2 px-3 py-2 text-left text-sm {selectedName ===
+                  class="flex min-h-9 grow items-center justify-between gap-2 px-3 py-2 text-left text-body {selectedName ===
                   cls.name
                     ? 'text-white'
                     : 'text-fg-2'}"
@@ -221,7 +221,7 @@
                     <span class="truncate">{cls.name}</span>
                   </span>
                   <span
-                    class="rounded-md border px-1.5 py-0.5 font-mono text-xs {adequacyChipClass(
+                    class="rounded-md border px-1.5 py-0.5 font-mono text-meta {adequacyChipClass(
                       cls.adequacy,
                     )}"
                     title="{cls.count.toLocaleString()} items carry this class.&#10;{cls.validated_count ??

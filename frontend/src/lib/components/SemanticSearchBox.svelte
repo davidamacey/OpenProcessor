@@ -101,7 +101,7 @@
   });
 </script>
 
-<div class="inline-flex items-center gap-2 text-xs">
+<div class="inline-flex items-center gap-2 text-meta">
   <div class="relative w-72 shrink-0">
     <span
       class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-3"

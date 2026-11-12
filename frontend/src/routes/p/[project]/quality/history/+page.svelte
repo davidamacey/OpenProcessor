@@ -30,7 +30,7 @@
       onclick={() => void ctl.load()}>Refresh</button
     >
   </header>
-  <p class="text-xs text-fg-2">
+  <p class="text-meta text-fg-2">
     Labels and moves recorded for this project, single or bulk. An undo restores only the
     items still carrying the operation's label; anything edited since, in the test holdout
     or whose restore class was renamed is kept as it is.
@@ -39,9 +39,9 @@
   </p>
 
   {#if ctl.loading && ctl.items.length === 0 && !ctl.loadError}
-    <section class="surface p-6 text-sm text-fg-3">Loading…</section>
+    <section class="surface p-6 text-body text-fg-3">Loading…</section>
   {:else if ctl.loadError}
-    <section class="surface flex flex-col gap-3 p-6 text-sm">
+    <section class="surface flex flex-col gap-3 p-6 text-body">
       <p class="text-danger-text" role="alert" data-testid="label-ops-error">
         {ctl.loadError}
       </p>
@@ -50,7 +50,7 @@
       >
     </section>
   {:else if ctl.items.length === 0}
-    <section class="surface p-6 text-sm text-fg-2" data-testid="label-ops-empty">
+    <section class="surface p-6 text-body text-fg-2" data-testid="label-ops-empty">
       No label operations recorded yet. A bulk label or move from a cluster shows up here.
     </section>
   {:else}
@@ -59,7 +59,7 @@
       <p
         role="alert"
         data-testid="label-ops-older-error"
-        class="text-sm text-danger-text self-center"
+        class="text-body text-danger-text self-center"
       >
         {ctl.olderError}
       </p>
@@ -74,7 +74,7 @@
         >{ctl.loadingOlder ? 'Loading…' : 'Load older'}</button
       >
     {:else}
-      <p data-testid="label-ops-end" class="text-xs text-fg-3 self-center">
+      <p data-testid="label-ops-end" class="text-meta text-fg-3 self-center">
         No older operations.
       </p>
     {/if}
