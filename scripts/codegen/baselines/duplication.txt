@@ -5,9 +5,7 @@ frontend/src/lib/components/configTest/CropFrameShapes.svelte <-> frontend/src/l
 frontend/src/lib/components/export/ExportControls.svelte <-> frontend/src/lib/components/train/TrainDatasetSection.svelte	19	baseline at introduction; extract a shared helper to shrink
 frontend/src/lib/components/packs/PackTestPanel.svelte <-> frontend/src/lib/components/profiles/ProfileTestPanel.svelte	30	baseline at introduction; extract a shared helper to shrink
 frontend/src/lib/components/settings/keymap/KeymapContextsSection.svelte <-> frontend/src/lib/components/settings/keymap/KeymapGroupsSection.svelte	34	baseline at introduction; extract a shared helper to shrink
-frontend/src/lib/config/configAvailability.svelte.ts <-> frontend/src/lib/datasets/datasetsAvailability.svelte.ts	27	baseline at introduction; extract a shared helper to shrink
 frontend/src/lib/packs/packTestController.svelte.ts <-> frontend/src/lib/profiles/profileTestController.svelte.ts	32	baseline at introduction; extract a shared helper to shrink
-frontend/src/lib/stores/classes.svelte.ts <-> frontend/src/lib/stores/health.svelte.ts	24	baseline at introduction; extract a shared helper to shrink
 frontend/src/routes/p/[project]/settings/open-vocab/+page.svelte <-> frontend/src/routes/p/[project]/settings/prompt-packs/+page.svelte	22	baseline at introduction; extract a shared helper to shrink
 frontend/src/routes/p/[project]/settings/open-vocab/+page.svelte <-> frontend/src/routes/p/[project]/settings/region-profiles/+page.svelte	22	baseline at introduction; extract a shared helper to shrink
 frontend/src/routes/p/[project]/settings/open-vocab/[name]/+page.svelte <-> frontend/src/routes/p/[project]/settings/prompt-packs/[name]/+page.svelte	54	baseline at introduction; extract a shared helper to shrink
