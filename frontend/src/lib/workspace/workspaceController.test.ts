@@ -429,4 +429,26 @@ describe('WorkspaceController', () => {
       expect(c.lightboxNeighbour(1)).toBeNull();
     });
   });
+
+  describe('label cluster', () => {
+    it('with nothing selected it takes the whole cluster, opens the picker and moves on after', () => {
+      visit('?view=clusters&scope=cluster%3Au1');
+      const c = make();
+      c.startLabelCluster();
+      expect(c.selection.kind).toBe('matching');
+      expect(c.pickerOpen).toBe(true);
+      expect(c.labelThenNext).toBe(true);
+      expect(c.actingOn).toBe('every item in this cluster');
+    });
+
+    it('with a selection it labels the selection and stays on the cluster', () => {
+      visit('?view=clusters&scope=cluster%3Au1');
+      const c = make();
+      c.select({ kind: 'items', cropIds: ['a', 'b'] });
+      c.startLabelCluster();
+      expect(c.selection).toEqual({ kind: 'items', cropIds: ['a', 'b'] });
+      expect(c.labelThenNext).toBe(false);
+      expect(c.actingOn).toBe('the 2 selected items');
+    });
+  });
 });

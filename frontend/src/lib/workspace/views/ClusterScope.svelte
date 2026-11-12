@@ -92,6 +92,11 @@
         () => void step(1),
         'workspace',
       ),
+      keyboardStore.registerAction(
+        'workspace.label_cluster',
+        () => ws.startLabelCluster(),
+        'workspace',
+      ),
     ];
     return () => offs.forEach((off) => off());
   });
@@ -138,7 +143,16 @@
       >
     {/if}
   </div>
-  <BulkBar {ws} onapplied={() => void view.loadFirst()}>
+  <BulkBar
+    {ws}
+    onapplied={() => {
+      void view.loadFirst();
+      if (!ws.labelThenNext) return;
+      ws.labelThenNext = false;
+      ws.clearSelection();
+      void step(1);
+    }}
+  >
     {#snippet extra()}
       <button
         class="btn"

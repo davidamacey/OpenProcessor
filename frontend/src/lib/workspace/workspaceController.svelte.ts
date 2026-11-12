@@ -70,6 +70,9 @@ export class WorkspaceController {
   matching = $state<{ total: number; hidden: HiddenCounts | null } | null>(null);
   /** The class picker the bulk bar owns; `workspace.class_picker` opens it. */
   pickerOpen = $state(false);
+  /** Set when the whole open cluster is being labelled by key: once the label lands the host
+   *  moves on to the next cluster. Cleared when the flow ends without a write. */
+  labelThenNext = $state(false);
   /** The queues and classes rail as a drawer under `lg`. */
   railOpen = $state(false);
   /** The server's account of the selection: what a bulk action would touch. */
@@ -395,6 +398,29 @@ export class WorkspaceController {
 
   confirmSelectAllMatching(): void {
     this.select({ kind: 'matching' });
+  }
+
+  /** The label-cluster key: label the selection when there is one, else everything the open
+   *  cluster matches, through the bulk bar's class picker (type to search or create) and the
+   *  server's dry run. Only a whole-cluster label moves on to the next cluster. */
+  startLabelCluster(): void {
+    const whole = this.selection.kind === 'none';
+    if (whole) this.confirmSelectAllMatching();
+    this.labelThenNext = whole;
+    this.pickerOpen = true;
+  }
+
+  /** What a bulk action acts on, in words, for the dialog that confirms it. */
+  get actingOn(): string {
+    const sel = this.selection;
+    if (sel.kind === 'items') return `the ${sel.cropIds.length} selected items`;
+    if (sel.kind === 'images') return `the ${sel.imageIds.length} selected images`;
+    if (sel.kind === 'clusters') return `the ${sel.clusterUids.length} selected clusters`;
+    if (sel.kind === 'matching')
+      return this.#url.scope?.kind === 'cluster'
+        ? 'every item in this cluster'
+        : 'every item matching the filter';
+    return 'nothing';
   }
 
   toggleRail(): void {

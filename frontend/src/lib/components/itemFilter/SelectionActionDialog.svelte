@@ -17,9 +17,11 @@
     controller: SelectionActionController;
     /** Called after the write landed, so the host can reload its view. */
     onapplied?: () => void;
+    /** Who the action acts on, in words ("the 3 selected items"), shown above the count. */
+    subject?: string;
   }
 
-  let { controller: c, onapplied }: Props = $props();
+  let { controller: c, onapplied, subject }: Props = $props();
 
   const TITLES: Record<SelectionActionId, string> = {
     exclude: 'Ignore matching items',
@@ -95,6 +97,9 @@
       </label>
     {/if}
 
+    {#if subject}
+      <p class="text-fg-2" data-testid="selection-subject">Acting on {subject}.</p>
+    {/if}
     <p data-testid="selection-count">
       {#if c.loading && c.selected == null}
         Counting…

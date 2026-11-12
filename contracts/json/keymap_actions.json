@@ -346,6 +346,17 @@
     {
       "context": "workspace",
       "default": [
+        "l"
+      ],
+      "description": "In an open cluster: label the selected items, or the whole cluster when none are selected, then go to the next cluster.",
+      "group": null,
+      "id": "workspace.label_cluster",
+      "label": "Label this cluster",
+      "modifiable": true
+    },
+    {
+      "context": "workspace",
+      "default": [
         "\\"
       ],
       "description": "Toggle the details panel.",

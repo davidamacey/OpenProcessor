@@ -210,6 +210,7 @@ const SEEDS: ActionSeed[] = [
   ['workspace.view_next', 'workspace', null, 'Next view', [']']],
   ['workspace.scope_prev', 'workspace', null, 'Previous cluster', [',']],
   ['workspace.scope_next', 'workspace', null, 'Next cluster', ['.']],
+  ['workspace.label_cluster', 'workspace', null, 'Label this cluster', ['l']],
   ['workspace.toggle_details', 'workspace', null, 'Show or hide details', ['\\']],
   ['workspace.open_editor', 'workspace', null, 'Open in the image editor', ['shift+o']],
   ['workspace.lightbox', 'workspace', null, 'Open the image full size', ['shift+space']],

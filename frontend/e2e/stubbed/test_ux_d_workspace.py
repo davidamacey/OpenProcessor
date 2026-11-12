@@ -202,3 +202,43 @@ def test_gallery_duplicates_control_sends_the_served_filter(stub, page, app_url)
     with page.expect_request(lambda r: r.url.endswith('/images')):
         page.get_by_role('radio', name='All images').click()
     shot(page, 'gallery-duplicates', widths=(1600, 430))
+
+
+def test_a_cluster_is_labelled_by_keyboard_and_focus_moves_to_the_next(stub, page, app_url):
+    from fixtures.contract import label_op_accepted
+    from harness.label_ops import stub_label_op
+    from test_workspace_shell import CLUSTER_UID, serve as serve_shell
+
+    second = 'cl-fixture-0002'
+    serve_shell(stub)
+    stub.on(
+        'GET', r'/clusters(\?|$)', cluster_list(cluster_card(CLUSTER_UID), cluster_card(second))
+    )
+    calls: list[dict] = []
+    stub_label_op(stub, r'/crops/batch_label$', 'op-key', updated=3, method='PUT')
+
+    def label(request, _match):
+        body = request.post_data_json or {}
+        calls.append(body)
+        if body.get('dry_run'):
+            return (200, {'dry_run': True, 'selected': 3})
+        return (202, label_op_accepted('op-key', 'job-op-key'))
+
+    stub.on('PUT', r'/crops/batch_label$', label)
+    page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:{CLUSTER_UID}')
+    page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
+    page.locator('body').click(position={'x': 5, 'y': 400})
+    page.keyboard.press('l')
+    box = page.get_by_role('combobox', name='Search classes')
+    expect(box).to_be_focused(timeout=ACTION_TIMEOUT_MS)
+    page.keyboard.type('widget')
+    page.keyboard.press('Enter')
+    expect(page.get_by_test_id('selection-subject')).to_have_text(
+        'Acting on every item in this cluster.', timeout=ACTION_TIMEOUT_MS
+    )
+    expect(page.get_by_test_id('selection-count')).to_contain_text('3', timeout=ACTION_TIMEOUT_MS)
+    page.keyboard.press('Enter')
+    expect(page).to_have_url(re.compile(f'scope=cluster(:|%3A){second}'), timeout=ACTION_TIMEOUT_MS)
+    assert [c.get('dry_run') for c in calls][:1] == [True]
+    assert any(not c.get('dry_run') for c in calls)
+    shot(page, 'label-cluster-by-key', widths=(1600, 430))

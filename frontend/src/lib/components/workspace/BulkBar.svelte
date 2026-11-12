@@ -51,6 +51,13 @@
     void excludeReasonsStore.init();
   });
 
+  // A label-by-key flow that ends without a write (picker or dialog dismissed) must not make a
+  // later, ordinary label move to the next cluster.
+  $effect(() => {
+    if (ws.labelThenNext && !ws.pickerOpen && actions.action == null)
+      ws.labelThenNext = false;
+  });
+
   function assign(cls: { id: number }): void {
     ws.pickerOpen = false;
     actions.classId = cls.id;
@@ -199,5 +206,5 @@
   onpick={labelGroup}
   onclose={() => (groupPickerOpen = false)}
 />
-<SelectionActionDialog controller={actions} {onapplied} />
+<SelectionActionDialog controller={actions} {onapplied} subject={ws.actingOn} />
 <SelectionActionDialog controller={group} {onapplied} />
