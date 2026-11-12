@@ -38,10 +38,17 @@ def _docs(opensearch: Any, index: str, image_id: str) -> list[dict[str, Any]]:
     return [hit['_source'] for hit in resp.json()['hits']['hits']]
 
 
-def _vector_dims(docs: list[dict[str, Any]]) -> set[int]:
-    return {
-        len(v) for doc in docs for k, v in doc.items() if 'embedding' in k and isinstance(v, list)
-    }
+# Every document field and `/search/ocr` result key the test reads. An offline test
+# (tests/compose/test_core_index_fields.py) checks them against the index mappings and the
+# response model, so a rename fails there first.
+VECTOR_FIELD = {'visual_search_faces': 'embedding', 'visual_search_global': 'global_embedding'}
+OCR_TEXT_FIELD = 'text'
+QUERIED_FIELDS = {
+    'visual_search_faces': ['image_id', VECTOR_FIELD['visual_search_faces']],
+    'visual_search_global': ['image_id', VECTOR_FIELD['visual_search_global']],
+    'visual_search_ocr': ['image_id', OCR_TEXT_FIELD],
+}
+OCR_RESULT_KEYS = ['image_id', 'matched_text']
 
 
 def test_core_ingest_writes_faces_embeddings_and_ocr(api: Any, opensearch: Any) -> None:
@@ -63,13 +70,15 @@ def test_core_ingest_writes_faces_embeddings_and_ocr(api: Any, opensearch: Any) 
 
     faces = _docs(opensearch, 'visual_search_faces', image_id)
     assert len(faces) == 1, faces
-    assert _vector_dims(faces) == {FACE_DIM}, faces
+    assert {len(f[VECTOR_FIELD['visual_search_faces']]) for f in faces} == {FACE_DIM}, faces
     global_docs = _docs(opensearch, 'visual_search_global', image_id)
     assert len(global_docs) == 1, global_docs
-    assert _vector_dims(global_docs) == {CLIP_DIM}, global_docs
+    assert {len(g[VECTOR_FIELD['visual_search_global']]) for g in global_docs} == {CLIP_DIM}, (
+        global_docs
+    )
     ocr_docs = _docs(opensearch, 'visual_search_ocr', image_id)
     assert ocr_docs, 'no OCR document was indexed'
-    assert FAKE_OCR_TEXT in str(ocr_docs), ocr_docs
+    assert any(FAKE_OCR_TEXT in d[OCR_TEXT_FIELD] for d in ocr_docs), ocr_docs
 
     # The same bytes again are a duplicate by content hash, not a second set of documents.
     again = api.post(
