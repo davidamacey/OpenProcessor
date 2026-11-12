@@ -358,3 +358,33 @@ def test_a_crop_read_after_the_move_never_writes_the_cache_back(
     assert fresh is not None
     assert fresh != b'old crop'
     assert not cached.exists()
+
+
+class _SecondMovePE(FakePE):
+    """A second editor moves the box while the encoder is busy with the first box."""
+
+    def __init__(self, fake: Any) -> None:
+        super().__init__()
+        self.fake = fake
+
+    async def embed_crops(self, crops: list[Any], max_batch: int = 32) -> Any:
+        self.fake.docs(ITEMS)['it-1'].update(
+            {
+                'bbox_norm': FAR,
+                'geometry_revision': 2,
+                'pe_embedding': None,
+                'embedding_state': 'deferred',
+            }
+        )
+        return await super().embed_crops(crops, max_batch)
+
+
+def test_a_re_embed_of_a_box_moved_again_writes_no_vector(world: Any) -> None:
+    """The first move's embed started on box A; box B was stored before it wrote, so its vector
+    (of A) must not land on B."""
+    resp = _patch(_client(world, _SecondMovePE(world)), MOVED, 0)
+    assert resp.status_code == 200
+    doc = world.docs(ITEMS)['it-1']
+    assert doc['bbox_norm'] == FAR
+    assert doc.get('pe_embedding') is None
+    assert doc['embedding_state'] == 'deferred'
