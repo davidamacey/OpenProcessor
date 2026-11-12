@@ -40,8 +40,9 @@ const FILES = sourceFiles(SRC)
 
 const EMOJI = /\p{Extended_Pictographic}/u;
 // Arrows (except the prose `→`), technical symbols, enclosed alphanumerics, geometric shapes,
-// miscellaneous symbols, dingbats and the supplemental arrows block.
-const GLYPH_ICON = /[←-↑↓-⇿⌀-⏿①-⓿■-◿☀-➿⬀-⯿]/u;
+// miscellaneous symbols, dingbats and the supplemental arrows block, plus the single and double
+// angle quotes (‹ › « ») that stand in for chevrons.
+const GLYPH_ICON = /[«»‹›←-↑↓-⇿⌀-⏿①-⓿■-◿☀-➿⬀-⯿]/u;
 // A close button spelled "×": alone on its line, between tags, or trailing a label.
 const CLOSE_GLYPH = /(^|>)\s*×\s*(<|$)|\S\s×\s*$|['"]×['"]/m;
 const PIXEL_TEXT = /\btext-\[[\d.]+(px|rem|em)\]/;
@@ -98,6 +99,10 @@ describe('the patterns catch each spelling (negative controls)', () => {
       '↑',
       '←',
       '⇧',
+      '‹',
+      '›',
+      '«',
+      '»',
     ])
       expect(GLYPH_ICON.test(`<b>${g}</b>`), g).toBe(true);
     expect(GLYPH_ICON.test('Settings → Models')).toBe(false);
