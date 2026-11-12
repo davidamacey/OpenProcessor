@@ -31,7 +31,8 @@ def _profile(api: Any, prefix: str, name: str, **extra: Any) -> None:
     }
     created = api.post(f'{prefix}/region_profiles', json={'name': name, 'body': body})
     assert created.status_code == 201, created.text
-    activated = api.post(f'{prefix}/region_profiles/{name}/activate', json={})
+    now = api.get(f'{prefix}/region_profiles/active').json()['active']
+    activated = api.post(f'{prefix}/region_profiles/{name}/activate', json={'expected_active': now})
     assert activated.status_code == 200, activated.text
 
 
