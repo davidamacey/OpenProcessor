@@ -120,6 +120,14 @@ services:
       - ./verify-data/secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
       - ./verify-data/secrets/valkey/password:/run/secrets/op_valkey/password:ro
 
+  detection-worker:
+    image: op-local/api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
+    volumes: !override
+      - ./region_profile.json:/region_profile.json:ro
+      - ./verify-data:/verify-data
+      - ./verify-data/secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ./verify-data/secrets/valkey/password:/run/secrets/op_valkey/password:ro
+
   fake-vlm:
     image: op-local/fake-vlm:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
     build: !reset null
