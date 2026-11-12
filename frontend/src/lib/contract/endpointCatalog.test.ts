@@ -92,6 +92,7 @@ const GLOBAL_SCANNED_FILES = [
   'lib/api_combine.ts',
   'lib/api_jobs.ts',
   'lib/api_presets.ts',
+  'lib/api_embeddingSpaces.ts',
 ] as const;
 
 /** Every file that composes a backend URL through

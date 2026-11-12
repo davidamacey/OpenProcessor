@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import spec from '$contracts/openapi/curation.json';
 import type * as T from '$lib/types_embeddingSpaces';
 import {
+  EMBEDDING_BUILD_MODES,
   EMBEDDING_SPACE_ROLES,
   EMBEDDING_SPACE_STATUSES,
   EMBEDDING_TARGETS,
@@ -44,6 +45,98 @@ describe('embedding space contract', () => {
     expect(p.role!.enum).toEqual([...EMBEDDING_SPACE_ROLES]);
     expect(p.status!.enum).toEqual([...EMBEDDING_SPACE_STATUSES]);
     expect(schemas.Target!.enum).toEqual([...EMBEDDING_TARGETS]);
+  });
+});
+
+describe('embedding space management wire', () => {
+  const CASES: [string, string[]][] = [
+    [
+      'EmbeddingModelEntry',
+      keys<keyof T.EmbeddingModelEntry>({
+        model_key: true,
+        version: true,
+        modalities: true,
+        native_dim: true,
+        matryoshka_dims: true,
+        licence: true,
+        available: true,
+        unavailable_reason: true,
+      }),
+    ],
+    [
+      'EmbeddingSpaceRegisterRequest',
+      keys<keyof T.EmbeddingSpaceRegisterRequest>({
+        model_key: true,
+        model_version: true,
+        target: true,
+        dim: true,
+      }),
+    ],
+    [
+      'EmbeddingBuildRequest',
+      keys<keyof T.EmbeddingBuildRequest>({ mode: true, batch_size: true }),
+    ],
+    ['EmbeddingPromoteRequest', keys<keyof T.EmbeddingPromoteRequest>({ force: true })],
+    [
+      'EmbeddingSpaceStartResponse',
+      keys<keyof T.EmbeddingSpaceStartResponse>({
+        space_key: true,
+        target: true,
+        job_id: true,
+        run_id: true,
+        bytes_estimate: true,
+      }),
+    ],
+    [
+      'EmbeddingPromoteResponse',
+      keys<keyof T.EmbeddingPromoteResponse>({
+        primary: true,
+        previous: true,
+        config_epoch: true,
+      }),
+    ],
+    [
+      'EmbeddingReindexRunResponse',
+      keys<keyof T.EmbeddingReindexRun>({
+        id: true,
+        space_key: true,
+        mode: true,
+        scope: true,
+        docs_total: true,
+        docs_done: true,
+        docs_failed: true,
+        docs_skipped: true,
+        bytes_estimate: true,
+        started_at: true,
+        finished_at: true,
+        job_id: true,
+        job_status: true,
+        job_progress: true,
+      }),
+    ],
+    [
+      'EmbeddingRunCancelResponse',
+      keys<keyof T.EmbeddingRunCancelResponse>({
+        run_id: true,
+        job_status: true,
+        abandoned: true,
+        space_status: true,
+        clear_job_id: true,
+      }),
+    ],
+  ];
+
+  it.each(CASES)(
+    '%s has exactly the keys the frontend type declares',
+    (name, expected) => {
+      expect(Object.keys(schemas[name]!.properties ?? {}).sort()).toEqual(expected);
+    },
+  );
+
+  it('the build modes are the served enum', () => {
+    expect(schemas.EmbeddingBuildRequest!.properties!.mode!.enum).toEqual([
+      ...EMBEDDING_BUILD_MODES,
+    ]);
   });
 });
 
