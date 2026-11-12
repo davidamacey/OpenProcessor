@@ -92,6 +92,7 @@ class ImagePage(BaseModel):
         default=None, description='Opaque; pass back as `cursor`. Null on the last page.'
     )
     total: int
+    limit: int = Field(description='The page size the server applied.')
     join_truncated: bool = Field(
         description='An item-level filter matched more images than the join could use.'
     )
@@ -100,6 +101,9 @@ class ImagePage(BaseModel):
     hidden: HiddenCounts
     empty_reason: EmptyReason | None = Field(
         default=None, description='Why `items` is empty; null when it is not.'
+    )
+    empty_message: str | None = Field(
+        default=None, description='The served sentence for `empty_reason`; null when not empty.'
     )
 
 

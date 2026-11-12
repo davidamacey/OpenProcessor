@@ -14037,6 +14037,18 @@
       },
       "ImagePage": {
         "properties": {
+          "empty_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The served sentence for `empty_reason`; null when not empty.",
+            "title": "Empty Message"
+          },
           "empty_reason": {
             "anyOf": [
               {
@@ -14067,6 +14079,11 @@
             "description": "An item-level filter matched more images than the join could use.",
             "title": "Join Truncated",
             "type": "boolean"
+          },
+          "limit": {
+            "description": "The page size the server applied.",
+            "title": "Limit",
+            "type": "integer"
           },
           "next_cursor": {
             "anyOf": [
@@ -14099,6 +14116,7 @@
         "required": [
           "items",
           "total",
+          "limit",
           "join_truncated",
           "sort_applied",
           "sort_options",
