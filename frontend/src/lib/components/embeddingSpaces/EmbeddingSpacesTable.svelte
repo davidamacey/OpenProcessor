@@ -79,35 +79,39 @@
               <span class="text-xs text-zinc-500">—</span>
             {/if}
           </td>
-          <td class="py-1.5 text-right whitespace-nowrap">
-            <button type="button" class="btn btn-sm" onclick={() => onaction('build', s)}
-              >Restart or backfill</button
-            >
-            {#if st.isFollowing(s)}
+          <td class="py-1.5">
+            <div class="flex flex-wrap justify-end gap-1">
               <button
                 type="button"
                 class="btn btn-sm"
-                onclick={() => onaction('cancel', s)}>Cancel build</button
+                onclick={() => onaction('build', s)}>Restart or backfill</button
               >
-            {/if}
-            {#if s.role !== 'primary'}
-              <button
-                type="button"
-                class="btn btn-sm"
-                data-testid="space-evaluation"
-                onclick={() => onevaluation(s)}>Evaluation</button
-              >
-              <button
-                type="button"
-                class="btn btn-sm"
-                onclick={() => onaction('promote', s)}>Promote</button
-              >
-              <button
-                type="button"
-                class="btn btn-sm"
-                onclick={() => onaction('retire', s)}>Retire</button
-              >
-            {/if}
+              {#if st.isFollowing(s)}
+                <button
+                  type="button"
+                  class="btn btn-sm"
+                  onclick={() => onaction('cancel', s)}>Cancel build</button
+                >
+              {/if}
+              {#if s.role !== 'primary'}
+                <button
+                  type="button"
+                  class="btn btn-sm"
+                  data-testid="space-evaluation-open"
+                  onclick={() => onevaluation(s)}>Evaluation</button
+                >
+                <button
+                  type="button"
+                  class="btn btn-sm"
+                  onclick={() => onaction('promote', s)}>Promote</button
+                >
+                <button
+                  type="button"
+                  class="btn btn-sm"
+                  onclick={() => onaction('retire', s)}>Retire</button
+                >
+              {/if}
+            </div>
           </td>
         </tr>
       {/each}
