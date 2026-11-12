@@ -6,7 +6,16 @@
   import type { CropMetaLoader } from '$lib/cropMeta/cropMetaLoader.svelte';
   import { formatTimestamp } from '$lib/format/date';
 
-  let { crop, loader }: { crop: Crop; loader: CropMetaLoader } = $props();
+  let {
+    crop,
+    loader,
+    onopencrop,
+  }: {
+    crop: Crop;
+    loader: CropMetaLoader;
+    /** Opens a sibling item in the host; absent, siblings are plain thumbnails. */
+    onopencrop?: (crop: Crop) => void;
+  } = $props();
 
   const imageMeta = $derived(loader.imageMeta);
   const siblings = $derived(loader.siblings);
@@ -75,12 +84,27 @@
       </div>
       <div class="mt-1 flex flex-wrap gap-1.5">
         {#each siblings as sib (sib.id)}
-          <img
-            src={getThumbUrl(sib.id, 64)}
-            alt="sibling crop"
-            title={sib.class_name ?? sib.id}
-            class="h-12 w-12 rounded border border-zinc-800 bg-zinc-900 object-contain"
-          />
+          {#snippet thumb()}
+            <img
+              src={getThumbUrl(sib.id, 64)}
+              alt="sibling crop"
+              class="h-12 w-12 rounded border border-zinc-800 bg-zinc-900 object-contain"
+            />
+          {/snippet}
+          {#if onopencrop}
+            <button
+              type="button"
+              data-testid="sibling-crop"
+              title={sib.class_name ?? sib.id}
+              aria-label="Open sibling {sib.class_name ?? sib.id}"
+              class="rounded hover:ring-2 hover:ring-zinc-500"
+              onclick={() => onopencrop(sib)}
+            >
+              {@render thumb()}
+            </button>
+          {:else}
+            <span title={sib.class_name ?? sib.id}>{@render thumb()}</span>
+          {/if}
         {/each}
       </div>
     {/if}

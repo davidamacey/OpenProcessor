@@ -34,9 +34,11 @@
     /** The served post-write crop after a Reprocess, for the host to
      *  adopt in place of `crop`. */
     onreprocessed?: (crop: Crop) => void;
+    /** A sibling thumbnail was clicked: the host opens that item. */
+    onopencrop?: (crop: Crop) => void;
   }
 
-  let { crop, embedded = false, onreprocessed }: Props = $props();
+  let { crop, embedded = false, onreprocessed, onopencrop }: Props = $props();
 
   // An assist run may have written suggestions on this crop; adopt the served item.
   async function adoptAfterAssist(): Promise<void> {
@@ -274,4 +276,4 @@
   historyLoading={loader.historyLoading}
 />
 
-<CropSourceContext {crop} {loader} />
+<CropSourceContext {crop} {loader} {onopencrop} />

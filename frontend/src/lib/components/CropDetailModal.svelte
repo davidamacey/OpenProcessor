@@ -14,7 +14,10 @@
   // A Reprocess answers with the served post-write crop; show it in place
   // of the one the modal was opened with.
   let adopted = $state<Crop | null>(null);
-  const crop = $derived(adopted?.id === given.id ? adopted : given);
+  // A sibling opened from the panel replaces the crop shown until the modal closes.
+  let opened = $state<Crop | null>(null);
+  const base = $derived(opened ?? given);
+  const crop = $derived(adopted?.id === base.id ? adopted : base);
 </script>
 
 <Modal
@@ -58,7 +61,11 @@
   </div>
 
   <div class="min-h-0 min-w-0 overflow-y-auto pr-6">
-    <CropMetaPanel {crop} onreprocessed={(c) => (adopted = c)} />
+    <CropMetaPanel
+      {crop}
+      onreprocessed={(c) => (adopted = c)}
+      onopencrop={(c) => (opened = c)}
+    />
   </div>
 
   <button
