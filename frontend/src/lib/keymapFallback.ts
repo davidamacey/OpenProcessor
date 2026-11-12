@@ -394,7 +394,7 @@ export const FALLBACK_KEYMAP: KeymapDocument = {
     {
       id: 'region_gallery',
       label: 'Region gallery',
-      description: 'The region gallery on /clusters.',
+      description: 'The region gallery in the Workspace Clusters view.',
       includes: ['global'],
       class_hotkeys_live: false,
     },

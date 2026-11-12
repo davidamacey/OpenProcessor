@@ -685,7 +685,7 @@
     },
     {
       "class_hotkeys_live": false,
-      "description": "The region gallery on /clusters.",
+      "description": "The region gallery in the Workspace Clusters view.",
       "id": "region_gallery",
       "includes": [
         "global"
