@@ -111,7 +111,7 @@ export function getReviewTabs(signal?: AbortSignal): Promise<ReviewTabsResponse>
 }
 
 export async function getReviewQueue(
-  tab: ReviewTab,
+  tab: ReviewTab | string,
   cursor: string | null = null,
   limit = 30,
   filter: Record<string, unknown> = {},

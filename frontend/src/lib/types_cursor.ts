@@ -50,3 +50,12 @@ export interface ListPosition {
   cursor_after: string | null;
   reason: string | null;
 }
+
+/** `GET /crops/locate`: where a crop sits in the list the same filters and sort would serve. */
+export interface CropLocateResult extends ListPosition {
+  crop_id: string;
+  in_view: boolean;
+  reason: 'not_found' | 'filtered_out' | null;
+  /** The served sentence for `reason`. */
+  reason_message: string | null;
+}

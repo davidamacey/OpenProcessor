@@ -11,7 +11,7 @@ import type {
   PaginatedResponse,
 } from '$lib/types';
 import type { ImageDetailResponse } from '$lib/types_images';
-import type { CursorPage } from '$lib/types_cursor';
+import type { CropLocateResult, CursorPage } from '$lib/types_cursor';
 import type { SearchCrop } from '$lib/types_review';
 
 export async function getCrops(
@@ -39,6 +39,22 @@ export async function getCrops(
     hidden: page.hidden ?? null,
     suggested_reprocess: page.suggested_reprocess ?? null,
   };
+}
+
+/**
+ * `GET {API_PREFIX}/crops/locate` — where one item sits in the list `getCrops` serves for the
+ * same filter and sort, with the cursors to load a page at it. One request whatever the depth.
+ */
+export function locateCrop(
+  cropId: string,
+  filter: CropFilter = {},
+  signal?: AbortSignal,
+): Promise<CropLocateResult> {
+  return apiFetch<CropLocateResult>(
+    `${scoped()}/crops/locate${qs({ ...filter, crop_id: cropId })}`,
+    {},
+    signal,
+  );
 }
 
 /**
