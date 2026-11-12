@@ -12,7 +12,7 @@ same card, and a deep link lands on its item with one locate request.
 
 from __future__ import annotations
 
-from fixtures.contract import fill
+from fixtures.contract import crop_label_written, fill
 from fixtures.wire import make_item, review_tab, review_tabs
 from harness.constants import ACTION_TIMEOUT_MS, review_url
 from harness.screens import shot
@@ -87,7 +87,11 @@ def test_enter_opens_review_at_the_card_and_esc_returns_to_it(stub, page, app_ur
             'reason_message': None,
         },
     )
-    stub.on('PUT', r'/crops/([^/]+)/label$', lambda r, m: (200, item(2)))
+    stub.on(
+        'PUT',
+        r'/crops/([^/]+)/label$',
+        lambda r, m: (200, crop_label_written('crop-2', op_id='op-crop-2')),
+    )
 
     page.goto(f'{app_url}/p/default/workspace?view=detections')
     cards = page.locator('[data-crop-id]')

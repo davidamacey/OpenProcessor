@@ -149,7 +149,8 @@ activates it at once. Review it first with `GET .../clusters/partitions/{partiti
   crops that a human labelled are ordinary human labels, so they are
   holdout-eligible.
 - **Label writes.** `PUT /crops/{crop_id}/label`, `PUT /crops/batch_label`,
-  `POST /crops/move`, exclude/discard, and undo for each. Every write is
+  `POST /crops/move`, exclude/discard, and undo for each. A label or move, single or bulk, is
+  a [label operation](../guides/label-operations-and-undo.mdx) undone by its `op_id`. Every write is
   recorded in `GET /crops/{crop_id}/history`. A human label is
   **locked**: no worker, VLM pass, re-ingest or reprocess overwrites it.
 - **Keyboard.** Each project has its own [keymap](../guides/keymaps.mdx).

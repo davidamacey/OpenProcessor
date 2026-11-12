@@ -3,14 +3,16 @@
 
 Enter -> confirmAndAdvance() -> assign(classId) -> `PUT
 {API_PREFIX}/crops/{id}/label` (src/routes/review/+page.svelte).
-Z -> undoLast() -> `POST {API_PREFIX}/crops/{id}/label/undo`
-(src/lib/api.ts undoCropLabel).
+The write is recorded as a label operation (the PUT answers its `op_id`), so Z ->
+undoLast() -> `POST {API_PREFIX}/label_ops/{op_id}/undo`, the same served undo the Label
+history uses; the per-crop `.../label/undo` route is not used.
 """
 
 from __future__ import annotations
 
 from fixtures.wire import make_item
 from harness.constants import ACTION_TIMEOUT_MS, review_url
+from harness.label_ops import stub_crop_label, stub_label_op_undo
 from playwright.sync_api import expect
 
 
@@ -47,8 +49,8 @@ def review_item(i: int) -> dict:
 
 
 def test_review_assign_then_undo(stub, page, app_url):
-    label_calls: list[tuple[str, str, dict]] = []
-    undo_calls: list[tuple[str, str]] = []
+    label_calls: list[tuple[str, dict]] = []
+    undo_calls: list[dict] = []
 
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
     stub.on('GET', r'/methods(\?|$)', METHODS)
@@ -71,23 +73,16 @@ def test_review_assign_then_undo(stub, page, app_url):
 
     stub.on('GET', r'/review/(?!tabs)', review_handler)
 
-    def label_handler(request, match):
-        label_calls.append((request.method, match.string, request.post_data_json or {}))
-        item = review_item(0)
-        item['class_id'] = (request.post_data_json or {}).get('class_id')
-        return (200, item)
-
-    stub.on('PUT', r'/crops/([^/]+)/label$', label_handler)
-
-    def undo_handler(request, match):
-        undo_calls.append((request.method, match.string))
-        item = review_item(0)
-        item['proposed_class_id'] = 1
-        item['proposed_class_name'] = 'ducati'
-        item['label_validated'] = False
-        return (200, item)
-
-    stub.on('POST', r'/crops/([^/]+)/label/undo$', undo_handler)
+    stub_crop_label(stub, calls=label_calls)
+    stub_label_op_undo(stub, 'op-crop-0', calls=undo_calls)
+    # The restored item is read back after the undo.
+    stub.on('GET', r'/crops(\?|$)', {'crops': [review_item(0)], 'total': 1, 'next_cursor': None})
+    legacy: list[str] = []
+    stub.on(
+        'POST',
+        r'/crops/[^/]+/label/undo$',
+        lambda request, match: legacy.append(match.string) or (200, {}),
+    )
 
     page.goto(review_url(app_url, 'to_label'))
     counter = page.get_by_test_id('queue-counter')
@@ -100,9 +95,8 @@ def test_review_assign_then_undo(stub, page, app_url):
         page.keyboard.press('Enter')
 
     assert len(label_calls) == 1, f'Enter should PUT exactly one label: {label_calls}'
-    method, path, body = label_calls[0]
-    assert method == 'PUT'
-    assert path.endswith('/label')
+    crop_id, body = label_calls[0]
+    assert crop_id == 'crop-0'
     assert body.get('class_id') == 1, body
 
     expect(counter.first).not_to_have_text(before, timeout=ACTION_TIMEOUT_MS)
@@ -110,16 +104,13 @@ def test_review_assign_then_undo(stub, page, app_url):
     assert after_label != before, 'the queue should visibly advance after a successful assign'
 
     with page.expect_response(
-        lambda r: r.request.method == 'POST' and r.url.endswith('/label/undo'),
+        lambda r: r.request.method == 'POST' and r.url.endswith('/label_ops/op-crop-0/undo'),
         timeout=ACTION_TIMEOUT_MS,
     ):
         page.keyboard.press('z')
 
-    assert len(undo_calls) == 1, f'Z should POST exactly one .../label/undo: {undo_calls}'
-    undo_method, undo_path = undo_calls[0]
-    assert undo_method == 'POST'
-    assert undo_path.endswith('/label/undo')
-    assert 'crop-0' in undo_path, undo_path
+    assert undo_calls == [{'dry_run': False}], f'Z should queue one undo by op id: {undo_calls}'
+    assert legacy == [], f'the single write is undone by its op, not per crop: {legacy}'
 
     errors = [c for c in stub.console_errors if c.startswith('pageerror')]
     assert not errors, f'no pageerror expected in the assign/undo flow: {errors[:3]}'

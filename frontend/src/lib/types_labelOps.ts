@@ -53,6 +53,15 @@ export interface LabelOpAccepted {
   status: string | null;
 }
 
+/** `CropLabelResponse`: `PUT /crops/{id}/label`. The single write is recorded as a label
+ *  operation in the same request; Z undoes it by `op_id` like a bulk write. */
+export interface CropLabelWritten {
+  crop_id: string;
+  class_id: number;
+  class_name: string;
+  op_id: string;
+}
+
 /** `LabelOpList`. */
 export interface LabelOpList {
   items: LabelOp[];

@@ -1,14 +1,15 @@
 /**
  * UndoStore — ring buffer of the last 50 human write *actions*, spanning
- * kinds (`UndoEntry.kind`): class-label writes (`'label'`, default),
- * bulk relabels and moves recorded as label operations (`'label_op'`,
- * undone by operation id), region writes (`'region'`, M6), VLM-suggestion dismissals
+ * kinds (`UndoEntry.kind`): single and bulk label writes and moves, all recorded by the
+ * server as label operations (`'label_op'`, undone by operation id, so the same undo is in
+ * the served Label history after a reload), discards and new-class resolves (`'label'`,
+ * default, undone per crop through the class history), region writes (`'region'`, M6), VLM-suggestion dismissals
  * (`'vlm_dismiss'`, M6/V1 undo) and ignore / restore writes (`'exclude'`
  * / `'unexclude'`, the selection actions). One entry per confirmed write, however
  * many crops it touched — a bulk label, a move, a batch region status
  * change, or a new-class-proposal resolve over N crops is ONE entry, so
  * one Z reverses the whole action. Calling code records what a confirmed
- * write touched via `recordWrites`/`recordRegionWrites`/
+ * write touched via `recordLabelOp`/`recordWrites`/`recordRegionWrites`/
  * `recordVlmDismiss`; Z pops the newest entry (across all three kinds)
  * and asks the backend to undo it on the route matching its kind
  * (single-crop or batch, depending on how many ids it holds). The
@@ -114,7 +115,8 @@ class UndoStore {
   }
 
   /**
-   * Record the crops a human class write just landed on, as ONE undo
+   * Record the crops a discard or a new-class resolve just landed on (writes that are not
+   * label operations; Z undoes them through the class history), as ONE undo
    * entry for the whole write. Call with the server's own `updated_ids`
    * (never the request ids minus conflicts computed locally) — the
    * served list is the only authoritative record of which crops the
@@ -127,8 +129,8 @@ class UndoStore {
   }
 
   /**
-   * A bulk relabel or move recorded by the server as a label operation: Z undoes it
-   * by `opId` (queued as a job). `cropIds` are the items the request named, used only
+   * A single or bulk relabel, or a move, recorded by the server as a label operation: Z
+   * undoes it by `opId` (queued as a job). `cropIds` are the items the request named, used only
    * to show the restored items afterwards; a selection write has none and the page
    * reloads instead. Skipped when the server queued nothing.
    */

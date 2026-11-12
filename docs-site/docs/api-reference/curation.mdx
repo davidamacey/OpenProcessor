@@ -215,7 +215,7 @@ and warns. A live combine marks its sources and target `project_busy`.
 | GET | `/crops/{crop_id}/thumbnail` | Item crop thumbnail |
 | GET | `/crops/{crop_id}/region_thumbnail` | One region box's crop; `box_id` is required |
 | GET | `/crops/{crop_id}/history` | Label/edit history |
-| PUT | `/crops/{crop_id}/label` | Set the class (`class_id`, `label_source` `human` or `human_confirmed`) |
+| PUT | `/crops/{crop_id}/label` | Set the class (`class_id`, `label_source` `human` or `human_confirmed`); recorded as a label operation, answers `op_id` |
 | DELETE | `/crops/{crop_id}/label` | Clear a human label |
 | PUT | `/crops/batch_label` | Label many; `202` with a job and an `op_id` (see [Jobs](../operations/jobs.mdx)) |
 | POST | `/crops/{crop_id}/label/undo` | Undo the last human class write |

@@ -42,8 +42,9 @@ What already works and is reused:
 
 ## 2. Semantics (gate G7)
 
-A **label operation** ("op") is one bulk human class write: `PUT /crops/batch_label` or
-`POST /crops/move` (both forms: explicit `crop_ids` or a `selection`). Undoing an op is the per-item
+A **label operation** ("op") is one human class write: `PUT /crops/batch_label` or
+`POST /crops/move` (both forms: explicit `crop_ids` or a `selection`), or a single `PUT /crops/{crop_id}/label`
+(recorded in the request with no job, one member). Undoing an op is the per-item
 undo (`POST /crops/{crop_id}/label/undo`) applied to exactly the items whose **next undo step is this
 op**, and to no other item.
 

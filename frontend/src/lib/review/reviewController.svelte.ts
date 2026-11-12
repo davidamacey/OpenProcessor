@@ -80,8 +80,8 @@ export function createReviewQueueController(opts: ReviewQueueControllerOptions) 
     // Optimistic: drop from list and advance.
     const restore = removeFromQueue(item);
     try {
-      await putCropLabel(item.id, classId);
-      undoStore.recordWrites([item.id]);
+      const written = await putCropLabel(item.id, classId);
+      undoStore.recordLabelOp(written.op_id, [item.id]);
       toastStore.success(`Labeled "${cls?.name ?? classId}".`);
     } catch (e) {
       restore();
