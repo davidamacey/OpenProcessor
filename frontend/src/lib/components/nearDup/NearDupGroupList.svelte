@@ -3,6 +3,9 @@
   thumbnail of the representative. Opening a group is the parent's call.
 -->
 <script lang="ts">
+  import { resolve } from '$app/paths';
+  import { projectHref } from '$lib/projectPaths';
+  import { writeWorkspaceUrl } from '$lib/workspace/workspaceUrl';
   import NearDupThumb from '$lib/components/nearDup/NearDupThumb.svelte';
   import type { NearDupPageController } from '$lib/nearDup/nearDupPageController.svelte';
   import type {
@@ -28,6 +31,16 @@
     dedup: 'Members at or above the duplicate cut: keep one, drop the rest.',
     leak: 'Members at or above the leak cut: they must stay on one train/test side.',
   };
+
+  /** The Workspace gallery filtered to one group (the `near_dup` scope). */
+  function workspaceSearch(groupId: string): string {
+    const params = new URLSearchParams();
+    writeWorkspaceUrl(params, {
+      view: 'gallery',
+      scope: { kind: 'near_dup', id: groupId },
+    });
+    return `?${params.toString()}`;
+  }
 
   function cos(v: number): string {
     return v.toFixed(3);
@@ -101,6 +114,14 @@
               {/if}
             </span>
           </button>
+          {#if ctl.level === 'image'}
+            <a
+              class="mt-1 inline-block text-xs text-accent-text hover:underline"
+              data-testid="near-dup-group-workspace"
+              href={resolve(projectHref(`/workspace${workspaceSearch(g.group_id)}`))}
+              >Open in the Workspace</a
+            >
+          {/if}
         </li>
       {/each}
     </ul>

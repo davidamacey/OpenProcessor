@@ -13,10 +13,18 @@
   import { resolve } from '$app/paths';
   import { projectHref } from '$lib/projectPaths';
   import { reviewSearch } from '$lib/workspace/workspaceUrl';
+  import EmptyState from '$components/ui/EmptyState.svelte';
   import AuditStartForm from '$lib/components/audit/AuditStartForm.svelte';
   import ConfusionMatrix from '$lib/components/audit/ConfusionMatrix.svelte';
 
   const audit = new AuditController();
+  // Nothing audited and nothing waiting: one empty state carries the way in.
+  const blank = $derived(
+    !audit.loadError &&
+      audit.report != null &&
+      audit.report.audited === 0 &&
+      audit.report.pending === 0,
+  );
 
   onMount(() => {
     const ctl = new AbortController();
@@ -25,9 +33,9 @@
   });
 </script>
 
-<div class="mx-auto flex h-full max-w-7xl flex-col gap-4 p-6">
+<div class="flex flex-col gap-4">
   <header class="flex flex-wrap items-center gap-3">
-    <h1 class="text-2xl font-semibold tracking-tight">Accuracy audit</h1>
+    <h2 class="text-title font-semibold text-fg-1">Accuracy audit</h2>
     <span class="grow"></span>
     <button
       type="button"
@@ -37,7 +45,9 @@
     >
   </header>
 
-  <AuditStartForm {audit} />
+  {#if !blank}
+    <AuditStartForm {audit} />
+  {/if}
 
   {#if audit.loading && !audit.report}
     <section class="surface p-6 text-sm text-fg-3">Loading…</section>
@@ -48,6 +58,17 @@
         >Retry</button
       >
     </section>
+  {:else if blank}
+    <div data-testid="audit-empty">
+      <EmptyState
+        title="No accuracy audit yet"
+        description="Draw a sample of machine-labelled crops, then label them: a human label is the ground truth the detector and the VLM are measured against."
+      >
+        {#snippet action()}
+          <AuditStartForm {audit} />
+        {/snippet}
+      </EmptyState>
+    </div>
   {:else if audit.report}
     {@const r = audit.report}
     <section

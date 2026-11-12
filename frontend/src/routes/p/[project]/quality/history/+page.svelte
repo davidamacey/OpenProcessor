@@ -19,9 +19,9 @@
   });
 </script>
 
-<div class="mx-auto flex h-full max-w-5xl flex-col gap-4 p-4 sm:p-6">
+<div class="flex flex-col gap-4">
   <header class="flex flex-wrap items-center gap-3">
-    <h1 class="text-2xl font-semibold tracking-tight">Label operations</h1>
+    <h2 class="text-title font-semibold text-fg-1">Label operations</h2>
     <span class="grow"></span>
     <button
       type="button"

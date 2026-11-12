@@ -77,7 +77,7 @@ async function mountPage(): Promise<void> {
       flushSync();
       expect(
         target.querySelector(
-          '[data-testid="audit-load-error"],[data-testid="audit-summary"]',
+          '[data-testid="audit-load-error"],[data-testid="audit-summary"],[data-testid="audit-empty"]',
         ),
       ).not.toBeNull();
     },
@@ -137,6 +137,27 @@ describe('/audit', () => {
     expect(q('[data-testid="audit-load-error"]')?.textContent).toContain(
       'audit index missing',
     );
+    expect(q('[data-testid="audit-summary"]')).toBeNull();
+  });
+
+  it('with nothing audited and nothing pending it is one empty state, not four empty cards', async () => {
+    stub({
+      report: () =>
+        json({
+          ...REPORT,
+          audited: 0,
+          pending: 0,
+          detector: [],
+          vlm: [],
+          confusion: {},
+          outcomes: {},
+        }),
+    });
+    await mountPage();
+    expect(q('[data-testid="audit-empty"]')).not.toBeNull();
+    expect(q('[data-testid="audit-empty"]')?.textContent).toContain('Draw a sample');
+    expect(q('[data-testid="audit-detector"]')).toBeNull();
+    expect(q('[data-testid="audit-confusion"]')).toBeNull();
     expect(q('[data-testid="audit-summary"]')).toBeNull();
   });
 });

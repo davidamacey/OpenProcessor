@@ -204,6 +204,20 @@ describe('NearDupGroupList', () => {
     ctl.dispose();
   });
 
+  it('links each image group to the Workspace filtered to it', async () => {
+    vi.mocked(api.listNearDupGroups).mockResolvedValue({
+      items: [group('a')],
+      next_cursor: null,
+      empty_reason: null,
+    });
+    const { ctl } = await render();
+    await settle(() => expect(qa('near-dup-group')).toHaveLength(1));
+    const href = q('near-dup-group-workspace')!.getAttribute('href')!;
+    expect(href).toContain('/workspace?');
+    expect(new URLSearchParams(href.split('?')[1]).get('scope')).toBe('near_dup:a');
+    ctl.dispose();
+  });
+
   it('shows the served reason when the level has no groups', async () => {
     vi.mocked(api.listNearDupGroups).mockResolvedValue({
       items: [],

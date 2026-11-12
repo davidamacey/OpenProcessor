@@ -44,9 +44,9 @@
   }
 </script>
 
-<div class="mx-auto flex max-w-6xl flex-col gap-4 p-6">
+<div class="flex flex-col gap-4">
   <header class="flex flex-wrap items-center gap-3">
-    <h1 class="text-2xl font-semibold tracking-tight">Near-duplicates</h1>
+    <h2 class="text-title font-semibold text-fg-1">Near-duplicates</h2>
     <span class="grow"></span>
     <button
       type="button"
