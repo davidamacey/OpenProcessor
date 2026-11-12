@@ -17,10 +17,12 @@ from src.config.curation_accessors import images_index, items_index
 from src.config.project_context import current_project_id
 from src.core.db_session import DbSessionDep
 from src.core.dependencies import get_curation_opensearch
-from src.domain.embedding_spaces import Target
+from src.domain.embedding_spaces import EmbeddingSpaceError, Target
 from src.routers.curation._common import router
 from src.routers.curation._embedding_space_models import (
     EmbeddingBuildRequest,
+    EmbeddingEvaluationListResponse,
+    EmbeddingEvaluationView,
     EmbeddingModelEntry,
     EmbeddingModelListResponse,
     EmbeddingPromoteRequest,
@@ -127,6 +129,46 @@ async def list_embedding_spaces(
             _view(f, await views.docs_with_vector(index, f.space), runs.get(f.space.id))
             for f in found
         ]
+    )
+
+
+@router.get(
+    '/embedding/spaces/{space_key}/evaluations',
+    response_model=EmbeddingEvaluationListResponse,
+    tags=['Embedding'],
+)
+async def list_space_evaluations(
+    space_key: str, target: TargetQuery, session: DbSessionDep
+) -> EmbeddingEvaluationListResponse:
+    """The evaluation runs of a space against other spaces, newest first. 404 for another
+    project's space."""
+    async with space_refusals():
+        found = await views.space_evaluations(session, current_project_id(), target, space_key)
+        if found is None:
+            raise EmbeddingSpaceError(
+                'embedding_space_not_found', f'no {target.value} space {space_key}', status=404
+            )
+    return EmbeddingEvaluationListResponse(
+        space_key=found.space.space_key,
+        target=found.space.target,
+        primary_space_key=found.primary_space_key,
+        evaluated_against_primary=any(e.against_primary for e in found.evaluations),
+        evaluations=[
+            EmbeddingEvaluationView(
+                id=str(e.id),
+                baseline_space_key=e.baseline_space_key,
+                candidate_space_key=e.candidate_space_key,
+                protocol=e.protocol,
+                verdict=e.verdict,
+                metrics=e.metrics,
+                sample_spec=e.sample_spec,
+                counts_for_promote=e.against_primary,
+                job_id=None if e.job_id is None else str(e.job_id),
+                created_at=e.created_at,
+                created_by=e.created_by,
+            )
+            for e in found.evaluations
+        ],
     )
 
 

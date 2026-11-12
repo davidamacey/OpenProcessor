@@ -11102,6 +11102,128 @@
         "title": "EmbeddingByState",
         "type": "object"
       },
+      "EmbeddingEvaluationListResponse": {
+        "properties": {
+          "evaluated_against_primary": {
+            "description": "A run compares this space with the current primary; a promote does not answer embedding_evaluation_missing.",
+            "title": "Evaluated Against Primary",
+            "type": "boolean"
+          },
+          "evaluations": {
+            "description": "Newest first.",
+            "items": {
+              "$ref": "#/components/schemas/EmbeddingEvaluationView"
+            },
+            "title": "Evaluations",
+            "type": "array"
+          },
+          "primary_space_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The target's primary space now.",
+            "title": "Primary Space Key"
+          },
+          "space_key": {
+            "title": "Space Key",
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/Target"
+          }
+        },
+        "required": [
+          "space_key",
+          "target",
+          "primary_space_key",
+          "evaluated_against_primary",
+          "evaluations"
+        ],
+        "title": "EmbeddingEvaluationListResponse",
+        "type": "object"
+      },
+      "EmbeddingEvaluationView": {
+        "properties": {
+          "baseline_space_key": {
+            "title": "Baseline Space Key",
+            "type": "string"
+          },
+          "candidate_space_key": {
+            "title": "Candidate Space Key",
+            "type": "string"
+          },
+          "counts_for_promote": {
+            "description": "The baseline is the current primary: the run a promote asks for.",
+            "title": "Counts For Promote",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "metrics": {
+            "additionalProperties": true,
+            "description": "Stored as written by the evaluation protocol.",
+            "title": "Metrics",
+            "type": "object"
+          },
+          "protocol": {
+            "title": "Protocol",
+            "type": "string"
+          },
+          "sample_spec": {
+            "additionalProperties": true,
+            "description": "Seed, strata and size of the sample.",
+            "title": "Sample Spec",
+            "type": "object"
+          },
+          "verdict": {
+            "description": "better, tie, worse or inconclusive.",
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "baseline_space_key",
+          "candidate_space_key",
+          "protocol",
+          "verdict",
+          "metrics",
+          "sample_spec",
+          "counts_for_promote",
+          "job_id",
+          "created_at",
+          "created_by"
+        ],
+        "title": "EmbeddingEvaluationView",
+        "type": "object"
+      },
       "EmbeddingModelEntry": {
         "properties": {
           "available": {
@@ -54002,6 +54124,69 @@
           }
         },
         "summary": "Build Embedding Space",
+        "tags": [
+          "Curation",
+          "Embedding"
+        ]
+      }
+    },
+    "/curation/projects/{project}/embedding/spaces/{space_key}/evaluations": {
+      "get": {
+        "description": "The evaluation runs of a space against other spaces, newest first. 404 for another\nproject's space.",
+        "operationId": "list_space_evaluations_curation_projects__project__embedding_spaces__space_key__evaluations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "space_key",
+            "required": true,
+            "schema": {
+              "title": "Space Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The target of the space (item, box, frame).",
+            "in": "query",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Target",
+              "description": "The target of the space (item, box, frame)."
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingEvaluationListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Space Evaluations",
         "tags": [
           "Curation",
           "Embedding"

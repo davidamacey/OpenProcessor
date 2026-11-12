@@ -1,4 +1,4 @@
-"""The wire of the space list, with the registry replaced by fakes.
+"""The wire of the space list and the evaluation route, with the registry replaced by fakes.
 
 The SQL behind them is proven against a real PostgreSQL in ``test_space_routes.py``; this file pins
 what the routes do with what the services return: the run fields on the list, the evaluation
@@ -96,3 +96,72 @@ def test_a_space_that_was_never_built_has_no_run(
     _latest(monkeypatch, {})
     primary = client.get(f'{SCOPED}/embedding/spaces').json()['spaces'][0]
     assert (primary['run_id'], primary['run_mode'], primary['run_status']) == (None, None, None)
+
+
+def _evaluations(found: views.SpaceEvaluations | None):
+    async def space_evaluations(_s: Any, _p: Any, _target: Any, _key: str):
+        return found
+
+    return space_evaluations
+
+
+def _row(verdict: str, against_primary: bool) -> views.EvaluationRow:
+    return views.EvaluationRow(
+        id=uuid.uuid4(),
+        baseline_space_key='mobileclip_v1',
+        candidate_space_key='pe_core_v1',
+        protocol='label_consistency_v1',
+        verdict=verdict,
+        metrics={'recall_at_10': {'baseline': 0.71, 'candidate': 0.78}},
+        sample_spec={'seed': 7, 'n': 2000},
+        job_id=None,
+        created_at=NOW,
+        created_by='api',
+        against_primary=against_primary,
+    )
+
+
+def test_the_evaluation_route_serves_the_runs_with_the_verdict_and_what_promote_needs(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    found = views.SpaceEvaluations(
+        space=CANDIDATE,
+        primary_space_key='mobileclip_v1',
+        evaluations=[_row('better', True), _row('tie', False)],
+    )
+    monkeypatch.setattr(views, 'space_evaluations', _evaluations(found))
+    r = client.get(f'{SCOPED}/embedding/spaces/pe_core_v1/evaluations?target=item')
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert (body['space_key'], body['target'], body['primary_space_key']) == (
+        'pe_core_v1',
+        'item',
+        'mobileclip_v1',
+    )
+    assert body['evaluated_against_primary'] is True
+    assert [e['verdict'] for e in body['evaluations']] == ['better', 'tie']
+    assert [e['counts_for_promote'] for e in body['evaluations']] == [True, False]
+    assert body['evaluations'][0]['metrics'] == {
+        'recall_at_10': {'baseline': 0.71, 'candidate': 0.78}
+    }
+    assert body['evaluations'][0]['created_at'].startswith('2026-11-12')
+
+
+def test_a_space_with_no_evaluation_is_an_empty_list_not_evaluated_against_primary(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    found = views.SpaceEvaluations(
+        space=CANDIDATE, primary_space_key='mobileclip_v1', evaluations=[]
+    )
+    monkeypatch.setattr(views, 'space_evaluations', _evaluations(found))
+    body = client.get(f'{SCOPED}/embedding/spaces/pe_core_v1/evaluations?target=item').json()
+    assert (body['evaluations'], body['evaluated_against_primary']) == ([], False)
+
+
+def test_an_unknown_space_is_404_with_the_registry_code(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(views, 'space_evaluations', _evaluations(None))
+    r = client.get(f'{SCOPED}/embedding/spaces/nope/evaluations?target=item')
+    assert r.status_code == 404
+    assert r.json()['detail']['error'] == 'embedding_space_not_found'
