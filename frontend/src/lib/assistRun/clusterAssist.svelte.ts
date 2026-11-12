@@ -1,5 +1,5 @@
 /**
- * Assist on /clusters/[id]: opens the dialog for the viewed cluster
+ * Assist on the cluster detail: opens the dialog for the viewed cluster
  * (and the crops selected in it), and loads the newest run that
  * produced a label proposal for that scope. The server lists the runs and
  * says, per run, whether the scope has changed since (`scope_now`).

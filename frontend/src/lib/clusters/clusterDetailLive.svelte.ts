@@ -1,5 +1,5 @@
 /**
- * Live refresh for /clusters/[id]: the class-scoped event stream counts new
+ * Live refresh for the cluster detail: the class-scoped event stream counts new
  * crops, refreshes in place while the operator is at the top of the grid,
  * and otherwise offers a "new crops" pill.
  */
