@@ -96,7 +96,7 @@
   </div>
   <!-- V-3: top-aligned, so on a tall pane the image sits at the top
        rather than mid-way down an empty black panel. -->
-  <div class="flex min-h-0 flex-1 items-center justify-center bg-surface-2">
+  <div class="flex min-h-0 flex-1 items-start justify-center bg-surface-2">
     <!-- Boxes/labels are drawn client-side from
          GET {API_PREFIX}/images/{image_id} over the clean pixels. -->
     {#if current.image_id}
@@ -104,6 +104,7 @@
         imageId={current.image_id}
         selectedCropId={current.id}
         maxDim={1600}
+        align="start"
         spotlight
       />
     {:else}
