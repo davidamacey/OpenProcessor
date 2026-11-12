@@ -21,6 +21,7 @@ from test_cluster_discard import CLASSES, CLUSTERS, crop
 from test_cluster_facets import FACET_UID, serve_cluster
 from test_cluster_list_filters import serve as serve_filtered_clusters
 from test_curation_settings import METHODS_TODAY, SETTINGS_EMPTY
+from test_embedding_spaces_page import serve_spaces
 from test_fresh_run_cosmetics import EMPTY_PROPOSALS
 from test_gallery_view import serve as serve_gallery
 from test_label_confirmation import _stub_audit
@@ -29,6 +30,7 @@ from test_map_view import _cells as map_cells, _meta as map_meta
 from test_near_duplicates import _serve as serve_near_dups
 from test_next_steps import FRESH, serve_next_steps
 from test_open_vocab import serve_open_vocab
+from test_presets import serve_presets
 from test_prompt_packs import serve_packs
 from test_review_crop_viewport import review_item
 from test_similar_crops import serve_similar
@@ -304,6 +306,44 @@ PAGES = [
     ),
     ('settings-prompt-packs', '/p/default/settings/prompt-packs', serve_prompt_packs, 'table'),
     ('settings-open-vocab', '/p/default/settings/open-vocab', serve_open_vocab_list, 'table'),
+    (
+        'settings-presets',
+        '/p/default/settings/presets/cluster-profiles',
+        serve_presets,
+        '[data-testid="preset-table"]',
+    ),
+    (
+        'settings-presets-editor',
+        '/p/default/settings/presets/cluster-profiles/strict',
+        serve_presets,
+        '[data-testid="preset-body"]',
+    ),
+    (
+        'settings-presets-activate-dialog',
+        '/p/default/settings/presets/cluster-profiles/strict',
+        serve_presets,
+        '[data-testid="preset-body"]',
+        lambda page: (
+            page.get_by_test_id('config-activate').click(),
+            expect(page.get_by_role('dialog')).to_be_visible(timeout=ACTION_TIMEOUT_MS),
+        ),
+    ),
+    (
+        'settings-embedding-register-dialog',
+        '/p/default/settings/embedding-spaces',
+        serve_spaces,
+        '[data-testid="model-table"]',
+        lambda page: (
+            page.get_by_test_id('space-register').click(),
+            expect(page.get_by_role('dialog')).to_be_visible(timeout=ACTION_TIMEOUT_MS),
+        ),
+    ),
+    (
+        'settings-embedding-spaces',
+        '/p/default/settings/embedding-spaces',
+        serve_spaces,
+        '[data-testid="model-table"]',
+    ),
 ]
 
 
