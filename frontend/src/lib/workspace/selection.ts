@@ -14,24 +14,17 @@ export type WorkspaceSelection =
   | { kind: 'clusters'; clusterUids: string[] }
   | { kind: 'matching' };
 
-/** The shared item filter plus the keys the queue and the scope add. */
-export type WorkspaceItemBody = ItemFilter & {
-  review_tab?: string | null;
-  cluster_uids?: string[];
-  near_dup_group?: string;
-};
-
 export type SelectionKind = 'items' | 'images' | 'clusters';
 
 export const NO_SELECTION: WorkspaceSelection = { kind: 'none' };
 
-function withFilter(filter: WorkspaceItemBody): ItemSelection {
+function withFilter(filter: ItemFilter): ItemSelection {
   return { filter };
 }
 
 export function toItemSelection(
   sel: WorkspaceSelection,
-  filter: WorkspaceItemBody,
+  filter: ItemFilter,
 ): ItemSelection | null {
   switch (sel.kind) {
     case 'none':

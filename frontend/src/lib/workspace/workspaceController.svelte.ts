@@ -16,14 +16,13 @@ import { page } from '$app/state';
 import { projectHref } from '$lib/projectPaths';
 import { ItemFilterState } from '$lib/itemFilter/itemFilterState.svelte';
 import { nextStepsStore } from '$stores/nextSteps.svelte';
-import type { ItemFilterQuery, ItemSelection } from '$lib/types_itemFilter';
+import type { ItemFilter, ItemFilterQuery, ItemSelection } from '$lib/types_itemFilter';
 import {
   NO_SELECTION,
   pressSelectAll,
   selectionKindFor,
   toItemSelection,
   type SelectionKind,
-  type WorkspaceItemBody,
   type WorkspaceSelection,
 } from './selection';
 import {
@@ -35,13 +34,6 @@ import {
   type ViewId,
   type WorkspaceUrlState,
 } from './workspaceUrl';
-
-/** The filter keys the queue and the scope add to the shared item filter. */
-export type WorkspaceItemQuery = ItemFilterQuery & {
-  review_tab?: string | null;
-  cluster_uid?: string[];
-  near_dup_group?: string;
-};
 
 const DETAILS_MEDIA = '(min-width: 1280px)';
 
@@ -148,8 +140,8 @@ export class WorkspaceController {
   }
 
   /** The applied filter, the queue as `review_tab` and the scope, as query parameters. */
-  itemQuery(): WorkspaceItemQuery {
-    const q: WorkspaceItemQuery = this.#applied.toQuery();
+  itemQuery(): ItemFilterQuery & { review_tab?: string } {
+    const q: ItemFilterQuery & { review_tab?: string } = this.#applied.toQuery();
     const { queue, scope } = this.#url;
     if (queue) q.review_tab = queue;
     if (scope?.kind === 'cluster') q.cluster_uid = [scope.id];
@@ -159,8 +151,8 @@ export class WorkspaceController {
   }
 
   /** The same combination in `ItemFilter` body form. */
-  itemBody(): WorkspaceItemBody {
-    const b: WorkspaceItemBody = this.#applied.toBody();
+  itemBody(): ItemFilter {
+    const b: ItemFilter = this.#applied.toBody();
     const { queue, scope } = this.#url;
     if (queue) b.review_tab = queue;
     if (scope?.kind === 'cluster') b.cluster_uids = [scope.id];
