@@ -255,6 +255,8 @@ export function createReviewQueueLoader(opts: ReviewQueueLoaderOptions) {
       await queue.loadAt(loc.cursor_before, loc.index);
       const idx = queue.items.findIndex((i) => i.id === cropId);
       cursor = Math.max(0, idx);
+      // The located page may end soon after the item; fetch the rows after it now.
+      maybePrefetch();
     } catch (e) {
       toastStore.error(`Locate failed: ${apiErrorText(e)}`);
     } finally {

@@ -58,6 +58,16 @@ CLASSES = [
 
 METHODS = {'strategies': [], 'flags': {}}
 LOCATE_CURSOR = 'cursor-before-target'
+AFTER_LOCATED = 'cursor-after-located-page'
+AFTER_PREFETCH = 'cursor-after-prefetch'
+
+
+def wait_until_requested(page, requests: list, cursor: str) -> None:
+    for _ in range(40):
+        if cursor in requests:
+            return
+        page.wait_for_timeout(250)
+    raise AssertionError(f'{cursor} was never requested: {requests}')
 
 
 def review_item(i: int) -> dict:
@@ -101,10 +111,18 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
             # response's crop_id and the URL's ?crop_id=).
             item['id'] = 'crop-target'
             item['crop_id'] = 'crop-target'
-            items = [item]
-        else:
-            items = [review_item(0)]
-        return (200, {'items': items, 'total': 3010, 'next_cursor': None, 'limit': 30})
+            return (
+                200,
+                {'items': [item], 'total': 3010, 'next_cursor': AFTER_LOCATED, 'limit': 30},
+            )
+        if cursor == AFTER_LOCATED:
+            # the rows after the located one: 3002 onward
+            rows = [review_item(1000 + i) for i in range(6)]
+            return (
+                200,
+                {'items': rows, 'total': 3010, 'next_cursor': AFTER_PREFETCH, 'limit': 30},
+            )
+        return (200, {'items': [review_item(0)], 'total': 3010, 'next_cursor': None, 'limit': 30})
 
     stub.on('GET', r'/review/all(\?|$)', review_handler)
 
@@ -165,9 +183,15 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
         f'a keypress fired while locating must never label crop-0 (item #1): {label_calls}'
     )
 
-    # Exactly the initial first-page load plus the one request the locate cursor
-    # starts — never a walk through the pages in between.
-    assert review_page_requests == [None, LOCATE_CURSOR], review_page_requests
+    # The initial first-page load, the one request the locate cursor starts (never a walk
+    # through the pages in between), then the queue's own prefetch with the served next_cursor.
+    wait_until_requested(page, review_page_requests, AFTER_LOCATED)
+    assert review_page_requests == [None, LOCATE_CURSOR, AFTER_LOCATED], review_page_requests
+
+    # Rows remain after the located one, so the footer must not claim everything is loaded.
+    footer = page.locator('text=/\\(loaded \\d+\\)/').first.inner_text()
+    assert footer == '(loaded 7)', footer
+    assert page.get_by_text('all loaded').count() == 0
 
     # F8 D6: the counter shows the served queue position (index 3000 ->
     # #3001), not the cursor's index within the one loaded page.
