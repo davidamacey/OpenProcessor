@@ -6,7 +6,8 @@ from __future__ import annotations
 import pytest
 
 from src.services.curation import review_tabs
-from src.services.curation.review_request import ReviewFilters, build_review_request
+from src.services.curation.review_filters import ReviewFilters
+from src.services.curation.review_request import build_review_request
 
 from .test_combine_execute import MAPPING, build
 from .world import World, run_job

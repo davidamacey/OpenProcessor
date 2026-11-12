@@ -12,7 +12,7 @@ from typing import Any
 from src.clients.curation_opensearch.msearch import msearch_checked
 from src.config.curation_accessors import items_index
 from src.services.curation import review_queries
-from src.services.curation.review_filter_specs import REGION_STATUS_DEFAULT
+from src.services.curation.review_filters import REGION_STATUS_DEFAULT
 from src.services.embedding_spaces.readers import item_vector_field
 
 

@@ -41,8 +41,8 @@ from src.services.curation.image_join import ImageJoin, join_truncated
 from src.services.curation.item_filter import item_filter_clauses
 from src.services.curation.list_cursor import CursorError, page_body, split_page
 from src.services.curation.list_locate import UnlocatableSortError, locate_item
-from src.services.curation.review_filter_specs import REGION_STATUS_DEFAULT
-from src.services.curation.review_request import ReviewFilters, build_review_request
+from src.services.curation.review_filters import REGION_STATUS_DEFAULT, ReviewFilters
+from src.services.curation.review_request import build_review_request
 from src.services.curation.review_tab_status import tab_counts, unavailable_reason
 from src.services.curation.review_tabs import KNOWN_TABS, review_tab_catalog
 from src.services.curation.wire import item_list_source_excludes, serialize_item

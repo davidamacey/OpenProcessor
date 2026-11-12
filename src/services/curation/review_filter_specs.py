@@ -23,6 +23,7 @@ from src.config.region_state import RegionStatus
 from src.domain.embedding_state import EmbeddingState
 from src.services.curation.item_filter import ItemFilter, Origin, ReviewStatus
 from src.services.curation.region_text_search import TextMatch
+from src.services.curation.review_filters import REGION_STATUS_DEFAULT, ReviewFilters
 
 
 # The ``region_status`` filter's selectable values on the ``regions`` tab
@@ -33,7 +34,6 @@ from src.services.curation.region_text_search import TextMatch
 # Not a RegionStatus: it selects on the box list, whatever the item status
 # (a `detected` item can carry a rejected box beside its accepted ones).
 HAS_REJECTED_BOX = 'has_rejected_box'
-REGION_STATUS_DEFAULT = 'all'
 REGION_STATUS_FILTER_OPTIONS: tuple[dict[str, str], ...] = (
     {'value': REGION_STATUS_DEFAULT, 'label': 'All (accepted + rejected boxes)'},
     {'value': RegionStatus.DETECTED.value, 'label': 'Detected only'},
@@ -111,8 +111,6 @@ _MODEL_FIELD = {'class_name': 'class_names', 'exclude_class_name': 'exclude_clas
 def _model_default(param: str) -> Any:
     """The value applied when ``param`` is omitted, read off the filter models
     (``ReviewFilters`` first, then ``ItemFilter``) so a spec cannot drift."""
-    from src.services.curation.review_request import ReviewFilters
-
     field = _MODEL_FIELD.get(param, param)
     review = ReviewFilters()
     if hasattr(review, field):

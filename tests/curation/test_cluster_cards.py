@@ -16,7 +16,8 @@ from src.config.curation_accessors import base_curation_config
 from src.schemas.curation.clusters import ClusterCard, ClusterListResponse
 from src.services.curation import cluster_cards as cc, review_tab_clauses
 from src.services.curation.item_filter import ItemFilter
-from src.services.curation.review_request import ReviewFilters, build_review_request
+from src.services.curation.review_filters import ReviewFilters
+from src.services.curation.review_request import build_review_request
 
 
 def _card(cid: int, **over: Any) -> ClusterCard:
