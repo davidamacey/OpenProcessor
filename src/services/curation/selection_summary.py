@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING, Any, Final
 
 from src.config.curation_accessors import images_index, items_index
 from src.schemas.curation.selection import ClassCount, SelectionSummary
+from src.services.curation.image_join import JOIN_MAX_IMAGES, LOCATION_FIELD
 from src.services.curation.item_selection import (
     MAX_BULK_SELECTION,
     ItemSelection,
     SelectionError,
     selection_query,
 )
-from src.services.curation.map_cells import JOIN_MAX_IMAGES, LOCATION_FIELD
 from src.services.curation.reprocess_locks import class_locked_clause, region_locked_clause
 
 
