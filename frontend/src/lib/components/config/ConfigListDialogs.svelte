@@ -21,9 +21,11 @@
     nameLabel: string;
     /** What the delete does, said under the title. */
     deleteNote: Snippet<[Row]>;
+    /** Offer "copy from another project"; off for a kind with no such clone (the presets). */
+    offerProjects?: boolean;
   }
 
-  let { flow, list, nameLabel, deleteNote }: Props = $props();
+  let { flow, list, nameLabel, deleteNote, offerProjects = true }: Props = $props();
 </script>
 
 {#if flow.cloneFrom}
@@ -35,7 +37,7 @@
     busy={list.busy}
     error={list.cloneError}
     report={list.cloneReport}
-    offerProjects={from.source !== 'template'}
+    offerProjects={offerProjects && from.source !== 'template'}
     onconfirm={(name, description, fromProject) =>
       void flow.doClone(name, description, fromProject)}
     oncancel={() => (flow.cloneFrom = null)}

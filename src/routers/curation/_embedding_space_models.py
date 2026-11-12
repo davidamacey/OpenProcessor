@@ -37,6 +37,45 @@ class EmbeddingSpaceView(BaseModel):
     docs_with_vector: int | None = Field(
         description='Documents holding a vector in this space; null when the index was not asked.'
     )
+    run_id: str | None = Field(
+        default=None,
+        description='The newest re-index run of the space, whoever started it; null when none, '
+        'or when the route does not ask (promote).',
+    )
+    run_mode: str | None = Field(
+        default=None, description='Mode of that run (build, backfill, clear).'
+    )
+    run_status: str | None = Field(
+        default=None,
+        description="The run's job status (queued, running, succeeded, failed, cancelled ...).",
+    )
+
+
+class EmbeddingEvaluationView(BaseModel):
+    id: str
+    baseline_space_key: str
+    candidate_space_key: str
+    protocol: str
+    verdict: str = Field(description='better, tie, worse or inconclusive.')
+    metrics: dict[str, Any] = Field(description='Stored as written by the evaluation protocol.')
+    sample_spec: dict[str, Any] = Field(description='Seed, strata and size of the sample.')
+    counts_for_promote: bool = Field(
+        description='The baseline is the current primary: the run a promote asks for.'
+    )
+    job_id: str | None
+    created_at: dt.datetime
+    created_by: str
+
+
+class EmbeddingEvaluationListResponse(BaseModel):
+    space_key: str
+    target: Target
+    primary_space_key: str | None = Field(description="The target's primary space now.")
+    evaluated_against_primary: bool = Field(
+        description='A run compares this space with the current primary; a promote does not '
+        'answer embedding_evaluation_missing.'
+    )
+    evaluations: list[EmbeddingEvaluationView] = Field(description='Newest first.')
 
 
 class EmbeddingSpaceListResponse(BaseModel):

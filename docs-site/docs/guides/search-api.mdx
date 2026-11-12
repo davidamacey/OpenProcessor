@@ -1,0 +1,29 @@
+---
+sidebar_position: 17
+title: Search routes (API)
+---
+
+# Search routes (API)
+
+The Clusters search box calls these routes (text, by image, similar to an item, item or box
+target, and a space picker). Call them directly for scripts. Every route below sits under
+`http://localhost:4603/curation/projects/<slug>`; `B` is that base URL. All three return
+`{items, total, page, page_size}` with a `semantic_score`, and share the item filters of the
+Items grid plus `target` (`item` or `box`), `space` and `fuse`. The spaces they rank in are
+managed on the [Embedding spaces](./embedding-spaces.mdx) page.
+
+```bash
+curl -s "$B/search/text?q=red+car&page_size=20"
+curl -s "$B/search/similar?crop_id=CROP_ID&exclude_self=true&page_size=20"
+curl -s -X POST "$B/search/image?page_size=20" -F image=@query.jpg    # nothing is stored
+curl -s "$B/search/text?q=red+car&space=SPACE_A&fuse=SPACE_B"         # reciprocal rank fusion
+```
+
+`search/image` also accepts `image_id` (a stored image) in place of the upload, and `box` for a
+region of it. `search/similar` takes `box_id` to start from one region box.
+
+Near-duplicate runs, groups and decisions have their own page in Cropwright (Quality). The
+routes are `POST $B/near_duplicates/runs`, `GET $B/near_duplicates/status`,
+`GET $B/near_duplicates/groups` and `POST $B/near_duplicates/decisions` (undo with
+`DELETE .../decisions/{decision_id}`); their thresholds are the
+[near-duplicate profile](./presets.mdx).

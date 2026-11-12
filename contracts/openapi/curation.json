@@ -7472,6 +7472,7 @@
               "image_encoder_unavailable",
               "unknown_revision",
               "active_conflict",
+              "axis_target_mismatch",
               "no_previous",
               "previous_deleted",
               "no_active_profile",
@@ -11162,6 +11163,128 @@
         "title": "EmbeddingByState",
         "type": "object"
       },
+      "EmbeddingEvaluationListResponse": {
+        "properties": {
+          "evaluated_against_primary": {
+            "description": "A run compares this space with the current primary; a promote does not answer embedding_evaluation_missing.",
+            "title": "Evaluated Against Primary",
+            "type": "boolean"
+          },
+          "evaluations": {
+            "description": "Newest first.",
+            "items": {
+              "$ref": "#/components/schemas/EmbeddingEvaluationView"
+            },
+            "title": "Evaluations",
+            "type": "array"
+          },
+          "primary_space_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The target's primary space now.",
+            "title": "Primary Space Key"
+          },
+          "space_key": {
+            "title": "Space Key",
+            "type": "string"
+          },
+          "target": {
+            "$ref": "#/components/schemas/Target"
+          }
+        },
+        "required": [
+          "space_key",
+          "target",
+          "primary_space_key",
+          "evaluated_against_primary",
+          "evaluations"
+        ],
+        "title": "EmbeddingEvaluationListResponse",
+        "type": "object"
+      },
+      "EmbeddingEvaluationView": {
+        "properties": {
+          "baseline_space_key": {
+            "title": "Baseline Space Key",
+            "type": "string"
+          },
+          "candidate_space_key": {
+            "title": "Candidate Space Key",
+            "type": "string"
+          },
+          "counts_for_promote": {
+            "description": "The baseline is the current primary: the run a promote asks for.",
+            "title": "Counts For Promote",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "metrics": {
+            "additionalProperties": true,
+            "description": "Stored as written by the evaluation protocol.",
+            "title": "Metrics",
+            "type": "object"
+          },
+          "protocol": {
+            "title": "Protocol",
+            "type": "string"
+          },
+          "sample_spec": {
+            "additionalProperties": true,
+            "description": "Seed, strata and size of the sample.",
+            "title": "Sample Spec",
+            "type": "object"
+          },
+          "verdict": {
+            "description": "better, tie, worse or inconclusive.",
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "baseline_space_key",
+          "candidate_space_key",
+          "protocol",
+          "verdict",
+          "metrics",
+          "sample_spec",
+          "counts_for_promote",
+          "job_id",
+          "created_at",
+          "created_by"
+        ],
+        "title": "EmbeddingEvaluationView",
+        "type": "object"
+      },
       "EmbeddingModelEntry": {
         "properties": {
           "available": {
@@ -11651,6 +11774,42 @@
             ],
             "title": "Role",
             "type": "string"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The newest re-index run of the space, whoever started it; null when none, or when the route does not ask (promote).",
+            "title": "Run Id"
+          },
+          "run_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Mode of that run (build, backfill, clear).",
+            "title": "Run Mode"
+          },
+          "run_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The run's job status (queued, running, succeeded, failed, cancelled ...).",
+            "title": "Run Status"
           },
           "space_key": {
             "title": "Space Key",
@@ -19872,11 +20031,13 @@
         "properties": {
           "acknowledge_external": {
             "default": false,
+            "description": "Confirms crops may go to an external audit endpoint.",
             "title": "Acknowledge External",
             "type": "boolean"
           },
           "floor": {
             "default": 0.85,
+            "description": "Agreement below which the audit fails.",
             "exclusiveMaximum": 1.0,
             "exclusiveMinimum": 0.0,
             "title": "Floor",
@@ -19891,12 +20052,14 @@
           },
           "min_per_batch": {
             "default": 30,
+            "description": "Fewest labels re-checked per batch.",
             "minimum": 1.0,
             "title": "Min Per Batch",
             "type": "integer"
           },
           "on_fail": {
             "default": "pause",
+            "description": "What a failed audit does: pause the loop or roll back.",
             "enum": [
               "pause",
               "rollback"
@@ -19906,6 +20069,7 @@
           },
           "rate": {
             "default": 0.01,
+            "description": "Share of propagated labels re-checked.",
             "exclusiveMinimum": 0.0,
             "maximum": 1.0,
             "title": "Rate",
@@ -19983,6 +20147,7 @@
         "description": "Hard caps; the loop never goes past one. ``max_vlm_crops`` has no default.",
         "properties": {
           "max_vlm_crops": {
+            "description": "Crops the VLM may label in one run.",
             "minimum": 1.0,
             "title": "Max Vlm Crops",
             "type": "integer"
@@ -20623,6 +20788,7 @@
         "properties": {
           "branching": {
             "default": 4,
+            "description": "Parts a failing node is split into.",
             "maximum": 8.0,
             "minimum": 2.0,
             "title": "Branching",
@@ -20630,6 +20796,7 @@
           },
           "max_depth": {
             "default": 3,
+            "description": "Levels a failing node is split.",
             "maximum": 6.0,
             "minimum": 0.0,
             "title": "Max Depth",
@@ -33700,6 +33867,39 @@
         "title": "ResearchActive",
         "type": "object"
       },
+      "ResearchAxis": {
+        "description": "A place a project kind can be active; a kind may be active on several.",
+        "properties": {
+          "axis": {
+            "description": "The id `activate` and `active` take.",
+            "title": "Axis",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the axis serves (a cluster profile body names its `target`); null when the axis does not depend on the body.",
+            "title": "Target"
+          }
+        },
+        "required": [
+          "axis",
+          "label",
+          "target"
+        ],
+        "title": "ResearchAxis",
+        "type": "object"
+      },
       "ResearchConfigDoc": {
         "properties": {
           "body": {
@@ -33796,6 +33996,35 @@
           "body"
         ],
         "title": "ResearchConfigPut",
+        "type": "object"
+      },
+      "ResearchConfigSchema": {
+        "properties": {
+          "axes": {
+            "description": "Where the kind can be activated; empty for the deployment-wide serving profile.",
+            "items": {
+              "$ref": "#/components/schemas/ResearchAxis"
+            },
+            "title": "Axes",
+            "type": "array"
+          },
+          "json_schema": {
+            "additionalProperties": true,
+            "description": "The JSON Schema (draft 2020-12) of the document body, generated from the model the server validates it with.",
+            "title": "Json Schema",
+            "type": "object"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "axes",
+          "json_schema"
+        ],
+        "title": "ResearchConfigSchema",
         "type": "object"
       },
       "ResolveConflict": {
@@ -45756,6 +45985,49 @@
         ]
       }
     },
+    "/curation/projects/{project}/assist_loop_presets/schema": {
+      "get": {
+        "operationId": "schema_assist_loop_preset_curation_projects__project__assist_loop_presets_schema_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchConfigSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Schema Assist Loop Preset",
+        "tags": [
+          "Curation",
+          "Auto-label"
+        ]
+      }
+    },
     "/curation/projects/{project}/assist_loop_presets/{name}": {
       "delete": {
         "operationId": "delete_assist_loop_preset_curation_projects__project__assist_loop_presets__name__delete",
@@ -47410,6 +47682,49 @@
           }
         },
         "summary": "Active Cluster Profile",
+        "tags": [
+          "Curation",
+          "Clustering"
+        ]
+      }
+    },
+    "/curation/projects/{project}/cluster_profiles/schema": {
+      "get": {
+        "operationId": "schema_cluster_profile_curation_projects__project__cluster_profiles_schema_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchConfigSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Schema Cluster Profile",
         "tags": [
           "Curation",
           "Clustering"
@@ -54187,6 +54502,69 @@
         ]
       }
     },
+    "/curation/projects/{project}/embedding/spaces/{space_key}/evaluations": {
+      "get": {
+        "description": "The evaluation runs of a space against other spaces, newest first. 404 for another\nproject's space.",
+        "operationId": "list_space_evaluations_curation_projects__project__embedding_spaces__space_key__evaluations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "space_key",
+            "required": true,
+            "schema": {
+              "title": "Space Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The target of the space (item, box, frame).",
+            "in": "query",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Target",
+              "description": "The target of the space (item, box, frame)."
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingEvaluationListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Space Evaluations",
+        "tags": [
+          "Curation",
+          "Embedding"
+        ]
+      }
+    },
     "/curation/projects/{project}/embedding/spaces/{space_key}/promote": {
       "post": {
         "description": "The fenced flip. 409 `embedding_space_not_ready` or `embedding_evaluation_missing`.",
@@ -60553,6 +60931,49 @@
           }
         },
         "summary": "Active Near Dup Profile",
+        "tags": [
+          "Curation",
+          "Near-duplicates"
+        ]
+      }
+    },
+    "/curation/projects/{project}/near_dup_profiles/schema": {
+      "get": {
+        "operationId": "schema_near_dup_profile_curation_projects__project__near_dup_profiles_schema_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchConfigSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Schema Near Dup Profile",
         "tags": [
           "Curation",
           "Near-duplicates"
@@ -76992,6 +77413,48 @@
           }
         },
         "summary": "Get Active Serving Profile",
+        "tags": [
+          "Projects",
+          "Serving"
+        ]
+      }
+    },
+    "/curation/serving_profiles/schema": {
+      "get": {
+        "operationId": "schema_serving_profile_curation_serving_profiles_schema_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResearchConfigSchema"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "project_not_found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Refused (see detail.error)"
+          }
+        },
+        "summary": "Schema Serving Profile",
         "tags": [
           "Projects",
           "Serving"

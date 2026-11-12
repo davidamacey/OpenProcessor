@@ -19,6 +19,7 @@ import type { CurationEvent } from '$lib/sse';
 import type {
   ActiveConfigResponse,
   ConfigDocBase,
+  ConfigDocCore,
   ConfigRevision,
   ConfigRevisionList,
   ConfigUpdateRequest,
@@ -34,24 +35,29 @@ export type ConfigBody = Record<string, unknown>;
 /** The resource's routes, already bound to its API wrappers. */
 export interface ConfigEditorBackend<
   B extends ConfigBody,
-  D extends ConfigDocBase<B>,
+  D extends ConfigDocCore<B>,
   S,
   E = CurationEvent,
 > {
-  getSchema: () => Promise<S>;
   getDoc: (name: string) => Promise<D>;
-  getRevisions: (name: string) => Promise<ConfigRevisionList>;
-  getRevision: (name: string, revision: number) => Promise<D>;
   update: (name: string, body: ConfigUpdateRequest<B>) => Promise<D>;
-  validate: (
+  /** The routes below are absent for a resource that does not serve them
+   *  (the research presets serve no schema, no live validation, no
+   *  revision history and no events): the editor then shows no field
+   *  help, validates only on Save (the server's 422), lists no
+   *  revisions and re-reads on a 409. */
+  getSchema?: () => Promise<S>;
+  getRevisions?: (name: string) => Promise<ConfigRevisionList>;
+  getRevision?: (name: string, revision: number) => Promise<D>;
+  validate?: (
     body: ConfigValidateRequest<B>,
     signal: AbortSignal,
   ) => Promise<ValidationReport>;
   /** `E` is the event type of the stream the resource follows (the scoped
    *  `CurationEvent`, or the VLM registry's global events). */
-  subscribe: (onEvent: (e: E) => void, onResync?: () => void) => { close(): void };
+  subscribe?: (onEvent: (e: E) => void, onResync?: () => void) => { close(): void };
   /** True for the events this resource follows. */
-  isEvent: (e: E) => boolean;
+  isEvent?: (e: E) => boolean;
 }
 
 /** What the shared editor components (save panel, revisions, activate and
@@ -68,6 +74,7 @@ export interface ConfigEditorView {
   readonly validateError: string | null;
   readonly saving: boolean;
   readonly saveError: string | null;
+  readonly saveReasons: string[];
   readonly conflict: { message: string; currentRevision: number | null } | null;
   readonly remoteChanged: boolean;
   readonly dirty: boolean;
@@ -81,6 +88,24 @@ export interface ConfigEditorView {
   restoreViewed(): Promise<boolean>;
 }
 
+/** What the save column reads, so a resource whose document carries less than
+ *  `ConfigDocBase` (the research presets) can use it too. */
+export type ConfigSaveView = Pick<
+  ConfigEditorView,
+  | 'validating'
+  | 'validateError'
+  | 'saving'
+  | 'saveError'
+  | 'saveReasons'
+  | 'conflict'
+  | 'remoteChanged'
+  | 'dirty'
+  | 'editable'
+  | 'canSave'
+  | 'reloadLatest'
+  | 'keepMine'
+> & { readonly doc: { readonly revision: number | null } | null };
+
 /** A deep copy, so edits never touch the served doc. */
 function cloneBody<B>(body: B): B {
   return JSON.parse(JSON.stringify(body)) as B;
@@ -88,7 +113,7 @@ function cloneBody<B>(body: B): B {
 
 export class ConfigEditor<
   B extends ConfigBody,
-  D extends ConfigDocBase<B>,
+  D extends ConfigDocCore<B>,
   S,
   A extends { load(): Promise<void> } = ConfigActive,
   E = CurationEvent,
@@ -113,6 +138,9 @@ export class ConfigEditor<
 
   saving = $state(false);
   saveError = $state<string | null>(null);
+  /** The served `reasons` of a refused Save (a 422 `validation_failed` from a
+   *  resource that validates on Save only), one line per field. */
+  saveReasons = $state<string[]>([]);
   /** A 409 `revision_conflict` on Save: the served message and revision. */
   conflict = $state<{ message: string; currentRevision: number | null } | null>(null);
 
@@ -156,7 +184,7 @@ export class ConfigEditor<
     this.draftBody = cloneBody(doc.body);
     this.draftDescription = doc.description ?? '';
     this.expectedRevision = doc.revision;
-    this.report = doc.validation;
+    this.report = doc.validation ?? null;
     this.conflict = null;
     this.remoteChanged = false;
   }
@@ -169,12 +197,12 @@ export class ConfigEditor<
     const b = this.backend;
     try {
       const [schema, doc] = await Promise.all([
-        b.getSchema(),
+        b.getSchema?.() ?? Promise.resolve(null),
         b.getDoc(this.name),
         this.active.load(),
         this.loadExtras(),
       ]);
-      this.schema = schema;
+      this.schema = schema as S | null;
       this.adopt(doc);
       this.loadError = null;
       await this.loadRevisions();
@@ -185,12 +213,13 @@ export class ConfigEditor<
   }
 
   async loadRevisions(): Promise<void> {
-    if (!this.doc || this.doc.source !== 'stored') {
+    const getRevisions = this.backend.getRevisions;
+    if (!getRevisions || !this.doc || this.doc.source !== 'stored') {
       this.revisions = null;
       return;
     }
     try {
-      this.revisions = (await this.backend.getRevisions(this.name)).revisions;
+      this.revisions = (await getRevisions(this.name)).revisions;
       this.revisionError = null;
     } catch (e) {
       this.revisionError = apiErrorText(e);
@@ -199,10 +228,11 @@ export class ConfigEditor<
 
   start(): void {
     void this.load();
-    this.#sub = this.backend.subscribe(
-      (e) => void this.#onEvent(e),
-      () => void this.#refresh(),
-    );
+    this.#sub =
+      this.backend.subscribe?.(
+        (e) => void this.#onEvent(e),
+        () => void this.#refresh(),
+      ) ?? null;
   }
 
   stop(): void {
@@ -214,7 +244,7 @@ export class ConfigEditor<
   }
 
   async #onEvent(e: E): Promise<void> {
-    if (!this.backend.isEvent(e)) return;
+    if (!this.backend.isEvent?.(e)) return;
     await this.active.load();
     const name = (e as { name?: string | null }).name;
     if (name !== this.name) return;
@@ -254,6 +284,7 @@ export class ConfigEditor<
   }
 
   scheduleValidate(): void {
+    if (!this.backend.validate) return;
     if (this.#timer) clearTimeout(this.#timer);
     this.#timer = setTimeout(() => {
       this.#timer = null;
@@ -264,15 +295,14 @@ export class ConfigEditor<
   /** Posts the draft to `/validate`. `name: null`: the doc's own name
    *  would read as taken. */
   async validateNow(): Promise<void> {
+    const validate = this.backend.validate;
+    if (!validate) return;
     this.#validateAbort?.abort();
     const ctl = new AbortController();
     this.#validateAbort = ctl;
     this.validating = true;
     try {
-      const report = await this.backend.validate(
-        { name: null, body: this.draftBody },
-        ctl.signal,
-      );
+      const report = await validate({ name: null, body: this.draftBody }, ctl.signal);
       if (ctl.signal.aborted) return;
       this.report = report;
       this.validateError = null;
@@ -296,6 +326,7 @@ export class ConfigEditor<
     if (this.expectedRevision == null) return false;
     this.saving = true;
     this.saveError = null;
+    this.saveReasons = [];
     this.conflict = null;
     try {
       const doc = await this.backend.update(this.name, {
@@ -316,6 +347,7 @@ export class ConfigEditor<
         };
       } else {
         this.saveError = apiErrorText(e);
+        this.saveReasons = d?.reasons ?? [];
         if (d?.report) this.report = d.report;
       }
       return false;
@@ -343,9 +375,11 @@ export class ConfigEditor<
   }
 
   async viewRevision(revision: number): Promise<void> {
+    const getRevision = this.backend.getRevision;
+    if (!getRevision) return;
     this.revisionError = null;
     try {
-      this.viewing = await this.backend.getRevision(this.name, revision);
+      this.viewing = await getRevision(this.name, revision);
     } catch (e) {
       this.revisionError = apiErrorText(e);
     }

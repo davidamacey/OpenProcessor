@@ -16,10 +16,15 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
+from src.config.cluster_profile import TARGET_AXES
 from src.db.models.config import ACTIVATION_AXES, DEPLOYMENT_CONFIG_KINDS
 from src.db.repos import config as repo
 from src.db.session import async_session_factory, deployment_tx, project_tx
-from src.schemas.curation.research_config import RESEARCH_BODY_MODELS, ResearchConfigDoc
+from src.schemas.curation.research_config import (
+    RESEARCH_BODY_MODELS,
+    ResearchAxis,
+    ResearchConfigDoc,
+)
 from src.services.config_store.bound_project import bound_project_id
 
 
@@ -40,6 +45,54 @@ KIND_AXES: dict[str, tuple[str, ...]] = {
 }
 
 
+AXIS_LABELS: dict[str, str] = {
+    'clustering_item': 'Items',
+    'clustering_region_box': 'Region boxes',
+    'assist_loop_preset': 'Assist loop',
+    'near_dup': 'Near-duplicates',
+}
+_AXIS_TARGETS = {axis: target for target, axis in TARGET_AXES.items()}
+
+
+def kind_axes(kind: str) -> list[ResearchAxis]:
+    """The axes a kind can be activated on, with the label to show and the body target each serves."""
+    return [
+        ResearchAxis(axis=axis, label=AXIS_LABELS[axis], target=_AXIS_TARGETS.get(axis))
+        for axis in KIND_AXES.get(kind, ())
+    ]
+
+
+class AxisTargetMismatchError(ValueError):
+    """The body's ``target`` is served by another axis than the one asked for."""
+
+    def __init__(self, *, kind: str, name: str, axis: str, target: str, expected_axis: str) -> None:
+        self.axis = axis
+        self.expected_axis = expected_axis
+        super().__init__(
+            f'{kind.replace("_", " ")} {name!r} has target {target}, so it is activated on '
+            f'{expected_axis}, not {axis}'
+        )
+
+
+def check_axis_target(kind: str, name: str, axis: str, body: dict[str, Any]) -> None:
+    """Refuse an axis that serves one target for a body whose ``target`` is another.
+
+    Only the axes that serve a target are checked (a cluster profile's two); a kind whose body
+    names no target is not.
+    """
+    wanted = _AXIS_TARGETS.get(axis)
+    if wanted is None or body.get('target') == wanted:
+        return
+    target = str(body.get('target'))
+    raise AxisTargetMismatchError(
+        kind=kind,
+        name=name,
+        axis=axis,
+        target=target,
+        expected_axis=TARGET_AXES.get(target, f'an axis for target {target}'),
+    )
+
+
 class InvalidConfigBodyError(ValueError):
     """The body does not fit its kind's model; ``errors`` is the pydantic error list."""
 
@@ -57,6 +110,11 @@ def _validated(kind: str, body: dict[str, Any]) -> dict[str, Any]:
         return RESEARCH_BODY_MODELS[kind].model_validate(body).model_dump(mode='json')
     except ValidationError as exc:
         raise InvalidConfigBodyError(exc.errors(include_url=False, include_context=False)) from exc
+
+
+def body_json_schema(kind: str) -> dict[str, Any]:
+    """The JSON Schema of a kind's body, generated from the model that validates it."""
+    return RESEARCH_BODY_MODELS[kind].model_json_schema()
 
 
 @asynccontextmanager
@@ -144,6 +202,7 @@ async def activate_project_axis(
         if doc is None:
             msg = f'no {kind} {name!r}' + (f' at revision {revision}' if revision else '')
             raise UnknownConfigError(msg)
+        check_axis_target(kind, name, axis, doc.body)
         return await repo.activate(
             session,
             project_id=project_id,

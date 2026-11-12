@@ -9,7 +9,7 @@ stable ``{"error": code, "message": ...}`` body.
 from __future__ import annotations
 
 import uuid
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import Depends, Header, Query
 
@@ -17,10 +17,12 @@ from src.config.curation_accessors import images_index, items_index
 from src.config.project_context import current_project_id
 from src.core.db_session import DbSessionDep
 from src.core.dependencies import get_curation_opensearch
-from src.domain.embedding_spaces import Target
+from src.domain.embedding_spaces import EmbeddingSpaceError, Target
 from src.routers.curation._common import router
 from src.routers.curation._embedding_space_models import (
     EmbeddingBuildRequest,
+    EmbeddingEvaluationListResponse,
+    EmbeddingEvaluationView,
     EmbeddingModelEntry,
     EmbeddingModelListResponse,
     EmbeddingPromoteRequest,
@@ -41,6 +43,9 @@ from src.services.embedding_spaces.reindex import ReindexIndex, ReindexMode
 from src.services.embedding_spaces.reindex_opensearch import OpenSearchReindexIndex
 from src.services.jobs.service import rejection
 
+
+if TYPE_CHECKING:
+    from src.services.embedding_spaces.reindex_runs import LatestRun
 
 IdempotencyKey = Annotated[
     str | None,
@@ -66,7 +71,11 @@ async def _index() -> ReindexIndex:
 IndexDep = Annotated[ReindexIndex, Depends(_index)]
 
 
-def _view(found: views.SpaceWithModel, docs: int | None = None) -> EmbeddingSpaceView:
+def _view(
+    found: views.SpaceWithModel,
+    docs: int | None = None,
+    run: LatestRun | None = None,
+) -> EmbeddingSpaceView:
     row, model = found.space, found.model
     return EmbeddingSpaceView(
         space_key=row.space_key,
@@ -78,6 +87,9 @@ def _view(found: views.SpaceWithModel, docs: int | None = None) -> EmbeddingSpac
         status=row.status.value,
         ready_at=row.ready_at,
         docs_with_vector=docs,
+        run_id=None if run is None else str(run.run_id),
+        run_mode=None if run is None else run.mode,
+        run_status=None if run is None else run.job_status,
     )
 
 
@@ -111,8 +123,52 @@ async def list_embedding_spaces(
     project = current_project_id()
     rows = await spaces.list_project_spaces(session, project, target)
     found = await views.with_models(session, project, rows)
+    runs = await views.latest_runs(session, project, rows)
     return EmbeddingSpaceListResponse(
-        spaces=[_view(f, await views.docs_with_vector(index, f.space)) for f in found]
+        spaces=[
+            _view(f, await views.docs_with_vector(index, f.space), runs.get(f.space.id))
+            for f in found
+        ]
+    )
+
+
+@router.get(
+    '/embedding/spaces/{space_key}/evaluations',
+    response_model=EmbeddingEvaluationListResponse,
+    tags=['Embedding'],
+)
+async def list_space_evaluations(
+    space_key: str, target: TargetQuery, session: DbSessionDep
+) -> EmbeddingEvaluationListResponse:
+    """The evaluation runs of a space against other spaces, newest first. 404 for another
+    project's space."""
+    async with space_refusals():
+        found = await views.space_evaluations(session, current_project_id(), target, space_key)
+        if found is None:
+            raise EmbeddingSpaceError(
+                'embedding_space_not_found', f'no {target.value} space {space_key}', status=404
+            )
+    return EmbeddingEvaluationListResponse(
+        space_key=found.space.space_key,
+        target=found.space.target,
+        primary_space_key=found.primary_space_key,
+        evaluated_against_primary=any(e.against_primary for e in found.evaluations),
+        evaluations=[
+            EmbeddingEvaluationView(
+                id=str(e.id),
+                baseline_space_key=e.baseline_space_key,
+                candidate_space_key=e.candidate_space_key,
+                protocol=e.protocol,
+                verdict=e.verdict,
+                metrics=e.metrics,
+                sample_spec=e.sample_spec,
+                counts_for_promote=e.against_primary,
+                job_id=None if e.job_id is None else str(e.job_id),
+                created_at=e.created_at,
+                created_by=e.created_by,
+            )
+            for e in found.evaluations
+        ],
     )
 
 

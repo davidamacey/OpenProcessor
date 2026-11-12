@@ -22,6 +22,9 @@ const space = (
   status: 'ready',
   ready_at: null,
   docs_with_vector: null,
+  run_id: null,
+  run_mode: null,
+  run_status: null,
   ...over,
 });
 

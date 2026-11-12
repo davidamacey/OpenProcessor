@@ -10,7 +10,7 @@ import httpx
 import pytest
 import pytest_asyncio
 from fastapi import Depends, FastAPI
-from fixtures.job_rows import make_project, sql
+from fixtures.job_rows import make_project, seed_default_spaces, sql
 
 from src.config.curation_accessors import base_curation_config
 from src.config.project_context import set_bound_project
@@ -301,3 +301,78 @@ async def test_docs_with_vector_comes_from_the_index_for_spaces_that_have_a_fiel
     _set_space_status(pg, alpha, 'building')
     building = (await client.get(url(alpha, '/spaces'))).json()['spaces'][0]
     assert (building['status'], building['docs_with_vector']) == ('building', 42)
+
+
+async def test_the_list_names_the_latest_run_of_a_space_started_elsewhere(app, pg, client) -> None:
+    alpha = project(app, pg, 'alpha')
+    started = (await client.post(url(alpha, '/spaces'), json=REGISTER)).json()
+    listed = (await client.get(url(alpha, '/spaces'))).json()['spaces'][0]
+    run = (await client.get(url(alpha, f'/reindex-runs/{started["run_id"]}'))).json()
+    assert listed['run_id'] == started['run_id']
+    assert (listed['run_mode'], listed['run_status']) == (run['mode'], run['job_status'])
+
+
+async def test_a_space_that_was_never_built_has_no_run_in_the_list(app, pg, client) -> None:
+    alpha = project(app, pg, 'alpha')
+    seed_default_spaces(pg, app.state.records[alpha].id)
+    spaces = (await client.get(url(alpha, '/spaces'))).json()['spaces']
+    assert spaces
+    assert {(s['run_id'], s['run_status']) for s in spaces} == {(None, None)}
+
+
+def _space_id(pg, slug: str, key: str) -> str:
+    return str(
+        sql(
+            pg,
+            'SELECT s.id FROM embedding_spaces s JOIN projects p ON p.id = s.project_id '
+            'WHERE p.slug = %s AND s.space_key = %s',
+            slug,
+            key,
+        )[0][0]
+    )
+
+
+async def test_evaluations_list_the_runs_and_mark_the_one_against_the_primary(
+    app, pg, client
+) -> None:
+    alpha = project(app, pg, 'alpha')
+    pid = app.state.records[alpha].id
+    seed_default_spaces(pg, pid)
+    await client.post(url(alpha, '/spaces'), json=REGISTER)
+    path = url(alpha, '/spaces/mobileclip2_s2_v1/evaluations?target=item')
+    empty = (await client.get(path)).json()
+    assert (empty['evaluations'], empty['evaluated_against_primary']) == ([], False)
+    primary = empty['primary_space_key']
+    assert primary
+    sql(
+        pg,
+        'INSERT INTO embedding_evaluation_runs (project_id, baseline_space_id, candidate_space_id, '
+        "protocol, sample_spec, metrics, verdict, created_by) VALUES (%s, %s, %s, 'label_consistency_v1', "
+        '%s::jsonb, %s::jsonb, %s, %s)',
+        pid,
+        _space_id(pg, alpha, primary),
+        _space_id(pg, alpha, 'mobileclip2_s2_v1'),
+        '{"seed": 7, "n": 2000}',
+        '{"recall_at_10": {"baseline": 0.71, "candidate": 0.78}}',
+        'better',
+        'api',
+    )
+    body = (await client.get(path)).json()
+    assert body['evaluated_against_primary'] is True
+    [only] = body['evaluations']
+    assert (only['baseline_space_key'], only['candidate_space_key']) == (
+        primary,
+        'mobileclip2_s2_v1',
+    )
+    assert (only['verdict'], only['counts_for_promote']) == ('better', True)
+    assert only['metrics']['recall_at_10']['candidate'] == 0.78
+    assert only['sample_spec'] == {'seed': 7, 'n': 2000}
+
+
+async def test_another_projects_space_evaluations_are_404(app, pg, client) -> None:
+    alpha = project(app, pg, 'alpha')
+    beta = project(app, pg, 'beta')
+    await client.post(url(alpha, '/spaces'), json=REGISTER)
+    r = await client.get(url(beta, '/spaces/mobileclip2_s2_v1/evaluations?target=item'))
+    assert r.status_code == 404
+    assert r.json()['detail']['error'] == 'embedding_space_not_found'

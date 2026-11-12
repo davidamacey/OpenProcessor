@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { followJob } from '$lib/jobs/followJob';
+import { followJob, pollWhile } from '$lib/jobs/followJob';
 import type { JobStatus, JobView } from '$lib/types_jobs';
 
 function job(status: JobStatus, over: Partial<JobView> = {}): JobView {
@@ -89,5 +89,38 @@ describe('followJob', () => {
     const p = followJob('j1', { ...fast, read, signal: ctl.signal });
     ctl.abort();
     await expect(p).rejects.toMatchObject({ name: 'AbortError' });
+  });
+});
+
+describe('pollWhile', () => {
+  it('reads until the value is no longer active and returns the last one', async () => {
+    const seen: number[] = [];
+    const values = [1, 2, 3];
+    const out = await pollWhile(
+      async () => values.shift()!,
+      (n) => n < 3,
+      { ...fast, onUpdate: (n) => seen.push(n) },
+    );
+    expect(out).toBe(3);
+    expect(seen).toEqual([1, 2, 3]);
+  });
+
+  it('gives up after the read fails maxReadFailures times in a row', async () => {
+    const read = vi.fn().mockRejectedValue(new Error('down'));
+    await expect(
+      pollWhile(read, () => true, { ...fast, maxReadFailures: 2 }),
+    ).rejects.toThrow('down');
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects with an AbortError when the signal aborts', async () => {
+    const ctl = new AbortController();
+    const read = vi.fn(async () => {
+      ctl.abort();
+      return 1;
+    });
+    await expect(
+      pollWhile(read, () => true, { ...fast, signal: ctl.signal }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
   });
 });

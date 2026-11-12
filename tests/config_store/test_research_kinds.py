@@ -189,10 +189,19 @@ def test_cluster_profile_and_preset_routes_activate_on_their_axes(client: TestCl
     )
     item = client.post(f'{base}/cluster_profiles/ivf/activate', json={'axis': 'clustering_item'})
     assert item.status_code == 200, item.text
-    region = client.post(
+    refused = client.post(
         f'{base}/cluster_profiles/ivf/activate', json={'axis': 'clustering_region_box'}
     )
-    assert region.status_code == 200
+    assert refused.status_code == 422, refused.text
+    assert refused.json()['detail']['error'] == 'axis_target_mismatch'
+    client.put(
+        f'{base}/cluster_profiles/boxes',
+        json={'body': {**CLUSTER, 'target': 'region_box'}, 'expected_revision': None},
+    )
+    region = client.post(
+        f'{base}/cluster_profiles/boxes/activate', json={'axis': 'clustering_region_box'}
+    )
+    assert region.status_code == 200, region.text
     assert client.get(f'{base}/cluster_profiles/active').json()['name'] == 'ivf'
     wrong = client.post(f'{base}/cluster_profiles/ivf/activate', json={'axis': 'vlm'})
     assert wrong.status_code == 422

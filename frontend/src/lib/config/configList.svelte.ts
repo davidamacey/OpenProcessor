@@ -22,9 +22,11 @@ export interface ConfigListBackend<L, D, E = CurationEvent> {
   clone: (name: string, body: ConfigCloneRequest) => Promise<D>;
   remove: (name: string, expectedRevision: number) => Promise<void>;
   /** `E` is the event type of the stream the resource follows: the scoped
-   *  `CurationEvent`, or (the VLM registry) the global stream's. */
-  subscribe: (onEvent: (e: E) => void, onResync?: () => void) => { close(): void };
-  isEvent: (e: E) => boolean;
+   *  `CurationEvent`, or (the VLM registry) the global stream's. Absent for
+   *  a resource that publishes no events (the research presets): the list
+   *  is then re-read after its own writes. */
+  subscribe?: (onEvent: (e: E) => void, onResync?: () => void) => { close(): void };
+  isEvent?: (e: E) => boolean;
 }
 
 /** What the clone dialog clones: a doc, or a template (`source`). */
@@ -33,7 +35,14 @@ export interface CloneSource {
   source: ConfigSource | null;
 }
 
-export class ConfigList<L, D, A extends ConfigActive = ConfigActive, E = CurationEvent> {
+/** The list state every config resource shares; `ConfigList` adds Rollback for those
+ *  whose active ref has one. */
+export class ConfigListBase<
+  L,
+  D,
+  A extends { load(): Promise<void> },
+  E = CurationEvent,
+> {
   list = $state<L | null>(null);
   loadError = $state<string | null>(null);
   readonly active: A;
@@ -68,23 +77,18 @@ export class ConfigList<L, D, A extends ConfigActive = ConfigActive, E = Curatio
 
   start(): void {
     void this.load();
-    this.#sub = this.backend.subscribe(
-      (e) => {
-        if (this.backend.isEvent(e)) void this.load();
-      },
-      () => void this.load(),
-    );
+    this.#sub =
+      this.backend.subscribe?.(
+        (e) => {
+          if (this.backend.isEvent?.(e)) void this.load();
+        },
+        () => void this.load(),
+      ) ?? null;
   }
 
   stop(): void {
     this.#sub?.close();
     this.#sub = null;
-  }
-
-  async rollback(): Promise<boolean> {
-    const ok = await this.active.rollback();
-    if (ok) await this.load();
-    return ok;
   }
 
   /** Deletes a stored doc at the revision the list served. */
@@ -136,5 +140,18 @@ export class ConfigList<L, D, A extends ConfigActive = ConfigActive, E = Curatio
     } finally {
       this.busy = false;
     }
+  }
+}
+
+export class ConfigList<
+  L,
+  D,
+  A extends ConfigActive = ConfigActive,
+  E = CurationEvent,
+> extends ConfigListBase<L, D, A, E> {
+  async rollback(): Promise<boolean> {
+    const ok = await this.active.rollback();
+    if (ok) await this.load();
+    return ok;
   }
 }

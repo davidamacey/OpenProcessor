@@ -1,6 +1,6 @@
 <script
   lang="ts"
-  generics="Row extends { name: string; read_only: boolean; updated_at?: string | null }"
+  generics="Row extends { name: string; read_only?: boolean; updated_at?: string | null }"
 >
   /** The last two cells of a config list row: when it was updated, and Clone / Delete. */
   import type { CloneDeleteFlow } from '$lib/config/cloneDeleteFlow.svelte';

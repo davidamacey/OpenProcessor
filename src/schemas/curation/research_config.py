@@ -27,34 +27,46 @@ class _Strict(BaseModel):
 class ServingServer(_Strict):
     """One Triton server, one per card."""
 
-    name: str = Field(min_length=1)
-    grpc_url: str = Field(min_length=1)
-    metrics_url: str = Field(min_length=1)
+    name: str = Field(min_length=1, description='The name `load_list` refers to; unique.')
+    grpc_url: str = Field(min_length=1, description='host:port clients send inference to.')
+    metrics_url: str = Field(min_length=1, description='host:port of its metrics endpoint.')
     gpu_uuids: list[str] = Field(min_length=1, description='NVML UUIDs of the cards it serves.')
-    numa_node: int | None = Field(default=None, ge=0)
+    numa_node: int | None = Field(
+        default=None, ge=0, description='The NUMA node it is pinned to; null = not pinned.'
+    )
 
 
 class ServingImagePrep(_Strict):
-    instances: int = Field(ge=1)
-    workers: int = Field(ge=1)
-    max_in_flight: int = Field(ge=1)
-    device_budget_mib: int = Field(ge=0)
-    min_megapixels: float = Field(default=0, ge=0)
+    """How images are decoded and resized before inference."""
+
+    instances: int = Field(ge=1, description='Image-prep model instances.')
+    workers: int = Field(ge=1, description='Worker threads per instance.')
+    max_in_flight: int = Field(ge=1, description='Images prepared at once before callers wait.')
+    device_budget_mib: int = Field(
+        ge=0, description='Device memory the image prep may use, in MiB.'
+    )
+    min_megapixels: float = Field(
+        default=0, ge=0, description='Images smaller than this are prepared on the CPU.'
+    )
 
 
 class ServingPriorities(_Strict):
-    interactive: int = Field(ge=0)
-    bulk: int = Field(ge=0)
+    """Triton request priority per traffic class (a lower number is served first)."""
+
+    interactive: int = Field(ge=0, description='Priority of requests a person is waiting on.')
+    bulk: int = Field(ge=0, description='Priority of ingest and batch work.')
 
 
 class ServingProfileBody(_Strict):
-    servers: list[ServingServer] = Field(min_length=1)
+    servers: list[ServingServer] = Field(
+        min_length=1, description='The Triton servers, one per card.'
+    )
     load_list: dict[str, list[str]] = Field(
         description='Per server name, the models it keeps resident.'
     )
     instances: dict[str, int] = Field(description='Instances per model.')
-    image_prep: ServingImagePrep
-    priorities: ServingPriorities
+    image_prep: ServingImagePrep = Field(description='Image decode and resize settings.')
+    priorities: ServingPriorities = Field(description='Request priorities per traffic class.')
 
     @model_validator(mode='after')
     def _names_agree(self) -> ServingProfileBody:
@@ -77,35 +89,65 @@ class ServingProfileBody(_Strict):
 
 class ClusterRefreshRule(_Strict):
     growth_threshold: float = Field(gt=0, description='Growth since the last run that starts one.')
-    max_deferral_s: int = Field(ge=0)
-    retry_backoff_s: int = Field(ge=0)
+    max_deferral_s: int = Field(
+        ge=0, description='Longest a run waits for ingest to go quiet, in seconds.'
+    )
+    retry_backoff_s: int = Field(
+        ge=0, description='Wait before retrying a run that failed or was cancelled, in seconds.'
+    )
 
 
 class ClusterProfileBody(_Strict):
-    target: Literal['item', 'region_box']
-    level: str = Field(min_length=1)
-    embedding_field: str = Field(min_length=1)
-    method: Literal['ivf', 'minibatch_kmeans']
-    params: dict[str, float | int | str | bool | None] = Field(default_factory=dict)
-    pool: dict[str, float | int | str | bool | None] = Field(default_factory=dict)
-    assign: dict[str, float | int | str | bool | None] = Field(default_factory=dict)
-    refresh: ClusterRefreshRule
-    activation: Literal['auto_when_safe', 'human'] = 'human'
-    backend: Literal['cpu', 'gpu_if_validated'] = 'cpu'
+    target: Literal['item', 'region_box'] = Field(
+        description='What is clustered; it must match the axis the profile is activated on.'
+    )
+    level: str = Field(min_length=1, description="The partition level, 'class' by default.")
+    embedding_field: str = Field(
+        min_length=1, description='The vector field (the primary space of the target) to cluster.'
+    )
+    method: Literal['ivf', 'minibatch_kmeans'] = Field(description='The clustering method.')
+    params: dict[str, float | int | str | bool | None] = Field(
+        default_factory=dict, description='Options of the method, such as n_clusters.'
+    )
+    pool: dict[str, float | int | str | bool | None] = Field(
+        default_factory=dict, description='Stored with the profile; the fit does not read it yet.'
+    )
+    assign: dict[str, float | int | str | bool | None] = Field(
+        default_factory=dict, description='Stored with the profile; the fit does not read it yet.'
+    )
+    refresh: ClusterRefreshRule = Field(description='When a new run starts.')
+    activation: Literal['auto_when_safe', 'human'] = Field(
+        default='human',
+        description='auto_when_safe: a new partition becomes serving when its diff is safe; '
+        'human: a person activates it.',
+    )
+    backend: Literal['cpu', 'gpu_if_validated'] = Field(
+        default='cpu', description='gpu_if_validated uses the GPU only where it was validated.'
+    )
 
 
 # --- assist_loop_preset: project-scoped, the project's default preset -----------------------------
 
 
 class AssistLoopPresetBody(_Strict):
-    strategy: Literal['cluster_sampled'] = 'cluster_sampled'
+    strategy: Literal['cluster_sampled'] = Field(
+        default='cluster_sampled', description='How crops are picked: one sample per cluster.'
+    )
     gate: LoopGate = Field(default_factory=LoopGate)
     recursion: LoopRecursion = Field(default_factory=LoopRecursion)
-    budget: LoopBudget
-    on_budget: Literal['complete', 'pause'] = 'pause'
+    budget: LoopBudget = Field(description='Hard caps; the loop never goes past one.')
+    on_budget: Literal['complete', 'pause'] = Field(
+        default='pause',
+        description="'pause': a reached limit pauses the loop; 'complete': the nodes the budget "
+        'cannot cover are left unvisited.',
+    )
     audit: LoopAudit = Field(default_factory=LoopAudit)
-    vlm_concurrency: int = Field(default=16, ge=1, le=128)
-    node_concurrency: int = Field(default=8, ge=1, le=32)
+    vlm_concurrency: int = Field(
+        default=16, ge=1, le=128, description='VLM requests in flight at once.'
+    )
+    node_concurrency: int = Field(
+        default=8, ge=1, le=32, description='Cluster nodes worked on at once.'
+    )
 
 
 RESEARCH_BODY_MODELS: dict[str, type[BaseModel]] = {
@@ -132,6 +174,28 @@ class ResearchConfigDoc(BaseModel):
 
 class ResearchConfigList(BaseModel):
     items: list[ResearchConfigDoc]
+
+
+class ResearchAxis(BaseModel):
+    """A place a project kind can be active; a kind may be active on several."""
+
+    axis: str = Field(description='The id `activate` and `active` take.')
+    label: str
+    target: str | None = Field(
+        description='What the axis serves (a cluster profile body names its `target`); null when '
+        'the axis does not depend on the body.'
+    )
+
+
+class ResearchConfigSchema(BaseModel):
+    kind: str
+    axes: list[ResearchAxis] = Field(
+        description='Where the kind can be activated; empty for the deployment-wide serving profile.'
+    )
+    json_schema: dict[str, Any] = Field(
+        description='The JSON Schema (draft 2020-12) of the document body, generated from the model '
+        'the server validates it with.'
+    )
 
 
 class ResearchConfigPut(BaseModel):

@@ -1,0 +1,57 @@
+---
+sidebar_position: 19
+title: Presets
+---
+
+# Presets
+
+Four kinds of settings are revisioned config documents with the same rules as
+[prompt packs](./prompt-packs.mdx) and [region profiles](./region-profiles.mdx): a save names the
+revision it was made against (`expected_revision`, `null` creates the document), a stale one is
+`409 revision_conflict`, activation names what it expects to replace, and a stale one is a `409`
+too. In Cropwright they are under **Settings, Presets and embedding spaces**
+(`/p/<project>/settings/presets/<kind>`); the user view is
+[Presets in Cropwright](../cropwright/user-guide/presets.md). Every kind has the same seven routes:
+list, get, put, delete, activate, the active read and the schema.
+
+| Preset | Path | Scope | What it holds |
+|---|---|---|---|
+| Serving profile | `/curation/serving_profiles` (no project) | Deployment | Triton servers, which models stay resident, instances, image-prep and priorities |
+| Cluster profile | `$B/cluster_profiles` | Project | Cluster method (`ivf`, `minibatch_kmeans`), embedding field, refresh rule, `activation`, `backend`; active per axis (`clustering_item`, `clustering_region_box`) |
+| Assist-loop preset | `$B/assist_loop_presets` | Project | The cluster-sampled auto-label loop: gate, recursion, budget, `on_budget`, concurrency |
+| Near-duplicate profile | `$B/near_dup_profiles` | Project | `dedup_cosine`, `leak_cosine`, `max_group_size`, `k` for the `image` and `item` levels |
+
+`B` is `http://localhost:4603/curation/projects/<slug>`.
+
+```bash
+curl -s "$B/near_dup_profiles/active?axis=near_dup"
+curl -s -X PUT "$B/near_dup_profiles/strict" -H 'content-type: application/json' \
+  -d '{"body":{"version":1,"item":{"dedup_cosine":0.97,"leak_cosine":0.93}},"description":"stricter items","expected_revision":null}'
+curl -s -X POST "$B/near_dup_profiles/strict/activate" -H 'content-type: application/json' \
+  -d '{"axis":"near_dup","revision":null,"expected_active":null}'
+curl -s -X DELETE "$B/near_dup_profiles/strict?expected_revision=1"
+```
+
+`GET <collection>/schema` (for example `$B/near_dup_profiles/schema`, or
+`/curation/serving_profiles/schema`) answers `{kind, axes, json_schema}`. `json_schema` is the JSON
+Schema of the body, generated from the model the server validates with, so it lists every field with
+its type, default, choices, limits and description, with sub-models under `$defs`. `axes` lists
+where the kind can be activated (`axis`, a `label`, and for a cluster profile the body `target` the
+axis serves); the serving profile has none. Cropwright's field help and axis choice come from this
+route.
+
+```bash
+curl -s "$B/cluster_profiles/schema" | jq '.axes, .json_schema.properties.backend'
+```
+
+The serving profile is activated against the revision of the active-profile setting, not an
+`{name, revision}` ref: read `setting_revision` from `GET /curation/serving_profiles/active`
+(a `404` means none is active) and send it as `expected_revision`.
+
+Bodies are validated strictly when they are saved: unknown keys are refused, and a refusal is
+`422 validation_failed` with one line per field in `reasons`. `leak_cosine` may not exceed
+`dedup_cosine`. A document is read at an older revision with `?revision=N`.
+
+A cluster profile body names its `target` (`item` or `region_box`) and is activated on the axis of
+that target: activating one on the other axis is `422 axis_target_mismatch`, with a message naming
+the profile, its target and the axis it belongs on, and nothing changes.

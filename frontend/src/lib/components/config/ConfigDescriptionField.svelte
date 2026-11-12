@@ -1,9 +1,9 @@
 <script lang="ts">
   /** The description box of a config editor: the viewed revision's, else the draft's. */
-  import type { ConfigEditorView } from '$lib/config/configEditor.svelte';
-
   interface Props {
-    ed: Pick<ConfigEditorView, 'viewing' | 'editable'> & {
+    ed: {
+      readonly viewing: { readonly description: string | null } | null;
+      readonly editable: boolean;
       readonly draftDescription: string;
       setDescription(value: string): void;
     };

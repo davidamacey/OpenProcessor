@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, select, update
+from sqlalchemy.dialects.postgresql import distinct_on
 
 from src.db.models.embeddings import EmbeddingReindexRun, EmbeddingSpace
 from src.db.models.jobs import Job
@@ -14,7 +15,7 @@ from src.db.models.jobs import Job
 
 if TYPE_CHECKING:
     import uuid
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -73,6 +74,36 @@ async def finish_run(session: AsyncSession, job_id: uuid.UUID) -> None:
         .where(EmbeddingReindexRun.job_id == job_id)
         .values(finished_at=dt.datetime.now(dt.UTC))
     )
+
+
+@dataclass(frozen=True)
+class LatestRun:
+    """The newest run of a space with its job's status."""
+
+    run_id: uuid.UUID
+    mode: str
+    job_status: str | None
+
+
+async def latest_runs_by_space(
+    session: AsyncSession, space_ids: Sequence[uuid.UUID]
+) -> dict[uuid.UUID, LatestRun]:
+    """The newest run of each space that has one (run ids are UUIDv7, so time ordered)."""
+    if not space_ids:
+        return {}
+    rows = await session.execute(
+        select(
+            EmbeddingReindexRun.space_id,
+            EmbeddingReindexRun.id,
+            EmbeddingReindexRun.mode,
+            Job.status,
+        )
+        .ext(distinct_on(EmbeddingReindexRun.space_id))
+        .join(Job, Job.id == EmbeddingReindexRun.job_id)
+        .where(EmbeddingReindexRun.space_id.in_(space_ids))
+        .order_by(EmbeddingReindexRun.space_id, EmbeddingReindexRun.id.desc())
+    )
+    return {space: LatestRun(run, mode, status) for space, run, mode, status in rows}
 
 
 @dataclass(frozen=True)

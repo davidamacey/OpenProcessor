@@ -370,6 +370,49 @@ async def has_evaluation(
     return found is not None
 
 
+@dataclass(frozen=True)
+class EvaluationRunRow:
+    id: uuid.UUID
+    baseline_space_id: uuid.UUID
+    candidate_space_id: uuid.UUID
+    protocol: str
+    sample_spec: dict[str, Any]
+    metrics: dict[str, Any]
+    verdict: str
+    job_id: uuid.UUID | None
+    created_at: dt.datetime
+    created_by: str
+
+
+async def list_evaluations(
+    session: AsyncSession, project_id: uuid.UUID, candidate_id: uuid.UUID
+) -> list[EvaluationRunRow]:
+    """The evaluation runs of ``candidate_id``, newest first (``has_evaluation`` asks the same table)."""
+    rows = await session.scalars(
+        select(EmbeddingEvaluationRun)
+        .where(
+            EmbeddingEvaluationRun.project_id == project_id,
+            EmbeddingEvaluationRun.candidate_space_id == candidate_id,
+        )
+        .order_by(EmbeddingEvaluationRun.created_at.desc(), EmbeddingEvaluationRun.id.desc())
+    )
+    return [
+        EvaluationRunRow(
+            id=r.id,
+            baseline_space_id=r.baseline_space_id,
+            candidate_space_id=r.candidate_space_id,
+            protocol=r.protocol,
+            sample_spec=r.sample_spec,
+            metrics=r.metrics,
+            verdict=r.verdict,
+            job_id=r.job_id,
+            created_at=r.created_at,
+            created_by=r.created_by,
+        )
+        for r in rows
+    ]
+
+
 # --- the project's configuration epoch (the projects row is owned by the projects repository) -----
 
 
