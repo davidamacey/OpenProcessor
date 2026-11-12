@@ -744,3 +744,38 @@ class _Indices:
         if value is not None:
             self.parent.max_inner_result_window = int(value)
         return {'acknowledged': True}
+
+
+class NearRealTimeFakeOpenSearch(QueryFakeOpenSearch):
+    """A fake whose searches and counts see only what the last refresh published.
+
+    Real OpenSearch publishes a write to search only on a refresh (every second by
+    default, or at once with ``refresh=True`` / ``'wait_for'`` on the write). A bulk
+    write without a refresh policy is therefore invisible to the next count.
+    """
+
+    def __init__(self, indexes: dict[str, dict[str, dict[str, Any]]] | None = None) -> None:
+        super().__init__(indexes)
+        self._published = copy.deepcopy(self.store)
+
+    async def bulk(
+        self, *, body: list[dict[str, Any]], refresh: bool | str = False, **kw: Any
+    ) -> dict[str, Any]:
+        resp = await super().bulk(body=body, **kw)
+        if refresh:
+            self._published = copy.deepcopy(self.store)
+        return resp
+
+    async def search(self, **kw: Any) -> dict[str, Any]:
+        live, self.store = self.store, self._published
+        try:
+            return await super().search(**kw)
+        finally:
+            self.store = live
+
+    async def count(self, *, index: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
+        live, self.store = self.store, self._published
+        try:
+            return await super().count(index=index, body=body)
+        finally:
+            self.store = live

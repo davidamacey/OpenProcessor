@@ -291,3 +291,18 @@ def test_two_starts_in_the_same_clock_second_get_different_batch_ids(
     )
     # still sortable by time: the timestamp leads the id
     assert sorted([later['batch_id'], first['batch_id']]) == [first['batch_id'], later['batch_id']]
+
+
+@pytest.mark.asyncio
+async def test_the_report_counts_every_crop_the_draw_just_marked() -> None:
+    """The draw returns, then the page reads the report. The marks must be visible to
+    that read; unrefreshed, the counter lagged the draw ("192 still waiting", then
+    300 on reload, for a draw of 300)."""
+    from curation.query_fakes import NearRealTimeFakeOpenSearch
+    from src.services.curation.audit import load_report, start_audit
+
+    nrt = NearRealTimeFakeOpenSearch({ITEMS: _population()})
+    drawn = await start_audit(nrt, min_per_class=2, sample_size=5)
+    report = await load_report(nrt)
+    assert drawn['sampled'] == 5
+    assert report['pending'] == drawn['sampled']
