@@ -13,6 +13,8 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Added
 
+- **Preset schemas and axes.** `GET /serving_profiles/schema`, `/cluster_profiles/schema`, `/assist_loop_presets/schema` and `/near_dup_profiles/schema` serve `{kind, axes, json_schema}`: the JSON Schema of the body, generated from the model that validates it (every field now has a description), and where the kind can be activated (`axis`, `label`, and the body `target` a cluster profile axis serves). Activating a cluster profile on the axis of another target is `422 axis_target_mismatch`.
+- **Embedding space builds and evaluation.** `GET /embedding/spaces` names each space's newest re-index run (`run_id`, `run_mode`, `run_status`), and `GET /embedding/spaces/{space_key}/evaluations?target=` lists the evaluation runs of a space with the verdict, metrics, sample and whether the run counts for promote (`counts_for_promote`, `evaluated_against_primary`).
 - **Table view.** Detections or images as rows with chosen columns, a server-side sort by header click, cursor paging and a column choice kept in the page address, on `GET /table` and `GET /table/columns`.
 - **Quality page.** Accuracy audit, near-duplicates and label history are tabs of `/quality` (`/quality/audit`, `/quality/near-duplicates`, `/quality/history`); the `/audit`, `/near-duplicates` and `/label-ops` pages are gone and the top bar has one Quality entry.
 - **Next steps.** The Dashboard and the empty Workspace show the served curation loop (`GET /next_steps`), and a near-duplicate group opens in the Workspace.

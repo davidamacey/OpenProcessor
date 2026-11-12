@@ -32,6 +32,10 @@ active revision is older than the saved one the row says "saved r3, active r2".
 
 The body is JSON text. The only check the page makes itself is that the text is a JSON object;
 every rule on the fields is the server's and appears when you press **Save**, one line per field.
+Beside the text, **Fields** lists every field of the body as the server describes it: its type,
+whether it is required, the default, the choices, the limits and what it does, at every depth
+(`refresh.max_deferral_s` for a field inside `refresh`). If the server cannot describe the fields,
+that is said there and you can still edit and save.
 
 - **Save** writes a new revision and never changes what is active. If someone saved a newer
   revision first, the server's answer is shown with **Reload** (drop your edits) and **Keep my
@@ -39,7 +43,8 @@ every rule on the fields is the server's and appears when you press **Save**, on
 - **Activate** asks what to activate (a cluster profile asks for items or region boxes), shows
   what is active now and what will be, and sends that as the guard. If the active document
   changed meanwhile, the server refuses, the page reads it again, and the dialog shows the
-  refusal.
+  refusal. A cluster profile whose target is items is refused on the region-box target and the
+  other way round; the dialog shows the server's message and nothing is activated.
 
-The routes serve no field descriptions, so the editor shows none; the body fields are listed in
-the [Presets guide](../../guides/presets.mdx).
+The targets Activate offers are the ones the server lists for the kind. The body fields are
+also in the [Presets guide](../../guides/presets.mdx).

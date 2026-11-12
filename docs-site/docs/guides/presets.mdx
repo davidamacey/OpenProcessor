@@ -11,8 +11,8 @@ revision it was made against (`expected_revision`, `null` creates the document),
 `409 revision_conflict`, activation names what it expects to replace, and a stale one is a `409`
 too. In Cropwright they are under **Settings, Presets and embedding spaces**
 (`/p/<project>/settings/presets/<kind>`); the user view is
-[Presets in Cropwright](../cropwright/user-guide/presets.md). Every kind has the same six routes:
-list, get, put, delete, activate and the active read.
+[Presets in Cropwright](../cropwright/user-guide/presets.md). Every kind has the same seven routes:
+list, get, put, delete, activate, the active read and the schema.
 
 | Preset | Path | Scope | What it holds |
 |---|---|---|---|
@@ -32,11 +32,26 @@ curl -s -X POST "$B/near_dup_profiles/strict/activate" -H 'content-type: applica
 curl -s -X DELETE "$B/near_dup_profiles/strict?expected_revision=1"
 ```
 
+`GET <collection>/schema` (for example `$B/near_dup_profiles/schema`, or
+`/curation/serving_profiles/schema`) answers `{kind, axes, json_schema}`. `json_schema` is the JSON
+Schema of the body, generated from the model the server validates with, so it lists every field with
+its type, default, choices, limits and description, with sub-models under `$defs`. `axes` lists
+where the kind can be activated (`axis`, a `label`, and for a cluster profile the body `target` the
+axis serves); the serving profile has none. Cropwright's field help and axis choice come from this
+route.
+
+```bash
+curl -s "$B/cluster_profiles/schema" | jq '.axes, .json_schema.properties.backend'
+```
+
 The serving profile is activated against the revision of the active-profile setting, not an
 `{name, revision}` ref: read `setting_revision` from `GET /curation/serving_profiles/active`
 (a `404` means none is active) and send it as `expected_revision`.
 
 Bodies are validated strictly when they are saved: unknown keys are refused, and a refusal is
 `422 validation_failed` with one line per field in `reasons`. `leak_cosine` may not exceed
-`dedup_cosine`. The routes serve no schema, so the field list is the one above and the interactive
-docs at `/docs`. A document is read at an older revision with `?revision=N`.
+`dedup_cosine`. A document is read at an older revision with `?revision=N`.
+
+A cluster profile body names its `target` (`item` or `region_box`) and is activated on the axis of
+that target: activating one on the other axis is `422 axis_target_mismatch`, with a message naming
+the profile, its target and the axis it belongs on, and nothing changes.
