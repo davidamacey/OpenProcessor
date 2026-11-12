@@ -127,18 +127,21 @@
       keyboardStore.registerAction('table.next_row', () => move(1, false), scope),
       keyboardStore.registerAction('table.extend_prev', () => move(-1, true), scope),
       keyboardStore.registerAction('table.extend_next', () => move(1, true), scope),
+      // Registered ahead of the page's card handler: this view's own scope is searched first.
       keyboardStore.registerAction(
-        'table.select_toggle',
+        'workspace.select_toggle',
         () => {
-          if (ctl.focusedId !== null) select(ctl.focusedId, false);
+          if (ctl.focusedId === null) return false;
+          select(ctl.focusedId, false);
         },
         scope,
       ),
       keyboardStore.registerAction(
-        'table.open_review',
+        'workspace.open_review',
         () => {
           const row = ctl.rows.find((r) => rowKey(r) === ctl.focusedId);
-          if (row) open(row);
+          if (!row) return false;
+          open(row);
         },
         scope,
       ),

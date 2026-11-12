@@ -388,25 +388,25 @@
       "modifiable": false
     },
     {
-      "context": "cluster",
+      "context": "workspace",
       "default": [
         "space"
       ],
-      "description": "Toggle the focused card in the selection.",
+      "description": "Toggle the focused card or row in the selection.",
       "group": null,
       "id": "workspace.select_toggle",
-      "label": "Select or deselect the focused card",
+      "label": "Select or deselect the focused card or row",
       "modifiable": true
     },
     {
-      "context": "cluster",
+      "context": "workspace",
       "default": [
         "enter"
       ],
-      "description": "Open Review at the focused card.",
+      "description": "Open Review at the focused card or row.",
       "group": null,
       "id": "workspace.open_review",
-      "label": "Open the focused card in Review",
+      "label": "Open the focused card or row in Review",
       "modifiable": false
     },
     {
@@ -452,28 +452,6 @@
       "id": "table.extend_next",
       "label": "Extend selection down",
       "modifiable": true
-    },
-    {
-      "context": "table",
-      "default": [
-        "space"
-      ],
-      "description": "Toggle the focused row in the selection.",
-      "group": null,
-      "id": "table.select_toggle",
-      "label": "Select or deselect the focused row",
-      "modifiable": true
-    },
-    {
-      "context": "table",
-      "default": [
-        "enter"
-      ],
-      "description": "Open Review at the focused row.",
-      "group": null,
-      "id": "table.open_review",
-      "label": "Open the focused row in Review",
-      "modifiable": false
     },
     {
       "context": "cluster",

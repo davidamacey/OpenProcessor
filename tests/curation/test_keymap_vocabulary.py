@@ -64,8 +64,14 @@ def test_table_context_serves_row_keys() -> None:
         'table.next_row': ('arrowdown',),
         'table.extend_prev': ('shift+arrowup',),
         'table.extend_next': ('shift+arrowdown',),
-        'table.select_toggle': ('space',),
-        'table.open_review': ('enter',),
     }
     for action_id, keys in expected.items():
         assert registry.actions[action_id].default == keys, action_id
+
+
+def test_select_and_open_review_are_one_workspace_action_for_every_view() -> None:
+    actions = load_registry().actions
+    for action_id in ('workspace.select_toggle', 'workspace.open_review'):
+        assert actions[action_id].context == 'workspace', action_id
+    assert 'table.select_toggle' not in actions
+    assert 'table.open_review' not in actions

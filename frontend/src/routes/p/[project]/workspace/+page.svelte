@@ -72,7 +72,7 @@
           }
           el.dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }));
         },
-        'cluster',
+        'workspace',
       ),
     ];
     return () => offs.forEach((off) => off());

@@ -223,16 +223,16 @@ const SEEDS: ActionSeed[] = [
   ],
   [
     'workspace.select_toggle',
-    'cluster',
+    'workspace',
     null,
-    'Select or deselect the focused card',
+    'Select or deselect the focused card or row',
     ['space'],
   ],
   [
     'workspace.open_review',
-    'cluster',
+    'workspace',
     null,
-    'Open the focused card in Review',
+    'Open the focused card or row in Review',
     ['enter'],
     { modifiable: false },
   ],
@@ -241,15 +241,6 @@ const SEEDS: ActionSeed[] = [
   ['table.next_row', 'table', null, 'Next row', ['arrowdown'], { modifiable: false }],
   ['table.extend_prev', 'table', null, 'Extend selection up', ['shift+arrowup']],
   ['table.extend_next', 'table', null, 'Extend selection down', ['shift+arrowdown']],
-  ['table.select_toggle', 'table', null, 'Select or deselect the focused row', ['space']],
-  [
-    'table.open_review',
-    'table',
-    null,
-    'Open the focused row in Review',
-    ['enter'],
-    { modifiable: false },
-  ],
 
   [
     'cluster.confirm',
