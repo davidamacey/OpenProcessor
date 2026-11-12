@@ -7,6 +7,7 @@
   import { apiErrorText } from '$lib/api_errors';
   import { formatTimestamp } from '$lib/format/date';
   import { editorHref } from '$lib/editor/editorUrl';
+  import NearDupGroupModal from '$components/nearDup/NearDupGroupModal.svelte';
   import type { ImageDetailResponse } from '$lib/types_images';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
 
@@ -14,11 +15,13 @@
 
   let detail = $state<ImageDetailResponse | null>(null);
   let error = $state<string | null>(null);
+  let groupOpen = $state(false);
 
   $effect(() => {
     const imageId = id;
     detail = null;
     error = null;
+    groupOpen = false;
     if (!imageId) return;
     const ctrl = new AbortController();
     getImage(imageId, ctrl.signal)
@@ -95,6 +98,14 @@
           onclick={() => ws.setScope({ kind: 'image', id: image.image_id })}
           >Show its items</button
         >
+        {#if image.near_dup}
+          <button
+            type="button"
+            class="btn"
+            data-testid="decide-near-dup"
+            onclick={() => (groupOpen = true)}>Keep or split this group</button
+          >
+        {/if}
         {#if image.near_dup?.is_representative}
           <button
             type="button"
@@ -107,5 +118,12 @@
         {/if}
       </div>
     </section>
+    {#if groupOpen && image.near_dup}
+      <NearDupGroupModal
+        level="image"
+        group={image.near_dup}
+        onclose={() => (groupOpen = false)}
+      />
+    {/if}
   {/if}
 </ViewState>

@@ -164,6 +164,19 @@
               title={DETECTOR_TOOLTIP}>detector {detector}</span
             >
           {/if}
+          {#if c.near_dup_group_count > 0}
+            <span
+              class="rounded border border-line-strong px-1.5 py-0.5 text-fg-2"
+              data-testid="cluster-near-dups"
+              title="The members belong to {c.near_dup_group_count} near-duplicate group{c.near_dup_group_count ===
+              1
+                ? ''
+                : 's'}"
+              >{c.near_dup_group_count} duplicate group{c.near_dup_group_count === 1
+                ? ''
+                : 's'}</span
+            >
+          {/if}
           {#if c.validation_state}
             <span
               class="rounded border border-line-strong px-1.5 py-0.5 text-fg-2"

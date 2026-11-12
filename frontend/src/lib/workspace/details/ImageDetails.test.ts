@@ -23,4 +23,31 @@ describe('ImageDetails', () => {
     (el.querySelector('[data-testid="lightbox-image"]') as HTMLElement).click();
     expect(ws.openLightbox).toHaveBeenCalledWith('img-1', h.textContent?.trim());
   });
+
+  it('opens the group decisions only for an image that is in a near-duplicate group', async () => {
+    vi.mocked(getImage).mockResolvedValue(imageDetail());
+    const plain = mountUi(ImageDetails, { ws: { setScope: vi.fn() }, id: 'img-1' });
+    await tick();
+    await tick();
+    flushSync();
+    expect(plain.querySelector('[data-testid="decide-near-dup"]')).toBeNull();
+
+    vi.mocked(getImage).mockResolvedValue(
+      imageDetail({
+        image: {
+          near_dup: {
+            group_id: 'g1',
+            purpose: 'dedup',
+            size: 3,
+            is_representative: false,
+          },
+        },
+      }),
+    );
+    const grouped = mountUi(ImageDetails, { ws: { setScope: vi.fn() }, id: 'img-2' });
+    await tick();
+    await tick();
+    flushSync();
+    expect(grouped.querySelector('[data-testid="decide-near-dup"]')).not.toBeNull();
+  });
 });

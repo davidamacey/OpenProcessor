@@ -6,7 +6,7 @@
 import { listImages } from '$lib/api_images';
 import { createPager } from '$lib/pager.svelte';
 import { createSelection } from '$lib/selection.svelte';
-import type { ImageCardWire } from '$lib/types_images';
+import type { ImageCardWire, NearDupFilter } from '$lib/types_images';
 import type { ItemFilterQuery } from '$lib/types_itemFilter';
 import type { HiddenCounts } from '$lib/types';
 import type { SortOption } from '$lib/types_cursor';
@@ -24,6 +24,7 @@ export type GalleryStatus = 'loading' | 'error' | 'empty' | 'ready';
 
 export function createImageGalleryController(deps: ImageGalleryDeps) {
   let unlabeledOnly = $state(false);
+  let nearDup = $state<NearDupFilter | null>(null);
   let sortApplied = $state<string | null>(null);
   let sortOptions = $state<SortOption[]>([]);
   let emptyMessage = $state<string | null>(null);
@@ -32,7 +33,7 @@ export function createImageGalleryController(deps: ImageGalleryDeps) {
   const selection = createSelection({ plainClick: 'replace' });
 
   const query = () =>
-    imageListQuery(deps.itemQuery(), { unlabeledOnly, sort: deps.sortId() });
+    imageListQuery(deps.itemQuery(), { unlabeledOnly, sort: deps.sortId(), nearDup });
 
   const pager = createPager<ImageCardWire>({
     fetchPage: async (cursor) => {
@@ -96,6 +97,13 @@ export function createImageGalleryController(deps: ImageGalleryDeps) {
     },
     set unlabeledOnly(v: boolean) {
       unlabeledOnly = v;
+    },
+    /** Which images by near-duplicate role (the served `near_dup` filter); null = all. */
+    get nearDup() {
+      return nearDup;
+    },
+    set nearDup(v: NearDupFilter | null) {
+      nearDup = v;
     },
     /** Changes with anything that re-fetches the list; the view reloads on it. */
     get queryKey() {

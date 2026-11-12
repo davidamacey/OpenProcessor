@@ -74,3 +74,13 @@ describe('ClusterGridCard name', () => {
     expect(el.textContent).toContain('needs label');
   });
 });
+
+describe('ClusterGridCard duplicates', () => {
+  it('shows how many duplicate groups the members are in, and nothing when none', () => {
+    const chip = (el: HTMLElement) =>
+      el.querySelector('[data-testid="cluster-near-dups"]')?.textContent?.trim();
+    expect(chip(render({ near_dup_group_count: 3 }))).toBe('3 duplicate groups');
+    expect(chip(render({ near_dup_group_count: 1 }))).toBe('1 duplicate group');
+    expect(chip(render({ near_dup_group_count: 0 }))).toBeUndefined();
+  });
+});

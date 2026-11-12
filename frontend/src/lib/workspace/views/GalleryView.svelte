@@ -9,9 +9,27 @@
   import SortSelect from '$components/workspace/SortSelect.svelte';
   import EmptyNextSteps from '$components/workspace/EmptyNextSteps.svelte';
   import ViewState from '$components/state/ViewState.svelte';
+  import Segmented from '$components/ui/Segmented.svelte';
+  import type { NearDupFilter } from '$lib/types_images';
   import ImageGrid from '$components/images/ImageGrid.svelte';
   import { createImageGalleryController } from '$lib/images/imageGalleryController.svelte';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
+
+  /** The served `near_dup` values, in plain words; `all` leaves the filter off. */
+  const NEAR_DUP_OPTIONS = [
+    { value: 'all', label: 'All images' },
+    {
+      value: 'representative',
+      label: 'One per group',
+      title: 'Collapse each duplicate group to its representative',
+    },
+    {
+      value: 'member',
+      label: 'Extra copies',
+      title: 'Images in a group that are not its representative',
+    },
+    { value: 'none', label: 'Not duplicated', title: 'Images in no duplicate group' },
+  ];
 
   let { ws }: { ws: WorkspaceController } = $props();
 
@@ -81,6 +99,13 @@
       >
         Has unlabelled objects
       </button>
+      <Segmented
+        label="Duplicates"
+        size="sm"
+        options={NEAR_DUP_OPTIONS}
+        value={gallery.nearDup ?? 'all'}
+        onchange={(v) => (gallery.nearDup = v === 'all' ? null : (v as NearDupFilter))}
+      />
       {#if gallery.sortOptions.length > 0}
         <SortSelect
           testid="gallery-sort"
