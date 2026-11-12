@@ -336,3 +336,25 @@ def test_moving_a_human_deleted_box_keeps_the_detector_anchor(world: Any) -> Non
     )
     assert _patch(_client(world, FakePE()), MOVED, 0).status_code == 200
     assert world.docs(ITEMS)['it-1']['detector_bbox_norm'] == ORIGINAL
+
+
+def test_a_crop_read_after_the_move_never_writes_the_cache_back(
+    world: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only ingest writes crops into the cache, and it skips a geometry-locked item; a read between
+    the move and the eviction can therefore not put the old crop back under the same id."""
+    from src.services.curation import crop_bytes
+
+    cache = tmp_path / 'cache'
+    cached = crop_cache_file(cache, 'it-1')
+    cached.parent.mkdir(parents=True)
+    cached.write_bytes(b'old crop')
+    cfg = SimpleNamespace(items_index=ITEMS, crop_cache_dir=str(cache), crop_max_side=0)
+    monkeypatch.setattr(geometry_service, 'get_curation_config', lambda: cfg)
+    monkeypatch.setattr(crop_bytes, 'get_curation_config', lambda: cfg)
+    assert _patch(_client(world, FakePE()), MOVED, 0).status_code == 200
+    path = world.docs(ITEMS)['it-1']['image_path']
+    fresh = crop_bytes.load_item_crop_jpeg('it-1', path, tuple(MOVED))  # type: ignore[arg-type]
+    assert fresh is not None
+    assert fresh != b'old crop'
+    assert not cached.exists()
