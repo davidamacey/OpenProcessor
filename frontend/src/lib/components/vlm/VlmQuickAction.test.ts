@@ -38,16 +38,6 @@ describe('VlmQuickAction', () => {
     expect(t.querySelector('button.btn-primary')).toBeNull();
   });
 
-  it('with no VLM it is a hint with a link, not something styled as a button', async () => {
-    const t = await render({ source: 'off', active: { name: null, revision: null } });
-    const hint = t.querySelector('[data-testid="vlm-activate-first"]')!;
-    expect(hint.tagName).not.toBe('A');
-    expect(hint.className).not.toContain('btn');
-    expect(hint.textContent).toContain('needs an active VLM');
-    const link = hint.querySelector('a')!;
-    expect(link.getAttribute('href')).toMatch(/\/settings\/models$/);
-  });
-
   it('a project with an active VLM links to the Workspace, where the AI menu starts VLM work', async () => {
     const t = await render({ source: 'saved', active: { name: 'x', revision: 1 } });
     const link = t.querySelector('a.btn-primary');

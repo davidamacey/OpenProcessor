@@ -26,12 +26,13 @@
 </script>
 
 {#if off}
-  <p class="text-body text-fg-2" data-testid="vlm-activate-first">
-    Assisting with the VLM needs an active VLM.
-    <a class="text-accent-text underline" href={resolve(projectHref('/settings/models'))}
-      >Activate one in Models settings</a
-    >
-  </p>
+  <a
+    class="btn"
+    data-testid="vlm-activate-first"
+    href={resolve(projectHref('/settings/models'))}
+    title="This project has no VLM. Activate one on the Models settings page."
+    >Assist with the VLM: activate one first</a
+  >
 {:else}
   <a
     class="btn btn-primary"
