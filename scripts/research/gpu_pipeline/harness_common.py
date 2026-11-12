@@ -14,9 +14,14 @@ import time
 from dataclasses import dataclass, field
 from importlib import metadata
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+
+
+if TYPE_CHECKING:
+    import argparse
+    from collections.abc import Callable
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -190,6 +195,27 @@ def paired_bootstrap_ratio(
         'hi': float(np.percentile(boot, 97.5)),
         'pairs': float(a.size),
     }
+
+
+def run_mode(
+    p: argparse.ArgumentParser,
+    args: argparse.Namespace,
+    argv: list[str] | None,
+    files: list[Path],
+    *,
+    cpu_smoke: Callable[[list[Path]], dict[str, Any]],
+    run_gpu: Callable[[argparse.Namespace, list[Path]], dict[str, Any]],
+    profile_gpu: Callable[[argparse.Namespace, list[str]], dict[str, Any]],
+) -> dict[str, Any]:
+    """The result body of ``args.mode``: ``cpu-smoke`` needs no GPU; ``run`` and ``profile``
+    need both plans and a GPU index."""
+    if args.mode == 'cpu-smoke':
+        return cpu_smoke(files)
+    if None in (args.det_plan, args.pe_plan, args.gpu_index):
+        p.error('run and profile need --det-plan, --pe-plan and --gpu-index')
+    if args.mode == 'run':
+        return run_gpu(args, files)
+    return profile_gpu(args, argv if argv is not None else sys.argv[1:])
 
 
 def write_json(path: Path, obj: Any) -> None:
