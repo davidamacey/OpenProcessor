@@ -312,6 +312,7 @@ export type ClassSourceRole =
   | 'label_import'
   | 'open_vocab'
   | 'propagated'
+  | 'detector'
   | (string & {});
 
 /** One `class_source` value this deployment can write. */
