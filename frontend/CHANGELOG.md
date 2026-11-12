@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- One "VLM" menu in the Workspace view bar, shown only while the project has an active VLM: Assist on the selection (or the scope), the auto-label loop with its status on the button, and the Auto-label run with its settings.
 - Map is a Workspace view with area filters: served counts ("1,920 located · 88 without location"), cells and single-photo pins, a cell's served summary with its first 12 image cards, and Shift+drag or lasso area selection that becomes a filter chip for every view.
 - Review's item details are the Workspace details panel: the Review pane and the panel no longer repeat the class, label source, scores, VLM answer and source image, and the pane's own Details disclosure is gone.
 - Review has the semantic search box: a text query runs over the Workspace query (filter, queue and its filters) and its results replace the queue, with each match score.
@@ -20,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- The Dashboard Auto-label panel and the Clusters auto-label loop panel: both live in the Workspace VLM menu. The Dashboard action now links to the menu (or to Models settings when no VLM is active).
 - `/map`: the Map is a Workspace view (`/workspace?view=map`) with area filters; its crop side panel is the cell details.
 - `/review`: Review is a Workspace view (`/workspace?view=review&queue=<queue>`); the top-bar Review link, the Review tab bar, the strategy row, the diverse overlay, the semantic search box on Review, its own filter bar and its own class picker are gone (Review uses the Workspace filter and class picker).
 - `/clusters` and `/clusters/[id]` (open a cluster with `/workspace?view=clusters&scope=cluster:<uid>`), the class sidebar and the cluster toolbar.
