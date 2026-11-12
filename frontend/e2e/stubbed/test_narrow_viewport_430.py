@@ -159,6 +159,7 @@ def _stub_common(stub) -> None:
                     unarchivable=True,
                 )
             ],
+            default_slug=LONG_SLUG,
         ),
     )
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
