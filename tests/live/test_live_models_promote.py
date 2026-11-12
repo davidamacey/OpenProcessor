@@ -5,8 +5,7 @@ detector the test builds inside the API image), the ``model_export`` job and its
 ``models`` registry version, and the promote route's gates against a run the fake trainer
 finished. What is not: the TensorRT build. ``export-worker`` is ``fake_consumers.py``'s
 ``model_export`` handler, which completes a job without building an engine, so ``triton_loaded``
-stays false and no engine exists; likewise no ONNX is written for a promote, so a forced promote
-stops at the ONNX check. Both end states are asserted, not skipped.
+stays false and no engine exists. The promote success path is ``test_live_train_promote.py``.
 """
 
 from __future__ import annotations
@@ -102,7 +101,7 @@ def test_export_refuses_a_bad_name_and_an_unknown_model(api: Any) -> None:
     assert unknown.status_code == 404, unknown.text
 
 
-def _finished_run(api: Any) -> str:
+def finished_run(api: Any) -> str:
     exported = api.post(f'{API_PREFIX}/projects/default/export/yolo', json={'version_tag': 'promo'})
     assert exported.status_code == 200, exported.text
     started = api.post(
@@ -126,8 +125,8 @@ def _finished_run(api: Any) -> str:
     return str(job_id)
 
 
-def test_promote_is_gated_then_stops_at_the_missing_onnx(api: Any) -> None:
-    job_id = _finished_run(api)
+def test_promote_is_gated_below_the_score_bar(api: Any) -> None:
+    job_id = finished_run(api)
     base = f'{API_PREFIX}/projects/default/train'
     body = {'triton_name': f'promoted_{uuid.uuid4().hex[:6]}'}
 
@@ -136,20 +135,5 @@ def test_promote_is_gated_then_stops_at_the_missing_onnx(api: Any) -> None:
     detail = gated.json()['detail']
     assert detail['failures'], detail
     assert detail['force_allowed'] is True, detail
-
-    forced = api.post(f'{base}/promote/{job_id}', params={'force': True}, json=body)
-    # The fake trainer wrote no ONNX export: forced past the score gate, the route still refuses
-    # (404) or the job ends failed, and nothing is left promoted.
-    if forced.status_code == 202:
-        promote_id = forced.json()['promote_id']
-        final = wait_for_state(
-            lambda: api.get(f'{base}/promote/{job_id}/jobs/{promote_id}').json(),
-            lambda s: s.get('status') in ('done', 'failed'),
-            timeout=120,
-        )
-        assert final['status'] == 'failed', final
-        assert final['error'], final
-    else:
-        assert forced.status_code in (404, 422), forced.text
     manifest = api.get(f'{base}/manifest/{job_id}').json()
     assert manifest.get('promoted_to') is None, manifest

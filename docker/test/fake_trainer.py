@@ -8,7 +8,8 @@ endpoints can be exercised against a real counterparty instead of a mock::
 
 Per run: ``running`` for ``FAKE_TRAINER_EPOCHS`` epochs (one per ``FAKE_TRAINER_EPOCH_S``
 seconds), then ``completed`` with a manifest stored in ``training_runs`` and a run log under the
-run's artifact prefix. A cancel request is seen at the next epoch boundary. It never touches a GPU,
+run's artifact prefix. A cancel request is seen at the next epoch boundary. On a finished run it also writes ``best.pt`` (placeholder bytes) and a real tiny ``best.onnx``
+(``fake_onnx.py``) so a promote succeeds. It never touches a GPU,
 never loads a model and never reads OpenSearch.
 """
 
@@ -16,7 +17,10 @@ from __future__ import annotations
 
 import asyncio
 import os
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
+
+from fake_onnx import build_detector_onnx
 
 from src.clients.storage.roots import build_rooted_store
 from src.config.storage import storage_root_paths
@@ -31,6 +35,8 @@ if TYPE_CHECKING:
 
 TOTAL_EPOCHS = int(os.environ.get('FAKE_TRAINER_EPOCHS', '3'))
 EPOCH_S = float(os.environ.get('FAKE_TRAINER_EPOCH_S', '1'))
+# best.pt and its best.onnx sibling (what a promote reads) live under the harness data mount.
+RUNS_DIR = Path(os.environ.get('FAKE_TRAINER_RUNS_DIR', '/verify-data/fake_runs'))
 EVAL = {'map50': 0.5, 'map50_95': 0.25}
 
 app = make_app(include=['fake_trainer'])
@@ -51,6 +57,11 @@ async def fake_train(ctx: JobContext) -> dict[str, Any]:
         log.append(f'{ctx.job_id} epoch {epoch}/{TOTAL_EPOCHS}')
         await ctx.progress(epoch, TOTAL_EPOCHS, 'running')
     cancelled = epoch < TOTAL_EPOCHS
+    checkpoint = RUNS_DIR / str(ctx.job_id) / 'weights' / 'best.pt'
+    if not cancelled:
+        checkpoint.parent.mkdir(parents=True, exist_ok=True)
+        checkpoint.write_bytes(b'fake checkpoint')
+        build_detector_onnx(checkpoint.with_suffix('.onnx'))
     log.append(f'{ctx.job_id} {"cancelled" if cancelled else "finished"}')
     store.write_atomic(log_key, ('\n'.join(log) + '\n').encode())
     manifest: dict[str, Any] = {
@@ -61,7 +72,7 @@ async def fake_train(ctx: JobContext) -> dict[str, Any]:
         'results': {
             'final_state': 'cancelled' if cancelled else 'finished',
             'eval': None if cancelled else EVAL,
-            'checkpoint_path': None if cancelled else '/runs/fake-run/weights/best.pt',
+            'checkpoint_path': None if cancelled else str(checkpoint),
         },
         'promoted_to': None,
     }
