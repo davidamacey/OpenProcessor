@@ -58,4 +58,13 @@ describe('/train cohort definitions come from GET /training_cohorts?class_id=', 
     expect(src).not.toMatch(/runCohortQuery\([^)]*,\s*1\s*,/);
     expect(src).toMatch(/c\.count/);
   });
+
+  it('a hand-declared cohort has no served count and says so instead of a spinner', () => {
+    const panel = readFileSync(
+      path.resolve(here, '../../../../lib/components/train/TrainingCohortsPanel.svelte'),
+      'utf-8',
+    );
+    expect(panel).toMatch(/cohort\.count === undefined/);
+    expect(panel).toMatch(/Count not available/);
+  });
 });
