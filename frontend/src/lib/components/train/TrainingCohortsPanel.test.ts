@@ -86,7 +86,7 @@ describe('TrainingCohortsPanel', () => {
   it('reads the matrix in one request, never one per class, and hides empty rows', async () => {
     const el = await render();
     expect(urls.filter((u) => u.includes('training_cohorts'))).toHaveLength(1);
-    expect(classes(el)).toEqual(['car', 'tram']);
+    expect(classes(el)).toEqual(['tram', 'car']);
     expect(el.querySelector('[data-testid="cohorts-hidden"]')!.textContent).toContain(
       '1 class with',
     );
@@ -97,7 +97,7 @@ describe('TrainingCohortsPanel', () => {
     const box = el.querySelector<HTMLInputElement>('[data-testid="cohorts-hide-empty"]')!;
     box.click();
     flushSync();
-    expect(classes(el)).toEqual(['bus', 'car', 'tram']);
+    expect(classes(el)).toEqual(['tram', 'car', 'bus']);
   });
 
   it('the filter keeps the classes that match', async () => {
@@ -109,18 +109,42 @@ describe('TrainingCohortsPanel', () => {
     expect(classes(el)).toEqual(['tram']);
   });
 
-  it('a class count opens the preview in a Drawer; a detector label or the undecided column does not', async () => {
+  it('a count opens the preview in a Drawer; a zero has no link', async () => {
     const el = await render();
     const buttons = [...el.querySelectorAll('tbody button')];
     expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual([
+      'Preview 3 Detector proposals not decided for tram',
+      'Preview 1 Detector proposals not decided for car',
       'Preview 9 Validated for car',
     ]);
-    (buttons[0] as HTMLButtonElement).click();
+    (buttons.at(-1) as HTMLButtonElement).click();
     await vi.waitFor(() => {
       flushSync();
       expect(document.querySelector('[data-testid="drawer"]')).not.toBeNull();
     });
     expect(document.querySelector('[data-testid="cohort-preview"]')).not.toBeNull();
     expect(urls.some((u) => u.includes('/crops'))).toBe(true);
+  });
+
+  it('a detector-only cell previews by the detector class name and the to_label queue, not a class', async () => {
+    const el = await render();
+    const btn = [...el.querySelectorAll('tbody button')].find((b) =>
+      b.getAttribute('aria-label')?.includes('for tram'),
+    ) as HTMLButtonElement;
+    expect(btn).toBeDefined();
+    btn.click();
+    await vi.waitFor(() =>
+      expect(urls.some((u) => u.includes('review_tab=to_label'))).toBe(true),
+    );
+    const u = urls.find((x) => x.includes('review_tab=to_label'))!;
+    expect(u).toContain('detector_class_name=tram');
+    expect(new URL(u, 'http://x').searchParams.has('class_name')).toBe(false);
+  });
+
+  it('opens sorted by what is still detector-only, largest first, and that column comes right after Class', async () => {
+    const el = await render();
+    const heads = [...el.querySelectorAll('thead th')].map((h) => h.textContent?.trim());
+    expect(heads[1]).toContain('Detector proposals not decided');
+    expect(classes(el)).toEqual(['tram', 'car']);
   });
 });

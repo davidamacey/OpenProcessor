@@ -184,7 +184,7 @@ def test_train_cohorts_are_one_served_matrix(stub, page, app_url):
         )
         # Empty classes are hidden by default; the detector-only label is a row of its own.
         expect(table.get_by_role('cell', name='unused')).to_have_count(0)
-        expect(table.get_by_role('cell', name='tram')).to_be_visible()
+        expect(table.get_by_role('cell', name='tram detector label')).to_be_visible()
         table.scroll_into_view_if_needed()
     save_screens(page, 'workflow_ux-e', 'train-cohorts', desktop=1600)
     assert len(reads) == 2

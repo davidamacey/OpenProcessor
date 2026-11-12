@@ -35,9 +35,9 @@ export interface CohortCell {
   column: CohortColumn;
 }
 
-/** The "detector proposals not decided" cohort is counted by the detector's own label, so a
- *  class row's count there is not a class filter: it has no preview of its own. */
-const UNDECIDED_ID = 'detector_proposals';
+/** The "detector proposals not decided" cohort: items with no class yet, counted (and previewed)
+ *  by the detector's own class name (`detector_class_name`), not by a class. */
+export const UNDECIDED_ID = 'detector_proposals';
 
 export function createTrainCohortsController() {
   let summary = $state<TrainingCohortSummary | null>(null);
@@ -82,11 +82,9 @@ export function createTrainCohortsController() {
 
   /** A cell opens a preview when its class is in the registry and its cohort is a class filter. */
   function previewable(row: CohortRow, column: CohortColumn): boolean {
-    return (
-      row.class_id != null &&
-      column.id !== UNDECIDED_ID &&
-      (row.counts[column.id] ?? 0) > 0
-    );
+    if ((row.counts[column.id] ?? 0) === 0) return false;
+    // The undecided cohort is counted by the detector's own label, so a detector-only row has one.
+    return column.id === UNDECIDED_ID || row.class_id != null;
   }
 
   // eslint-disable-next-line svelte/prefer-svelte-reactivity -- rebuilt whole on every $derived recompute and never mutated; reactivity comes from the $derived
@@ -110,6 +108,15 @@ export function createTrainCohortsController() {
     const classId = row.class_id ?? undefined;
     const className = row.class_name;
     const kind = cohortEndpointKind(path);
+
+    if (column.id === UNDECIDED_ID) {
+      const res = await getCrops({
+        review_tab: typeof params.review_tab === 'string' ? params.review_tab : undefined,
+        detector_class_name: [className],
+        limit: pageSize,
+      });
+      return { total: res.total, items: res.items };
+    }
 
     if (kind === 'training_candidates') {
       const mode = params.mode as TrainingCohortMode;

@@ -18,7 +18,10 @@
   import type { CohortRow } from '$lib/api_train';
   import type { RegionBrowseItem } from '$lib/api_regions';
   import type { Crop } from '$lib/types';
-  import type { TrainCohortsController } from '$lib/train/trainCohortsController.svelte';
+  import {
+    UNDECIDED_ID,
+    type TrainCohortsController,
+  } from '$lib/train/trainCohortsController.svelte';
 
   interface Props {
     ctl: TrainCohortsController;
@@ -33,13 +36,16 @@
 
   const columns = $derived<Column<CohortRow>[]>([
     { id: 'class', label: 'Class', value: (r) => r.class_name },
-    ...(ctl.summary?.cohorts ?? []).map((c) => ({
-      id: c.id,
-      label: c.label,
-      title: c.description,
-      align: 'right' as const,
-      value: (r: CohortRow) => r.counts[c.id] ?? 0,
-    })),
+    // What is still detector-only comes first: it is what the user labels next.
+    ...[...(ctl.summary?.cohorts ?? [])]
+      .sort((a, b) => Number(b.id === UNDECIDED_ID) - Number(a.id === UNDECIDED_ID))
+      .map((c) => ({
+        id: c.id,
+        label: c.label,
+        title: c.description,
+        align: 'right' as const,
+        value: (r: CohortRow) => r.counts[c.id] ?? 0,
+      })),
   ]);
   const fmt = (n: number) => n.toLocaleString();
   const hiddenText = $derived(
@@ -101,7 +107,9 @@
         rows={ctl.rows}
         rowKey={(r) => `${r.kind}:${r.class_id ?? r.class_name}`}
         label="Training cohorts by class"
-        initialSort={{ column: 'class', dir: 'asc' }}
+        initialSort={ctl.summary.cohorts.some((c) => c.id === UNDECIDED_ID)
+          ? { column: UNDECIDED_ID, dir: 'desc' }
+          : { column: 'class', dir: 'asc' }}
       >
         {#snippet cell(row, col)}
           {#if col.id === 'class'}

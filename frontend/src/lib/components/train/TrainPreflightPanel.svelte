@@ -32,6 +32,15 @@
       <span class="text-xs text-fg-2">{preflight.summary ?? ''}</span>
     {/if}
   </header>
+  {#if !preflight && !preflighting}
+    <p class="text-xs text-fg-3" data-testid="preflight-empty">
+      Not checked yet. Run the preflight to check the dataset before a run.
+    </p>
+  {:else if preflight && preflight.checks.length === 0}
+    <p class="text-xs text-fg-3" data-testid="preflight-empty">
+      No checks were reported for this dataset.
+    </p>
+  {/if}
   {#if preflight}
     {#if attention.length > 0}
       <ul class="space-y-1.5" data-testid="preflight-open-rows">

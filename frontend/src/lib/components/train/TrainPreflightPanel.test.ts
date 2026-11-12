@@ -45,4 +45,18 @@ describe('TrainPreflightPanel', () => {
       el.querySelector('[data-testid="preflight-ok-rows"] summary')!.textContent,
     ).toContain('1 check passed');
   });
+
+  it('never shows a bare header: no report and an empty report each say so', () => {
+    const none = mountUi(TrainPreflightPanel, { preflight: null, preflighting: false });
+    expect(none.querySelector('[data-testid="preflight-empty"]')!.textContent).toContain(
+      'Not checked yet',
+    );
+    const empty = mountUi(TrainPreflightPanel, {
+      preflight: { blocked: false, summary: '', checks: [] } as PreflightReport,
+      preflighting: false,
+    });
+    expect(empty.querySelector('[data-testid="preflight-empty"]')!.textContent).toContain(
+      'No checks',
+    );
+  });
 });
