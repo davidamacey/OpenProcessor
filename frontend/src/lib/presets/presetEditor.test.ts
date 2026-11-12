@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { PRESET_SCHEMAS } from '$lib/test/fixtures/presetSchemas';
 import { ApiError } from '$lib/api_errors';
 import type { PresetDoc } from '$lib/types_presets';
 import { createPresetEditor } from './presetEditorController.svelte';
@@ -19,6 +20,7 @@ const doc = (revision: number, body: Record<string, unknown>): PresetDoc => ({
 
 function setup(put = vi.fn()) {
   const deps = {
+    getPresetSchema: vi.fn().mockResolvedValue(PRESET_SCHEMAS.near_dup_profile),
     getPreset: vi
       .fn()
       .mockResolvedValue(doc(2, { version: 1, item: { dedup_cosine: 0.97 } })),

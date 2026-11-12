@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '$lib/api_errors';
 import type { ActivePreset } from '$lib/types_presets';
 import { PresetActive } from './presetActive.svelte';
+import { PRESET_SCHEMAS } from '$lib/test/fixtures/presetSchemas';
 import { PRESET_KINDS, presetKindBySlug } from './presetKinds';
 
 const kind = (slug: string) => presetKindBySlug(slug)!;
+const schemaOf = vi.fn(async (k: keyof typeof PRESET_SCHEMAS) => PRESET_SCHEMAS[k]);
 
 const entry = (over: Partial<ActivePreset>): ActivePreset => ({
   axis: 'near_dup',
@@ -14,6 +16,39 @@ const entry = (over: Partial<ActivePreset>): ActivePreset => ({
   activated_at: null,
   setting_revision: null,
   ...over,
+});
+
+describe('PresetActive schema', () => {
+  it('reads the served schema of the kind once, however often it reloads', async () => {
+    const schema = vi.fn().mockResolvedValue(PRESET_SCHEMAS.near_dup_profile);
+    const a = new PresetActive(kind('near-dup-profiles'), {
+      getPresetSchema: schema,
+      getActivePreset: vi.fn().mockResolvedValue(entry({})),
+    });
+    await a.load();
+    await a.load();
+    expect(schema).toHaveBeenCalledTimes(1);
+    expect(schema).toHaveBeenCalledWith('near_dup_profile');
+    expect(a.schema?.kind).toBe('near_dup_profile');
+    expect(a.schemaError).toBeNull();
+  });
+
+  it('a schema that cannot be read is shown as served and does not block the active read', async () => {
+    const a = new PresetActive(kind('near-dup-profiles'), {
+      getPresetSchema: vi.fn().mockRejectedValue(
+        new ApiError(500, '/x', {
+          detail: { error: 'internal', message: 'schema broke' },
+        }),
+      ),
+      getActivePreset: vi
+        .fn()
+        .mockResolvedValue(entry({ state: 'active', name: 'strict', revision: 2 })),
+    });
+    await a.load();
+    expect(a.schema).toBeNull();
+    expect(a.schemaError).toMatch(/schema broke/);
+    expect(a.activeOn('strict')).toEqual(['near_dup']);
+  });
 });
 
 describe('PresetActive', () => {
@@ -27,6 +62,7 @@ describe('PresetActive', () => {
       }),
     );
     const a = new PresetActive(kind('cluster-profiles'), {
+      getPresetSchema: schemaOf,
       getActivePreset: read as never,
     });
     await a.load();
@@ -45,6 +81,7 @@ describe('PresetActive', () => {
       .mockResolvedValueOnce(entry({ state: 'active', name: 'strict', revision: 3 }));
     const write = vi.fn().mockResolvedValue({});
     const a = new PresetActive(kind('near-dup-profiles'), {
+      getPresetSchema: schemaOf,
       getActivePreset: read,
       activatePreset: write,
     });
@@ -61,6 +98,7 @@ describe('PresetActive', () => {
   it('sends a null expected_active when nothing is active', async () => {
     const write = vi.fn().mockResolvedValue({});
     const a = new PresetActive(kind('assist-loop-presets'), {
+      getPresetSchema: schemaOf,
       getActivePreset: vi.fn().mockResolvedValue(entry({ axis: 'assist_loop_preset' })),
       activatePreset: write,
     });
@@ -79,6 +117,7 @@ describe('PresetActive', () => {
       }),
     );
     const a = new PresetActive(kind('near-dup-profiles'), {
+      getPresetSchema: schemaOf,
       getActivePreset: read,
       activatePreset: write,
     });
@@ -92,6 +131,7 @@ describe('PresetActive', () => {
   it('the serving profile is activated against the setting revision', async () => {
     const write = vi.fn().mockResolvedValue({});
     const a = new PresetActive(kind('serving-profiles'), {
+      getPresetSchema: schemaOf,
       getActiveServingProfile: vi.fn().mockResolvedValue(
         entry({
           axis: null,
@@ -110,6 +150,7 @@ describe('PresetActive', () => {
 
   it('a failed read keeps the served error and offers no activation', async () => {
     const a = new PresetActive(kind('near-dup-profiles'), {
+      getPresetSchema: schemaOf,
       getActivePreset: vi.fn().mockRejectedValue(new Error('down')),
     });
     await a.load();

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { PRESET_SCHEMAS } from '$lib/test/fixtures/presetSchemas';
 import { ApiError } from '$lib/api_errors';
 import type { PresetDoc } from '$lib/types_presets';
 import { createPresetList } from './presetListController.svelte';
@@ -20,6 +21,7 @@ const doc = (name: string, revision = 1, over: Partial<PresetDoc> = {}): PresetD
 
 function setup(over = {}) {
   const deps = {
+    getPresetSchema: vi.fn().mockResolvedValue(PRESET_SCHEMAS.near_dup_profile),
     listPresets: vi.fn().mockResolvedValue({ items: [doc('strict', 2)] }),
     getPreset: vi.fn().mockResolvedValue(doc('strict', 2)),
     putPreset: vi.fn().mockImplementation(async (_k, name: string) => doc(name)),

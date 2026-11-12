@@ -11,6 +11,7 @@
   import ConfigSavePanel from '$components/config/ConfigSavePanel.svelte';
   import PresetActivateDialog from '$components/presets/PresetActivateDialog.svelte';
   import PresetActiveSummary from '$components/presets/PresetActiveSummary.svelte';
+  import PresetSchemaHelp from '$components/presets/PresetSchemaHelp.svelte';
   import { createPresetEditor } from '$lib/presets/presetEditorController.svelte';
   import { presetKindBySlug, presetPath } from '$lib/presets/presetKinds';
   import { projectHref } from '$lib/projectPaths';
@@ -79,7 +80,7 @@
     {:else}
       <PresetActiveSummary active={ed.active} />
 
-      <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
         <section class="surface flex min-w-0 flex-col gap-3 p-4" aria-label="Body">
           <ConfigDescriptionField {ed} />
           <label class="flex flex-col gap-1 text-xs text-zinc-400">
@@ -106,16 +107,21 @@
           </div>
         </section>
 
-        <ConfigSavePanel
-          {ed}
-          report={null}
-          noun={kind.noun}
-          onsave={() => void doSave()}
-          onactivate={() => {
-            ed.active.clearAction();
-            activating = true;
-          }}
-        />
+        <div class="flex min-w-0 flex-col gap-4">
+          <ConfigSavePanel
+            {ed}
+            report={null}
+            noun={kind.noun}
+            onsave={() => void doSave()}
+            onactivate={() => {
+              ed.active.clearAction();
+              activating = true;
+            }}
+          />
+          <div class="max-h-[34rem] min-w-0 overflow-y-auto">
+            <PresetSchemaHelp schema={ed.active.schema} error={ed.active.schemaError} />
+          </div>
+        </div>
       </div>
 
       {#if activating && ed.doc}

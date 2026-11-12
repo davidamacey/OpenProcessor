@@ -64,6 +64,22 @@ const CASES: [string, string[]][] = [
     } satisfies Record<keyof T.PresetActiveWire, true>),
   ],
   [
+    'ResearchConfigSchema',
+    keys({
+      kind: true,
+      axes: true,
+      json_schema: true,
+    } satisfies Record<keyof T.PresetSchemaWire, true>),
+  ],
+  [
+    'ResearchAxis',
+    keys({
+      axis: true,
+      label: true,
+      target: true,
+    } satisfies Record<keyof T.PresetAxisWire, true>),
+  ],
+  [
     'ServingActive',
     keys({
       name: true,
@@ -104,6 +120,7 @@ describe('every preset route exists with the method the wrapper sends', () => {
       expect(Object.keys(doc.paths[path] ?? {}), `${method} ${path}`).toContain(method);
     has(base, 'get');
     has(`${base}/active`, 'get');
+    has(`${base}/schema`, 'get');
     has(`${base}/{name}`, 'get');
     has(`${base}/{name}`, 'put');
     has(`${base}/{name}`, 'delete');

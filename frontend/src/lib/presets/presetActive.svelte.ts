@@ -10,11 +10,12 @@ import {
   activateServingProfile,
   getActivePreset,
   getActiveServingProfile,
+  getPresetSchema,
   presetRefusalText,
 } from '$lib/api_presets';
 import { configErrorDetail } from '$lib/api_profiles';
 import type { ConfigErrorDetail } from '$lib/types_config';
-import type { ActivePreset } from '$lib/types_presets';
+import type { ActivePreset, PresetSchemaWire } from '$lib/types_presets';
 import type { PresetKind } from './presetKinds';
 
 export interface PresetActiveDeps {
@@ -22,12 +23,16 @@ export interface PresetActiveDeps {
   getActiveServingProfile: typeof getActiveServingProfile;
   activatePreset: typeof activatePreset;
   activateServingProfile: typeof activateServingProfile;
+  getPresetSchema: typeof getPresetSchema;
 }
 
 export class PresetActive {
   /** One entry per axis, in the kind's axis order; one for the serving profile. */
   entries = $state<ActivePreset[]>([]);
   loadError = $state<string | null>(null);
+  /** The JSON Schema of the kind's body, as served; read once. */
+  schema = $state<PresetSchemaWire | null>(null);
+  schemaError = $state<string | null>(null);
   busy = $state(false);
   actionError = $state<string | null>(null);
   errorDetail = $state<ConfigErrorDetail | null>(null);
@@ -40,6 +45,21 @@ export class PresetActive {
   }
 
   async load(): Promise<void> {
+    await Promise.all([this.#loadSchema(), this.#loadActive()]);
+  }
+
+  async #loadSchema(): Promise<void> {
+    if (this.schema) return;
+    try {
+      this.schema = await (this.#deps.getPresetSchema ?? getPresetSchema)(this.kind.id);
+      this.schemaError = null;
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      this.schemaError = presetRefusalText(e);
+    }
+  }
+
+  async #loadActive(): Promise<void> {
     const d = this.#deps;
     const { id, axes } = this.kind;
     try {

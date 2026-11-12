@@ -27,6 +27,42 @@ export interface PresetListResponse {
   items: PresetDoc[];
 }
 
+/** One node of a JSON Schema (the parts pydantic writes that the help reads). */
+export interface JsonSchemaNode {
+  $ref?: string;
+  $defs?: Record<string, JsonSchemaNode>;
+  type?: string;
+  description?: string;
+  default?: unknown;
+  enum?: unknown[];
+  const?: unknown;
+  anyOf?: JsonSchemaNode[];
+  properties?: Record<string, JsonSchemaNode>;
+  required?: string[];
+  items?: JsonSchemaNode;
+  additionalProperties?: boolean | JsonSchemaNode;
+  minimum?: number;
+  maximum?: number;
+  exclusiveMinimum?: number;
+  exclusiveMaximum?: number;
+  minLength?: number;
+  minItems?: number;
+}
+
+/** `ResearchAxis`: a place a project kind can be active. `target` is the body `target` the axis serves. */
+export interface PresetAxisWire {
+  axis: string;
+  label: string;
+  target: string | null;
+}
+
+/** `ResearchConfigSchema`: the JSON Schema of a kind's body and the axes it activates on, as served. */
+export interface PresetSchemaWire {
+  kind: string;
+  axes: PresetAxisWire[];
+  json_schema: JsonSchemaNode;
+}
+
 /** `ResearchConfigPut`: `expected_revision: null` creates the document. */
 export interface PresetPutRequest {
   body: PresetBody;

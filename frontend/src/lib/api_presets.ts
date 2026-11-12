@@ -16,6 +16,7 @@ import type {
   PresetKindId,
   PresetListResponse,
   PresetPutRequest,
+  PresetSchemaWire,
   ServingActivateRequest,
   ServingActiveWire,
 } from '$lib/types_presets';
@@ -46,6 +47,14 @@ export function listPresets(
   signal?: AbortSignal,
 ): Promise<PresetListResponse> {
   return apiFetch<PresetListResponse>(collection(kind), {}, signal, opts(kind));
+}
+
+/** `GET /schema`: the JSON Schema of the kind's body, for the field help beside the editor. */
+export function getPresetSchema(
+  kind: PresetKindId,
+  signal?: AbortSignal,
+): Promise<PresetSchemaWire> {
+  return apiFetch<PresetSchemaWire>(`${collection(kind)}/schema`, {}, signal, opts(kind));
 }
 
 /** `GET /{name}`; `revision` reads an older one. */
