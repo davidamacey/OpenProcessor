@@ -37,6 +37,25 @@ class ClusterCard(TypedDict):
     labelled_count: int
     dominant_class_name: str | None
     dominant_count: int
+    display_name: Annotated[
+        str,
+        Field(
+            description='The one name a page shows for the cluster: its dominant class, else the '
+            "detector's most common class, else empty. The same rule an item's `display_name` "
+            'follows.'
+        ),
+    ]
+    display_name_kind: Annotated[
+        Literal['class', 'detector', 'none'],
+        Field(description='Where `display_name` came from.'),
+    ]
+    near_dup_group_count: Annotated[
+        int,
+        Field(
+            description='How many near-duplicate groups the members belong to; 0 when none of '
+            'them is in a group.'
+        ),
+    ]
     label_agreement: Annotated[
         float | None, Field(description="The top class's share of the labelled members.")
     ]

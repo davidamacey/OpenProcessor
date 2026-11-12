@@ -5,12 +5,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Final, cast
 
-from src.clients.occ_locks import is_locked_box, is_locked_geometry
+from src.clients.occ_locks import is_locked_box, is_locked_geometry, lock_includes
 from src.config import get_region_fields
 from src.domain.region_boxes import read_boxes
 from src.schemas.curation.images import BoxLabelKind, BoxTone, BoxView
 from src.services.curation.geometry_wire import geometry_lock_label, region_box_lock_label
-from src.services.curation.wire import item_display_name, parse_xyxy, region_box_name
+from src.services.curation.wire import (
+    DISPLAY_NAME_FIELDS,
+    item_display_name,
+    parse_xyxy,
+    region_box_name,
+)
 
 
 if TYPE_CHECKING:
@@ -19,6 +24,29 @@ if TYPE_CHECKING:
     from src.config import RegionFields
 
 UNLABELED_LABEL: Final = 'unlabeled'
+
+
+def box_source_fields() -> list[str]:
+    """The stored fields :func:`item_box_views` reads, for a query that draws the boxes of items
+    without fetching whole documents (the gallery card). Each part is declared beside the code
+    that reads it; ``tests/curation/test_image_box_names.py`` fails when the serializer reads a
+    field that is not here."""
+    return list(
+        dict.fromkeys(
+            [
+                'crop_id',
+                'bbox_norm',
+                'class_id',
+                'class_name',
+                'class_validated',
+                'class_excluded',
+                'test_holdout',
+                'geometry_revision',
+                *lock_includes(),
+                *DISPLAY_NAME_FIELDS,
+            ]
+        )
+    )
 
 
 def is_labeled(src: dict[str, Any]) -> bool:

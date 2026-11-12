@@ -246,3 +246,9 @@ class ServingActive(BaseModel):
     revision: int
     setting_revision: int
     body: dict[str, Any]
+
+
+class ServingActiveState(BaseModel):
+    """``GET /serving_profiles/active``: the active profile, or ``null`` when none was activated."""
+
+    active: ServingActive | None

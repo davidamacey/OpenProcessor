@@ -46,7 +46,7 @@ curl -s "$B/cluster_profiles/schema" | jq '.axes, .json_schema.properties.backen
 
 The serving profile is activated against the revision of the active-profile setting, not an
 `{name, revision}` ref: read `setting_revision` from `GET /curation/serving_profiles/active`
-(a `404` means none is active) and send it as `expected_revision`.
+(`{"active": null}` means none is active) and send it as `expected_revision`.
 
 Bodies are validated strictly when they are saved: unknown keys are refused, and a refusal is
 `422 validation_failed` with one line per field in `reasons`. `leak_cosine` may not exceed

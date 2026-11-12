@@ -55,7 +55,10 @@ curl -s "$API/curation/projects/cars/clusters?sort=label_agreement_asc&flag=labe
 
 ## Card fields
 
-Besides size, dominant class and representatives, a card has `label_agreement` (share of the
+Besides size, dominant class and representatives, a card has `display_name` and
+`display_name_kind` (`class`, `detector` or `none`: the dominant class, else the detector's most
+common class, the same rule an item follows), `near_dup_group_count` (how many
+near-duplicate groups the members belong to), `label_agreement` (share of the
 labelled members naming the top class), `detector_top_class`, `detector_top_share`,
 `detector_conf_mean`, `validation_state`, `review_counts` per review tab,
 `needs_review_count` and `flags`. The response also carries `sort`, `sort_options`,

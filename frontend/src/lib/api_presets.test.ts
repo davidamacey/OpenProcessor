@@ -121,7 +121,7 @@ describe('preset wrappers', () => {
     expect(a).toMatchObject({ axis: 'clustering_region_box', state: 'off', name: null });
   });
 
-  it('the serving profile is activated against the setting revision; a 404 is none active', async () => {
+  it('the serving profile is activated against the setting revision; {active: null} is none active', async () => {
     const call = respond(200, { name: 'p', revision: 1, setting_revision: 4, body: {} });
     await activateServingProfile('p', { revision: 1, expected_revision: 3 });
     expect(call()).toEqual({
@@ -130,14 +130,14 @@ describe('preset wrappers', () => {
       body: { revision: 1, expected_revision: 3 },
     });
 
-    respond(200, { name: 'p', revision: 1, setting_revision: 4, body: {} });
+    respond(200, { active: { name: 'p', revision: 1, setting_revision: 4, body: {} } });
     expect(await getActiveServingProfile()).toMatchObject({
       state: 'active',
       name: 'p',
       setting_revision: 4,
     });
 
-    respond(404, { detail: { error: 'not_found', message: 'none active' } });
+    respond(200, { active: null });
     expect(await getActiveServingProfile()).toMatchObject({
       state: 'none',
       name: null,

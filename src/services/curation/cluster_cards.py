@@ -9,7 +9,7 @@ cards, and the response says when the aggregation was cut at ``max_clusters``.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from src.config.curation_accessors import items_index
 from src.config.project_context import current_project_id
@@ -23,6 +23,7 @@ from src.services.curation.cluster_representatives import partition_representati
 from src.services.curation.hidden_counts import hidden_counts
 from src.services.curation.image_join import ImageJoin, join_truncated
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
+from src.services.curation.wire import display_name_of
 from src.services.embedding_spaces.readers import item_write_fields
 from src.utils.class_names import normalize_class_name
 
@@ -123,6 +124,7 @@ def aggregation_body(params: ClusterListParams, embedding: WriteFields) -> dict[
         'validated': {'filter': {'term': {'class_validated': True}}},
         'latest_update': {'max': {'field': 'updated_at'}},
         'detector_top': {'terms': {'field': 'detector_class_name', 'size': 1}},
+        'near_dup_groups': {'cardinality': {'field': 'near_dup_group_id'}},
         'detector_conf': {'avg': {'field': 'detector_confidence'}},
         **review_aggs(embedding.vector_field),
     }
@@ -163,6 +165,8 @@ def bucket_to_card(bucket: dict[str, Any]) -> ClusterCard:
         tab: int(review.get(tab, {}).get('doc_count') or 0) for tab in CLUSTER_REVIEW_TABS
     }
     state: ValidationState = validation_state(size, validated_count)
+    detector_top = str(det_buckets[0]['key']) if det_buckets else None
+    named = display_name_of({'class_name': top_name, 'detector_class_name': detector_top}, '')
     return {
         'cluster_uid': str(bucket['key']),
         'display_no': None,
@@ -171,12 +175,17 @@ def bucket_to_card(bucket: dict[str, Any]) -> ClusterCard:
         'labelled_count': labelled_total,
         'dominant_class_name': top_name,
         'dominant_count': top_count,
+        'display_name': named['display_name'],
+        'display_name_kind': cast(
+            'Literal["class", "detector", "none"]', named['display_name_kind']
+        ),
+        'near_dup_group_count': int(bucket.get('near_dup_groups', {}).get('value') or 0),
         'label_agreement': label_agreement,
         'labelled_share': (labelled_total / size) if size else None,
         'is_unlabeled': labelled_total == 0,
         'updated_at': bucket.get('latest_update', {}).get('value_as_string'),
         'representatives': [],
-        'detector_top_class': str(det_buckets[0]['key']) if det_buckets else None,
+        'detector_top_class': detector_top,
         'detector_top_share': det_share,
         'detector_conf_mean': bucket.get('detector_conf', {}).get('value'),
         'validation_state': state,

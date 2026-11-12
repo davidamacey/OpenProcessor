@@ -72,6 +72,7 @@ from src.services.curation.export_readiness import (
     MANIFEST_GENERATION_KEY,
     NO_VALIDATED_ITEMS_REASON,
     NothingToExportError,
+    export_image_join,
     items_index_generation,
     validated_export_query,
 )
@@ -255,8 +256,9 @@ class GenericYoloExportService:
             raise ValueError(msg)
         started_at = datetime.now(UTC).isoformat()
         generation = await items_index_generation(self.opensearch, self.config.items_index)
+        join = await export_image_join(self.opensearch, item_filter)
         rows, skipped_items = await self._load_rows(
-            validated_export_query(await item_write_fields(), item_filter)
+            validated_export_query(await item_write_fields(), item_filter, join)
         )
         registry_file = await self.registry.snapshot()
         rows, id_map, dropped_unregistered = to_dense_ids(rows, registry_file)

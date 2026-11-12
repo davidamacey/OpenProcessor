@@ -148,7 +148,8 @@ def test_the_serving_routes_save_activate_and_refuse_a_stale_expected_revision(
     )
     assert put.status_code == 200, put.text
     assert put.json()['revision'] == 1
-    assert client.get('/curation/serving_profiles/active').status_code == 404
+    none_active = client.get('/curation/serving_profiles/active')
+    assert (none_active.status_code, none_active.json()) == (200, {'active': None})
 
     first = client.post('/curation/serving_profiles/standard/activate', json={})
     assert first.status_code == 200, first.text
@@ -163,7 +164,8 @@ def test_the_serving_routes_save_activate_and_refuse_a_stale_expected_revision(
         '/curation/serving_profiles/standard/activate', json={'expected_revision': setting}
     )
     assert again.status_code == 200
-    assert client.get('/curation/serving_profiles/active').json()['name'] == 'standard'
+    active = client.get('/curation/serving_profiles/active').json()['active']
+    assert (active['name'], active['setting_revision']) == ('standard', setting)
 
 
 def test_a_serving_profile_save_is_validated_and_optimistic(client: TestClient) -> None:

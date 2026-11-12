@@ -5578,6 +5578,21 @@
             "description": "That class as a share of the members that have a detector class.",
             "title": "Detector Top Share"
           },
+          "display_name": {
+            "description": "The one name a page shows for the cluster: its dominant class, else the detector's most common class, else empty. The same rule an item's `display_name` follows.",
+            "title": "Display Name",
+            "type": "string"
+          },
+          "display_name_kind": {
+            "description": "Where `display_name` came from.",
+            "enum": [
+              "class",
+              "detector",
+              "none"
+            ],
+            "title": "Display Name Kind",
+            "type": "string"
+          },
           "display_no": {
             "anyOf": [
               {
@@ -5644,6 +5659,11 @@
             ],
             "title": "Labelled Share"
           },
+          "near_dup_group_count": {
+            "description": "How many near-duplicate groups the members belong to; 0 when none of them is in a group.",
+            "title": "Near Dup Group Count",
+            "type": "integer"
+          },
           "needs_review_count": {
             "description": "review_counts['all']: the review queue sort key.",
             "title": "Needs Review Count",
@@ -5701,6 +5721,9 @@
           "labelled_count",
           "dominant_class_name",
           "dominant_count",
+          "display_name",
+          "display_name_kind",
+          "near_dup_group_count",
           "label_agreement",
           "labelled_share",
           "is_unlabeled",
@@ -38512,6 +38535,26 @@
           "body"
         ],
         "title": "ServingActive",
+        "type": "object"
+      },
+      "ServingActiveState": {
+        "description": "``GET /serving_profiles/active``: the active profile, or ``null`` when none was activated.",
+        "properties": {
+          "active": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ServingActive"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "active"
+        ],
+        "title": "ServingActiveState",
         "type": "object"
       },
       "SingleClassSplitCounts": {
@@ -77385,7 +77428,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ServingActive"
+                  "$ref": "#/components/schemas/ServingActiveState"
                 }
               }
             },

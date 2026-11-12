@@ -1458,7 +1458,9 @@ no longer exist.
 
 Cards. `ClusterCard` has `cluster_uid`, `display_no` (a short number for the screen), `size`,
 `labelled_count`, `labelled_share`, `validated_count`, `dominant_class_name`, `dominant_count`,
-`label_agreement`, `is_unlabeled`, the quality fields below, `representatives` and `updated_at`.
+`display_name` and `display_name_kind` (`class`, `detector` or `none`: the dominant class, else the
+detector's most common class, as an item's `display_name` is chosen), `near_dup_group_count` (the near-duplicate groups its
+members belong to), `label_agreement`, `is_unlabeled`, the quality fields below, `representatives` and `updated_at`.
 `label_agreement` is the top class's share of the labelled members (`null` with none labelled).
 Frozen test-holdout and excluded items are never counted in any card number.
 

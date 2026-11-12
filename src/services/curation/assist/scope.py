@@ -23,6 +23,7 @@ from src.services.curation.assist.models import (
     SkippedCounts,
 )
 from src.services.curation.class_write_guard import class_write_locked
+from src.services.curation.image_join import resolve_filter_join
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses, visibility_clauses
 from src.services.curation.item_selection import MAX_SELECTION_SCAN
 from src.services.curation.reprocess_targets import items_by_terms, scan_items
@@ -33,6 +34,7 @@ from src.services.rejections import rejection
 if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
+    from src.services.curation.image_join import ImageJoin
     from src.services.embedding_spaces.readers import WriteFields
 
 _INCLUDES = ['test_holdout', 'class_excluded', 'class_source', 'class_validated']
@@ -87,9 +89,11 @@ def proposal_scope(target: AssistTarget) -> ItemFilter | None:
     return None
 
 
-def _base_query(flt: ItemFilter, embedding: WriteFields, *extra: dict[str, Any]) -> dict[str, Any]:
+def _base_query(
+    flt: ItemFilter, embedding: WriteFields, join: ImageJoin | None, *extra: dict[str, Any]
+) -> dict[str, Any]:
     try:
-        clauses = [*item_filter_clauses(flt, embedding=embedding), *extra]
+        clauses = [*item_filter_clauses(flt, embedding=embedding, image_join=join), *extra]
     except ValueError as exc:
         raise rejection(422, 'invalid_request', str(exc)) from exc
     return {'bool': {'filter': clauses}} if clauses else {'match_all': {}}
@@ -104,23 +108,31 @@ async def filter_members(
     opensearch: AsyncOpenSearch, flt: ItemFilter, *, label: str
 ) -> tuple[list[tuple[str, dict[str, Any]]], SkippedCounts]:
     embedding = await item_write_fields()
-    total = await _count(opensearch, _base_query(flt, embedding))
+    join = await resolve_filter_join(opensearch, flt)
+    if join is not None and join.truncated:
+        raise rejection(
+            422,
+            'assist_too_large',
+            f'{label} names more images than one run can join; narrow the area or group',
+        )
+    total = await _count(opensearch, _base_query(flt, embedding, join))
     if total == 0:
         raise rejection(404, 'not_found', f'{label} selects no items')
     holdout = await _count(
-        opensearch, _base_query(flt, embedding, {'term': {'test_holdout': True}})
+        opensearch, _base_query(flt, embedding, join, {'term': {'test_holdout': True}})
     )
     excluded = await _count(
         opensearch,
         _base_query(
             flt,
             embedding,
+            join,
             {'term': {'class_excluded': True}},
             {'bool': {'must_not': {'term': {'test_holdout': True}}}},
         ),
     )
     visible = _base_query(
-        flt, embedding, *visibility_clauses(include_test=False, include_excluded=False)
+        flt, embedding, join, *visibility_clauses(include_test=False, include_excluded=False)
     )
     found = await scan_items(
         opensearch,

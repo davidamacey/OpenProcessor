@@ -443,3 +443,60 @@ async def test_export_item_filter_narrows_the_cohort_query_and_is_recorded(tmp_p
         version_tag='f2', copy_images=False
     )
     assert json.loads((Path(plain.export_dir) / 'manifest.json').read_text())['item_filter'] is None
+
+
+def _one_doc() -> list[dict[str, Any]]:
+    return [
+        {
+            'crop_id': 'crop-1',
+            'image_id': 'img-1',
+            'image_path': 'a.jpg',
+            'bbox_norm': [0.1, 0.1, 0.5, 0.5],
+            'class_id': 0,
+            'class_name': 'car',
+        },
+    ]
+
+
+@pytest.mark.asyncio
+async def test_export_resolves_the_image_join_of_an_image_predicate(tmp_path, monkeypatch):
+    from src.services.curation.image_join import ImageJoin
+    from src.services.curation.item_filter import ItemFilter
+
+    async def join(_opensearch: Any, _flt: Any) -> ImageJoin:
+        return ImageJoin(image_ids=('img-1',), truncated=False)
+
+    monkeypatch.setattr('src.services.curation.export_readiness.resolve_filter_join', join)
+    service = generic_service(tmp_path, _one_doc(), ['car'])
+    queries: list[dict[str, Any]] = []
+    scroll = service._scroll_items
+
+    async def spy(query: dict[str, Any]) -> list[dict[str, Any]]:
+        queries.append(query)
+        return await scroll(query)
+
+    service._scroll_items = spy
+
+    await service.export_dataset(
+        version_tag='g1', copy_images=False, item_filter=ItemFilter(has_location=True)
+    )
+
+    assert {'terms': {'image_id': ['img-1']}} in queries[0]['bool']['filter']
+
+
+@pytest.mark.asyncio
+async def test_export_refuses_a_truncated_image_join(tmp_path, monkeypatch):
+    from src.services.curation.export_readiness import NothingToExportError
+    from src.services.curation.image_join import ImageJoin
+    from src.services.curation.item_filter import ItemFilter
+
+    async def join(_opensearch: Any, _flt: Any) -> ImageJoin:
+        return ImageJoin(image_ids=('img-1',), truncated=True)
+
+    monkeypatch.setattr('src.services.curation.export_readiness.resolve_filter_join', join)
+    service = generic_service(tmp_path, _one_doc(), ['car'])
+
+    with pytest.raises(NothingToExportError, match='narrow'):
+        await service.export_dataset(
+            version_tag='g2', copy_images=False, item_filter=ItemFilter(has_location=True)
+        )
