@@ -1,76 +1,122 @@
 @import 'tailwindcss';
 
-/* Stock zinc-500/600 fail WCAG AA (4.5:1) as text on the dark surfaces
-   (3.7:1 and 2.6:1 on zinc-900); lifted so dim captions stay readable. */
+/* Design tokens. Tailwind v4 is CSS-first: variables declared in `@theme` both become
+   CSS custom properties and generate utilities (`--color-surface-1` gives `bg-surface-1`,
+   `--shadow-e2` gives `shadow-e2`, `--radius-card` gives `rounded-card`, `--text-meta`
+   gives `text-meta`). https://tailwindcss.com/docs/theme
+   Text colours are `fg-1..3` (utilities `text-fg-1`): a `--text-1` variable would collide
+   with Tailwind's `--text-*` font-size namespace. */
 @theme {
-  --color-zinc-500: #8a8a94;
-  --color-zinc-600: #82828c;
+  /* Surfaces: dark with a slight blue tint. */
+  --color-surface-0: rgb(9 9 11); /* page */
+  --color-surface-1: rgb(20 20 25); /* cards */
+  --color-surface-2: rgb(28 28 34); /* inputs, table head, hover */
+  --color-surface-3: rgb(38 38 46); /* popovers, modals */
+  --color-surface-nav: rgb(14 14 18 / 0.85); /* top nav, with backdrop blur */
+  --color-line: rgb(255 255 255 / 0.07);
+  --color-line-strong: rgb(255 255 255 / 0.12);
+
+  /* Text. fg-3 is for captions of 12px or more only. */
+  --color-fg-1: rgb(244 244 245);
+  --color-fg-2: rgb(176 176 186);
+  --color-fg-3: rgb(138 138 148);
+
+  /* Accent: one primary action per view, the active nav/tab, the selected card ring,
+     links and focus. The fill is the white-label-safe blue (4.5:1). */
+  --color-accent: rgb(10 132 255);
+  --color-accent-fill: rgb(0 102 214);
+  --color-accent-soft: rgb(10 132 255 / 0.14);
+  --color-accent-line: rgb(10 132 255 / 0.45);
+
+  /* Semantic colours, each with a 12% soft and a 35% line variant. The -fill variants are
+     the darker backgrounds that carry white label text at 4.5:1. */
+  --color-success: rgb(48 209 88);
+  --color-success-soft: rgb(48 209 88 / 0.12);
+  --color-success-line: rgb(48 209 88 / 0.35);
+  --color-warn: rgb(255 159 10);
+  --color-warn-soft: rgb(255 159 10 / 0.12);
+  --color-warn-line: rgb(255 159 10 / 0.35);
+  --color-danger: rgb(255 69 58);
+  --color-danger-soft: rgb(255 69 58 / 0.12);
+  --color-danger-line: rgb(255 69 58 / 0.35);
+  --color-danger-fill: rgb(201 36 28);
+  --color-info: rgb(100 210 255);
+  --color-info-soft: rgb(100 210 255 / 0.12);
+  --color-info-line: rgb(100 210 255 / 0.35);
+  --color-holdout: rgb(191 90 242);
+  --color-holdout-soft: rgb(191 90 242 / 0.12);
+  --color-holdout-line: rgb(191 90 242 / 0.35);
+
+  /* Box tones on an image. --hl is reserved for the selected thing on an image. */
+  --color-tone-validated: var(--color-success);
+  --color-tone-machine: var(--color-warn);
+  --color-tone-detector: var(--color-info);
+  --color-tone-holdout: var(--color-holdout);
+  --color-tone-rejected: var(--color-danger);
+  --color-hl: rgb(255 214 10);
+
+  /* Elevation. e0 is no shadow; z-order: nav 40, drawer 50, popover 60, modal 70, toast 80. */
+  --shadow-e1: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 1px 2px rgb(0 0 0 / 0.5);
+  --shadow-e2: 0 1px 0 rgb(255 255 255 / 0.06) inset, 0 4px 14px rgb(0 0 0 / 0.45);
+  --shadow-e3: 0 12px 32px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.08);
+
+  /* Spacing is Tailwind's 4px base (p-1 = 4px, p-6 = 24px); only the page gutter is named. */
+  --spacing-gutter: 1.5rem; /* 24px; PageShell uses 16px (px-4) on mobile */
+
+  --radius-chip: 0.25rem;
+  --radius-control: 0.375rem;
+  --radius-card: 0.625rem;
+  --radius-modal: 0.875rem;
+
+  /* Type scale. 11 is the minimum; 28 is for KPI numbers only; mono only for ids, numbers
+     and paths. */
+  --text-caption: 0.6875rem;
+  --text-caption--line-height: 1rem;
+  --text-meta: 0.75rem;
+  --text-meta--line-height: 1rem;
+  --text-control: 0.8125rem;
+  --text-control--line-height: 1.25rem;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.375rem;
+  --text-title: 1rem;
+  --text-title--line-height: 1.5rem;
+  --text-h1: 1.25rem;
+  --text-h1--line-height: 1.75rem;
+  --text-kpi: 1.75rem;
+  --text-kpi--line-height: 2rem;
 }
 
-/* Apple system color palette — dark theme baseline.
-   These are the canonical Apple HIG dark-mode RGBs, exposed as CSS vars
-   so we can re-theme without touching component code. */
 :root {
   color-scheme: dark;
 
-  /* System colors (dark) */
-  --system-blue: 10 132 255;
-  /* Filled-button backgrounds: white label text needs 4.5:1, which the
-     system blue/red (3.6:1 / 3.4:1) do not give. */
-  --btn-primary-bg: 0 102 214;
-  --btn-danger-bg: 201 36 28;
-  --system-green: 48 209 88;
-  --system-orange: 255 159 10;
-  --system-red: 255 69 58;
-  --system-yellow: 255 214 10;
-  --system-indigo: 94 92 230;
-  --system-teal: 100 210 255;
-  --system-pink: 255 55 95;
-
-  /* Grays (dark) — mapped to zinc for tailwind compatibility */
-  --system-gray-1: 142 142 147;
-  --system-gray-2: 99 99 102;
-  --system-gray-3: 72 72 74;
-  --system-gray-4: 58 58 60;
-  --system-gray-5: 44 44 46;
-  --system-gray-6: 28 28 30;
-
-  /* Semantic */
-  --bg-base: 9 9 11; /* zinc-950 */
-  --bg-elevated: 24 24 27; /* zinc-900 */
-  --bg-hover: 39 39 42; /* zinc-800 */
-  --border-subtle: 39 39 42; /* zinc-800 */
-  --border-strong: 63 63 70; /* zinc-700 */
-  --text-primary: 244 244 245;
-  --text-secondary: 161 161 170;
-  --text-tertiary: 113 113 122;
-
-  /* Control-size scale — three tiers, used by .btn/.select/.input (md),
+  /* Control-size scale: three tiers, used by .btn/.select/.input (md),
      .btn-sm/.select-sm/.input-sm (sm), and .chip (xs). Do not mix tiers
-     within a single toolbar row — see CLAUDE.md StrategyBar section. */
-  --ctl-h-md: 2rem; /* 32px — primary: .btn, .select, .input */
+     within a single toolbar row. */
+  --ctl-h-md: 2rem; /* 32px: primary: .btn, .select, .input */
   --ctl-pad-md: 0.3125rem 0.5rem;
   --ctl-font-md: 0.8125rem;
   --ctl-line-md: 1.25rem;
-  --ctl-radius-md: 0.375rem;
+  --ctl-radius-md: var(--radius-control);
 
-  --ctl-h-sm: 1.625rem; /* 26px — secondary/filter: .btn-sm, .select-sm, .input-sm */
+  --ctl-h-sm: 1.625rem; /* 26px: secondary/filter: .btn-sm, .select-sm, .input-sm */
   --ctl-pad-sm: 0.25rem 0.5rem;
   --ctl-font-sm: 0.75rem;
   --ctl-line-sm: 1rem;
-  --ctl-radius-sm: 0.3125rem;
+  --ctl-radius-sm: var(--radius-control);
 
-  --ctl-h-xs: 1.25rem; /* 20px — chips: .chip */
+  --ctl-h-xs: 1.25rem; /* 20px: chips: .chip */
   --ctl-pad-xs: 0.125rem 0.5rem;
   --ctl-font-xs: 0.6875rem;
   --ctl-line-xs: 1rem;
-  --ctl-radius-xs: 0.25rem;
+  --ctl-radius-xs: var(--radius-chip);
+
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--color-accent) 25%, transparent);
 }
 
 html,
 body {
-  background-color: rgb(var(--bg-base));
-  color: rgb(var(--text-primary));
+  background-color: var(--color-surface-0);
+  color: var(--color-fg-1);
   font-family:
     -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
   font-feature-settings: 'cv11', 'ss01';
@@ -80,14 +126,14 @@ body {
 }
 
 * {
-  border-color: rgb(var(--border-subtle));
+  border-color: var(--color-line);
 }
 
 button {
   font-family: inherit;
 }
 
-/* Scrollbar — minimal dark */
+/* Scrollbar: minimal dark */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -96,104 +142,129 @@ button {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgb(var(--system-gray-4));
+  background: var(--color-line-strong);
   border-radius: 5px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgb(var(--system-gray-3));
+  background: rgb(255 255 255 / 0.2);
 }
 
-/* Focus rings — Apple-blue */
+/* Focus: a 2px accent ring, offset 2; a white ring on filled controls, where an accent
+   ring would vanish into the fill. */
 :focus-visible {
-  outline: 2px solid rgb(var(--system-blue));
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
+.btn-primary:focus-visible,
+.btn-danger:focus-visible {
+  outline-color: white;
+}
 
-/* Utility classes layered onto Tailwind */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* A card surface (the `Card` component renders this too). */
 .surface {
-  background-color: rgb(var(--bg-elevated));
-  border: 1px solid rgb(var(--border-subtle));
-  border-radius: 0.5rem;
+  background-color: var(--color-surface-1);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-e1);
 }
 
 /* Control classes MUST live inside @layer components: Tailwind v4 utilities
    are emitted into @layer utilities, and unlayered CSS always wins over
-   layered CSS regardless of source order — so an unlayered .btn silently
+   layered CSS regardless of source order, so an unlayered .btn silently
    defeated every `class="btn <utility-override>"` instance in the codebase
-   (e.g. rounded-l-none, px-1.5). Layering these fixes that for good. */
+   (e.g. rounded-l-none, px-1.5). Layering these fixes that for good.
+   `ui/Button.svelte` and `ui/Chip.svelte` render these same classes: they are the one
+   implementation of the control tiers. */
 @layer components {
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: var(--ctl-pad-md);
-    border-radius: var(--ctl-radius-md);
-    border: 1px solid rgb(var(--border-strong));
-    background-color: rgb(var(--bg-elevated));
-    color: rgb(var(--text-primary));
-    font-size: var(--ctl-font-md);
-    line-height: var(--ctl-line-md);
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background-color 120ms ease;
-  }
-  .btn:hover {
-    background-color: rgb(var(--bg-hover));
-  }
-  .btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-  .btn:disabled:hover {
-    background-color: rgb(var(--bg-elevated));
-  }
-  .btn-primary {
-    background-color: rgb(var(--btn-primary-bg));
-    border-color: rgb(var(--btn-primary-bg));
-    color: white;
-  }
-  .btn-primary:hover {
-    background-color: rgb(var(--btn-primary-bg) / 0.85);
-  }
-  .btn-danger {
-    background-color: rgb(var(--btn-danger-bg));
-    border-color: rgb(var(--btn-danger-bg));
-    color: white;
-  }
-
-  /* Secondary/filter tier — StrategyBar and other opt-in, stackable
-     controls. Deliberately smaller than .btn, not a shrunk .btn-primary. */
+  .btn,
   .btn-sm {
     display: inline-flex;
     align-items: center;
+    border: 1px solid var(--color-line-strong);
+    background-color: var(--color-surface-2);
+    color: var(--color-fg-1);
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+      background-color 120ms ease,
+      border-color 120ms ease;
+  }
+  .btn {
+    gap: 0.5rem;
+    padding: var(--ctl-pad-md);
+    border-radius: var(--ctl-radius-md);
+    font-size: var(--ctl-font-md);
+    line-height: var(--ctl-line-md);
+  }
+  /* Secondary/filter tier: StrategyBar and other opt-in, stackable
+     controls. Deliberately smaller than .btn, not a shrunk .btn-primary. */
+  .btn-sm {
     gap: 0.375rem;
     padding: var(--ctl-pad-sm);
     border-radius: var(--ctl-radius-sm);
-    border: 1px solid rgb(var(--border-strong));
-    background-color: rgb(var(--bg-elevated));
-    color: rgb(var(--text-primary));
     font-size: var(--ctl-font-sm);
     line-height: var(--ctl-line-sm);
-    cursor: pointer;
-    white-space: nowrap;
-    transition: background-color 120ms ease;
   }
+  .btn:hover,
   .btn-sm:hover {
-    background-color: rgb(var(--bg-hover));
+    background-color: var(--color-surface-3);
   }
-  /* A pressed toggle reads as selected in every toggle group, not just by its border. */
-  .btn-sm[aria-pressed='true'] {
-    border-color: rgb(59 130 246);
-    background-color: rgb(59 130 246 / 0.3);
-    color: rgb(191 219 254);
-  }
+  .btn:disabled,
   .btn-sm:disabled,
   .btn-sm[aria-disabled='true'] {
     opacity: 0.6;
     cursor: not-allowed;
   }
+  .btn:disabled:hover {
+    background-color: var(--color-surface-2);
+  }
+  .btn-primary {
+    background-color: var(--color-accent-fill);
+    border-color: var(--color-accent-fill);
+    color: white;
+  }
+  .btn-primary:hover {
+    background-color: var(--color-accent-fill);
+    filter: brightness(1.15);
+  }
+  .btn-danger {
+    background-color: var(--color-danger-fill);
+    border-color: var(--color-danger-fill);
+    color: white;
+  }
+  .btn-danger:hover {
+    background-color: var(--color-danger-fill);
+    filter: brightness(1.15);
+  }
+  .btn-ghost {
+    background-color: transparent;
+    border-color: transparent;
+    color: var(--color-fg-2);
+  }
+  .btn-ghost:hover {
+    background-color: var(--color-surface-2);
+    color: var(--color-fg-1);
+  }
+  /* A pressed toggle reads as selected in every toggle group, not just by its border. */
+  .btn-sm[aria-pressed='true'],
+  .btn[aria-pressed='true'] {
+    border-color: var(--color-accent-line);
+    background-color: var(--color-accent-soft);
+    color: var(--color-accent);
+  }
 
-  /* Square icon-only variant — width matches height for whichever tier
+  /* Square icon-only variant: width matches height for whichever tier
      it's paired with (.btn or .btn-sm). */
   .btn-icon {
     padding-left: 0;
@@ -218,143 +289,132 @@ button {
     border-bottom-left-radius: 0;
   }
 
-  /* Shared native <select> styling, matching .btn's box model (padding,
-     radius, border, background) so a dropdown sitting next to buttons in
-     the same toolbar row has the same height and doesn't look bolted-on.
-     Every toolbar select in the app should use this class instead of an
-     ad-hoc Tailwind utility string — those had drifted into several
-     slightly different heights/radii/colors across pages. */
-  .select {
-    display: inline-flex;
-    max-width: 100%;
-    align-items: center;
-    padding: var(--ctl-pad-md);
-    border-radius: var(--ctl-radius-md);
-    border: 1px solid rgb(var(--border-strong));
-    background-color: rgb(var(--bg-elevated));
-    color: rgb(var(--text-primary));
-    font-size: var(--ctl-font-md);
-    line-height: var(--ctl-line-md);
-    cursor: pointer;
-    transition: background-color 120ms ease;
-  }
-  .select:hover {
-    background-color: rgb(var(--bg-hover));
-  }
-  .select:focus {
-    outline: none;
-    border-color: rgb(var(--system-blue));
-  }
-  .select:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .select-sm {
-    display: inline-flex;
-    max-width: 100%;
-    align-items: center;
-    padding: var(--ctl-pad-sm);
-    border-radius: var(--ctl-radius-sm);
-    border: 1px solid rgb(var(--border-strong));
-    background-color: rgb(var(--bg-elevated));
-    color: rgb(var(--text-primary));
-    font-size: var(--ctl-font-sm);
-    line-height: var(--ctl-line-sm);
-    cursor: pointer;
-    transition: background-color 120ms ease;
-  }
-  .select-sm:hover {
-    background-color: rgb(var(--bg-hover));
-  }
-  .select-sm:focus {
-    outline: none;
-    border-color: rgb(var(--system-blue));
-  }
-  .select-sm:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  /* Text/number inputs matching .btn/.select's box model. */
-  .input {
-    display: inline-flex;
-    align-items: center;
-    padding: var(--ctl-pad-md);
-    border-radius: var(--ctl-radius-md);
-    border: 1px solid rgb(var(--border-strong));
-    background-color: rgb(var(--bg-elevated));
-    color: rgb(var(--text-primary));
-    font-size: var(--ctl-font-md);
-    line-height: var(--ctl-line-md);
-    transition: background-color 120ms ease;
-  }
-  .input:focus {
-    outline: none;
-    border-color: rgb(var(--system-blue));
-  }
-  .input:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
+  /* Shared native <select> and text inputs, matching .btn's box model (padding,
+     radius, border, background) so a field sitting next to buttons in the same toolbar
+     row has the same height. Every toolbar field uses these classes instead of an ad-hoc
+     utility string. */
+  .select,
+  .select-sm,
+  .input,
   .input-sm {
     display: inline-flex;
     align-items: center;
+    max-width: 100%;
+    border: 1px solid var(--color-line-strong);
+    background-color: var(--color-surface-2);
+    color: var(--color-fg-1);
+    transition:
+      background-color 120ms ease,
+      border-color 120ms ease,
+      box-shadow 120ms ease;
+  }
+  .select,
+  .input {
+    padding: var(--ctl-pad-md);
+    border-radius: var(--ctl-radius-md);
+    font-size: var(--ctl-font-md);
+    line-height: var(--ctl-line-md);
+  }
+  .select-sm,
+  .input-sm {
     padding: var(--ctl-pad-sm);
     border-radius: var(--ctl-radius-sm);
-    border: 1px solid rgb(var(--border-strong));
-    background-color: rgb(var(--bg-elevated));
-    color: rgb(var(--text-primary));
     font-size: var(--ctl-font-sm);
     line-height: var(--ctl-line-sm);
-    transition: background-color 120ms ease;
   }
+  .select,
+  .select-sm {
+    cursor: pointer;
+  }
+  .select:hover,
+  .select-sm:hover {
+    background-color: var(--color-surface-3);
+  }
+  /* Inputs get an accent border plus a 3px 25% ring. */
+  .select:focus,
+  .select-sm:focus,
+  .input:focus,
   .input-sm:focus {
     outline: none;
-    border-color: rgb(var(--system-blue));
+    border-color: var(--color-accent);
+    box-shadow: var(--focus-ring);
   }
+  .select:disabled,
+  .select-sm:disabled,
+  .input:disabled,
   .input-sm:disabled {
     opacity: 0.6;
     cursor: not-allowed;
   }
 
-  /* xs tier — filter chips / segmented controls / read-only badges. */
+  /* xs tier: filter chips / segmented controls / read-only badges. */
   .chip {
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
     padding: var(--ctl-pad-xs);
     border-radius: var(--ctl-radius-xs);
-    border: 1px solid rgb(var(--border-strong));
-    background-color: rgb(var(--bg-elevated));
-    color: rgb(var(--text-secondary));
+    border: 1px solid var(--color-line-strong);
+    background-color: var(--color-surface-2);
+    color: var(--color-fg-2);
     font-size: var(--ctl-font-xs);
     line-height: var(--ctl-line-xs);
     white-space: nowrap;
     transition: background-color 120ms ease;
   }
   .chip:hover {
-    background-color: rgb(var(--bg-hover));
+    background-color: var(--color-surface-3);
   }
   .chip:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+  /* Chip tones (ui/Chip.svelte `tone`). */
+  .chip-accent {
+    background-color: var(--color-accent-soft);
+    border-color: var(--color-accent-line);
+    color: var(--color-accent);
+  }
+  .chip-success {
+    background-color: var(--color-success-soft);
+    border-color: var(--color-success-line);
+    color: var(--color-success);
+  }
+  .chip-warn {
+    background-color: var(--color-warn-soft);
+    border-color: var(--color-warn-line);
+    color: var(--color-warn);
+  }
+  .chip-danger {
+    background-color: var(--color-danger-soft);
+    border-color: var(--color-danger-line);
+    color: var(--color-danger);
+  }
+  .chip-info {
+    background-color: var(--color-info-soft);
+    border-color: var(--color-info-line);
+    color: var(--color-info);
+  }
+  .chip-holdout {
+    background-color: var(--color-holdout-soft);
+    border-color: var(--color-holdout-line);
+    color: var(--color-holdout);
   }
 }
 
 kbd {
   display: inline-block;
   padding: 0.125rem 0.375rem;
-  /* Explicit line-height — monospace fonts default to a taller line box
+  /* Explicit line-height: monospace fonts default to a taller line box
      in some engines, which was silently stretching any .btn/.chip that
      contained a <kbd> hint taller than its kbd-less siblings in the same
      row (32px -> 38px). Matches the xs control tier's line-height. */
   line-height: 0.75rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.75rem;
-  background-color: rgb(var(--bg-hover));
-  border: 1px solid rgb(var(--border-strong));
-  border-radius: 0.25rem;
-  color: rgb(var(--text-primary));
+  background-color: var(--color-surface-3);
+  border: 1px solid var(--color-line-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-chip);
+  color: var(--color-fg-1);
 }

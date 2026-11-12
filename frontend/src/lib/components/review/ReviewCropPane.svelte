@@ -274,7 +274,7 @@
       <ReviewSlotPanel {current} {activeSlot} {slotLabels} {edit} {slot} {skip} />
     {:else}
       <div
-        class="sticky bottom-0 z-10 mt-3 flex flex-wrap gap-2 bg-[rgb(var(--bg-elevated))] py-1"
+        class="sticky bottom-0 z-10 mt-3 flex flex-wrap gap-2 bg-surface-1 py-1"
         data-testid="review-actions"
       >
         <button

@@ -137,7 +137,7 @@
 
 <style>
   .unlabeled-chip {
-    border-color: rgb(var(--system-orange));
-    color: rgb(var(--system-orange));
+    border-color: var(--color-warn);
+    color: var(--color-warn);
   }
 </style>

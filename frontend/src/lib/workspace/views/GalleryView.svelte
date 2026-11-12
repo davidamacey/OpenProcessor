@@ -123,8 +123,8 @@
 
 <style>
   .needs-work.active {
-    border-color: rgb(var(--system-orange));
-    background-color: rgb(var(--system-orange) / 0.2);
-    color: rgb(var(--system-orange));
+    border-color: var(--color-warn);
+    background-color: var(--color-warn-soft);
+    color: var(--color-warn);
   }
 </style>
