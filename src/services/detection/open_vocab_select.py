@@ -75,6 +75,16 @@ class ExistingBox:
     bbox_norm: tuple[float, float, float, float]
     class_name: str | None
     locked: bool
+    detector_bbox_norm: tuple[float, float, float, float] | None = None
+    """The detector's original box of an item a person moved; a locked item owns it too."""
+
+
+def locked_overlap(e: ExistingBox, box: tuple[float, float, float, float]) -> bool:
+    """``box`` lands on a locked item: on its current box or on the detector box it was moved from."""
+    if not e.locked:
+        return False
+    spots = [e.bbox_norm] + ([e.detector_bbox_norm] if e.detector_bbox_norm else [])
+    return any(iou(box, spot) >= LOCKED_OVERLAP_IOU for spot in spots)
 
 
 @dataclass(frozen=True)
@@ -154,7 +164,7 @@ def select_open_vocab_hits(
     for h in survivors:
         box = h.candidate.bbox_norm
         key = hit_label(h)
-        if any(e.locked and iou(box, e.bbox_norm) >= LOCKED_OVERLAP_IOU for e in existing):
+        if any(locked_overlap(e, box) for e in existing):
             dropped.append((h, 'skipped_locked'))
         elif any(
             e.class_name and _norm(e.class_name) == key and iou(box, e.bbox_norm) >= dedup_iou
@@ -174,5 +184,6 @@ __all__ = [
     'OpenVocabSelection',
     'TargetRules',
     'hit_label',
+    'locked_overlap',
     'select_open_vocab_hits',
 ]

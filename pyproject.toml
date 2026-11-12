@@ -388,6 +388,9 @@ exempt-modules = [
     "src.routers.curation._cursor_params",       # CursorQ
     "src.routers.curation._crop_params",         # CropBrowseQuery and its Query aliases
     "src.schemas.curation.views",                # TypedDicts that response TypedDicts nest
+    "src.routers.curation._item_write_models",
+    "src.schemas.curation.exclusion",             # ExcludeReason request field
+    "src.schemas.curation.images",               # ItemCreateRequest, GeometryPatchRequest
     "src.routers.curation._common",              # OpenSearchDep
     "src.services.curation.vlm_policy",          # VlmScope query parameter
     "src.services.curation.dataset_import.options",

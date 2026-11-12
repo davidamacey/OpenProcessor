@@ -13,11 +13,12 @@ from typing import TYPE_CHECKING, Any
 
 from opensearchpy.exceptions import OpenSearchException
 
-from src.clients.occ_locks import _is_locked_marker, is_locked_class
+from src.clients.occ_locks import _is_locked_marker, has_human_geometry, is_locked_class
 from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
 from src.domain.embedding_state import keep_stored_vector_state
 from src.domain.history import CLASS_STATE_FIELDS
+from src.domain.item_geometry import GEOMETRY_OWNED_FIELDS
 
 
 if TYPE_CHECKING:
@@ -279,6 +280,11 @@ async def _update_existing_docs(
             existing=source,
             human_field_guards=human_field_guards,
         )
+        if has_human_geometry(source):
+            # The incoming box, area and vector describe the detector's box, not the one a
+            # person set; the stored ones stand.
+            for field in (*GEOMETRY_OWNED_FIELDS, vector_field, state_field):
+                merged.pop(field, None)
         filled = _apply_fill_if_absent(merged, source, fill_if_absent)
         keep_stored_vector_state(merged, source, vector_field, state_field)
         merge_effects[doc_id] = (preserved_fields, filled)

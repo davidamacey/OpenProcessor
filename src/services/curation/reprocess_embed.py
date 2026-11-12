@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from PIL import Image, ImageOps
 
+from src.clients.occ import occ_skip_on_conflict_bulk
 from src.config import get_curation_config
 from src.core.logging import get_logger
 from src.domain.embedding_state import EMBEDDED
@@ -34,6 +35,7 @@ from src.domain.region_boxes import read_boxes
 from src.services.curation.image_serving import is_servable_image_path
 from src.services.curation.ingest_index import crop_pil, place_vectors
 from src.services.curation.item_doc import placement_fields
+from src.services.curation.region_box_edits import same_box
 from src.services.curation.region_box_embeddings import (
     embeddable,
     entry_for,
@@ -41,7 +43,12 @@ from src.services.curation.region_box_embeddings import (
     write_box_embeddings,
 )
 from src.services.curation.reprocess_gpu_embed import embed_on_gpu
-from src.services.embedding_spaces.readers import WriteFields, frame_vector_field, item_write_fields
+from src.services.embedding_spaces.readers import (
+    WriteFields,
+    frame_vector_field,
+    item_write_fields,
+    vector_source_excludes,
+)
 from src.services.near_duplicates import pending as near_dup_pending
 from src.utils.cpu_pool import offload_always, run_cpu
 from src.utils.vectors import float_list
@@ -226,6 +233,30 @@ async def _bulk_update(
             raise RuntimeError(f'embedding bulk update failed: {str(resp.get("items"))[:300]}')
 
 
+async def _write_item_vectors(
+    opensearch: AsyncOpenSearch,
+    index: str,
+    fields: dict[str, dict[str, Any]],
+    boxes: dict[str, Any],
+) -> None:
+    """Write each item's vector fields, unless its box is no longer the one embedded. A person
+    who moves a box while the encoder runs has already cleared the vector of the old box; the
+    conditional write lets that stand instead of putting the old box's vector on the new one, and
+    a conflicting write is skipped (the item stays ``deferred`` for the next embed pass)."""
+
+    def merge(doc_id: str, src: dict[str, Any]) -> dict[str, Any]:
+        return fields[doc_id] if same_box(src.get('bbox_norm'), boxes.get(doc_id)) else {}
+
+    await occ_skip_on_conflict_bulk(
+        opensearch,
+        doc_ids=list(fields),
+        merger=merge,
+        vector_excludes=await vector_source_excludes(),
+        index=index,
+        writer_id='worker:reembed',
+    )
+
+
 @dataclass
 class _Writes:
     """What a pass writes once every image is embedded, and its counters."""
@@ -250,6 +281,8 @@ class _Writes:
     items: dict[str, dict[str, Any]] = field(default_factory=dict)
     images: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
     boxes: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    embedded_boxes: dict[str, Any] = field(default_factory=dict)
+    """The crop box each item's vector was computed from."""
     unplaced: dict[str, Any] = field(default_factory=dict)
 
     def add(
@@ -268,6 +301,7 @@ class _Writes:
             self.counts['frame_written'] += 1
         for (cid, src), vec in zip(boxed, vectors.crops, strict=True):
             update = self.items.setdefault(cid, {})
+            self.embedded_boxes[cid] = src['bbox_norm']
             update[self.item_fields.vector_field] = float_list(vec)
             update[self.item_fields.state_field] = EMBEDDED
             if self.place and not src.get('cluster_partition_id'):
@@ -351,7 +385,7 @@ async def reembed_items(
     await near_dup_pending.enqueue_pending_bound(
         'image', [doc_id for doc_id, _ in writes.images], 'vector_changed'
     )
-    await _bulk_update(opensearch, cfg.items_index, list(writes.items.items()))
+    await _write_item_vectors(opensearch, cfg.items_index, writes.items, writes.embedded_boxes)
     await _bulk_update(opensearch, cfg.images_index, writes.images)
     if writes.boxes:
         await write_box_embeddings(opensearch, index=cfg.items_index, by_crop=writes.boxes)

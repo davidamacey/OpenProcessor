@@ -196,8 +196,13 @@ async def crop_thumbnail(
     crop_id: str,
     opensearch: OpenSearchDep,
     size: Annotated[int, Query(ge=32, le=512, description='Square thumbnail size')] = 128,
+    v: Annotated[
+        int | None,
+        Query(description='The item `geometry_revision`: a cache key only, the server ignores it.'),
+    ] = None,
 ) -> Response:
     """128px JPEG thumbnail of an item crop, LRU-cached."""
+    del v  # a cache key for the browser; the server's cache is keyed by the box itself
     crop = await _fetch_crop(crop_id, opensearch)
     bbox_norm = crop.get('bbox_norm')
     if not bbox_norm or len(bbox_norm) != 4:

@@ -13,7 +13,7 @@ vector field (``tests/curation/test_embedding_state_consumers.py`` pins that).
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Final, Literal
 
 
 EMBEDDED = 'embedded'
@@ -21,7 +21,7 @@ EMBEDDED = 'embedded'
 NOT_SELECTED = 'not_selected'
 # No vector yet by design: ingest policy mode ``lazy`` stores no vector at ingest, and a
 # vector dropped because the target project could not use it is stored this way too.
-DEFERRED = 'deferred'
+DEFERRED: Final = 'deferred'
 # The encoder raised for this item at ingest.
 FAILED = 'failed'
 

@@ -10,6 +10,7 @@ from src.config.region_state import HUMAN_WRITABLE_STATUSES
 
 # Runtime import: pydantic resolves the Literal annotation from module globals.
 from src.routers.curation._selection import SelectionTargets
+from src.schemas.curation.exclusion import ExcludeReason
 from src.services.curation.class_sources import HumanLabelSource
 
 
@@ -32,13 +33,13 @@ class CropExcludeRequest(SelectionTargets):
     """Exclude crops from training + clustering (reversible).
 
     Blurry / unidentifiable / partial crops the human doesn't want in
-    the training set. ``reason`` defaults to ``'ignore'``; the UI can
-    pass a more specific tag (``'blurry'``, ``'unidentifiable'``,
-    ``'wrong_class'``, ``'partial_crop'``) when the operator wants to
-    record why (e.g. a whole cluster of blurry items).
+    the training set. ``reason`` defaults to ``'ignore'`` and is one of the
+    served ``GET /exclude_reasons`` ids; ``'not_an_object'`` is a person's soft
+    delete of a box that was never an object (the document stays, and the
+    geometry lock keeps a re-detect from creating the box again).
     """
 
-    reason: str = 'ignore'
+    reason: ExcludeReason = 'ignore'
 
 
 class CropUnexcludeRequest(SelectionTargets):

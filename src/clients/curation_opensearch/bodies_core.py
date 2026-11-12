@@ -143,6 +143,15 @@ _CLASS_HISTORY_MAPPING: dict[str, Any] = {
     'enabled': False,
 }
 
+# Item geometry provenance (src/domain/item_geometry.py): who set the stored box,
+# how many times a person has moved it, and the detector's original box kept on
+# the first human move so a re-detect cannot re-create it (the geometry lock).
+_GEOMETRY_MAPPING: dict[str, Any] = {
+    'geometry_source': {'type': 'keyword'},
+    'geometry_revision': {'type': 'integer'},
+    'detector_bbox_norm': {'type': 'float'},
+}
+
 _EXCLUSION_MAPPING: dict[str, Any] = {
     'class_excluded': {'type': 'boolean'},
     'excluded_at': {'type': 'date'},
@@ -440,6 +449,7 @@ def _items_body() -> dict[str, Any]:
                 # pre-exclusion validation/cluster placement un-exclude
                 # restores (src/services/curation/exclusion.py).
                 **_EXCLUSION_MAPPING,
+                **_GEOMETRY_MAPPING,
                 **OPEN_VOCAB_ITEM_MAPPING,
                 **ASSIST_ITEM_MAPPING,
                 **ITEMS_VIZ_MAPPING,

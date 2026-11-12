@@ -6,9 +6,10 @@ here, so the browser computes none of them.
 
 from __future__ import annotations
 
+import uuid
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from src.schemas.curation.views import HiddenCounts, SortOption
 
@@ -35,6 +36,13 @@ class BoxView(BaseModel):
     class_name: str | None = None
     tone: BoxTone = Field(description='How the box is drawn: its review state, served.')
     state: str | None = Field(default=None, description='The region box state; null for an item.')
+    locked: bool = Field(
+        default=False, description='An automated writer never moves, deletes or re-creates it.'
+    )
+    lock_label: str | None = Field(default=None, description='Served text for why it is locked.')
+    geometry_revision: int | None = Field(
+        default=None, description='The item box revision an edit sends back; null for a region.'
+    )
 
 
 class ImageCounts(BaseModel):
@@ -136,3 +144,42 @@ class ImageLocate(BaseModel):
         description='Why it is not in the list; null when in_view.'
     )
     reason_message: str | None = Field(description='The served sentence for `reason`.')
+
+
+class ItemCreateRequest(BaseModel):
+    """Draw a box: it becomes an item with a person's class and a person's geometry."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    bbox_norm: tuple[float, float, float, float] = Field(
+        description='[x1, y1, x2, y2] in image coordinates, each in [0, 1], x1 < x2 and y1 < y2.'
+    )
+    class_name: str = Field(min_length=1, max_length=128, description='An active registry class.')
+    request_id: uuid.UUID = Field(
+        description='Sent again unchanged, it returns the first item instead of a second.'
+    )
+
+
+class GeometryPatchRequest(BaseModel):
+    """Move or resize an item's box."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    bbox_norm: tuple[float, float, float, float]
+    expected_geometry_revision: int = Field(
+        ge=0, description='The `geometry_revision` the editor holds; 0 for an item never edited.'
+    )
+    drop_region_box_ids: list[str] = Field(
+        default_factory=list,
+        description='Region boxes that fall outside the new box and may be deleted with it.',
+    )
+
+
+class GeometryUndoRequest(BaseModel):
+    """Undo the newest box edit the editor has seen."""
+
+    model_config = ConfigDict(extra='forbid')
+
+    expected_geometry_revision: int = Field(
+        ge=0, description='The `geometry_revision` the editor holds; a newer one is a 409.'
+    )

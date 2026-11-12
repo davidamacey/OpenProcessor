@@ -1007,7 +1007,23 @@ applies to automated writers.
 | POST | `/crops/{crop_id}/region/undo` | | the restored item | `404`, `409` nothing to undo |
 | POST | `/crops/region/undo_batch` | `{crop_ids}` | `{items[], undone, nothing_to_undo, conflicts, not_found}` | `409` when no crop had anything to undo |
 | POST | `/crops/{crop_id}/vlm_dismiss/undo` | | the restored item | `409` no dismissal to undo |
+| POST | `/crops/{crop_id}/geometry/undo` | `{expected_geometry_revision}` | `GeometryWritten` | `404`, `409 geometry_conflict` (the item moved since the editor looked; carries the current item), `409 nothing_to_undo`, `409 regions_changed` (the edit dropped region boxes and a region write came since). An undo of an undo is not restorable; undoing a move that dropped region boxes puts them back |
 
+### Annotation writes: draw, move, delete
+
+A person's drawn, moved or deleted box is locked: re-detect, open-vocabulary runs, dataset-import reconcile and re-ingest never move, delete or re-create it (`is_locked_geometry`). The item wire serves `geometry_revision`, `geometry_source` (`detector`, `human`, `import`), `geometry_locked` and `lock_label`; `thumbnail_url` ends `?v=<geometry_revision>`.
+
+| Method | Path | Body | Response | Errors |
+|---|---|---|---|---|
+| POST | `/images/{image_id}/items` | `{bbox_norm, class_name, request_id}` | `ItemCreated`: `{item, created, image_boxes[], image_counts, embedding_state, embedding_message}`. `201`, or `200` with `created: false` when `request_id` was already used | `404 image_not_found`; `409 request_id_reused` (same `request_id`, other box or class; carries the stored item; a repeat is answered before the class is checked again); `422 unknown_class` (unknown or deprecated name), `box_out_of_image`, `degenerate_box`, `box_too_small` (with `min_side`) |
+| PATCH | `/crops/{crop_id}/geometry` | `{bbox_norm, expected_geometry_revision, drop_region_box_ids[]}` | `GeometryWritten`: `{item, image_boxes[], embedding_state, embedding_message}` | `404`; `409 geometry_conflict` with `current_geometry_revision` and the current `item`; `422 regions_outside_item` with `box_ids` until they are listed in `drop_region_box_ids`; the box refusals above |
+| GET | `/exclude_reasons` | | `{reasons: [{id, label}]}` | |
+
+- The drawn item has a human class, `geometry_source: human`, `geometry_revision: 1`, and is held out (with the image's `dataset_split`) when the image's items are. It is embedded in the request; when that fails the write stands and `embedding_state` is `deferred` with a served `embedding_message`.
+- A move keeps the machine's box once in `detector_bbox_norm`, clears the vector, evicts the cached crop picture and re-ranks the image. The `crop_id` never changes.
+- Delete is `POST /crops/batch_exclude` with `reason: not_an_object`; `POST /crops/batch_unexclude` restores it. The item stays a document, so its box keeps blocking a re-detect.
+
+- A geometry snapshot holds `bbox_norm`, `crop_area_norm`, `geometry_source`, `detector_bbox_norm` and `crop_rank_in_image`; the restore moves `geometry_revision` forward, drops the vector and re-embeds.
 - A class snapshot holds `class_id`, `class_name`, `class_source`,
   `label_source`, `confidence`, `class_detector`, `class_detector_version`,
   `class_labeler`, `class_labeled_at` and `class_validated`. Repeated undo steps back

@@ -22,9 +22,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from src.clients.occ import occ_update_one
+from src.clients.occ_locks import lock_includes
 from src.config import get_curation_config
-from src.config.region_fields import get_region_fields
 from src.core.logging import get_logger
+from src.domain.item_geometry import stored_box
 from src.services.curation.image_serving import is_servable_image_path
 from src.services.curation.ingest_index import ImageContext, index_items
 from src.services.curation.item_delete import delete_items
@@ -54,20 +55,7 @@ REPROCESS_SOURCE = 'reprocess'
 
 
 def _existing_includes() -> list[str]:
-    F = get_region_fields()
-    return [
-        'image_id',
-        'bbox_norm',
-        'class_id',
-        'class_name',
-        'class_source',
-        'class_validated',
-        'test_holdout',
-        'proposal_chain',
-        F.boxes,
-        F.validated,
-        F.verifier,
-    ]
+    return ['image_id', 'bbox_norm', 'class_id', 'class_name', 'proposal_chain', *lock_includes()]
 
 
 def _proposal(item: DetectedItem, width: int, height: int) -> Proposal:
@@ -202,6 +190,7 @@ async def redetect_image(
                 bbox_norm=(bn[0], bn[1], bn[2], bn[3]),
                 class_name=src.get('class_name'),
                 locked=item_locked(src),
+                detector_bbox_norm=stored_box(src.get('detector_bbox_norm')),
             )
         )
     items = (await service.detect_items(ctx.require_pil(), image_path=ctx.image_path)).items

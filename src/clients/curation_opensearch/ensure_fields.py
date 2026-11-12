@@ -18,6 +18,7 @@ from src.clients.curation_opensearch.base import (
 from src.clients.curation_opensearch.bodies_core import (
     _CLASS_HISTORY_MAPPING,
     _EXCLUSION_MAPPING,
+    _GEOMETRY_MAPPING,
     _region_auto_confirm_mapping,
     _region_boxes_mapping,
 )
@@ -330,19 +331,16 @@ async def ensure_items_history_fields(
         }
 
 
-async def ensure_items_exclusion_fields(
-    client: AsyncOpenSearch,
+async def _put_items_fields_one_by_one(
+    client: AsyncOpenSearch, mapping: dict[str, Any]
 ) -> dict[str, Any]:
-    """PUT the exclusion fields (:data:`_EXCLUSION_MAPPING`) onto the items mapping.
-
-    One ``PUT _mapping`` per field: indexes created before these were
-    mapped may already carry a dynamic ``text`` mapping for the string
-    fields, and a conflict on one must not block the others.
-    """
+    """One ``PUT _mapping`` per field of ``mapping``: indexes created before
+    these were mapped may already carry a dynamic mapping for a field, and a
+    conflict on one must not block the others."""
     index = config.items_index
     added: list[str] = []
     conflicts: list[str] = []
-    for field, spec in _EXCLUSION_MAPPING.items():
+    for field, spec in mapping.items():
         try:
             await client.indices.put_mapping(index=index, body={'properties': {field: spec}})
             added.append(field)
@@ -356,6 +354,20 @@ async def ensure_items_exclusion_fields(
         'curation_mapping_migration', index=index, fields=added, existing_conflicts=conflicts
     )
     return {'acknowledged': True, 'index': index, 'fields_added': added, 'conflicts': conflicts}
+
+
+async def ensure_items_exclusion_fields(
+    client: AsyncOpenSearch,
+) -> dict[str, Any]:
+    """PUT the exclusion fields (:data:`_EXCLUSION_MAPPING`) onto the items mapping."""
+    return await _put_items_fields_one_by_one(client, _EXCLUSION_MAPPING)
+
+
+async def ensure_items_geometry_fields(
+    client: AsyncOpenSearch,
+) -> dict[str, Any]:
+    """PUT the item geometry fields (:data:`_GEOMETRY_MAPPING`) onto the items mapping."""
+    return await _put_items_fields_one_by_one(client, _GEOMETRY_MAPPING)
 
 
 async def ensure_items_text_fields(

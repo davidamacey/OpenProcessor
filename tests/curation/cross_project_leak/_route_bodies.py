@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from integration.ingest_fakes import jpeg_bytes
 
-from curation.cross_project_leak._constants import cluster_uid
+from curation.cross_project_leak._constants import CLASS_NAMES, cluster_uid
 from curation.cross_project_leak._seeded_files import _source_root
 from curation.cross_project_leak._seeders import (
     _VLM_ACTIVE,
@@ -104,7 +104,7 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         ('POST', '/label_ops/{op_id}/undo'): {'json': {'dry_run': False}},
         ('POST', '/crops/flag_new_class'): {'json': {'crop_ids': [item], 'note': 'n'}},
         ('POST', '/selection/summary'): {'json': {'crop_ids': [proposal]}},
-        ('POST', '/crops/batch_exclude'): {'json': {'crop_ids': [proposal], 'reason': 'r'}},
+        ('POST', '/crops/batch_exclude'): {'json': {'crop_ids': [proposal], 'reason': 'ignore'}},
         ('POST', '/crops/batch_unexclude'): {'json': {'crop_ids': [proposal]}},
         ('POST', '/classes'): {'json': {'name': f'{slug}_newclass'}},
         ('POST', '/classes/seed_from_detector'): {
@@ -192,6 +192,18 @@ def route_bodies(slug: str, export_root: Path) -> dict[tuple[str, str], dict[str
         # single forms take their target from the path.
         ('POST', '/reprocess'): {
             'json': {'targets': {'crop_ids': [proposal]}, 'scopes': ['region'], 'dry_run': False}
+        },
+        ('PATCH', '/crops/{crop_id}/geometry'): {
+            'json': {'bbox_norm': [0.1, 0.1, 0.5, 0.5], 'expected_geometry_revision': 0}
+        },
+        # The PATCH row above moves the same item first (revision 1), so there is an edit to undo.
+        ('POST', '/crops/{crop_id}/geometry/undo'): {'json': {'expected_geometry_revision': 1}},
+        ('POST', '/images/{image_id}/items'): {
+            'json': {
+                'bbox_norm': [0.2, 0.2, 0.6, 0.6],
+                'class_name': CLASS_NAMES.get(slug, slug),
+                'request_id': str(uuid.uuid4()),
+            }
         },
         ('POST', '/images/{image_id}/reprocess'): {'json': {'scopes': ['region']}},
         ('POST', '/crops/{crop_id}/reprocess'): {'json': {'scopes': ['region']}},

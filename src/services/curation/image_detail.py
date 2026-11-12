@@ -61,6 +61,41 @@ async def image_source(opensearch: Any, image_id: str, fields: list[str]) -> dic
     return resp.get('_source') or {}
 
 
+async def image_item_hits(opensearch: Any, image_id: str) -> dict[str, Any]:
+    """The search response holding the image's items, ordered by ``crop_rank_in_image``."""
+    resp: dict[str, Any] = await opensearch.search(
+        index=items_index(),
+        body={
+            'size': ITEMS_MAX,
+            'track_total_hits': True,
+            'query': {'term': {'image_id': image_id}},
+            'sort': [{'crop_rank_in_image': {'order': 'asc', 'missing': '_last'}}],
+            '_source': {'excludes': item_context_source_excludes(await vector_source_excludes())},
+        },
+    )
+    return resp
+
+
+async def boxes_and_counts(
+    opensearch: Any, image_id: str, hits: list[dict[str, Any]]
+) -> tuple[list[BoxView], ImageCounts]:
+    """The boxes an image draws (every item in ``hits``, excluded and held-out ones with their own
+    tone) and its served counts."""
+    boxes = boxes_of((str(h.get('_id') or ''), h.get('_source') or {}) for h in hits)
+    counts = (await item_facts(opensearch, [image_id], include_test=True, box_limit=0))[
+        image_id
+    ].counts
+    return boxes, counts
+
+
+async def image_boxes_and_counts(
+    opensearch: Any, image_id: str
+) -> tuple[list[BoxView], ImageCounts]:
+    """:func:`boxes_and_counts` for the image as stored now (the response of an annotation write)."""
+    resp = await image_item_hits(opensearch, image_id)
+    return await boxes_and_counts(opensearch, image_id, resp['hits']['hits'])
+
+
 async def image_detail(opensearch: Any, image_id: str, policy: str) -> dict[str, Any] | None:
     """``{image, counts, items, boxes, items_truncated}`` or ``None`` for an unknown image.
 
@@ -74,27 +109,14 @@ async def image_detail(opensearch: Any, image_id: str, policy: str) -> dict[str,
         size = await asyncio.to_thread(_pixel_size_from_header, str(src['image_path']))
         if size is not None:
             width, height = size
-    vector_excludes = await vector_source_excludes()
-    resp = await opensearch.search(
-        index=items_index(),
-        body={
-            'size': ITEMS_MAX,
-            'track_total_hits': True,
-            'query': {'term': {'image_id': image_id}},
-            'sort': [{'crop_rank_in_image': {'order': 'asc', 'missing': '_last'}}],
-            '_source': {'excludes': item_context_source_excludes(vector_excludes)},
-        },
-    )
+    resp = await image_item_hits(opensearch, image_id)
     hits = resp['hits']['hits']
     state_fields = await item_state_fields()
     items = [
         serialize_item(h.get('_source') or {}, h.get('_id', ''), state_fields=state_fields)
         for h in hits
     ]
-    boxes: list[BoxView] = boxes_of((str(h.get('_id') or ''), h.get('_source') or {}) for h in hits)
-    counts: ImageCounts = (
-        await item_facts(opensearch, [image_id], include_test=True, box_limit=0)
-    )[image_id].counts
+    boxes, counts = await boxes_and_counts(opensearch, image_id, hits)
     capture = served_capture(src, policy)
     info = ImageInfo(
         image_id=image_id,

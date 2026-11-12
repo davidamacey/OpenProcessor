@@ -28,9 +28,11 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from opensearchpy.exceptions import OpenSearchException
 
+from src.clients.occ_locks import lock_includes
 from src.config import get_curation_config
 from src.core.logging import get_logger
 from src.domain.ingest_class_sources import OPEN_VOCAB_CLASS_SOURCE, OPEN_VOCAB_TARGET_CLASS_SOURCE
+from src.domain.item_geometry import stored_box
 from src.services.classes.registry import get_class_registry
 from src.services.classes.resolve import ResolvedClass, ensure_class_by_name
 from src.services.curation.ingest_index import index_items
@@ -135,21 +137,13 @@ def encode_for_segmenter(pil: Image.Image, max_side: int) -> bytes:
 
 
 def _existing_includes() -> list[str]:
-    from src.config.region_fields import get_region_fields
-
-    F = get_region_fields()
     return [
         'bbox_norm',
         'class_id',
         'class_name',
         'proposal_name',
-        'class_source',
-        'class_validated',
-        'test_holdout',
         'open_vocab_set',
-        F.boxes,
-        F.validated,
-        F.verifier,
+        *lock_includes(),
     ]
 
 
@@ -296,7 +290,12 @@ async def plan_open_vocab_image(
             continue
         existing_ids[doc_id] = name
         existing.append(
-            ExistingBox(bbox_norm=(box[0], box[1], box[2], box[3]), class_name=name, locked=locked)
+            ExistingBox(
+                bbox_norm=(box[0], box[1], box[2], box[3]),
+                class_name=name,
+                locked=locked,
+                detector_bbox_norm=stored_box(src.get('detector_bbox_norm')),
+            )
         )
         locked_count += int(locked)
 

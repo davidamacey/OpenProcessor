@@ -134,6 +134,16 @@ ErrorCode = Literal[
     'probe_busy',
     # the test-on-crop routes
     'crop_not_found',
+    # annotation writes (draw a box, move it, undo)
+    'unknown_class',
+    'box_out_of_image',
+    'box_too_small',
+    'degenerate_box',
+    'geometry_conflict',
+    'regions_outside_item',
+    'regions_changed',
+    'request_id_reused',
+    'nothing_to_undo',
     'test_busy',
     'test_timeout',
     'vlm_transport_error',
@@ -431,6 +441,13 @@ class ConfigErrorDetail(BaseModel):
     reasons: list[str] | None = None
     # 404 crop_not_found names every crop id the project does not have.
     crop_ids: list[str] | None = None
+    # 422 box_too_small: the shortest side a box may have, as a fraction of the image.
+    min_side: float | None = None
+    # 422 regions_outside_item: the region boxes the new item box would strand.
+    box_ids: list[str] | None = None
+    # 409 geometry_conflict: the stored revision and the stored item (the wire item).
+    current_geometry_revision: int | None = None
+    item: dict[str, Any] | None = None
     # 409 in_use on PUT /models/{name}/sharing: who still runs the model.
     used_by: list[ModelSharingUser] | None = None
     # 409 audit_required / audit_precision_low on POST /clusters/auto_promote: the

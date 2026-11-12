@@ -46,8 +46,11 @@ matters: an undo record is always newer than the entry it cancels."""
 class EditKind(str, Enum):  # noqa: UP042  # (str, Enum) keeps str() and format() as Class.MEMBER; StrEnum would change both
     REGION = 'region'
     VLM_DISMISS = 'vlm_dismiss'
+    GEOMETRY = 'geometry'
 
 
+GEOMETRY_WRITER = 'human:geometry'
+GEOMETRY_UNDO_WRITER = 'human:geometry_undo'
 REGION_UNDO_WRITER = 'human:region_undo'
 VLM_DISMISS_UNDO_WRITER = 'human:vlm_dismiss_undo'
 
@@ -56,6 +59,40 @@ VLM_DISMISS_FIELDS: tuple[str, ...] = (
     'vlm_dismissed_class_name',
     'vlm_dismissed_at',
 )
+
+
+GEOMETRY_FIELDS: tuple[str, ...] = (
+    'bbox_norm',
+    'crop_area_norm',
+    'geometry_source',
+    'detector_bbox_norm',
+    'crop_rank_in_image',
+)
+"""What a box edit replaces. ``geometry_revision`` is not one: a restore is itself a change, so it
+moves forward from the stored revision, as ``region_revision`` does."""
+
+
+REGION_REVISION_BEFORE = 'region_revision_before'
+"""Key of a geometry entry's ``state`` holding the ``region_revision`` the edit read: an undo that
+restores dropped region boxes is refused when a region write has happened since."""
+
+
+def geometry_region_fields() -> tuple[str, ...]:
+    """The region box list and the summaries a move that dropped boxes rewrites. Only such an edit
+    snapshots them, so an undo of a plain move never reverts a later region edit."""
+    F = get_region_fields()
+    return (F.boxes, F.count, F.rejected_count, F.max_score, F.rejection_reason)
+
+
+def with_dropped_regions(
+    history: list[dict[str, Any]], current: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """``history`` whose newest entry also holds the region boxes ``current`` had."""
+    F = get_region_fields()
+    newest = history[-1]
+    state = {f: current.get(f) for f in geometry_region_fields()}
+    state[REGION_REVISION_BEFORE] = int(current.get(F.revision) or 0)
+    return [*history[:-1], {**newest, 'state': {**newest['state'], **state}}]
 
 
 def region_state_fields() -> tuple[str, ...]:
@@ -89,6 +126,8 @@ def region_state_fields() -> tuple[str, ...]:
 def state_fields(kind: EditKind) -> tuple[str, ...]:
     if kind == EditKind.REGION:
         return region_state_fields()
+    if kind == EditKind.GEOMETRY:
+        return GEOMETRY_FIELDS
     return VLM_DISMISS_FIELDS
 
 
@@ -148,23 +187,36 @@ def restore_edit_state(
     # Only the fields the snapshot recorded: an entry written before a
     # field joined ``state_fields`` says nothing about it, and restoring it
     # as null would erase a value that edit never touched.
-    restored = {f: state[f] for f in state_fields(kind) if f in state}
+    fields = state_fields(kind)
+    if kind == EditKind.GEOMETRY:
+        fields = (*fields, *geometry_region_fields())
+    restored = {f: state[f] for f in fields if f in state}
     if kind == EditKind.REGION:
         F = get_region_fields()
         restored[F.revision] = int(current.get(F.revision) or 0) + 1
+    elif kind == EditKind.GEOMETRY:
+        restored['geometry_revision'] = int(current.get('geometry_revision') or 0) + 1
+        if REGION_REVISION_BEFORE in state:
+            F = get_region_fields()
+            restored[F.revision] = int(current.get(F.revision) or 0) + 1
     return restored
 
 
 __all__ = [
     'EDIT_HISTORY_FIELD',
+    'GEOMETRY_UNDO_WRITER',
+    'GEOMETRY_WRITER',
     'MAX_EDIT_HISTORY_ENTRIES',
+    'REGION_REVISION_BEFORE',
     'REGION_UNDO_WRITER',
     'VLM_DISMISS_FIELDS',
     'VLM_DISMISS_UNDO_WRITER',
     'EditKind',
     'find_edit_undo',
+    'geometry_region_fields',
     'record_edit',
     'region_state_fields',
     'restore_edit_state',
     'state_fields',
+    'with_dropped_regions',
 ]

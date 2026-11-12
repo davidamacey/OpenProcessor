@@ -158,3 +158,80 @@ def test_region_confirm_then_undo(
 
     again = api.post(f'{prefix}/crops/{ingested_crop_id}/region/undo')
     assert again.status == 409, 'nothing is left to undo, the server says so'
+
+
+def _item(api: Any, prefix: str, crop_id: str) -> dict[str, Any]:
+    resp = api.get(f'{prefix}/crops/{crop_id}')
+    assert resp.status == 200, resp.text()
+    return resp.json()
+
+
+def _image_items(api: Any, prefix: str, image_id: str) -> list[dict[str, Any]]:
+    page = api.get(f'{prefix}/crops?image_id={image_id}&page_size=200&include_excluded=true').json()
+    return list(page['crops'])
+
+
+def _iou(a: list[float], b: list[float]) -> float:
+    w = max(0.0, min(a[2], b[2]) - max(a[0], b[0]))
+    h = max(0.0, min(a[3], b[3]) - max(a[1], b[1]))
+    inter = w * h
+    union = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter
+    return inter / union if union else 0.0
+
+
+def test_draw_move_delete_survive_a_redetect(
+    api: Any, throwaway_project: dict[str, str], ingested_crop_id: str
+) -> None:
+    """A drawn box, a moved detector box and a deleted detector box are all a person's: a
+    re-detect of the image changes none of them and does not re-create the deleted one."""
+    prefix = throwaway_project['prefix']
+    detected = _item(api, prefix, ingested_crop_id)
+    image_id = detected['image_id']
+    detector_box = list(detected['bbox_norm'])
+    api.post(f'{prefix}/classes', data={'name': 'e2e-thing', 'group': 'e2e'})
+
+    drawn = api.post(
+        f'{prefix}/images/{image_id}/items',
+        data={
+            'bbox_norm': [0.02, 0.02, 0.12, 0.12],
+            'class_name': 'e2e-thing',
+            'request_id': str(uuid.uuid4()),
+        },
+    )
+    assert drawn.status == 201, drawn.text()
+    drawn_id = drawn.json()['item']['crop_id']
+
+    moved_to = [0.03, 0.03, 0.2, 0.2]
+    moved = api.patch(
+        f'{prefix}/crops/{drawn_id}/geometry',
+        data={'bbox_norm': moved_to, 'expected_geometry_revision': 1},
+    )
+    assert moved.status == 200, moved.text()
+
+    gone = api.post(
+        f'{prefix}/crops/batch_exclude',
+        data={'crop_ids': [ingested_crop_id], 'reason': 'not_an_object'},
+    )
+    assert gone.status == 200, gone.text()
+
+    redetect = api.post(f'{prefix}/images/{image_id}/reprocess', data={'scopes': ['detect']})
+    assert redetect.status in (200, 202), redetect.text()
+    job = redetect.json().get('job')
+    if job:
+        _poll(
+            're-detect job to finish',
+            lambda: (
+                api.get(f'{prefix}/reprocess/jobs/{job["job_id"]}').json().get('status')
+                in ('done', 'completed', 'succeeded')
+            ),
+        )
+
+    assert _item(api, prefix, drawn_id)['bbox_norm'] == pytest.approx(moved_to)
+    deleted = _item(api, prefix, ingested_crop_id)
+    assert deleted['class_excluded'] is True
+    on_the_deleted_box = [
+        row
+        for row in _image_items(api, prefix, image_id)
+        if _iou(list(row['bbox_norm']), detector_box) > 0.5
+    ]
+    assert [row['crop_id'] for row in on_the_deleted_box] == [ingested_crop_id]

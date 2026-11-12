@@ -7,8 +7,8 @@ item's ``class_name`` or the detector's ``proposal_name``, see
 :mod:`~src.services.curation.name_match`), never by model class id.
 
 ``origin`` says how an item came to exist: ``detector`` (the ingest detector),
-``sam3`` (a full-image SAM 3 pass), ``human`` (a person owns its class) or
-``import`` (a dataset import wrote or proposed it). ``embedding_state``
+``sam3`` (a full-image SAM 3 pass), ``human`` (a person owns its class),
+``drawn`` (a person drew its box) or ``import`` (a dataset import wrote or proposed it). ``embedding_state``
 ``embedded`` means "has a vector" (the authoritative ``exists`` test); the
 others are the recorded reasons it has none.
 
@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from src.services.embedding_spaces.readers import WriteFields
 
 
-Origin = Literal['detector', 'sam3', 'human', 'import']
+Origin = Literal['detector', 'sam3', 'human', 'import', 'drawn']
 ReviewStatus = Literal['pending', 'validated', 'dismissed', 'excluded']
 
 HUMAN_CLASS_SOURCES: tuple[str, ...] = ('human', 'human_move')
@@ -151,6 +151,14 @@ def _origin_clause(origin: str) -> dict[str, Any]:
         return {'exists': {'field': 'import_ids'}}
     if origin == 'human':
         return {'terms': {'class_source': list(HUMAN_CLASS_SOURCES)}}
+    if origin == 'drawn':
+        # A person drew the box: human geometry on an item no detector ever named.
+        return {
+            'bool': {
+                'filter': [{'term': {'geometry_source': 'human'}}],
+                'must_not': [{'exists': {'field': 'detector_class_name'}}],
+            }
+        }
     if origin == 'sam3':
         return {'exists': {'field': SAM3_ORIGIN_FIELD}}
     # detector: everything no other origin claims

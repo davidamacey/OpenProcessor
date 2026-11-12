@@ -10,9 +10,13 @@ site) keeps working unchanged.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.config import get_region_fields
+
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 def is_human_marker(value: Any) -> bool:
@@ -83,11 +87,58 @@ def is_locked_box(box: Any) -> bool:
     return _box_is_human_owned(box) or (box.source == CANDIDATE_IMPORT and box.state != 'proposed')
 
 
+def is_human_deleted(source: Mapping[str, Any]) -> bool:
+    """A person deleted the item as not an object; the document stays so its box keeps
+    blocking a re-create."""
+    from src.domain.item_geometry import NOT_AN_OBJECT
+
+    return bool(
+        source.get('class_excluded')
+        and source.get('excluded_by') == 'human'
+        and source.get('excluded_reason') == NOT_AN_OBJECT
+    )
+
+
+def has_human_geometry(source: Mapping[str, Any]) -> bool:
+    """A person drew the item's box or moved it, or deleted the item as not an object."""
+    from src.domain.item_geometry import GEOMETRY_SOURCE_HUMAN
+
+    return source.get('geometry_source') == GEOMETRY_SOURCE_HUMAN or is_human_deleted(source)
+
+
+def has_import_geometry(source: Mapping[str, Any]) -> bool:
+    """A validated import wrote the item (a ``label_trust: suggestion`` import and a machine
+    proposal an import made stay replaceable, like their class)."""
+    from src.domain.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
+
+    return bool(
+        source.get('import_ids')
+        and source.get('class_source') == LABEL_IMPORT_CLASS_SOURCE
+        and source.get('class_validated')
+    )
+
+
+def is_locked_geometry(source: Mapping[str, Any]) -> bool:
+    """True when an automated writer must never move, delete, re-create or re-index
+    the item's box: a person owns the geometry (:func:`has_human_geometry`), a
+    validated import wrote the item (a ``label_trust: suggestion`` import and a
+    machine proposal an import made stay replaceable, like their class), or the item
+    is frozen into the test holdout.
+
+    Re-detect, an open-vocabulary run, import reconcile and re-ingest reach this
+    through :func:`is_locked_item`, so none can skip it."""
+    return (
+        has_human_geometry(source)
+        or has_import_geometry(source)
+        or bool(source.get('test_holdout'))
+    )
+
+
 def is_locked_item(source: dict[str, Any], F: Any = None) -> bool:
-    """Item-level lock test reprocess and undo use: locked class, OR any
-    locked box in the item's region list, OR a validated set whose
-    verifier is ``human``/``import``."""
-    if is_locked_class(source):
+    """Item-level lock test reprocess and undo use: locked class, OR a locked
+    geometry, OR any locked box in the item's region list, OR a validated set
+    whose verifier is ``human``/``import``."""
+    if is_locked_class(source) or is_locked_geometry(source):
         return True
     from src.domain.region_boxes import read_boxes
 
@@ -117,6 +168,7 @@ def is_human_owned_item(
     return (
         is_human_marker(source.get('class_source'))
         or is_human_marker(source.get('label_source'))
+        or has_human_geometry(source)
         or (count_holdout and bool(source.get('test_holdout')))
         or any(is_human_owned(box) for box in read_boxes(source, fields))
         or (bool(source.get(fields.validated)) and source.get(fields.verifier) == 'human')
@@ -127,15 +179,32 @@ def lock_includes() -> list[str]:
     """The ``_source`` fields :func:`is_locked_item` reads, for a query that
     fetches items only to test the lock."""
     F = get_region_fields()
-    return ['class_source', 'class_validated', 'test_holdout', F.boxes, F.validated, F.verifier]
+    return [
+        'class_source',
+        'class_validated',
+        'test_holdout',
+        'geometry_source',
+        'import_ids',
+        'class_excluded',
+        'excluded_by',
+        'excluded_reason',
+        'detector_bbox_norm',
+        F.boxes,
+        F.validated,
+        F.verifier,
+    ]
 
 
 __all__ = [
     '_is_locked_marker',
+    'has_human_geometry',
+    'has_import_geometry',
+    'is_human_deleted',
     'is_human_marker',
     'is_human_owned_item',
     'is_locked_box',
     'is_locked_class',
+    'is_locked_geometry',
     'is_locked_item',
     'lock_includes',
 ]

@@ -398,7 +398,7 @@ def test_server_built_urls_follow_the_configured_prefix(monkeypatch: pytest.Monk
     with _client(monkeypatch, RegionFields()) as client:
         items = _endpoint_items(client)
     for name, item in items.items():
-        assert item['thumbnail_url'] == '/custom-mount/crops/crop-1/thumbnail', name
+        assert item['thumbnail_url'] == '/custom-mount/crops/crop-1/thumbnail?v=0', name
         (box,) = item['region_boxes']
         assert box['thumbnail_url'] == '/custom-mount/crops/crop-1/region_thumbnail?box_id=b1', name
 
