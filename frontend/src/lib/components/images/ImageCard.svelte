@@ -39,13 +39,18 @@
       (m) => (missing = m),
     );
   }
-  const aspect = $derived(
-    card.width && card.height ? `${card.width} / ${card.height}` : '4 / 3',
-  );
+  // Every thumbnail sits in the same 4:3 frame, so cards are one height; the picture (and the
+  // boxes drawn over it) keeps its own aspect inside the frame.
+  const FRAME = 4 / 3;
+  const picture = $derived.by(() => {
+    const ratio = card.width && card.height ? card.width / card.height : FRAME;
+    const fit = ratio >= FRAME ? 'width:100%' : 'height:100%';
+    return `aspect-ratio:${ratio};${fit}`;
+  });
 </script>
 
 <li
-  class="flex flex-col rounded-md border bg-zinc-900 {selected
+  class="flex h-full flex-col rounded-md border bg-zinc-900 {selected
     ? 'border-sky-400 bg-zinc-800'
     : 'border-zinc-700'} {focused ? 'ring-2 ring-sky-500 ring-inset' : ''}"
   style="content-visibility:auto;contain-intrinsic-size:auto 220px"
@@ -57,32 +62,41 @@
   <div class="relative" bind:clientWidth={width}>
     <button
       type="button"
-      class="relative block w-full overflow-hidden rounded-t bg-zinc-950"
-      style="aspect-ratio:{aspect}"
+      class="relative flex w-full items-center justify-center overflow-hidden rounded-t bg-zinc-950"
+      style="aspect-ratio:4 / 3"
       data-testid="image-card-select"
       aria-pressed={selected}
       aria-label="Select {card.file_name}"
       {onclick}
       ondblclick={onopen}
     >
-      {#key attempt}
-        <img
-          src={resolveApiUrl(card.thumbnail_url)}
-          alt=""
-          loading="lazy"
-          class="h-full w-full object-fill"
-          onerror={thumbFailed}
-        />
-      {/key}
-      {#if missing}
-        <SourceMissingBadge {missing} compact />
-      {/if}
-      <BoxLayer boxes={card.boxes} showLabels={width >= LABEL_MIN_WIDTH} />
+      <span class="relative block" style={picture}>
+        {#key attempt}
+          <img
+            src={resolveApiUrl(card.thumbnail_url)}
+            alt=""
+            loading="lazy"
+            class="h-full w-full object-fill"
+            onerror={thumbFailed}
+          />
+        {/key}
+        {#if missing}
+          <SourceMissingBadge {missing} compact />
+        {/if}
+        <BoxLayer boxes={card.boxes} showLabels={width >= LABEL_MIN_WIDTH} />
+      </span>
     </button>
     {#if selected}
       <span
         class="pointer-events-none absolute top-1 left-1 flex h-5 w-5 items-center justify-center rounded-full bg-sky-500 text-xs text-white"
         aria-hidden="true">✓</span
+      >
+    {/if}
+    {#if card.boxes_truncated}
+      <span
+        class="chip pointer-events-none absolute bottom-1 left-1"
+        data-testid="boxes-truncated"
+        title="This image has more items than are drawn">+ more boxes</span
       >
     {/if}
     {#if card.near_dup}
@@ -107,16 +121,9 @@
       data-testid="chip-unlabeled"
       title="Items without a class">{card.counts.unlabeled} unlabelled</span
     >
-    {#if card.boxes_truncated}
-      <span
-        class="chip"
-        data-testid="boxes-truncated"
-        title="This image has more items than are drawn">+ more boxes</span
-      >
-    {/if}
   </div>
   <div
-    class="flex items-center justify-between gap-2 px-2 pb-1.5 text-[11px] text-zinc-400"
+    class="mt-auto flex items-center justify-between gap-2 px-2 pb-1.5 text-[11px] text-zinc-400"
   >
     <span class="truncate" title={card.file_name}>{card.file_name}</span>
     <button

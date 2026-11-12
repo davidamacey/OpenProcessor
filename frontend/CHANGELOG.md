@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Gallery cards are one height: every thumbnail sits in the same 4:3 frame, the "+ more boxes" mark moved onto the thumbnail, and the grid rows are equal.
 - A gallery thumbnail that fails to load is retried once after a second, then shows the server's source-missing badge (G-27).
 - Items serve `clarity_label` (soft, clear, sharp) and `rank_label` (largest, 2nd, …), thresholds in `src/domain/item_labels.py`; the card chip shows them instead of "b0.14" (G-20).
 - The source-image overlay labels every item box and draws region boxes only for the selected item; an "All regions" toggle draws them for all (G-19).

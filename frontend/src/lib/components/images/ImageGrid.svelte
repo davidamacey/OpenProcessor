@@ -34,7 +34,9 @@
 
 <ul
   class="grid gap-3"
-  style="grid-template-columns:repeat(auto-fill,minmax({MIN_COLUMN[thumb]},1fr))"
+  style="grid-template-columns:repeat(auto-fill,minmax({MIN_COLUMN[
+    thumb
+  ]},1fr));grid-auto-rows:1fr"
   data-testid="image-grid"
 >
   {#each cards as card (card.image_id)}
