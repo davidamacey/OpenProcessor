@@ -5,6 +5,8 @@
    * counted or labelled here.
    */
   import { resolveApiUrl } from '$lib/api';
+  import { fetchSourceMissing, type SourceMissing } from '$lib/sourceMissing';
+  import SourceMissingBadge from '$components/SourceMissingBadge.svelte';
   import type { ImageCardWire } from '$lib/types_images';
   import BoxLayer from '$components/boxes/BoxLayer.svelte';
 
@@ -22,6 +24,21 @@
   let { card, selected, focused, onclick, onopen }: Props = $props();
 
   let width = $state(0);
+  // A thumbnail that fails is asked for once more after a second; a second failure asks the
+  // server why and shows its answer.
+  const RETRY_AFTER_MS = 1000;
+  let attempt = $state(0);
+  let missing = $state<SourceMissing | null>(null);
+
+  function thumbFailed(e: Event): void {
+    if (attempt === 0) {
+      setTimeout(() => (attempt = 1), RETRY_AFTER_MS);
+      return;
+    }
+    void fetchSourceMissing((e.currentTarget as HTMLImageElement).src).then(
+      (m) => (missing = m),
+    );
+  }
   const aspect = $derived(
     card.width && card.height ? `${card.width} / ${card.height}` : '4 / 3',
   );
@@ -48,12 +65,18 @@
       {onclick}
       ondblclick={onopen}
     >
-      <img
-        src={resolveApiUrl(card.thumbnail_url)}
-        alt=""
-        loading="lazy"
-        class="h-full w-full object-fill"
-      />
+      {#key attempt}
+        <img
+          src={resolveApiUrl(card.thumbnail_url)}
+          alt=""
+          loading="lazy"
+          class="h-full w-full object-fill"
+          onerror={thumbFailed}
+        />
+      {/key}
+      {#if missing}
+        <SourceMissingBadge {missing} compact />
+      {/if}
       <BoxLayer boxes={card.boxes} showLabels={width >= LABEL_MIN_WIDTH} />
     </button>
     {#if selected}
