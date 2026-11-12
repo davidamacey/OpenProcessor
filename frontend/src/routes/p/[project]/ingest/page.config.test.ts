@@ -8,6 +8,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
 import { servedIngestConfig } from '$lib/test/fixtures/ingestConfig';
 
+const state = vi.hoisted(() => ({ page: { url: new URL('http://x/p/demo/ingest') } }));
+vi.mock('$app/state', () => state);
+
 vi.mock('$lib/api_ingest', async () => {
   const actual =
     await vi.importActual<typeof import('$lib/api_ingest')>('$lib/api_ingest');
@@ -23,6 +26,7 @@ let target: HTMLDivElement;
 let instance: ReturnType<typeof mount> | undefined;
 
 beforeEach(() => {
+  state.page.url = new URL('http://x/p/demo/ingest');
   target = document.createElement('div');
   document.body.appendChild(target);
 });
@@ -106,7 +110,40 @@ describe('/ingest — served config', () => {
       batch: { ...served.batch, enabled: true, source_roots: ['/data/archive'] },
     });
     await render();
+    await vi.waitFor(() =>
+      expect(target.querySelector('[data-tab="folder"]')?.textContent).toContain(
+        'Server folder',
+      ),
+    );
+    expect(target.textContent).not.toContain('Server-path ingest');
+  });
+
+  it('the folder tab (the address) shows the bulk and server-path panels', async () => {
+    state.page.url = new URL('http://x/p/demo/ingest?tab=folder');
+    const served = servedIngestConfig();
+    getConfig.mockResolvedValue({
+      ...served,
+      batch: { ...served.batch, enabled: true, source_roots: ['/data/archive'] },
+    });
+    await render();
     await vi.waitFor(() => expect(target.textContent).toContain('Server-path ingest'));
+    expect(target.textContent).toContain('Bulk ingest');
+    expect(target.querySelector('input[type=file]')).toBeNull();
+    expect(
+      target.querySelector('[data-tab="folder"]')?.getAttribute('aria-current'),
+    ).toBe('page');
+  });
+
+  it('the Pipeline rail is on every tab', async () => {
+    state.page.url = new URL('http://x/p/demo/ingest?tab=sources');
+    getConfig.mockResolvedValue(servedIngestConfig());
+    await render();
+    await vi.waitFor(() =>
+      expect(target.querySelector('[data-testid="ingest-pipeline-rail"]')).not.toBeNull(),
+    );
+    expect(
+      target.querySelector('[data-testid="ingest-pipeline-rail"]')!.textContent,
+    ).toContain('Cluster');
   });
 
   it('hides the server-path panel when the backend serves batch.enabled: false, roots or not', async () => {

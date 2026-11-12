@@ -5,6 +5,7 @@
 -->
 <script lang="ts">
   import { resolve } from '$app/paths';
+  import { RESOLUTION_SHORT } from '$lib/detector/classResolution';
   import { projectHref } from '$lib/projectPaths';
   import type { IngestConfig } from '$lib/types_ingest';
 
@@ -12,6 +13,11 @@
 
   const detector = $derived(config.detector ?? null);
   const policy = $derived(config.policy ?? null);
+  // The class a detection gets is the ingest policy's `detect.class_resolution`, not the
+  // detector's own `assigns_class` (a classifier head).
+  const classPolicy = $derived(
+    RESOLUTION_SHORT[policy?.detect?.class_resolution ?? 'by_name'],
+  );
 
   const detectFacts = $derived.by(() => {
     const d = policy?.detect;
@@ -41,7 +47,11 @@
       </dd>
       <dt class="text-fg-3">Input size</dt>
       <dd class="text-fg-1">{detector.input_size}</dd>
-      <dt class="text-fg-3">Assigns a class</dt>
+      <dt class="text-fg-3">Class</dt>
+      <dd class="text-fg-1" data-testid="detector-class-policy">
+        {classPolicy}
+      </dd>
+      <dt class="text-fg-3">Classifier head</dt>
       <dd class="text-fg-1" data-testid="detector-assigns-class">
         {detector.assigns_class ? 'yes' : 'no'}
       </dd>

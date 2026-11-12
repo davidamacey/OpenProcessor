@@ -13,7 +13,6 @@
    * used to have to invent independently.
    */
   import AutoLabelPanel from '$components/AutoLabelPanel.svelte';
-  import ClusterRunPanel from '$components/clusters/ClusterRunPanel.svelte';
   import { formatTime } from '$lib/format/time';
   import type { IngestRunState } from '$lib/ingest/ingestRunController.svelte';
   import type { RegionDrain } from '$lib/types_ingest';
@@ -60,6 +59,5 @@
   {#if note}
     <p class="text-caption text-fg-3">{note}</p>
   {/if}
-  <ClusterRunPanel />
   <AutoLabelPanel {gate} />
 </div>

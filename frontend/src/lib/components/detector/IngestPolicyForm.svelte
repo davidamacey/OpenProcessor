@@ -6,11 +6,11 @@
   is frontend copy quoting the backend's documented behavior.
 -->
 <script lang="ts">
+  import { RESOLUTION_HELP } from '$lib/detector/classResolution';
   import type { IngestPolicyEditor } from '$lib/detector/ingestPolicyController.svelte';
   import {
     CLASS_RESOLUTIONS,
     EMBEDDING_MODES,
-    type ClassResolution,
     type EmbeddingMode,
   } from '$lib/types_detector';
   import ClassNamePicker from './ClassNamePicker.svelte';
@@ -22,11 +22,6 @@
     selected: 'Only detections matching the criteria below get a vector.',
     lazy: 'No detection gets a vector at ingest; embed them later. The whole-frame vector is still stored.',
     none: 'Detection only: no vector of any kind, the whole-frame vector included. Embed later.',
-  };
-  const RESOLUTION_HELP: Record<ClassResolution, string> = {
-    proposal: 'The detector label is kept as a proposal; no class is assigned.',
-    by_name:
-      'Gives the box the class named like the detector label, adding it to the registry when it is missing. It is a machine label, reviewable and still clustered.',
   };
 
   function num(v: string): number | null {

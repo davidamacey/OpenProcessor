@@ -59,6 +59,28 @@ describe('IngestDetectorCard', () => {
     ).toContain('no');
   });
 
+  it('says what class a detection gets from the served policy, not "Assigns a class: no"', () => {
+    render({
+      detector: DETECTOR,
+      policy: {
+        embedding: { mode: 'all' },
+        detect: { class_resolution: 'proposal' },
+        revision: 1,
+      },
+    });
+    expect(target.textContent).not.toContain('Assigns a class');
+    expect(
+      target.querySelector('[data-testid="detector-class-policy"]')!.textContent,
+    ).toContain('proposals only');
+  });
+
+  it('defaults to the detector class by name when the policy says nothing', () => {
+    render({ detector: DETECTOR });
+    expect(
+      target.querySelector('[data-testid="detector-class-policy"]')!.textContent,
+    ).toContain('machine label');
+  });
+
   it('lists the label table name to slug inside a collapsed details', () => {
     render({ detector: DETECTOR });
     const details = target.querySelector('details')!;
