@@ -143,6 +143,22 @@ def test_an_empty_filter_is_refused() -> None:
     assert info.value.detail['error'] == 'invalid_request'
 
 
+@pytest.mark.parametrize(
+    'predicate',
+    [
+        {'has_location': True},
+        {'geo_bbox': {'west': 0, 'south': 0, 'east': 5, 'north': 5}},
+        {'near_dup_group': '00000000-0000-0000-0000-000000000001'},
+    ],
+)
+def test_a_filter_target_with_an_image_predicate_is_refused_up_front(
+    predicate: dict[str, Any],
+) -> None:
+    with pytest.raises(RequestRejectedError) as info:
+        validate_request(_request({'kind': 'filter', 'filter': predicate}))
+    assert (info.value.status_code, info.value.detail['error']) == (422, 'invalid_request')
+
+
 def test_a_size_without_a_representative_sample_is_refused() -> None:
     with pytest.raises(RequestRejectedError):
         validate_request(_request(_cluster(), sample={'mode': 'all', 'size': 5}))

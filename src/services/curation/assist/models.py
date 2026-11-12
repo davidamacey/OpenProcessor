@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from src.domain.assist_sampling import MAX_ASSIST_ITEMS, SAMPLE_HARD_MAX
 from src.services.curation.assist.proposal_models import Proposal, ScopeNow
+from src.services.curation.image_join import has_image_predicates
 from src.services.curation.item_filter import ItemFilter
 from src.services.curation.item_selection import MAX_SELECTION_IDS
 from src.services.rejections import rejection
@@ -171,13 +172,23 @@ def validate_request(request: AssistRunRequest) -> None:
             )
         if len(set(target.crop_ids)) != len(target.crop_ids):
             raise _invalid('crop_ids must not repeat')
-    if isinstance(target, FilterTarget) and target.filter.is_empty():
+    if isinstance(target, FilterTarget):
+        _check_filter_target(target)
+    if request.sample.mode == 'all' and request.sample.size is not None:
+        raise _invalid('sample.size applies to sample.mode "representative"')
+
+
+def _check_filter_target(target: FilterTarget) -> None:
+    if target.filter.is_empty():
         raise _invalid(
             'a filter target needs at least one filter field; a whole-project run is the '
             'auto-label job'
         )
-    if request.sample.mode == 'all' and request.sample.size is not None:
-        raise _invalid('sample.size applies to sample.mode "representative"')
+    if has_image_predicates(target.filter):
+        # The run is rebuilt in a worker, which has no image join to apply.
+        raise _invalid(
+            'a filter target does not take area, location or near-duplicate-group filters'
+        )
 
 
 def _invalid(message: str) -> Exception:

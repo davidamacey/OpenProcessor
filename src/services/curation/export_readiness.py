@@ -41,11 +41,13 @@ from src.services.curation.dataset_thresholds import (
     MIN_TRAIN_INSTANCES_PER_CLASS,
     MIN_VAL_INSTANCES_PER_CLASS,
 )
+from src.services.curation.image_join import resolve_filter_join
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses
 from src.services.embedding_spaces.readers import item_write_fields
 
 
 if TYPE_CHECKING:
+    from src.services.curation.image_join import ImageJoin
     from src.services.embedding_spaces.readers import WriteFields
 
 
@@ -64,7 +66,9 @@ NO_VALIDATED_ITEMS_REASON = (
 
 
 def validated_export_query(
-    embedding: WriteFields, item_filter: ItemFilter | None = None
+    embedding: WriteFields,
+    item_filter: ItemFilter | None = None,
+    image_join: ImageJoin | None = None,
 ) -> dict[str, Any]:
     """The cohort ``POST /export/yolo`` scrolls: validated items, minus
     excluded / review-dismissed ones, narrowed by ``item_filter``. Shared
@@ -74,7 +78,9 @@ def validated_export_query(
         'bool': {
             'filter': [
                 {'term': {'class_validated': True}},
-                *item_filter_clauses(item_filter or ItemFilter(), embedding=embedding),
+                *item_filter_clauses(
+                    item_filter or ItemFilter(), embedding=embedding, image_join=image_join
+                ),
             ],
             'must_not': [
                 {'exists': {'field': 'review_dismissed_at'}},
@@ -82,6 +88,18 @@ def validated_export_query(
             ],
         }
     }
+
+
+async def export_image_join(opensearch: Any, item_filter: ItemFilter | None) -> ImageJoin | None:
+    """The images an export filter's image predicates (area, location, near-duplicate group)
+    name. A join cut at the cap would export a silent subset, so it is refused."""
+    if item_filter is None:
+        return None
+    join = await resolve_filter_join(opensearch, item_filter)
+    if join is not None and join.truncated:
+        msg = 'the filter names more images than one export can join; narrow the area or group'
+        raise NothingToExportError(msg)
+    return join
 
 
 async def export_blocking_reasons(
@@ -92,9 +110,10 @@ async def export_blocking_reasons(
     refusal only; reasons that need the scrolled rows (no box, unregistered
     class, fully-labeled filter) are still raised by the export itself."""
     try:
+        join = await export_image_join(opensearch, item_filter)
         resp = await opensearch.count(
             index=index,
-            body={'query': validated_export_query(await item_write_fields(), item_filter)},
+            body={'query': validated_export_query(await item_write_fields(), item_filter, join)},
         )
         count = int(resp.get('count') or 0)
     except OpenSearchException as exc:
@@ -348,6 +367,7 @@ __all__ = [
     'export_blocking_reasons',
     'export_class_split_check',
     'export_generation_check',
+    'export_image_join',
     'export_size_check',
     'export_splits_check',
     'export_unlabeled_objects_check',
