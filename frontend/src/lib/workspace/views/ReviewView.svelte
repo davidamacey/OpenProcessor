@@ -8,7 +8,8 @@
    */
   import ClassPicker from '$components/ClassPicker.svelte';
   import DismissedPanel from '$lib/components/review/DismissedPanel.svelte';
-  import Filmstrip from '$lib/components/review/Filmstrip.svelte';
+  import Filmstrip from '$components/Filmstrip.svelte';
+  import { getThumbUrl } from '$lib/api_cropRead';
   import QueueFilters from '$lib/components/review/QueueFilters.svelte';
   import RejectReasonPrompt from '$lib/components/review/RejectReasonPrompt.svelte';
   import ReviewCropPane from '$lib/components/review/ReviewCropPane.svelte';
@@ -67,9 +68,11 @@
 
   // The served page around the focus: the loaded items near the cursor.
   const strip = $derived(
-    queue.items
-      .slice(Math.max(0, loader.cursor - 6), loader.cursor + 10)
-      .map((c) => ({ id: c.id, displayName: c.display_name })),
+    queue.items.slice(Math.max(0, loader.cursor - 6), loader.cursor + 10).map((c) => ({
+      id: c.id,
+      label: c.display_name,
+      thumbUrl: getThumbUrl(c.id, 112),
+    })),
   );
 
   // A Reprocess in the details panel re-reads the item: take it into the queue.
@@ -122,7 +125,7 @@
 
   {#if current}
     <Filmstrip
-      items={strip}
+      tiles={strip}
       focusedId={current.id}
       index={loader.currentPosition - 1}
       total={queue.total}

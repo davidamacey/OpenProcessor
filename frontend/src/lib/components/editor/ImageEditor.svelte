@@ -10,12 +10,17 @@
   import ClassPicker from '$components/ClassPicker.svelte';
   import EditorCanvas from '$components/editor/EditorCanvas.svelte';
   import EditorHeader from '$components/editor/EditorHeader.svelte';
-  import Filmstrip from '$components/editor/Filmstrip.svelte';
+  import Filmstrip from '$components/Filmstrip.svelte';
   import ObjectList from '$components/editor/ObjectList.svelte';
   import ToolStrip from '$components/editor/ToolStrip.svelte';
   import SlotBboxEditor from '$components/SlotBboxEditor.svelte';
   import ViewState from '$components/state/ViewState.svelte';
-  import { getImageFileUrl, listImages, locateImage } from '$lib/api_images';
+  import {
+    getImageFileUrl,
+    getImageThumbUrl,
+    listImages,
+    locateImage,
+  } from '$lib/api_images';
   import { slotRegistry } from '$lib/annotations/registeredSlots';
   import { subBoxSlotFor } from '$lib/annotations/cropSlots';
   import { createEditorController } from '$lib/editor/editorController.svelte';
@@ -180,10 +185,18 @@
       {#if c.filmstrip && c.filmstrip.index !== null}
         <div class="shrink-0 border-t border-zinc-800 p-2">
           <Filmstrip
-            before={c.filmstrip.before}
-            after={c.filmstrip.after}
-            currentId={id}
-            hrefFor={(other) => editorHref(other, query)}
+            tiles={[
+              ...(c.filmstrip.before ? [c.filmstrip.before] : []),
+              id,
+              ...c.filmstrip.after,
+            ].map((other) => ({
+              id: other,
+              label: other === id ? 'This image' : `Open image ${other}`,
+              thumbUrl: getImageThumbUrl(other, 96),
+              href: editorHref(other, query),
+            }))}
+            focusedId={id}
+            navLabel="Images in this list"
           />
         </div>
       {/if}
