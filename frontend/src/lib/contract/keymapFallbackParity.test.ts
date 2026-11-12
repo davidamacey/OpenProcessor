@@ -25,6 +25,15 @@ describe('FALLBACK_KEYMAP parity with the served vocabulary', () => {
     expect(keys['cluster.select_all']).toEqual(['a', 'ctrl+a', 'meta+a']);
   });
 
+  it('serves the editor actions with their default keys', () => {
+    const keys = Object.fromEntries(
+      FALLBACK_KEYMAP.actions.map((a) => [a.id, a.default]),
+    );
+    expect(keys['editor.tool_draw']).toEqual(['b']);
+    expect(keys['editor.cancel']).toEqual(['escape']);
+    expect(keys['editor.undo']).toEqual(['ctrl+z', 'meta+z']);
+  });
+
   it('has the same actions, contexts and default keys', () => {
     // The fallback lists `~` first so the overlay prints "~"; the served default omits it.
     const OVERLAY = 'global.shortcuts_overlay';

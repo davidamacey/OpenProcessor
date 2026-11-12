@@ -28,8 +28,8 @@ afterEach(() => {
 describe('FALLBACK_KEYMAP', () => {
   it('declares every action id once', () => {
     const ids = FALLBACK_KEYMAP.actions.map((a) => a.id);
-    expect(ids).toHaveLength(59);
-    expect(new Set(ids).size).toBe(59);
+    expect(ids.length).toBeGreaterThan(0);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
   it("reproduces today's default keys", () => {

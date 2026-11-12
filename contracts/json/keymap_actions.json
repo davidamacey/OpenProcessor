@@ -654,6 +654,350 @@
       "id": "region_gallery.undo",
       "label": "Undo last region action",
       "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "v"
+      ],
+      "description": "Select, move and resize boxes.",
+      "group": null,
+      "id": "editor.tool_select",
+      "label": "Select and move tool",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "b"
+      ],
+      "description": "Draw one box, then go back to the select tool.",
+      "group": null,
+      "id": "editor.tool_draw",
+      "label": "Draw one box",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "shift+b"
+      ],
+      "description": "Keep the draw tool on after each box.",
+      "group": null,
+      "id": "editor.tool_draw_sticky",
+      "label": "Draw boxes (stays on)",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "h"
+      ],
+      "description": "Drag to pan the image; holding space pans for a moment.",
+      "group": null,
+      "id": "editor.tool_pan",
+      "label": "Pan tool",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "="
+      ],
+      "description": "Zoom in at the cursor.",
+      "group": null,
+      "id": "editor.zoom_in",
+      "label": "Zoom in",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "-"
+      ],
+      "description": "Zoom out at the cursor.",
+      "group": null,
+      "id": "editor.zoom_out",
+      "label": "Zoom out",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "0"
+      ],
+      "description": "Fit the whole image in the view.",
+      "group": null,
+      "id": "editor.zoom_fit",
+      "label": "Fit image",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "1"
+      ],
+      "description": "Show the image at 100%.",
+      "group": null,
+      "id": "editor.zoom_actual",
+      "label": "Actual size (100%)",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "delete",
+        "backspace"
+      ],
+      "description": "Remove the selected object; undo brings it back.",
+      "group": null,
+      "id": "editor.delete",
+      "label": "Delete the selected box",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "tab"
+      ],
+      "description": "Select the next object.",
+      "group": null,
+      "id": "editor.next_box",
+      "label": "Select the next box",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "shift+tab"
+      ],
+      "description": "Select the previous object.",
+      "group": null,
+      "id": "editor.prev_box",
+      "label": "Select the previous box",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "arrowup"
+      ],
+      "description": "Nudge the selected box by one screen pixel.",
+      "group": null,
+      "id": "editor.nudge_up",
+      "label": "Move box up",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "arrowdown"
+      ],
+      "description": "Nudge the selected box by one screen pixel.",
+      "group": null,
+      "id": "editor.nudge_down",
+      "label": "Move box down",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "arrowleft"
+      ],
+      "description": "Nudge the selected box by one screen pixel.",
+      "group": null,
+      "id": "editor.nudge_left",
+      "label": "Move box left",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "arrowright"
+      ],
+      "description": "Nudge the selected box by one screen pixel.",
+      "group": null,
+      "id": "editor.nudge_right",
+      "label": "Move box right",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "shift+arrowup"
+      ],
+      "description": "Nudge the selected box by ten screen pixels.",
+      "group": null,
+      "id": "editor.nudge_up_far",
+      "label": "Move box up, far",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "shift+arrowdown"
+      ],
+      "description": "Nudge the selected box by ten screen pixels.",
+      "group": null,
+      "id": "editor.nudge_down_far",
+      "label": "Move box down, far",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "shift+arrowleft"
+      ],
+      "description": "Nudge the selected box by ten screen pixels.",
+      "group": null,
+      "id": "editor.nudge_left_far",
+      "label": "Move box left, far",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "shift+arrowright"
+      ],
+      "description": "Nudge the selected box by ten screen pixels.",
+      "group": null,
+      "id": "editor.nudge_right_far",
+      "label": "Move box right, far",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "alt+shift+arrowup"
+      ],
+      "description": "Resize the selected box from its bottom-right corner by one screen pixel.",
+      "group": null,
+      "id": "editor.resize_up",
+      "label": "Move the bottom-right corner up",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "alt+shift+arrowdown"
+      ],
+      "description": "Resize the selected box from its bottom-right corner by one screen pixel.",
+      "group": null,
+      "id": "editor.resize_down",
+      "label": "Move the bottom-right corner down",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "alt+shift+arrowleft"
+      ],
+      "description": "Resize the selected box from its bottom-right corner by one screen pixel.",
+      "group": null,
+      "id": "editor.resize_left",
+      "label": "Move the bottom-right corner left",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "alt+shift+arrowright"
+      ],
+      "description": "Resize the selected box from its bottom-right corner by one screen pixel.",
+      "group": null,
+      "id": "editor.resize_right",
+      "label": "Move the bottom-right corner right",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "shift+r"
+      ],
+      "description": "Edit the selected object's region boxes.",
+      "group": null,
+      "id": "editor.regions",
+      "label": "Edit region boxes",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "shift+l"
+      ],
+      "description": "Toggle the labels drawn on the boxes.",
+      "group": null,
+      "id": "editor.labels",
+      "label": "Show or hide box labels",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "ctrl+z",
+        "meta+z"
+      ],
+      "description": "Undo the last change to this image.",
+      "group": null,
+      "id": "editor.undo",
+      "label": "Undo",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "ctrl+shift+z",
+        "meta+shift+z"
+      ],
+      "description": "Redo the change you undid.",
+      "group": null,
+      "id": "editor.redo",
+      "label": "Redo",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "/"
+      ],
+      "description": "Pick the class of the selected box.",
+      "group": null,
+      "id": "editor.class_picker",
+      "label": "Search all classes...",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        ","
+      ],
+      "description": "Go to the previous image in the list you came from.",
+      "group": null,
+      "id": "editor.prev_image",
+      "label": "Previous image",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "."
+      ],
+      "description": "Go to the next image in the list you came from.",
+      "group": null,
+      "id": "editor.next_image",
+      "label": "Next image",
+      "modifiable": true
+    },
+    {
+      "context": "editor",
+      "default": [
+        "escape"
+      ],
+      "description": "Cancel the draw, then deselect, then go back to the Workspace.",
+      "group": null,
+      "id": "editor.cancel",
+      "label": "Cancel / deselect / back",
+      "modifiable": false
     }
   ],
   "contexts": [
@@ -753,6 +1097,15 @@
         "global"
       ],
       "label": "Region gallery"
+    },
+    {
+      "class_hotkeys_live": true,
+      "description": "The image editor: draw, move and label the boxes of one image.",
+      "id": "editor",
+      "includes": [
+        "global"
+      ],
+      "label": "Image editor"
     }
   ],
   "generated_by": "scripts/codegen/export_api_contracts.py",
