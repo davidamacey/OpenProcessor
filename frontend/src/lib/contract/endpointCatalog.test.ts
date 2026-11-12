@@ -40,7 +40,6 @@ const SCANNED_FILES = [
   'lib/api_clusters.ts',
   'lib/api_cropRead.ts',
   'lib/api_cropWrites.ts',
-  'lib/api_images.ts',
   'lib/api_datasetImport.ts',
   'lib/api_export.ts',
   'lib/api_images.ts',

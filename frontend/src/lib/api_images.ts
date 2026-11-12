@@ -5,7 +5,9 @@
  */
 import { apiBase, apiFetch, qs, scoped } from '$lib/api';
 import { mapRawCrop, type RawCrop } from '$lib/api_cropMap';
+import type { Crop } from '$lib/types';
 import type { ItemFilterQuery } from '$lib/types_itemFilter';
+import type { ImageLocate, ItemCreateBody, ItemCreatedWire } from '$lib/types_editor';
 import type { ImageDetailResponse, ImagePage, ImageViewParams } from '$lib/types_images';
 
 /** `GET /images`: the shared item filter plus the image-only parameters, one page at `cursor`. */
@@ -42,4 +44,37 @@ export async function getImage(
  */
 export function getImageFileUrl(imageId: string, maxDim: number = 1280): string {
   return `${apiBase}${scoped()}/images/${encodeURIComponent(imageId)}/file?max_dim=${maxDim}`;
+}
+
+/**
+ * `POST {API_PREFIX}/images/{id}/items` — a drawn box becomes an item with the named class.
+ * Retrying with the same `request_id` returns the first item instead of a second.
+ */
+export async function createImageItem(
+  imageId: string,
+  body: ItemCreateBody,
+  signal?: AbortSignal,
+): Promise<ItemCreatedWire<Crop>> {
+  const raw = await apiFetch<ItemCreatedWire<RawCrop>>(
+    `${scoped()}/images/${encodeURIComponent(imageId)}/items`,
+    { method: 'POST', body: JSON.stringify(body) },
+    signal,
+  );
+  return { ...raw, item: mapRawCrop(raw.item) };
+}
+
+/**
+ * `GET {API_PREFIX}/images/locate` — where `target_image_id` sits in the gallery order of `query`, with
+ * the cursors of the page that starts at it and of the page after.
+ */
+export function locateImage(
+  query: ItemFilterQuery & ImageViewParams,
+  target_image_id: string,
+  signal?: AbortSignal,
+): Promise<ImageLocate> {
+  return apiFetch<ImageLocate>(
+    `${scoped()}/images/locate${qs({ ...query, target_image_id })}`,
+    {},
+    signal,
+  );
 }

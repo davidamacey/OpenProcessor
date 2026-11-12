@@ -133,6 +133,10 @@ const DEFAULT_ITEM: Required<RawCrop> = {
       },
     ],
   },
+  geometry_revision: 3,
+  geometry_source: 'human',
+  geometry_locked: true,
+  lock_label: 'Placed by a person',
 };
 
 // Runtime cross-check that DEFAULT_ITEM's own keys match RAW_CROP_KEYS
