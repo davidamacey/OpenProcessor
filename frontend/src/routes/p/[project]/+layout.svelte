@@ -13,7 +13,7 @@
   import ProjectSwitcher from '$components/ProjectSwitcher.svelte';
   import ProjectUnavailable from '$components/ProjectUnavailable.svelte';
   import ResourcesMenu from '$components/ResourcesMenu.svelte';
-  import { projectHref, sectionOf, SECTION_LABELS } from '$lib/projectPaths';
+  import { projectHref, sectionOf } from '$lib/projectPaths';
   import type { ProjectResolution } from '$stores/projects.svelte';
   import AboutModal from '$components/AboutModal.svelte';
   import { slotRegistryWarnings } from '$lib/annotations/registeredSlots';
@@ -199,7 +199,7 @@
     // title/nav; a redundant lowercase "dashboard" crumb added nothing.
     if (!section || section === 'dashboard') return [];
     const out: Array<{ label: string; href: ReturnType<typeof projectHref> }> = [
-      { label: SECTION_LABELS[section] ?? section, href: projectHref(`/${section}`) },
+      { label: section, href: projectHref(`/${section}`) },
     ];
     return out;
   });
@@ -321,11 +321,6 @@
           aria-current={navCurrent('review')}>Review</a
         >
         <a
-          href={resolve(projectHref('/audit'))}
-          class={navLinkClass('audit')}
-          aria-current={navCurrent('audit')}>Audit</a
-        >
-        <a
           href={resolve(projectHref('/classes'))}
           class={navLinkClass('classes')}
           aria-current={navCurrent('classes')}>Classes</a
@@ -351,14 +346,9 @@
           aria-current={navCurrent('bakeoff')}>Bake-off</a
         >
         <a
-          href={resolve(projectHref('/label-ops'))}
-          class={navLinkClass('label-ops')}
-          aria-current={navCurrent('label-ops')}>Label ops</a
-        >
-        <a
-          href={resolve(projectHref('/near-duplicates'))}
-          class={navLinkClass('near-duplicates')}
-          aria-current={navCurrent('near-duplicates')}>Near-duplicates</a
+          href={resolve(projectHref('/quality/audit'))}
+          class={navLinkClass('quality')}
+          aria-current={navCurrent('quality')}>Quality</a
         >
         {#if mapAvailabilityStore.availableFor(slug)}
           <a

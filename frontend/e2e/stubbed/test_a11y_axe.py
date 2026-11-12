@@ -232,10 +232,15 @@ PAGES = [
     ('review-source-missing', '/p/default/review', serve_review_pane, '[role="status"]'),
     ('classes', '/p/default/classes', serve_classes, 'main'),
     ('settings', '/p/default/settings', serve_settings, 'main'),
-    ('label-ops', '/p/default/label-ops', serve_label_ops, '[data-testid="label-op-row"]'),
     (
-        'label-ops-dry-run',
-        '/p/default/label-ops',
+        'quality-history',
+        '/p/default/quality/history',
+        serve_label_ops,
+        '[data-testid="label-op-row"]',
+    ),
+    (
+        'quality-history-dry-run',
+        '/p/default/quality/history',
         serve_label_ops,
         '[data-testid="label-op-row"]',
         show_label_op_dry_run,

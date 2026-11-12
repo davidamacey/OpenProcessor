@@ -67,7 +67,7 @@ ROUTES: list[tuple[str, str]] = [
     ('/review?tab=classifier_blind_spots', "[data-testid='queue-counter']"),
     ('/review?tab=new_class_proposals', "[data-testid='queue-counter']"),
     (f'/review?tab={REGION_TAB_URL_ID}', "[data-testid='queue-counter']"),
-    ('/audit', 'h1'),
+    ('/quality/audit', 'h1'),
     ('/classes', 'h1'),
     ('/export', 'h1'),
     ('/models', 'h1'),

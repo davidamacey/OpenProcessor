@@ -30,7 +30,7 @@ from playwright.sync_api import expect
 PHOTO = (
     Path(__file__).resolve().parents[1] / 'fixtures' / 'ingest' / 'batch1' / 'a.jpg'
 ).read_bytes()
-URL = '/p/default/near-duplicates'
+URL = '/p/default/quality/near-duplicates'
 
 IMAGE_IDS = ['img-a', 'img-b', 'img-c', 'img-d']
 
