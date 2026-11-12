@@ -17,9 +17,10 @@
     target: string;
     spaces: EmbeddingSpaceView[];
     onaction: (action: SpaceAction, space: EmbeddingSpaceView) => void;
+    onevaluation: (space: EmbeddingSpaceView) => void;
   }
 
-  let { state: st, target, spaces, onaction }: Props = $props();
+  let { state: st, target, spaces, onaction, onevaluation }: Props = $props();
 </script>
 
 <section
@@ -90,6 +91,12 @@
               >
             {/if}
             {#if s.role !== 'primary'}
+              <button
+                type="button"
+                class="btn btn-sm"
+                data-testid="space-evaluation"
+                onclick={() => onevaluation(s)}>Evaluation</button
+              >
               <button
                 type="button"
                 class="btn btn-sm"

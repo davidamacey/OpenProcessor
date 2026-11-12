@@ -6,6 +6,7 @@
    * only that.
    */
   import ConfirmDialog from '$components/ConfirmDialog.svelte';
+  import EmbeddingEvaluation from '$components/embeddingSpaces/EmbeddingEvaluation.svelte';
   import type {
     EmbeddingSpacesState,
     SpaceAction,
@@ -47,6 +48,10 @@
   const offerForce = $derived(
     action === 'promote' && spaces.refusal?.code === 'embedding_evaluation_missing',
   );
+
+  $effect(() => {
+    if (action === 'promote') void spaces.loadEvaluation(space);
+  });
 
   async function run(): Promise<void> {
     const ok =
@@ -96,6 +101,10 @@
       Make this the primary {space.target} space. The server refuses until the build is complete
       and an evaluation against the current primary exists.
     </p>
+    <EmbeddingEvaluation
+      evaluation={spaces.evaluationOf(space)}
+      error={spaces.evaluationErrorOf(space)}
+    />
   {:else if action === 'retire'}
     <p class="text-xs text-zinc-400">
       Retire this space and queue the run that clears its vectors. The primary space

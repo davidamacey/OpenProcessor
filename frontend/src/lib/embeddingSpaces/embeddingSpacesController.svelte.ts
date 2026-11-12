@@ -10,6 +10,7 @@
 import {
   buildEmbeddingSpace,
   cancelEmbeddingReindexRun,
+  getEmbeddingEvaluations,
   getEmbeddingModels,
   getEmbeddingReindexRun,
   getEmbeddingSpaces,
@@ -23,6 +24,7 @@ import { pollWhile } from '$lib/jobs/followJob';
 import { jobPhase } from '$lib/jobs/jobPhase';
 import type {
   EmbeddingBuildMode,
+  EmbeddingEvaluationList,
   EmbeddingModelEntry,
   EmbeddingReindexRun,
   EmbeddingSpaceRegisterRequest,
@@ -34,6 +36,7 @@ import type {
 export interface EmbeddingSpacesDeps {
   getEmbeddingSpaces: typeof getEmbeddingSpaces;
   getEmbeddingModels: typeof getEmbeddingModels;
+  getEmbeddingEvaluations: typeof getEmbeddingEvaluations;
   registerEmbeddingSpace: typeof registerEmbeddingSpace;
   buildEmbeddingSpace: typeof buildEmbeddingSpace;
   promoteEmbeddingSpace: typeof promoteEmbeddingSpace;
@@ -66,6 +69,9 @@ export class EmbeddingSpacesState {
   runs = $state<Record<string, EmbeddingReindexRun>>({});
   /** The run being followed for each space, until its job ends. */
   following = $state<Record<string, string>>({});
+  /** The served evaluation of each space whose evaluation was opened, by `spaceRunKey`. */
+  evaluations = $state<Record<string, EmbeddingEvaluationList>>({});
+  evaluationErrors = $state<Record<string, string>>({});
   busy = $state(false);
   /** The refusal of the last write; null after a success. */
   refusal = $state<Refusal | null>(null);
@@ -128,6 +134,31 @@ export class EmbeddingSpacesState {
   /** True while a run started here for the space has not ended. */
   isFollowing(space: SpaceId): boolean {
     return spaceRunKey(space) in this.following;
+  }
+
+  evaluationOf(space: SpaceId): EmbeddingEvaluationList | null {
+    return this.evaluations[spaceRunKey(space)] ?? null;
+  }
+
+  evaluationErrorOf(space: SpaceId): string | null {
+    return this.evaluationErrors[spaceRunKey(space)] ?? null;
+  }
+
+  /** Reads the served evaluation of a space; a failed read is kept as served for the dialog. */
+  async loadEvaluation(space: SpaceId): Promise<void> {
+    const key = spaceRunKey(space);
+    try {
+      const read = this.#deps.getEmbeddingEvaluations ?? getEmbeddingEvaluations;
+      this.evaluations = {
+        ...this.evaluations,
+        [key]: await read(space.space_key, space.target),
+      };
+      const { [key]: _gone, ...rest } = this.evaluationErrors;
+      this.evaluationErrors = rest;
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      this.evaluationErrors = { ...this.evaluationErrors, [key]: apiErrorText(e) };
+    }
   }
 
   clearRefusal(): void {

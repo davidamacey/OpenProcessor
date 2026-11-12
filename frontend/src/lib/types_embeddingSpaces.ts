@@ -38,6 +38,30 @@ export interface EmbeddingSpaceView {
   run_status: string | null;
 }
 
+/** `GET /embedding/spaces/{key}/evaluations`: one run of the in-product evaluation of a space. */
+export interface EmbeddingEvaluationView {
+  id: string;
+  baseline_space_key: string;
+  candidate_space_key: string;
+  protocol: string;
+  verdict: string;
+  metrics: Record<string, unknown>;
+  sample_spec: Record<string, unknown>;
+  /** The baseline is the current primary: the run a promote asks for. */
+  counts_for_promote: boolean;
+  job_id: string | null;
+  created_at: string;
+  created_by: string;
+}
+
+export interface EmbeddingEvaluationList {
+  space_key: string;
+  target: EmbeddingTarget;
+  primary_space_key: string | null;
+  evaluated_against_primary: boolean;
+  evaluations: EmbeddingEvaluationView[];
+}
+
 export interface EmbeddingSpaceListResponse {
   spaces: EmbeddingSpaceView[];
 }

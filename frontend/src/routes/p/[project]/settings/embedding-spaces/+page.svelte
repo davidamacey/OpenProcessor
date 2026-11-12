@@ -2,13 +2,14 @@
   /**
    * `/settings/embedding-spaces`: the project's embedding spaces per target, the encoders the
    * deployment can serve, and the writes that register, restart or backfill, promote, retire and
-   * cancel. Builds started here are followed through the served re-index run. Comparison is only
-   * what the server serves; this page computes none.
+   * cancel. Every build, wherever it was started, is followed through the served re-index run. The
+   * comparison of a space with the primary is the served evaluation; this page computes none.
    */
   import { resolve } from '$app/paths';
   import EmbeddingModelsTable from '$components/embeddingSpaces/EmbeddingModelsTable.svelte';
   import EmbeddingSpacesTable from '$components/embeddingSpaces/EmbeddingSpacesTable.svelte';
   import SpaceActionDialog from '$components/embeddingSpaces/SpaceActionDialog.svelte';
+  import SpaceEvaluationDialog from '$components/embeddingSpaces/SpaceEvaluationDialog.svelte';
   import SpaceRegisterDialog from '$components/embeddingSpaces/SpaceRegisterDialog.svelte';
   import {
     createEmbeddingSpaces,
@@ -31,6 +32,7 @@
 
   let registering = $state(false);
   let acting = $state<{ action: SpaceAction; space: EmbeddingSpaceView } | null>(null);
+  let viewing = $state<EmbeddingSpaceView | null>(null);
 
   const DONE: Record<SpaceAction, string> = {
     build: 'Build started',
@@ -84,6 +86,7 @@
             st.clearRefusal();
             acting = { action, space };
           }}
+          onevaluation={(space) => (viewing = space)}
         />
       {/if}
     {/each}
@@ -110,6 +113,10 @@
     }}
     oncancel={() => (registering = false)}
   />
+{/if}
+
+{#if viewing}
+  <SpaceEvaluationDialog state={st} space={viewing} onclose={() => (viewing = null)} />
 {/if}
 
 {#if acting}

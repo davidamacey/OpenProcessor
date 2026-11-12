@@ -4,6 +4,7 @@ import { API_PREFIX, setScopedPrefix } from '$lib/api';
 import {
   buildEmbeddingSpace,
   cancelEmbeddingReindexRun,
+  getEmbeddingEvaluations,
   getEmbeddingModels,
   getEmbeddingReindexRun,
   promoteEmbeddingSpace,
@@ -44,6 +45,16 @@ describe('embedding space wrappers', () => {
     expect(await getEmbeddingModels()).toEqual([{ model_key: 'm' }]);
     expect(call()).toMatchObject({
       url: `${API_PREFIX}/embedding/models`,
+      method: 'GET',
+    });
+  });
+
+  it('the evaluation of a space is read in the project, with the target and the key encoded', async () => {
+    setScopedPrefix(PROJECT);
+    const call = capture({ space_key: 'a/b', evaluations: [] });
+    await getEmbeddingEvaluations('a/b', 'box');
+    expect(call()).toMatchObject({
+      url: `${PROJECT}/embedding/spaces/a%2Fb/evaluations?target=box`,
       method: 'GET',
     });
   });

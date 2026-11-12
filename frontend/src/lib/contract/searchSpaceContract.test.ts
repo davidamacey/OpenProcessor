@@ -118,6 +118,32 @@ describe('embedding space management wire', () => {
       }),
     ],
     [
+      'EmbeddingEvaluationView',
+      keys<keyof T.EmbeddingEvaluationView>({
+        id: true,
+        baseline_space_key: true,
+        candidate_space_key: true,
+        protocol: true,
+        verdict: true,
+        metrics: true,
+        sample_spec: true,
+        counts_for_promote: true,
+        job_id: true,
+        created_at: true,
+        created_by: true,
+      }),
+    ],
+    [
+      'EmbeddingEvaluationListResponse',
+      keys<keyof T.EmbeddingEvaluationList>({
+        space_key: true,
+        target: true,
+        primary_space_key: true,
+        evaluated_against_primary: true,
+        evaluations: true,
+      }),
+    ],
+    [
       'EmbeddingRunCancelResponse',
       keys<keyof T.EmbeddingRunCancelResponse>({
         run_id: true,

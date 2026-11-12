@@ -2,6 +2,7 @@
 import { apiFetch, globalApi, qs, scoped } from '$lib/api';
 import type {
   EmbeddingBuildRequest,
+  EmbeddingEvaluationList,
   EmbeddingModelEntry,
   EmbeddingModelListResponse,
   EmbeddingPromoteRequest,
@@ -93,6 +94,19 @@ export function retireEmbeddingSpace(
     {
       method: 'POST',
     },
+  );
+}
+
+/** `GET /embedding/spaces/{key}/evaluations?target=`: the evaluation runs of a space, newest first. */
+export function getEmbeddingEvaluations(
+  key: string,
+  target: EmbeddingTarget,
+  signal?: AbortSignal,
+): Promise<EmbeddingEvaluationList> {
+  return apiFetch<EmbeddingEvaluationList>(
+    `${scoped()}/embedding/spaces/${encodeURIComponent(key)}/evaluations${qs({ target })}`,
+    {},
+    signal,
   );
 }
 

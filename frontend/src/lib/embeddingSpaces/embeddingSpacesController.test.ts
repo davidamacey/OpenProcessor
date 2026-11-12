@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError } from '$lib/api_errors';
-import type { EmbeddingReindexRun, EmbeddingSpaceView } from '$lib/types_embeddingSpaces';
+import type {
+  EmbeddingEvaluationList,
+  EmbeddingReindexRun,
+  EmbeddingSpaceView,
+} from '$lib/types_embeddingSpaces';
 import { createEmbeddingSpaces } from './embeddingSpacesController.svelte';
 
 const space = (over: Partial<EmbeddingSpaceView> = {}): EmbeddingSpaceView => ({
@@ -37,6 +41,31 @@ const run = (over: Partial<EmbeddingReindexRun> = {}): EmbeddingReindexRun => ({
   ...over,
 });
 
+const evaluation = (
+  over: Partial<EmbeddingEvaluationList> = {},
+): EmbeddingEvaluationList => ({
+  space_key: 'mobileclip2_s2_v1_512',
+  target: 'item',
+  primary_space_key: 'pe_core_l14_336_v1',
+  evaluated_against_primary: true,
+  evaluations: [
+    {
+      id: 'ev-1',
+      baseline_space_key: 'pe_core_l14_336_v1',
+      candidate_space_key: 'mobileclip2_s2_v1_512',
+      protocol: 'label_consistency_v1',
+      verdict: 'better',
+      metrics: { recall_at_10: { baseline: 0.71, candidate: 0.78 } },
+      sample_spec: { seed: 7, n: 2000 },
+      counts_for_promote: true,
+      job_id: null,
+      created_at: '2026-11-12T10:00:00Z',
+      created_by: 'api',
+    },
+  ],
+  ...over,
+});
+
 const started = {
   space_key: 'mobileclip2_s2_v1_512',
   target: 'item',
@@ -52,6 +81,7 @@ function setup(over = {}) {
   const deps = {
     getEmbeddingSpaces: vi.fn().mockResolvedValue([space()]),
     getEmbeddingModels: vi.fn().mockResolvedValue([]),
+    getEmbeddingEvaluations: vi.fn().mockResolvedValue(evaluation()),
     registerEmbeddingSpace: vi.fn().mockResolvedValue(started),
     buildEmbeddingSpace: vi.fn().mockResolvedValue(started),
     promoteEmbeddingSpace: vi.fn().mockResolvedValue({}),
@@ -104,6 +134,38 @@ describe('EmbeddingSpacesState follows the runs the list names', () => {
     expect(deps.getEmbeddingReindexRun.mock.calls.every((c) => c[0] === 'run-5')).toBe(
       true,
     );
+  });
+});
+
+describe('EmbeddingSpacesState evaluation', () => {
+  it('reads the served evaluation of the space and keeps it as served', async () => {
+    const { st, deps } = setup();
+    const s = space();
+    await st.loadEvaluation(s);
+    expect(deps.getEmbeddingEvaluations).toHaveBeenCalledWith(
+      'mobileclip2_s2_v1_512',
+      'item',
+    );
+    expect(st.evaluationOf(s)?.evaluations[0]?.verdict).toBe('better');
+    expect(st.evaluationOf(s)?.evaluated_against_primary).toBe(true);
+    expect(st.evaluationErrorOf(s)).toBeNull();
+  });
+
+  it('a refused read is the served message, and a later good read clears it', async () => {
+    const read = vi
+      .fn()
+      .mockRejectedValueOnce(refusal(404, 'embedding_space_not_found', 'no item space x'))
+      .mockResolvedValue(
+        evaluation({ evaluations: [], evaluated_against_primary: false }),
+      );
+    const { st } = setup({ getEmbeddingEvaluations: read });
+    const s = space();
+    await st.loadEvaluation(s);
+    expect(st.evaluationErrorOf(s)).toBe('no item space x');
+    expect(st.evaluationOf(s)).toBeNull();
+    await st.loadEvaluation(s);
+    expect(st.evaluationErrorOf(s)).toBeNull();
+    expect(st.evaluationOf(s)?.evaluations).toEqual([]);
   });
 });
 
