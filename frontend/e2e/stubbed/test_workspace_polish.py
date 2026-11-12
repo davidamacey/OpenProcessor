@@ -1,11 +1,14 @@
 """Workspace polish: equal gallery card heights, the hidden-count note in Clusters, select-all in every view.
 
 - Gallery cards in one row have the same height, with or without the "+ more boxes" chip
+- Ctrl+A selects the loaded page in Gallery and Detections; a second Ctrl+A on a full page asks for all
+  matching with the served total
 """
 
 from __future__ import annotations
 
 from fixtures.contract import fill, image_card, image_page
+from fixtures.wire import make_item
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.screens import shot
 from playwright.sync_api import expect
@@ -39,3 +42,47 @@ def test_gallery_cards_have_equal_heights(stub, page, app_url):
         )
         assert len(set(heights)) == 1, (width, heights)
         shot(page, f'gallery-card-heights-{width}')
+
+
+def serve_detections(stub, total: int) -> None:
+    stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': []})
+    stub.on(
+        'GET',
+        r'/next_steps(\?|$)',
+        fill('WorkflowSteps', steps=[], next=None, workspace_default_view='detections'),
+    )
+    items = [
+        make_item(
+            crop_id=f'crop-{i}', image_id=f'img-{i}', thumbnail_url=f'/crops/crop-{i}/thumbnail'
+        )
+        for i in range(3)
+    ]
+    stub.on(
+        'GET',
+        r'/crops(\?|$)',
+        {'total': total, 'next_cursor': 'more', 'limit': 3, 'crops': items},
+    )
+
+
+def test_select_all_in_detections_asks_for_all_matching_on_a_second_press(stub, page, app_url):
+    serve_detections(stub, 40)
+    page.set_viewport_size({'width': 1600, 'height': 900})
+    page.goto(f'{app_url}/p/default/workspace?view=detections')
+    expect(page.get_by_test_id('detections-total')).to_have_text('40', timeout=ACTION_TIMEOUT_MS)
+    page.get_by_test_id('detections-view').click(position={'x': 5, 'y': 5})
+    page.keyboard.press('Control+a')
+    expect(page.get_by_test_id('bulk-count')).to_have_text('3 selected', timeout=ACTION_TIMEOUT_MS)
+    page.keyboard.press('Control+a')
+    expect(page.get_by_test_id('select-all-matching')).to_have_text(
+        'Select all 40 matching', timeout=ACTION_TIMEOUT_MS
+    )
+    shot(page, 'select-all-detections-40', widths=(1600, 430))
+
+
+def test_select_all_in_gallery_selects_the_loaded_images(stub, page, app_url):
+    serve_gallery(stub)
+    page.set_viewport_size({'width': 1600, 'height': 900})
+    page.goto(f'{app_url}/p/default/workspace?view=gallery')
+    expect(page.get_by_test_id('image-card').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    page.keyboard.press('Control+a')
+    expect(page.get_by_test_id('bulk-count')).to_have_text('20 selected', timeout=ACTION_TIMEOUT_MS)

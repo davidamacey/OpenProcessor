@@ -34,6 +34,15 @@
     ws.select(ids.length > 0 ? { kind: 'items', cropIds: ids } : NO_SELECTION);
   });
 
+  $effect(() =>
+    ws.registerPage({
+      kind: 'items',
+      ids: () => pager.items.map((c) => c.id),
+      total: () => pager.total,
+      apply: (ids) => sel.selectAll(ids),
+    }),
+  );
+
   $effect(() => {
     if (!pager.loading) ws.matching = { total: pager.total, hidden: items.hidden };
     return () => {

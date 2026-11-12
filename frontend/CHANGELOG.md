@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Ctrl/Cmd+A is one Workspace action (`workspace.select_all`) in every view that selects (Gallery, Detections, Table, an open cluster, search results): the first press selects the loaded page, a second on a full page offers "Select all N matching" with the served total. `cluster.select_all` and `clusters_search.select_all` are gone.
 - Review's "Rank · clarity" row shows the served words ("2nd · sharp") instead of "#2 · b4.50".
 - Review and the image editor share one filmstrip component (thumbnails around the open item with its served position); the two duplicates are gone.
 - Gallery cards are one height: every thumbnail sits in the same 4:3 frame, the "+ more boxes" mark moved onto the thumbnail, and the grid rows are equal.

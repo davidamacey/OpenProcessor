@@ -58,6 +58,17 @@
     gridItemFilter,
   });
   let detailSearchCrop = $state<Crop | null>(null);
+  // Select-all applies where cards are items: the search results. The cluster cards are opened,
+  // not selected, so the key keeps its browser meaning there.
+  $effect(() => {
+    if (!modes.searchModeActive) return;
+    return ws.registerPage({
+      kind: 'items',
+      ids: () => modes.searchResults.map((c) => c.id),
+      total: () => modes.searchTotal,
+      apply: (ids) => modes.searchSel.selectAll(ids),
+    });
+  });
 
   // --- Slot gallery (shown instead of the cluster grid when the class
   //     filter is a slot-bound class). State/logic live in

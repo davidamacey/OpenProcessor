@@ -121,6 +121,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -162,11 +167,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -175,9 +175,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -424,6 +421,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -465,11 +467,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -478,9 +475,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -727,6 +721,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -768,11 +767,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -781,9 +775,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -1031,6 +1022,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -1072,11 +1068,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -1085,9 +1076,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -1339,6 +1327,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -1380,11 +1373,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -1393,9 +1381,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -1654,6 +1639,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -1695,11 +1685,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -1708,9 +1693,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -1945,6 +1927,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -1986,11 +1973,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -1999,9 +1981,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -2248,6 +2227,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -2289,11 +2273,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -2302,9 +2281,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -2551,6 +2527,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -2592,11 +2573,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -2605,9 +2581,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -2858,6 +2831,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -2899,11 +2877,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -2912,9 +2885,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -3161,6 +3131,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -3202,11 +3177,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -3215,9 +3185,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -3471,6 +3438,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -3512,11 +3484,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -3525,9 +3492,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -3763,6 +3727,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -3804,11 +3773,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -3817,9 +3781,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -4087,6 +4048,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -4128,11 +4094,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -4141,9 +4102,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -4475,6 +4433,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -4516,11 +4479,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -4529,9 +4487,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -4773,6 +4728,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -4814,11 +4774,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -4827,9 +4782,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -5076,6 +5028,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -5117,11 +5074,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -5130,9 +5082,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -5375,6 +5324,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -5416,11 +5370,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -5429,9 +5378,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -5701,6 +5647,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -5742,11 +5693,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -5755,9 +5701,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -6031,6 +5974,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -6072,11 +6020,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -6085,9 +6028,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -6322,6 +6262,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -6363,11 +6308,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -6376,9 +6316,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -6621,6 +6558,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -6662,11 +6604,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -6675,9 +6612,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -6932,6 +6866,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -6973,11 +6912,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -6986,9 +6920,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -7262,6 +7193,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -7303,11 +7239,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -7316,9 +7247,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -7573,6 +7501,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -7614,11 +7547,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -7627,9 +7555,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"
@@ -7864,6 +7789,11 @@
    "workspace.open_review": [
     "enter"
    ],
+   "workspace.select_all": [
+    "a",
+    "ctrl+a",
+    "meta+a"
+   ],
    "table.prev_row": [
     "arrowup"
    ],
@@ -7905,11 +7835,6 @@
    "cluster.unignore": [
     "u"
    ],
-   "cluster.select_all": [
-    "a",
-    "ctrl+a",
-    "meta+a"
-   ],
    "cluster.prev": [
     "arrowleft"
    ],
@@ -7918,9 +7843,6 @@
    ],
    "cluster.move": [
     "m"
-   ],
-   "clusters_search.select_all": [
-    "a"
    ],
    "clusters_search.cancel": [
     "escape"

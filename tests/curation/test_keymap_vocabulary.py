@@ -23,6 +23,7 @@ WORKSPACE_KEYS = {
     'workspace.escape': ('escape',),
     'workspace.select_toggle': ('space',),
     'workspace.open_review': ('enter',),
+    'workspace.select_all': ('a', 'ctrl+a', 'meta+a'),
 }
 
 
@@ -34,14 +35,13 @@ def test_workspace_actions_are_served() -> None:
 
 def test_the_grid_context_includes_the_workspace_context() -> None:
     registry = load_registry()
-    assert registry.active_set('cluster') == {'cluster', 'workspace', 'global'}
+    assert registry.active_set('cluster') == {'cluster', 'workspace.items', 'workspace', 'global'}
     assert registry.contexts['workspace'].class_hotkeys_live is True
 
 
 @pytest.mark.parametrize(
     ('action_id', 'keys'),
     [
-        ('cluster.select_all', ('a', 'ctrl+a', 'meta+a')),
         ('cluster.confirm', ('shift+enter',)),
         ('cluster.undo', ('z', 'ctrl+z', 'meta+z')),
     ],
@@ -62,7 +62,7 @@ def test_every_default_action_has_keys() -> None:
 
 def test_table_context_serves_row_keys() -> None:
     registry = load_registry()
-    assert registry.active_set('table') == {'table', 'workspace', 'global'}
+    assert registry.active_set('table') == {'table', 'workspace.items', 'workspace', 'global'}
     expected = {
         'table.prev_row': ('arrowup',),
         'table.next_row': ('arrowdown',),
@@ -76,7 +76,10 @@ def test_table_context_serves_row_keys() -> None:
 def test_select_and_open_review_are_one_workspace_action_for_every_view() -> None:
     actions = load_registry().actions
     for action_id in ('workspace.select_toggle', 'workspace.open_review'):
-        assert actions[action_id].context == 'workspace', action_id
+        assert actions[action_id].context == 'workspace.items', action_id
+    assert actions['workspace.select_all'].context == 'workspace'
+    assert 'cluster.select_all' not in actions
+    assert 'clusters_search.select_all' not in actions
     assert 'table.select_toggle' not in actions
     assert 'table.open_review' not in actions
 

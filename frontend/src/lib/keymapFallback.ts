@@ -236,6 +236,13 @@ const SEEDS: ActionSeed[] = [
     ['enter'],
     { modifiable: false },
   ],
+  [
+    'workspace.select_all',
+    'workspace',
+    null,
+    'Select all on the page',
+    ['a', 'ctrl+a', 'meta+a'],
+  ],
 
   ['table.prev_row', 'table', null, 'Previous row', ['arrowup'], { modifiable: false }],
   ['table.next_row', 'table', null, 'Next row', ['arrowdown'], { modifiable: false }],
@@ -275,24 +282,10 @@ const SEEDS: ActionSeed[] = [
     ['x'],
   ],
   ['cluster.unignore', 'cluster', null, 'Undo last ignore', ['u']],
-  [
-    'cluster.select_all',
-    'cluster',
-    'select_all',
-    'Select all on page',
-    ['a', 'ctrl+a', 'meta+a'],
-  ],
   ['cluster.prev', 'cluster', 'prev', 'Previous crop', ['arrowleft']],
   ['cluster.next', 'cluster', 'next', 'Next crop', ['arrowright']],
   ['cluster.move', 'cluster', null, 'Move selected to cluster…', ['m']],
 
-  [
-    'clusters_search.select_all',
-    'clusters_search',
-    'select_all',
-    'Select all results',
-    ['a'],
-  ],
   [
     'clusters_search.cancel',
     'clusters_search',
