@@ -195,6 +195,11 @@ def _class_source_writes() -> list[tuple[str, int, ast.expr]]:
                     for k, v in zip(n.keys, n.values, strict=True):
                         if isinstance(k, ast.Constant) and k.value in _QUERY_KEYS:
                             query_dicts.add(id(v))
+                elif isinstance(n, ast.Call):
+                    # route_params= carries request filter values into a query builder.
+                    query_dicts.update(
+                        id(kw.value) for kw in n.keywords if kw.arg == 'route_params'
+                    )
             for n in ast.walk(tree):
                 values: list[ast.expr] = []
                 if isinstance(n, ast.Dict) and id(n) not in query_dicts:
