@@ -212,7 +212,7 @@ const SEEDS: ActionSeed[] = [
   ['workspace.scope_next', 'workspace', null, 'Next cluster', ['.']],
   ['workspace.toggle_details', 'workspace', null, 'Show or hide details', ['\\']],
   ['workspace.open_editor', 'workspace', null, 'Open in the image editor', ['shift+o']],
-  ['workspace.class_picker', 'workspace', null, 'Search all classes…', ['/']],
+  ['workspace.class_picker', 'workspace.items', null, 'Search all classes…', ['/']],
   [
     'workspace.escape',
     'workspace',
@@ -223,14 +223,14 @@ const SEEDS: ActionSeed[] = [
   ],
   [
     'workspace.select_toggle',
-    'workspace',
+    'workspace.items',
     null,
     'Select or deselect the focused card or row',
     ['space'],
   ],
   [
     'workspace.open_review',
-    'workspace',
+    'workspace.items',
     null,
     'Open the focused card or row in Review',
     ['enter'],
@@ -382,10 +382,18 @@ export const FALLBACK_KEYMAP: KeymapDocument = {
       class_hotkeys_live: true,
     },
     {
+      id: 'workspace.items',
+      label: 'Workspace items',
+      description:
+        'Keys of the views that list items to open and select: Enter opens Review, Space selects, / assigns a class.',
+      includes: ['workspace'],
+      class_hotkeys_live: true,
+    },
+    {
       id: 'table',
       label: 'Workspace table',
       description: 'The Workspace Table view: row focus and selection.',
-      includes: ['workspace'],
+      includes: ['workspace.items'],
       class_hotkeys_live: true,
     },
     {
@@ -393,7 +401,7 @@ export const FALLBACK_KEYMAP: KeymapDocument = {
       label: 'Workspace grid',
       description:
         "The Workspace card grids: clusters, detections and a cluster's crops.",
-      includes: ['workspace'],
+      includes: ['workspace.items'],
       class_hotkeys_live: true,
     },
     {

@@ -78,7 +78,7 @@
         () => {
           if (ws.selection.kind !== 'none') ws.pickerOpen = true;
         },
-        'workspace',
+        'workspace.items',
       ),
       keyboardStore.registerAction('workspace.open_review', openReview, 'cluster'),
       // Space on a focused card toggles it, like Ctrl+click.
@@ -91,7 +91,7 @@
           }
           el.dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }));
         },
-        'workspace',
+        'workspace.items',
       ),
     ];
     return () => offs.forEach((off) => off());

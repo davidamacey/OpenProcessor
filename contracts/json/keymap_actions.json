@@ -366,7 +366,7 @@
       "modifiable": true
     },
     {
-      "context": "workspace",
+      "context": "workspace.items",
       "default": [
         "/"
       ],
@@ -388,7 +388,7 @@
       "modifiable": false
     },
     {
-      "context": "workspace",
+      "context": "workspace.items",
       "default": [
         "space"
       ],
@@ -399,7 +399,7 @@
       "modifiable": true
     },
     {
-      "context": "workspace",
+      "context": "workspace.items",
       "default": [
         "enter"
       ],
@@ -712,10 +712,19 @@
     },
     {
       "class_hotkeys_live": true,
+      "description": "Keys of the views that list items to open and select: Enter opens Review, Space selects, / assigns a class.",
+      "id": "workspace.items",
+      "includes": [
+        "workspace"
+      ],
+      "label": "Workspace items"
+    },
+    {
+      "class_hotkeys_live": true,
       "description": "The Workspace Table view: row focus and selection.",
       "id": "table",
       "includes": [
-        "workspace"
+        "workspace.items"
       ],
       "label": "Workspace table"
     },
@@ -724,7 +733,7 @@
       "description": "The Workspace card grids: clusters, detections and a cluster's crops.",
       "id": "cluster",
       "includes": [
-        "workspace"
+        "workspace.items"
       ],
       "label": "Workspace grid"
     },
