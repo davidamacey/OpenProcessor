@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /** The training form's collapsible hyperparameter override grid. Writes
    *  go straight into the bound overrides object the form owns. */
   import type { HyperparamOverrides } from '$lib/train/trainSpec';
@@ -20,7 +21,11 @@
     onclick={() => (expanded = !expanded)}
     aria-expanded={expanded}
   >
-    <span class="font-mono text-xs text-fg-3">{expanded ? '▼' : '▶'}</span>
+    <Icon
+      name={expanded ? 'chevron-down' : 'chevron-right'}
+      size={14}
+      class="text-fg-3"
+    />
     <span class="font-semibold text-fg-1">Hyperparameters</span>
     <span class="grow text-xs text-fg-2">
       epochs {hp.epochs ?? '—'} · batch {hp.batch ?? '—'} · imgsz {hp.imgsz ?? '—'}

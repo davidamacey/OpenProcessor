@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   import EmptyNextSteps from '$components/workspace/EmptyNextSteps.svelte';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import ClusterBadge from '$lib/components/ClusterBadge.svelte';
@@ -77,7 +78,8 @@
         class="btn-sm border border-line-strong bg-surface-1 text-fg-2 hover:bg-surface-2"
         onclick={modes.exitSearchMode}
       >
-        ← Back to clusters
+        <Icon name="arrow-left" size={14} class="mr-1 -mt-0.5 inline-block" />Back to
+        clusters
       </button>
     </div>
     {#if modes.similarError}
@@ -144,7 +146,8 @@
         class="btn-sm border border-line-strong bg-surface-1 text-fg-2 hover:bg-surface-2"
         onclick={modes.exitIgnoredMode}
       >
-        ← Back to clusters
+        <Icon name="arrow-left" size={14} class="mr-1 -mt-0.5 inline-block" />Back to
+        clusters
       </button>
     </div>
     {#if modes.ignoredLoading && modes.ignoredItems.length === 0}
@@ -183,7 +186,8 @@
         class="btn-sm border border-line-strong bg-surface-1 text-fg-2 hover:bg-surface-2"
         onclick={modes.exitItemTextMode}
       >
-        ← Back to clusters
+        <Icon name="arrow-left" size={14} class="mr-1 -mt-0.5 inline-block" />Back to
+        clusters
       </button>
     </div>
     {#if modes.itemTextLoading && modes.itemTextItems.length === 0}

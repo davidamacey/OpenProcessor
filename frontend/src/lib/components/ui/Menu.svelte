@@ -78,6 +78,7 @@
   {/snippet}
   <div
     role="menu"
+    tabindex="-1"
     aria-label={label}
     bind:this={list}
     onkeydown={onListKeydown}

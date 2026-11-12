@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /** /export's per-class dataset table: sortable, with the classes that
    *  have no validated or held-out crop folded behind one toggle row. */
   import {
@@ -78,7 +79,11 @@
     {title}
     onclick={() => setSort(field)}
   >
-    {label}{appliedField === field ? (appliedDirection === 'asc' ? ' ▲' : ' ▼') : ''}
+    {label}{#if appliedField === field}<Icon
+        name={appliedDirection === 'asc' ? 'chevron-up' : 'chevron-down'}
+        size={12}
+        class="ml-1 inline-block"
+      />{/if}
   </th>
 {/snippet}
 
@@ -201,7 +206,11 @@
                 data-testid="export-empty-classes-toggle"
                 onclick={() => (showEmptyClasses = !showEmptyClasses)}
               >
-                {showEmptyClasses ? '▾' : '▸'}
+                <Icon
+                  name={showEmptyClasses ? 'chevron-down' : 'chevron-right'}
+                  size={14}
+                  class="inline-block"
+                />
                 {emptyRows.length}
                 {emptyRows.length === 1 ? 'class' : 'classes'} with no validated crops
               </button>

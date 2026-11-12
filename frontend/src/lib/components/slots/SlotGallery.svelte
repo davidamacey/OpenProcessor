@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * A slot's region gallery for /clusters, backed by the slot's browse
    * endpoint (genericization plan §3.4/§5a). All
@@ -140,7 +141,7 @@
           class="btn-sm border border-line-strong bg-surface-2 text-fg-1 hover:bg-surface-3"
           onclick={gallery.backToClusters}
         >
-          ← Clusters
+          <Icon name="arrow-left" size={14} class="mr-1 -mt-0.5 inline-block" />Clusters
         </button>
         <span class="font-medium text-danger">Suspected false positives</span>
         <label class="flex items-center gap-1 text-caption text-fg-2">
@@ -168,7 +169,7 @@
           class="btn-sm border border-line-strong bg-surface-2 text-fg-1 hover:bg-surface-3"
           onclick={gallery.backToClusters}
         >
-          ← Clusters
+          <Icon name="arrow-left" size={14} class="mr-1 -mt-0.5 inline-block" />Clusters
         </button>
         <span class="font-medium text-fg-1">All {label.plural}</span>
       {:else if gallery.selectedCluster == null}
@@ -219,7 +220,7 @@
           class="btn-sm border border-line-strong bg-surface-2 text-fg-1 hover:bg-surface-3"
           onclick={gallery.backToClusters}
         >
-          ← Clusters
+          <Icon name="arrow-left" size={14} class="mr-1 -mt-0.5 inline-block" />Clusters
         </button>
         <span class="font-mono text-caption text-fg-2" title={gallery.selectedCluster}
           >cluster {gallery.selectedCluster.slice(0, 8)}</span
@@ -294,7 +295,7 @@
                   gallery.falsePositiveState(),
                 )}
         >
-          ✗ Mark false positive
+          <Icon name="x" size={14} class="mr-1 -mt-0.5 inline-block" />Mark false positive
         </button>
         <button
           type="button"
@@ -322,7 +323,7 @@
                   gallery.confirmState(),
                 )}
         >
-          ✓ Verify
+          <Icon name="check" size={14} class="mr-1 -mt-0.5 inline-block" />Verify
         </button>
         <button
           type="button"

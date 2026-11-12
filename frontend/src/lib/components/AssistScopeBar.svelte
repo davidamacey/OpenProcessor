@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * Scope selector for an assisted auto-label run
    * (VLM-scoped labeling assist plan §4).
@@ -31,7 +32,6 @@
    * exactly today's unscoped run.
    */
 
-  import ChevronDownIcon from './ChevronDownIcon.svelte';
   import VlmRunPicker from './vlm/VlmRunPicker.svelte';
   import { searchClasses } from '$lib/classPicker';
   import {
@@ -125,7 +125,7 @@
     >
       <span class="text-fg-3">assist:</span>
       <span>{summary}</span>
-      <span class="text-fg-3"><ChevronDownIcon size={15} /></span>
+      <Icon name="chevron-down" size={15} class="text-fg-3" />
     </button>
   {:else}
     <label class="flex items-center gap-1.5">
@@ -226,7 +226,7 @@
       onclick={() => (expanded = false)}
       title="Collapse"
     >
-      ×
+      <Icon name="x" size={14} />
     </button>
   {/if}
 </div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   import { toastStore } from '$stores/toast.svelte';
 
   const kindClass = (k: 'info' | 'success' | 'warn' | 'error'): string => {
@@ -34,7 +35,7 @@
           aria-label="Dismiss"
           onclick={() => toastStore.dismiss(t.id)}
         >
-          ×
+          <Icon name="x" size={14} />
         </button>
       </div>
     </div>

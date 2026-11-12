@@ -73,10 +73,8 @@ describe('AssistScopeBar VLM control', () => {
     flushSync();
     expect(scope.vlm).toBe('local_vlm');
     expect(scope.toStartParams()).toEqual({ vlm: 'local_vlm' });
-    // Collapse by the × button: the chip summary names the endpoint.
-    [...target.querySelectorAll('button')]
-      .find((b) => b.textContent?.trim() === '×')!
-      .click();
+    // Collapse by the close button: the chip summary names the endpoint.
+    target.querySelector<HTMLButtonElement>('button[title="Collapse"]')!.click();
     flushSync();
     expect(target.textContent).toContain('whole dataset · local_vlm');
   });

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * Shared sort/filter strategy control (curation-strategy plan Phase 3/4 —
    * curation strategy plan §5.1/§5.4/§7). Used on both
@@ -39,7 +40,6 @@
    */
 
   import { untrack } from 'svelte';
-  import ChevronDownIcon from './ChevronDownIcon.svelte';
   import {
     hasFieldCoverage,
     isDiverseOverlayAvailable,
@@ -366,7 +366,7 @@
           beta
         </span>
       {/if}
-      <span class="text-fg-3"><ChevronDownIcon size={15} /></span>
+      <Icon name="chevron-down" size={15} class="text-fg-3" />
     </button>
   {:else}
     {#if sortOptions.length > 1}
@@ -498,7 +498,7 @@
       onclick={() => (expanded = false)}
       title="Collapse"
     >
-      ×
+      <Icon name="x" size={14} />
     </button>
   {/if}
 </div>

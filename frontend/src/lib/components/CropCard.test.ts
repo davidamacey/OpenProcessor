@@ -225,15 +225,15 @@ describe('CropCard — region sub-box editing follows the served region profile 
 
   afterEach(() => resetDeploymentSlots());
 
-  it('no region profile: no ✎ button and no region ring, even with region_* values on the item', () => {
+  it('no region profile: no edit button and no region ring, even with region_* values on the item', () => {
     installServedRegionProfile(null);
     const slots = mapCropSlots({ region_bbox_norm: [0.4, 0.4, 0.6, 0.6] }, [0, 0, 1, 1]);
     const el = renderCard({ crop: baseCrop({ slots } as Partial<Crop>) });
     expect(editButton(el)).toBeNull();
-    expect(el.textContent).not.toContain('✎');
+    expect(el.querySelector('button[aria-label^="Edit"]')).toBeNull();
   });
 
-  it('a served region profile: the ✎ button edits that region, labelled by the served singular noun (#36 item 10)', () => {
+  it('a served region profile: the edit button edits that region, labelled by the served singular noun (#36 item 10)', () => {
     installServedRegionProfile(WIDGET_TAG_PROFILE);
     const el = renderCard({ crop: baseCrop() });
     expect(editButton(el)?.getAttribute('aria-label')).toBe(

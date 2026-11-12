@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   import { apiErrorText } from '$lib/api_errors';
   /**
    * Promote-to-Triton modal. Phase 4 wiring; the labeler-side knob set
@@ -143,9 +144,19 @@
                     ? 'font-medium text-accent'
                     : 'text-fg-3'}"
             >
-              <span class="w-3 text-center">
-                {i < phaseIndex ? '✓' : i === phaseIndex ? '●' : '○'}
-              </span>
+              <Icon
+                name={i < phaseIndex
+                  ? 'circle-check'
+                  : i === phaseIndex
+                    ? 'circle-dot'
+                    : 'circle'}
+                size={14}
+                label={i < phaseIndex
+                  ? 'done'
+                  : i === phaseIndex
+                    ? 'in progress'
+                    : 'pending'}
+              />
               {phase}
             </li>
           {/each}

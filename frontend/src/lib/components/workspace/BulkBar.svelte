@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * What the selection is and what an action will change. The sentence is the
    * server's (`POST /selection/summary`); every action opens the server's
@@ -6,7 +7,6 @@
    * list. A view adds its own buttons through `extra`.
    */
   import type { Snippet } from 'svelte';
-  import ChevronDownIcon from '$components/ChevronDownIcon.svelte';
   import ClassPicker from '$components/ClassPicker.svelte';
   import DiverseSample from '$components/workspace/DiverseSample.svelte';
   import SelectionActionDialog from '$components/itemFilter/SelectionActionDialog.svelte';
@@ -142,7 +142,7 @@
         aria-expanded={reasonsOpen}
         onclick={() => (reasonsOpen = !reasonsOpen)}
       >
-        <ChevronDownIcon size={18} />
+        <Icon name="chevron-down" size={18} />
       </button>
     {/if}
     {#if reasonsOpen}

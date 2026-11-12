@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * "Matching items" on /clusters: every item the shared filter matches, as a
    * flat crop grid, with run-on-selection actions (ignore, restore, label,
@@ -108,7 +109,7 @@
     class="btn-sm border border-line-strong bg-surface-1 text-fg-2 hover:bg-surface-2"
     onclick={onexit}
   >
-    ← Back to clusters
+    <Icon name="arrow-left" size={14} class="mr-1 -mt-0.5 inline-block" />Back to clusters
   </button>
 </div>
 

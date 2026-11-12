@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * One binding's keys as removable chips, the "Change" button that starts a
    * capture (and the capture prompt while it runs), and the row's own extras.
@@ -31,7 +32,7 @@
         aria-label={`remove ${k}`}
         onclick={() => onremove(k)}
       >
-        ×
+        <Icon name="x" size={14} />
       </button>
     </span>
   {/each}

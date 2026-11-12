@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * Top-bar project switcher (review §7.3). Lists the served `selectable`
    * projects with their `display_name` and a served status badge for
@@ -144,7 +145,7 @@
         data-testid="project-switcher-custom-keys">custom keys</span
       >
     {/if}
-    <span class="shrink-0 text-fg-3" aria-hidden="true">▾</span>
+    <Icon name="chevron-down" size={14} class="text-fg-3" />
   </button>
 
   {#if open}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * The Workspace's filter row: the shared item-filter bar, the chips the
    * queue and the scope add to it, and the served next step. Under `md` it
@@ -72,7 +73,11 @@
       title="Leave this {scope.kind}"
       onclick={() => ws.setScope(null)}
     >
-      {scope.kind === 'cluster' ? 'Cluster' : scope.kind} · {scope.id} ×
+      {scope.kind === 'cluster' ? 'Cluster' : scope.kind} · {scope.id}<Icon
+        name="x"
+        size={12}
+        class="ml-1 inline-block"
+      />
     </button>
   {/if}
   {#if queue}
@@ -83,7 +88,7 @@
       title="Leave the {queueLabel} queue"
       onclick={() => ws.setQueue(null)}
     >
-      Queue · {queueLabel} ×
+      Queue · {queueLabel}<Icon name="x" size={12} class="ml-1 inline-block" />
     </button>
   {/if}
   {#if next && nextHref}

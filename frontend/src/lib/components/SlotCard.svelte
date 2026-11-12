@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * Compact card for one slot detection, read through the `readSlot`
    * adapter against the given `slot` (genericization plan
@@ -137,7 +138,7 @@
       : 'border-line hover:border-accent/50'} {isFalsePositive ? 'opacity-50' : ''}"
     onclick={handleClick}
     onkeydown={handleKey}
-    title={`${crop.crop_id} — click to select, ✎ to edit`}
+    title={`${crop.crop_id} — click to select, the pencil to edit`}
   >
     <div class="relative w-full bg-surface-1" style="aspect-ratio: {thumbAspect}">
       <img
@@ -153,11 +154,7 @@
           title={reprocessVocabularyStore.lockText()}
           data-testid="box-locked"
         >
-          <svg viewBox="0 0 16 16" fill="currentColor" class="h-3 w-3" aria-hidden="true">
-            <path
-              d="M8 1a3.5 3.5 0 0 0-3.5 3.5V6H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-.5V4.5A3.5 3.5 0 0 0 8 1Zm2 5H6V4.5a2 2 0 1 1 4 0V6Z"
-            />
-          </svg>
+          <Icon name="lock" size={12} />
         </span>
       {/if}
       <!-- Selection checkbox (top-left). -->
@@ -167,7 +164,7 @@
           : 'border-fg-3 bg-black/50 text-transparent group-hover:text-fg-2'}"
         aria-hidden="true"
       >
-        ✓
+        <Icon name="check" size={14} />
       </span>
       <!-- Edit + quick false-positive (hover). Span (not button) to stay
          valid inside the outer button; stopPropagation so they don't
@@ -189,7 +186,7 @@
           }}
           title="Edit {slot.label.singular} bbox / status"
         >
-          ✎
+          <Icon name="pencil" size={14} />
         </span>
       {/if}
       {#if onmarkfp && !isFalsePositive}
@@ -209,7 +206,7 @@
           }}
           title="Mark false positive"
         >
-          ✗ FP
+          <Icon name="x" size={12} class="mr-1 -mt-0.5 inline-block" />FP
         </span>
       {/if}
       {#if isFalsePositive}

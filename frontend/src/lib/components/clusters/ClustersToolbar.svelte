@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   import { page } from '$app/state';
   import BlurSlider from '$lib/components/BlurSlider.svelte';
   import ImageSearchPicker from '$components/clusters/ImageSearchPicker.svelte';
@@ -142,7 +143,11 @@
       : 'border-line-strong bg-surface-1 text-fg-2 hover:border-warn/40'}"
     title="Crops excluded from training + clustering"
   >
-    {modes.ignoredModeActive ? '✓ ' : ''}Ignored
+    {#if modes.ignoredModeActive}<Icon
+        name="check"
+        size={12}
+        class="mr-1 -mt-0.5 inline-block"
+      />{/if}Ignored
   </button>
 
   <!-- Every item the shared filter matches, with run-on-selection actions. -->
@@ -155,7 +160,11 @@
     data-testid="matching-mode-toggle"
     title="List every item the filter below matches, and act on all of them"
   >
-    {matchingModeActive ? '✓ ' : ''}Matching items
+    {#if matchingModeActive}<Icon
+        name="check"
+        size={12}
+        class="mr-1 -mt-0.5 inline-block"
+      />{/if}Matching items
   </button>
 
   <span class="grow"></span>

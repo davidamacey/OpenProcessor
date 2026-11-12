@@ -4,6 +4,7 @@
   actions with the step-back footer.
 -->
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   import AssistButton from '$lib/components/assistRun/AssistButton.svelte';
   import AssistSuggestions from '$lib/components/assistRun/AssistSuggestions.svelte';
   import ProvenanceChip from '$lib/components/ProvenanceChip.svelte';
@@ -364,7 +365,7 @@
         'review.region.back',
       )}) — only re-queues it locally, use {kg('review.undo')} to undo the server write"
     >
-      ← Step back
+      <Icon name="arrow-left" size={14} class="mr-1 -mt-0.5 inline-block" />Step back
     </button>
   {/if}
 </div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   import type { RegistryClass } from '$lib/types_classes';
   import { classesStore } from '$stores/classes.svelte';
 
@@ -24,7 +25,7 @@
       class="flex items-center gap-2 text-xs text-fg-2 hover:text-fg-1"
       onclick={() => (showDeprecated = !showDeprecated)}
     >
-      <span aria-hidden="true">{showDeprecated ? '▼' : '▶'}</span>
+      <Icon name={showDeprecated ? 'chevron-down' : 'chevron-right'} size={14} />
       Deprecated classes ({deprecatedRows.length})
     </button>
     {#if showDeprecated}

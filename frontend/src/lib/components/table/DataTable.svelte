@@ -4,6 +4,7 @@
   comes from the served `sort_applied`. The table scrolls inside its own container.
 -->
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   import { resolveApiUrl } from '$lib/api';
   import type { SortOption } from '$lib/types_cursor';
   import type { CellTone, TableColumn, TableRow } from '$lib/types_table';
@@ -89,7 +90,10 @@
               >
                 {c.label}
                 {#if c.id === appliedColumn}
-                  <span aria-hidden="true">{appliedDir === 'asc' ? '▲' : '▼'}</span>
+                  <Icon
+                    name={appliedDir === 'asc' ? 'chevron-up' : 'chevron-down'}
+                    size={12}
+                  />
                 {/if}
               </button>
             {:else}

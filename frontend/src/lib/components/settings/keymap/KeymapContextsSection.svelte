@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   import { formatShortcutKey } from '$lib/keyboardDisplay';
   import KeyChips from '$components/settings/keymap/KeyChips.svelte';
   import { keymapStore } from '$stores/keymap.svelte';
@@ -37,7 +38,10 @@
             <td class="px-3 py-1.5">
               {#if !action.modifiable}
                 <span class="rounded border border-line-strong px-1.5 py-0.5 text-fg-3">
-                  🔒 {ctl.keysOf(action.id).map(formatShortcutKey).join(' / ') || '—'}
+                  <Icon name="lock" size={12} class="mr-1 -mt-0.5 inline-block" />{ctl
+                    .keysOf(action.id)
+                    .map(formatShortcutKey)
+                    .join(' / ') || '—'}
                 </span>
               {:else}
                 <KeyChips

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * The thumbnails of the crops selected on the scatter, so a selection of dots can be judged
    * before it is acted on. Capped (a huge lasso must not render thousands of <img> tags); a
@@ -91,7 +92,7 @@
       }}
       aria-label="Close"
     >
-      ×
+      <Icon name="x" size={14} />
     </button>
   </Modal>
 {/if}

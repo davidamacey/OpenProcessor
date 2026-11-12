@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /** /train's paginated past-runs table with per-run promote/reproduce. */
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import RunResults from '$components/RunResults.svelte';
@@ -60,7 +61,11 @@
                     class="truncate font-mono text-caption text-fg-3"
                     title={r.campaign_id}
                   >
-                    ↳ {r.campaign_id}
+                    <Icon
+                      name="corner-down-right"
+                      size={12}
+                      class="mr-1 -mt-0.5 inline-block"
+                    />{r.campaign_id}
                   </div>
                 {/if}
               </td>
@@ -102,7 +107,7 @@
                       onclick={() => actions.openPromote(r)}
                       title="Promote to Triton"
                     >
-                      Promote ↑
+                      Promote<Icon name="arrow-up" size={14} class="ml-1 inline-block" />
                     </button>
                   {/if}
                   {#if r.state === 'finished' || r.state === 'failed'}

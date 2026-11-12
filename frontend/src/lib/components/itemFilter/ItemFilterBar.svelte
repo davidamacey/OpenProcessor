@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * The shared item-filter bar (OpenProcessor v0.4.0): class (by name) and
    * not-class, confidence and area bands, largest-N per image, origin,
@@ -108,7 +109,7 @@
         onchange?.();
       }}
     >
-      {chip.label} ×
+      {chip.label}<Icon name="x" size={12} class="ml-1 inline-block" />
     </button>
   {/each}
 

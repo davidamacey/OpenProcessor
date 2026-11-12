@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * Free-text semantic search over crops (P2-14 — `GET
    * {API_PREFIX}/search/text`). Renders alongside `<StrategyBar>` on `/review` and
@@ -106,18 +107,7 @@
       class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-3"
       aria-hidden="true"
     >
-      <svg
-        width="13"
-        height="13"
-        viewBox="0 0 16 16"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.6"
-        stroke-linecap="round"
-      >
-        <circle cx="6.75" cy="6.75" r="5" />
-        <line x1="10.5" y1="10.5" x2="14.5" y2="14.5" />
-      </svg>
+      <Icon name="search" size={14} />
     </span>
     <input
       type="text"
@@ -147,7 +137,7 @@
         }}
         title="Clear search"
       >
-        ×
+        <Icon name="x" size={14} />
       </button>
     {/if}
   </div>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /** One served resource entry: an anchor, or a muted row when it has no
    *  usable link. The same markup serves the menu and the dashboards row;
    *  `class` styles the wrapper. */
@@ -16,7 +17,8 @@
       rel="noopener noreferrer"
       data-testid="resource-link"
       title={view.hint || undefined}
-      class="text-fg-1 hover:text-white">{view.label} ↗</a
+      class="text-fg-1 hover:text-white"
+      >{view.label}<Icon name="external-link" size={12} class="ml-1 inline-block" /></a
     >
     <!-- eslint-enable svelte/no-navigation-without-resolve -->
     {#if view.notRunning}

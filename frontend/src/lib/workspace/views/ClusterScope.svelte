@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * One open cluster inside the Clusters view: its crops, the facet chips and
    * the bulk bar. The cluster is `ws.url.scope`; the filter, queue and view
@@ -114,7 +115,7 @@
       data-testid="scope-back"
       onclick={() => ws.openCluster(null)}
     >
-      ← All clusters
+      <Icon name="arrow-left" size={14} class="mr-1 -mt-0.5 inline-block" />All clusters
     </button>
     <h1 class="flex items-baseline gap-2 text-lg font-semibold" data-testid="scope-title">
       {#if view.clusterName}

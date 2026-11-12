@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   import { getThumbUrl } from '$lib/api_cropRead';
   import type { Crop } from '$lib/types';
   import CropMetaPanel from './CropMetaPanel.svelte';
@@ -74,6 +75,6 @@
     onclick={onclose}
     aria-label="Close"
   >
-    ×
+    <Icon name="x" size={14} />
   </button>
 </Modal>

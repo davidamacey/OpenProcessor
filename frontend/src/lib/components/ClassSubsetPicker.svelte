@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * Class multi-select with preset chips and live counters.
    *
@@ -175,7 +176,11 @@
     onclick={() => (expanded = !expanded)}
     aria-expanded={expanded}
   >
-    <span class="font-mono text-xs text-fg-3">{expanded ? '▼' : '▶'}</span>
+    <Icon
+      name={expanded ? 'chevron-down' : 'chevron-right'}
+      size={14}
+      class="text-fg-3"
+    />
     <span class="font-semibold text-fg-1">Classes to train</span>
     <span class="grow text-xs text-fg-2">{summary}</span>
   </button>

@@ -31,9 +31,9 @@ describe('Chip', () => {
 
   it('onremove adds a named close button', () => {
     const onremove = vi.fn();
-    const el = mountUi(Chip, { onremove, removeLabel: 'Remove car', children: text });
+    const el = mountUi(Chip, { onremove, removeLabel: 'Remove tag', children: text });
     const close = el.querySelector(
-      'button[aria-label="Remove car"]',
+      'button[aria-label="Remove tag"]',
     ) as HTMLButtonElement;
     close.click();
     expect(onremove).toHaveBeenCalledOnce();

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   import BlurSlider from '$components/BlurSlider.svelte';
   import UnembeddedBanner from '$components/embedding/UnembeddedBanner.svelte';
   import SemanticSearchBox from '$components/SemanticSearchBox.svelte';
@@ -105,7 +106,11 @@
     onclick={() => (view.strategyBar.sort = view.outliersFirst ? 'default' : 'outliers')}
     title="Sort by distance from the cluster centroid (most atypical first) to spot mislabels/junk"
   >
-    {view.outliersFirst ? '◤ Outliers first' : 'Outliers first'}
+    {#if view.outliersFirst}<Icon
+        name="check"
+        size={12}
+        class="mr-1 -mt-0.5 inline-block"
+      />{/if}Outliers first
   </button>
 
   <!-- Fuller order selector — additive alongside the shortcut above.

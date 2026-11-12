@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * One region-profile field, rendered from its served schema row (§7.3):
    * label, help, the served default and range, the control its served
@@ -195,7 +196,7 @@
               type="button"
               class="text-fg-3 hover:text-fg-1"
               aria-label="Remove {String(item)}"
-              onclick={() => removeItem(idx)}>×</button
+              onclick={() => removeItem(idx)}><Icon name="x" size={14} /></button
             >
           {/if}
         </span>

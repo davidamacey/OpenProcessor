@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   import { apiErrorText } from '$lib/api_errors';
   /**
    * Finished-run results — evaluation (labelled by its own `eval.split`)
@@ -119,7 +120,7 @@
     onclick={toggle}
     aria-expanded={open}
   >
-    <span class="font-mono">{open ? '▾' : '▸'}</span>
+    <Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} />
     Results
   </button>
 
@@ -481,7 +482,7 @@
       }}
       aria-label="Close"
     >
-      ×
+      <Icon name="x" size={14} />
     </button>
   </Modal>
 {/if}

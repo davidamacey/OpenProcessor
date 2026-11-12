@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   import { sourceBadge } from '$lib/sourceBadge';
   import { sourceShortCode } from '$lib/cropCardText';
   import { vlmEmptyReasonText } from '$lib/review/reviewCopy';
@@ -341,7 +342,7 @@
           aria-label="Show crop details"
           title="Details (provenance + metadata)"
         >
-          ⓘ
+          <Icon name="info" size={14} />
         </button>
       {/if}
 
@@ -374,9 +375,9 @@
             editorOpen = true;
           }}
           aria-label="Edit {activeSlot.label.singular}"
-          title="Edit {activeSlot.label.singular} (✎)"
+          title="Edit {activeSlot.label.singular}"
         >
-          ✎
+          <Icon name="pencil" size={14} />
         </button>
       {/if}
 
@@ -408,11 +409,7 @@
         aria-label="Label locked"
         data-testid="label-locked-badge"
       >
-        <svg viewBox="0 0 16 16" fill="currentColor" class="h-3 w-3" aria-hidden="true">
-          <path
-            d="M8 1a3.5 3.5 0 0 0-3.5 3.5V6H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-.5V4.5A3.5 3.5 0 0 0 8 1Zm2 5H6V4.5a2 2 0 1 1 4 0V6Z"
-          />
-        </svg>
+        <Icon name="lock" size={12} />
       </span>
     {/if}
     {#each noVectorEntries(crop.embedding_states) as [space, state] (space)}
@@ -491,7 +488,7 @@
         }}
         aria-label="Accept VLM suggestion"
       >
-        ✓
+        <Icon name="check" size={14} />
       </button>
       <button
         type="button"
@@ -502,7 +499,7 @@
         }}
         aria-label="Reject VLM suggestion"
       >
-        ×
+        <Icon name="x" size={14} />
       </button>
     </div>
   {:else if crop.vlm_suggested_class_name && !crop.class_validated}
@@ -567,7 +564,7 @@
       onclick={() => (expanded = false)}
       aria-label="Close"
     >
-      ×
+      <Icon name="x" size={14} />
     </button>
   </Modal>
 {/if}

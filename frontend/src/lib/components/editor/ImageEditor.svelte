@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * One image in the editor: the picture and its boxes, the tools, the objects, the filmstrip of the
    * list it was opened from, the class picker for a drawn box and the save state. Everything it
@@ -155,7 +156,7 @@
             onclick={() => (objectsOpen = !objectsOpen)}
           >
             <span>Objects ({c.objects.length})</span>
-            <span aria-hidden="true">{objectsOpen ? '▾' : '▸'}</span>
+            <Icon name={objectsOpen ? 'chevron-down' : 'chevron-right'} size={14} />
           </button>
           <div
             id="editor-objects"

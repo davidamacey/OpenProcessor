@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * One whole image: the served thumbnail with the served boxes over it, the served counts as
    * chips, and the near-duplicate badge when the server says the image is in a group. Nothing is
@@ -89,7 +90,7 @@
     {#if selected}
       <span
         class="pointer-events-none absolute top-1 left-1 flex h-5 w-5 items-center justify-center rounded-full bg-info text-xs text-white"
-        aria-hidden="true">✓</span
+        aria-hidden="true"><Icon name="check" size={14} /></span
       >
     {/if}
     {#if card.boxes_truncated}

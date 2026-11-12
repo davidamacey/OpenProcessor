@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from '$components/ui/Icon.svelte';
   /**
    * The served loop: every step in the order the backend gives, the first
    * undone one marked as the next. Label, detail, done flag and the page each
@@ -30,10 +31,12 @@
         data-step-id={step.id}
         data-done={step.done}
       >
-        <span
+        <Icon
+          name={step.done ? 'circle-check' : 'circle'}
+          size={14}
           class={step.done ? 'text-success' : 'text-fg-3'}
-          aria-label={step.done ? 'Done' : 'To do'}>{step.done ? '✓' : '○'}</span
-        >
+          label={step.done ? 'Done' : 'To do'}
+        />
         <a
           href={resolve(projectHref(path(step), slug))}
           class="font-medium {step.done ? 'text-fg-2' : 'text-fg-1'}"
