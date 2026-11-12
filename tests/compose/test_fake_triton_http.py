@@ -34,11 +34,13 @@ def base_url():
     server.server_close()
 
 
-def test_the_repository_index_is_an_empty_list(base_url: str) -> None:
+def test_the_repository_index_lists_the_served_and_listed_only_models(base_url: str) -> None:
     request = urllib.request.Request(f'{base_url}/v2/repository/index', method='POST')
     with urllib.request.urlopen(request, timeout=5) as response:  # nosec B310 - loopback
         assert response.status == 200
-        assert json.loads(response.read()) == []
+        listed = {row['name']: row for row in json.loads(response.read())}
+    assert {'yolov11_small_trt_end2end', 'ocr_pipeline', 'paddleocr_det_trt'} <= set(listed)
+    assert {row['state'] for row in listed.values()} == {'READY'}
 
 
 def test_readiness_is_ok_and_anything_else_is_unimplemented(base_url: str) -> None:
