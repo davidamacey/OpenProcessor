@@ -29,6 +29,7 @@ from src.schemas.curation.research_config import (
 from src.services.config_store.research_kinds import (
     KIND_AXES,
     ActiveConflictError,
+    AxisTargetMismatchError,
     InvalidConfigBodyError,
     RevisionConflictError,
     UnknownConfigError,
@@ -154,6 +155,8 @@ def _register_project_activation(kind: str, path: str, axes: tuple[str, ...], *,
             )
         except UnknownConfigError as exc:
             raise api_error(404, 'not_found', str(exc)) from exc
+        except AxisTargetMismatchError as exc:
+            raise api_error(422, 'axis_target_mismatch', str(exc), axis=exc.axis) from exc
         except ActiveConflictError as exc:
             raise active_conflict_error(f'the active {kind}', exc.current) from exc
         return ResearchActive(

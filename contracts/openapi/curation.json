@@ -7442,6 +7442,7 @@
               "image_encoder_unavailable",
               "unknown_revision",
               "active_conflict",
+              "axis_target_mismatch",
               "no_previous",
               "previous_deleted",
               "no_active_profile",

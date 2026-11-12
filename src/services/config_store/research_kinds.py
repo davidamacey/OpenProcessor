@@ -62,6 +62,37 @@ def kind_axes(kind: str) -> list[ResearchAxis]:
     ]
 
 
+class AxisTargetMismatchError(ValueError):
+    """The body's ``target`` is served by another axis than the one asked for."""
+
+    def __init__(self, *, kind: str, name: str, axis: str, target: str, expected_axis: str) -> None:
+        self.axis = axis
+        self.expected_axis = expected_axis
+        super().__init__(
+            f'{kind.replace("_", " ")} {name!r} has target {target}, so it is activated on '
+            f'{expected_axis}, not {axis}'
+        )
+
+
+def check_axis_target(kind: str, name: str, axis: str, body: dict[str, Any]) -> None:
+    """Refuse an axis that serves one target for a body whose ``target`` is another.
+
+    Only the axes that serve a target are checked (a cluster profile's two); a kind whose body
+    names no target is not.
+    """
+    wanted = _AXIS_TARGETS.get(axis)
+    if wanted is None or body.get('target') == wanted:
+        return
+    target = str(body.get('target'))
+    raise AxisTargetMismatchError(
+        kind=kind,
+        name=name,
+        axis=axis,
+        target=target,
+        expected_axis=TARGET_AXES.get(target, f'an axis for target {target}'),
+    )
+
+
 class InvalidConfigBodyError(ValueError):
     """The body does not fit its kind's model; ``errors`` is the pydantic error list."""
 
@@ -171,6 +202,7 @@ async def activate_project_axis(
         if doc is None:
             msg = f'no {kind} {name!r}' + (f' at revision {revision}' if revision else '')
             raise UnknownConfigError(msg)
+        check_axis_target(kind, name, axis, doc.body)
         return await repo.activate(
             session,
             project_id=project_id,

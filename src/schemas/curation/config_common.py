@@ -55,6 +55,8 @@ ErrorCode = Literal[
     'image_encoder_unavailable',
     'unknown_revision',
     'active_conflict',
+    # A cluster profile activated on the axis of another target than its own.
+    'axis_target_mismatch',
     'no_previous',
     # m-b fix: rollback's `previous` target was
     # deleted since it was activated -- distinct from `no_previous`
