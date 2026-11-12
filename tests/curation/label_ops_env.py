@@ -11,8 +11,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from curation.query_fakes import QueryFakeOpenSearch
+from src.clients.occ import OCCFinalConflictError
 from src.config import get_curation_config
 from src.config.project_context import current_project_id
+from src.core.error_handlers import occ_final_conflict_response
 
 
 if TYPE_CHECKING:
@@ -218,6 +220,7 @@ def build_env(
     monkeypatch.setattr(crops_write, 'get_class_registry', lambda: registry)
     fake = InstrumentedFake({items_index(): docs or {}})
     app = mount_curation_routers(FastAPI(), router)
+    app.exception_handler(OCCFinalConflictError)(occ_final_conflict_response)
     app.dependency_overrides[_raw_opensearch_dep] = lambda: fake
     app.dependency_overrides[_common._registry_dep] = lambda: registry
     return OpsEnv(TestClient(app, raise_server_exceptions=False), fake, registry, class_ids, SCOPED)
