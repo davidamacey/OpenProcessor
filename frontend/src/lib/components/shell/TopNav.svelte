@@ -7,6 +7,7 @@
    * label, group and path comes from the one table in `$lib/projectPaths`.
    */
   import { page } from '$app/state';
+  import { MediaQuery } from 'svelte/reactivity';
   import { resolve } from '$app/paths';
   import AboutModal from '$components/AboutModal.svelte';
   import AppLogo from '$components/AppLogo.svelte';
@@ -34,6 +35,12 @@
 
   let aboutOpen = $state(false);
   let drawerOpen = $state(false);
+  // The desktop nav shows from md (768px); a drawer left open past it would cover that nav.
+  const desktop =
+    typeof matchMedia === 'function' ? new MediaQuery('min-width: 768px') : null;
+  $effect(() => {
+    if (desktop?.current) drawerOpen = false;
+  });
 
   const section = $derived(sectionOf(page.url.pathname));
   const activeGroup = $derived(section ? navGroupOf(section) : null);
@@ -164,7 +171,7 @@
 
 {#if drawerOpen}
   <Drawer label="Navigation" onclose={() => (drawerOpen = false)}>
-    <nav aria-label="Primary" class="flex flex-col py-2" data-testid="drawer-nav">
+    <nav aria-label="Primary (menu)" class="flex flex-col py-2" data-testid="drawer-nav">
       {#each NAV_GROUPS as group (group.id)}
         {#if group.sections.length > 1}
           <p

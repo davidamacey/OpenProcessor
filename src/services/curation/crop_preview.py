@@ -8,8 +8,8 @@ it. Resampling is ``Image.Resampling.LANCZOS``: Pillow's handbook (Concepts, Fil
 quality for both upscaling and downscaling, the right filter for enlarging a small crop.
 
 Cached like the thumbnails (:class:`~src.services.curation.image_serving.ThumbnailCache`): a
-per-process LRU of the encoded JPEG, keyed by the image, the exact box and every parameter, so an
-edited box can never be served from an old entry.
+per-process LRU of the encoded JPEG, bounded in bytes, keyed by the image, the exact box and every
+parameter, so an edited box can never be served from an old entry.
 """
 
 from __future__ import annotations
@@ -29,8 +29,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-PREVIEW_CACHE_MAX_ENTRIES = 500
-"""About 50 MB at the 1024 px limit."""
+PREVIEW_CACHE_MAX_BYTES = 16 * 1024 * 1024
+"""Encoded bytes one process keeps (the stack runs many workers). Bounded by size, not entry
+count: a preview may be up to 2048 px, so a count would not bound memory."""
 
 OUTLINE_RGB = (255, 214, 10)
 """The highlight yellow (``--hl``): the colour the UI reserves for the selected thing."""
@@ -110,9 +111,16 @@ class PreviewCache:
     """LRU cache of encoded previews (a per-process cache: concurrent misses for one key may each
     compute it once, the last write wins)."""
 
-    def __init__(self, maxsize: int = PREVIEW_CACHE_MAX_ENTRIES) -> None:
-        self._cache: LRUCache[_Key, bytes] = LRUCache(maxsize=maxsize)
+    def __init__(self, max_bytes: int = PREVIEW_CACHE_MAX_BYTES) -> None:
+        # cachetools sizes each entry with ``getsizeof`` and evicts the least recently used until
+        # the total fits ``maxsize``.
+        self._cache: LRUCache[_Key, bytes] = LRUCache(maxsize=max_bytes, getsizeof=len)
         self._lock = Lock()
+
+    @property
+    def size_bytes(self) -> int:
+        with self._lock:
+            return int(self._cache.currsize)
 
     async def get_or_compute(
         self,
@@ -146,7 +154,9 @@ class PreviewCache:
             outline=outline,
         )
         with self._lock:
-            self._cache[key] = jpeg
+            # cachetools refuses an entry larger than the whole cache; serve it uncached.
+            if len(jpeg) <= self._cache.maxsize:
+                self._cache[key] = jpeg
         return jpeg
 
     def clear(self) -> None:

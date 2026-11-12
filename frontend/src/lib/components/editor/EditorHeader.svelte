@@ -4,6 +4,7 @@
    * which is always visible. A failed or conflicting save also shows the server's own words.
    */
   import { resolve } from '$app/paths';
+  import Icon from '$components/ui/Icon.svelte';
   import type { SaveStatus } from '$lib/editor/editorCommands.svelte';
 
   interface Props {
@@ -32,10 +33,10 @@
 >
   <a
     href={resolve(backHref)}
-    class="text-sm text-info-text hover:underline"
+    class="inline-flex items-center gap-1 text-sm text-info-text hover:underline"
     data-testid="editor-back"
   >
-    ‹ Workspace
+    <Icon name="chevron-left" size={14} />Workspace
   </a>
   <h1 class="min-w-0 truncate text-sm font-medium text-fg-1" title={fileName}>
     {fileName}

@@ -25,11 +25,16 @@ def adoption_merger(
 ) -> Callable[[dict[str, Any]], dict[str, Any]]:
     """``classes`` maps a detector name (registry-name form) to ``(class_id, class_name)``.
 
-    A locked, validated or already classed item, and a name with no class in ``classes``, is left
+    A locked, validated, excluded or already classed item, and a name with no class in ``classes``, is left
     as it is: an empty merge writes nothing."""
 
     def merge(current: dict[str, Any]) -> dict[str, Any]:
-        if class_write_locked(current) or current.get('class_id') is not None:
+        # class_excluded is re-checked here: a person may exclude an item after the id snapshot.
+        if (
+            class_write_locked(current)
+            or current.get('class_excluded')
+            or current.get('class_id') is not None
+        ):
             return {}
         found = classes.get(normalize_class_name(str(current.get('detector_class_name') or '')))
         if found is None:

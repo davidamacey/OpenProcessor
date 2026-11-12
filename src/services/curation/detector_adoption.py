@@ -84,8 +84,11 @@ class AdoptionPlan:
 
     @property
     def items(self) -> int:
-        """Items adoption would give a class."""
-        return sum(n for name, n in self.adoptable.items() if name not in self.blocked)
+        """Items adoption would give a class: those whose name is in ``existing`` or ``create``.
+        A name with no slug is never a class (ingest ``by_name`` skips it the same way), so its
+        items are neither counted here nor written."""
+        written = {*self.existing, *self.create}
+        return sum(n for name, n in self.adoptable.items() if name in written)
 
     @property
     def blocked_items(self) -> int:
