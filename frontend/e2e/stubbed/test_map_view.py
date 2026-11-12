@@ -152,7 +152,10 @@ def test_served_counts_and_a_cell_click_shows_the_summary_and_twelve_cards(stub,
 
     page.get_by_test_id('cell-show').click()
     expect(page).to_have_url(re.compile(r'geo_bbox'), timeout=ACTION_TIMEOUT_MS)
-    assert 'view=map' not in page.url
+    assert 'view=gallery' in page.url
+    expect(page.get_by_test_id('view-tab-gallery')).to_have_attribute(
+        'aria-selected', 'true', timeout=ACTION_TIMEOUT_MS
+    )
     expect(page.get_by_text('Area: box')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
 
 
@@ -163,6 +166,7 @@ def test_a_single_photo_cell_is_a_pin_that_opens_the_image(stub, page, app_url):
     page.mouse.click(x, y)
     expect(page).to_have_url(re.compile(r'img-pin'), timeout=ACTION_TIMEOUT_MS)
     assert 'cell' not in parse_qs(urlparse(page.url).query).get('focus', [''])[0]
+    expect(page.get_by_test_id('image-details')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     _shots(page, 'map_pin')
 
 
