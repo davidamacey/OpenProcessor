@@ -488,6 +488,7 @@ const UNRESOLVED_QUERY = new Set<string>([
   'lib/api_stats.ts GET /stats/dataset',
   'lib/api_autoLabel.ts POST /pipeline/auto_label/start',
   'lib/api_detector.ts GET /detections/summary',
+  'lib/api_images.ts GET /images/locate',
   'lib/api_map.ts GET /map/cells',
   'lib/api_table.ts GET /table',
 ]);
