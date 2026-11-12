@@ -139,9 +139,8 @@ def image_counts_dirty(monkeypatch: pytest.MonkeyPatch) -> dict[str, set[str]]:
     from fixtures.fake_valkey import FakeValkeySets
 
     data: dict[str, set[str]] = {}
-    monkeypatch.setattr(
-        'src.clients.image_counts_dirty.valkey_client', lambda: FakeValkeySets(data)
-    )
+    for name in ('valkey_client', 'shared_valkey_client'):
+        monkeypatch.setattr(f'src.clients.image_counts_dirty.{name}', lambda: FakeValkeySets(data))
     return data
 
 

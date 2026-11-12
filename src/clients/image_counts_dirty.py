@@ -18,6 +18,8 @@ The set is keyed by the bound project's slug, so projects never share one.
 
 from __future__ import annotations
 
+import asyncio
+import weakref
 from typing import TYPE_CHECKING, Any, Final
 
 import redis
@@ -58,7 +60,7 @@ def refused_key() -> str:
 
 
 def valkey_client() -> aioredis.Redis:
-    """A Valkey client for one operation (the caller closes it)."""
+    """A Valkey client for one operation of the drain (the caller closes it)."""
     settings = QueueSettings.from_env()
     return aioredis.Redis.from_url(
         settings.url,
@@ -70,6 +72,36 @@ def valkey_client() -> aioredis.Redis:
 
 class CountsMarkError(RuntimeError):
     """Neither Valkey nor the images index took the mark of a changed image."""
+
+
+_HEALTH_CHECK_S: Final = 30
+_SHARED: dict[weakref.ref[asyncio.AbstractEventLoop], aioredis.Redis] = {}
+
+
+def shared_valkey_client() -> aioredis.Redis:
+    """The running event loop's Valkey client, built on first use and reused by every mark.
+
+    A client owns a connection pool (https://redis-py.readthedocs.io/en/stable/connections.html),
+    so a label operation no longer opens a TCP connection per write batch. The client is per
+    loop: asyncio connections cannot cross loops, and a Celery child runs each task on a loop of
+    its own, so the clients of closed or collected loops are dropped here. Callers do not close
+    it.
+    """
+    for ref in list(_SHARED):
+        if (loop := ref()) is None or loop.is_closed():
+            del _SHARED[ref]
+    key = weakref.ref(asyncio.get_running_loop())
+    client = _SHARED.get(key)
+    if client is None:
+        settings = QueueSettings.from_env()
+        client = _SHARED[key] = aioredis.Redis.from_url(
+            settings.url,
+            socket_timeout=_TIMEOUT_S,
+            socket_connect_timeout=_TIMEOUT_S,
+            health_check_interval=_HEALTH_CHECK_S,
+            **client_kwargs(settings),
+        )
+    return client
 
 
 async def mark_dirty(opensearch: Any, image_ids: Iterable[str]) -> int:
@@ -85,17 +117,11 @@ async def mark_dirty(opensearch: Any, image_ids: Iterable[str]) -> int:
     ids = sorted({i for i in image_ids if i})
     if not ids:
         return 0
-    key = dirty_key()
-    client = None
     try:
-        client = valkey_client()
-        await client.sadd(key, *ids)
+        await shared_valkey_client().sadd(dirty_key(), *ids)
     except (redis.RedisError, EnvError, OSError):
         logger.error('image_counts_mark_failed', images=len(ids), exc_info=True)
         await _clear_counts_at(opensearch, ids)
-    finally:
-        if client is not None:
-            await client.aclose()
     return len(ids)
 
 

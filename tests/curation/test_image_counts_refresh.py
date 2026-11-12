@@ -12,6 +12,7 @@ from typing import Any
 from fixtures.fake_valkey import FakeValkeySets
 
 from curation.query_fakes import QueryFakeOpenSearch
+from src.clients import image_counts_dirty as dirty_mod
 from src.clients.image_counts_dirty import DirtyImages, dirty_key
 from src.clients.occ import occ_skip_on_conflict_bulk, occ_update_one
 from src.clients.occ_bulk import occ_update_bulk
@@ -20,6 +21,9 @@ from src.config import IndexRole, index_name
 from src.config.curation_accessors import base_curation_config
 from src.services.curation import image_counts_refresh as refresh
 
+
+# Taken at import, before the autouse fixture swaps the client factories for an in-memory set.
+_REAL_SHARED_CLIENT = dirty_mod.shared_valkey_client
 
 CFG = base_curation_config()
 ITEMS = CFG.items_index
@@ -357,9 +361,8 @@ def test_a_valkey_outage_marks_the_image_through_the_index_and_the_sweep_recount
     assert all('counts_at' in d for d in fake.docs(IMAGES).values())
     fake.docs(ITEMS)['c1']['class_id'] = 7  # a label that committed while Valkey is down
     client = _Down()
-    monkeypatch.setattr(dirty_mod, 'valkey_client', lambda: client)
+    monkeypatch.setattr(dirty_mod, 'shared_valkey_client', lambda: client)
     assert _run(dirty_mod.mark_dirty(fake, ['img-c'])) == 1
-    assert client.closed
     docs = fake.docs(IMAGES)
     assert 'counts_at' not in {k for k, v in docs['img-c'].items() if v is not None}
     assert image_counts_dirty.get(DIRTY) is None
@@ -377,7 +380,7 @@ def test_a_mark_that_neither_valkey_nor_the_index_takes_is_raised(monkeypatch: A
     from src.clients import image_counts_dirty as dirty_mod
 
     fake = _world()
-    monkeypatch.setattr(dirty_mod, 'valkey_client', lambda: _Down())
+    monkeypatch.setattr(dirty_mod, 'shared_valkey_client', lambda: _Down())
 
     async def refuse(*, body: list[dict[str, Any]], **_kw: Any) -> dict[str, Any]:
         return {'errors': True, 'items': [{'update': {'status': 400}} for _ in body[::2]]}
@@ -385,3 +388,33 @@ def test_a_mark_that_neither_valkey_nor_the_index_takes_is_raised(monkeypatch: A
     monkeypatch.setattr(fake, 'bulk', refuse)
     with pytest.raises(dirty_mod.CountsMarkError):
         _run(dirty_mod.mark_dirty(fake, ['img-a']))
+
+
+def test_marks_reuse_one_valkey_client_per_event_loop(monkeypatch: Any) -> None:
+    from types import SimpleNamespace
+
+    built: list[object] = []
+
+    def from_url(_cls: Any, _url: str, **_kw: Any) -> object:
+        built.append(object())
+        return built[-1]
+
+    monkeypatch.setattr(
+        dirty_mod,
+        'QueueSettings',
+        SimpleNamespace(from_env=lambda: SimpleNamespace(url='redis://x:6379/0', password='p')),
+    )
+    monkeypatch.setattr(dirty_mod.aioredis.Redis, 'from_url', classmethod(from_url))
+    monkeypatch.setattr(dirty_mod, '_SHARED', {})
+
+    async def two_marks() -> object:
+        first, second = _REAL_SHARED_CLIENT(), _REAL_SHARED_CLIENT()
+        assert first is second
+        return first
+
+    one = asyncio.run(two_marks())
+    other = asyncio.run(two_marks())
+    # A new loop (a Celery child's next task) gets its own client; the closed loop's is dropped.
+    assert one is not other
+    assert len(built) == 2
+    assert len(dirty_mod._SHARED) == 1
