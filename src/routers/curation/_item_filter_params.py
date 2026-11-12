@@ -106,8 +106,10 @@ def item_filter_query(
         str | None,
         Query(
             description=(
-                'Only items this review tab would show (a `GET /review/tabs` id such as '
-                '`outliers` or `detector_disagreements`; `regions` is not accepted).'
+                'Only items this review queue or filter preset would show: a queue id from '
+                '`GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, '
+                '`new_class_proposals`, `audit`) or an older preset such as `outliers` or '
+                '`detector_disagreements`; `regions` is not accepted.'
             )
         ),
     ] = None,

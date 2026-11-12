@@ -47669,7 +47669,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -47682,7 +47682,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -48720,7 +48720,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -48733,7 +48733,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -50029,7 +50029,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -50042,7 +50042,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -53002,7 +53002,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -53015,7 +53015,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -54638,7 +54638,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -54651,7 +54651,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -55310,7 +55310,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -55323,7 +55323,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -59157,7 +59157,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -59170,7 +59170,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -62419,7 +62419,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -62432,7 +62432,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -65198,7 +65198,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -65211,7 +65211,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -66845,7 +66845,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -66858,7 +66858,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -67630,7 +67630,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -67643,7 +67643,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -68349,7 +68349,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -68362,7 +68362,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -69246,7 +69246,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -69259,7 +69259,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -70021,7 +70021,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -70034,7 +70034,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -70738,7 +70738,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -70751,7 +70751,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -71629,7 +71629,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -71642,7 +71642,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -72130,7 +72130,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -72143,7 +72143,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
@@ -72695,7 +72695,7 @@
             }
           },
           {
-            "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+            "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
             "in": "query",
             "name": "review_tab",
             "required": false,
@@ -72708,7 +72708,7 @@
                   "type": "null"
                 }
               ],
-              "description": "Only items this review tab would show (a `GET /review/tabs` id such as `outliers` or `detector_disagreements`; `regions` is not accepted).",
+              "description": "Only items this review queue or filter preset would show: a queue id from `GET /review/tabs` (`to_label`, `check_machine`, `disagreements`, `new_class_proposals`, `audit`) or an older preset such as `outliers` or `detector_disagreements`; `regions` is not accepted.",
               "title": "Review Tab"
             }
           },
