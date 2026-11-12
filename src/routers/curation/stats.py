@@ -11,9 +11,9 @@ Two endpoints; the aggregations and rollups live in
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Query
 
 from src.core.db_session import DbSessionDep
 from src.db.session import async_session_factory
@@ -32,7 +32,19 @@ if TYPE_CHECKING:
 
 
 @router.get('/stats/classes', response_model=ClassStatsResponse, response_model_exclude_unset=True)
-async def stats_classes(opensearch: OpenSearchDep, item_filter: ItemFilterQuery) -> dict[str, Any]:
+async def stats_classes(
+    opensearch: OpenSearchDep,
+    item_filter: ItemFilterQuery,
+    sort: Annotated[
+        str | None,
+        Query(
+            description=(
+                "`<field>:<asc|desc>`; the accepted values are the response's `sort_options`. "
+                'Default `class_id:asc`. An unknown field or direction is a 400.'
+            )
+        ),
+    ] = None,
+) -> dict[str, Any]:
     """Per-class total/validated breakdown.
 
     Returns both the raw ``by_class`` aggregation and a flattened ``classes``
@@ -51,8 +63,8 @@ async def stats_classes(opensearch: OpenSearchDep, item_filter: ItemFilterQuery)
     against :func:`dataset_thresholds`'s per-class minimum, floored at 0.
     """
     try:
-        return await class_stats(opensearch, item_filter, get_class_registry)
-    except InvalidItemFilterError as exc:
+        return await class_stats(opensearch, item_filter, get_class_registry, sort)
+    except (InvalidItemFilterError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ClassRegistryUnavailableError as exc:
         raise server_error(503, 'class registry unavailable', exc) from exc

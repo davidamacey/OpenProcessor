@@ -5197,13 +5197,26 @@
             "title": "Classes",
             "type": "array"
           },
+          "sort_applied": {
+            "title": "Sort Applied",
+            "type": "string"
+          },
+          "sort_options": {
+            "items": {
+              "$ref": "#/components/schemas/SortOption"
+            },
+            "title": "Sort Options",
+            "type": "array"
+          },
           "thresholds": {
             "$ref": "#/components/schemas/ClassStatsThresholds"
           }
         },
         "required": [
           "classes",
-          "thresholds"
+          "thresholds",
+          "sort_applied",
+          "sort_options"
         ],
         "title": "ClassStatsResponse",
         "type": "object"
@@ -5239,6 +5252,16 @@
             "title": "Count",
             "type": "integer"
           },
+          "test_count": {
+            "description": "Frozen test-holdout crops of the class.",
+            "title": "Test Count",
+            "type": "integer"
+          },
+          "test_deficient": {
+            "description": "test_count is below the per-class test minimum.",
+            "title": "Test Deficient",
+            "type": "boolean"
+          },
           "trainable": {
             "description": "Validated minus holdout minus human-excluded crops.",
             "title": "Trainable",
@@ -5263,7 +5286,9 @@
           "trainable_gap",
           "adequacy",
           "aug_target",
-          "aug_gap"
+          "aug_gap",
+          "test_count",
+          "test_deficient"
         ],
         "title": "ClassStatsRow",
         "type": "object"
@@ -72073,6 +72098,24 @@
             "schema": {
               "title": "Project",
               "type": "string"
+            }
+          },
+          {
+            "description": "`<field>:<asc|desc>`; the accepted values are the response's `sort_options`. Default `class_id:asc`. An unknown field or direction is a 400.",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`<field>:<asc|desc>`; the accepted values are the response's `sort_options`. Default `class_id:asc`. An unknown field or direction is a 400.",
+              "title": "Sort"
             }
           },
           {
