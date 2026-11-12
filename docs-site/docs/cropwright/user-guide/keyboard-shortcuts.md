@@ -32,6 +32,7 @@ makes the shortcuts below customizable per project rather than fixed.
 | `/` | Open the class picker for the selection |
 | `Space` | Select or deselect the focused card |
 | `\` | Show or hide the details panel |
+| `Shift+O` | Open the focused image or detection in the image editor |
 | `Esc` | In Review, back to the grid; otherwise clear the selection, then leave the open cluster, then close the panel |
 | `Shift+Enter` | Confirm selected to the chosen class + advance |
 | `Shift+G` | Accept all VLM suggestions on the page |
@@ -45,6 +46,23 @@ makes the shortcuts below customizable per project rather than fixed.
 | `A` | Select all on page |
 | `←` / `→` | Move the selection by one crop |
 | `M` | Move selected to another cluster |
+
+## `/p/<project>/images/<image_id>` (image editor)
+
+| Key | Action |
+| --- | --- |
+| `V` / `B` / `Shift+B` / `H` | Select, draw one box, draw boxes (stays on), pan |
+| `=` / `-` / `0` / `1` | Zoom in, zoom out, fit, 100 % |
+| `Tab` / `Shift+Tab` | Select the next / previous object |
+| Arrow keys / `Shift`+arrows | Move the selected box 1 / 10 screen pixels |
+| `Alt+Shift`+arrows | Move the box's bottom-right corner |
+| `Delete` / `Backspace` | Delete the selected object (undo restores it) |
+| `/` | Pick the selected object's class |
+| _class letter_ | Set the selected object's class |
+| `Ctrl+Z` / `Ctrl+Shift+Z` | Undo / redo |
+| `,` / `.` | Previous / next image in the list you came from |
+| `Shift+R` / `Shift+L` | Edit region boxes / show or hide box labels |
+| `Esc` | Cancel the draw, then deselect, then back to the Workspace |
 
 ## Review view (`/p/<project>/workspace?view=review`)
 

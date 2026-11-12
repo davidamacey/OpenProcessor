@@ -61,6 +61,7 @@ ROUTES: list[tuple[str, str]] = [
     ('/workspace?view=clusters&scope=cluster:cl-fixture-0064', "[data-testid='class-name']"),
     ('/workspace?view=gallery', "[data-testid='gallery-view']"),
     ('/workspace?view=detections', "[data-testid='detections-view']"),
+    ('/images/img-1?view=gallery', 'h1'),
     ('/workspace?view=review', "[data-testid='queue-counter']"),
     ('/workspace?view=review&queue=to_label', "[data-testid='queue-counter']"),
     ('/workspace?view=review&queue=check_machine', "[data-testid='queue-counter']"),

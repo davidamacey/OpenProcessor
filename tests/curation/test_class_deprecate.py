@@ -134,10 +134,10 @@ def test_deprecate_is_idempotent(
 
 def test_deprecate_clears_hotkey(client: TestClient, registry: InMemoryRegistry) -> None:
     assert (
-        client.put('/curation/projects/default/classes/0', json={'hotkey_letter': 'v'}).status_code
+        client.put('/curation/projects/default/classes/0', json={'hotkey_letter': 'k'}).status_code
         == 200
     )
-    assert _entry(registry, 0).hotkey_letter == 'v'
+    assert _entry(registry, 0).hotkey_letter == 'k'
 
     resp = client.post('/curation/projects/default/classes/0/deprecate')
     assert resp.status_code == 200, resp.text

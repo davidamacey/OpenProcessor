@@ -144,6 +144,10 @@ class ImageLocate(BaseModel):
     cursor_after: str | None = Field(
         description='Pass as `cursor` for the page right after this image; null when not in it.'
     )
+    previous_image_id: str | None = Field(
+        description='The image right before this one in the list, for walking back; null for the '
+        'first row and when not in the list.'
+    )
     reason: Literal['not_found', 'filtered_out'] | None = Field(
         description='Why it is not in the list; null when in_view.'
     )

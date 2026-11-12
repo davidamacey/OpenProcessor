@@ -135,6 +135,10 @@ export type RawCrop = {
   region_gate_skip?: string | null;
   /** The newest assist run's suggestions (attributes, the VLM's class answer). */
   assist?: ItemAssist | null;
+  geometry_revision?: number;
+  geometry_source?: 'detector' | 'human' | 'import';
+  geometry_locked?: boolean;
+  lock_label?: string | null;
 };
 
 /**
@@ -230,6 +234,10 @@ export const RAW_CROP_KEYS = [
   'mask_polygon',
   'region_gate_skip',
   'assist',
+  'geometry_revision',
+  'geometry_source',
+  'geometry_locked',
+  'lock_label',
 ] as const satisfies readonly (keyof RawCrop)[];
 // Compile error if RAW_CROP_KEYS drops (or never gains) a RawCrop key.
 type _RawCropKeysExhaustive =
@@ -287,6 +295,16 @@ function mapCropScores(c: RawCrop) {
     probe_in_scope: c.probe_in_scope ?? null,
     probe_model_version: c.probe_model_version ?? null,
     probe_actionable: c.probe_actionable ?? null,
+  } satisfies Partial<Crop>;
+}
+
+/** The box-edit revision and lock of a served crop. */
+function mapCropGeometry(c: RawCrop) {
+  return {
+    geometry_revision: c.geometry_revision ?? 0,
+    geometry_source: c.geometry_source ?? 'detector',
+    geometry_locked: !!c.geometry_locked,
+    lock_label: c.lock_label ?? null,
   } satisfies Partial<Crop>;
 }
 
@@ -362,6 +380,7 @@ export function mapRawCrop(c: RawCrop): Crop {
     combine_merged_origins: asStringArray(c.combine_merged_origins),
     embedding_states: c.embedding_states ?? {},
     ...mapCropScores(c),
+    ...mapCropGeometry(c),
     ...mapCropOrigin(c),
     near_dup_group_id:
       typeof c.near_dup_group_id === 'string' ? c.near_dup_group_id : null,

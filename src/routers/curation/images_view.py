@@ -74,8 +74,9 @@ async def locate_image_in_list(
     """Where `target_image_id` sits in the list `GET /images` serves for the same filters and sort.
 
     `index` is the 0-based position; `cursor_before` starts a page at the image (null for the first
-    row) and `cursor_after` resumes right after it. Not in the list: `index` and the cursors are
-    null and `reason` is `not_found` or `filtered_out`."""
+    row) and `cursor_after` resumes right after it; `previous_image_id` is the image just before it.
+    Not in the list: `index`, the cursors and `previous_image_id` are null and `reason` is
+    `not_found` or `filtered_out`."""
     try:
         doc = await opensearch.get(index=images_index(), id=target_image_id)
     except Exception as exc:

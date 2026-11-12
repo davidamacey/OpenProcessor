@@ -256,6 +256,7 @@ async def locate_image(
         total=int((await opensearch.count(index=images_index(), body={'query': query}))['count']),
         cursor_before=None,
         cursor_after=None,
+        previous_image_id=None,
         reason='not_found',
         reason_message='No such image.',
     )
@@ -280,5 +281,11 @@ async def locate_image(
             }
         )
     return out.model_copy(
-        update={'in_view': True, 'reason': None, 'reason_message': None, **where.as_wire()}
+        update={
+            'in_view': True,
+            'reason': None,
+            'reason_message': None,
+            'previous_image_id': where.previous_id,
+            **where.as_wire(),
+        }
     )

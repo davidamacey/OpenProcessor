@@ -110,12 +110,14 @@ def reverse_sort(sort: list[dict[str, Any]]) -> list[dict[str, Any]]:
 @dataclass(frozen=True)
 class ListLocation:
     """``index`` is 0-based. ``cursor_before`` starts a page at the item (``None`` for the first
-    row); ``cursor_after`` resumes right after it."""
+    row); ``cursor_after`` resumes right after it; ``previous_id`` is the id of the item right
+    before it (``None`` for the first row)."""
 
     index: int
     total: int
     cursor_before: str | None
     cursor_after: str
+    previous_id: str | None = None
 
     def as_wire(self) -> dict[str, Any]:
         return {
@@ -151,17 +153,21 @@ async def locate_item(
     rank = int((await opensearch.count(index=index, body={'query': before}))['count'])
     total = int((await opensearch.count(index=index, body={'query': query}))['count'])
     cursor_before = None
+    previous_id = None
     if rank:
         prev = await opensearch.search(
             index=index,
-            body={'query': before, 'size': 1, 'sort': reverse_sort(sort), '_source': False},
+            body={'query': before, 'size': 1, 'sort': reverse_sort(sort), '_source': [id_field]},
         )
-        cursor_before = encode_cursor(sort_id, prev['hits']['hits'][0]['sort'])
+        hit = prev['hits']['hits'][0]
+        cursor_before = encode_cursor(sort_id, hit['sort'])
+        previous_id = str(hit['_source'][id_field])
     return ListLocation(
         index=rank,
         total=total,
         cursor_before=cursor_before,
         cursor_after=encode_cursor(sort_id, hits[0]['sort']),
+        previous_id=previous_id,
     )
 
 

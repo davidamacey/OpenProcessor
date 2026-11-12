@@ -64,6 +64,7 @@ def test_index_and_cursors_walk_to_the_image(client: TestClient, sort: str) -> N
         assert got['index'] == position
         assert got['total'] == N
         assert got['reason'] is None
+        assert got['previous_image_id'] == (everything[position - 1] if position else None)
         if position == 0:
             assert got['cursor_before'] is None
         else:
@@ -80,6 +81,7 @@ def test_filtered_out_image_says_so(client: TestClient) -> None:
     assert (got['in_view'], got['index'], got['reason']) == (False, None, 'filtered_out')
     assert got['cursor_before'] is None
     assert got['cursor_after'] is None
+    assert got['previous_image_id'] is None
     assert got['reason_message']
 
 

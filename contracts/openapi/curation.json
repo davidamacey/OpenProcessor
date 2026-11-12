@@ -13877,6 +13877,18 @@
             "description": "0-based position in the list; null when not in it.",
             "title": "Index"
           },
+          "previous_image_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The image right before this one in the list, for walking back; null for the first row and when not in the list.",
+            "title": "Previous Image Id"
+          },
           "reason": {
             "anyOf": [
               {
@@ -13918,6 +13930,7 @@
           "total",
           "cursor_before",
           "cursor_after",
+          "previous_image_id",
           "reason",
           "reason_message"
         ],
@@ -55147,7 +55160,7 @@
     },
     "/curation/projects/{project}/images/locate": {
       "get": {
-        "description": "Where `target_image_id` sits in the list `GET /images` serves for the same filters and sort.\n\n`index` is the 0-based position; `cursor_before` starts a page at the image (null for the first\nrow) and `cursor_after` resumes right after it. Not in the list: `index` and the cursors are\nnull and `reason` is `not_found` or `filtered_out`.",
+        "description": "Where `target_image_id` sits in the list `GET /images` serves for the same filters and sort.\n\n`index` is the 0-based position; `cursor_before` starts a page at the image (null for the first\nrow) and `cursor_after` resumes right after it; `previous_image_id` is the image just before it.\nNot in the list: `index`, the cursors and `previous_image_id` are null and `reason` is\n`not_found` or `filtered_out`.",
         "operationId": "locate_image_in_list_curation_projects__project__images_locate_get",
         "parameters": [
           {

@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Review is a Workspace view. `Enter` on a Detections card opens it at that item and `Esc` returns to the same card; the rail lists the served queues (To label, Check machine labels, Disagreements, New class proposals, Audit sample and the region queue) with their counts under the filter.
 - Workspace page (`/workspace`) with Clusters and Detections views, a served queues and classes rail, a details panel, a bulk bar that states the served selection summary and dry-runs every action, and a class picker with inline create. The filter, queue, open cluster and selection stay when you switch view; Back restores the previous view.
 - Ignore reasons are the served list (`GET /exclude_reasons`).
+- Image editor (`/images/<image_id>`): draw, move, resize and delete boxes, class picker with inline create, undo and redo, autosave. It walks the Workspace list it was opened from (`Shift+O` opens it from the Workspace); its keys are the `editor` keymap context.
 
 ### Removed
 

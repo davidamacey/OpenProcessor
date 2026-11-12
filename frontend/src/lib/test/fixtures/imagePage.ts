@@ -1,11 +1,12 @@
 /** Served `GET /images` bodies (`ImagePage`, `ImageCardWire`) for tests: every key present. */
+import { API_PREFIX } from '$lib/api';
 import type { ImageCardWire, ImagePage } from '$lib/types_images';
 
 export function imageCard(over: Partial<ImageCardWire> = {}): ImageCardWire {
   return {
     image_id: 'img-1',
     file_name: 'img-1.jpg',
-    thumbnail_url: '/curation/projects/p/images/img-1/thumbnail',
+    thumbnail_url: `${API_PREFIX}/projects/p/images/img-1/thumbnail`,
     width: 640,
     height: 480,
     source: 'test',

@@ -201,6 +201,14 @@ export interface Crop {
   /** Suggestions from the newest assist run (attributes, the VLM's class
    *  answer). Never a label: a locked item carries them too. */
   assist?: ItemAssist | null;
+  /** How often a person has moved or resized this item's box; the editor sends it back so a
+   *  stale edit is a 409 instead of an overwrite. */
+  geometry_revision: number;
+  geometry_source: 'detector' | 'human' | 'import';
+  /** A person set this box, so the pipeline must not move it. */
+  geometry_locked: boolean;
+  /** The served words for what locks this box; null when nothing does. */
+  lock_label: string | null;
   /** a human-locked label the pipeline must not overwrite. */
   label_locked?: boolean;
   /** ids of the dataset imports that carried this item. */

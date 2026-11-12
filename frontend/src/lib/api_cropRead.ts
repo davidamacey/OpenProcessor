@@ -1,6 +1,6 @@
 /**
  * Item reads: crop pages, one crop, its history and source-image context,
- * text search, and the thumbnail / source-image URLs.
+ * text search, and the thumbnail URL.
  */
 import { apiBase, apiFetch, qs, scoped } from '$lib/api';
 import { mapRawCrop, type RawCrop } from '$lib/api_cropMap';
@@ -10,7 +10,6 @@ import type {
   CropHistoryResponse,
   PaginatedResponse,
 } from '$lib/types';
-import type { ImageDetailResponse } from '$lib/types_images';
 import type { CropLocateResult, CursorPage } from '$lib/types_cursor';
 import type { SearchCrop } from '$lib/types_review';
 
@@ -73,24 +72,6 @@ export function getCropHistory(
     {},
     signal,
   );
-}
-
-/**
- * `GET {API_PREFIX}/images/{id}` — one source image: its facts, its counts,
- * every item detected on it (siblings included) and the boxes to draw. The
- * pixels are `getImageFileUrl`; `SourceImageOverlay` draws over them.
- */
-export async function getImage(
-  imageId: string,
-  signal?: AbortSignal,
-): Promise<ImageDetailResponse> {
-  type Raw = Omit<ImageDetailResponse, 'items'> & { items: RawCrop[] };
-  const raw = await apiFetch<Raw>(
-    `${scoped()}/images/${encodeURIComponent(imageId)}`,
-    {},
-    signal,
-  );
-  return { ...raw, items: raw.items.map(mapRawCrop) };
 }
 
 /**
@@ -278,13 +259,4 @@ function mapSearchPage(
  */
 export function getThumbUrl(cropId: string, size: number = 160): string {
   return `${apiBase}${scoped()}/crops/${encodeURIComponent(cropId)}/thumbnail?size=${size}`;
-}
-
-/**
- * The clean source pixels of an image, shrunk to ~`maxDim`px on the longest
- * side so a review view does not pull 2+ MB per open. Nothing is drawn on
- * them: `SourceImageOverlay` draws the served boxes.
- */
-export function getImageFileUrl(imageId: string, maxDim: number = 1280): string {
-  return `${apiBase}${scoped()}/images/${encodeURIComponent(imageId)}/file?max_dim=${maxDim}`;
 }

@@ -91,10 +91,10 @@ def test_create_and_rename_accept_slug_names(client: TestClient) -> None:
 
 def test_create_with_hotkey(client: TestClient, registry: InMemoryRegistry) -> None:
     r = client.post(
-        '/curation/projects/default/classes', json={'name': 'van', 'hotkey_letter': 'V'}
+        '/curation/projects/default/classes', json={'name': 'van', 'hotkey_letter': 'K'}
     )
     assert r.status_code == 201, r.text
-    assert _entry(registry, r.json()['class_id']).hotkey_letter == 'v'
+    assert _entry(registry, r.json()['class_id']).hotkey_letter == 'k'
 
 
 @pytest.mark.parametrize('letter', ['d', '/', 'b'])

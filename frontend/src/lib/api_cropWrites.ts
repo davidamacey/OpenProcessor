@@ -12,6 +12,7 @@ import type {
   WriteFailure,
 } from '$lib/types';
 import type { SlotSpec } from '$lib/annotations/types';
+import type { GeometryPatchBody, GeometryWrittenWire } from '$lib/types_editor';
 import type { ExcludeReasonEntry, SelectionExcludeResult } from '$lib/types_itemFilter';
 import type { LabelOpAccepted } from '$lib/types_labelOps';
 
@@ -369,4 +370,41 @@ export function flagNeedsNewClass(
     },
     signal,
   );
+}
+
+// -- box geometry ----------------------------------------------------------
+
+/**
+ * `PATCH {API_PREFIX}/crops/{id}/geometry` — move or resize an item's box. A `409` means the
+ * box changed since `expected_geometry_revision`; a `422 regions_outside_item` names the region
+ * boxes the new box would leave outside (send them back as `drop_region_box_ids` to delete them).
+ */
+export async function patchItemGeometry(
+  cropId: string,
+  body: GeometryPatchBody,
+  signal?: AbortSignal,
+): Promise<GeometryWrittenWire<Crop>> {
+  const raw = await apiFetch<GeometryWrittenWire<RawCrop>>(
+    `${scoped()}/crops/${encodeURIComponent(cropId)}/geometry`,
+    { method: 'PATCH', body: JSON.stringify(body) },
+    signal,
+  );
+  return { ...raw, item: mapRawCrop(raw.item) };
+}
+
+/** `POST {API_PREFIX}/crops/{id}/geometry/undo` — restore the box before the newest edit. */
+export async function undoItemGeometry(
+  cropId: string,
+  expectedGeometryRevision: number,
+  signal?: AbortSignal,
+): Promise<GeometryWrittenWire<Crop>> {
+  const raw = await apiFetch<GeometryWrittenWire<RawCrop>>(
+    `${scoped()}/crops/${encodeURIComponent(cropId)}/geometry/undo`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ expected_geometry_revision: expectedGeometryRevision }),
+    },
+    signal,
+  );
+  return { ...raw, item: mapRawCrop(raw.item) };
 }

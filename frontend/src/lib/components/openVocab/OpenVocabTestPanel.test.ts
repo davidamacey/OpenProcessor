@@ -22,6 +22,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('$lib/api_cropRead', async (orig) => ({
   ...(await orig<typeof import('$lib/api_cropRead')>()),
   getCrop: mocks.getCrop,
+}));
+vi.mock('$lib/api_images', async (orig) => ({
+  ...(await orig<typeof import('$lib/api_images')>()),
   getImage: mocks.getImage,
 }));
 vi.mock('$lib/api_openVocab', () => ({ testOpenVocab: mocks.testOpenVocab }));
