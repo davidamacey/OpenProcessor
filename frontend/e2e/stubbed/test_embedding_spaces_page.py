@@ -8,6 +8,9 @@
   4. `test_restart_retire_and_cancel` — the build mode, the target in the query, abandon.
   5. `test_primary_offers_neither_promote_nor_retire`.
   6. `test_page_fits_430`.
+  7. `test_a_build_started_elsewhere_is_followed_from_the_list` — the list names the running run; the
+     page follows it, offers Cancel build and re-reads the list when the job ends.
+  8. `test_the_served_evaluation_is_shown_on_the_row_and_in_the_promote_step`.
 
 Set OP_E2E_SHOT_DIR to also save full-page screenshots (1600 and 430 px).
 """
@@ -99,7 +102,10 @@ def start(**over: Any) -> dict[str, Any]:
 
 
 def serve_spaces(stub: Any, spaces: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    state: dict[str, Any] = {'spaces': spaces or [PRIMARY, CANDIDATE, BOX_PRIMARY]}
+    state: dict[str, Any] = {
+        'spaces': spaces or [PRIMARY, CANDIDATE, BOX_PRIMARY],
+        'evaluations': {},
+    }
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': []})
     stub.on(
         'GET',
@@ -107,7 +113,40 @@ def serve_spaces(stub: Any, spaces: list[dict[str, Any]] | None = None) -> dict[
         lambda _r, _m: (200, fill('EmbeddingSpaceListResponse', spaces=state['spaces'])),
     )
     stub.on('GET', r'/embedding/models$', MODELS)
+
+    def evaluations(request: Any, _m: Any):
+        key = request.url.split('/embedding/spaces/')[1].split('/')[0]
+        return (200, state['evaluations'].get(key) or evaluation_list(key, []))
+
+    stub.on('GET', r'/embedding/spaces/[^/]+/evaluations(\?|$)', evaluations)
     return state
+
+
+def evaluation_list(key: str, runs: list[dict[str, Any]]) -> dict[str, Any]:
+    return fill(
+        'EmbeddingEvaluationListResponse',
+        space_key=key,
+        target='item',
+        primary_space_key='pe_core_v1_1024',
+        evaluated_against_primary=any(r['counts_for_promote'] for r in runs),
+        evaluations=runs,
+    )
+
+
+def evaluation_run(verdict: str, against_primary: bool = True) -> dict[str, Any]:
+    return fill(
+        'EmbeddingEvaluationView',
+        id=f'ev-{verdict}',
+        baseline_space_key='pe_core_v1_1024' if against_primary else 'older_v1',
+        candidate_space_key='mobileclip2_s2_v1_512',
+        protocol='label_consistency_v1',
+        verdict=verdict,
+        metrics={'recall_at_10': {'baseline': 0.7123, 'candidate': 0.78}, 'mrr': 0.41},
+        sample_spec={'seed': 7, 'n': 2000},
+        counts_for_promote=against_primary,
+        created_at='2026-11-11T09:00:00Z',
+        created_by='api',
+    )
 
 
 def open_page(page: Any, app_url: str) -> None:
@@ -348,3 +387,87 @@ def test_page_fits_430(stub, page, app_url):
     promote.scroll_into_view_if_needed()
     expect(promote).to_be_visible()
     shot(page, 'embedding-spaces-430-rows', widths=(430,))
+
+
+def test_a_build_started_elsewhere_is_followed_from_the_list(stub, page, app_url):
+    elsewhere = {
+        **CANDIDATE,
+        'status': 'building',
+        'ready_at': None,
+        'run_id': 'run-7',
+        'run_mode': 'build',
+        'run_status': 'running',
+    }
+    state = serve_spaces(stub, [PRIMARY, elsewhere])
+    reads = {'n': 0}
+
+    def read_run(_r: Any, _m: Any):
+        reads['n'] += 1
+        if reads['n'] == 1:
+            return (200, run(id='run-7', docs_done=1200))
+        state['spaces'] = [
+            PRIMARY,
+            {**CANDIDATE, 'run_id': 'run-7', 'run_mode': 'build', 'run_status': 'completed'},
+        ]
+        return (
+            200,
+            run(
+                id='run-7',
+                docs_done=4000,
+                job_status='completed',
+                finished_at='2026-11-12T10:30:00Z',
+            ),
+        )
+
+    stub.on('GET', r'/embedding/reindex-runs/run-7$', read_run)
+    open_page(page, app_url)
+
+    new_row = row(page, 'mobileclip2_s2_v1_512')
+    expect(new_row.get_by_test_id('run-status')).to_have_text('running', timeout=ACTION_TIMEOUT_MS)
+    expect(new_row.get_by_test_id('run-counts')).to_contain_text('1200 of 4000 done')
+    expect(new_row.get_by_role('button', name='Cancel build')).to_be_visible()
+    shot(page, 'embedding-build-elsewhere', widths=SHOT_WIDTHS)
+    expect(new_row.get_by_test_id('space-status')).to_have_text('ready', timeout=ACTION_TIMEOUT_MS)
+    expect(new_row.get_by_test_id('run-status')).to_have_text('completed')
+    expect(new_row.get_by_role('button', name='Cancel build')).to_have_count(0)
+    # a fresh visit shows the finished last run from the list alone, and follows nothing
+    page.reload()
+    page.get_by_test_id('model-table').wait_for(timeout=ACTION_TIMEOUT_MS)
+    fresh = row(page, 'mobileclip2_s2_v1_512')
+    expect(fresh.get_by_test_id('last-run-status')).to_have_text('completed')
+    expect(fresh.get_by_test_id('run-status')).to_have_count(0)
+    assert reads['n'] == 2
+
+
+def test_the_served_evaluation_is_shown_on_the_row_and_in_the_promote_step(stub, page, app_url):
+    state = serve_spaces(stub, [PRIMARY, CANDIDATE])
+    open_page(page, app_url)
+
+    # nothing recorded: said as served, no verdict is made up
+    row(page, 'mobileclip2_s2_v1_512').get_by_test_id('space-evaluation-open').click()
+    dialog = page.get_by_role('dialog')
+    expect(dialog.get_by_test_id('evaluation-summary')).to_contain_text('No evaluation of')
+    expect(dialog.get_by_test_id('evaluation-run')).to_have_count(0)
+    dialog.get_by_role('button', name='Close').click()
+
+    state['evaluations']['mobileclip2_s2_v1_512'] = evaluation_list(
+        'mobileclip2_s2_v1_512', [evaluation_run('better'), evaluation_run('tie', False)]
+    )
+    row(page, 'mobileclip2_s2_v1_512').get_by_test_id('space-evaluation-open').click()
+    dialog = page.get_by_role('dialog')
+    runs = dialog.get_by_test_id('evaluation-run')
+    expect(runs).to_have_count(2)
+    expect(runs.first.get_by_test_id('evaluation-verdict')).to_have_text('better')
+    expect(runs.first.get_by_test_id('evaluation-counts')).to_be_visible()
+    expect(runs.nth(1).get_by_test_id('evaluation-counts')).to_have_count(0)
+    expect(runs.first.get_by_test_id('evaluation-metric')).to_have_text(['0.7123', '0.78', '0.41'])
+    expect(dialog.get_by_test_id('evaluation-summary')).to_contain_text(
+        'One is against the current primary'
+    )
+    shot(page, 'embedding-evaluation', widths=SHOT_WIDTHS)
+    dialog.get_by_role('button', name='Close').click()
+
+    row(page, 'mobileclip2_s2_v1_512').get_by_role('button', name='Promote').click()
+    promote = page.get_by_role('dialog')
+    expect(promote.get_by_test_id('evaluation-run')).to_have_count(2)
+    shot(page, 'embedding-promote-with-evaluation', widths=SHOT_WIDTHS)

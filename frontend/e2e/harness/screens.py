@@ -30,8 +30,12 @@ def shot(
     *,
     env_var: str = 'OP_E2E_SHOT_DIR',
     widths: tuple[int, ...] = (),
+    height: int = 1000,
 ) -> None:
-    """Full-page screenshot into ``$env_var``; one file per width (``name-<width>``) when ``widths`` is given."""
+    """Full-page screenshot into ``$env_var``; one file per width (``name-<width>``) when ``widths`` is given.
+
+    The app scrolls inside its own container, so a page longer than the viewport is cut at ``height``:
+    pass a taller one to see all of it."""
     out = os.environ.get(env_var)
     if not out:
         return
@@ -40,6 +44,6 @@ def shot(
         page.screenshot(path=str(Path(out) / f'{name}.png'), full_page=True)
         return
     for width in widths:
-        page.set_viewport_size({'width': width, 'height': 1000})
+        page.set_viewport_size({'width': width, 'height': height})
         page.screenshot(path=str(Path(out) / f'{name}-{width}.png'), full_page=True)
     page.set_viewport_size({'width': 1280, 'height': 720})

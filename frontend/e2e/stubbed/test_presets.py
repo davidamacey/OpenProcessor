@@ -12,6 +12,13 @@ register fails the test.
   6. `test_new_clone_and_delete`.
   7. `test_unknown_kind`.
   8. `test_rows_fit_430` — no page-wide horizontal scroll at 430 px, every action reachable.
+  9. `test_the_editor_lists_the_served_fields_beside_the_body` — the field help is the served JSON
+     Schema (type, required, choices, limits, default, words); a schema that cannot be read is said
+     as served and the body stays editable.
+ 10. `test_a_cluster_profile_on_the_axis_of_another_target_is_a_served_422`.
+
+The axes of a kind are served with its schema (`.../schema`), so every page of a kind reads that
+first. Saving with a stale revision is the existing `test_edit_save_stale_409_then_keep_my_edits`.
 
 Set OP_E2E_SHOT_DIR to also save full-page screenshots (1600 and 430 px).
 """
@@ -45,6 +52,108 @@ AXES = {
     'cluster_profile': ['clustering_item', 'clustering_region_box'],
     'assist_loop_preset': ['assist_loop_preset'],
     'near_dup_profile': ['near_dup'],
+}
+AXIS_WIRE = {
+    'clustering_item': ('Items', 'item'),
+    'clustering_region_box': ('Region boxes', 'region_box'),
+    'assist_loop_preset': ('Assist loop', None),
+    'near_dup': ('Near-duplicates', None),
+}
+# Compact JSON Schemas in the shape pydantic writes (a $ref into $defs, enums, limits, nullable).
+JSON_SCHEMAS = {
+    'serving_profile': {
+        'type': 'object',
+        'required': ['servers'],
+        'properties': {
+            'servers': {
+                'type': 'array',
+                'description': 'The Triton servers, one per card.',
+                'items': {'$ref': '#/$defs/Server'},
+                'minItems': 1,
+            }
+        },
+        '$defs': {
+            'Server': {
+                'type': 'object',
+                'required': ['name'],
+                'properties': {
+                    'name': {'type': 'string', 'description': 'The name load_list refers to.'},
+                    'numa_node': {
+                        'anyOf': [{'type': 'integer', 'minimum': 0}, {'type': 'null'}],
+                        'default': None,
+                        'description': 'The NUMA node it is pinned to.',
+                    },
+                },
+            }
+        },
+    },
+    'cluster_profile': {
+        'type': 'object',
+        'required': ['target', 'method', 'refresh'],
+        'properties': {
+            'target': {
+                'enum': ['item', 'region_box'],
+                'type': 'string',
+                'description': 'What is clustered; it must match the axis.',
+            },
+            'method': {
+                'enum': ['ivf', 'minibatch_kmeans'],
+                'type': 'string',
+                'description': 'The clustering method.',
+            },
+            'backend': {
+                'enum': ['cpu', 'gpu_if_validated'],
+                'type': 'string',
+                'default': 'cpu',
+                'description': 'gpu_if_validated uses the GPU only where it was validated.',
+            },
+            'refresh': {'$ref': '#/$defs/Refresh', 'description': 'When a new run starts.'},
+        },
+        '$defs': {
+            'Refresh': {
+                'type': 'object',
+                'required': ['max_deferral_s'],
+                'properties': {
+                    'max_deferral_s': {
+                        'type': 'integer',
+                        'minimum': 0,
+                        'description': 'Longest a run waits for ingest to go quiet.',
+                    }
+                },
+            }
+        },
+    },
+    'assist_loop_preset': {
+        'type': 'object',
+        'required': ['budget'],
+        'properties': {
+            'on_budget': {
+                'enum': ['complete', 'pause'],
+                'type': 'string',
+                'default': 'pause',
+                'description': 'What a reached limit does.',
+            },
+            'budget': {'type': 'object', 'description': 'Hard caps.', 'properties': {}},
+        },
+    },
+    'near_dup_profile': {
+        'type': 'object',
+        'properties': {
+            'version': {'const': 1, 'type': 'integer', 'default': 1, 'description': 'Format.'},
+            'item': {
+                'type': 'object',
+                'description': 'Cuts for items.',
+                'properties': {
+                    'dedup_cosine': {
+                        'type': 'number',
+                        'maximum': 1.0,
+                        'default': 0.98,
+                        'description': 'Items at or above it are duplicates.',
+                    }
+                },
+            },
+        },
+    },
 }
 BODIES = {
     'serving_profile': {'servers': [{'name': 'gpu0'}], 'instances': {'yolo': 2}},
@@ -86,6 +195,16 @@ def serve_kind(stub: Any, slug: str, coll: str, kind: str, scope: str, state: di
     """The reads every page of one kind makes. `state` is what the write handlers update."""
     state.setdefault('docs', {'strict': doc(kind, 'strict', 2), 'loose': doc(kind, 'loose', 1)})
     state.setdefault('active', {})
+    axes = [
+        fill('ResearchAxis', axis=a, label=AXIS_WIRE[a][0], target=AXIS_WIRE[a][1])
+        for a in AXES[kind]
+        if a in AXIS_WIRE
+    ]
+    schema_reply = state.get('schema') or (
+        200,
+        fill('ResearchConfigSchema', kind=kind, axes=axes, json_schema=JSON_SCHEMAS[kind]),
+    )
+    stub.on('GET', rf'/{coll}/schema$', schema_reply)
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': []})
     stub.on(
         'GET',
@@ -466,3 +585,88 @@ def test_rows_fit_430(stub, page, app_url, where):
         box = page.get_by_test_id('config-save').bounding_box()
         assert box is not None and box['x'] >= 0 and box['x'] + box['width'] <= 430
     shot(page, f'{where}-430-rows', widths=(430,))
+
+
+def test_the_editor_lists_the_served_fields_beside_the_body(stub, page, app_url):
+    slug, coll, kind, scope = KINDS[1]
+    serve_kind(stub, slug, coll, kind, scope, {})
+    open_editor(page, app_url, slug)
+    fields = page.get_by_test_id('preset-schema-fields')
+    expect(fields).to_be_visible()
+
+    def field(path: str) -> Any:
+        return fields.locator(f'[data-testid="preset-schema-field"][data-path="{path}"]')
+
+    target = field('target')
+    expect(target).to_contain_text('required')
+    expect(target).to_contain_text('One of item, region_box')
+    expect(target).to_contain_text('What is clustered; it must match the axis.')
+    expect(field('backend')).to_contain_text('Default "cpu"')
+    # a nested model behind a $ref: the path is dotted, the limit is the schema's
+    nested = field('refresh.max_deferral_s')
+    expect(nested).to_contain_text('at least 0')
+    expect(nested).to_contain_text('Longest a run waits for ingest to go quiet.')
+    expect(field('refresh')).to_contain_text('When a new run starts.')
+    shot(page, 'editor-field-help', widths=SHOT_WIDTHS, height=2400)
+
+
+def test_a_schema_that_cannot_be_read_is_said_as_served_and_the_body_stays_editable(
+    stub, page, app_url
+):
+    slug, coll, kind, scope = KINDS[0]
+    serve_kind(
+        stub,
+        slug,
+        coll,
+        kind,
+        scope,
+        {
+            'schema': (
+                500,
+                {'detail': {'error': 'internal', 'message': 'the schema could not be built'}},
+            )
+        },
+    )
+    open_editor(page, app_url, slug)
+    expect(page.get_by_test_id('preset-schema-error')).to_contain_text(
+        'the schema could not be built'
+    )
+    page.get_by_test_id('preset-body').fill('{"servers": []}')
+    expect(page.get_by_test_id('config-save')).to_be_enabled()
+    shot(page, 'editor-schema-error', widths=SHOT_WIDTHS, height=2400)
+
+
+def test_a_cluster_profile_on_the_axis_of_another_target_is_a_served_422(stub, page, app_url):
+    slug, coll, kind, scope = KINDS[1]
+    serve_kind(stub, slug, coll, kind, scope, {})
+    message = (
+        "cluster profile 'strict' has target item, so it is activated on clustering_item, "
+        'not clustering_region_box'
+    )
+    posts: list[Any] = []
+
+    def activate(request: Any, _m: Any):
+        posts.append(request.post_data_json)
+        return (
+            422,
+            {
+                'detail': {
+                    'error': 'axis_target_mismatch',
+                    'message': message,
+                    'axis': 'clustering_region_box',
+                }
+            },
+        )
+
+    stub.on('POST', rf'/{coll}/strict/activate$', activate)
+    open_editor(page, app_url, slug)
+    page.get_by_test_id('config-activate').click()
+    dialog = page.get_by_role('dialog')
+    dialog.get_by_test_id('activate-axis').select_option('clustering_region_box')
+    with expect_handled(page, lambda r: r.method == 'POST'):
+        dialog.get_by_role('button', name='Activate', exact=True).click()
+    assert posts[0]['axis'] == 'clustering_region_box'
+    expect(dialog.get_by_test_id('activate-error')).to_have_text(message)
+    # nothing was activated: the dialog stays, the chip is absent
+    expect(page.get_by_test_id('preset-active-chip')).to_have_count(0)
+    shot(page, 'activate-axis-mismatch', widths=SHOT_WIDTHS)
