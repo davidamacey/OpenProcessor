@@ -232,7 +232,7 @@ def test_counters_accumulate_beside_non_counter_detail() -> None:
 
 def test_every_spec_serves_its_filter_model_default() -> None:
     from src.services.curation.item_filter import ItemFilter
-    from src.services.curation.review_request import ReviewFilters
+    from src.services.curation.review_filters import ReviewFilters
 
     alias = {'class_name': 'class_names', 'exclude_class_name': 'exclude_class_names'}
     review, item = ReviewFilters(), ItemFilter()

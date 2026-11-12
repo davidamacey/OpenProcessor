@@ -41,8 +41,8 @@ number of occurrences so a new one in the same file fails):
 - ``src/services/labeling/vlm_prompts.py``: the default prompt packs spell
   the same three VLM reply keys in their instruction text (any number of
   times -- it is prompt prose); only those three names are exempt there.
-- ``src/routers/curation/crops_list.py``: ``region_text`` is the name of the
-  listing's plate-text filter parameter (06e PT-F3), which matches the
+- ``src/routers/curation/_crop_params.py``: ``region_text`` is the name of the
+  listing's plate-text filter parameter, which matches the
   per-box folded text; four spellings (parameter, two description strings,
   the exclusivity error, the filter-dict key).
 - ``src/services/curation/wire.py``: one ``getattr`` that maps a live
@@ -124,9 +124,9 @@ LITERAL_ALLOWLIST: dict[str, dict[str, int]] = {
     },
     'src/services/curation/review_sorts.py': {'region_score': 2},
     # The `region_text` / `region_text_match` query parameters of the crops
-    # listing (06e PT-F3): filter names that search the per-box `text_fold`,
+    # listing: filter names that search the per-box `text_fold`,
     # not the retired item-level storage scalar. Pinned to the four spellings.
-    'src/routers/curation/crops_list.py': {'region_text': 4},
+    'src/routers/curation/_crop_params.py': {'region_text': 4},
     # The model-choices row id for the profile's detector model (a wire id of
     # `GET /models/choices`, not the retired item-level scalar).
     'src/services/curation/model_choices.py': {'region_detector': 1},

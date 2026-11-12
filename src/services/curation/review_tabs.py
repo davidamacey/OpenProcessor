@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from src.services.curation import review_filter_specs
-from src.services.curation.review_filter_specs import REGION_STATUS_DEFAULT
+from src.services.curation.review_filters import REGION_STATUS_DEFAULT
 
 
 KNOWN_TABS: tuple[str, ...] = (

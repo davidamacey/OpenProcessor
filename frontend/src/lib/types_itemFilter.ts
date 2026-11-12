@@ -21,7 +21,7 @@ export const EMBEDDING_STATES = [
 export type EmbeddingState = (typeof EMBEDDING_STATES)[number];
 
 /** `ItemFilter.origin`: which actor produced the item. */
-export const ITEM_ORIGINS = ['detector', 'sam3', 'human', 'import'] as const;
+export const ITEM_ORIGINS = ['detector', 'sam3', 'human', 'import', 'drawn'] as const;
 export type ItemOrigin = (typeof ITEM_ORIGINS)[number];
 
 /** `ItemFilter.review_status`. */

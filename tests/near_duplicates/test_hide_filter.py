@@ -61,7 +61,8 @@ def _search_clauses(hide: bool) -> list[dict[str, Any]]:
 async def _review_clauses(hide: bool) -> list[dict[str, Any]]:
     # imported here: review_request imports through review_filter_specs, which imports it back,
     # and only resolves when another curation module has been imported first
-    from src.services.curation.review_request import ReviewFilters, build_review_request
+    from src.services.curation.review_filters import ReviewFilters
+    from src.services.curation.review_request import build_review_request
 
     request = await build_review_request(
         'all', ReviewFilters(hide_near_duplicates=hide, include_test=True), None, None

@@ -25,11 +25,8 @@ from src.domain.region_boxes import box_query
 from src.services.curation import review_tabs
 from src.services.curation.class_sources import VLM_CLASS_SOURCES
 from src.services.curation.region_text_search import TextMatch, region_text_match_clause
-from src.services.curation.review_filter_specs import (
-    HAS_REJECTED_BOX,
-    REGION_STATUS_DEFAULT,
-    REGION_STATUS_FILTER_VALUES,
-)
+from src.services.curation.review_filter_specs import HAS_REJECTED_BOX, REGION_STATUS_FILTER_VALUES
+from src.services.curation.review_filters import REGION_STATUS_DEFAULT
 from src.services.curation.training_cohorts import LOW_CONFIDENCE_MAX
 from src.services.curation.vlm_class_attempt import EmptyClassReason
 from src.services.detection.region_text import active_confusables

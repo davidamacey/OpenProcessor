@@ -12,44 +12,21 @@ same query — one ``count`` call regardless of queue depth.
 
 from __future__ import annotations
 
-import dataclasses
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from src.clients.curation_opensearch.near_dup_fields import near_dup_visible_clause, null_safe_floor
 from src.services.curation import review_queries, review_sorts, review_tabs
 from src.services.curation.image_join import ImageJoin, resolve_filter_join
-from src.services.curation.item_filter import ItemFilter, item_filter_clauses
-from src.services.curation.review_filter_specs import REGION_STATUS_DEFAULT
+from src.services.curation.item_filter import item_filter_clauses
 from src.services.embedding_spaces.readers import item_write_fields
 
 
 if TYPE_CHECKING:
-    from src.services.curation.region_text_search import TextMatch
+    from src.services.curation.review_filters import ReviewFilters
 
 
 TIEBREAK: dict[str, Any] = {'crop_id': {'order': 'asc'}}
-
-
-@dataclass(frozen=True)
-class ReviewFilters:
-    include_test: bool = False
-    text: str | None = None
-    max_rank: int | None = None
-    min_blur_ratio: float | None = None
-    min_mistakenness: float | None = None
-    hide_near_duplicates: bool = False
-    source: str | None = None
-    # The shared item filter (class names, confidence band, size, origin,
-    # embedding state, review status), minus ``max_rank``, which a tab can
-    # default and so is read above.
-    item: ItemFilter = dataclasses.field(default_factory=ItemFilter)
-    region_status: str | None = REGION_STATUS_DEFAULT
-    region_text_match: TextMatch | None = None
-    combine_conflict: bool = False
-    import_id: str | None = None
-    dataset_split: str | None = None
-    on_negative_frame: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -111,7 +88,6 @@ async def build_review_request(
 
 __all__ = [
     'TIEBREAK',
-    'ReviewFilters',
     'ReviewRequest',
     'build_review_request',
 ]
