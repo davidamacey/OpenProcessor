@@ -3,11 +3,11 @@ import { pickerRecent } from './pickerRecent';
 
 describe('pickerRecent', () => {
   it('puts the proposal first and does not repeat it', () => {
-    expect(pickerRecent('bus', ['car', 'bus'])).toEqual(['bus', 'car']);
+    expect(pickerRecent('bolt', ['cog', 'bolt'])).toEqual(['bolt', 'cog']);
   });
 
   it('is just the hints when nothing is proposed', () => {
-    expect(pickerRecent(null, ['car'])).toEqual(['car']);
+    expect(pickerRecent(null, ['cog'])).toEqual(['cog']);
     expect(pickerRecent('', [])).toEqual([]);
   });
 });
