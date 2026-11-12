@@ -73,16 +73,6 @@ and prompt pack), and a **lock** icon on a label a human has set.
 A thumbnail whose source file cannot be read shows "Source not mounted" or
 "Image file missing" with the backend's message, instead of only a dimmed tile.
 
-## Label operations (`/p/<project>/label-ops`)
-
-**Label ops** in the top bar lists the bulk labels and moves the backend has
-recorded for the project, newest first (**Load older** pages back through the
-kept history). **Details** opens an operation with its served fields. A
-label operation on many items is accepted as a background job (202); the page
-follows it, and **Undo** targets the operation by its id. **Undo**
-first shows the backend's dry run (what it would restore, what it would keep,
-the conflicts); only **Confirm undo** changes anything.
-
 ## Map (`/p/<project>/map`)
 
 **Map** appears in the top bar only when the project has photos with a stored
