@@ -54,6 +54,7 @@ def _hostname_prefix(svc: dict[str, Any]) -> str:
 def test_the_celery_workers_of_the_api_image_run_the_pool_healthcheck() -> None:
     assert set(_probe_services(REPO_ROOT / 'docker-compose.yml')) == {
         'jobs-worker',
+        'interactive-worker',
         'periodic-worker',
         'open-vocab-worker',
         'cluster-worker',

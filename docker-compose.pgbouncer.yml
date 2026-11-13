@@ -81,6 +81,7 @@ services:
 
   api: *pooled
   jobs-worker: *pooled
+  interactive-worker: *pooled
   periodic-worker: *pooled
   open-vocab-worker: *pooled
   cluster-worker: *pooled

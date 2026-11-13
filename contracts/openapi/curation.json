@@ -18989,6 +18989,18 @@
             "title": "Queue",
             "type": "string"
           },
+          "queue_ahead": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only on the single-job route, only while `queued`: jobs queued before this one on its queue, over every project (running jobs hold the workers and are not counted). Null otherwise.",
+            "title": "Queue Ahead"
+          },
           "queued_at": {
             "anyOf": [
               {

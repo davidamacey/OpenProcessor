@@ -19,6 +19,7 @@ from src.config.queue import TaskQueues
 # GPU-arbiter overlay (RC-3), so it is checked in test_arbiter_overlay.
 EXPECTED = {
     TaskQueues.JOBS: 'jobs-worker',
+    TaskQueues.INTERACTIVE: 'interactive-worker',
     TaskQueues.PERIODIC: 'periodic-worker',
     TaskQueues.OPEN_VOCAB: 'open-vocab-worker',
     TaskQueues.AUTOLABEL: 'curation-auto-label-worker',

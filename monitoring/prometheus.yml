@@ -61,6 +61,7 @@ scrape_configs:
     dns_sd_configs:
       - names:
           - jobs-worker
+          - interactive-worker
           - periodic-worker
           - open-vocab-worker
           - cluster-worker

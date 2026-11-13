@@ -28,7 +28,8 @@ These start with the core stack.
 
 | Service | Queue | What it does |
 |---|---|---|
-| `jobs-worker` | `jobs` | Runs most jobs: label operations, dataset import, bulk ingest, reprocess, scores, promote, combine, project create and delete, embedding builds, near-duplicate runs. Concurrency `OP_JOBS_CONCURRENCY` (default 4); replicas `OP_JOBS_REPLICAS` |
+| `interactive-worker` | `interactive` | Runs the label operations a person waits on (bulk label, move, undo) on their own queue, so bulk jobs cannot hold every slot in front of them. Concurrency `OP_INTERACTIVE_CONCURRENCY` (default 2) |
+| `jobs-worker` | `jobs` | Runs most jobs: dataset import, bulk ingest, reprocess, scores, promote, combine, project create and delete, embedding builds, near-duplicate runs. Concurrency `OP_JOBS_CONCURRENCY` (default 4); replicas `OP_JOBS_REPLICAS` |
 | `periodic-worker` | `periodic` | Runs the scheduled ticks and the reaper |
 | `open-vocab-worker` | `open_vocab` | The open-vocabulary sweep |
 | `jobs-beat` | | The beat scheduler: one replica. It queues the reaper (every 30 s), the ingest dispatcher, the open-vocabulary sweep, the serving inventory, the near-duplicate rescore, the cluster refresh, the optional database backup and the GPU arbiter tick |

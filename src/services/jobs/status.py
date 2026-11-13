@@ -29,7 +29,9 @@ DEFAULT_PAGE = 50
 MAX_PAGE = 200
 
 
-def to_view(listed: listing.ListedJob, *, with_params: bool = False) -> JobView:
+def to_view(
+    listed: listing.ListedJob, *, with_params: bool = False, queue_ahead: int | None = None
+) -> JobView:
     row = listed.row
     return JobView(
         id=str(row.id),
@@ -50,6 +52,7 @@ def to_view(listed: listing.ListedJob, *, with_params: bool = False) -> JobView:
         error_code=row.error_code,
         error_message=row.error_message,
         params=dict(row.params or {}) if with_params else None,
+        queue_ahead=queue_ahead,
         requested_by=row.requested_by,
         created_at=row.created_at,
         queued_at=row.queued_at,
@@ -116,4 +119,14 @@ async def get_job(
         found = await session.run_sync(lambda sync: listing.get_one(sync, flt, job_id))
     if found is None:
         raise rejection(404, 'job_not_found', f'no job {job_id}')
-    return to_view(found, with_params=True)
+    row = found.row
+    queued_at = row.queued_at
+    ahead = None
+    if row.status == 'queued' and queued_at is not None:
+        async with deployment_tx(session, 'count the jobs queued ahead of one on its queue'):
+            ahead = await session.run_sync(
+                lambda sync: listing.queued_ahead(
+                    sync, queue=row.queue, queued_at=queued_at, job_id=row.id
+                )
+            )
+    return to_view(found, with_params=True, queue_ahead=ahead)

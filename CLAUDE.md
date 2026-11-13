@@ -93,7 +93,7 @@ connection pooler for PostgreSQL.
 | `opensearch` | none | 4607 | k-NN store for items, images and vectors (control data is in PostgreSQL) |
 | `postgres`, `valkey` | none | | PostgreSQL 18 (projects, classes, configs, jobs, events, spaces, partitions) and the Valkey 9 task broker; internal only, passwords from `secrets/` |
 | `db-migrate` | none | | One-shot: Alembic upgrade and OpenSearch index migration; `api` and every worker wait for it |
-| `jobs-worker`, `periodic-worker`, `open-vocab-worker`, `jobs-beat` | none | | Celery workers for the `jobs`, `periodic` and `open_vocab` queues, and the beat scheduler (one replica) |
+| `jobs-worker`, `interactive-worker`, `periodic-worker`, `open-vocab-worker`, `jobs-beat` | none | | Celery workers for the `jobs`, `interactive` (label operations a person waits on), `periodic` and `open_vocab` queues, and the beat scheduler (one replica) |
 | `curation-detection-worker`, `curation-vlm-worker` | `curation` | | Region cascade and VLM loop stream workers; replicas share projects through claims in PostgreSQL |
 | `curation-auto-label-worker`, `curation-assist-loop-worker`, `cluster-worker` | `curation` | | Celery workers for the `autolabel`, `assist_loop` and `cluster` queues |
 | `model-export` | `setup` | | One-shot engine-build toolchain (TensorRT, ModelOpt, export scripts, model-repo seed); `models install`, `export` and the `make` export targets run it; never started by `up` |

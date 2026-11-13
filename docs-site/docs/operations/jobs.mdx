@@ -54,6 +54,7 @@ operations and the assist loop fail the job on an unwritable item.
 
 | Queue | Worker |
 |---|---|
+| `interactive` | `interactive-worker` (concurrency `OP_INTERACTIVE_CONCURRENCY`): label operations and their undo |
 | `jobs` | `jobs-worker` (concurrency `OP_JOBS_CONCURRENCY`, replicas `OP_JOBS_REPLICAS`) |
 | `periodic` | `periodic-worker` |
 | `open_vocab` | `open-vocab-worker` |

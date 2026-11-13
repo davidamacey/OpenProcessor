@@ -82,7 +82,7 @@ RD-70 answered as recommended (D-78)): "stop for now" is pause.
 | `project_delete` | NULL, scope slug | `jobs` | `project_delete`, slug | yes (idempotent) | 3 h / 3 h 15 m | 24 h |
 | `directory_ingest` | NULL | `jobs` | none | no | 24 h / 24 h 15 m | 24 h |
 | `persons_cluster` (keeps its name in 0.7.0; see the note below the table) | NULL | `jobs` | `persons_cluster`, '' | no | 3 h / 3 h 15 m | 24 h |
-| `label_op`, `label_undo` (owner decision 2026-11-05: Celery jobs like every other long job; they leave the request) | yes | `jobs` | `label_op`, op id; `label_undo`, '' | no | 1 h / 1 h 5 m | 1 h |
+| `label_op`, `label_undo` (owner decision 2026-11-05: Celery jobs like every other long job; they leave the request; D-75 amendment 2026-11-12: on the `interactive` queue) | yes | `interactive` | `label_op`, op id; `label_undo`, '' | no | 1 h / 1 h 5 m | 1 h |
 | `project_create` (B4 4D, R-21) | NULL, scope slug | `jobs` | `project_create`, slug | yes (idempotent: each step checks what exists) | 1 h / 1 h 5 m | 1 h |
 | `review_resolve_batch`, `edit_undo_batch`, `vlm_label_batch`, `vlm_verify_region_batch` (B4 4A; the two VLM kinds move to B2 4D-8 if D-29a is answered before W2.3a, D-84) | yes | `jobs` | own kind, '' | no | 3 h / 3 h 15 m | 1 h |
 | `gpu_arbiter` tick (R-20) | NULL | `arbiter` (periodic task, not a `jobs` row); scheduled only when `OP_GPU_ARBITER_CONTAINERS` is set, which the overlay sets (RC-3) | advisory lock | - | 120 s / 150 s | - |
@@ -154,6 +154,16 @@ on any `INSERT INTO jobs` or `jobs` model construction outside `src/db/repos/job
 `send_task` outside `src/clients/task_queue.py`.
 
 ### 2.5 No inline jobs
+
+**D-75 amendment (owner-approved 2026-11-12):** `label_op` and `label_undo` run on their own `interactive` queue and
+`interactive-worker`, not on `jobs`. A walk found cluster-label operations `queued` for 5 minutes behind bulk jobs
+(project deletes, ingest) that held all four `jobs` slots; a person is waiting on a label operation, so it gets its
+own pool ([Celery routing](https://docs.celeryq.dev/en/stable/userguide/routing.html): `task_routes` send a task
+to a queue, one worker pool consumes each queue). `GET /jobs/{id}` serves `queue_ahead` for a `queued` job: the
+count of `queued` rows on its queue with an earlier `queued_at` (the partial index `ix_jobs_queued`), over every
+project in a deployment transaction. Celery's `inspect` (reserved/active) only sees what workers already hold, not
+the broker backlog, and the broker also keeps stale messages of cancelled or paused rows, so the table is the
+correct source.
 
 Owner decision 2026-11-05 (D-75): `label_op` and `label_undo` are Celery jobs of the `jobs` queue (kind table,
 section 2.1), started through `start_job` like every other long job; the route answers 202 with the
@@ -577,6 +587,7 @@ reaper rebuilds the queue from the `jobs` rows.
 | Queue | Service | Pool, concurrency | `--max-tasks-per-child` | Profile | GPU |
 |---|---|---|---|---|---|
 | `jobs` | `jobs-worker` | prefork, `${OP_JOBS_CONCURRENCY:-4}` (D-23) | 50 | core | `API_GPU_ID` (UMAP, cuML) |
+| `interactive` | `interactive-worker` | prefork, `${OP_INTERACTIVE_CONCURRENCY:-2}` | 200 | core | none |
 | `periodic` | `periodic-worker` | prefork, 2 | 200 | core | none |
 | `arbiter` (R-20) | `gpu-arbiter-worker` (api image, only with the GPU-arbiter overlay) | prefork, 1 | 200 | overlay | none; the only service that mounts the Docker socket |
 | `open_vocab` | `open-vocab-worker` | prefork, 1 | 50 | core | none (calls the segmenter) |

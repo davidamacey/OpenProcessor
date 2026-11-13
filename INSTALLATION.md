@@ -177,7 +177,7 @@ OpenSearch, and `/ready` answers 503 naming the one that is down.
 | `postgres` | PostgreSQL 18: projects, classes, configs, jobs, events, spaces, partitions. Internal only (no published port) |
 | `valkey` | The Celery broker and event wake-ups. Internal only, password required |
 | `db-migrate` | One-shot: applies the Alembic revisions and migrates the OpenSearch indexes; the API and the workers wait for it and exit at another schema revision |
-| `jobs-worker`, `periodic-worker`, `open-vocab-worker`, `jobs-beat` | Celery workers and the beat scheduler (one beat replica) |
+| `jobs-worker`, `interactive-worker`, `periodic-worker`, `open-vocab-worker`, `jobs-beat` | Celery workers and the beat scheduler (one beat replica) |
 | `cluster-worker` and the stream and auto-label workers | profile `curation` |
 | `flower` | Celery monitor on port 4613 (profile `monitoring`, bound to `OP_BIND_ADDRESS`) |
 
