@@ -339,6 +339,10 @@ def _model_disagreements_tab(include_test: bool) -> _TabQuery:
     # next training cycle.
     must: _Clauses = [
         {'term': {'class_validated': True}},
+        # ``probe_disagreement`` is null (not indexed) when the item's class is outside the
+        # probe's classes: the model has no opinion there, so it cannot disagree. A bare
+        # ``probe_pred_class`` hit listed every out-of-vocabulary item.
+        {'exists': {'field': 'probe_disagreement'}},
         {'exists': {'field': 'probe_pred_class'}},
         # Inequality requires a script — the index is small enough at
         # typical curation-deployment scale (~163K items) that script_query

@@ -157,7 +157,11 @@ def test_disagreements_unions_the_three_sources(monkeypatch: pytest.MonkeyPatch)
         'unmatched': _item('unmatched', class_source='vlm_unmatched', class_validated=False),
         'detector': _machine('detector', detector_class_name='truck'),
         'model': _machine(
-            'model', class_source='human', class_validated=True, probe_pred_class='truck'
+            'model',
+            class_source='human',
+            class_validated=True,
+            probe_pred_class='truck',
+            probe_disagreement=True,
         ),
         'agrees': _machine('agrees', detector_class_name='car'),
         'validated_agrees': _machine(
@@ -171,6 +175,26 @@ def test_disagreements_unions_the_three_sources(monkeypatch: pytest.MonkeyPatch)
     assert reasons['model'] == 'new model disagrees with the validated label'
     assert reasons['detector'] == "VLM's class differs from the detector's class"
     assert reasons['unmatched'] == 'VLM gave no class answer'
+
+
+def test_model_disagreements_skip_classes_the_model_has_no_opinion_on(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The probe still names a top-1 class for an item whose class it was never trained on,
+    # but ``probe_disagreement`` is null there: no opinion, so no disagreement.
+    docs = {
+        'opinion': _machine(
+            'opinion', class_validated=True, probe_pred_class='truck', probe_disagreement=True
+        ),
+        'blind': _machine('blind', class_validated=True, probe_pred_class='truck'),
+    }
+    client = _client(docs, monkeypatch)
+    assert _ids(client.get(f'{BASE}/review/disagreements')) == ['opinion']
+    counts = {t['id']: t['count'] for t in _tabs(client)}
+    assert counts['disagreements'] == 1
+    assert _ids(client.get(f'{BASE}/crops', params={'review_tab': 'disagreements'}), 'crops') == [
+        'opinion'
+    ]
 
 
 def test_audit_queue_only_while_a_sample_is_pending(monkeypatch: pytest.MonkeyPatch) -> None:
