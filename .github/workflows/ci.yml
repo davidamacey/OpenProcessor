@@ -177,7 +177,7 @@ jobs:
 
   # Line coverage of src/ and scripts/ over the offline shards plus the db tier measured 89.28
   # percent locally (2026-11-13); the offline shards alone measured 78.45.
-  # the floor sits below it because this runner installs fewer packages and so skips more
+  # The floor sits below it because this runner installs fewer packages and so skips more
   # tests. Raise it to the measured value minus one whenever a change raises coverage.
   coverage:
     name: coverage floor (all shards)
