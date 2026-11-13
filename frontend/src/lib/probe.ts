@@ -9,6 +9,10 @@
 import { jobPhase } from '$lib/jobs/jobPhase';
 import type { TrainJobStatus } from './types_train';
 
+/** The one user-facing name of the step that runs the promoted model over the project to fill
+ *  Disagreements: the Train page button, the Workspace More entry and the dashboard text. */
+export const FIND_DISAGREEMENTS = 'Find disagreements with the new model';
+
 export type ProbePollOutcome = 'running' | 'completed' | 'failed' | 'cancelled';
 
 /** What a poll of `GET {API_PREFIX}/probe/status` should do next, given

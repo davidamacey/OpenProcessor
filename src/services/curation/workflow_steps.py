@@ -178,8 +178,8 @@ def _disagreements_step(f: WorkflowFacts) -> WorkflowStep:
         return WorkflowStep(
             id='probe',
             label='Find where the promoted model disagrees with your labels',
-            detail='A model is promoted; run it over the items from the Train page '
-            '(Find disagreements) to fill the Disagreements queue.',
+            detail='A model is promoted; run "Find disagreements with the new model" from the '
+            'Train page or the Workspace More menu to fill the Disagreements queue.',
             done=False,
             section='train',
         )

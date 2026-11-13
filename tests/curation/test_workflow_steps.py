@@ -138,6 +138,7 @@ def test_after_a_promote_the_probe_comes_before_the_disagreements_queue() -> Non
     assert 'probe' in ids
     assert 'review_disagreements' not in ids
     assert _step(unscored, 'probe').section == 'train'
+    assert 'Find disagreements with the new model' in _step(unscored, 'probe').detail
     following = build_steps(unscored).next
     assert following is not None
     assert following.id == 'probe'

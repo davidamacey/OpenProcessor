@@ -1,4 +1,4 @@
-"""OpenProcessor #36 item 8 — the /train "Run probe predictions" control
+"""OpenProcessor #36 item 8 — the /train "Find disagreements with the new model" control
 (ProbeControl.svelte, embedded in RunResults for a finished run).
 Populates probe_pred_* on items, the one prerequisite item 9's
 empty_state.has_probe_predictions checks for.
@@ -53,7 +53,7 @@ def test_run_probe_button_offered_for_a_finished_run_with_a_checkpoint(stub, pag
 
     control = page.get_by_test_id('probe-control')
     control.wait_for(timeout=10000)
-    assert 'Run probe predictions' in control.inner_text()
+    assert 'Find disagreements with the new model' in control.inner_text()
 
     errors = [c for c in stub.console_errors if c.startswith('pageerror')]
     assert not errors, errors[:3]
@@ -104,9 +104,9 @@ def test_confirm_then_run_probe_posts_this_runs_job_id_and_polls_status(stub, pa
 
     control = page.get_by_test_id('probe-control')
     control.wait_for(timeout=10000)
-    control.get_by_role('button', name='Run probe predictions').click()
+    control.get_by_role('button', name='Find disagreements with the new model').click()
 
-    dialog = page.get_by_role('dialog', name='Confirm run probe predictions')
+    dialog = page.get_by_role('dialog', name='Confirm find disagreements')
     dialog.wait_for(timeout=5000)
     dialog.get_by_role('button', name='Confirm').click()
 
@@ -140,8 +140,8 @@ def test_probe_run_409_shows_the_served_detail_verbatim(stub, page, app_url):
 
     control = page.get_by_test_id('probe-control')
     control.wait_for(timeout=10000)
-    control.get_by_role('button', name='Run probe predictions').click()
-    page.get_by_role('dialog', name='Confirm run probe predictions').get_by_role(
+    control.get_by_role('button', name='Find disagreements with the new model').click()
+    page.get_by_role('dialog', name='Confirm find disagreements').get_by_role(
         'button', name='Confirm'
     ).click()
 
