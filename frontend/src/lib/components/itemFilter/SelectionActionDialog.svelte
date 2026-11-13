@@ -24,9 +24,15 @@
     openNext?: { checked: boolean; onchange: (checked: boolean) => void };
     /** A caution the host wants read before the write (a mixed cluster). */
     warning?: string | null;
+    /** The detector classes of a mixed cluster: offered first, because labelling one at a time
+     *  is cleaner than labelling the whole. Choosing one closes this dialog and narrows the view. */
+    split?: {
+      classes: { value: string; count: number }[];
+      onsplit: (value: string) => void;
+    };
   }
 
-  let { controller: c, onapplied, subject, openNext, warning }: Props = $props();
+  let { controller: c, onapplied, subject, openNext, warning, split }: Props = $props();
 
   const TITLES: Record<SelectionActionId, string> = {
     exclude: 'Ignore matching items',
@@ -83,6 +89,37 @@
         </button>
       {/if}
     {/snippet}
+    {#if warning && c.action === 'label'}
+      <div
+        class="flex flex-col gap-2 rounded border border-warn/40 bg-warn/10 px-3 py-2 text-warn-text"
+        role="note"
+        data-testid="selection-warning"
+      >
+        <p>{warning}</p>
+        {#if split && split.classes.length > 1}
+          <div class="flex flex-wrap items-center gap-1.5" data-testid="selection-split">
+            <span class="text-fg-1">Split it first:</span>
+            {#each split.classes as f (f.value)}
+              <button
+                type="button"
+                class="btn-sm border border-line-strong bg-surface-1 text-meta text-fg-1 hover:border-accent/40"
+                data-testid="selection-split-class"
+                onclick={() => {
+                  c.cancel();
+                  split.onsplit(f.value);
+                }}
+              >
+                {f.value}
+                <span class="ml-1 tabular-nums text-fg-2">{f.count.toLocaleString()}</span
+                >
+              </button>
+            {/each}
+          </div>
+        {/if}
+        <p class="text-meta text-fg-2">Or choose a class below to label all of them.</p>
+      </div>
+    {/if}
+
     {#if c.action === 'label'}
       <label class="flex items-center gap-2">
         <span class="text-fg-2">Class</span>
@@ -121,16 +158,6 @@
           {/each}
         </select>
       </label>
-    {/if}
-
-    {#if warning && c.action === 'label'}
-      <p
-        class="rounded border border-warn/40 bg-warn/10 px-3 py-2 text-warn-text"
-        role="note"
-        data-testid="selection-warning"
-      >
-        {warning}
-      </p>
     {/if}
 
     {#if subject}

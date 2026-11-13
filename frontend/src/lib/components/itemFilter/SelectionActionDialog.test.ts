@@ -110,6 +110,41 @@ describe('SelectionActionDialog', () => {
     expect(q('[data-testid="selection-count"]')!.textContent).toContain('3');
   });
 
+  it('a mixed cluster offers the split by detector class before the class choice', async () => {
+    const onsplit = vi.fn();
+    const controller = createSelectionActionController(() => ({
+      filter: { class_names: ['widget'] },
+    }));
+    instance = mount(SelectionActionDialog, {
+      target,
+      props: {
+        controller,
+        warning: 'This cluster is mixed.',
+        split: {
+          classes: [
+            { value: 'chair', count: 8 },
+            { value: 'bowl', count: 4 },
+          ],
+          onsplit,
+        },
+      },
+    });
+    await controller.open('label');
+    flushSync();
+    const dialog = q('[role="dialog"]')!;
+    const split = q('[data-testid="selection-split"]')!;
+    const classSelect = q('[data-testid="selection-class"]')!;
+    expect(dialog.contains(split)).toBe(true);
+    expect(
+      split.compareDocumentPosition(classSelect) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(split.textContent).toContain('chair');
+    q('[data-testid="selection-split-class"]')!.click();
+    flushSync();
+    expect(onsplit).toHaveBeenCalledWith('chair');
+    expect(q('[role="dialog"]')).toBeNull();
+  });
+
   it('the seed control exists only for a random sample, and a change re-runs the dry run', async () => {
     vi.mocked(batchExcludeSelection).mockResolvedValue({ dry_run: true, selected: 4 });
     const { controller } = mountDialog();

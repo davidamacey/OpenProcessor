@@ -157,7 +157,16 @@
     showPrimary={view.sel.size === 0}
     more={scopeMore}
   />
-  <BulkBar {ws} more={scopeMore} onapplied={onLabelWritten} ondetached={advance} />
+  <BulkBar
+    {ws}
+    more={scopeMore}
+    onapplied={onLabelWritten}
+    ondetached={advance}
+    split={{
+      classes: view.facets?.detector_classes ?? [],
+      onsplit: (value) => view.toggleDetectorClass(value),
+    }}
+  />
   {#if clusterAssist.loadError}
     <p
       class="border-b border-line px-4 py-1.5 text-meta text-warn-text"
