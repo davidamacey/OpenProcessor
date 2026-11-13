@@ -39,11 +39,20 @@ def test_combine_merges_two_projects_and_dedups_by_content(api: Any, opensearch:
     ):
         _upload(api, a.prefix, {'shared.jpg': SHARED, 'only_a.jpg': ONLY_A})
         _upload(api, b.prefix, {'shared-b.jpg': SHARED, 'only_b.jpg': ONLY_B})
-        request = {
+        request: dict[str, Any] = {
             'target': {'slug': target, 'display_name': 'Combined live'},
             'sources': [{'project': a.slug}, {'project': b.slug}],
             'dedup': 'content_hash',
         }
+
+        # Uploaded items carry their detector's class by name, so the preview first asks for a
+        # mapping of each source's class and serves its name-based suggestion; the combine is
+        # previewed again with that mapping, as a client would.
+        first = api.post(f'{API_PREFIX}/projects/combine/preview', json=request)
+        assert first.status_code == 200, first.text
+        needs = first.json()
+        assert {e['code'] for e in needs['errors']} <= {'unmapped_class'}, needs['errors']
+        request['class_mapping'] = needs['suggested_mapping']
 
         preview = api.post(f'{API_PREFIX}/projects/combine/preview', json=request)
         assert preview.status_code == 200, preview.text
