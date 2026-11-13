@@ -13,6 +13,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Added
 
+- **Ready to train.** `GET /quality/readiness` answers whether the dataset can be trained on: a `verdict` (`ready`, `warn`, `blocked`), one check each for class minimums, the frozen test set, machine labels nobody has checked, the accuracy audit (with each class's precision and interval), near-duplicate groups, unlabelled objects on exportable photos and the newest export, every check with its `label`, `severity`, `message`, `count`, worst `classes` and a `link` to the items that need work, plus `coverage` per class (validated, machine-set, detector-only, test). The class and test-set rows are the same checks `POST /train/preflight` runs.
 - **Preflight row labels.** Every row of `POST /train/preflight` serves `label` beside `name` ("Class balance", "Trainer GPUs", ...), so the form shows names, not ids.
 - **Recent-class keys in the class picker.** The keymap serves a `class_picker` context with `class_picker.recent_1` to `class_picker.recent_9` (keys `1` to `9`, rebindable), so the most recently used classes are one keypress in the open picker.
 - **Audit outcome filter.** `audit_outcome` (repeatable: `agree`, `detector_wrong`, `vlm_wrong`, `both_wrong`) on the shared item filter and every route that takes it, such as `GET /crops`: the audited crops a person labelled and whose label still stands, so each count of the accuracy audit report lists its crops.

@@ -4998,6 +4998,44 @@
         "title": "ClassCount",
         "type": "object"
       },
+      "ClassCoverage": {
+        "description": "Items of one active class by how far a person has checked them.",
+        "properties": {
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "detector_only": {
+            "description": "Only the detector named the class, unchecked.",
+            "title": "Detector Only",
+            "type": "integer"
+          },
+          "machine_only": {
+            "description": "A machine set the class (VLM, classifier), unchecked.",
+            "title": "Machine Only",
+            "type": "integer"
+          },
+          "test": {
+            "description": "In the frozen test holdout.",
+            "title": "Test",
+            "type": "integer"
+          },
+          "validated": {
+            "description": "Checked by a person or an import.",
+            "title": "Validated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "class_name",
+          "validated",
+          "machine_only",
+          "detector_only",
+          "test"
+        ],
+        "title": "ClassCoverage",
+        "type": "object"
+      },
       "ClassCreateRequest": {
         "properties": {
           "group": {
@@ -10643,6 +10681,46 @@
           "source"
         ],
         "title": "DatasetPreviewRequest",
+        "type": "object"
+      },
+      "DatasetReadiness": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/ReadinessCheck"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "computed_at": {
+            "description": "When the checks were computed (UTC, ISO 8601).",
+            "title": "Computed At",
+            "type": "string"
+          },
+          "coverage": {
+            "items": {
+              "$ref": "#/components/schemas/ClassCoverage"
+            },
+            "title": "Coverage",
+            "type": "array"
+          },
+          "verdict": {
+            "enum": [
+              "ready",
+              "warn",
+              "blocked"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "verdict",
+          "checks",
+          "coverage",
+          "computed_at"
+        ],
+        "title": "DatasetReadiness",
         "type": "object"
       },
       "DatasetRef": {
@@ -28920,6 +28998,157 @@
           "run_id"
         ],
         "title": "QuantizeRequest",
+        "type": "object"
+      },
+      "ReadinessCheck": {
+        "properties": {
+          "classes": {
+            "description": "The classes the message names (worst first); empty when none.",
+            "items": {
+              "$ref": "#/components/schemas/ReadinessClassRow"
+            },
+            "title": "Classes",
+            "type": "array"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The number the message is about; null when none.",
+            "title": "Count"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "description": "The served name of the check.",
+            "title": "Label",
+            "type": "string"
+          },
+          "link": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadinessLink"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "ok",
+              "warn",
+              "block"
+            ],
+            "title": "Severity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "severity",
+          "message",
+          "count",
+          "link",
+          "classes"
+        ],
+        "title": "ReadinessCheck",
+        "type": "object"
+      },
+      "ReadinessClassRow": {
+        "description": "One class a check names: how many of what, and for the audit its precision.",
+        "properties": {
+          "ci_high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Wilson 95% interval, upper bound.",
+            "title": "Ci High"
+          },
+          "ci_low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Wilson 95% interval, lower bound.",
+            "title": "Ci Low"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "count": {
+            "description": "What the check counts for this class.",
+            "title": "Count",
+            "type": "integer"
+          },
+          "precision": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Audited precision of the detector for this class, if audited.",
+            "title": "Precision"
+          }
+        },
+        "required": [
+          "class_name",
+          "count"
+        ],
+        "title": "ReadinessClassRow",
+        "type": "object"
+      },
+      "ReadinessLink": {
+        "description": "Where the check's work is: a project page and, for the Workspace, its address query.",
+        "properties": {
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The search string of the page address (for the Workspace: `view`, `queue`, and the item filter keys it understands); null for none.",
+            "title": "Query"
+          },
+          "section": {
+            "description": "The project page: `workspace`, `export`, `quality/audit` or `classes`.",
+            "title": "Section",
+            "type": "string"
+          }
+        },
+        "required": [
+          "section",
+          "query"
+        ],
+        "title": "ReadinessLink",
         "type": "object"
       },
       "RegionBatchWriteResponse": {
@@ -65856,6 +66085,49 @@
           }
         },
         "summary": "Get Prompt Pack Revision",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/quality/readiness": {
+      "get": {
+        "description": "Is the dataset ready to train on? A `verdict` (`ready`, `warn`, `blocked`), one entry in\n`checks` per question (class minimums, the frozen test set, machine labels nobody has\nchecked, the accuracy audit, near-duplicate groups, unlabelled objects on exportable photos,\nthe newest export), each with its `label`, `severity`, `message`, the `count` it is about, the\nworst `classes` and a `link` to the items that need work, and `coverage` per class: validated,\nmachine-set, detector-only and test items. The class and test-set rows are Train preflight's\nown checks (`POST /train/preflight`), so the two never disagree.",
+        "operationId": "quality_readiness_curation_projects__project__quality_readiness_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetReadiness"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Quality Readiness",
         "tags": [
           "Curation"
         ]

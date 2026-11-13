@@ -15,11 +15,6 @@ from src.config.curation_accessors import items_index
 from src.core.exceptions import RequestRejectedError
 from src.domain.gpu_claims import containers_to_stop, needs_service_stop, parse_cuda_visible_devices
 from src.services.classes.registry import get_class_registry
-from src.services.curation.dataset_thresholds import (
-    HARD_MIN_CROPS_PER_CLASS,
-    MIN_TEST_CROPS_PER_CLASS,
-    WARN_MIN_CROPS_PER_CLASS,
-)
 from src.services.curation.export_readiness import (
     export_class_split_check,
     export_generation_check,
@@ -40,6 +35,7 @@ from src.services.training.preflight_checks import (
     append_label_scan_checks,
     append_single_class_data_checks,
     augmentation_preset_error,
+    class_balance_check,
     count_pending_ingest,
     count_validated_and_test_per_class,
     free_gb,
@@ -47,6 +43,7 @@ from src.services.training.preflight_checks import (
     read_export_manifest,
     resolve_disk_check_path,
     resolve_target_classes,
+    test_holdout_check,
     training_volume_mount_sane,
     unresolvable_include_classes,
 )
@@ -329,80 +326,6 @@ def _include_classes_check(spec: TrainJobSpec, include_classes: list[int]) -> Pr
     )
 
 
-def _class_name(registry: Any, class_id: int) -> str:
-    entry = registry.get(class_id)
-    return entry.class_name if entry else f'class_{class_id}'
-
-
-def _class_balance_check(
-    target_classes: list[int], counts: dict[int, int], registry: Any
-) -> PreflightCheck:
-    below_hard: list[dict[str, Any]] = []
-    below_recommended: list[dict[str, Any]] = []
-    for cid in target_classes:
-        n = counts.get(cid, 0)
-        row = {'class_id': cid, 'name': _class_name(registry, cid), 'validated': n}
-        if n < HARD_MIN_CROPS_PER_CLASS:
-            below_hard.append(row)
-        elif n < WARN_MIN_CROPS_PER_CLASS:
-            below_recommended.append(row)
-    if below_hard:
-        names = ', '.join(f'{r["name"]} ({r["validated"]})' for r in below_hard)
-        return PreflightCheck(
-            name='class_balance',
-            severity='block',
-            message=(
-                f'{len(below_hard)} class(es) below hard floor of '
-                f'{HARD_MIN_CROPS_PER_CLASS} validated crops: {names}'
-            ),
-            detail={'classes': below_hard},
-        )
-    if below_recommended:
-        names = ', '.join(f'{r["name"]} ({r["validated"]})' for r in below_recommended)
-        return PreflightCheck(
-            name='class_balance',
-            severity='warn',
-            message=(
-                f'{len(below_recommended)} class(es) below recommended '
-                f'{WARN_MIN_CROPS_PER_CLASS}: {names}'
-            ),
-            detail={'classes': below_recommended},
-        )
-    return PreflightCheck(
-        name='class_balance',
-        severity='ok',
-        message=(
-            f'All {len(target_classes)} classes have ≥{WARN_MIN_CROPS_PER_CLASS} validated crops'
-        ),
-    )
-
-
-def _test_holdout_check(
-    target_classes: list[int], test_counts: dict[int, int], registry: Any
-) -> PreflightCheck:
-    thin: list[dict[str, Any]] = []
-    for cid in target_classes:
-        n = test_counts.get(cid, 0)
-        if n < MIN_TEST_CROPS_PER_CLASS:
-            thin.append({'class_id': cid, 'name': _class_name(registry, cid), 'test_crops': n})
-    if thin:
-        names = ', '.join(f'{r["name"]} ({r["test_crops"]})' for r in thin)
-        return PreflightCheck(
-            name='test_holdout',
-            severity='block' if any(r['test_crops'] == 0 for r in thin) else 'warn',
-            message=(
-                f'{len(thin)} class(es) below {MIN_TEST_CROPS_PER_CLASS} '
-                f'test crops: {names}. Refreeze the test holdout.'
-            ),
-            detail={'classes': thin},
-        )
-    return PreflightCheck(
-        name='test_holdout',
-        severity='ok',
-        message=f'All classes have ≥{MIN_TEST_CROPS_PER_CLASS} test crops',
-    )
-
-
 async def _multi_class_data_checks(
     opensearch: Any, target_classes: list[int]
 ) -> list[PreflightCheck]:
@@ -432,8 +355,8 @@ async def _multi_class_data_checks(
     counts, test_counts = counted
     registry = await get_class_registry().snapshot()
     return [
-        _class_balance_check(target_classes, counts, registry),
-        _test_holdout_check(target_classes, test_counts, registry),
+        class_balance_check(target_classes, counts, registry),
+        test_holdout_check(target_classes, test_counts, registry),
     ]
 
 

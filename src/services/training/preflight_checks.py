@@ -247,6 +247,84 @@ def augmentation_preset_error(augmentation: AugmentationSpec | None) -> str | No
     return unknown_preset_error(augmentation.preset)
 
 
+def _class_name(registry: Any, class_id: int) -> str:
+    entry = registry.get(class_id)
+    return entry.class_name if entry else f'class_{class_id}'
+
+
+def class_balance_check(
+    target_classes: list[int], counts: dict[int, int], registry: Any
+) -> PreflightCheck:
+    """The ``class_balance`` row: validated crops per class against the hard and recommended
+    floors. ``registry`` is anything with ``get(class_id)`` returning an entry with ``class_name``;
+    the dataset readiness checklist runs this same function."""
+    below_hard: list[dict[str, Any]] = []
+    below_recommended: list[dict[str, Any]] = []
+    for cid in target_classes:
+        n = counts.get(cid, 0)
+        row = {'class_id': cid, 'name': _class_name(registry, cid), 'validated': n}
+        if n < HARD_MIN_CROPS_PER_CLASS:
+            below_hard.append(row)
+        elif n < WARN_MIN_CROPS_PER_CLASS:
+            below_recommended.append(row)
+    if below_hard:
+        names = ', '.join(f'{r["name"]} ({r["validated"]})' for r in below_hard)
+        return PreflightCheck(
+            name='class_balance',
+            severity='block',
+            message=(
+                f'{len(below_hard)} class(es) below hard floor of '
+                f'{HARD_MIN_CROPS_PER_CLASS} validated crops: {names}'
+            ),
+            detail={'classes': below_hard},
+        )
+    if below_recommended:
+        names = ', '.join(f'{r["name"]} ({r["validated"]})' for r in below_recommended)
+        return PreflightCheck(
+            name='class_balance',
+            severity='warn',
+            message=(
+                f'{len(below_recommended)} class(es) below recommended '
+                f'{WARN_MIN_CROPS_PER_CLASS}: {names}'
+            ),
+            detail={'classes': below_recommended},
+        )
+    return PreflightCheck(
+        name='class_balance',
+        severity='ok',
+        message=(
+            f'All {len(target_classes)} classes have ≥{WARN_MIN_CROPS_PER_CLASS} validated crops'
+        ),
+    )
+
+
+def test_holdout_check(
+    target_classes: list[int], test_counts: dict[int, int], registry: Any
+) -> PreflightCheck:
+    """The ``test_holdout`` row: test-holdout crops per class against the per-class floor."""
+    thin: list[dict[str, Any]] = []
+    for cid in target_classes:
+        n = test_counts.get(cid, 0)
+        if n < MIN_TEST_CROPS_PER_CLASS:
+            thin.append({'class_id': cid, 'name': _class_name(registry, cid), 'test_crops': n})
+    if thin:
+        names = ', '.join(f'{r["name"]} ({r["test_crops"]})' for r in thin)
+        return PreflightCheck(
+            name='test_holdout',
+            severity='block' if any(r['test_crops'] == 0 for r in thin) else 'warn',
+            message=(
+                f'{len(thin)} class(es) below {MIN_TEST_CROPS_PER_CLASS} '
+                f'test crops: {names}. Refreeze the test holdout.'
+            ),
+            detail={'classes': thin},
+        )
+    return PreflightCheck(
+        name='test_holdout',
+        severity='ok',
+        message=f'All classes have ≥{MIN_TEST_CROPS_PER_CLASS} test crops',
+    )
+
+
 def free_gb(path: str) -> float | None:
     """Free disk space on ``path``'s filesystem, in GB.
 

@@ -45,7 +45,7 @@ def test_aug_target(n: int, target: int) -> None:
 
 def test_preflight_uses_the_same_constants() -> None:
     from src.services.curation import holdout
-    from src.services.training import preflight_run as preflight
+    from src.services.training import preflight_checks as preflight
 
     assert preflight.HARD_MIN_CROPS_PER_CLASS == thresholds.HARD_MIN_CROPS_PER_CLASS
     assert preflight.WARN_MIN_CROPS_PER_CLASS == thresholds.WARN_MIN_CROPS_PER_CLASS
