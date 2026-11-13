@@ -20,6 +20,28 @@ import pytest
 # Read by ultralytics.utils at import: no package is pip-installed from inside a test.
 os.environ.setdefault('YOLO_AUTOINSTALL', 'False')
 
+# A git hook (the pre-push stage runs this suite) exports GIT_DIR and friends so its commands find the
+# repository (githooks(5)); inherited by a test, they point every `git` call in a scratch repo at the real
+# one. Drop the repository-local variables, the set `git rev-parse --local-env-vars` prints.
+for _git_var in (
+    'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+    'GIT_CONFIG',
+    'GIT_CONFIG_PARAMETERS',
+    'GIT_CONFIG_COUNT',
+    'GIT_OBJECT_DIRECTORY',
+    'GIT_DIR',
+    'GIT_WORK_TREE',
+    'GIT_IMPLICIT_WORK_TREE',
+    'GIT_GRAFT_FILE',
+    'GIT_INDEX_FILE',
+    'GIT_NO_REPLACE_OBJECTS',
+    'GIT_REPLACE_REF_BASE',
+    'GIT_PREFIX',
+    'GIT_SHALLOW_FILE',
+    'GIT_COMMON_DIR',
+):
+    os.environ.pop(_git_var, None)
+
 # The `db` tier's PostgreSQL fixtures (pg, two_sessions); inert unless a test asks for them.
 pytest_plugins = [
     'fixtures.postgres',
