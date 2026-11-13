@@ -10,9 +10,11 @@ import { humanizeId } from '$lib/humanizeId';
 import type { GeoBox } from '$lib/types_map';
 import {
   EMBEDDING_STATES,
+  AUDIT_OUTCOMES,
   ITEM_ORIGINS,
   REVIEW_STATUSES,
   TEXT_MATCHES,
+  type AuditOutcome,
   type EmbeddingState,
   type ItemFilter,
   type ItemFilterQuery,
@@ -95,6 +97,8 @@ export class ItemFilterState {
   origin = $state<ItemOrigin[]>([]);
   embeddingState = $state<EmbeddingState[]>([]);
   reviewStatus = $state<ReviewStatus[]>([]);
+  /** Audited crops by who was right; set by the link from an audit report, not by a bar control. */
+  auditOutcomes = $state<AuditOutcome[]>([]);
   openVocabSet = $state<string | null>(null);
   sourcePrompt = $state<string | null>(null);
   /** One dataset import: the items it labeled or proposed. */
@@ -141,6 +145,7 @@ export class ItemFilterState {
     put('origin', [...this.origin], this.origin.length > 0);
     put('embedding_state', [...this.embeddingState], this.embeddingState.length > 0);
     put('review_status', [...this.reviewStatus], this.reviewStatus.length > 0);
+    put('audit_outcome', [...this.auditOutcomes], this.auditOutcomes.length > 0);
     put('open_vocab_set', this.openVocabSet, !!this.openVocabSet);
     put('source_prompt', this.sourcePrompt, !!this.sourcePrompt);
     put('import_id', this.importId, !!this.importId);
@@ -176,6 +181,7 @@ export class ItemFilterState {
     if (this.origin.length > 0) b.origin = [...this.origin];
     if (this.embeddingState.length > 0) b.embedding_state = [...this.embeddingState];
     if (this.reviewStatus.length > 0) b.review_status = [...this.reviewStatus];
+    if (this.auditOutcomes.length > 0) b.audit_outcome = [...this.auditOutcomes];
     if (this.takenFrom) b.taken_from = this.takenFrom;
     if (this.takenTo) b.taken_to = this.takenTo;
     return { ...b, ...this.textBody(), ...this.areaBody() };
@@ -226,6 +232,7 @@ export class ItemFilterState {
     this.origin = pick(params.getAll('origin'), ITEM_ORIGINS);
     this.embeddingState = pick(params.getAll('embedding_state'), EMBEDDING_STATES);
     this.reviewStatus = pick(params.getAll('review_status'), REVIEW_STATUSES);
+    this.auditOutcomes = pick(params.getAll('audit_outcome'), AUDIT_OUTCOMES);
     this.openVocabSet = params.get('open_vocab_set') || null;
     this.sourcePrompt = params.get('source_prompt') || null;
     this.importId = params.get('import_id') || null;
@@ -357,6 +364,7 @@ export class ItemFilterState {
     this.origin = [];
     this.embeddingState = [];
     this.reviewStatus = [];
+    this.auditOutcomes = [];
     this.openVocabSet = null;
     this.sourcePrompt = null;
     this.importId = null;
@@ -434,6 +442,13 @@ export class ItemFilterState {
         param: 'review_status',
         label: `Review: ${humanizeId(v)}`,
         clear: () => (this.reviewStatus = this.reviewStatus.filter((x) => x !== v)),
+      });
+    }
+    for (const v of this.auditOutcomes) {
+      out.push({
+        param: 'audit_outcome',
+        label: `Audit: ${humanizeId(v)}`,
+        clear: () => (this.auditOutcomes = this.auditOutcomes.filter((x) => x !== v)),
       });
     }
     if (this.openVocabSet) {
@@ -544,6 +559,7 @@ export const URL_KEYS = [
   'origin',
   'embedding_state',
   'review_status',
+  'audit_outcome',
   'open_vocab_set',
   'source_prompt',
   'import_id',

@@ -26,8 +26,8 @@
       cluster; reversible with {actions.kg('cluster.undo')}.
     </p>
     <p class="mb-3 text-meta text-fg-2" data-testid="move-relabel-hint">
-      To change their <strong>class</strong> instead, close this and use "Assign class…" in
-      the bulk bar, or press the class's hotkey.
+      To change their <strong>class</strong> instead, close this and use "Label as…" in the
+      bulk bar, or press the class's hotkey.
     </p>
     <label class="mb-3 block text-body">
       <span class="mb-1 block text-fg-2">Target cluster</span>

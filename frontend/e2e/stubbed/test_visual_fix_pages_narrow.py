@@ -187,7 +187,8 @@ def test_ignored_mode_hides_cluster_grid_controls(stub, page, app_url):
     sort = page.get_by_test_id('cluster-sort')
     sort.wait_for(timeout=ACTION_TIMEOUT_MS)
 
-    page.locator("button:has-text('Ignored')").first.click()
+    page.get_by_test_id('cluster-refine').click()
+    page.get_by_test_id('ignored-mode-toggle').click()
     page.get_by_text('Nothing ignored.').wait_for(timeout=10000)
 
     assert page.get_by_test_id('cluster-sort').count() == 0

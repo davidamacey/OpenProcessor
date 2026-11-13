@@ -28,6 +28,15 @@ export type ItemOrigin = (typeof ITEM_ORIGINS)[number];
 export const REVIEW_STATUSES = ['pending', 'validated', 'dismissed', 'excluded'] as const;
 export type ReviewStatus = (typeof REVIEW_STATUSES)[number];
 
+/** `ItemFilter.audit_outcome`: who was right on an audited crop a person labelled. */
+export const AUDIT_OUTCOMES = [
+  'agree',
+  'detector_wrong',
+  'vlm_wrong',
+  'both_wrong',
+] as const;
+export type AuditOutcome = (typeof AUDIT_OUTCOMES)[number];
+
 /** `ItemFilter.region_text_match`: how a box-text search matches. */
 export const TEXT_MATCHES = ['exact', 'fuzzy', 'fragment'] as const;
 export type TextMatch = (typeof TEXT_MATCHES)[number];
@@ -53,6 +62,7 @@ export interface ItemFilterQuery {
   origin?: ItemOrigin[];
   embedding_state?: EmbeddingState[];
   review_status?: ReviewStatus[];
+  audit_outcome?: AuditOutcome[];
   open_vocab_set?: string;
   source_prompt?: string;
   import_id?: string;
@@ -116,6 +126,7 @@ export interface ItemFilter {
   region_text_match?: TextMatch;
   review_dismissed?: boolean | null;
   review_status?: ReviewStatus[];
+  audit_outcome?: AuditOutcome[];
   review_tab?: string | null;
   source?: string | null;
   source_prompt?: string | null;

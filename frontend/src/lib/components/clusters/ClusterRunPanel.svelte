@@ -57,7 +57,7 @@
     </div>
     <button
       type="button"
-      class="btn {primary ? 'btn-primary' : ''}"
+      class="btn {primary && !ctl.pending ? 'btn-primary' : ''}"
       disabled={ctl.busy}
       onclick={() => void ctl.cluster()}
       data-testid="cluster-run-start"
@@ -80,7 +80,7 @@
       </span>
       <button
         type="button"
-        class="btn btn-sm"
+        class="btn btn-sm btn-primary"
         disabled={ctl.busy}
         onclick={() => ctl.pending && void ctl.activate(ctl.pending)}
         data-testid="cluster-run-activate"

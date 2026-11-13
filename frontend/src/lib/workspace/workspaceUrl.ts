@@ -3,6 +3,7 @@
  * Workspace keys of `page.url.searchParams`. The item-filter keys belong to
  * `ItemFilterState`; this module never touches them.
  */
+import { NEAR_DUP_FILTERS, type NearDupFilter } from '$lib/types_images';
 
 const VIEW_IDS = [
   'gallery',
@@ -37,6 +38,8 @@ export interface WorkspaceUrlState {
   thumb: ThumbSize;
   q: string | null;
   similarTo: string | null;
+  /** The Gallery's near-duplicate role (a link from the quality pages opens it collapsed). */
+  nearDup: NearDupFilter | null;
   map: MapPosition | null;
 }
 
@@ -54,6 +57,7 @@ export const WORKSPACE_URL_KEYS: readonly string[] = [
   'thumb',
   'q',
   'similar_to',
+  'near_dup',
   'map',
 ];
 
@@ -100,6 +104,7 @@ export function parseWorkspaceUrl(
     thumb: oneOf(THUMB_SIZES, params.get('thumb')) ?? 'm',
     q: params.get('q') || null,
     similarTo: params.get('similar_to') || null,
+    nearDup: oneOf(NEAR_DUP_FILTERS, params.get('near_dup')),
     map: parseMap(params.get('map')),
   };
 }
@@ -134,6 +139,7 @@ const FIELDS: {
   thumb: { key: 'thumb', spell: (v) => (v !== 'm' ? v : null) },
   q: { key: 'q', spell: (v) => v },
   similarTo: { key: 'similar_to', spell: (v) => v },
+  nearDup: { key: 'near_dup', spell: (v) => v },
   map: { key: 'map', spell: (v) => (v ? spellMap(v) : null) },
 };
 

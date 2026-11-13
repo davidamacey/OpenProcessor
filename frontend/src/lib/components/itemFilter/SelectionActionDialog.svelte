@@ -20,9 +20,13 @@
     onapplied?: () => void;
     /** Who the action acts on, in words ("the 3 selected items"), shown above the count. */
     subject?: string;
+    /** The whole-cluster label offers to open the next cluster once it is written. */
+    openNext?: { checked: boolean; onchange: (checked: boolean) => void };
+    /** A caution the host wants read before the write (a mixed cluster). */
+    warning?: string | null;
   }
 
-  let { controller: c, onapplied, subject }: Props = $props();
+  let { controller: c, onapplied, subject, openNext, warning }: Props = $props();
 
   const TITLES: Record<SelectionActionId, string> = {
     exclude: 'Ignore matching items',
@@ -119,6 +123,16 @@
       </label>
     {/if}
 
+    {#if warning && c.action === 'label'}
+      <p
+        class="rounded border border-warn/40 bg-warn/10 px-3 py-2 text-warn-text"
+        role="note"
+        data-testid="selection-warning"
+      >
+        {warning}
+      </p>
+    {/if}
+
     {#if subject}
       <p class="text-fg-2" data-testid="selection-subject">Acting on {subject}.</p>
     {/if}
@@ -185,6 +199,18 @@
         </label>
       {/if}
     </div>
+
+    {#if openNext && c.action === 'label'}
+      <label class="flex items-center gap-2 text-meta text-fg-2">
+        <input
+          type="checkbox"
+          checked={openNext.checked}
+          data-testid="open-next-after-label"
+          onchange={(e) => openNext.onchange(e.currentTarget.checked)}
+        />
+        Open the next cluster after labelling
+      </label>
+    {/if}
 
     {#if statusLine}
       <p class="text-fg-1" data-testid="selection-job">

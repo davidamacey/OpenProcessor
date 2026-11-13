@@ -7,7 +7,11 @@
  */
 import type { SortOption } from '$lib/types_cursor';
 import { untrack } from 'svelte';
-import { getClusters, type ClusterEmptyReason } from '$lib/api_clusters';
+import {
+  getClusters,
+  type ClusterEmptyReason,
+  type PendingPartition,
+} from '$lib/api_clusters';
 import {
   EMPTY_CLUSTER_FILTER,
   clusterFilterFromUrl,
@@ -15,7 +19,6 @@ import {
   isClusterFilterActive,
 } from '$lib/clusters/clusterListFilter';
 import { filterPersistKey, parsePersistedFilter } from '$lib/clusters/persistedFilter';
-import type { SlotInventory } from '$lib/clusters/slotInventory.svelte';
 import { createPager } from '$lib/pager.svelte';
 import type { Cluster, ClusterFilter, HiddenCounts } from '$lib/types';
 import type { ItemFilterQuery } from '$lib/types_itemFilter';
@@ -32,7 +35,6 @@ export interface ClusterListDeps {
   readonly classFilter: number | null;
   readonly isSlotFilter: boolean;
   readonly gridFilterKey: string;
-  readonly slotInventory: SlotInventory;
   gridItemFilter(): ItemFilterQuery;
   /** The query string the page was opened with (read once). */
   readonly initialUrlParams: Pick<URLSearchParams, 'get' | 'getAll' | 'has'>;
@@ -44,14 +46,13 @@ export interface ClusterListDeps {
 const PAGE_SIZE = 24;
 
 export function createClusterListController(deps: ClusterListDeps) {
-  const { slotInventory } = deps;
-
   let appliedSort = $state<string | null>(null);
   let sortOptions = $state<SortOption[]>([]);
   let flagVocabulary = $state<ClusterFlag[]>([]);
   let truncated = $state(false);
   let emptyReason = $state<ClusterEmptyReason | null>(null);
   let emptyMessage = $state<string | null>(null);
+  let pendingPartition = $state<PendingPartition | null>(null);
   let total = $state(0);
   let hidden = $state<HiddenCounts | null>(null);
   // Detector classes seen on served cards, in served order. Kept across
@@ -78,6 +79,7 @@ export function createClusterListController(deps: ClusterListDeps) {
       truncated = res.truncated;
       emptyReason = res.empty_reason;
       emptyMessage = res.empty_message;
+      pendingPartition = res.pending_partition;
       total = res.total;
       hidden = res.hidden;
       rememberDetectorClasses(res.items);
@@ -158,19 +160,9 @@ export function createClusterListController(deps: ClusterListDeps) {
     };
   }
 
-  // The cards on screen: the served list cut at `shown`, with the slot
-  // inventory entry points pinned first while no card filter is set.
-  const gridItems = $derived.by<Cluster[]>(() => {
-    const cards = clusterPager.items.slice(0, shown);
-    if (
-      deps.classFilter == null &&
-      slotInventory.slotInventoryCards.length > 0 &&
-      !filterActive
-    ) {
-      return [...slotInventory.slotInventoryCards, ...cards];
-    }
-    return cards;
-  });
+  // The cards on screen: the served list cut at `shown`. Nothing is pinned in front of it, so
+  // the list is empty exactly when the server served no cluster.
+  const gridItems = $derived<Cluster[]>(clusterPager.items.slice(0, shown));
   const hasMoreCards = $derived(shown < clusterPager.items.length);
 
   // Thumbnails for the next window come from the same list call, asked with
@@ -206,7 +198,6 @@ export function createClusterListController(deps: ClusterListDeps) {
     shown = PAGE_SIZE;
     repsCoveredTo = PAGE_SIZE;
     await clusterPager.loadFirst();
-    if (clusterPager.error == null) await slotInventory.loadSlotInventoryCards();
   }
 
   function loadMore(): void {
@@ -263,6 +254,9 @@ export function createClusterListController(deps: ClusterListDeps) {
     },
     get emptyMessage() {
       return emptyMessage;
+    },
+    get pendingPartition() {
+      return pendingPartition;
     },
     get total() {
       return total;

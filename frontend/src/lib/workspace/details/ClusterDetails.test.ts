@@ -3,7 +3,7 @@ import { mountUi } from '$lib/test/mountUi';
 import ClusterDetails from './ClusterDetails.svelte';
 
 function ws(card: Record<string, unknown> | null) {
-  return { scopeCard: card, confirmSelectAllMatching: vi.fn(), pickerOpen: false };
+  return { scopeCard: card, startLabelCluster: vi.fn() };
 }
 const card = (over: Record<string, unknown> = {}) => ({
   uid: 'u1',
@@ -31,18 +31,20 @@ describe('ClusterDetails', () => {
     expect(el.textContent).toContain('not named yet');
   });
 
-  it('labels the whole cluster in one action: select everything it matches, open the picker', () => {
+  it('keeps a secondary copy of the whole-cluster label, through the same label flow', () => {
     const w = ws(card());
     const el = mountUi(ClusterDetails, { ws: w, id: 'u1' });
-    const btn = el.querySelector('[data-testid="label-cluster"]') as HTMLButtonElement;
-    expect(btn.textContent).toContain('Label all 12');
+    const btn = el.querySelector(
+      '[data-testid="label-cluster-details"]',
+    ) as HTMLButtonElement;
+    expect(btn.textContent).toContain('Label all 12 as');
+    expect(btn.className).not.toContain('btn-primary');
     btn.click();
-    expect(w.confirmSelectAllMatching).toHaveBeenCalledOnce();
-    expect(w.pickerOpen).toBe(true);
+    expect(w.startLabelCluster).toHaveBeenCalledOnce();
   });
 
   it('has no label action before a cluster is open', () => {
     const el = mountUi(ClusterDetails, { ws: ws(null), id: null });
-    expect(el.querySelector('[data-testid="label-cluster"]')).toBeNull();
+    expect(el.querySelector('[data-testid="label-cluster-details"]')).toBeNull();
   });
 });

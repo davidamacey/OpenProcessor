@@ -63,6 +63,10 @@ const UPPERCASE = /(?<=\s|class=["'`{])uppercase(?![\w-]|\s*\??:)/;
 // A page title is `PageHeader`'s h1; a workspace view keeps an `sr-only` one.
 const RAW_H1 = /<h1(?![^>]*\bsr-only\b)[^>]*class=/;
 
+// A key hint is `ui/Kbd.svelte`, which spells the combo with capitals; a raw `<kbd>` would show
+// the key as typed (`l`).
+const RAW_KBD = /<kbd[\s>]/;
+
 /** file (relative to src) -> why it may break a rule. */
 const ALLOWED: { file: string; rule: 'glyph' | 'colour' | 'mono' | 'h1'; why: string }[] =
   [
@@ -172,34 +176,14 @@ const ALLOWED: { file: string; rule: 'glyph' | 'colour' | 'mono' | 'h1'; why: st
       why: 'a code editor: this file edits a server path',
     },
     {
-      file: 'lib/components/clusters/ClustersToolbar.svelte',
-      rule: 'h1',
-      why: 'the title moves to ui/PageHeader or an sr-only h1 when lane C restructures this view (12f section 4)',
-    },
-    {
       file: 'lib/components/config/ConfigDocHeader.svelte',
       rule: 'h1',
       why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11); the title shows a config name, which section 5.3 rule 4 replaces with the served label',
     },
     {
-      file: 'lib/components/editor/EditorHeader.svelte',
-      rule: 'h1',
-      why: 'the title moves to ui/PageHeader or an sr-only h1 when lane C restructures this view (12f section 4)',
-    },
-    {
-      file: 'lib/components/review/ReviewHeader.svelte',
-      rule: 'h1',
-      why: 'the title moves to ui/PageHeader or an sr-only h1 when lane C restructures this view (12f section 4)',
-    },
-    {
       file: 'lib/components/shell/ErrorPage.svelte',
       rule: 'h1',
       why: 'a full-page error state, not a titled page; it has no PageHeader slots for an action row',
-    },
-    {
-      file: 'lib/workspace/views/ClusterScope.svelte',
-      rule: 'h1',
-      why: 'the title moves to ui/PageHeader or an sr-only h1 when lane C restructures this view (12f section 4)',
     },
     {
       file: 'routes/p/[project]/export/+page.svelte',
@@ -402,6 +386,12 @@ describe('the patterns catch each spelling (negative controls)', () => {
     expect(UPPERCASE.test("=== 'uppercase'")).toBe(false);
     expect(UPPERCASE.test('class="normal-case"')).toBe(false);
   });
+  it('a raw key hint, but not the Kbd component', () => {
+    expect(RAW_KBD.test('<kbd class="x">l</kbd>')).toBe(true);
+    expect(RAW_KBD.test('<kbd>{k}</kbd>')).toBe(true);
+    expect(RAW_KBD.test('<Kbd combo="l" />')).toBe(false);
+  });
+
   it('a page h1 that bypasses PageHeader, but not an sr-only one', () => {
     expect(RAW_H1.test('<h1 class="text-h1 font-semibold">Title</h1>')).toBe(true);
     expect(RAW_H1.test('<h1 data-x="y" class="text-title">Title</h1>')).toBe(true);
@@ -448,6 +438,14 @@ describe('product source', () => {
 
   it('writes sentence case, never the uppercase utility', () => {
     expect(offenders((c) => UPPERCASE.test(c), 'none')).toEqual([]);
+  });
+
+  it('writes every key hint through the Kbd component', () => {
+    expect(
+      offenders((c) => RAW_KBD.test(c), 'none').filter(
+        (f) => f !== path.join('lib', 'components', 'ui', 'Kbd.svelte'),
+      ),
+    ).toEqual([]);
   });
 
   it('gives every page title through PageHeader (a view keeps an sr-only h1)', () => {

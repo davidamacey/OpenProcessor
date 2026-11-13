@@ -179,9 +179,7 @@ def test_filter_survives_a_view_switch_and_a_selection_of_another_kind_clears(st
     expect(page.get_by_test_id('item-filter-chip').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     # Clusters select clusters, not detections: the selection does not follow the view.
     page.get_by_test_id('view-tab-detections').click()
-    expect(page.get_by_test_id('bulk-summary')).to_have_text(
-        'Nothing selected', timeout=ACTION_TIMEOUT_MS
-    )
+    expect(page.get_by_test_id('bulk-bar')).to_have_count(0, timeout=ACTION_TIMEOUT_MS)
     expect(page).to_have_url(re.compile('class_name=widget'))
 
 

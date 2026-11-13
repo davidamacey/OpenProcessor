@@ -120,49 +120,27 @@ def test_settings_unset_sort_is_not_blank(stub, page, app_url):
     assert 'not set' in shown, shown
 
 
-def test_region_inventory_card_uses_served_display_name(stub, page, app_url):
-    """The pinned region inventory card showed the raw class id as
-    both title and subtitle instead of the served display name."""
-    from fixtures.wire import REGION_CLASS, REGION_TAB_LABEL, make_item
+def test_region_boxes_line_replaces_the_pinned_inventory_card(stub, page, app_url):
+    """The cluster list pins no client-built card. A one-line link to the served region queue
+    names it by its served label and count, and opens it in Review."""
+    from fixtures.wire import REGION_TAB_LABEL, review_tab, review_tabs
     from test_visual_fix_pages_narrow import CLASSES as NARROW_CLASSES, CLUSTERS
 
-    items = [make_item(crop_id=f'r-{i}', image_id=f'img-{i}') for i in range(4)]
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': NARROW_CLASSES})
     stub.on('GET', r'/clusters(\?|$)', CLUSTERS)
-    rows = [{**i, 'row_key': f'{i["crop_id"]}#item'} for i in items]
-    stub.on('GET', r'/regions(\?|$)', {'items': rows, 'total': 4})
-
-    page.goto(f'{app_url}/p/default/workspace?view=clusters')
-    title = page.get_by_test_id('slot-card-title')
-    title.wait_for(timeout=ACTION_TIMEOUT_MS)
-    assert title.inner_text().strip() == REGION_TAB_LABEL
-    assert REGION_TAB_LABEL != REGION_CLASS
-
-
-def test_region_inventory_card_survives_boxes_of_one_item(stub, page, app_url):
-    """A multi-box item is several `/regions` rows with ONE crop id (`row_key`
-    tells them apart). The pinned inventory card keyed its close-ups by crop
-    id, so those rows threw `each_key_duplicate` and the card never rendered."""
-    from fixtures.wire import make_box, make_item
-    from test_visual_fix_pages_narrow import CLASSES as NARROW_CLASSES, CLUSTERS
-
-    boxes = [make_box(f'b{n}') for n in (1, 2, 3)]
-    item = make_item(crop_id='multi-1', image_id='img-1', region_boxes=boxes)
-    rows = [
-        {**item, 'region_box_id': b['box_id'], 'row_key': f'multi-1#{b["box_id"]}'} for b in boxes
-    ]
-    other = make_item(crop_id='solo-1', image_id='img-2', region_boxes=[make_box('b1')])
-    rows.append({**other, 'region_box_id': 'b1', 'row_key': 'solo-1#b1'})
-    stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': NARROW_CLASSES})
-    stub.on('GET', r'/clusters(\?|$)', CLUSTERS)
-    stub.on('GET', r'/regions(\?|$)', {'items': rows, 'total': 2})
-    errors: list[str] = []
-    page.on('pageerror', lambda e: errors.append(str(e)))
-
-    page.goto(f'{app_url}/p/default/workspace?view=clusters')
-    page.get_by_test_id('slot-card-title').wait_for(timeout=ACTION_TIMEOUT_MS)
-    assert not errors, errors
-    tiles = (
-        page.get_by_test_id('slot-card-title').locator('xpath=ancestor::button[1]').locator('img')
+    stub.on(
+        'GET',
+        r'/review/tabs(\?|$)',
+        review_tabs(
+            review_tab('to_label', 'To label'),
+            review_tab('regions', REGION_TAB_LABEL, count=166),
+        ),
     )
-    assert tiles.count() == 4, tiles.count()
+
+    page.goto(f'{app_url}/p/default/workspace?view=clusters')
+    line = page.get_by_test_id('region-boxes-line')
+    expect(line).to_contain_text(f'{REGION_TAB_LABEL} to confirm', timeout=ACTION_TIMEOUT_MS)
+    expect(line).to_contain_text('166')
+    expect(page.get_by_test_id('slot-card-title')).to_have_count(0)
+    line.get_by_role('button', name='Open the queue').click()
+    page.wait_for_url('**view=review*queue=regions*', timeout=ACTION_TIMEOUT_MS)

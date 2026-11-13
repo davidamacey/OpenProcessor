@@ -89,7 +89,7 @@ def test_review_class_and_origin_reach_the_queue_by_name_and_persist_in_the_url(
         timeout=ACTION_TIMEOUT_MS,
     ):
         page.get_by_test_id('served-filter-class_name').locator('select').select_option('gadget')
-    page.get_by_test_id('item-filter-more').locator('summary').click()
+    page.get_by_test_id('item-filter-more-toggle').click()
     with page.expect_request(
         lambda r: '/review/to_label' in r.url and 'origin=sam3' in r.url,
         timeout=ACTION_TIMEOUT_MS,
@@ -200,7 +200,7 @@ def test_clusters_grid_and_matching_mode_send_the_filter(stub, page, app_url):
         timeout=ACTION_TIMEOUT_MS,
     ):
         page.get_by_test_id('served-filter-class_name').locator('select').select_option('gadget')
-    page.get_by_test_id('item-filter-more').locator('summary').click()
+    page.get_by_test_id('item-filter-more-toggle').click()
     with page.expect_request(
         lambda r: '/clusters' in r.url and 'origin=human' in r.url,
         timeout=ACTION_TIMEOUT_MS,
@@ -217,6 +217,8 @@ def test_clusters_grid_and_matching_mode_send_the_filter(stub, page, app_url):
         lambda r: '/crops' in r.url and 'class_name=gadget' in r.url,
         timeout=ACTION_TIMEOUT_MS,
     ) as sent:
+        page.keyboard.press('Escape')
+        page.get_by_test_id('cluster-refine').click()
         page.get_by_test_id('matching-mode-toggle').click()
     page.get_by_test_id('matching-total').wait_for(timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_test_id('served-filter-open_vocab_set').count() == 1

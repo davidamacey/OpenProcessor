@@ -74,6 +74,7 @@ def test_facet_chips_show_served_counts_and_send_the_served_filters(stub, page, 
     queries: list[dict] = []
     serve_cluster(stub, queries)
     page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:{FACET_UID}')
+    page.get_by_test_id('scope-refine').click(timeout=ACTION_TIMEOUT_MS)
     facets = page.get_by_test_id('cluster-facets')
     expect(facets).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     expect(facets.get_by_test_id('facet-detector-class')).to_have_text(
@@ -108,8 +109,10 @@ def test_facet_chips_show_served_counts_and_send_the_served_filters(stub, page, 
     q = click_and_wait(facets.get_by_test_id('facet-review-tab').first, 'review_tab')
     assert q['review_tab'] == ['outliers']
 
+    # The one Sort of the header also reaches the detector-confidence order.
+    page.keyboard.press('Escape')
     with expect_handled(
         page, lambda r: '/crops' in r.url and 'sort=' in r.url, timeout=ACTION_TIMEOUT_MS
     ):
-        page.get_by_test_id('facet-sort').select_option('desc')
+        page.get_by_test_id('scope-sort').select_option('confidence_desc')
     assert queries[-1]['sort'] == ['detector_confidence:desc']

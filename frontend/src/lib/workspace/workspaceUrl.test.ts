@@ -68,6 +68,18 @@ describe('workspaceUrl', () => {
     });
   });
 
+  it('reads the near-duplicate role of the Gallery and drops an unknown one', () => {
+    expect(parseWorkspaceUrl(new URLSearchParams('near_dup=collapsed')).nearDup).toBe(
+      'collapsed',
+    );
+    expect(parseWorkspaceUrl(new URLSearchParams('near_dup=bogus')).nearDup).toBeNull();
+    const p = new URLSearchParams();
+    writeWorkspaceUrl(p, { nearDup: 'member' });
+    expect(p.get('near_dup')).toBe('member');
+    writeWorkspaceUrl(p, { nearDup: null });
+    expect(p.has('near_dup')).toBe(false);
+  });
+
   it('keeps a colon inside an id', () => {
     const s = parseWorkspaceUrl(new URLSearchParams('scope=image%3Aa%3Ab'));
     expect(s.scope).toEqual({ kind: 'image', id: 'a:b' });

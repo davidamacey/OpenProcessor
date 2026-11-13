@@ -26,6 +26,7 @@ import {
   type SelectionSummaryState,
 } from './selectionSummary.svelte';
 import type { Cluster, Crop, HiddenCounts } from '$lib/types';
+import type { NearDupFilter } from '$lib/types_images';
 import type { ItemFilter, ItemFilterQuery, ItemSelection } from '$lib/types_itemFilter';
 import {
   NO_SELECTION,
@@ -73,6 +74,9 @@ export class WorkspaceController {
   /** Set when the whole open cluster is being labelled by key: once the label lands the host
    *  moves on to the next cluster. Cleared when the flow ends without a write. */
   labelThenNext = $state(false);
+  /** The user's choice, in the label dialog, to move on to the next cluster after a whole-cluster
+   *  label (on by default). */
+  openNextAfterLabel = $state(true);
   /** The queues and classes rail as a drawer under `lg`. */
   railOpen = $state(false);
   /** The server's account of the selection: what a bulk action would touch. */
@@ -218,8 +222,8 @@ export class WorkspaceController {
   }
 
   /** Another queue opens in its own order: the Review sort belongs to the queue it was picked in. */
-  setQueue(id: string | null): void {
-    this.#write({ queue: id, sort: { review: '' } }, false);
+  setQueue(id: string | null, opts: { replace?: boolean } = {}): void {
+    this.#write({ queue: id, sort: { review: '' } }, opts.replace ?? false);
   }
 
   setScope(scope: ScopeRef | null): void {
@@ -307,12 +311,33 @@ export class WorkspaceController {
     this.#write({ view: this.#reviewOrigin, focus }, false);
   }
 
-  setFocus(focus: FocusRef | null): void {
-    this.#write({ focus }, true);
+  /** The focus before the last one that was pushed as a history entry: a map cell, when the user
+   *  went on from it to one of its photos ("Back to the cell"). */
+  #previousFocus = $state<FocusRef | null>(null);
+
+  get previousFocus(): FocusRef | null {
+    return this.#previousFocus;
+  }
+
+  /** Sets the focus. `push` makes it a history entry, so Back returns to the focus it replaced
+   *  (a map cell the user stepped out of); the default replaces it. */
+  setFocus(focus: FocusRef | null, opts: { push?: boolean } = {}): void {
+    this.#previousFocus = opts.push ? this.#url.focus : null;
+    this.#write({ focus }, !opts.push);
+  }
+
+  /** "Show its N detections": the Detections view scoped to one image, in one URL write. */
+  showImageItems(imageId: string): void {
+    this.#write({ view: 'detections', scope: { kind: 'image', id: imageId } }, false);
   }
 
   setSort(view: ViewId, sortId: string): void {
     this.#write({ sort: { [view]: sortId } }, false);
+  }
+
+  /** The Gallery's near-duplicate role; null lists every photo. */
+  setNearDup(nearDup: NearDupFilter | null): void {
+    this.#write({ nearDup }, true);
   }
 
   setTable(rows: TableRows, columns: string[] | null = null): void {

@@ -68,6 +68,7 @@ def crop(i: int) -> dict:
         confidence=0.9,
         cluster=item_cluster(CLUSTER_UID),
         label_validated=False,
+        class_validated=False,
         label_source='model_suggestion',
         thumbnail_url=f'/curation/crops/crop-{i}/thumbnail',
     )
@@ -264,9 +265,7 @@ def test_labeling_flow(stub, page, app_url):
         wait_for_paint(page)
     # Escape with no drag in progress clears the selection (cluster.cancel)
     # — a real, observable state change proving the last Escape ran.
-    expect(page.get_by_test_id('bulk-summary')).to_have_text(
-        'Nothing selected', timeout=ACTION_TIMEOUT_MS
-    )
+    expect(page.get_by_test_id('bulk-bar')).to_have_count(0, timeout=ACTION_TIMEOUT_MS)
     overflow = [
         c
         for c in stub.console_errors
@@ -281,7 +280,7 @@ def test_labeling_flow(stub, page, app_url):
     page.goto(review_url(app_url, 'to_label'))
     counter = page.get_by_test_id('queue-counter')
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    expect(counter.first).to_contain_text('3 total', timeout=ACTION_TIMEOUT_MS)
+    expect(counter.first).to_contain_text('of 3', timeout=ACTION_TIMEOUT_MS)
     before = counter.first.inner_text()
     with page.expect_response(
         lambda r: r.request.method == 'PUT' and r.url.endswith('/label'), timeout=ACTION_TIMEOUT_MS

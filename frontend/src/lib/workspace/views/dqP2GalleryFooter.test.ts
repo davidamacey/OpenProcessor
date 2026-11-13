@@ -28,7 +28,7 @@ describe('DQ-p2: the status bar reads the pager that actually backs the visible 
     const slice = src.slice(idx, idx + 1800);
     expect(slice).toMatch(/\{(#|:else )if slotGallery\}/);
     expect(slice).toMatch(
-      /\{slotGallery\.pager\.items\.length\} \/ \{slotGallery\.pager\.total\}/,
+      /\{slotGallery\.pager\.items\.length\.toLocaleString\(\)\} of\s+\{slotGallery\.pager\.total\.toLocaleString\(\)\}/,
     );
     expect(slice).toMatch(/list\.total/);
   });

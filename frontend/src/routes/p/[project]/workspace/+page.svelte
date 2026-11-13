@@ -6,6 +6,7 @@
    * selection survive a view switch and Back restores the previous view.
    */
   import { onDestroy } from 'svelte';
+  import AdoptBanner from '$components/workspace/AdoptBanner.svelte';
   import DetailsPanel from '$components/workspace/DetailsPanel.svelte';
   import Lightbox from '$components/ui/Lightbox.svelte';
   import FilterBar from '$components/workspace/FilterBar.svelte';
@@ -125,6 +126,9 @@
     <WorkspaceRail {ws} />
     <div class="min-w-0 flex-1 overflow-auto" data-testid="workspace-view">
       {#if !ws.viewPending}
+        {#if ['clusters', 'gallery', 'detections'].includes(ws.view)}
+          <AdoptBanner />
+        {/if}
         {#key entry.id}
           <View {ws} />
         {/key}

@@ -1,5 +1,6 @@
 <script lang="ts">
   import Icon from '$components/ui/Icon.svelte';
+  import Popover from '$components/ui/Popover.svelte';
   /**
    * The shared item-filter bar (OpenProcessor v0.4.0): class (by name) and
    * not-class, confidence and area bands, largest-N per image, origin,
@@ -7,7 +8,7 @@
    * open-vocabulary set and prompt. Every control is a `ServedFilterField`
    * drawn from a spec; a route's served `filter_specs` entry for a param
    * replaces the local spec. A control the route does not honour is absent
-   * (`visible`), never disabled. Nothing is range-checked here: a malformed
+   * (`visible`), never disabled. The rarely used controls sit in a "More filters" popover. Nothing is range-checked here: a malformed
    * band is the server's 400, shown under the bar through `error`.
    */
   import ServedFilterField from './ServedFilterField.svelte';
@@ -65,6 +66,7 @@
     'has_location',
     'viz_box',
     'import_id',
+    'audit_outcome',
   ]);
   const chips = $derived(
     filter.chips().filter((c) => CHIP_PARAMS.has(c.param) && visible(c.param)),
@@ -82,20 +84,29 @@
   {/each}
 
   {#if moreControls.length > 0}
-    <details
-      class="shrink-0 open:basis-full"
-      data-testid="item-filter-more"
-      open={moreActive > 0}
-    >
-      <summary class="chip cursor-pointer list-none text-fg-2">
-        More filters{moreActive > 0 ? ` (${moreActive})` : ''}
-      </summary>
-      <div class="mt-2 flex flex-wrap items-center gap-3 text-meta">
-        {#each moreControls as spec (spec.param)}
-          <ServedFilterField {spec} value={filter.valueOf(spec.param)} onchange={set} />
-        {/each}
-      </div>
-    </details>
+    <!-- A popover over the view, so opening it moves neither the grid nor the map. -->
+    <div class="shrink-0" data-testid="item-filter-more">
+      <Popover
+        label="More filters"
+        panelClass="w-[36rem] max-h-[70vh] overflow-y-auto p-3"
+      >
+        {#snippet trigger({ open, attrs })}
+          <button
+            type="button"
+            class="chip {moreActive > 0 || open ? 'chip-accent' : 'text-fg-2'}"
+            data-testid="item-filter-more-toggle"
+            {...attrs}
+          >
+            More filters{moreActive > 0 ? ` (${moreActive})` : ''}
+          </button>
+        {/snippet}
+        <div class="flex flex-wrap items-center gap-3 text-meta">
+          {#each moreControls as spec (spec.param)}
+            <ServedFilterField {spec} value={filter.valueOf(spec.param)} onchange={set} />
+          {/each}
+        </div>
+      </Popover>
+    </div>
   {/if}
 
   {#each chips as chip, i (`${chip.param}:${i}`)}

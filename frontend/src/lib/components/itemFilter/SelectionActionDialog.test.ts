@@ -144,7 +144,7 @@ describe('SelectionActionDialog', () => {
   it('a queued label shows the served state and the jobs ahead, never a bare "Working…"', async () => {
     vi.mocked(bulkLabelSelection)
       .mockResolvedValueOnce({ dry_run: true, selected: 24 })
-      .mockResolvedValueOnce({ op_id: 'op1', job_id: 'job1' });
+      .mockResolvedValueOnce({ op_id: 'op1', job_id: 'job1' } as never);
     vi.mocked(getJob).mockResolvedValue({
       id: 'job1',
       kind: 'label_op',
@@ -171,7 +171,7 @@ describe('SelectionActionDialog', () => {
   it('Run in background closes the dialog, keeps the job followed and toasts the end with Undo', async () => {
     vi.mocked(bulkLabelSelection)
       .mockResolvedValueOnce({ dry_run: true, selected: 24 })
-      .mockResolvedValueOnce({ op_id: 'op1', job_id: 'job1' });
+      .mockResolvedValueOnce({ op_id: 'op1', job_id: 'job1' } as never);
     vi.mocked(getJob)
       .mockResolvedValueOnce({
         id: 'job1',

@@ -1,21 +1,16 @@
 <script lang="ts">
   import type { ClusterListController } from '$lib/clusters/clusterListController.svelte';
   import type { ClusterSearchModes } from '$lib/clusters/clusterSearchModes.svelte';
-  import type { SlotInventory } from '$lib/clusters/slotInventory.svelte';
   import type { SlotGalleryController } from '$lib/slots/slotGalleryController.svelte';
 
   let {
     list,
     modes,
-    slotInventory,
-    classFilter,
     matchingModeActive,
     slotGallery,
   }: {
     list: ClusterListController;
     modes: ClusterSearchModes;
-    slotInventory: SlotInventory;
-    classFilter: number | null;
     matchingModeActive: boolean;
     slotGallery: SlotGalleryController | null;
   } = $props();
@@ -35,14 +30,15 @@
     <span class="text-meta text-fg-2">matching items</span>
   {:else if modes.ignoredModeActive}
     <span class="text-meta text-fg-3 tabular-nums" data-testid="clusters-footer-count">
-      {modes.ignoredItems.length} / {modes.ignoredTotal} ignored crops
+      {modes.ignoredItems.length.toLocaleString()} of {modes.ignoredTotal.toLocaleString()}
+      ignored crops
     </span>
     <span class="text-meta text-fg-2">
       {modes.ignoredLoading ? 'loading…' : 'ignored bucket'}
     </span>
   {:else if slotGallery}
     <span class="text-meta text-fg-3 tabular-nums">
-      {slotGallery.pager.items.length} / {slotGallery.pager.total}
+      {slotGallery.pager.items.length.toLocaleString()} of {slotGallery.pager.total.toLocaleString()}
     </span>
     <span class="text-meta text-fg-2">
       {#if slotGallery.pager.loadingMore}loading more…{:else if slotGallery.pager.hasMore}scroll
@@ -52,10 +48,7 @@
     <!-- A failed load has no honest count; the grid shows the error. -->
   {:else}
     <span class="text-meta text-fg-3 tabular-nums" data-testid="clusters-footer-count">
-      {list.gridItems.length} / {list.total +
-        (classFilter == null && !list.filterActive
-          ? slotInventory.slotInventoryCards.length
-          : 0)}
+      {list.gridItems.length.toLocaleString()} of {list.total.toLocaleString()}
     </span>
     <span class="text-meta text-fg-2">
       {#if list.repsLoading}loading more…{:else if list.hasMoreCards}scroll for more{:else}all

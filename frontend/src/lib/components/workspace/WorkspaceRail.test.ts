@@ -43,7 +43,11 @@ const EMPTY_STATE = {
 beforeEach(() => {
   reviewTabsVocabularyStore.resetForProjectChange();
   vi.mocked(getReviewTabs).mockReset();
-  vi.mocked(getReviewTabs).mockResolvedValue({ tabs: TABS, empty_state: EMPTY_STATE });
+  vi.mocked(getReviewTabs).mockResolvedValue({
+    tabs: TABS,
+    empty_state: EMPTY_STATE,
+    default_tab: null,
+  });
   reviewTabsVocabularyStore.list = TABS;
   reviewTabsVocabularyStore.loaded = true;
   classesStore.classes = [
@@ -98,6 +102,12 @@ describe('WorkspaceRail', () => {
       block_below: 10,
       warn_below: 30,
     };
+    flushSync();
+    // The legend sits behind an info button next to the heading, in a popover.
+    expect(target.querySelector('[data-testid="class-count-legend"]')).toBeNull();
+    target
+      .querySelector<HTMLElement>('[data-testid="class-count-legend-toggle"]')!
+      .click();
     flushSync();
     const legend = target.querySelector('[data-testid="class-count-legend"]')!;
     const text = legend.textContent!.replace(/\s+/g, ' ');

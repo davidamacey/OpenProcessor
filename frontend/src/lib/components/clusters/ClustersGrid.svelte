@@ -2,6 +2,7 @@
   import EmptyState from '$components/ui/EmptyState.svelte';
   import Icon from '$components/ui/Icon.svelte';
   import EmptyNextSteps from '$components/workspace/EmptyNextSteps.svelte';
+  import { gridArrowKeys } from '$lib/actions/gridArrowKeys';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import ClusterBadge from '$lib/components/ClusterBadge.svelte';
   import ClusterRunPanel from '$lib/components/clusters/ClusterRunPanel.svelte';
@@ -221,7 +222,7 @@
     <!-- Slot gallery: SlotGallery.svelte, backed by
          slotGalleryController.svelte.ts. -->
     <SlotGallery gallery={slotGallery} />
-  {:else if list.clusterPager.loading && list.gridItems.length === 0}
+  {:else if list.clusterPager.loading && list.clusterPager.items.length === 0}
     <p class="text-body text-fg-3" role="status">Loading clusters…</p>
   {:else if list.clusterPager.error}
     <div class="text-body text-danger-text" role="alert" data-testid="clusters-error">
@@ -234,17 +235,43 @@
         Retry
       </button>
     </div>
-  {:else if list.gridItems.length === 0}
+  {:else if list.clusterPager.items.length === 0}
     {#if list.filterActive}
-      <div class="text-body text-fg-2" data-testid="clusters-filtered-empty">
-        <p>No clusters match these filters.</p>
-        <button
-          type="button"
-          class="btn-sm mt-2 border border-line-strong bg-surface-1 text-fg-1 hover:bg-surface-2"
-          onclick={() => list.clearFilter()}
+      <div data-testid="clusters-filtered-empty">
+        <EmptyState
+          icon="funnel"
+          title="No clusters match these filters"
+          description="Nothing in the serving partition passes the refinements you set."
         >
-          Clear filters
-        </button>
+          {#snippet action()}
+            <button
+              type="button"
+              class="btn btn-primary"
+              onclick={() => list.clearFilter()}
+            >
+              Clear filters
+            </button>
+          {/snippet}
+        </EmptyState>
+      </div>
+    {:else if list.emptyReason === 'pending_activation'}
+      <div data-testid="clusters-empty">
+        <EmptyState
+          icon="layers-2"
+          title="Clusters are ready to activate"
+          description={[
+            list.emptyMessage,
+            list.pendingPartition
+              ? `${list.pendingPartition.clusters.toLocaleString()} clusters over ${list.pendingPartition.items.toLocaleString()} items.`
+              : null,
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
+          {#snippet action()}
+            <ClusterRunPanel primary={false} onserving={() => void list.loadFirst()} />
+          {/snippet}
+        </EmptyState>
       </div>
     {:else}
       <div data-testid="clusters-empty">
@@ -255,7 +282,7 @@
         >
           {#snippet action()}
             <!-- One way forward: the run panel when a run is what is missing, else the served loop. -->
-            {#if list.emptyReason === 'no_partition' || list.emptyReason === 'pending_activation'}
+            {#if list.emptyReason === 'no_partition'}
               <ClusterRunPanel onserving={() => void list.loadFirst()} />
             {:else}
               <EmptyNextSteps />
@@ -275,9 +302,17 @@
         Narrow the filters to see the rest.
       </p>
     {/if}
-    <ul class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {#each list.gridItems as c (c.isSlotCard ? `slot-${c.uid}` : c.uid)}
-        <ClusterGridCard {c} flagVocabulary={list.flagVocabulary} />
+    <ul
+      class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+      data-testid="cluster-grid"
+      use:gridArrowKeys
+    >
+      {#each list.gridItems as c, i (c.uid)}
+        <ClusterGridCard
+          {c}
+          flagVocabulary={list.flagVocabulary}
+          tabindex={i === 0 ? 0 : -1}
+        />
       {/each}
     </ul>
     <!-- Sentinel MUST live inside the scroll container so the IntersectionObserver

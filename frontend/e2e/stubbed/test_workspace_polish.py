@@ -131,6 +131,7 @@ def test_diverse_sample_selects_the_served_pick(stub, page, app_url):
     page.set_viewport_size({'width': 1600, 'height': 900})
     page.goto(f'{app_url}/p/default/workspace?view=detections&class_name=widget')
     expect(page.get_by_test_id('detections-total')).to_have_text('40', timeout=ACTION_TIMEOUT_MS)
+    page.get_by_test_id('view-more').click()
     page.get_by_test_id('diverse-sample-open').click()
     page.get_by_test_id('diverse-sample-k').fill('2')
     shot(page, 'diverse-sample-open', widths=(1600, 430))

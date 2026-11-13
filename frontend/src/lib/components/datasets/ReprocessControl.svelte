@@ -34,6 +34,8 @@
     buttonClass?: string;
     /** The open button's text (default "Reprocess…"). */
     buttonLabel?: string;
+    /** No button: a menu item opens the dialog through `openFlow`. */
+    hideButton?: boolean;
   }
 
   let {
@@ -43,6 +45,7 @@
     disabled = false,
     buttonClass = 'btn btn-sm',
     buttonLabel = 'Reprocess…',
+    hideButton = false,
   }: Props = $props();
 
   const available = $derived(datasetsAvailability.available === true);
@@ -62,6 +65,18 @@
     flow = new ReprocessFlow(target);
   }
 
+  /** Opens the dialog; true when the backend serves reprocessing. */
+  export function openFlow(): boolean {
+    if (!available) return false;
+    open();
+    return true;
+  }
+
+  /** Whether the backend serves reprocessing (a menu item is offered only then). */
+  export function isAvailable(): boolean {
+    return available;
+  }
+
   function close(): void {
     flow?.destroy();
     flow = null;
@@ -79,7 +94,7 @@
   }
 </script>
 
-{#if available}
+{#if available && !hideButton}
   <button
     type="button"
     class={buttonClass}

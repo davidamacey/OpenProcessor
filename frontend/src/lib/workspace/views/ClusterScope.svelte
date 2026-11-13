@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Icon from '$components/ui/Icon.svelte';
   /**
    * One open cluster inside the Clusters view: its crops, the facet chips and
    * the bulk bar. The cluster is `ws.url.scope`; the filter, queue and view
@@ -7,12 +6,11 @@
    */
   import CropDetailModal from '$components/CropDetailModal.svelte';
   import ReprocessControl from '$components/datasets/ReprocessControl.svelte';
+  import type { MenuItem } from '$components/ui/Menu.svelte';
   import BulkBar from '$components/workspace/BulkBar.svelte';
-  import ClusterDetailFilters from '$lib/components/clusters/ClusterDetailFilters.svelte';
-  import ClusterFacetBar from '$lib/components/clusters/ClusterFacetBar.svelte';
+  import ClusterScopeHeader from '$lib/components/clusters/ClusterScopeHeader.svelte';
   import ClusterDetailGrid from '$lib/components/clusters/ClusterDetailGrid.svelte';
   import MoveClusterPicker from '$lib/components/clusters/MoveClusterPicker.svelte';
-  import { displayNoText } from '$lib/clusters/clusterCardText';
   import { createClusterDetailActions } from '$lib/clusters/clusterDetailActions.svelte';
   import { createClusterDetailController } from '$lib/clusters/clusterDetailController.svelte';
   import { createClusterDetailLive } from '$lib/clusters/clusterDetailLive.svelte';
@@ -74,24 +72,56 @@
   );
 
   // `,` and `.` step through the served cluster list.
-  async function step(by: 1 | -1): Promise<void> {
+  async function stepAsync(by: 1 | -1): Promise<void> {
     const uids = (await getClusters({ per_cluster: 0 })).items.map((c) => c.uid);
     const at = uids.indexOf(view.clusterUid);
     const next = uids[at + by];
     if (at >= 0 && next) ws.openCluster(next);
   }
+  const step = (by: 1 | -1): void => void stepAsync(by);
+
+  // After a whole-cluster label the next cluster opens, once: when the write is queued (the
+  // dialog closed) or, when it was not detached, when it has landed.
+  function advance(): void {
+    if (!ws.labelThenNext) return;
+    ws.labelThenNext = false;
+    if (!ws.openNextAfterLabel) return;
+    ws.clearSelection();
+    step(1);
+  }
+  function onLabelWritten(): void {
+    void view.loadFirst();
+    advance();
+  }
+
+  let reprocess = $state<ReturnType<typeof ReprocessControl> | null>(null);
+  const scopeMore = $derived<MenuItem[]>([
+    {
+      id: 'flag',
+      label: 'Flag selected as a new class',
+      disabled: view.sel.size === 0,
+      onselect: () => void actions.flagSelectedForNewClass(),
+    },
+    ...(reprocess?.isAvailable() === true
+      ? [
+          {
+            id: 'reprocess',
+            label: 'Reprocess…',
+            disabled: view.sel.size === 0,
+            onselect: () => void reprocess?.openFlow(),
+          },
+        ]
+      : []),
+    {
+      id: 'accept-vlm',
+      label: "Accept the VLM's suggestions on this page",
+      onselect: () => actions.controller.acceptAllVlmOnPage(),
+    },
+  ]);
   $effect(() => {
     const offs = [
-      keyboardStore.registerAction(
-        'workspace.scope_prev',
-        () => void step(-1),
-        'workspace',
-      ),
-      keyboardStore.registerAction(
-        'workspace.scope_next',
-        () => void step(1),
-        'workspace',
-      ),
+      keyboardStore.registerAction('workspace.scope_prev', () => step(-1), 'workspace'),
+      keyboardStore.registerAction('workspace.scope_next', () => step(1), 'workspace'),
       keyboardStore.registerAction(
         'workspace.label_cluster',
         () => ws.startLabelCluster(),
@@ -112,91 +142,15 @@
 </script>
 
 <div class="flex h-full flex-col">
-  <div class="flex flex-wrap items-center gap-3 border-b border-line px-4 py-2.5">
-    <button
-      type="button"
-      class="btn shrink-0"
-      title="Back to all clusters"
-      data-testid="scope-back"
-      onclick={() => ws.openCluster(null)}
-    >
-      <Icon name="arrow-left" size={14} class="mr-1 -mt-0.5 inline-block" />All clusters
-    </button>
-    <h1
-      class="flex items-baseline gap-2 text-title font-semibold"
-      data-testid="scope-title"
-    >
-      {#if view.clusterName}
-        <span class="capitalize text-fg-1">{view.clusterName}</span>
-        <span class="text-body font-normal text-fg-3" title={view.clusterUid}
-          >{displayNoText(view.cluster ?? {})}</span
-        >
-      {:else}
-        <span class="text-fg-1" title={view.clusterUid}
-          >Cluster {displayNoText(view.cluster ?? {})}</span
-        >
-        {#if view.cluster?.is_unlabeled}
-          <span class="text-body font-normal text-warn-text/80">unlabeled</span>
-        {/if}
-      {/if}
-    </h1>
-    {#if view.cardError}
-      <span class="text-meta text-warn-text" data-testid="cluster-card-error"
-        >Cluster details unavailable: {view.cardError}</span
-      >
-    {/if}
-  </div>
-  <BulkBar
+  <ClusterScopeHeader
     {ws}
-    onapplied={() => {
-      void view.loadFirst();
-      if (!ws.labelThenNext) return;
-      ws.labelThenNext = false;
-      ws.clearSelection();
-      void step(1);
-    }}
-  >
-    {#snippet extra()}
-      <button
-        class="btn"
-        type="button"
-        onclick={() => void actions.flagSelectedForNewClass()}
-        disabled={view.sel.size === 0}
-        title="{actions.kg(
-          'cluster.flag_new_class',
-        )} — flag selected as needing a new class"
-      >
-        Flag
-      </button>
-      <ReprocessControl
-        target={{ kind: 'crops', cropIds: [...view.sel.ids] }}
-        disabled={view.sel.size === 0}
-        buttonClass="btn"
-        onapplied={() => void view.loadFirst()}
-      />
-      <button
-        class="btn"
-        type="button"
-        onclick={actions.controller.acceptAllVlmOnPage}
-        title="{actions.kg(
-          'cluster.accept_all_vlm',
-        )} — accept all VLM suggestions on this page"
-      >
-        Accept VLM
-      </button>
-      <button
-        class="btn"
-        type="button"
-        onclick={clusterAssist.openAssist}
-        title="Ask the VLM about the selected crops, this cluster, or a representative sample of it"
-        data-testid="assist-open"
-      >
-        Assist…
-      </button>
-    {/snippet}
-  </BulkBar>
-  <ClusterDetailFilters {view} />
-  <ClusterFacetBar {view} />
+    {view}
+    {clusterAssist}
+    {step}
+    showPrimary={view.sel.size === 0}
+    more={scopeMore}
+  />
+  <BulkBar {ws} more={scopeMore} onapplied={onLabelWritten} ondetached={advance} />
   {#if clusterAssist.loadError}
     <p
       class="border-b border-line px-4 py-1.5 text-meta text-warn-text"
@@ -220,6 +174,13 @@
   {/if}
   <ClusterDetailGrid {view} {actions} {live} ondetail={(c) => (detailCrop = c)} />
 </div>
+
+<ReprocessControl
+  bind:this={reprocess}
+  hideButton
+  target={{ kind: 'crops', cropIds: [...view.sel.ids] }}
+  onapplied={() => void view.loadFirst()}
+/>
 
 <MoveClusterPicker {view} {actions} />
 

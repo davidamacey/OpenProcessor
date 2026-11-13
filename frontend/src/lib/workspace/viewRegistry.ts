@@ -24,27 +24,36 @@ export interface ViewEntry {
   component: Component<{ ws: WorkspaceController }>;
   /** The keymap context the view's keys are registered under. */
   keyContext: 'cluster' | 'table' | 'map' | 'review';
+  /** Shown after a divider: the views the labelling loop does not need every minute. */
+  advanced?: boolean;
   /** Absent means always available; the Map view needs a project that serves a map and the
    *  Embedding view a deployment that serves the projection. */
   available?: (ws: WorkspaceController) => boolean;
 }
 
 export const VIEWS: readonly ViewEntry[] = [
-  { id: 'gallery', label: 'Gallery', component: GalleryView, keyContext: 'cluster' },
   { id: 'clusters', label: 'Clusters', component: ClustersView, keyContext: 'cluster' },
+  { id: 'gallery', label: 'Gallery', component: GalleryView, keyContext: 'cluster' },
   {
     id: 'detections',
     label: 'Detections',
     component: DetectionsView,
     keyContext: 'cluster',
   },
-  { id: 'table', label: 'Table', component: TableView, keyContext: 'table' },
   { id: 'review', label: 'Review', component: ReviewView, keyContext: 'review' },
+  {
+    id: 'table',
+    label: 'Table',
+    component: TableView,
+    keyContext: 'table',
+    advanced: true,
+  },
   {
     id: 'map',
     label: 'Map',
     component: MapView,
     keyContext: 'map',
+    advanced: true,
     available: () => mapAvailabilityStore.availableFor(page.params.project),
   },
   {
@@ -52,7 +61,9 @@ export const VIEWS: readonly ViewEntry[] = [
     label: 'Embedding',
     component: EmbeddingView,
     keyContext: 'cluster',
-    // The overlay is offered only where `/methods` reports the projection.
+    advanced: true,
+    // The overlay is offered only where `/methods` reports the projection; the capability list
+    // is reactive, so the tab appears the moment it loads.
     available: () => isEmbeddingVizAvailable(strategiesStore.methods.overlays),
   },
 ];

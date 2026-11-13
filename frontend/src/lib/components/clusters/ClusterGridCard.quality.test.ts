@@ -1,7 +1,7 @@
 /**
- * The card shows the served quality fields: the detector's top class with its
- * share and mean confidence, the validation state, the review count and the
- * flags (served label as the chip, served description as the tooltip).
+ * The card shows the served quality fields sparingly: the labelled share and the detector's top
+ * class on one line, at most one status chip (served flag label, served description as the
+ * tooltip), and the rest in the hover text.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
@@ -58,40 +58,57 @@ const q = (root: HTMLElement, id: string) =>
   root.querySelector(`[data-testid="${id}"]`) as HTMLElement | null;
 
 describe('ClusterGridCard quality fields', () => {
-  it('shows the detector top class with its share and mean confidence', () => {
-    const el = q(render(), 'cluster-detector')!;
-    expect(el.textContent).toContain('widget_x');
-    expect(el.textContent).toContain('62%');
-    expect(el.textContent).toContain('0.81');
-  });
-
-  it('shows the validation state and the review count', () => {
-    const root = render();
-    expect(q(root, 'cluster-validation')!.textContent).toMatch(/partly validated/);
-    expect(q(root, 'cluster-needs-review')!.textContent).toContain('7');
-    expect(q(root, 'cluster-needs-review')!.getAttribute('title')).toContain(
-      'outliers: 3',
+  it('shows the labelled share and the detector top class on one meta line', () => {
+    const root = render({
+      labelled_share: 1,
+      display_name: 'cup',
+      display_name_kind: 'class',
+    });
+    expect(q(root, 'cluster-meta')!.textContent).toBe(
+      '100% labelled \u00b7 detector: widget_x 62%',
     );
   });
 
-  it('renders each flag with its served label and description', () => {
-    const flags = [...render().querySelectorAll('[data-testid="cluster-flag"]')];
-    expect(flags.map((f) => f.textContent?.trim())).toEqual([
-      'Mixed detector classes',
-      'Unvalidated',
-    ]);
-    expect(flags[0]!.getAttribute('title')).toBe('The detector gave different classes.');
+  it('shows one status chip, the review count first, in a warn tone', () => {
+    const root = render();
+    const chips = root.querySelectorAll('[data-testid="cluster-status"]');
+    expect(chips).toHaveLength(1);
+    expect(chips[0]!.textContent).toContain('7 to review');
+    expect(chips[0]!.className).toContain('chip-warn');
+    expect(chips[0]!.getAttribute('title')).toContain('outliers: 3');
   });
 
-  it('omits the detector line, the review chip and flags when none are served', () => {
+  it('falls to the served mixed-classes flag, then to unvalidated in an info tone', () => {
+    const mixed = q(render({ needs_review_count: 0 }), 'cluster-status')!;
+    expect(mixed.textContent?.trim()).toBe('Mixed detector classes');
+    expect(mixed.getAttribute('title')).toBe('The detector gave different classes.');
+    if (instance) unmount(instance);
+    target.remove();
+    const un = q(
+      render({ needs_review_count: 0, flags: [], validation_state: 'none' }),
+      'cluster-status',
+    )!;
+    expect(un.textContent?.trim()).toBe('Unvalidated');
+    expect(un.className).toContain('chip-info');
+  });
+
+  it('keeps agreement and detector confidence in the hover text, not on the card', () => {
+    const root = render({ detector_conf_mean: 0.814, validated_count: 4 });
+    const btn = root.querySelector('button')!;
+    expect(btn.getAttribute('title')).toContain('agreement 75%');
+    expect(btn.getAttribute('title')).toContain('detector confidence 0.81');
+    expect(btn.getAttribute('title')).toContain('4 of 40 validated');
+    expect(root.textContent).not.toContain('agreement');
+    expect(q(root, 'cluster-agreement')).toBeNull();
+  });
+
+  it('shows no status when nothing needs attention', () => {
     const root = render({
-      detector_top_class: null,
       needs_review_count: 0,
       flags: [],
+      validation_state: 'complete',
     });
-    expect(q(root, 'cluster-detector')).toBeNull();
-    expect(q(root, 'cluster-needs-review')).toBeNull();
-    expect(root.querySelector('[data-testid="cluster-flag"]')).toBeNull();
+    expect(q(root, 'cluster-status')).toBeNull();
   });
 
   it('nests no interactive control inside the card button', () => {

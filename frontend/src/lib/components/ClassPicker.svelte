@@ -91,6 +91,12 @@
             onclick={() => picker.pick(cls)}
             onmouseenter={() => (picker.index = i)}
           >
+            {#if i < picker.recentCount}
+              <Kbd
+                combo={keymapStore.combo(`class_picker.recent_${i + 1}`)}
+                class="text-caption text-fg-2"
+              />
+            {/if}
             {#if cls.hotkey_letter}
               <Kbd combo={cls.hotkey_letter} class="text-caption text-accent-text" />
             {/if}
