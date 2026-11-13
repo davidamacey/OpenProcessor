@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from fixtures.wire import make_item
 from harness.constants import ACTION_TIMEOUT_MS, review_url
+from test_open_vocab import png
 
 
 CLASSES = [
@@ -103,17 +104,7 @@ def test_review_actions_stay_within_1280x720_viewport(stub, page, app_url):
 def _stub_review(stub) -> None:
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
     stub.on('GET', r'/methods(\?|$)', METHODS)
-    stub.on(
-        'GET',
-        r'/images/[^/]+/file$',
-        lambda req, m: (
-            200,
-            {
-                'image': {'path': '/nas/img-0.jpg', 'width': 640, 'height': 480},
-                'items': [review_item(0)],
-            },
-        ),
-    )
+    stub.on('GET', r'/images/[^/]+/file$', (200, png(640, 480), 'image/png'))
     stub.on(
         'GET',
         r'/review/(?!tabs)',
@@ -144,14 +135,15 @@ def test_review_meta_pane_not_squeezed_at_800(stub, page, app_url):
 
 def test_review_source_image_top_aligned(stub, page, app_url):
     """V-3: on a tall viewport the source image is top-aligned in its pane,
-    not centered mid-way down an empty panel."""
+    not centered mid-way down an empty panel. The panel now ends under its image, so the
+    image box is the tallest box in it (~340px), not a 400px+ stretched one."""
     page.set_viewport_size({'width': 1600, 'height': 2400})
     _stub_review(stub)
     page.goto(review_url(app_url, 'to_label'))
     page.get_by_role('button', name='Confirm', exact=True).wait_for(timeout=ACTION_TIMEOUT_MS)
     panel = page.get_by_test_id('review-source-panel')
     aligns = panel.evaluate(
-        "el => [...el.querySelectorAll('div')].filter(d => d.clientHeight > 400)"
+        "el => [...el.querySelectorAll('div')].filter(d => d.clientHeight > 200)"
         '.map(d => getComputedStyle(d).alignItems)'
     )
     assert aligns, 'no tall box inside the source panel'
