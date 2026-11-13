@@ -39,7 +39,7 @@
       {#if linkable}
         <a
           class="text-accent-text underline hover:text-accent-text"
-          href={resolve(projectHref(`/datasets/imports/${encodeURIComponent(id)}`))}
+          href={resolve(projectHref(`/ingest/imports/${encodeURIComponent(id)}`))}
           ><code>{id}</code></a
         >
       {:else}

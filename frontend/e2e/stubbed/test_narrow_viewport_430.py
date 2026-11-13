@@ -81,9 +81,7 @@ ROUTES: list[tuple[str, str]] = [
     ('/settings/open-vocab', 'h1'),
     ('/settings/prompt-packs', 'h1'),
     ('/settings/region-profiles', 'h1'),
-    ('/datasets', 'h1'),
-    ('/datasets/import', 'h1'),
-    ('/datasets/imports', 'h1'),
+    ('/ingest?tab=import', 'h1'),
 ]
 GLOBAL_ROUTES: list[tuple[str, str]] = [
     ('/projects', 'h1'),

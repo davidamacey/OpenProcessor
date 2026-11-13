@@ -33,7 +33,6 @@
   let identifierPrefixTouched = $state(false);
   let skipLookup = $state(false);
   let concurrency = $state(DEFAULT_UPLOAD_CONCURRENCY);
-  let advancedOpen = $state(false);
   let activeTab = $state<IngestResultKind>('failed');
   // BA-7: the Failed tab's error_kind filter chip. `null` = no filter
   // (every failed result shows). Only meaningful on the 'failed' tab.
@@ -139,52 +138,6 @@
 </script>
 
 <div class="space-y-3">
-  <div class="flex flex-wrap items-end gap-3">
-    <label class="text-meta text-fg-2">
-      Source tag
-      <input class="input input-sm block" bind:value={source} disabled={isRunning} />
-    </label>
-    <label class="flex items-center gap-1.5 text-meta text-fg-2">
-      <input type="checkbox" bind:checked={skipLookup} disabled={isRunning} />
-      Skip the already-indexed check
-    </label>
-    <button
-      class="btn btn-sm"
-      type="button"
-      onclick={() => (advancedOpen = !advancedOpen)}
-    >
-      Advanced
-    </button>
-  </div>
-
-  {#if advancedOpen}
-    <div class="flex flex-wrap items-end gap-3 rounded border border-line p-3">
-      <label class="text-meta text-fg-2">
-        Identifier prefix
-        <input
-          class="input input-sm block"
-          value={identifierPrefix}
-          disabled={isRunning}
-          oninput={(e) => {
-            identifierPrefixTouched = true;
-            identifierPrefix = (e.currentTarget as HTMLInputElement).value;
-          }}
-        />
-      </label>
-      <label class="text-meta text-fg-2">
-        Concurrency
-        <input
-          class="input input-sm block w-16"
-          type="number"
-          min="1"
-          max="4"
-          bind:value={concurrency}
-          disabled={isRunning}
-        />
-      </label>
-    </div>
-  {/if}
-
   {#if files.length >= LARGE_SELECTION_HINT}
     <p class="text-meta text-warn-text">
       Large selection ({files.length} files) — the command-line uploader (<code
@@ -220,6 +173,43 @@
       </button>
     {/if}
   </div>
+
+  <details class="text-meta" data-testid="ingest-advanced">
+    <summary class="cursor-pointer text-fg-2">Advanced</summary>
+    <div class="mt-2 flex flex-wrap items-end gap-3 rounded border border-line p-3">
+      <label class="text-meta text-fg-2">
+        Source tag
+        <input class="input input-sm block" bind:value={source} disabled={isRunning} />
+      </label>
+      <label class="flex items-center gap-1.5 text-meta text-fg-2">
+        <input type="checkbox" bind:checked={skipLookup} disabled={isRunning} />
+        Skip the already-indexed check
+      </label>
+      <label class="text-meta text-fg-2">
+        Identifier prefix
+        <input
+          class="input input-sm block"
+          value={identifierPrefix}
+          disabled={isRunning}
+          oninput={(e) => {
+            identifierPrefixTouched = true;
+            identifierPrefix = (e.currentTarget as HTMLInputElement).value;
+          }}
+        />
+      </label>
+      <label class="text-meta text-fg-2">
+        Concurrency
+        <input
+          class="input input-sm block w-16"
+          type="number"
+          min="1"
+          max="4"
+          bind:value={concurrency}
+          disabled={isRunning}
+        />
+      </label>
+    </div>
+  </details>
 
   {#if run.pauseReason}
     <p class="text-meta text-warn-text">Paused — {run.pauseReason}</p>

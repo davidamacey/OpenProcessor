@@ -1,10 +1,7 @@
 <script lang="ts">
-  import PageHeader from '$components/ui/PageHeader.svelte';
-  import PageShell from '$components/ui/PageShell.svelte';
   /**
-   * `/datasets/imports/[id]` — one import job (any_domain_plan.md §7.12
-   * item 2; w10 import reprocess UI plan §3).
-   * Everything shown is the served job; `ImportJob` follows it.
+   * `/ingest/imports/[id]` — one import job, rendered inside the Ingest layout with the Import
+   * tab current. Everything shown is the served job; `ImportJob` follows it.
    */
   import { page } from '$app/state';
   import { resolve } from '$app/paths';
@@ -14,6 +11,7 @@
   import { datasetsAvailability } from '$lib/datasets/datasetsAvailability.svelte';
   import { createImportJob, PAGE_SIZE } from '$lib/datasets/importJobController.svelte';
   import { projectHref } from '$lib/projectPaths';
+  import { setCrumbName } from '$stores/crumbName.svelte';
   import type { DatasetImportReport, NextStep } from '$lib/types_import';
 
   const importId = $derived(page.params.id ?? '');
@@ -24,6 +22,12 @@
     const j = job;
     j.start();
     return () => j.stop();
+  });
+
+  // The breadcrumb's last crumb is the import's name, not its id.
+  $effect(() => {
+    const j = job.job;
+    if (j) setCrumbName(page.url.pathname, j.name ?? j.import_id);
   });
 
   let confirm = $state<'cancel' | 'resume' | 'undo' | null>(null);
@@ -80,15 +84,11 @@
     total > 0 ? Math.min(100, (done / total) * 100) : 0;
 </script>
 
-<PageShell class="space-y-6">
-  <PageHeader title="Import {importId}">
-    {#snippet actions()}
-      <a
-        class="text-meta text-accent-text hover:underline"
-        href={resolve(projectHref('/datasets/imports'))}>All imports</a
-      >
-    {/snippet}
-  </PageHeader>
+<div class="mt-4 space-y-6">
+  <a
+    class="inline-flex items-center gap-1 text-meta text-accent-text hover:underline"
+    href={resolve(projectHref('/ingest?tab=import'))}>Import dataset</a
+  >
 
   <DatasetsGate>
     {#snippet children(formats)}
@@ -494,7 +494,7 @@
       {/if}
     {/snippet}
   </DatasetsGate>
-</PageShell>
+</div>
 
 {#snippet Pager({
   page: p,

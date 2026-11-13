@@ -401,7 +401,7 @@ def test_import_with_mapping_starts_and_follows_the_job(stub, page, app_url):
     serve_ingest_page(stub)
 
     page.goto(f'{app_url}/p/default/ingest')
-    link = page.get_by_test_id('ingest-dataset-import-link')
+    link = page.locator('[data-tab="import"]')
     link.wait_for(timeout=ACTION_TIMEOUT_MS)
     link.click()
 
@@ -443,7 +443,7 @@ def test_import_with_mapping_starts_and_follows_the_job(stub, page, app_url):
     }, body
     assert all('project' not in p for p in previews)
 
-    page.wait_for_url(f'**/p/default/datasets/imports/{IMPORT_ID}', timeout=ACTION_TIMEOUT_MS)
+    page.wait_for_url(f'**/p/default/ingest/imports/{IMPORT_ID}', timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id('job-status')).to_have_text('Done', timeout=ACTION_TIMEOUT_MS)
 
     errors = [c for c in stub.console_errors if c.startswith('pageerror')]
@@ -452,9 +452,10 @@ def test_import_with_mapping_starts_and_follows_the_job(stub, page, app_url):
 
 def test_job_progresses_to_done(stub, page, app_url):
     serve_import_page(stub)
+    serve_ingest_page(stub)
     reads = serve_job_sequence(stub, [job(), job(), completed_job()])
 
-    page.goto(f'{app_url}/p/default/datasets/imports/{IMPORT_ID}')
+    page.goto(f'{app_url}/p/default/ingest/imports/{IMPORT_ID}')
     status = page.get_by_test_id('job-status')
     expect(status).to_have_text('Importing', timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id('job-progress')).to_contain_text('64 / 96')
@@ -476,6 +477,7 @@ def test_job_progresses_to_done(stub, page, app_url):
 
 def test_failed_job_shows_its_served_error(stub, page, app_url):
     serve_import_page(stub)
+    serve_ingest_page(stub)
     failed = job(
         status='failed',
         poll_after_s=None,
@@ -483,7 +485,7 @@ def test_failed_job_shows_its_served_error(stub, page, app_url):
     )
     serve_job_sequence(stub, [failed])
 
-    page.goto(f'{app_url}/p/default/datasets/imports/{IMPORT_ID}')
+    page.goto(f'{app_url}/p/default/ingest/imports/{IMPORT_ID}')
     expect(page.get_by_test_id('job-status')).to_have_text('Failed', timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id('job-error')).to_have_text(
         '6 consecutive chunks failed: the items index is unavailable.'
@@ -606,9 +608,9 @@ def test_feature_absent_when_formats_404(stub, page, app_url):
     with page.expect_response(lambda r: r.url.endswith('/datasets/formats')):
         page.goto(f'{app_url}/p/default/ingest')
     page.get_by_role('heading', name='Ingest', exact=True).wait_for(timeout=ACTION_TIMEOUT_MS)
-    expect(page.get_by_test_id('ingest-dataset-import-link')).to_have_count(0)
+    expect(page.locator('[data-tab="import"]')).to_have_count(0)
 
-    page.goto(f'{app_url}/p/default/datasets/import')
+    page.goto(f'{app_url}/p/default/ingest?tab=import')
     expect(page.get_by_test_id('datasets-unavailable')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id('import-path')).to_have_count(0)
 

@@ -271,6 +271,11 @@ def test_nginx_style_413_html_stops_run(stub, page, app_url):
     page.wait_for_selector('text=OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB')
 
 
+def _open_auto_label(page) -> None:
+    """The auto-label run sits collapsed under 'Advanced: auto-label run'."""
+    page.get_by_test_id('auto-label-advanced').locator('summary').click()
+
+
 def test_drain_gate(stub, page, app_url):
     _base_ingest_stubs(stub, drain_unfinished=4)
     stub.on('POST', r'/ingest/path_lookup', {'known_paths': {}})
@@ -286,6 +291,7 @@ def test_drain_gate(stub, page, app_url):
     page.wait_for_selector('h1:has-text("Ingest")')
     page.wait_for_selector('text=4')
 
+    _open_auto_label(page)
     auto_label_btn = page.get_by_role('button', name='Auto-label now', exact=True)
     auto_label_btn.wait_for()
     assert auto_label_btn.is_disabled()
@@ -308,6 +314,7 @@ def test_drain_gate(stub, page, app_url):
     )
     page.goto(f'{app_url}/p/default/ingest?tab=activity')
     page.wait_for_selector('h1:has-text("Ingest")')
+    _open_auto_label(page)
     auto_label_btn = page.get_by_role('button', name='Auto-label now', exact=True)
     auto_label_btn.wait_for()
     assert auto_label_btn.is_disabled()
@@ -329,6 +336,7 @@ def test_drain_gate(stub, page, app_url):
     page.goto(f'{app_url}/p/default/ingest?tab=activity')
     page.wait_for_selector('h1:has-text("Ingest")')
 
+    _open_auto_label(page)
     auto_label_btn = page.get_by_role('button', name='Auto-label now', exact=True)
     expect(auto_label_btn).to_be_enabled()
     auto_label_btn.click()
@@ -432,7 +440,7 @@ def test_region_drain_shows_served_stall_reason(stub, page, app_url):
             }
         ],
     )
-    page.goto(f'{app_url}/p/default/ingest')
+    page.goto(f'{app_url}/p/default/ingest?tab=activity')
     page.wait_for_selector('h1:has-text("Ingest")')
     expect(page.get_by_test_id('region-drain-stall-reason')).to_contain_text(reason)
     expect(page.get_by_test_id('region-drain-dependencies')).to_contain_text('seg_b')
@@ -526,6 +534,7 @@ def test_detector_card_and_per_file_embedding_counts(stub, page, app_url):
     stub.on('POST', r'/ingest/upload', upload_handler)
 
     page.goto(f'{app_url}/p/default/ingest')
+    page.get_by_test_id('ingest-detector-details').get_by_text('Detector details').click()
     card = page.get_by_test_id('ingest-detector-card')
     card.wait_for(timeout=ACTION_TIMEOUT_MS)
     expect(card).to_contain_text('widget_detector_v1')

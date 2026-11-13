@@ -59,11 +59,10 @@ def shoot(page: Any, name: str) -> None:
 def test_panel_only_with_a_region_profile(stub, page, app_url):
     _serve_ingest_baseline(stub)
     stub.on('GET', r'/health$', {'status': 'ok', 'region_profile': None})
-    page.goto(f'{app_url}/p/default/ingest')
+    page.goto(f'{app_url}/p/default/ingest?tab=activity')
     expect(page.get_by_text('Ingest').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_selector(
-        '[data-testid="ingest-status-table"], table, h2', timeout=ACTION_TIMEOUT_MS
-    )
+    expect(page.get_by_test_id('ingest-pipeline-rail')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_test_id('auto-label-advanced')).to_be_visible()
     expect(page.get_by_test_id('region-stage-panel')).to_have_count(0)
     assert not [p for _m, p in stub.handled if '/region_stage' in p]
 
@@ -97,7 +96,7 @@ def test_pause_needs_a_confirm_and_resume_follows(stub, page, app_url):
     stub.on('POST', r'/region_stage/pause$', pause)
     stub.on('POST', r'/region_stage/resume$', resume)
 
-    page.goto(f'{app_url}/p/default/ingest')
+    page.goto(f'{app_url}/p/default/ingest?tab=activity')
     panel = page.get_by_test_id('region-stage-panel')
     expect(panel.get_by_test_id('region-stage-state')).to_have_text(
         'running', timeout=ACTION_TIMEOUT_MS
@@ -149,7 +148,7 @@ def test_rerun_gate_skipped_sends_the_served_request(stub, page, app_url):
         return (200, {'dry_run': True, 'scopes': [{'scope': 'region', 'selected': 7, 'queued': 0}]})
 
     stub.on('POST', r'/reprocess$', reprocess)
-    page.goto(f'{app_url}/p/default/ingest')
+    page.goto(f'{app_url}/p/default/ingest?tab=activity')
     button = page.get_by_test_id('region-stage-panel').get_by_test_id('reprocess-open')
     expect(button).to_have_text('Re-run gate-skipped (7)…', timeout=ACTION_TIMEOUT_MS)
     button.click()

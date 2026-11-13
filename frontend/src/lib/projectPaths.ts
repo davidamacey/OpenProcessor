@@ -33,7 +33,6 @@ const SECTION_TABLE = [
   { section: 'dashboard', label: 'Dashboard', group: 'home' },
   { section: 'ingest', label: 'Ingest', group: 'data' },
   { section: 'classes', label: 'Classes', group: 'data' },
-  { section: 'datasets', label: 'Datasets', group: 'data', hidden: true },
   { section: 'images', label: 'Images', group: 'data', hidden: true },
   { section: 'workspace', label: 'Workspace', group: 'work' },
   { section: 'quality', label: 'Data quality', group: 'quality' },

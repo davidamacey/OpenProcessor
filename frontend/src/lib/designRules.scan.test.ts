@@ -167,7 +167,7 @@ const ALLOWED: { file: string; rule: 'glyph' | 'colour' | 'mono' | 'h1'; why: st
       why: 'a code editor: this file edits an open-vocabulary set name',
     },
     {
-      file: 'routes/p/[project]/datasets/import/+page.svelte',
+      file: 'lib/components/datasets/ImportWizardPanel.svelte',
       rule: 'mono',
       why: 'a code editor: this file edits a server path',
     },
