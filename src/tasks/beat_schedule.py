@@ -15,7 +15,8 @@ from src.config.cluster_profile import DEFAULT_REFRESH_INTERVAL_S, REFRESH_INTER
 from src.config.env import env_float, env_int, env_str
 
 
-REAPER_INTERVAL_S = 30
+REAPER_DEFAULT_S = 30
+REAPER_INTERVAL_S = env_int('OP_REAPER_INTERVAL_S', REAPER_DEFAULT_S, minimum=1)
 INGEST_DISPATCH_DEFAULT_S = 5.0
 OPEN_VOCAB_SWEEP_DEFAULT_S = 120
 JOB_STATS_INTERVAL_S = 30

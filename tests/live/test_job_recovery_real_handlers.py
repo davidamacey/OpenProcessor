@@ -34,8 +34,9 @@ if TYPE_CHECKING:
 
 pytestmark = pytest.mark.live
 
-INTERRUPT_WITHIN_S = 150
-REAPER_TICK_S = 30
+# Match docker/test/compose.yml: OP_JOB_LEASE_TTL_S=40 plus one reaper tick (OP_REAPER_INTERVAL_S=10) and slack.
+INTERRUPT_WITHIN_S = 80
+REAPER_TICK_S = 10
 
 
 def _job(api_client: Any, job_id: str) -> dict[str, Any]:

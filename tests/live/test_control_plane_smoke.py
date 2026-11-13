@@ -43,8 +43,9 @@ pytestmark = pytest.mark.live
 
 EVENTS_URL = f'{API_URL}{API_PREFIX}/events'
 TERMINAL = {'completed', 'completed_with_errors', 'failed', 'cancelled', 'interrupted'}
-INTERRUPT_WITHIN_S = 150
-REAPER_TICK_S = 30
+# Match docker/test/compose.yml: OP_JOB_LEASE_TTL_S=40 plus one reaper tick (OP_REAPER_INTERVAL_S=10) and slack.
+INTERRUPT_WITHIN_S = 80
+REAPER_TICK_S = 10
 SSE_TICK_S = 2
 
 
@@ -142,8 +143,8 @@ def test_stage3_exit_b_job_state_events_arrive_on_the_stream(api: httpx.Client) 
 def test_stage3_exit_c_killed_worker_leaves_the_job_interrupted(
     api: httpx.Client, intact_stack: None
 ) -> None:
-    """Stage-3 exit C: kill the jobs-worker mid sleep_noop; the row is `interrupted` in 150 s."""
-    job_id = start_infra_job('sleep_noop', seconds=120)
+    """Stage-3 exit C: kill the jobs-worker mid sleep_noop; the row ends `interrupted` in time."""
+    job_id = start_infra_job('sleep_noop', seconds=60)
     _running_with_progress(api, job_id)
     _compose.kill('jobs-worker')
     killed_at = time.monotonic()
@@ -176,7 +177,7 @@ def test_step8_broker_loss_is_survived_and_recovered(api: httpx.Client, intact_s
     outage is dispatched by the reaper (rule c); a running sleep_noop keeps its lease; SSE events
     still arrive (the 2 s safety tick).
     """
-    running_id = start_infra_job('sleep_noop', seconds=100)
+    running_id = start_infra_job('sleep_noop', seconds=50)
     _running_with_progress(api, running_id)
     sse = SseCollector(EVENTS_URL).start()
     try:
@@ -200,7 +201,7 @@ def test_step8_broker_loss_is_survived_and_recovered(api: httpx.Client, intact_s
 
         job = wait_for_job(api, queued_id, TERMINAL, timeout_s=REAPER_TICK_S * 4)
         _assert_status(job, 'completed', 'reaper rule c did not redispatch the queued job')
-        after = wait_for_job(api, running_id, TERMINAL, timeout_s=150)
+        after = wait_for_job(api, running_id, TERMINAL, timeout_s=90)
         _assert_status(after, 'completed')
         assert after is not None
         assert after['attempt'] == 1, 'the running job lost its lease and was re-run'
@@ -214,7 +215,7 @@ def test_step9_postgres_restart_mid_job(api: httpx.Client, intact_stack: None) -
     During the outage a start fails, the DB-backed routes answer 503, /ready names the database
     and /live stays 200; afterwards the database is ready and the job completes.
     """
-    job_id = start_infra_job('sleep_noop', seconds=90)
+    job_id = start_infra_job('sleep_noop', seconds=45)
     _running_with_progress(api, job_id)
     _compose.stop('postgres')
     try:
@@ -232,7 +233,7 @@ def test_step9_postgres_restart_mid_job(api: httpx.Client, intact_stack: None) -
         _compose.start('postgres')
     assert _wait_service(api, 'database', True, 90), 'database not ready after restart'
     assert api.get('/live', timeout=20.0).status_code == 200
-    job = wait_for_job(api, job_id, TERMINAL, timeout_s=180)
+    job = wait_for_job(api, job_id, TERMINAL, timeout_s=120)
     _assert_status(job, 'completed', 'neither completed nor resumed after the restart')
 
 

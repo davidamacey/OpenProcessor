@@ -83,6 +83,12 @@ x-process-env: &process-env
   OP_VIZ_PROJECTION_ENABLED: '1'
   HF_HOME: /tmp/hf
   HF_HUB_CACHE: /tmp/hf/hub
+  # Short job timers (production: 120 / 15 / 30 / 30 s) so a killed worker's job is interrupted in
+  # about a minute, not three. A holder's write budget in a database outage is TTL - margin = 30 s.
+  OP_JOB_LEASE_TTL_S: '40'
+  OP_JOB_HEARTBEAT_TICK_S: '4'
+  OP_JOB_FENCE_MARGIN_S: '10'
+  OP_REAPER_INTERVAL_S: '10'
 
 services:
   # Docker creates a missing bind-mount source as root:root, which the
@@ -324,6 +330,7 @@ services:
       interval: 15s
       timeout: 15s
       start_period: 60s
+      start_interval: 3s
       retries: 3
     depends_on: &worker-deps
       api:
@@ -343,6 +350,7 @@ services:
       interval: 15s
       timeout: 15s
       start_period: 60s
+      start_interval: 3s
       retries: 3
     depends_on: *worker-deps
     networks:
@@ -359,6 +367,7 @@ services:
       interval: 15s
       timeout: 15s
       start_period: 60s
+      start_interval: 3s
       retries: 3
     depends_on: *worker-deps
     networks:
@@ -378,6 +387,7 @@ services:
       interval: 15s
       timeout: 10s
       start_period: 60s
+      start_interval: 3s
       retries: 3
     deploy:
       replicas: 1
@@ -398,6 +408,7 @@ services:
       interval: 15s
       timeout: 15s
       start_period: 60s
+      start_interval: 3s
       retries: 3
     networks:
       - verify_net
@@ -415,6 +426,7 @@ services:
       interval: 15s
       timeout: 15s
       start_period: 60s
+      start_interval: 3s
       retries: 3
     networks:
       - verify_net
@@ -441,6 +453,7 @@ services:
       interval: 15s
       timeout: 15s
       start_period: 60s
+      start_interval: 3s
       retries: 3
     networks:
       - verify_net
@@ -467,6 +480,7 @@ services:
       interval: 15s
       timeout: 15s
       start_period: 60s
+      start_interval: 3s
       retries: 3
     networks:
       - verify_net
@@ -482,6 +496,7 @@ services:
       interval: 15s
       timeout: 15s
       start_period: 60s
+      start_interval: 3s
       retries: 3
     networks:
       - verify_net
@@ -497,6 +512,7 @@ services:
       interval: 15s
       timeout: 15s
       start_period: 60s
+      start_interval: 3s
       retries: 3
     networks:
       - verify_net
@@ -520,6 +536,7 @@ services:
       interval: 15s
       timeout: 15s
       start_period: 60s
+      start_interval: 3s
       retries: 3
     networks:
       - verify_net
@@ -535,6 +552,7 @@ services:
       interval: 15s
       timeout: 15s
       start_period: 60s
+      start_interval: 3s
       retries: 3
     networks:
       - verify_net
@@ -550,6 +568,7 @@ services:
       interval: 15s
       timeout: 15s
       start_period: 60s
+      start_interval: 3s
       retries: 3
     networks:
       - verify_net
