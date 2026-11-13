@@ -62,6 +62,30 @@ Every phase's exit bar (section 2) names the goals it proves.
 | G2e | polish: an intuitive, professional UI held to the same speed bars |
 | **G3** | **Create frames with the stored boxes**: faces, people and objects decide crops, pan and zoom targets and matched cuts, so no output cuts a head |
 | **G4** | **Measured phases**: each phase ships and is proven on public data plus the owner's walk on the owner's own library before the next starts |
+| **G5** | **Looks and feels professional**: as polished as Apple Photos and as quick as Google Photos, more capable than Immich, never cheap or "AI-styled". The standard is section 0.1; every phase's owner walk includes a design review against it |
+| **G6** | **End goal: a desktop app** that runs standalone on a person's computer with its GPU or Apple chip. Not built now; [50](50_desktop_direction.md) records the direction and what today's work keeps possible. Nothing in this plan (library, training, segmentation) is cut because of it |
+
+### 0.1 Look and feel standard (G5)
+
+Based on [Apple's Human Interface Guidelines](https://developer.apple.com/design/human-interface-guidelines) and
+[Material Design 3](https://m3.material.io/); Cropwright already has the base (Tailwind 4 tokens, Inter, Lucide
+icons, the tested `lib/components/ui/` set).
+
+- **One design system.** Colours, type scale, spacing (4 px grid), radii, shadows and motion are tokens in one
+  place; screens use the `ui/` components, never one-off styles. New needs become a token or a component.
+- **Photos are the hero.** Neutral, quiet chrome; photos edge to edge; no heavy borders or boxes around photos;
+  controls appear on hover or focus where that keeps the view clean.
+- **Restraint.** No gradients, glows, emoji, sparkle icons or a special "AI" colour. A feature driven by a model
+  looks like any other feature, and its label says what it does ("Group faces", not "AI magic").
+- **Snappy.** Visible response to every click or key within 100 ms; optimistic updates with undo instead of
+  confirm dialogs; placeholders (thumbhash) and skeletons, never spinners in a grid; 60 fps scrolling; a shared
+  zoom from grid to viewer.
+- **Motion with a purpose.** 150 to 250 ms, ease-out, no bounce; `prefers-reduced-motion` respected.
+- **Consistent and accessible.** One icon set (Lucide) and stroke; light and dark themes; keyboard shortcuts for
+  every frequent action; visible focus; WCAG 2.2 AA contrast; layouts checked at 1600 px and 430 px.
+- **Plain words.** Short labels and messages a non-technical person understands; no internal terms on screen.
+- **Gate.** Before each owner walk, an independent design review checks full-page screenshots (desktop and 430 px)
+  against this list; findings are fixed before the walk.
 
 ---
 
