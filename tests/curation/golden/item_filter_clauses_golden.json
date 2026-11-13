@@ -946,6 +946,32 @@
    }
   }
  ],
+ "audit_outcome": [
+  {
+   "bool": {
+    "filter": [
+     {
+      "term": {
+       "audit_sample": true
+      }
+     },
+     {
+      "term": {
+       "class_validated": true
+      }
+     },
+     {
+      "terms": {
+       "audit_outcome": [
+        "agree",
+        "both_wrong"
+       ]
+      }
+     }
+    ]
+   }
+  }
+ ],
  "everything": [
   {
    "bool": {

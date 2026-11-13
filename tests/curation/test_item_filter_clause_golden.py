@@ -86,6 +86,7 @@ CASES: dict[str, dict[str, Any]] = {
     'has_location': {'has_location': True},
     'near_dup_group': {'near_dup_group': '11111111-1111-1111-1111-111111111111'},
     'viz_box': {'viz_box': (0.0, -1.0, 2.5, 3.0)},
+    'audit_outcome': {'audit_outcome': ['agree', 'both_wrong']},
     'everything': {
         'class_names': ['person'],
         'exclude_class_names': ['car'],

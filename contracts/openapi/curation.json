@@ -18238,6 +18238,19 @@
         "additionalProperties": false,
         "description": "Predicates over stored items. Every field unset = no constraint.",
         "properties": {
+          "audit_outcome": {
+            "items": {
+              "enum": [
+                "agree",
+                "detector_wrong",
+                "vlm_wrong",
+                "both_wrong"
+              ],
+              "type": "string"
+            },
+            "title": "Audit Outcome",
+            "type": "array"
+          },
           "class_id": {
             "anyOf": [
               {
@@ -33177,6 +33190,19 @@
             "default": false,
             "title": "All Images",
             "type": "boolean"
+          },
+          "audit_outcome": {
+            "items": {
+              "enum": [
+                "agree",
+                "detector_wrong",
+                "vlm_wrong",
+                "both_wrong"
+              ],
+              "type": "string"
+            },
+            "title": "Audit Outcome",
+            "type": "array"
           },
           "class_id": {
             "anyOf": [
@@ -49038,6 +49064,33 @@
             }
           },
           {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
+            }
+          },
+          {
             "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
             "in": "query",
             "name": "taken_from",
@@ -50122,6 +50175,33 @@
               ],
               "description": "Items a dataset import labeled (`import_ids`) or proposed.",
               "title": "Import Id"
+            }
+          },
+          {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
             }
           },
           {
@@ -51449,6 +51529,33 @@
               ],
               "description": "Items a dataset import labeled (`import_ids`) or proposed.",
               "title": "Import Id"
+            }
+          },
+          {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
             }
           },
           {
@@ -54540,6 +54647,33 @@
             }
           },
           {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
+            }
+          },
+          {
             "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
             "in": "query",
             "name": "taken_from",
@@ -56319,6 +56453,33 @@
             }
           },
           {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
+            }
+          },
+          {
             "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
             "in": "query",
             "name": "taken_from",
@@ -57025,6 +57186,33 @@
               ],
               "description": "Items a dataset import labeled (`import_ids`) or proposed.",
               "title": "Import Id"
+            }
+          },
+          {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
             }
           },
           {
@@ -61037,6 +61225,33 @@
             }
           },
           {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
+            }
+          },
+          {
             "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
             "in": "query",
             "name": "taken_from",
@@ -64378,6 +64593,33 @@
             }
           },
           {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
+            }
+          },
+          {
             "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
             "in": "query",
             "name": "taken_from",
@@ -67193,6 +67435,33 @@
             }
           },
           {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
+            }
+          },
+          {
             "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
             "in": "query",
             "name": "taken_from",
@@ -68876,6 +69145,33 @@
             }
           },
           {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
+            }
+          },
+          {
             "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
             "in": "query",
             "name": "taken_from",
@@ -69697,6 +69993,33 @@
             }
           },
           {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
+            }
+          },
+          {
             "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
             "in": "query",
             "name": "taken_from",
@@ -70449,6 +70772,33 @@
               ],
               "description": "Items a dataset import labeled (`import_ids`) or proposed.",
               "title": "Import Id"
+            }
+          },
+          {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
             }
           },
           {
@@ -71227,6 +71577,33 @@
               ],
               "description": "Items a dataset import labeled (`import_ids`) or proposed.",
               "title": "Import Id"
+            }
+          },
+          {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
             }
           },
           {
@@ -72041,6 +72418,33 @@
             }
           },
           {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
+            }
+          },
+          {
             "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
             "in": "query",
             "name": "taken_from",
@@ -72791,6 +73195,33 @@
               ],
               "description": "Items a dataset import labeled (`import_ids`) or proposed.",
               "title": "Import Id"
+            }
+          },
+          {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
             }
           },
           {
@@ -73977,6 +74408,33 @@
             }
           },
           {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
+            }
+          },
+          {
             "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
             "in": "query",
             "name": "taken_from",
@@ -74511,6 +74969,33 @@
               ],
               "description": "Items a dataset import labeled (`import_ids`) or proposed.",
               "title": "Import Id"
+            }
+          },
+          {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
             }
           },
           {
@@ -75112,6 +75597,33 @@
               ],
               "description": "Items a dataset import labeled (`import_ids`) or proposed.",
               "title": "Import Id"
+            }
+          },
+          {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
             }
           },
           {
@@ -77119,6 +77631,33 @@
               ],
               "description": "Items a dataset import labeled (`import_ids`) or proposed.",
               "title": "Import Id"
+            }
+          },
+          {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
             }
           },
           {

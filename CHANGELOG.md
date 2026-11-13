@@ -13,6 +13,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Added
 
+- **Audit outcome filter.** `audit_outcome` (repeatable: `agree`, `detector_wrong`, `vlm_wrong`, `both_wrong`) on the shared item filter and every route that takes it, such as `GET /crops`: the audited crops a person labelled and whose label still stands, so each count of the accuracy audit report lists its crops.
 - **Map match counts.** `GET /map/cells` serves `n_located_matching` and `n_unlocated_matching`: how many photos match the request filter with and without a position, across the whole map (the viewport box does not narrow them), so the map can say "12 of 63 located photos match" or why it is empty.
 - **Review default queue.** `GET /review/tabs` serves `default_tab`: the first queue in served order that has work, null when every queue is empty.
 - **Accept machine labels.** `POST /label_ops/accept_machine` validates the detector's and the VLM's labels that reach a bar (`min_confidence` 0.50-1.00, `sources`, an optional item `filter`) as one undoable label operation with the label source `human_bulk_accept`. The dry run (the default) serves the counts by class and what is held back (`excluded`, `holdout`, `audit_sample`, `locked`, `deprecated_class`); a person's or an import's validated class, the test holdout, excluded or review-dismissed items, an open audit sample and a deprecated class are never written. One operation writes at most 20,000 items; `remaining` says how many are left.

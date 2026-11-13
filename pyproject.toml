@@ -398,6 +398,7 @@ exempt-modules = [
     "src.services.training.job_models",
     "src.config.projects",                       # ProjectRecord dependency return type
     "src.domain.embedding_state",                # EmbeddingState query parameter
+    "src.domain.audit_math",                     # AuditOutcome query parameter
     "src.services.curation.region_impact",
     "collections.abc",
 ]
