@@ -22,7 +22,7 @@
       align: 'right',
     },
     { id: 'holdout', label: 'In the test set', value: (g) => Number(g.has_holdout) },
-    { id: 'open', label: '' },
+    { id: 'open', label: 'View' },
   ];
 
   function href(groupId: string): string {

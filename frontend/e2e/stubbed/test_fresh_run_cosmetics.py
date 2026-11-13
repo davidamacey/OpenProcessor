@@ -9,6 +9,14 @@ from playwright.sync_api import expect
 
 NARROW = {'width': 800, 'height': 1000}
 
+EMPTY_PROPOSALS = {
+    'total_pending': 0,
+    'without_term': 0,
+    'top_terms': [],
+    'flagged_terms': [],
+    'term_rules': None,
+}
+
 
 def test_bakeoff_ranked_table_shows_scroll_cue_at_800(stub, page, app_url):
     """F8 D5: the ranked table cut off after Precision at 800px with no
