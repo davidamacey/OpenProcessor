@@ -28,6 +28,7 @@ import logging
 import sys
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -145,17 +146,28 @@ def cmd_commons(args: argparse.Namespace) -> int:
     meta: dict[str, dict[str, str]] = {}
     for row in rows:
         key = f'{row["make"]}/{row["model"]}/{row["generation"]}'
-        per_model[key] = commons.collect(row, args.min_side)
+        per_model[key] = commons.cached(
+            key,
+            args.cache,
+            partial(
+                commons.collect,
+                row,
+                args.min_side,
+                thumb_width=args.thumb_width,
+                max_subcats=args.max_subcats,
+            ),
+        )
         meta[key] = row
         logger.info('%s: %d candidates', key, len(per_model[key]))
-    chosen, dropped = commons.choose(
-        commons.drop_ambiguous(per_model), args.n, args.min_per_model, args.seed
-    )
+    unambiguous = commons.drop_ambiguous(per_model)
+    ambiguous = sum(map(len, per_model.values())) - sum(map(len, unambiguous.values()))
+    chosen, dropped = commons.choose(unambiguous, args.n, args.min_per_model, args.seed)
     print(
         {
             'models': len(chosen),
             'images': sum(len(v) for v in chosen.values()),
             'dropped_models': dropped,
+            'dropped_ambiguous': ambiguous,
             'per_make': commons.counts_by_make(chosen),
             'per_licence': dict(Counter(c['license'] for v in chosen.values() for c in v)),
         }
@@ -170,9 +182,14 @@ def cmd_commons(args: argparse.Namespace) -> int:
     with ThreadPoolExecutor(COMMONS_IMAGE_THREADS) as pool:
         files = list(pool.map(lambda c: _fetch_commons_file(c, out), todo))
     manifest = build_manifest(
-        'commons_set_c', commons.API_URL, COMMONS_LICENCE, files, dropped_models=dropped
+        args.dataset_name,
+        commons.API_URL,
+        COMMONS_LICENCE,
+        files,
+        dropped_models=dropped,
+        dropped_ambiguous=ambiguous,
     )
-    write_dataset(out, manifest, _commons_labels(files), None)
+    write_dataset(out, manifest, _commons_labels(files), args.pin)
     write_json(args.manifest, manifest)
     sample = commons.review_sample([f['path'] for f in files], REVIEW_FRACTION, args.seed)
     write_csv(
@@ -283,6 +300,11 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument('--min-per-model', type=int, default=15)
     c.add_argument('--min-side', type=int, default=1000)
     c.add_argument('--seed', type=int, default=20261029)
+    c.add_argument('--dataset-name', default='commons_set_c')
+    c.add_argument('--thumb-width', type=int, default=commons.THUMB_WIDTH)
+    c.add_argument('--max-subcats', type=int, default=commons.MAX_SUBCATS)
+    c.add_argument('--cache', type=Path, help='candidate listing cache, kept outside --out')
+    c.add_argument('--pin', type=Path, help='small pin (digest, counts) to commit')
     c.add_argument('--dry-run', action='store_true')
     c.set_defaults(func=cmd_commons)
     o = sub.add_parser('openimages')

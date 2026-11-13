@@ -24,6 +24,7 @@ from scripts.datasets.fetch_hires_set import ALLOWED_LICENSE, api_get
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
 
 API_URL = 'https://commons.wikimedia.org/w/api.php'
@@ -66,30 +67,81 @@ def _get(**params: str) -> dict[str, Any]:
     return api_get(f'{API_URL}?{urllib.parse.urlencode({"format": "json", **params})}')
 
 
-def list_subcategories(category: str) -> list[str]:
+def list_subcategories(category: str, max_subcats: int = MAX_SUBCATS) -> list[str]:
     doc = _get(
         action='query', list='categorymembers', cmtitle=f'Category:{category}',
         cmtype='subcat', cmlimit='100',
     )  # fmt: skip
     titles = sorted(m['title'] for m in doc.get('query', {}).get('categorymembers', []))
-    return [t for t in titles if keep_subcategory(t)][:MAX_SUBCATS]
+    return [t for t in titles if keep_subcategory(t)][:max_subcats]
 
 
-def list_files(category_title: str) -> list[dict[str, Any]]:
-    """Image pages of one category title with size, mime, licence and a thumbnail URL."""
-    params = {
-        'action': 'query', 'generator': 'categorymembers', 'gcmtitle': category_title,
-        'gcmtype': 'file', 'gcmlimit': '50', 'prop': 'imageinfo',
-        'iiprop': 'url|size|mime|extmetadata', 'iiurlwidth': str(THUMB_WIDTH),
-        'iiextmetadatafilter': 'LicenseShortName|Artist',
-    }  # fmt: skip
+_IMAGEINFO = {
+    'prop': 'imageinfo', 'iiprop': 'url|size|mime|extmetadata',
+    'iiextmetadatafilter': 'LicenseShortName|LicenseUrl|Artist',
+}  # fmt: skip
+
+
+def _paged(params: dict[str, str], max_pages: int | None = None) -> list[dict[str, Any]]:
+    """Follow the API ``continue`` token, stopping once ``max_pages`` pages are in hand."""
     pages: list[dict[str, Any]] = []
     while True:
         doc = _get(**params)
         pages.extend(doc.get('query', {}).get('pages', {}).values())
-        if 'continue' not in doc:
+        if 'continue' not in doc or (max_pages is not None and len(pages) >= max_pages):
             return pages
         params.update(doc['continue'])
+
+
+def list_files(category_title: str, thumb_width: int = THUMB_WIDTH) -> list[dict[str, Any]]:
+    """Image pages of one category title with size, mime, licence and a thumbnail URL."""
+    return _paged({
+        'action': 'query', 'generator': 'categorymembers', 'gcmtitle': category_title,
+        'gcmtype': 'file', 'gcmlimit': '50', 'iiurlwidth': str(thumb_width), **_IMAGEINFO,
+    })  # fmt: skip
+
+
+def depicts_count(qid: str) -> int:
+    """Files whose structured data says they depict the Wikidata item ``qid`` (P180)."""
+    doc = _get(
+        action='query', list='search', srnamespace='6', srlimit='1', srprop='',
+        srsearch=f'haswbstatement:P180={qid} filetype:bitmap',
+    )  # fmt: skip
+    return int(doc.get('query', {}).get('searchinfo', {}).get('totalhits', 0))
+
+
+def collect_depicted(
+    qid: str, min_side: int, *, thumb_width: int = THUMB_WIDTH, max_files: int = 200
+) -> list[dict[str, Any]]:
+    """Qualifying candidates among the first ``max_files`` files depicting ``qid``, by page id."""
+    pages = _paged({
+        'action': 'query', 'generator': 'search', 'gsrnamespace': '6', 'gsrlimit': '50',
+        'gsrsearch': f'haswbstatement:P180={qid} filetype:bitmap',
+        'iiurlwidth': str(thumb_width), **_IMAGEINFO,
+    }, max_files)  # fmt: skip
+    found: dict[int, dict[str, Any]] = {}
+    for page in pages:
+        cand = candidate(page, min_side)
+        if cand is not None:
+            found[cand['page_id']] = cand
+    return [found[k] for k in sorted(found)]
+
+
+def cached(
+    key: str, cache_path: Path | None, fn: Callable[[], list[dict[str, Any]]]
+) -> list[dict[str, Any]]:
+    """``fn()`` once per ``key``: the listing is kept in ``cache_path`` so a resumed run skips the API."""
+    store: dict[str, list[dict[str, Any]]] = {}
+    if cache_path is not None and cache_path.is_file():
+        store = json.loads(cache_path.read_text(encoding='utf-8'))
+    if key not in store:
+        store[key] = fn()
+        if cache_path is not None:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = cache_path.with_suffix('.tmp')
+            tmp.write_text(json.dumps(store), encoding='utf-8')
+            tmp.replace(cache_path)
+    return store[key]
 
 
 def candidate(page: dict[str, Any], min_side: int) -> dict[str, Any] | None:
@@ -106,16 +158,23 @@ def candidate(page: dict[str, Any], min_side: int) -> dict[str, Any] | None:
         'url': info['thumburl'],
         'description_url': info.get('descriptionurl', ''),
         'license': licence,
+        'license_url': meta.get('LicenseUrl', {}).get('value', ''),
         'author': html.unescape(re.sub(r'<[^>]+>', '', meta.get('Artist', {}).get('value', ''))),
     }
 
 
-def collect(row: dict[str, str], min_side: int) -> list[dict[str, Any]]:
+def collect(
+    row: dict[str, str],
+    min_side: int,
+    *,
+    thumb_width: int = THUMB_WIDTH,
+    max_subcats: int = MAX_SUBCATS,
+) -> list[dict[str, Any]]:
     """Qualifying candidates of one model category, sorted by page id."""
-    titles = [f'Category:{row["category"]}', *list_subcategories(row['category'])]
+    titles = [f'Category:{row["category"]}', *list_subcategories(row['category'], max_subcats)]
     found: dict[int, dict[str, Any]] = {}
     for title in titles:
-        for page in list_files(title):
+        for page in list_files(title, thumb_width):
             cand = candidate(page, min_side)
             if cand is not None:
                 found[cand['page_id']] = cand
