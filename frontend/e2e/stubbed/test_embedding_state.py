@@ -24,6 +24,7 @@ from harness.constants import ACTION_TIMEOUT_MS
 from harness.screens import shot
 from harness.vlm_menu import open_vlm_menu, serve_workspace_reads
 from playwright.sync_api import expect
+from test_dashboard_stats import open_pipeline_details
 from test_dataset_import import FORMATS
 
 
@@ -218,6 +219,7 @@ def test_dashboard_summary_embed_n_opens_the_served_request(stub, page, app_url)
     stub.on('POST', r'/reprocess$', reprocess)
 
     page.goto(f'{app_url}/p/default/dashboard')
+    open_pipeline_details(page)
     summary = page.get_by_test_id('detections-summary')
     summary.wait_for(timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id('detections-total')).to_contain_text('120 detections')

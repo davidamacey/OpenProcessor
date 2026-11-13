@@ -19,6 +19,7 @@ import json
 from fixtures.wire import labeled_stats, make_item, review_tab, review_tabs
 from harness.constants import ACTION_TIMEOUT_MS, review_url
 from playwright.sync_api import expect
+from test_dashboard_stats import open_pipeline_details
 
 
 CLASSES = [
@@ -238,6 +239,8 @@ def _stub_audit(stub):
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
     stub.on('GET', r'/class_sources(\?|$)', CLASS_SOURCES)
     stub.on('GET', r'/audit/report(\?|$)', REPORT)
+    # The pending-sample strip reads the audit queue's crops.
+    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'next_cursor': None, 'limit': 24, 'crops': []})
 
 
 def test_audit_page_renders_the_served_report_and_links_the_queue(stub, page, app_url):
@@ -247,8 +250,9 @@ def test_audit_page_renders_the_served_report_and_links_the_queue(stub, page, ap
     expect(page.get_by_test_id('audit-pending')).to_have_text('31')
     rows = page.get_by_test_id('audit-detector').get_by_test_id('audit-class-row')
     expect(rows).to_have_count(2)
-    expect(rows.nth(0)).to_contain_text('95.0%')
-    expect(rows.nth(1).get_by_test_id('insufficient-sample')).to_be_visible()
+    # Worst precision first: the insufficient 50.0% row, then the 95.0% row.
+    expect(rows.nth(0).get_by_test_id('insufficient-sample')).to_be_visible()
+    expect(rows.nth(1)).to_contain_text('95.0%')
     expect(page.get_by_test_id('confusion-cell')).to_have_count(4)
     open_link = page.get_by_test_id('audit-open-queue')
     assert 'view=review&queue=audit' in open_link.get_attribute('href')
@@ -424,6 +428,7 @@ def test_dashboard_says_a_label_is_not_ground_truth(stub, page, app_url):
         (200, f'event: snapshot\ndata: {json.dumps(snapshot)}\n\n', 'text/event-stream'),
     )
     page.goto(f'{app_url}/p/default/dashboard')
+    open_pipeline_details(page)
     note = page.get_by_test_id('labeled-not-ground-truth')
     expect(note).to_contain_text(
         'not ground truth until a human validates it', timeout=ACTION_TIMEOUT_MS
