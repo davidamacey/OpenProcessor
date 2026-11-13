@@ -191,6 +191,8 @@ export interface TrainJobStatus {
   job_id: string;
   /** Latest promote of this run; served by `GET /train/status/{job_id}` only. */
   promote?: PromoteJobStatus | null;
+  /** The readable Triton name the promote form starts with (served). */
+  suggested_triton_name?: string | null;
   campaign_id?: string | null;
   state: TrainState;
   started_at?: string | null;

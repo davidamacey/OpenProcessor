@@ -9,7 +9,6 @@ import PromoteModal from './PromoteModal.svelte';
 import { ApiError } from '$lib/api_errors';
 import { getPromoteJob, promoteTrainJob } from '$lib/api_train';
 import type { PromoteJobStatus } from '$lib/types_train';
-import { defaultTritonName } from '$lib/promote';
 import { toastStore } from '$stores/toast.svelte';
 
 vi.mock('$lib/api_train', async () => {
@@ -173,17 +172,6 @@ describe('PromoteModal gate failure — full-class remap missing (OpenProcessor 
     expect(text).toContain('pass force=true in the request body');
     expect(target.querySelector('[data-testid="promote-force"]')).not.toBeNull();
     expect(target.textContent).not.toContain('API 422');
-  });
-});
-
-describe('defaultTritonName', () => {
-  it('is the Triton-safe job id with no version suffix', () => {
-    expect(defaultTritonName('2026-09-25T17-01-25_yolo26s')).toBe(
-      '2026-09-25T17-01-25_yolo26s',
-    );
-    expect(defaultTritonName('a:b.c')).toBe('a_b_c');
-    expect(defaultTritonName('x'.repeat(80))).toHaveLength(64);
-    expect(defaultTritonName('2026-09-25T17-01-25_yolo26s')).not.toMatch(/_v\d+$/);
   });
 });
 

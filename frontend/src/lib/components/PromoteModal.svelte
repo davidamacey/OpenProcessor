@@ -37,7 +37,7 @@
   interface Props {
     open: boolean;
     jobId: string | null;
-    /** Default Triton model name (`defaultTritonName(job_id)`). */
+    /** Default Triton model name (served `suggested_triton_name`). */
     defaultName?: string;
     /** A promote already served for this run (`TrainJobStatus.promote`);
      *  an active one is followed instead of showing the form. */

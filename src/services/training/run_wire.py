@@ -11,10 +11,12 @@ from __future__ import annotations
 import datetime as dt
 from typing import TYPE_CHECKING, Any
 
+from src.config.project_context import current_project
 from src.domain import job_states as js
 from src.domain.training_keys import SKIPPED_ERROR_CODE
 from src.services.training.job_models import TrainJobStatus
 from src.services.training.job_wire import _prepare_status_for_wire
+from src.services.training.suggested_name import suggested_triton_name
 
 
 if TYPE_CHECKING:
@@ -67,6 +69,9 @@ def to_status(run: RunRow) -> TrainJobStatus:
         compare=live.get('compare'),
         error=run.error_message,
         heartbeat_at=_iso(run.heartbeat_at),
+        suggested_triton_name=suggested_triton_name(
+            current_project().record.slug, run.started_at or run.created_at
+        ),
         class_remap_copy_failed=bool(counters.get('class_remap_copy_failed', False)),
     )
     return _prepare_status_for_wire(status)

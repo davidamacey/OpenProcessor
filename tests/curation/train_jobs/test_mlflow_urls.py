@@ -160,3 +160,13 @@ async def test_read_manifest_rewrites_eval_and_mlflow_url(monkeypatch: pytest.Mo
         results['eval']['confusion_matrix_url']
         == f'/curation/projects/default/train/artifacts/{row.job_id}/confusion_matrix.png'
     )
+
+
+def test_the_status_serves_a_readable_triton_name(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_cfg(monkeypatch, _FakeCurationConfig())
+
+    status = to_status(_row())
+
+    assert status.suggested_triton_name is not None
+    assert status.suggested_triton_name.startswith('default_')
+    assert str(_row().job_id)[:8] not in status.suggested_triton_name

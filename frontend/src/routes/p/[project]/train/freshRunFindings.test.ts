@@ -36,6 +36,6 @@ describe('/train fresh-run findings', () => {
   it('F-64: the promote default name has no hardcoded version suffix', () => {
     expect(src).not.toMatch(/_v7/);
     expect(actions).not.toMatch(/_v7/);
-    expect(actions).toMatch(/promoteDefaultName = defaultTritonName\(r\.job_id\)/);
+    expect(actions).toMatch(/promoteDefaultName = r\.suggested_triton_name/);
   });
 });

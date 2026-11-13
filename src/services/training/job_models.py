@@ -279,6 +279,8 @@ class TrainJobStatus(BaseModel):
     # Latest background promote of this run (``GET /train/status/{job_id}``
     # only; null in lists and when the run was never promoted async).
     promote: dict[str, Any] | None = None
+    # The readable Triton name the promote form starts with (project and run time).
+    suggested_triton_name: str | None = None
 
     @model_validator(mode='before')
     @classmethod

@@ -40976,6 +40976,17 @@
             "title": "State",
             "type": "string"
           },
+          "suggested_triton_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Triton Name"
+          },
           "total_epochs": {
             "anyOf": [
               {
