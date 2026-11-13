@@ -235,6 +235,17 @@ describe('CommandStack', () => {
     expect(s.status).toBe('saved');
   });
 
+  it('a turn that runs nothing leaves the status as it was, never stuck on saving', async () => {
+    const { s } = stack();
+    await s.run(() => null);
+    expect(s.status).toBe('saved');
+    expect(s.saving).toBe(false);
+    api.excludeCrops.mockRejectedValueOnce(new Error('network down'));
+    await s.run(deleteCommand(item));
+    await s.run(() => null);
+    expect(s.status).toBe('failed');
+  });
+
   it('runs writes one after the other', async () => {
     const order: string[] = [];
     api.excludeCrops.mockImplementationOnce(async () => {

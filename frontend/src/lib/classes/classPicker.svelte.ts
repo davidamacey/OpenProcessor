@@ -2,9 +2,11 @@
  * The class picker's state: a combobox over the bounded, served class
  * registry. Typed text only filters that list (`searchClasses`); creating a
  * class goes to `POST /classes`, which stores the typed name as its slug and
- * answers that `class_name`. The element-scoped keydown handler is not a
+ * answers that `class_name`. Typed text is compared through the registry's own name rule
+ * (`$contracts/ts/classNames`), so a natural spelling selects the existing class. The element-scoped keydown handler is not a
  * window listener.
  */
+import { normalizeClassName } from '$contracts/ts/classNames';
 import { addClass } from '$lib/api_classes';
 import { apiErrorText } from '$lib/api_errors';
 import { itemClassTargets, searchClasses } from '$lib/classPicker';
@@ -47,7 +49,9 @@ export function createClassPicker(opts: ClassPickerOptions) {
   /** The name the last row would create, or null when nothing is typed or it exists. */
   const createName = $derived.by(() => {
     if (!typed) return null;
-    return targets.some((c) => c.name === typed) ? null : typed;
+    const key = normalizeClassName(typed);
+    // A name the registry would call a duplicate is never offered as new: it selects the class.
+    return !key || targets.some((c) => normalizeClassName(c.name) === key) ? null : typed;
   });
   const rowCount = $derived(results.length + (createName ? 1 : 0));
 

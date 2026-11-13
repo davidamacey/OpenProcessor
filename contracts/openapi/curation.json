@@ -3980,7 +3980,7 @@
           },
           "locked": {
             "default": false,
-            "description": "An automated writer never moves, deletes or re-creates it.",
+            "description": "The editor may not move it: an import wrote it, it is in the test holdout, or a person deleted it. A person can always edit their own box.",
             "title": "Locked",
             "type": "boolean"
           },

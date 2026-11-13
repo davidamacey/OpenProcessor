@@ -24,9 +24,14 @@
     ondetached?: () => void;
     /** The view's own rare actions, listed first under More. */
     more?: MenuItem[];
+    /** The open cluster's detector classes and how to narrow the cluster to one. */
+    split?: {
+      classes: { value: string; count: number }[];
+      onsplit: (value: string) => void;
+    };
   }
 
-  let { ws, onapplied, ondetached, more = [] }: Props = $props();
+  let { ws, onapplied, ondetached, more = [], split }: Props = $props();
 
   const actions = createSelectionActionController(() => ws.itemSelection() ?? {}, {
     detachOnQueued: () => ws.labelThenNext && ws.openNextAfterLabel,
@@ -39,10 +44,14 @@
   let reasonsOpen = $state(false);
 
   // A whole-cluster label of a cluster the detector split across classes says so before it writes.
+  const isMixed = $derived(
+    ws.scopeCard?.flags?.some(
+      (f) => f === 'mixed_detector_classes' || f === 'low_label_agreement',
+    ) ?? false,
+  );
   const mixedWarning = $derived.by((): string | null => {
     const card = ws.scopeCard;
-    if (!ws.labelThenNext || !card?.flags?.includes('mixed_detector_classes'))
-      return null;
+    if (!card || !ws.labelThenNext || !isMixed) return null;
     const cls = classesStore.classes.find((c) => c.id === actions.classId)?.name;
     const top = card.detector_top_class
       ? `the detector's most common class here is ${card.detector_top_class}${
@@ -51,7 +60,7 @@
             : ''
         }`
       : 'the detector named more than one class here';
-    return `This cluster is mixed: ${top}. Labelling all ${actions.selected ?? card.size} as ${cls ?? 'one class'} also labels the others. Tip: sort by Outliers first and label or move those first.`;
+    return `This cluster is mixed: ${top}. Labelling all ${actions.selected ?? card.size} as ${cls ?? 'one class'} also labels the others.`;
   });
 
   const moreItems = $derived<MenuItem[]>([
@@ -264,6 +273,7 @@
   {onapplied}
   subject={ws.actingOn}
   warning={mixedWarning}
+  split={mixedWarning ? split : undefined}
   openNext={ws.labelThenNext
     ? { checked: ws.openNextAfterLabel, onchange: (v) => (ws.openNextAfterLabel = v) }
     : undefined}

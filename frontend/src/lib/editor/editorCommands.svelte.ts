@@ -212,6 +212,8 @@ export class CommandStack {
   #done = $state.raw<EditorCommand[]>([]);
   #undone = $state.raw<EditorCommand[]>([]);
   #pending = $state(0);
+  /** What the status returns to when a turn ends without settling (a move that ran nothing). */
+  #resting: SaveStatus = 'saved';
   #tail: Promise<void> = Promise.resolve();
   readonly #hooks: StackHooks;
 
@@ -289,6 +291,7 @@ export class CommandStack {
     this.status = 'saving';
     const next = this.#tail.then(job).finally(() => {
       this.#pending -= 1;
+      if (this.#pending === 0 && this.status === 'saving') this.status = this.#resting;
     });
     this.#tail = next.catch(() => {});
     return next;
@@ -298,12 +301,14 @@ export class CommandStack {
     this.regionBoxIds = r.ok ? null : (r.regionBoxIds ?? null);
     if (r.ok) {
       this.message = null;
+      this.#resting = 'saved';
       this.status = this.#pending > 1 ? 'saving' : 'saved';
       this.#hooks.onImage(r.image);
       return;
     }
     this.message = r.message;
     this.status = r.conflict ? 'conflict' : 'failed';
+    this.#resting = this.status;
     if (r.conflict) this.#hooks.onConflict();
   }
 }

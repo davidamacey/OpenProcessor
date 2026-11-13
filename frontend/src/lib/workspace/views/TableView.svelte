@@ -19,7 +19,7 @@
     type TableUrlState,
   } from '$lib/table/tableController.svelte';
   import type { TableRow } from '$lib/types_table';
-  import { NO_SELECTION } from '$lib/workspace/selection';
+  import { heldIds, NO_SELECTION } from '$lib/workspace/selection';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
   import { writeWorkspaceUrl } from '$lib/workspace/workspaceUrl';
   import { keyboardStore } from '$stores/keyboard.svelte';
@@ -45,6 +45,11 @@
         }),
       ),
   });
+
+  // The selection survives a view switch: seed the table's own from it, then mirror it back.
+  // Without this the first mirror below sees no rows selected and clears the Workspace's.
+  // svelte-ignore state_referenced_locally
+  ctl.select(heldIds(ws.selection, ctl.rowsKind === 'images' ? 'images' : 'items'), true);
 
   let anchor: string | null = null;
 

@@ -28,4 +28,15 @@ describe('ClusterRunPanel', () => {
     expect(start.className).not.toContain('btn-primary');
     expect(start.textContent).toContain('Cluster items');
   });
+
+  it('compact shows only the activation row, without the heading or a second run button', () => {
+    const pending = {
+      ...ctl,
+      pending: { id: 'p', n_clusters: 3, n_items: 9 },
+    } as unknown as ClusterRunController;
+    const el = mountUi(ClusterRunPanel, { ctl: pending, compact: true });
+    expect(el.querySelector('[data-testid="cluster-run-activate"]')).not.toBeNull();
+    expect(el.querySelector('h2')).toBeNull();
+    expect(el.querySelector('[data-testid="cluster-run-start"]')).toBeNull();
+  });
 });

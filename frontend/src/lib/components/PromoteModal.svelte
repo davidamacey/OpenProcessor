@@ -198,7 +198,7 @@
             bind:value={tritonName}
             required
             placeholder="model_name"
-            pattern="[A-Za-z0-9_-]+"
+            pattern="[A-Za-z0-9_\-]+"
             class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 font-mono text-body text-fg-1 focus:border-accent focus:outline-none"
           />
           <span class="mt-1 block text-caption text-fg-3">

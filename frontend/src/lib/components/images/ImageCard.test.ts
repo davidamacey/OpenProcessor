@@ -46,10 +46,22 @@ describe('ImageCard', () => {
       }),
     });
     expect(el.querySelector('[data-testid="chip-items"]')!.textContent).toContain('7');
-    expect(el.querySelector('[data-testid="chip-labeled"]')!.textContent).toContain('5');
+    expect(el.querySelector('[data-testid="chip-labeled"]')).toBeNull();
+    expect(
+      el.querySelector('[data-testid="chip-items"]')!.getAttribute('title'),
+    ).toContain('5 with a class');
     expect(el.querySelector('[data-testid="chip-unlabeled"]')!.textContent).toContain(
       '2',
     );
+  });
+
+  it('shows no unlabelled chip when every detection has a class', () => {
+    const el = render({
+      card: imageCard({
+        counts: { items: 3, labeled: 3, validated: 0, unlabeled: 0, in_holdout: 0 },
+      }),
+    });
+    expect(el.querySelector('[data-testid="chip-unlabeled"]')).toBeNull();
   });
 
   it('near-dup badge only when served', () => {

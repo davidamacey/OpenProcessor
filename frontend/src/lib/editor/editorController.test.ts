@@ -222,6 +222,26 @@ describe('selecting and editing', () => {
     expect(api.undoItemGeometry).toHaveBeenCalledWith('c1', 3);
   });
 
+  it("a person's own box can be moved again and every move undone in turn", async () => {
+    const { c } = await setup();
+    api.patchItemGeometry.mockImplementation(
+      async (_id: string, body: { expected_geometry_revision: number }) => ({
+        item: {
+          ...editorItem(),
+          geometry_source: 'human',
+          geometry_revision: body.expected_geometry_revision + 1,
+        },
+      }),
+    );
+    await c.move('c1', BOX);
+    await c.move('c1', [0.2, 0.2, 0.6, 0.6]);
+    expect(api.patchItemGeometry).toHaveBeenCalledTimes(2);
+    await c.undo();
+    await c.undo();
+    expect(api.undoItemGeometry).toHaveBeenCalledTimes(2);
+    expect(c.stack.canUndo).toBe(false);
+  });
+
   it('a conflict reloads the image and shows the served message', async () => {
     const { c } = await setup();
     api.patchItemGeometry.mockRejectedValueOnce(

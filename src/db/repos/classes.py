@@ -20,12 +20,13 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 
 from src.db.models.classes import ClassRegistry, ProjectClass, SearchProjectionTask
+from src.domain.class_hotkeys import pick_hotkey
 from src.utils.class_names import normalize_class_name
 
 
 if TYPE_CHECKING:
     import uuid
-    from collections.abc import Sequence
+    from collections.abc import Collection, Sequence
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -217,9 +218,25 @@ async def _insert_class(
     group: str,
     notes: str,
     hotkey_letter: str | None,
+    reserved_hotkeys: Collection[str] | None = None,
 ) -> ClassRow:
     stripped = name.strip()
     key = name_key(stripped)
+    if hotkey_letter is None and reserved_hotkeys is not None:
+        # Under the registry lock the caller holds, so two new classes never get one letter.
+        taken = (
+            (
+                await session.execute(
+                    select(ProjectClass.hotkey_letter).where(
+                        ProjectClass.project_id == reg.project_id,
+                        ProjectClass.hotkey_letter.is_not(None),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        hotkey_letter = pick_hotkey(key, [t for t in taken if t], reserved_hotkeys)
     new_id = reg.next_class_id
     try:
         async with session.begin_nested():
@@ -257,6 +274,7 @@ async def ensure_class(
     name: str,
     group: str = 'unknown',
     notes: str = '',
+    reserved_hotkeys: Collection[str] | None = None,
 ) -> tuple[ClassRow, bool]:
     """Idempotent by name: the active class called ``name``, created when absent.
 
@@ -270,7 +288,7 @@ async def ensure_class(
     found = await find_by_name(session, project_id, name)
     if found is not None and not found.deprecated:
         return found, False
-    return await _insert_class(session, reg, name, group, notes, None), True
+    return await _insert_class(session, reg, name, group, notes, None, reserved_hotkeys), True
 
 
 async def add_class(
@@ -280,14 +298,17 @@ async def add_class(
     group: str = 'unknown',
     notes: str = '',
     hotkey_letter: str | None = None,
+    reserved_hotkeys: Collection[str] | None = None,
 ) -> ClassRow:
-    """Append a class; an active class with the same key is a :class:`ClassNameTakenError`."""
+    """Append a class; an active class with the same key is a :class:`ClassNameTakenError`.
+    With ``reserved_hotkeys`` (the keymap's letters) and no ``hotkey_letter`` the class is
+    given the first free letter (:func:`src.domain.class_hotkeys.pick_hotkey`)."""
     name_key(name)
     reg = await _lock(session, project_id)
     found = await find_by_name(session, project_id, name)
     if found is not None and not found.deprecated:
         raise ClassNameTakenError(f'duplicate class_name {name.strip()!r} (id={found.class_id})')
-    return await _insert_class(session, reg, name, group, notes, hotkey_letter)
+    return await _insert_class(session, reg, name, group, notes, hotkey_letter, reserved_hotkeys)
 
 
 async def _queue_projection(

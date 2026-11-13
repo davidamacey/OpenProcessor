@@ -84,7 +84,7 @@ def test_a_typed_class_name_is_created_under_the_served_slug(stub, page, app_url
     drag(page, (0.6, 0.1), (0.9, 0.4))
     box = page.get_by_role('combobox')
     box.fill('Traffic light')
-    page.get_by_role('option', name='Create "Traffic light"').click()
+    page.get_by_role('option', name='Create new class "Traffic light"').click()
     expect(page.get_by_test_id('object-list').locator('li[data-crop-id]')).to_have_count(
         3, timeout=ACTION_TIMEOUT_MS
     )

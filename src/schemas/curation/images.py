@@ -37,7 +37,8 @@ class BoxView(BaseModel):
     tone: BoxTone = Field(description='How the box is drawn: its review state, served.')
     state: str | None = Field(default=None, description='The region box state; null for an item.')
     locked: bool = Field(
-        default=False, description='An automated writer never moves, deletes or re-creates it.'
+        default=False,
+        description='The editor may not move it: an import wrote it, it is in the test holdout, or a person deleted it. A person can always edit their own box.',
     )
     lock_label: str | None = Field(default=None, description='Served text for why it is locked.')
     geometry_revision: int | None = Field(

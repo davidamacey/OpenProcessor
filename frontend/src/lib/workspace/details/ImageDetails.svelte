@@ -111,13 +111,13 @@
         >
         <button
           type="button"
-          class="btn btn-icon"
-          aria-label="View full size"
+          class="btn"
           title="View full size ({keymapStore.glyph('workspace.lightbox')})"
           data-testid="lightbox-image"
           onclick={() => void ws.openLightbox(image.image_id, image.file_name)}
         >
           <Icon name="maximize" size={16} />
+          View full size
         </button>
         {#if ws.url.scope?.kind === 'image' && ws.url.scope.id === image.image_id}
           <button

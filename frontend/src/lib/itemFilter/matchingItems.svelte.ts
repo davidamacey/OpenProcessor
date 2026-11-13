@@ -10,7 +10,9 @@ import { createPager, type Pager } from '$lib/pager.svelte';
 import type { Crop, HiddenCounts } from '$lib/types';
 import type { ItemFilterQuery } from '$lib/types_itemFilter';
 
-export const MATCHING_PAGE_SIZE = 48;
+/** A page is a few screens of cards, so reading deep into a large project is not one network
+ *  round trip per screen. `GET /crops` serves at most 500. */
+export const MATCHING_PAGE_SIZE = 200;
 
 export interface MatchingItems {
   readonly pager: Pager<Crop>;

@@ -15,6 +15,7 @@ import {
 } from '$lib/api_clusters';
 import { apiErrorText } from '$lib/api_errors';
 import { followJob } from '$lib/jobs/followJob';
+import { nextStepsStore } from '$stores/nextSteps.svelte';
 import type { ClusterPartitionView, ClusterTarget } from '$lib/types_clusterList';
 import { JOB_DONE_STATUSES, type JobView } from '$lib/types_jobs';
 
@@ -91,6 +92,9 @@ export class ClusterRunController {
       this.busy = false;
       this.jobStatus = null;
       await this.load();
+      // A run or an activation can finish the "Activate a clustering" step: the header chip and
+      // the stepper re-read the served steps instead of waiting for a reload.
+      void nextStepsStore.refresh();
     }
   }
 
