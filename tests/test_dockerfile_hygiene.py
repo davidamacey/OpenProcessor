@@ -457,3 +457,72 @@ def test_psycopg_c_is_the_loaded_implementation_where_it_is_installed() -> None:
         check=True,
     )
     assert out.stdout.strip() == 'c'
+
+
+def _stage_dockerfiles() -> list[str]:
+    return [d for d in _dockerfiles() if (REPO_ROOT / d).is_file()]
+
+
+# Docker, "Building best practices" and "Optimize cache usage": a layer's cache key includes the
+# ARG values in scope, so a per-commit or per-release ARG above an install reruns the install.
+_PER_BUILD_ARGS = {'OP_BUILD_SHA', 'VERSION', 'REVISION', 'BUILD_TIME', 'BUILD_DATE', 'VCS_REF'}
+_INSTALL_RE = re.compile(r'\b(pip install|npm ci|apt-get install|apk add|apk upgrade)\b')
+
+
+@pytest.mark.parametrize('rel', _stage_dockerfiles())
+def test_per_build_args_come_after_the_dependency_installs(rel: str) -> None:
+    for stage in _stages(rel):
+        installs = [i for i, (k, r) in enumerate(stage) if k == 'RUN' and _INSTALL_RE.search(r)]
+        late = [
+            i
+            for i, (k, r) in enumerate(stage)
+            if k == 'ARG' and r.split('=')[0].strip() in _PER_BUILD_ARGS
+        ]
+        assert not installs or not late or min(late) > max(installs), (
+            f'{rel}: a per-build ARG precedes an install RUN in the same stage'
+        )
+
+
+@pytest.mark.parametrize('rel', _stage_dockerfiles())
+def test_no_recursive_chown_over_a_tree_an_earlier_copy_wrote(rel: str) -> None:
+    """`chown -R`/`chmod -R` over copied files rewrites each into a second layer; use
+    `COPY --chown/--chmod` (Dockerfile reference, COPY)."""
+    for stage in _stages(rel):
+        dests: list[str] = []
+        for kind, rest in stage:
+            if kind == 'COPY':
+                dests.append(rest.split()[-1].rstrip('/'))
+            elif kind == 'RUN':
+                for m in re.finditer(r'\b(?:chown|chmod)\s+-R\s+(?:\S+\s+)((?:/\S+\s*)+)', rest):
+                    paths = [p.rstrip('/') for p in m.group(1).split() if p.startswith('/')]
+                    clash = [p for p in paths for d in dests if d == p or d.startswith(p + '/')]
+                    assert not clash, f'{rel}: recursive chown/chmod over copied {clash}'
+
+
+# The runtime-stage final image of hardened/triton keeps --no-cache-dir inside one RUN that
+# also deletes every cache; the others take BuildKit cache mounts (RUN --mount=type=cache).
+_NO_CACHE_MOUNT = {'docker/hardened/triton/Dockerfile'}
+
+
+@pytest.mark.parametrize('rel', _stage_dockerfiles())
+def test_package_installs_use_a_cache_mount_not_no_cache_dir(rel: str) -> None:
+    for kind, rest in _instructions(rel):
+        if kind != 'RUN' or not re.search(r'\b(pip install|npm ci)\b', rest):
+            continue
+        if rel in _NO_CACHE_MOUNT:
+            continue
+        assert '--mount=type=cache' in rest, (
+            f'{rel}: install RUN without a cache mount: {rest[:60]}'
+        )
+        assert '--no-cache-dir' not in rest, f'{rel}: --no-cache-dir defeats the cache mount'
+
+
+def test_root_dockerignore_excludes_runtime_data_and_unread_trees() -> None:
+    ignored = {
+        ln.strip().rstrip('/')
+        for ln in (REPO_ROOT / '.dockerignore').read_text().splitlines()
+        if ln.strip() and not ln.startswith(('#', '!'))
+    }
+    for entry in ('data', 'secrets', 'contracts', 'monitoring', 'docker/bench', 'docker/test'):
+        assert entry in ignored, f'.dockerignore does not exclude {entry}/'
+    assert 'docker/hardened' not in ignored, 'docker/hardened builds from the root context'

@@ -21,3 +21,4 @@ coverage
 **/*.engine
 **/*.safetensors
 **/*.pt
+playwright-report

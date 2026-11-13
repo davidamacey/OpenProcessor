@@ -7,3 +7,5 @@
 **/*.safetensors
 **/*.pt
 **/*.pth
+.env
+.env.*
