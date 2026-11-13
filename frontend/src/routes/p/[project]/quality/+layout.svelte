@@ -27,7 +27,7 @@
 <PageShell>
   <PageHeader
     title="Data quality"
-    description="Check the dataset before you train: how complete it is, how accurate the machine labels are, and what changed."
+    description="The final review of the dataset before you train."
   />
   <Tabs
     label="Data quality"
