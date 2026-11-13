@@ -78,6 +78,7 @@ BODY_ROUTES: dict[tuple[str, str], Body] = {
     ('POST', '/crops/batch_exclude'): lambda f: {'selection': _selection(f), 'reason': 'ignore'},
     ('POST', '/crops/batch_unexclude'): lambda f: {'selection': _selection(f)},
     ('POST', '/export/yolo'): lambda f: {'item_filter': f, 'version_tag': 'v1'},
+    ('POST', '/export/yolo/preview'): lambda f: {'item_filter': f, 'version_tag': 'v1'},
     ('POST', '/assist/runs'): lambda f: {
         'target': {'kind': 'filter', 'filter': f},
         'actions': ['classify'],
@@ -180,6 +181,7 @@ NEEDS_DATABASE = frozenset(
         ('GET', '/stats/dataset'),
         ('POST', '/crops/move'),
         ('POST', '/export/yolo'),
+        ('POST', '/export/yolo/preview'),
     }
 )
 SCOPED = '/curation/projects/default'
