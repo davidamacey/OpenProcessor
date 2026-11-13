@@ -1,7 +1,8 @@
 <script lang="ts">
   /**
-   * Data quality: dataset hygiene in one place. The accuracy audit, near-duplicates and the label
-   * history are URL-bound tabs (each its own route, so reload and Back work).
+   * Data quality: the final dataset-level review before training. Ready to train (the default),
+   * the accuracy audit and the label history are URL-bound tabs (each its own route, so reload
+   * and Back work).
    *
    * Docs read: SvelteKit routing, nested layouts (svelte.dev/docs/kit/routing#layout).
    */
@@ -14,8 +15,8 @@
   let { children } = $props();
 
   const TABS = [
+    { id: 'ready', path: '/quality/ready', label: 'Ready to train' },
     { id: 'audit', path: '/quality/audit', label: 'Accuracy audit' },
-    { id: 'near-duplicates', path: '/quality/near-duplicates', label: 'Near-duplicates' },
     { id: 'history', path: '/quality/history', label: 'Label history' },
   ] as const;
   const current = $derived(
@@ -26,7 +27,7 @@
 <PageShell>
   <PageHeader
     title="Data quality"
-    description="How accurate the labels are, which images repeat, and what changed."
+    description="Check the dataset before you train: how complete it is, how accurate the machine labels are, and what changed."
   />
   <Tabs
     label="Data quality"

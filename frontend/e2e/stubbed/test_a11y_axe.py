@@ -23,6 +23,7 @@ from test_assist_loop_panel import (
     show_finished_loop,
     show_plan_form,
 )
+from test_audit_gallery import _serve as _stub_audit
 from test_cluster_discard import CLASSES, CLUSTERS, crop
 from test_cluster_facets import FACET_UID, serve_cluster
 from test_cluster_list_filters import serve as serve_filtered_clusters
@@ -31,7 +32,6 @@ from test_embedding_spaces_page import serve_spaces
 from test_embedding_view import serve as serve_embedding
 from test_fresh_run_cosmetics import EMPTY_PROPOSALS
 from test_gallery_view import serve as serve_gallery
-from test_label_confirmation import _stub_audit
 from test_label_ops import serve as serve_label_ops
 from test_map_view import _cells as map_cells, _meta as map_meta
 from test_near_duplicates import _serve as serve_near_dups
@@ -39,6 +39,7 @@ from test_next_steps import FRESH, serve_next_steps
 from test_open_vocab import serve_open_vocab
 from test_presets import serve_presets
 from test_prompt_packs import serve_packs
+from test_quality_ready import _serve as _serve_ready
 from test_review_crop_viewport import review_item
 from test_similar_crops import serve_similar
 from test_source_missing import serve_cluster_grid, serve_review_pane
@@ -145,7 +146,7 @@ def serve_cluster_with_facets(stub) -> None:
 
 def show_label_op_dry_run(page) -> None:
     page.get_by_role(
-        'button', name='Details for Label to widget_a at 2026-10-30 10:00:00 UTC'
+        'button', name='Details for Labelled 12 items as widget_a at 2026-10-30 10:00:00 UTC'
     ).click()
     page.get_by_test_id('label-op-undo').click()
     expect(page.get_by_test_id('label-op-confirm')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
@@ -304,10 +305,16 @@ PAGES = [
         '[data-testid="audit-start"]',
     ),
     (
-        'quality-near-duplicates',
-        '/p/default/quality/near-duplicates',
+        'settings-near-duplicates',
+        '/p/default/settings/presets/near-dup-profiles',
         serve_near_dups,
         '[data-testid="near-dup-status"]',
+    ),
+    (
+        'quality-ready',
+        '/p/default/quality/ready',
+        _serve_ready,
+        '[data-testid="readiness-row"]',
     ),
     (
         'dashboard-next-steps',

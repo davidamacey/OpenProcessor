@@ -8,12 +8,10 @@
    */
   import { onMount } from 'svelte';
   import { AuditController } from '$lib/labelConfirmation/auditController.svelte';
-  import { humanizeId } from '$lib/humanizeId';
   import AuditClassTable from '$lib/components/audit/AuditClassTable.svelte';
-  import { resolve } from '$app/paths';
-  import { projectHref } from '$lib/projectPaths';
-  import { reviewSearch } from '$lib/workspace/workspaceUrl';
   import EmptyState from '$components/ui/EmptyState.svelte';
+  import AuditOutcomes from '$lib/components/audit/AuditOutcomes.svelte';
+  import AuditPendingStrip from '$lib/components/audit/AuditPendingStrip.svelte';
   import AuditStartForm from '$lib/components/audit/AuditStartForm.svelte';
   import ConfusionMatrix from '$lib/components/audit/ConfusionMatrix.svelte';
 
@@ -87,13 +85,7 @@
         >
         <span class="text-fg-2">still waiting</span></span
       >
-      <ul class="flex flex-wrap gap-2 text-meta" data-testid="audit-outcomes">
-        {#each Object.entries(r.outcomes) as [outcome, n] (outcome)}
-          <li class="rounded border border-line-strong px-1.5 py-0.5 text-fg-2">
-            {humanizeId(outcome)}: <span class="tabular-nums">{n}</span>
-          </li>
-        {/each}
-      </ul>
+      <AuditOutcomes outcomes={r.outcomes} />
     </section>
 
     <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -115,19 +107,14 @@
 
     <ConfusionMatrix confusion={r.confusion} />
 
-    <section class="surface flex flex-wrap items-center gap-3 p-4 text-body">
-      {#if r.pending > 0}
-        <a
-          class="btn"
-          href={resolve(projectHref(`/workspace${reviewSearch({ queue: 'audit' })}`))}
-          data-testid="audit-open-queue">Label the sample in Review</a
-        >
-        <span class="text-fg-2">{r.pending.toLocaleString()} crops are waiting.</span>
-      {:else}
+    {#if r.pending > 0}
+      <AuditPendingStrip audited={r.audited} pending={r.pending} />
+    {:else}
+      <section class="surface p-4 text-body">
         <span class="text-fg-3" data-testid="audit-nothing-waiting"
           >Nothing is waiting. Draw a sample to start an audit.</span
         >
-      {/if}
-    </section>
+      </section>
+    {/if}
   {/if}
 </div>

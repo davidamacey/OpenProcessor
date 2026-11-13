@@ -21,7 +21,7 @@
 
 <div class="flex flex-col gap-4">
   <header class="flex flex-wrap items-center gap-3">
-    <h2 class="text-title font-semibold text-fg-1">Label operations</h2>
+    <h2 class="text-title font-semibold text-fg-1">Label history</h2>
     <span class="grow"></span>
     <button
       type="button"

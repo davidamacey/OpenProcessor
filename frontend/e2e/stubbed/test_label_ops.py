@@ -146,7 +146,10 @@ def serve(stub, ops=None, queries=None):
 def _open_history(page, app_url):
     page.goto(f'{app_url}/p/default/quality/history')
     expect(page.get_by_test_id('label-op-row')).to_have_count(2, timeout=ACTION_TIMEOUT_MS)
-    expect(page.get_by_test_id('label-op-row').first).to_contain_text('UTC · by Human')
+    expect(page.get_by_test_id('label-op-row').first).to_contain_text('by a person · 2026-10-30')
+    expect(page.get_by_test_id('label-op-title').first).to_have_text(
+        'Labelled 12 items as widget_a'
+    )
     expect(page.get_by_test_id('label-ops-end')).to_be_visible()
     expect(
         page.get_by_text('newest 200 bulk operations and the newest 1000 single labels')
@@ -164,7 +167,7 @@ def test_history_list_dry_run_then_confirm(stub, page, app_url):
         shot(page, f'history-{tag}', env_var='LABEL_OPS_SHOTS')
 
         page.get_by_role(
-            'button', name='Details for Label to widget_a at 2026-10-30 10:00:00 UTC'
+            'button', name='Details for Labelled 12 items as widget_a at 2026-10-30 10:00:00 UTC'
         ).click()
         dialog = page.get_by_test_id('label-op-dialog')
         expect(dialog).to_be_visible(timeout=ACTION_TIMEOUT_MS)
@@ -209,7 +212,7 @@ def test_back_from_dry_run_writes_nothing(stub, page, app_url):
     bodies = serve(stub)
     _open_history(page, app_url)
     page.get_by_role(
-        'button', name='Details for Label to widget_a at 2026-10-30 10:00:00 UTC'
+        'button', name='Details for Labelled 12 items as widget_a at 2026-10-30 10:00:00 UTC'
     ).click()
     page.get_by_test_id('label-op-undo').click()
     expect(page.get_by_test_id('label-op-confirm')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
@@ -222,7 +225,7 @@ def test_already_undone_operation_offers_no_undo(stub, page, app_url):
     serve(stub)
     _open_history(page, app_url)
     page.get_by_role(
-        'button', name='Details for Move to widget_b at 2026-10-29 08:30:00 UTC'
+        'button', name='Details for Moved 3 items to widget_b at 2026-10-29 08:30:00 UTC'
     ).click()
     expect(page.get_by_test_id('label-op-last-undo')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id('label-op-undo')).to_have_count(0)
@@ -237,7 +240,7 @@ def test_served_refusal_is_shown_verbatim(stub, page, app_url):
     )
     _open_history(page, app_url)
     page.get_by_role(
-        'button', name='Details for Label to widget_a at 2026-10-30 10:00:00 UTC'
+        'button', name='Details for Labelled 12 items as widget_a at 2026-10-30 10:00:00 UTC'
     ).click()
     page.get_by_test_id('label-op-undo').click()
     expect(page.get_by_test_id('label-op-undo-error')).to_have_text(

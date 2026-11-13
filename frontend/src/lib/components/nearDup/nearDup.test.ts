@@ -4,13 +4,11 @@ import { ApiError } from '$lib/api_errors';
 import * as api from '$lib/api_nearDup';
 import { createNearDupDecisionsController } from '$lib/nearDup/nearDupDecisionsController.svelte';
 import { createNearDupPageController } from '$lib/nearDup/nearDupPageController.svelte';
-import { createNearDupProfileController } from '$lib/nearDup/nearDupProfileController.svelte';
 import NearDupDecisionsPanel from './NearDupDecisionsPanel.svelte';
-import NearDupGroupList from './NearDupGroupList.svelte';
+import NearDupLeakGroupsTable from './NearDupLeakGroupsTable.svelte';
 import NearDupGroupModal from './NearDupGroupModal.svelte';
-import NearDupProfilePanel from './NearDupProfilePanel.svelte';
 import NearDupRunsTable from './NearDupRunsTable.svelte';
-import NearDupStatusCard from './NearDupStatusCard.svelte';
+import NearDupRunsPanel from './NearDupRunsPanel.svelte';
 import type {
   NearDupGroupSummary,
   NearDupMemberView,
@@ -78,7 +76,7 @@ const group = (
   ...over,
 });
 
-describe('NearDupStatusCard', () => {
+describe('NearDupRunsPanel', () => {
   const status: NearDupStatus = {
     profile: { name: 'default', revision: 2 },
     levels: [
@@ -92,7 +90,7 @@ describe('NearDupStatusCard', () => {
     ],
   };
 
-  it('shows the served stale reasons, an empty level, and starts the mode the reasons call for', async () => {
+  it('shows the served stale reasons and an empty level, and starts a full rebuild', async () => {
     vi.mocked(api.getNearDupStatus).mockResolvedValue(status);
     vi.mocked(api.listNearDupRuns).mockResolvedValue({ items: [] });
     vi.mocked(api.startNearDupRun).mockRejectedValue(
@@ -102,21 +100,22 @@ describe('NearDupStatusCard', () => {
     );
     const ctl = createNearDupPageController();
     await ctl.loadOverview();
-    instance = mount(NearDupStatusCard, { target, props: { ctl } });
+    instance = mount(NearDupRunsPanel, { target, props: { ctl } });
     flushSync();
-    expect(q('near-dup-profile-chip')?.textContent).toContain('revision 2');
     expect(q('near-dup-stale-image')?.textContent).toContain('not yet grouped (7)');
     expect(q('near-dup-no-run-item')).not.toBeNull();
     expect(q('near-dup-stale-item')?.textContent).toContain('never been built');
     expect(q('near-dup-run-full-item')?.textContent?.trim()).toBe('Build');
     expect(q('near-dup-run-full-image')?.textContent?.trim()).toBe('Full rebuild');
+    // The quick "group new items" run is the Gallery's; this panel only rebuilds.
+    expect(q('near-dup-run-incremental-image')).toBeNull();
 
-    (q('near-dup-run-incremental-image') as HTMLButtonElement).click();
+    (q('near-dup-run-full-image') as HTMLButtonElement).click();
     await settle(() =>
       expect(q('near-dup-run-error')?.textContent).toContain('Build the image'),
     );
     expect(api.startNearDupRun).toHaveBeenCalledWith(
-      { level: 'image', mode: 'incremental' },
+      { level: 'image', mode: 'full' },
       expect.anything(),
     );
     ctl.dispose();
@@ -174,47 +173,33 @@ describe('NearDupDecisionsPanel', () => {
   });
 });
 
-describe('NearDupGroupList', () => {
+describe('NearDupLeakGroupsTable', () => {
   async function render() {
     const ctl = createNearDupPageController();
-    const onopen = vi.fn();
-    instance = mount(NearDupGroupList, { target, props: { ctl, onopen } });
-    await ctl.showGroups('image', 'dedup');
+    instance = mount(NearDupLeakGroupsTable, { target, props: { ctl } });
+    await ctl.showGroups('item', 'leak');
     flushSync();
-    return { ctl, onopen };
+    return ctl;
   }
 
-  it('renders a group with its figures and the holdout chip, and opens it on click', async () => {
+  it('lists each group with its figures and links it to Detections on its near_dup scope', async () => {
     vi.mocked(api.listNearDupGroups).mockResolvedValue({
-      items: [group('a', { has_holdout: true })],
+      items: [group('a', { has_holdout: true, purpose: 'leak' })],
       next_cursor: null,
       empty_reason: null,
     });
-    const { ctl, onopen } = await render();
-    await settle(() => expect(qa('near-dup-group')).toHaveLength(1));
-    const card = q('near-dup-group') as HTMLButtonElement;
-    expect(card.textContent).toContain('4 members');
-    expect(card.textContent).toContain('0.991');
-    expect(card.textContent).toContain('In test holdout');
-    expect((q('near-dup-thumb') as HTMLImageElement).getAttribute('src')).toBe(
-      '/curation/projects/p/images/img-a/thumbnail',
-    );
-    card.click();
-    expect(onopen).toHaveBeenCalledWith(expect.objectContaining({ group_id: 'a' }));
-    ctl.dispose();
-  });
-
-  it('links each image group to the Workspace filtered to it', async () => {
-    vi.mocked(api.listNearDupGroups).mockResolvedValue({
-      items: [group('a')],
-      next_cursor: null,
-      empty_reason: null,
-    });
-    const { ctl } = await render();
-    await settle(() => expect(qa('near-dup-group')).toHaveLength(1));
+    const ctl = await render();
+    await settle(() => expect(qa('near-dup-group-workspace')).toHaveLength(1));
+    expect(target.textContent).toContain('0.991');
+    expect(target.textContent).toContain('Yes');
     const href = q('near-dup-group-workspace')!.getAttribute('href')!;
-    expect(href).toContain('/workspace?');
-    expect(new URLSearchParams(href.split('?')[1]).get('scope')).toBe('near_dup:a');
+    const params = new URLSearchParams(href.split('?')[1]);
+    expect(params.get('view')).toBe('detections');
+    expect(params.get('scope')).toBe('near_dup:a');
+    expect(vi.mocked(api.listNearDupGroups).mock.calls[0]![0]).toMatchObject({
+      level: 'item',
+      purpose: 'leak',
+    });
     ctl.dispose();
   });
 
@@ -222,12 +207,12 @@ describe('NearDupGroupList', () => {
     vi.mocked(api.listNearDupGroups).mockResolvedValue({
       items: [],
       next_cursor: null,
-      empty_reason: '0 dedup groups at cosine 0.98 among 91 images',
+      empty_reason: '0 leak groups at cosine 0.98 among 91 items',
     });
-    const { ctl } = await render();
+    const ctl = await render();
     await settle(() => expect(q('near-dup-groups-empty')).not.toBeNull());
     expect(q('near-dup-groups-empty')?.textContent).toContain(
-      '0 dedup groups at cosine 0.98 among 91 images',
+      '0 leak groups at cosine 0.98 among 91 items',
     );
     ctl.dispose();
   });
@@ -236,33 +221,9 @@ describe('NearDupGroupList', () => {
     vi.mocked(api.listNearDupGroups).mockRejectedValue(
       new ApiError(500, '/x', { detail: 'store down' }),
     );
-    const { ctl } = await render();
+    const ctl = await render();
     await settle(() =>
       expect(q('near-dup-groups-error')?.textContent).toContain('store down'),
-    );
-    ctl.dispose();
-  });
-
-  it('switches level and purpose through the served query', async () => {
-    vi.mocked(api.listNearDupGroups).mockResolvedValue({
-      items: [],
-      next_cursor: null,
-      empty_reason: 'none',
-    });
-    const { ctl } = await render();
-    (q('near-dup-level-tab-item') as HTMLButtonElement).click();
-    await settle(() =>
-      expect(vi.mocked(api.listNearDupGroups).mock.calls.at(-1)![0]).toMatchObject({
-        level: 'item',
-        purpose: 'dedup',
-      }),
-    );
-    (q('near-dup-purpose-tab-leak') as HTMLButtonElement).click();
-    await settle(() =>
-      expect(vi.mocked(api.listNearDupGroups).mock.calls.at(-1)![0]).toMatchObject({
-        level: 'item',
-        purpose: 'leak',
-      }),
     );
     ctl.dispose();
   });
@@ -368,83 +329,5 @@ describe('NearDupGroupModal', () => {
     await settle(() =>
       expect(q('near-dup-group-error')?.textContent).toContain('no group'),
     );
-  });
-});
-
-describe('NearDupProfilePanel', () => {
-  const body = (v: number) => ({
-    version: 1,
-    image: { dedup_cosine: v, leak_cosine: v, k: 64, max_group_size: 1000 },
-    item: {
-      dedup_cosine: v,
-      leak_cosine: v,
-      max_group_size: 1000,
-      scope: 'image_leak_groups',
-      same_detector_class: true,
-    },
-  });
-  const doc = (name: string, revision: number, v: number) => ({
-    kind: 'near_dup_profile',
-    name,
-    revision,
-    description: '',
-    body: body(v),
-    created_at: '',
-    updated_at: '',
-    updated_by: '',
-  });
-
-  it('shows the seeded defaults beside the fields and saves an edit through the controller', async () => {
-    vi.mocked(api.getActiveNearDupProfile).mockResolvedValue({
-      axis: 'near_dup',
-      state: 'active',
-      name: 'default',
-      revision: 2,
-    });
-    vi.mocked(api.getNearDupProfile).mockImplementation(async (name, revision) =>
-      revision === 1 ? doc('default', 1, 0.98) : doc(name, revision ?? 2, 0.95),
-    );
-    vi.mocked(api.saveNearDupProfile).mockResolvedValue(doc('default', 3, 0.9));
-    vi.mocked(api.activateNearDupProfile).mockResolvedValue({
-      axis: 'near_dup',
-      state: 'active',
-      name: 'default',
-      revision: 3,
-    });
-    const onSaved = vi.fn();
-    const ctl = createNearDupProfileController(onSaved);
-    instance = mount(NearDupProfilePanel, { target, props: { ctl } });
-    await settle(() => expect(q('np-image-dedup')).not.toBeNull());
-    expect(target.textContent).toContain('default 0.98');
-    const input = q('np-image-dedup') as HTMLInputElement;
-    expect(input.value).toBe('0.95');
-    expect((q('near-dup-profile-save') as HTMLButtonElement).disabled).toBe(true);
-
-    input.value = '0.9';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    await settle(() =>
-      expect((q('near-dup-profile-save') as HTMLButtonElement).disabled).toBe(false),
-    );
-    (q('near-dup-profile-save') as HTMLButtonElement).click();
-    await settle(() => expect(q('near-dup-profile-notice')).not.toBeNull());
-    expect(api.saveNearDupProfile).toHaveBeenCalledWith(
-      'default',
-      expect.objectContaining({ image: expect.objectContaining({ dedup_cosine: 0.9 }) }),
-      2,
-      expect.anything(),
-    );
-    expect(q('near-dup-profile-notice')?.textContent).toContain('need a rebuild');
-    expect(onSaved).toHaveBeenCalled();
-  });
-
-  it('shows the error and no form when no profile is active', async () => {
-    vi.mocked(api.getActiveNearDupProfile).mockResolvedValue({
-      axis: 'near_dup',
-      state: 'none',
-    });
-    const ctl = createNearDupProfileController(() => {});
-    instance = mount(NearDupProfilePanel, { target, props: { ctl } });
-    await settle(() => expect(q('near-dup-profile-error')).not.toBeNull());
-    expect(q('np-image-dedup')).toBeNull();
   });
 });

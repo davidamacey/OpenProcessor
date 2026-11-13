@@ -90,7 +90,7 @@ def test_single_label_undo_survives_a_reload(stub, page, app_url):
     page.goto(f'{app_url}/p/default/quality/history')
     expect(page.get_by_test_id('label-op-row')).to_have_count(1, timeout=ACTION_TIMEOUT_MS)
     page.get_by_role(
-        'button', name='Details for Label to ducati at 2026-11-12 10:00:00 UTC'
+        'button', name='Details for Labelled 1 item as ducati at 2026-11-12 10:00:00 UTC'
     ).click()
     page.get_by_test_id('label-op-undo').click()
     expect(page.get_by_test_id('label-op-confirm')).to_be_visible(timeout=ACTION_TIMEOUT_MS)

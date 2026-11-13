@@ -113,8 +113,8 @@ describe('ImportProvenanceRows', () => {
     await render({ import_ids: ['imp_1', 'imp_2'] });
     const links = [...q('import-ids')!.querySelectorAll('a')];
     expect(links.map((a) => a.getAttribute('href'))).toEqual([
-      '/p/default/datasets/imports/imp_1',
-      '/p/default/datasets/imports/imp_2',
+      '/p/default/ingest/imports/imp_1',
+      '/p/default/ingest/imports/imp_2',
     ]);
     expect(links.map((a) => a.textContent)).toEqual(['imp_1', 'imp_2']);
   });

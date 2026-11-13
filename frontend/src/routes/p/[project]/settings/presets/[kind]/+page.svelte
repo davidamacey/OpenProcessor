@@ -9,6 +9,7 @@
   import { resolve } from '$app/paths';
   import ConfigListDialogs from '$components/config/ConfigListDialogs.svelte';
   import ConfigRowTail from '$components/config/ConfigRowTail.svelte';
+  import NearDupSettingsSections from '$lib/components/nearDup/NearDupSettingsSections.svelte';
   import PresetActiveSummary from '$components/presets/PresetActiveSummary.svelte';
   import PresetNewDialog from '$components/presets/PresetNewDialog.svelte';
   import { createCloneDeleteFlow } from '$lib/config/cloneDeleteFlow.svelte';
@@ -175,6 +176,10 @@
         oncreate={(n, d, b) => void doCreate(n, d, b)}
         oncancel={() => (creating = false)}
       />
+    {/if}
+
+    {#if kind.id === 'near_dup_profile'}
+      <NearDupSettingsSections />
     {/if}
 
     <ConfigListDialogs {flow} {list} nameLabel="New name" offerProjects={false}>

@@ -5,7 +5,9 @@
 <script lang="ts">
   import { formatCount } from '$lib/format/count';
   import { formatTimestamp } from '$lib/format/date';
+  import { plural } from '$lib/format/plural';
   import { humanizeId } from '$lib/humanizeId';
+  import { labelOpSubtitle, labelOpTitle } from '$lib/labelOps/labelOpText';
   import type { LabelOp } from '$lib/types_labelOps';
 
   interface Props {
@@ -13,16 +15,6 @@
     onopen: (opId: string) => void;
   }
   let { items, onopen }: Props = $props();
-
-  function when(op: LabelOp): string {
-    const at = formatTimestamp(op.at);
-    return op.label_source ? `${at} · by ${humanizeId(op.label_source)}` : at;
-  }
-
-  function title(op: LabelOp): string {
-    const verb = op.kind === 'label' ? 'Label' : 'Move';
-    return op.class_name ? `${verb} to ${op.class_name}` : verb;
-  }
 </script>
 
 <ul class="flex flex-col gap-2" data-testid="label-ops-list">
@@ -32,13 +24,17 @@
       data-testid="label-op-row"
     >
       <div class="flex min-w-0 grow flex-col gap-0.5">
-        <span class="truncate font-medium" data-testid="label-op-title">{title(op)}</span>
+        <span class="truncate font-medium" data-testid="label-op-title"
+          >{labelOpTitle(op)}</span
+        >
         <span class="text-meta text-fg-2" title={op.at}>
-          {when(op)}
+          {labelOpSubtitle(op)}
         </span>
       </div>
       <span class="text-meta text-fg-2" data-testid="label-op-count">
-        <span class="tabular-nums">{formatCount(op.count)}</span> items,
+        <span class="tabular-nums"
+          >{op.count == null ? '—' : plural(op.count, 'item')}</span
+        >,
         <span class="tabular-nums">{formatCount(op.current)}</span> still labeled
       </span>
       <span
@@ -48,7 +44,7 @@
       <button
         type="button"
         class="btn"
-        aria-label={`Details for ${title(op)} at ${formatTimestamp(op.at)}`}
+        aria-label={`Details for ${labelOpTitle(op)} at ${formatTimestamp(op.at)}`}
         onclick={() => onopen(op.op_id)}>Details</button
       >
     </li>

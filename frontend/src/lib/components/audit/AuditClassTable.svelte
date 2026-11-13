@@ -16,6 +16,13 @@
     testId: string;
   }
   let { title, blurb, stats, minPerClass, testId }: Props = $props();
+
+  // Worst precision first; a class with no precision yet goes last.
+  const sorted = $derived(
+    [...stats].sort((a, b) => (a.precision ?? 2) - (b.precision ?? 2)),
+  );
+  const pct = (v: number | null | undefined): string =>
+    `${Math.max(0, Math.min(1, v ?? 0)) * 100}%`;
 </script>
 
 <section class="surface flex flex-col gap-2 p-4" data-testid={testId}>
@@ -37,7 +44,7 @@
           </tr>
         </thead>
         <tbody>
-          {#each stats as row (row.name)}
+          {#each sorted as row (row.name)}
             <tr
               class="border-t border-line {row.insufficient_sample
                 ? 'text-fg-3'
@@ -62,6 +69,22 @@
                 <span class="block text-caption whitespace-nowrap text-fg-3"
                   >{percentText(row.ci_low, 1)} to {percentText(row.ci_high, 1)}</span
                 >
+                <span
+                  class="relative ml-auto mt-1 block h-1.5 w-28 rounded-full bg-surface-3"
+                  data-testid="audit-interval"
+                  aria-hidden="true"
+                >
+                  <span
+                    class="absolute inset-y-0 rounded-full {row.insufficient_sample
+                      ? 'bg-fg-3'
+                      : 'bg-accent'}"
+                    style:left={pct(row.ci_low)}
+                    style:width="{Math.max(
+                      0,
+                      Math.min(1, row.ci_high ?? 0) - Math.min(1, row.ci_low ?? 0),
+                    ) * 100}%"
+                  ></span>
+                </span>
               </td>
             </tr>
           {/each}

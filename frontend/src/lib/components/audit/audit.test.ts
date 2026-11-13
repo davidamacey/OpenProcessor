@@ -37,6 +37,27 @@ const stat = (over = {}) => ({
   ...over,
 });
 
+describe('AuditClassTable order', () => {
+  it('lists the worst precision first and draws an interval bar per class', () => {
+    const el = render(AuditClassTable, {
+      title: 'Detector precision',
+      blurb: '',
+      stats: [
+        stat({ name: 'good', precision: 0.97 }),
+        stat({ name: 'bad', precision: 0.4, ci_low: 0.2, ci_high: 0.6 }),
+        stat({ name: 'unknown', precision: null, ci_low: null, ci_high: null, n: 0 }),
+      ],
+      minPerClass: 30,
+      testId: 'audit-detector',
+    });
+    const names = [
+      ...el.querySelectorAll('[data-testid="audit-class-row"] td:first-child'),
+    ].map((td) => td.textContent!.trim());
+    expect(names).toEqual(['bad', 'good', 'unknown']);
+    expect(el.querySelectorAll('[data-testid="audit-interval"]')).toHaveLength(3);
+  });
+});
+
 describe('AuditClassTable', () => {
   it('prints the served precision with its interval', () => {
     const el = render(AuditClassTable, {
