@@ -42,9 +42,10 @@ Notes:
   License; the MobileCLIP2-S2 *weights* are under `apple-amlr`, a
   research-only term. `make export-mobileclip` fetches them on your
   machine.
-- **SAM 3**: the code is Apache-2.0; the weights are under Meta's SAM
-  License (commercial use and redistribution allowed with the license
-  attached) and gated on HuggingFace. See `docker/segmenter/NOTICE`.
+- **SAM 3**: both the code and the weights are under Meta's SAM License
+  (custom, not OSI-approved, not Apache-2.0;
+  [pinned text](https://github.com/facebookresearch/sam3/blob/f1647e8d0c1d280991f4d1b7d974c2704537fe66/LICENSE)). Distribution requires a copy of the license, which
+  the segmenter image carries. The weights are gated on HuggingFace. See `docker/segmenter/NOTICE`.
 
 ## Software components
 
@@ -58,7 +59,7 @@ Notes:
 | OpenCLIP | MIT |
 | PaddleOCR | Apache-2.0 |
 | Meta Perception Encoder (PE-Core) code | Apache-2.0 |
-| Meta SAM 3 code | Apache-2.0 |
+| Meta SAM 3 code | SAM License (custom) |
 | OpenSearch | Apache-2.0 |
 
 ## Sample datasets

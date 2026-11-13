@@ -153,6 +153,6 @@ during inference.
 
 See [`NOTICE`](./NOTICE). SAM 3 is from
 [facebookresearch/sam3](https://github.com/facebookresearch/sam3)
-(Apache 2.0); the service shape draws on
+(SAM License, Meta's custom license; see NOTICE); the service shape draws on
 [efwfe/Labely](https://github.com/efwfe/Labely)'s SAM 3 inference
 pattern.
