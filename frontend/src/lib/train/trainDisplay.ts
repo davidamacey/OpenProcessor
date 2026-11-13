@@ -54,3 +54,10 @@ export function checkSeverityClass(s: PreflightCheck['severity']): string {
       return 'border-line-strong bg-surface-0 text-fg-2';
   }
 }
+
+/** The dataset picker's first option: the newest export, by its served time. */
+export function latestExportLabel(exportedAt: string | null | undefined): string {
+  return exportedAt
+    ? `Latest export · ${exportedAt.slice(0, 16).replace('T', ' ')}`
+    : 'Latest export';
+}
