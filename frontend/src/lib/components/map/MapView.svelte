@@ -59,6 +59,8 @@
     precision: 0,
     truncated: false,
     join_truncated: false,
+    n_located_matching: 0,
+    n_unlocated_matching: 0,
   };
 
   function pointOf(geometry: { type: string }): [number, number] {

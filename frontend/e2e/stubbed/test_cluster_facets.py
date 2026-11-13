@@ -17,9 +17,15 @@ FACET_UID = 'bbbb0002'
 FACETS = cluster_facets(
     FACET_UID,
     total=40,
-    detector_classes=[{'value': 'widget_x', 'count': 31}, {'value': 'widget_y', 'count': 0}],
+    detector_classes=[
+        {'value': 'widget_x', 'count': 31, 'label': None},
+        {'value': 'widget_y', 'count': 0, 'label': None},
+    ],
     validation={'validated': 4, 'unvalidated': 36},
-    review_tabs={'outliers': 3, 'detector_disagreements': 0},
+    review_tabs=[
+        {'value': 'outliers', 'count': 3, 'label': 'Outliers'},
+        {'value': 'detector_disagreements', 'count': 0, 'label': 'Detector disagrees'},
+    ],
     detector_confidence=[
         {'min': 0.0, 'max': 0.1, 'count': 0},
         {'min': 0.9, 'max': None, 'count': 25},
@@ -72,6 +78,9 @@ def test_facet_chips_show_served_counts_and_send_the_served_filters(stub, page, 
     expect(facets).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     expect(facets.get_by_test_id('facet-detector-class')).to_have_text(
         ['widget_x 31', 'widget_y 0']
+    )
+    expect(facets.get_by_test_id('facet-review-tab')).to_have_text(
+        ['Outliers 3', 'Detector disagrees 0']
     )
     expect(facets.get_by_test_id('facet-confidence-bin')).to_have_text(['0.0–0.1 0', '0.9+ 25'])
     expect(facets.get_by_test_id('facet-confidence-missing')).to_have_text('none: 2')

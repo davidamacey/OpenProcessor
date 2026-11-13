@@ -87,6 +87,7 @@ describe('shared item-filter enums equal the contract enums', () => {
 describe('item-filter body schemas', () => {
   it('ItemFilter has exactly the served properties', () => {
     const local = keys({
+      audit_outcome: true,
       class_id: true,
       class_names: true,
       class_source: true,

@@ -8,6 +8,8 @@ import spec from '$contracts/openapi/curation.json';
 import { URL_KEYS } from './itemFilterState.svelte';
 
 const NOT_ON_BAR = [
+  // an audit verdict is opened by a link from the audit page, not set on the bar
+  'audit_outcome',
   // paging, ordering and lookups
   'cursor',
   'limit',

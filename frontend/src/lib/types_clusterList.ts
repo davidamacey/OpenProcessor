@@ -45,6 +45,8 @@ export interface ClusterListFilter {
 export interface FacetCount {
   value: string;
   count: number;
+  /** The served name for `value`; null when the value is its own name. */
+  label: string | null;
 }
 
 /** `ConfidenceBin`: `min` and `max` are the values to send as
@@ -62,7 +64,8 @@ export interface ClusterFacets {
   detector_classes: FacetCount[];
   class_sources: FacetCount[];
   validation: { validated: number; unvalidated: number };
-  review_tabs: Record<string, number>;
+  /** One per review filter: `value` is the `review_tab` id, `label` its served name. */
+  review_tabs: FacetCount[];
   detector_confidence: ConfidenceBin[];
   detector_confidence_missing: number;
 }

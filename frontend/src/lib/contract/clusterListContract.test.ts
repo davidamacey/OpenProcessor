@@ -73,7 +73,7 @@ describe('cluster list contract', () => {
     expect(keys<keyof SortOption>({ id: true, label: true })).toEqual(
       propsOf('SortOption'),
     );
-    expect(keys<keyof FacetCount>({ value: true, count: true })).toEqual(
+    expect(keys<keyof FacetCount>({ value: true, count: true, label: true })).toEqual(
       propsOf('FacetCount'),
     );
     expect(keys<keyof ConfidenceBin>({ min: true, max: true, count: true })).toEqual(

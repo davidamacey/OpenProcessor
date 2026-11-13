@@ -22,12 +22,15 @@ const FACETS: ClusterFacets = {
   cluster_uid: 'uid-7',
   total: 30,
   detector_classes: [
-    { value: 'widget_x', count: 20 },
-    { value: 'widget_y', count: 0 },
+    { value: 'widget_x', count: 20, label: null },
+    { value: 'widget_y', count: 0, label: null },
   ],
   class_sources: [],
   validation: { validated: 4, unvalidated: 26 },
-  review_tabs: { outliers: 3, detector_disagreements: 0 },
+  review_tabs: [
+    { value: 'outliers', count: 3, label: 'Outliers' },
+    { value: 'detector_disagreements', count: 0, label: 'Detector disagrees' },
+  ],
   detector_confidence: [
     { min: 0.0, max: 0.1, count: 0 },
     { min: 0.9, max: null, count: 12 },
