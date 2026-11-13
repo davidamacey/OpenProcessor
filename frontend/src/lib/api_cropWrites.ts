@@ -221,6 +221,36 @@ export async function undoVlmDismiss(
 }
 
 /**
+ * `POST {API_PREFIX}/crops/{id}/probe_dismiss`: keep the person's label
+ * against the model's disagreement; the item leaves the Disagreements queue
+ * until a new probe run scores it. `409` when the model does not disagree.
+ */
+export async function dismissProbeDisagreement(
+  cropId: string,
+  signal?: AbortSignal,
+): Promise<Crop> {
+  const raw = await apiFetch<RawCrop>(
+    `${scoped()}/crops/${encodeURIComponent(cropId)}/probe_dismiss`,
+    { method: 'POST' },
+    signal,
+  );
+  return mapRawCrop(raw);
+}
+
+/** `POST {API_PREFIX}/crops/{id}/probe_dismiss/undo`: bring the disagreement back. */
+export async function undoProbeDismiss(
+  cropId: string,
+  signal?: AbortSignal,
+): Promise<Crop> {
+  const raw = await apiFetch<RawCrop>(
+    `${scoped()}/crops/${encodeURIComponent(cropId)}/probe_dismiss/undo`,
+    { method: 'POST' },
+    signal,
+  );
+  return mapRawCrop(raw);
+}
+
+/**
  * `POST {API_PREFIX}/crops/{id}/region/undo` (M6, backend b654da5):
  * restore the region to its state before the most recent not-yet-undone
  * human region write (confirm, reject, false positive, box edit, status

@@ -36,6 +36,7 @@ import {
   undoCropRegion,
   undoCropRegionBatch,
   undoLabelBatch,
+  undoProbeDismiss,
   undoVlmDismiss,
   excludeCrops,
   unexcludeCrops,
@@ -87,6 +88,11 @@ async function revertEntry(entry: UndoEntry): Promise<Crop[]> {
   if (kind === 'vlm_dismiss') {
     const crop = await undoVlmDismiss(entry.crop_ids[0]!);
     toastStore.success('VLM suggestion restored.');
+    return [crop];
+  }
+  if (kind === 'probe_dismiss') {
+    const crop = await undoProbeDismiss(entry.crop_ids[0]!);
+    toastStore.success('Back in Disagreements.');
     return [crop];
   }
   const region = kind === 'region';
@@ -220,6 +226,11 @@ class UndoStore {
   /** M6/V1: record a Reject-VLM (`vlm_dismiss`) as one undo entry. */
   recordVlmDismiss(cropId: string): void {
     this.push({ crop_ids: [cropId], at: Date.now(), kind: 'vlm_dismiss' });
+  }
+
+  /** Record a "Keep my label" (`probe_dismiss`) as one undo entry. */
+  recordProbeDismiss(cropId: string): void {
+    this.push({ crop_ids: [cropId], at: Date.now(), kind: 'probe_dismiss' });
   }
 
   /**

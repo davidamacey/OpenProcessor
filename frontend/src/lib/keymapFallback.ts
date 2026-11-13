@@ -130,6 +130,7 @@ const SEEDS: ActionSeed[] = [
     ['enter'],
   ],
   ['review.queue.discard', 'review.queue', 'discard', 'Discard', ['d']],
+  ['review.queue.keep_label', 'review.queue', 'keep', 'Keep my label', ['shift+k']],
   ['review.queue.class_picker', 'review.queue', null, 'Search all classes…', ['/']],
   ['review.queue.prev', 'review.queue', 'prev', 'Previous item', ['arrowleft']],
   ['review.queue.next', 'review.queue', 'next', 'Next item', ['arrowright']],

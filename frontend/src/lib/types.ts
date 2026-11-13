@@ -475,7 +475,14 @@ export interface UndoEntry {
    * thing on purpose: it's bound to its own `X`/`U` keys, never `Z`, so
    * there's no ordering question to get right by sharing a stack.
    */
-  kind?: 'label' | 'label_op' | 'region' | 'vlm_dismiss' | 'exclude' | 'unexclude';
+  kind?:
+    | 'label'
+    | 'label_op'
+    | 'region'
+    | 'vlm_dismiss'
+    | 'probe_dismiss'
+    | 'exclude'
+    | 'unexclude';
   /** `kind: 'label_op'`: the recorded operation Z undoes by id
    *  (`POST /label_ops/{op_id}/undo`, queued as a job). */
   op_id?: string;

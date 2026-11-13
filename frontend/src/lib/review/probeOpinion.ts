@@ -28,6 +28,8 @@ export type ProbeOpinionKind = 'no_opinion' | 'prediction' | 'unsure' | 'none';
 export interface ProbeOpinion {
   kind: ProbeOpinionKind;
   showAccept: boolean;
+  /** The model disagrees with the label: the person may keep theirs (served `probe_disagreement`). */
+  showKeepLabel: boolean;
 }
 
 export const NO_OPINION_TEXT = "no opinion (outside the probe's classes)";
@@ -41,14 +43,20 @@ export function probeOpinion(
     probe_pred_class_id?: number | null;
   },
 ): ProbeOpinion {
-  if (item.probe_in_scope === false) return { kind: 'no_opinion', showAccept: false };
-  if (!item.probe_pred_class) return { kind: 'none', showAccept: false };
+  if (item.probe_in_scope === false)
+    return { kind: 'no_opinion', showAccept: false, showKeepLabel: false };
+  if (!item.probe_pred_class)
+    return { kind: 'none', showAccept: false, showKeepLabel: false };
   if (item.probe_disagreement === true && item.probe_actionable !== true) {
-    return { kind: 'unsure', showAccept: false };
+    return { kind: 'unsure', showAccept: false, showKeepLabel: true };
   }
   const showAccept =
     item.probe_disagreement === true &&
     item.probe_actionable === true &&
     item.probe_pred_class_id != null;
-  return { kind: 'prediction', showAccept };
+  return {
+    kind: 'prediction',
+    showAccept,
+    showKeepLabel: item.probe_disagreement === true,
+  };
 }

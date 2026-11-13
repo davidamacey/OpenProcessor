@@ -17,7 +17,11 @@
  * a page-level and a controller-level copy that can drift apart.
  */
 
-import { putCropLabel, reviewDismissCrop } from '$lib/api_cropWrites';
+import {
+  dismissProbeDisagreement,
+  putCropLabel,
+  reviewDismissCrop,
+} from '$lib/api_cropWrites';
 import { apiErrorText } from '$lib/api_errors';
 import type { Pager } from '$lib/pager.svelte';
 import type { ReviewItem } from '$lib/types_review';
@@ -109,6 +113,19 @@ export function createReviewQueueController(opts: ReviewQueueControllerOptions) 
     }
   }
 
+  /** "Keep my label": the model disagrees, the person keeps theirs. Undoable with Z. */
+  async function keepLabel(item: ReviewItem): Promise<void> {
+    const restore = removeFromQueue(item);
+    try {
+      await dismissProbeDisagreement(item.id);
+      undoStore.recordProbeDismiss(item.id);
+      toastStore.success('Kept your label. Z undoes.');
+    } catch (e) {
+      restore();
+      toastStore.error(`Keep label failed: ${apiErrorText(e)}`);
+    }
+  }
+
   async function undoLast(): Promise<void> {
     const crops = await undoStore.undoLast();
     if (crops.length === 0) return;
@@ -130,7 +147,7 @@ export function createReviewQueueController(opts: ReviewQueueControllerOptions) 
     }
   }
 
-  return { removeFromQueue, assign, skip, discard, undoLast };
+  return { removeFromQueue, assign, skip, discard, keepLabel, undoLast };
 }
 
 export type ReviewQueueController = ReturnType<typeof createReviewQueueController>;

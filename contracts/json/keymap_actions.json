@@ -70,6 +70,17 @@
     {
       "context": "review.queue",
       "default": [
+        "shift+k"
+      ],
+      "description": "Keep the label against the model's disagreement and leave the Disagreements queue.",
+      "group": "keep",
+      "id": "review.queue.keep_label",
+      "label": "Keep my label",
+      "modifiable": true
+    },
+    {
+      "context": "review.queue",
+      "default": [
         "/"
       ],
       "description": "Open the class-assignment picker.",

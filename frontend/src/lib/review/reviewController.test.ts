@@ -17,6 +17,7 @@ vi.mock('$lib/api_cropWrites', async () => {
     ...actual,
     putCropLabel: vi.fn(),
     reviewDismissCrop: vi.fn(),
+    dismissProbeDisagreement: vi.fn(),
     undoCropLabel: vi.fn(),
     undoLabelBatch: vi.fn(),
   };
@@ -32,6 +33,7 @@ vi.mock('$lib/api_cropRead', async () => {
 import { getCropsByIds } from '$lib/api_cropRead';
 import { undoLabelOpToEnd } from '$lib/labelOps/runLabelOp';
 import {
+  dismissProbeDisagreement,
   putCropLabel,
   reviewDismissCrop,
   undoCropLabel,
@@ -94,6 +96,36 @@ function setup(items: ReviewItem[]) {
 afterEach(() => {
   vi.clearAllMocks();
   undoStore.clear();
+});
+
+describe('keepLabel', () => {
+  it('removes the item, records an undoable dismissal on success', async () => {
+    vi.mocked(dismissProbeDisagreement).mockResolvedValue({} as never);
+    vi.spyOn(toastStore, 'success').mockImplementation(() => 'toast-id');
+    const record = vi.spyOn(undoStore, 'recordProbeDismiss');
+    const a = item('a');
+    const b = item('b');
+    const { queue, controller } = setup([a, b]);
+
+    await controller.keepLabel(a);
+
+    expect(dismissProbeDisagreement).toHaveBeenCalledWith('a');
+    expect(queue.items.map((i) => i.id)).toEqual(['b']);
+    expect(record).toHaveBeenCalledWith('a');
+  });
+
+  it('puts the item back and records nothing when the write fails', async () => {
+    vi.mocked(dismissProbeDisagreement).mockRejectedValue(new Error('down'));
+    vi.spyOn(toastStore, 'error').mockImplementation(() => 'toast-id');
+    const record = vi.spyOn(undoStore, 'recordProbeDismiss');
+    const a = item('a');
+    const { queue, controller } = setup([a]);
+
+    await controller.keepLabel(a);
+
+    expect(queue.items.map((i) => i.id)).toEqual(['a']);
+    expect(record).not.toHaveBeenCalled();
+  });
 });
 
 describe('assign', () => {

@@ -29,7 +29,7 @@ describe('probeOpinion', () => {
         probe_disagreement: true,
         probe_actionable: true,
       }),
-    ).toEqual({ kind: 'prediction', showAccept: true });
+    ).toEqual({ kind: 'prediction', showAccept: true, showKeepLabel: true });
   });
 
   it('disagreeing but not actionable is "unsure", never Accept', () => {
@@ -40,7 +40,7 @@ describe('probeOpinion', () => {
         probe_disagreement: true,
         probe_actionable: false,
       }),
-    ).toEqual({ kind: 'unsure', showAccept: false });
+    ).toEqual({ kind: 'unsure', showAccept: false, showKeepLabel: true });
   });
 
   it('disagreeing with a null probe_actionable (older/un-backfilled item) is also "unsure"', () => {
@@ -51,7 +51,7 @@ describe('probeOpinion', () => {
         probe_disagreement: true,
         probe_actionable: null,
       }),
-    ).toEqual({ kind: 'unsure', showAccept: false });
+    ).toEqual({ kind: 'unsure', showAccept: false, showKeepLabel: true });
   });
 
   it('never offers Accept when probe_disagreement is null (not scored / no opinion)', () => {
@@ -74,7 +74,7 @@ describe('probeOpinion', () => {
         probe_disagreement: false,
         probe_actionable: true,
       }),
-    ).toEqual({ kind: 'prediction', showAccept: false });
+    ).toEqual({ kind: 'prediction', showAccept: false, showKeepLabel: false });
   });
 
   it('out of the probe classes is "no opinion", never a prediction', () => {
@@ -85,7 +85,7 @@ describe('probeOpinion', () => {
         probe_disagreement: null,
         probe_actionable: null,
       }),
-    ).toEqual({ kind: 'no_opinion', showAccept: false });
+    ).toEqual({ kind: 'no_opinion', showAccept: false, showKeepLabel: false });
   });
 
   it('actionable disagreement offers Accept even when probe_pred_class_id equals class_id (served flags decide, not a client id compare)', () => {
@@ -97,7 +97,7 @@ describe('probeOpinion', () => {
         probe_disagreement: true,
         probe_actionable: true,
       }),
-    ).toEqual({ kind: 'prediction', showAccept: true });
+    ).toEqual({ kind: 'prediction', showAccept: true, showKeepLabel: true });
   });
 
   it('never offers Accept when the served probe_pred_class_id is missing, even if actionable', () => {
@@ -109,7 +109,7 @@ describe('probeOpinion', () => {
         probe_disagreement: true,
         probe_actionable: true,
       }),
-    ).toEqual({ kind: 'prediction', showAccept: false });
+    ).toEqual({ kind: 'prediction', showAccept: false, showKeepLabel: true });
   });
 
   it('nothing to show without a served prediction', () => {
@@ -121,6 +121,6 @@ describe('probeOpinion', () => {
         probe_disagreement: true,
         probe_actionable: true,
       }),
-    ).toEqual({ kind: 'none', showAccept: false });
+    ).toEqual({ kind: 'none', showAccept: false, showKeepLabel: false });
   });
 });

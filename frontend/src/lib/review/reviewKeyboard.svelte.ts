@@ -32,7 +32,7 @@ export interface ReviewKeyboardOptions {
 export function installReviewKeyboard(opts: ReviewKeyboardOptions): void {
   const { tabs, loader, edit } = opts;
   const { queue, maybePrefetch } = loader;
-  const { assign, confirmAndAdvance, discard, skip, undoLast } = opts.actions;
+  const { assign, confirmAndAdvance, discard, keepLabel, skip, undoLast } = opts.actions;
   const { openPicker } = opts.picker;
   const { multiBox, toggleEdit } = edit;
   const { confirmSlot, confirmMultiBoxSlot, rejectSlot, markFalsePositive, slotBack } =
@@ -139,6 +139,7 @@ export function installReviewKeyboard(opts: ReviewKeyboardOptions): void {
         openPicker();
       });
       reg('review.queue.discard', discard);
+      reg('review.queue.keep_label', keepLabel);
       reg('review.queue.class_picker', openPicker);
     }
     if (!editMode) {

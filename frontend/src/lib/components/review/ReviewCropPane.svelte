@@ -304,6 +304,7 @@
       opinion={actions.opinion}
       searchScores={loader.searchScores}
       acceptModelClass={actions.acceptModelClass}
+      keepLabel={actions.keepLabel}
     />
 
     {#if loader.semanticSearchAvailable}
