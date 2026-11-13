@@ -83,8 +83,8 @@ describe('Tabs on a narrow screen', () => {
         ).not.toBeNull();
       }
     } finally {
-      delete (HTMLElement.prototype as Partial<HTMLElement>).clientWidth;
-      delete (HTMLElement.prototype as Partial<HTMLElement>).scrollWidth;
+      Reflect.deleteProperty(HTMLElement.prototype, 'clientWidth');
+      Reflect.deleteProperty(HTMLElement.prototype, 'scrollWidth');
     }
   });
 });
