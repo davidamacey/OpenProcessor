@@ -175,6 +175,7 @@ def test_unembedded_banner_on_an_ordered_cluster_view(stub, page, app_url):
         },
     )
     page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:{CLUSTER_UID}')
+    page.get_by_test_id('scope-refine').click(timeout=ACTION_TIMEOUT_MS)
     banner = page.get_by_test_id('unembedded-banner')
     banner.wait_for(timeout=ACTION_TIMEOUT_MS)
     expect(banner).to_contain_text('1 items in scope have no vector and are not ranked')
@@ -265,6 +266,7 @@ def test_reprocess_embed_options_and_served_detail(stub, page, app_url):
     page.goto(f'{app_url}/p/default/workspace?view=clusters&scope=cluster:{CLUSTER_UID}')
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
     page.keyboard.press('a')
+    page.get_by_test_id('bulk-more').click()
     page.get_by_test_id('reprocess-open').first.click()
     dialog = page.get_by_role('dialog', name='Reprocess')
     dialog.get_by_label('Compute vectors', exact=True).check()

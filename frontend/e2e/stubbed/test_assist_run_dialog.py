@@ -259,6 +259,8 @@ def test_assist_dialog_dry_run_then_run_then_apply(stub, page, app_url):
     page.locator('img').nth(0).click()
     page.locator('img').nth(1).click(modifiers=['Control'])
     expect(page.get_by_text('2 selected').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    # With a selection the bulk bar replaces the header row; Assist is under its More menu.
+    page.get_by_test_id('bulk-more').click()
     page.get_by_test_id('assist-open').click()
     dialog = page.get_by_test_id('assist-dialog')
     expect(dialog).to_be_visible()
