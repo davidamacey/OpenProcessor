@@ -57,6 +57,12 @@ export function selectionKindFor(
   }
 }
 
+/** The ids of `sel` when it is a selection of `kind`, else none: what a view of that kind
+ *  seeds its own grid with when it opens. */
+export function heldIds(sel: WorkspaceSelection, kind: SelectionKind): string[] {
+  return sel.kind === kind ? selectedIds(sel) : [];
+}
+
 /** The ids a selection holds, `[]` for `none` and `matching`. */
 function selectedIds(sel: WorkspaceSelection): string[] {
   switch (sel.kind) {
