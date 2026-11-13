@@ -92,6 +92,7 @@ def review_item(i: int, **over) -> dict:
         proposed_class_id=2,
         proposed_class_name='touringbike',
         label_validated=False,
+        class_validated=False,
         label_source='vlm',
         thumbnail_url=f'/curation/crops/crop-{i}/thumbnail',
         **over,
@@ -170,7 +171,7 @@ def test_picker_and_quick_assign_never_offer_the_region_class(stub, page, app_ur
     search = page.get_by_placeholder('Search all 2 classes…')
     search.wait_for(timeout=5000)
     rows = page.get_by_role('dialog', name='Search classes').locator('li button')
-    row_names = [r.split('\n')[0].strip() for r in rows.all_inner_texts()]
+    row_names = [' '.join(r.split()) for r in rows.all_inner_texts()]
     assert all(REGION_CLASS not in r for r in row_names), row_names
     assert 'touringbike' in row_names[0], row_names
 

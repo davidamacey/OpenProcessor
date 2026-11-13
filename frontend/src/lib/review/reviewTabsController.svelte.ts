@@ -5,6 +5,7 @@
  * per-queue vocabulary: label, honoured filters and the queue-only filter values the URL carries.
  */
 import { ITEM_FILTER_PARAMS } from '$lib/itemFilter/itemFilterControls';
+import { createReviewDefaultQueue } from '$lib/review/reviewDefaultQueue.svelte';
 import { REVIEW_TABS, tabForQueue } from '$lib/reviewTabs';
 import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
 import { reviewTabsVocabularyStore } from '$stores/reviewTabsVocabulary.svelte';
@@ -29,6 +30,10 @@ export function createReviewTabsController(ws: WorkspaceController) {
   // True from mount until that item is located (or the attempt gives up). While true the keys
   // register nothing, so a keypress cannot act on whatever item #1 of the first page is.
   let awaitingDeepLink = $state<boolean>(pendingCropId != null);
+
+  // svelte-ignore state_referenced_locally
+  const walksDetections = !queue && pendingCropId != null;
+  const defaultQueue = createReviewDefaultQueue(ws, () => queue, walksDetections);
 
   /** The queue-only filters this queue serves (region status, text, ...): every served spec the
    *  shared item filter does not own. They live in the URL as plain parameters. */
@@ -86,6 +91,12 @@ export function createReviewTabsController(ws: WorkspaceController) {
     },
     get queueFilterValues() {
       return queueFilterValues;
+    },
+    get defaultPending() {
+      return defaultQueue.defaultPending;
+    },
+    get nothingToReview() {
+      return defaultQueue.nothingToReview;
     },
     get activeQueueLabel() {
       return activeQueueLabel;

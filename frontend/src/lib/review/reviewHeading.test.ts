@@ -2,8 +2,8 @@
 import { expect, it } from 'vitest';
 import { reviewSource } from '$lib/testing/reviewPageSources';
 
-it('the header carries the queue label as the heading', () => {
+it('the header carries the queue label as the (screen-reader) page heading, shown once as text', () => {
   expect(reviewSource('lib/components/review/ReviewHeader.svelte')).toMatch(
-    /<h1[^>]*data-testid="review-queue-label">\s*\{tabs\.activeQueueLabel\}\s*<\/h1>/,
+    /<h1 class="sr-only" data-testid="review-queue-label">\{tabs\.activeQueueLabel\}<\/h1>/,
   );
 });

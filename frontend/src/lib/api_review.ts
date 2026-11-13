@@ -95,6 +95,8 @@ export interface ReviewEmptyState {
 export interface ReviewTabsResponse {
   tabs: ReviewTabVocabularyEntry[];
   empty_state: ReviewEmptyState;
+  /** The first queue, in served order, that holds work; null when every queue is empty. */
+  default_tab: string | null;
 }
 
 /** The review queues in served order, each with its `count` under `filter` (the Workspace filter,

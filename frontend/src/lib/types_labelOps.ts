@@ -2,6 +2,8 @@
 // (`contracts/openapi/curation.json`), pinned key for key by
 // `contract/labelOpsContract.test.ts`.
 
+import type { ItemFilter } from '$lib/types_itemFilter';
+
 export const LABEL_OP_STATUSES = [
   'writing',
   'interrupted',
@@ -27,7 +29,12 @@ export interface LabelOpUndoPass {
 export interface LabelOp {
   op_id: string;
   kind:
-    'label' | 'move' | 'assist_loop_propagate' | 'assist_loop_review' | 'adopt_detector';
+    | 'label'
+    | 'move'
+    | 'assist_loop_propagate'
+    | 'assist_loop_review'
+    | 'adopt_detector'
+    | 'accept_machine';
   at: string;
   finished_at: string | null;
   class_name: string | null;
@@ -106,6 +113,43 @@ export interface AdoptDetectorResponse {
   blocked: string[];
   blocked_items: number;
   /** Items beyond this operation (one writes at most 20,000): adopt again. */
+  remaining: number;
+  op_id: string | null;
+  job_id: string | null;
+}
+
+/** `AcceptMachineRequest`: `POST /label_ops/accept_machine`. */
+export interface AcceptMachineRequest {
+  dry_run: boolean;
+  /** The bar, 0.5 to 1.0: the detector's score, or the VLM's confidence category. */
+  min_confidence: number;
+  sources: ('detector' | 'vlm')[];
+  filter?: ItemFilter | null;
+}
+
+/** `AcceptedClassCount`: machine labels the operation accepts, by class name. */
+export interface AcceptedClassCount {
+  class_name: string;
+  count: number;
+}
+
+/** `AcceptHeldBack`: what the operation leaves alone, by reason. */
+export interface AcceptHeldBack {
+  audit_sample: number;
+  deprecated_class: number;
+  excluded: number;
+  holdout: number;
+  locked: number;
+}
+
+/** `AcceptMachineResponse`: what accepting would do (dry run) or did. `op_id` and `job_id` are
+ *  null for a dry run and when nothing qualified. */
+export interface AcceptMachineResponse {
+  dry_run: boolean;
+  items: number;
+  by_class: AcceptedClassCount[];
+  held_back: AcceptHeldBack;
+  /** Items beyond this operation (one writes at most 20,000): accept again. */
   remaining: number;
   op_id: string | null;
   job_id: string | null;
