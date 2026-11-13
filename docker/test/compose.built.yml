@@ -18,6 +18,8 @@ services:
     image: op-local/openprocessor-api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
     build: !reset null
     volumes: !override
+      # the builtin engine seed reads /app/models; the image keeps its copy elsewhere
+      - ../../models:/app/models:ro
       - ./verify-data/secrets/postgres:/run/secrets/op_pg:ro
 
   fake-triton:
@@ -92,6 +94,7 @@ services:
     image: op-local/openprocessor-api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
     volumes: !override
       - ./fake_trainer.py:/opt/fake_trainer/fake_trainer.py:ro
+      - ./fake_onnx.py:/opt/fake_trainer/fake_onnx.py:ro
       - ./verify-data:/verify-data
       - ./verify-data/secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
       - ./verify-data/secrets/valkey/password:/run/secrets/op_valkey/password:ro

@@ -87,17 +87,21 @@ def worker_stack() -> Iterator[None]:
         )  # fmt: skip
         # A thawed worker reports unhealthy until its next probe, so `up --wait` would refuse it.
         assert wait_until(_all_healthy, timeout=120, interval=3.0), _compose.service_states()
-        # A finished merge queues a projection sync in the same exclusive group: let it end.
+        # A finished merge leaves an outbox row; the reaper turns it into a projection-sync job on
+        # a later tick, in the same exclusive group. Wait for the row to be done as well as for the
+        # jobs table to be idle, or a job can appear after the idle check and block the next merge.
         assert wait_until(
             lambda: (
                 _compose.psql(
-                    "SELECT count(*) FROM jobs WHERE status IN ('queued', 'running', 'cancelling')"
+                    'SELECT (SELECT count(*) FROM jobs '
+                    "WHERE status IN ('queued', 'running', 'cancelling')) "
+                    '+ (SELECT count(*) FROM search_projection_tasks WHERE done_at IS NULL)'
                 )
                 == '0'
             ),
             timeout=120,
             interval=3.0,
-        ), 'jobs from an earlier check are still active'
+        ), 'jobs or projection tasks from an earlier check are still active'
 
     heal()
     yield
