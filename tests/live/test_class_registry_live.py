@@ -18,6 +18,7 @@ from typing import Any
 import pytest
 
 from tests.live._compose import compose
+from tests.live.conftest import free_hotkey_letter
 
 
 pytestmark = pytest.mark.live
@@ -107,11 +108,14 @@ def test_the_routes_read_and_write_the_same_registry(api_client: Any) -> None:
     class_id = created.json()['class_id']
 
     # The hotkey is released again so a rerun against the same registry finds it free.
-    updated = api_client.put(f'/classes/{class_id}', json={'hotkey_letter': 'q', 'group': 'moved'})
+    letter = free_hotkey_letter(api_client)
+    updated = api_client.put(
+        f'/classes/{class_id}', json={'hotkey_letter': letter, 'group': 'moved'}
+    )
     assert updated.status_code == 200, updated.text
     try:
         listed = {c['class_id']: c for c in api_client.get('/classes').json()['classes']}
-        assert listed[class_id]['hotkey_letter'] == 'q'
+        assert listed[class_id]['hotkey_letter'] == letter
         assert listed[class_id]['group'] == 'moved'
         assert listed[class_id]['class_name'] == name
     finally:

@@ -14,12 +14,15 @@ from typing import Any
 
 import pytest
 
+from src.services.curation.keymap import reserved_hotkeys
+
 from .conftest import (
     FROZEN_CLASS,
     INDEXES,
     MERGE_SOURCE_CLASS,
     MERGE_TARGET_CLASS,
     crop_ids_in,
+    free_hotkey_letter,
     get_doc,
     refresh,
     request_when_free,
@@ -79,13 +82,16 @@ def test_rename_and_hotkey_update_persist(api_client: Any) -> None:
     assert resp.status_code == 200, resp.text
     assert resp.json()['class_name'] == renamed
 
-    resp = api_client.put(f'/classes/{class_id}', json={'hotkey_letter': 'q'})
+    letter = free_hotkey_letter(api_client)
+    resp = api_client.put(f'/classes/{class_id}', json={'hotkey_letter': letter})
     assert resp.status_code == 200, resp.text
     try:
-        assert resp.json()['hotkey_letter'] == 'q'
+        assert resp.json()['hotkey_letter'] == letter
 
         # A reserved action letter must be refused rather than silently bound.
-        resp = api_client.put(f'/classes/{class_id}', json={'hotkey_letter': 'g'})
+        resp = api_client.put(
+            f'/classes/{class_id}', json={'hotkey_letter': reserved_hotkeys({})[0]}
+        )
         assert resp.status_code == 422, resp.text
 
         assert _classes(api_client)[class_id]['class_name'] == renamed

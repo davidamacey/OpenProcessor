@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import string
 import subprocess  # nosec B404 - drives the harness's own compose project
 import time
 from collections.abc import Mapping
@@ -25,6 +26,8 @@ from urllib.parse import urlparse
 
 import httpx
 import pytest
+
+from src.services.curation.keymap import reserved_hotkeys
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -460,6 +463,16 @@ def class_ids(api_client: Any) -> dict[str, int]:
     resp = api_client.get('/classes')
     resp.raise_for_status()
     return {c['class_name']: c['class_id'] for c in resp.json()['classes']}
+
+
+def free_hotkey_letter(api_client: Any) -> str:
+    """A letter no class holds and no keymap action reserves right now. New classes take the first
+    free letter automatically, so a fixed letter is not free on a registry other tests wrote to."""
+    resp = api_client.get('/classes')
+    resp.raise_for_status()
+    blocked = {c['hotkey_letter'] for c in resp.json()['classes'] if c.get('hotkey_letter')}
+    blocked |= set(reserved_hotkeys({}))
+    return next(letter for letter in string.ascii_lowercase if letter not in blocked)
 
 
 @pytest.fixture
