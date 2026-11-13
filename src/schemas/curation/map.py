@@ -66,3 +66,13 @@ class MapCellCollection(BaseModel):
     precision: int = Field(description='The grid precision (tile zoom) the cells are at.')
     truncated: bool = False
     join_truncated: bool = False
+    n_located_matching: int = Field(
+        default=0,
+        description='Photos with a served position that match the request filter, across the '
+        'whole map (the viewport box does not narrow it).',
+    )
+    n_unlocated_matching: int = Field(
+        default=0,
+        description='Photos without a position that match the request filter: they are not on '
+        'the map.',
+    )

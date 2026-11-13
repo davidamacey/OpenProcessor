@@ -21844,6 +21844,18 @@
             "title": "Join Truncated",
             "type": "boolean"
           },
+          "n_located_matching": {
+            "default": 0,
+            "description": "Photos with a served position that match the request filter, across the whole map (the viewport box does not narrow it).",
+            "title": "N Located Matching",
+            "type": "integer"
+          },
+          "n_unlocated_matching": {
+            "default": 0,
+            "description": "Photos without a position that match the request filter: they are not on the map.",
+            "title": "N Unlocated Matching",
+            "type": "integer"
+          },
           "precision": {
             "description": "The grid precision (tile zoom) the cells are at.",
             "title": "Precision",

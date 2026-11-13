@@ -173,7 +173,7 @@ async def test_a_date_range_is_answered_on_the_images_index_without_the_item_joi
     await _cells(
         os, 'store', ItemFilter(taken_from=dt.date(2024, 3, 5), taken_to=dt.date(2024, 3, 6))
     )
-    assert len(os.calls) == 1
+    assert not [index for index, _ in os.calls if index.endswith('items')]
     flt = os.calls[0][1]['query']['bool']['filter']
     assert any('should' in c.get('bool', {}) for c in flt)
     assert 'capture.taken_utc' in json.dumps(flt)
@@ -184,7 +184,7 @@ async def test_an_item_filter_is_resolved_to_images_first_and_says_when_it_was_c
     os = FakeSearch(buckets=BUCKETS, joined=['img1', 'img2'], other_docs=5)
     got = await _cells(os, 'store', ItemFilter(class_names=['car']))
     assert got.join_truncated is True
-    (items_index, items_body), (_, images_body) = os.calls
+    (items_index, items_body), (_, images_body), *_counts = os.calls
     assert items_index.endswith('items')
     assert items_body['aggs']['images']['terms'] == {
         'field': 'image_id',
@@ -291,3 +291,56 @@ async def test_meta_counts_images_without_location() -> None:
     )
     # Under `drop` no image has a served position.
     assert (dropped.n_located, dropped.n_without_location) == (0, 250)
+
+
+def _located_project() -> Any:
+    """Three located photos (a, b, c), two without a position (d, e), one item each (a, b, d have
+    a car, c and e a person)."""
+    from curation.query_fakes import QueryFakeOpenSearch
+    from src.config.curation_accessors import images_index, items_index
+
+    def at(lon: float) -> dict[str, Any]:
+        return {'location': {'lat': 47.0, 'lon': lon}}
+
+    images = {
+        'a': {'image_id': 'a', 'capture': at(8.0)},
+        'b': {'image_id': 'b', 'capture': at(8.1)},
+        'c': {'image_id': 'c', 'capture': at(9.0)},
+        'd': {'image_id': 'd'},
+        'e': {'image_id': 'e'},
+    }
+    items = {
+        f'item-{i}': {'crop_id': f'item-{i}', 'image_id': i, 'class_name': name}
+        for i, name in {'a': 'car', 'b': 'car', 'c': 'person', 'd': 'car', 'e': 'person'}.items()
+    }
+    return QueryFakeOpenSearch({images_index(): images, items_index(): items})
+
+
+@pytest.mark.asyncio
+async def test_the_cells_serve_how_many_photos_match_the_filter_with_and_without_a_position() -> (
+    None
+):
+    project = _located_project()
+    everything = await _cells(project, 'store')
+    assert (everything.n_located_matching, everything.n_unlocated_matching) == (3, 2)
+    cars = await _cells(project, 'store', ItemFilter(class_names=['car']))
+    assert (cars.n_located_matching, cars.n_unlocated_matching) == (2, 1)
+    nobody = await _cells(project, 'store', ItemFilter(class_names=['zebra']))
+    assert (nobody.n_located_matching, nobody.n_unlocated_matching) == (0, 0)
+    assert nobody.features == []
+
+
+@pytest.mark.asyncio
+async def test_the_counts_ignore_the_viewport_box_the_cells_obey() -> None:
+    project = _located_project()
+    box = parse_geo_box('7.9,46,8.2,48')  # holds a and b, not c
+    got = await _cells(project, 'store', ItemFilter(class_names=['person']), box=box)
+    assert got.n_located_matching == 1  # c is outside the box but still matches the filter
+
+
+@pytest.mark.asyncio
+async def test_a_dropped_location_policy_counts_nothing_and_asks_nothing() -> None:
+    os = FakeSearch()
+    got = await _cells(os, 'drop')
+    assert (got.n_located_matching, got.n_unlocated_matching) == (0, 0)
+    assert os.calls == []
