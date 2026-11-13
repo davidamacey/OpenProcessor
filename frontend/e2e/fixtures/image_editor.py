@@ -3,6 +3,7 @@ sits in, and every write the editor makes. Shared by the editor's own tests and 
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from fixtures.contract import box_view, crop_label_written, fill, image_detail
@@ -146,18 +147,7 @@ class Editor:
         )
 
     def create_class(self, request: Any, _match: Any) -> Any:
-        name = request.post_data_json['name']
-        if name != name.lower().replace(' ', '_'):
-            return (
-                422,
-                {
-                    'detail': {
-                        'error': 'invalid_class_name',
-                        'message': 'Class names are lowercase with underscores.',
-                        'suggested_name': name.lower().replace(' ', '_'),
-                    }
-                },
-            )
+        name = re.sub(r'[^a-z0-9]+', '_', request.post_data_json['name'].lower()).strip('_')
         self.classes.append({**CLASSES[0], 'class_id': 9, 'class_name': name, 'hotkey_letter': ''})
         return (201, {'class_id': 9, 'class_name': name})
 

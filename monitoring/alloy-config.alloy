@@ -92,7 +92,7 @@ discovery.relabel "workers" {
   }
   rule {
     source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
-    regex         = "jobs-worker|periodic-worker|jobs-beat|open-vocab-worker|cluster-worker|gpu-arbiter-worker|curation-detection-worker|curation-vlm-worker|curation-auto-label-worker|curation-assist-loop-worker|curation-trainer|curation-evaluator|model-export-worker|segmenter|postgres|valkey"
+    regex         = "jobs-worker|interactive-worker|periodic-worker|jobs-beat|open-vocab-worker|cluster-worker|gpu-arbiter-worker|curation-detection-worker|curation-vlm-worker|curation-auto-label-worker|curation-assist-loop-worker|curation-trainer|curation-evaluator|model-export-worker|segmenter|postgres|valkey"
     action        = "keep"
   }
   rule {

@@ -53,7 +53,8 @@ wire contract see [design/curation_api_contract.md](design/curation_api_contract
         ^                      |  tasks (Celery)
         |                      v
   +---------------------------------------------+
-  | jobs-worker, periodic-worker, jobs-beat,    |
+  | jobs-worker, interactive-worker,            |
+  | periodic-worker, jobs-beat,                 |
   | open-vocab-worker (always); profile         |
   | `curation`: cluster, auto-label, assist     |
   | loop, detection and VLM stream workers;     |
@@ -93,7 +94,7 @@ checkout. GPU placement comes from `.env` keys, not from the compose files.
 | `postgres` | none | | PostgreSQL 18: projects, classes, config documents, settings, jobs, events, embedding spaces, cluster partitions, near-duplicate groups, the auto-label loop record. Row-level security scopes every project query. Internal only |
 | `valkey` | none | | Valkey 9: the Celery broker and the event wake-ups. Internal only, password required |
 | `db-migrate` | none | | One-shot: Alembic upgrade and OpenSearch index migration; the API and every worker wait for it and refuse to start at another schema revision |
-| `jobs-worker`, `periodic-worker`, `open-vocab-worker` | none | | Celery workers for the `jobs` (default concurrency 4), `periodic` and `open_vocab` queues |
+| `jobs-worker`, `interactive-worker`, `periodic-worker`, `open-vocab-worker` | none | | Celery workers for the `jobs` (default concurrency 4), `interactive` (label operations, concurrency 2), `periodic` and `open_vocab` queues |
 | `jobs-beat` | none | | The beat scheduler, one replica (`src/tasks/beat_schedule.py`: reaper, ingest dispatch, open-vocabulary sweep, serving inventory, near-duplicate rescore, cluster refresh and the rest) |
 | `cluster-worker` | `curation` | | Celery worker for the `cluster` queue (clustering runs, one task per child process) |
 | `curation-detection-worker`, `curation-vlm-worker` | `curation` | | Stream workers: the region cascade over pending items and the VLM class and verification loop. Replicas share projects through claims in PostgreSQL |

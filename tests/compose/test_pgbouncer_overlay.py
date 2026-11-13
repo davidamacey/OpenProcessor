@@ -15,6 +15,7 @@ OVERLAY = ('docker-compose.yml', 'docker-compose.pgbouncer.yml')
 POOLED = (
     'api',
     'jobs-worker',
+    'interactive-worker',
     'periodic-worker',
     'open-vocab-worker',
     'cluster-worker',

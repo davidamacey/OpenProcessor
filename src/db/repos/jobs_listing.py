@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select, tuple_
+from sqlalchemy import func, select, tuple_
 
 from src.db.models.jobs import Job
 from src.db.models.projects import Project
@@ -77,3 +77,18 @@ def list_page(
 def get_one(session: Session, flt: JobFilter, job_id: uuid.UUID) -> ListedJob | None:
     found = session.execute(_select(flt).where(Job.id == job_id)).mappings().first()
     return None if found is None else _listed(found)
+
+
+def queued_ahead(session: Session, *, queue: str, queued_at: dt.datetime, job_id: uuid.UUID) -> int:
+    """Jobs still ``queued`` on ``queue`` that were queued before this one (ties by id). Run it in
+    a deployment transaction: the jobs ahead belong to any project."""
+    query = (
+        select(func.count())
+        .select_from(Job.__table__)
+        .where(
+            Job.status == 'queued',
+            Job.queue == queue,
+            tuple_(Job.queued_at, Job.id) < tuple_(queued_at, job_id),
+        )
+    )
+    return int(session.execute(query).scalar_one())

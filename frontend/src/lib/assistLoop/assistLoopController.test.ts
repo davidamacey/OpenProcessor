@@ -151,7 +151,13 @@ describe('AssistLoopController', () => {
 
   it('sends the cluster scope as uids', async () => {
     ctl = new AssistLoopController(loopDeps());
-    expect(ctl.request.scope).toEqual({ cluster_uids: null, min_root_size: 40 });
+    expect(ctl.request.scope).toEqual({ cluster_uids: null, min_root_size: null });
+  });
+
+  it('sends the smallest cluster only when the person set one', async () => {
+    ctl = new AssistLoopController(loopDeps());
+    ctl.minRootSize = 12;
+    expect(ctl.request.scope.min_root_size).toBe(12);
   });
 
   it('rolls back only after a dry run, with the nodes it was asked about', async () => {

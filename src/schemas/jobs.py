@@ -59,6 +59,14 @@ class JobView(BaseModel):
     params: dict[str, Any] | None = Field(
         default=None, description='Only on the single-job route; the list leaves it out.'
     )
+    queue_ahead: int | None = Field(
+        default=None,
+        description=(
+            'Only on the single-job route, only while `queued`: jobs queued before this one on '
+            'its queue, over every project (running jobs hold the workers and are not counted). '
+            'Null otherwise.'
+        ),
+    )
     requested_by: str
     created_at: dt.datetime
     queued_at: dt.datetime | None

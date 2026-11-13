@@ -7,6 +7,8 @@ import type { ImageLocate } from '$lib/types_editor';
 import { editorApi as api, editorItem, resetEditorApi } from './editorApiMock';
 import type { CanvasApi } from './editorController.svelte';
 
+type XYBox = [number, number, number, number];
+
 vi.mock('$lib/api_images', async () =>
   (await import('./editorApiMock')).editorImagesModule(),
 );
@@ -272,6 +274,45 @@ describe('selecting and editing', () => {
     expect(far.bbox_norm.map((n: number) => +n.toFixed(6))).toEqual([
       0.09, 0.1, 0.29, 0.3,
     ]);
+  });
+
+  it('arrows pressed faster than the server answers each move from the box the last one left', async () => {
+    const { c } = await setup();
+    // A server that moves the box and bumps its revision, as PATCH /geometry does.
+    let box: [number, number, number, number] = [0.1, 0.1, 0.3, 0.3];
+    let revision = 2;
+    const stored = () => ({
+      ...served(),
+      items: [editorItem({ crop_id: 'c1', geometry_revision: revision }), c2, gone],
+      boxes: [imageBox({ crop_id: 'c1', bbox_norm: box }), ...served().boxes.slice(1)],
+    });
+    api.patchItemGeometry.mockImplementation(
+      async (
+        _id: string,
+        body: { bbox_norm: XYBox; expected_geometry_revision: number },
+      ) => {
+        if (body.expected_geometry_revision !== revision)
+          throw new ApiError(409, '/geometry', {});
+        box = body.bbox_norm;
+        revision += 1;
+        return { item: editorItem({ crop_id: 'c1', geometry_revision: revision }) };
+      },
+    );
+    api.getImage.mockImplementation(async () => stored());
+    c.attachCanvas({
+      zoomBy: vi.fn(),
+      zoomFit: vi.fn(),
+      zoomActual: vi.fn(),
+      cancelGesture: vi.fn(() => false),
+      pixelStep: () => ({ x: 0.01, y: 0.01 }),
+    });
+    c.select('c1');
+    await Promise.all([c.nudge(1, 0), c.nudge(1, 0), c.nudge(1, 0)]);
+    expect(
+      api.patchItemGeometry.mock.calls.map(([, b]) => b.expected_geometry_revision),
+    ).toEqual([2, 3, 4]);
+    expect(box.map((n) => +n.toFixed(6))).toEqual([0.13, 0.1, 0.33, 0.3]);
+    expect(c.stack.status).toBe('saved');
   });
 
   it('resize moves the bottom-right corner', async () => {

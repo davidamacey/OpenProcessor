@@ -468,7 +468,7 @@ docker compose -p <project> --profile curation up -d
 
 The `curation` profile starts five services: the detection and VLM stream workers and the
 Celery workers for auto-label, the assist loop and clustering. The always-on `jobs-worker`,
-`periodic-worker`, `open-vocab-worker` and `jobs-beat` run the rest, and the bake-off evaluator
+`interactive-worker`, `periodic-worker`, `open-vocab-worker` and `jobs-beat` run the rest, and the bake-off evaluator
 is started on demand.
 
 Details, GPU needs and the segmenter, trainer and GPU arbiter profiles:

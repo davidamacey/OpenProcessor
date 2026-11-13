@@ -63,13 +63,30 @@ def client(registry: InMemoryRegistry, fake_os: AsyncMock, monkeypatch: pytest.M
         yield c
 
 
-@pytest.mark.parametrize('name', ['Pickup Truck', 'pickup-truck', 'SUV', '', 'bus!'])
-def test_create_rejects_non_slug_names(
+@pytest.mark.parametrize('name', ['', '!!!'])
+def test_create_rejects_names_with_no_letter_or_digit(
     client: TestClient, registry: InMemoryRegistry, name: str
 ) -> None:
     r = client.post('/curation/projects/default/classes', json={'name': name})
     assert r.status_code == 422, r.text
     assert len(registry.load().classes) == 2
+
+
+@pytest.mark.parametrize(
+    ('typed', 'slug'),
+    [
+        ('Pickup Truck', 'pickup_truck'),
+        ('pickup-truck', 'pickup_truck'),
+        ('Box Truck', 'box_truck'),
+    ],
+)
+def test_create_stores_a_typed_name_as_its_slug(
+    client: TestClient, registry: InMemoryRegistry, typed: str, slug: str
+) -> None:
+    r = client.post('/curation/projects/default/classes', json={'name': typed})
+    assert r.status_code == 201, r.text
+    assert r.json()['class_name'] == slug
+    assert registry.load().classes[-1].class_name == slug
 
 
 def test_rename_rejects_non_slug_names(client: TestClient, registry: InMemoryRegistry) -> None:

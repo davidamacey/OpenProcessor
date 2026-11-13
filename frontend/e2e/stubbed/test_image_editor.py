@@ -1,7 +1,7 @@
 """The image editor at `/p/default/images/<image_id>`.
 
 - a dragged box, the class picker (the last class first) and Enter write `POST /images/{id}/items`
-- a class typed as "Traffic light" is refused with the served suggestion and created as `traffic_light`
+- a class typed as "Traffic light" is created under the slug the server answers (`traffic_light`)
 - a move the server refuses with a 409 shows the served message and the server's box
 - delete then Ctrl+Z writes `batch_exclude` then `batch_unexclude`
 - a class change then Ctrl+Z undoes the label operation the write recorded (`POST /label_ops/{op_id}/undo`)
@@ -76,7 +76,7 @@ def test_draw_pick_and_save_with_the_last_class_first(stub, page, app_url):
     assert [e for e in stub.console_errors if e.startswith('pageerror')] == []
 
 
-def test_a_new_class_is_created_with_the_served_suggestion(stub, page, app_url):
+def test_a_typed_class_name_is_created_under_the_served_slug(stub, page, app_url):
     ed = Editor(stub)
     ed.open(page, app_url)
     page.keyboard.press('b')
@@ -84,15 +84,11 @@ def test_a_new_class_is_created_with_the_served_suggestion(stub, page, app_url):
     box = page.get_by_role('combobox')
     box.fill('Traffic light')
     page.get_by_role('option', name='Create "Traffic light"').click()
-    expect(page.get_by_role('option', name='Create "traffic_light"')).to_be_visible(
-        timeout=ACTION_TIMEOUT_MS
-    )
-    page.keyboard.press('Enter')
     expect(page.get_by_test_id('object-list').locator('li[data-crop-id]')).to_have_count(
         3, timeout=ACTION_TIMEOUT_MS
     )
     assert ed.writes('POST', '/images/img-1/items')[0]['class_name'] == 'traffic_light'
-    assert ed.writes('POST', '/classes')[-1] == {'name': 'traffic_light'}
+    assert ed.writes('POST', '/classes')[-1] == {'name': 'Traffic light'}
 
 
 def test_a_refused_move_shows_the_served_message_and_the_servers_box(stub, page, app_url):

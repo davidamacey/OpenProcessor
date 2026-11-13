@@ -331,6 +331,23 @@ services:
     networks:
       - verify_net
 
+  interactive-worker:
+    image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
+    volumes: *api-volumes
+    environment:
+      <<: *process-env
+      REMAP_SIGTERM: SIGQUIT
+    command: celery -A src.tasks.app worker -Q interactive --concurrency=1 --hostname interactive@%h -E
+    healthcheck:
+      test: ["CMD", "python", "/app/scripts/healthcheck/celery_pool_healthcheck.py", "interactive"]
+      interval: 15s
+      timeout: 15s
+      start_period: 60s
+      retries: 3
+    depends_on: *worker-deps
+    networks:
+      - verify_net
+
   periodic-worker:
     image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
     volumes: *api-volumes

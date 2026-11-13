@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKER_SERVICES = (
     'jobs-worker',
+    'interactive-worker',
     'periodic-worker',
     'open-vocab-worker',
     'cluster-worker',

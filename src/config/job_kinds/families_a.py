@@ -45,7 +45,7 @@ KINDS: tuple[JobKind, ...] = (
     JobKind(
         name='label_op',
         task_name='op.jobs_a.label_op',
-        queue=TaskQueues.JOBS,
+        queue=TaskQueues.INTERACTIVE,
         project_scope='project',
         soft_limit_s=_HOUR_S,
         hard_limit_s=_HOUR_S + 300,
@@ -56,7 +56,7 @@ KINDS: tuple[JobKind, ...] = (
     JobKind(
         name='label_undo',
         task_name='op.jobs_a.label_undo',
-        queue=TaskQueues.JOBS,
+        queue=TaskQueues.INTERACTIVE,
         project_scope='project',
         soft_limit_s=_HOUR_S,
         hard_limit_s=_HOUR_S + 300,

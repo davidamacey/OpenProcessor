@@ -17,6 +17,7 @@ from compose._helpers import _services, render
 PYTHON_SERVICES = (
     'db-migrate',
     'jobs-worker',
+    'interactive-worker',
     'periodic-worker',
     'open-vocab-worker',
     'jobs-beat',

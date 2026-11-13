@@ -22,6 +22,7 @@ class TaskQueues:
     """Every Celery queue. A queue is declared here once and routed in ``task_routes``."""
 
     JOBS = 'jobs'
+    INTERACTIVE = 'interactive'
     PERIODIC = 'periodic'
     ARBITER = 'arbiter'
     OPEN_VOCAB = 'open_vocab'
@@ -34,6 +35,7 @@ class TaskQueues:
 
     ALL: tuple[str, ...] = (
         JOBS,
+        INTERACTIVE,
         PERIODIC,
         ARBITER,
         OPEN_VOCAB,
@@ -50,6 +52,7 @@ class TaskQueues:
 # profile is down holds its messages; the reaper fails the job after its max queue wait.
 QUEUE_PROFILE: dict[str, str] = {
     TaskQueues.JOBS: 'core',
+    TaskQueues.INTERACTIVE: 'core',
     TaskQueues.PERIODIC: 'core',
     TaskQueues.ARBITER: 'overlay',
     TaskQueues.OPEN_VOCAB: 'core',

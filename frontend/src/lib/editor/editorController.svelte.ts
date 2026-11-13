@@ -257,11 +257,18 @@ export function createEditorController(deps: EditorDeps) {
     selectedCropId = live.length > 0 ? live[Math.min(at, live.length - 1)].cropId : null;
   }
 
-  async function move(cropId: string, box: XYXY): Promise<void> {
-    const item = itemFor(cropId);
-    if (!item || item.geometry_locked || item.class_excluded) return;
-    await stack.run(moveCommand(item, box));
-    if (stack.regionBoxIds) drop = { cropId, box, regionBoxIds: stack.regionBoxIds };
+  /** `to` is the new box, or a function of the box the server holds when this move's turn comes. */
+  async function move(cropId: string, to: XYXY | ((from: XYXY) => XYXY)): Promise<void> {
+    let box: XYXY | null = null;
+    await stack.run(() => {
+      const item = itemFor(cropId);
+      const from = boxFor(cropId)?.bbox_norm;
+      if (!item || !from || item.geometry_locked || item.class_excluded) return null;
+      box = typeof to === 'function' ? to(from) : to;
+      return moveCommand(item, box);
+    });
+    if (box && stack.regionBoxIds)
+      drop = { cropId, box, regionBoxIds: stack.regionBoxIds };
   }
 
   async function confirmDrop(): Promise<void> {
@@ -286,18 +293,18 @@ export function createEditorController(deps: EditorDeps) {
 
   /** Moves the selected box by whole screen pixels. */
   function nudge(dx: number, dy: number): Promise<void> {
-    const box = selectedCropId ? boxFor(selectedCropId) : null;
-    if (!box || !canvas) return Promise.resolve();
+    const cropId = selectedCropId;
+    if (!cropId || !canvas) return Promise.resolve();
     const step = canvas.pixelStep();
-    return move(box.crop_id, translateXyxy(box.bbox_norm, dx * step.x, dy * step.y));
+    return move(cropId, (from) => translateXyxy(from, dx * step.x, dy * step.y));
   }
 
   /** Moves the bottom-right corner of the selected box by whole screen pixels. */
   function resizeCorner(dx: number, dy: number): Promise<void> {
-    const box = selectedCropId ? boxFor(selectedCropId) : null;
-    if (!box || !canvas) return Promise.resolve();
+    const cropId = selectedCropId;
+    if (!cropId || !canvas) return Promise.resolve();
     const step = canvas.pixelStep();
-    return move(box.crop_id, resizeXyxy(box.bbox_norm, 'se', dx * step.x, dy * step.y));
+    return move(cropId, (from) => resizeXyxy(from, 'se', dx * step.x, dy * step.y));
   }
 
   const undo = () => stack.undo();

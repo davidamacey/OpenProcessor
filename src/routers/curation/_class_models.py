@@ -64,7 +64,7 @@ CLASS_NAME_PATTERN = r'^[a-z0-9_]+$'
 
 
 class ClassCreateRequest(BaseModel):
-    # The slug rule is checked by the handler, which answers with a suggested name.
+    # A display name; the handler stores its slug.
     name: str
     group: str = 'unknown'
     notes: str = ''

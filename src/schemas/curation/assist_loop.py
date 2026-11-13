@@ -23,8 +23,14 @@ class LoopScope(BaseModel):
             'null = every cluster of it.'
         ),
     )
-    min_root_size: int = Field(
-        default=40, ge=1, description='Smaller clusters are left alone (no root).'
+    min_root_size: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            'Smaller clusters are left alone (no root). Null: the server sizes it from the '
+            'serving partition (40, or less when fewer than 10 clusters reach it) and the '
+            'stored run carries the number it chose.'
+        ),
     )
 
     @field_validator('cluster_uids')

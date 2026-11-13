@@ -8093,17 +8093,6 @@
             ],
             "title": "Soft Limit"
           },
-          "suggested_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Suggested Name"
-          },
           "unbound_class_hotkeys": {
             "anyOf": [
               {
@@ -19000,6 +18989,18 @@
             "title": "Queue",
             "type": "string"
           },
+          "queue_ahead": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only on the single-job route, only while `queued`: jobs queued before this one on its queue, over every project (running jobs hold the workers and are not counted). Null otherwise.",
+            "title": "Queue Ahead"
+          },
           "queued_at": {
             "anyOf": [
               {
@@ -21131,11 +21132,17 @@
             "title": "Cluster Uids"
           },
           "min_root_size": {
-            "default": 40,
-            "description": "Smaller clusters are left alone (no root).",
-            "minimum": 1.0,
-            "title": "Min Root Size",
-            "type": "integer"
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Smaller clusters are left alone (no root). Null: the server sizes it from the serving partition (40, or less when fewer than 10 clusters reach it) and the stored run carries the number it chose.",
+            "title": "Min Root Size"
           }
         },
         "title": "LoopScope",
@@ -47270,7 +47277,7 @@
         ]
       },
       "post": {
-        "description": "Append-only add. ``name`` must be a slug (``^[a-z0-9_]+$``, else 422\n``invalid_class_name`` with the ``suggested_name`` slug when one exists);\nan optional ``hotkey_letter`` is validated like on update before\nanything is written, against the bound project's stored keymap.",
+        "description": "Append-only add. ``name`` is a display name: it is stored as its registry slug\n(``normalize_class_name``, the one name rule, as ingest by_name does) and the\nresponse's ``class_name`` is that slug. A name with no slug-safe character is 422\n``invalid_class_name``. An optional ``hotkey_letter`` is validated like on update\nbefore anything is written, against the bound project's stored keymap.",
         "operationId": "create_class_curation_projects__project__classes_post",
         "parameters": [
           {

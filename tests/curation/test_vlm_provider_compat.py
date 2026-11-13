@@ -15,6 +15,7 @@ import httpx
 import pytest
 
 from src.domain.job_failure import JobFailedError
+from src.services.labeling.vlm_client import build_auth_headers
 from src.services.labeling.vlm_endpoint_body import VlmEndpointBody
 from src.services.labeling.vlm_endpoint_probe import probe_endpoint
 from src.services.labeling.vlm_endpoints import env_endpoint
@@ -232,3 +233,31 @@ def test_the_env_endpoint_defaults_are_the_local_ones(monkeypatch: pytest.Monkey
         'auto',
         0.0,
     )
+
+
+def test_the_env_endpoint_for_api_anthropic_com_is_the_anthropic_provider_without_the_variable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Anthropic's /v1/models answers 400 "anthropic-version: header is required" unless the
+    # provider is 'anthropic' (platform.claude.com/docs/en/api/models-list).
+    for name in ('OP_VLM_PROVIDER', 'OP_VLM_JSON_MODE', 'OP_VLM_TEMPERATURE'):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv('OP_VLM_URL', 'https://api.anthropic.com/v1')
+    monkeypatch.setenv('OP_VLM_MODEL', 'claude-haiku-5-5')
+    endpoint = env_endpoint()
+    assert endpoint is not None
+    assert (endpoint.body.provider, endpoint.body.json_mode, endpoint.body.temperature) == (
+        'anthropic',
+        'off',
+        None,
+    )
+    assert 'anthropic-version' in build_auth_headers('k', endpoint.body.provider)
+
+
+def test_an_explicit_provider_wins_over_the_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('OP_VLM_URL', 'https://api.anthropic.com/v1')
+    monkeypatch.setenv('OP_VLM_MODEL', 'm')
+    monkeypatch.setenv('OP_VLM_PROVIDER', 'openai_compatible')
+    endpoint = env_endpoint()
+    assert endpoint is not None
+    assert endpoint.body.provider == 'openai_compatible'

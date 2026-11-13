@@ -33,13 +33,28 @@ from src.services.rejections import rejection
 
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Sequence
 
     from opensearchpy import AsyncOpenSearch
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from src.schemas.curation.assist_loop import AssistLoopRequest
     from src.services.labeling.vlm_prompts import PromptPack
+
+
+DEFAULT_MIN_ROOT_SIZE = 40
+MIN_ROOTS = 10
+"""A loop is worth running on at least this many clusters, when the partition has them."""
+
+
+def sized_min_root_size(sizes: Sequence[int]) -> int:
+    """The threshold a loop that named none works with: ``DEFAULT_MIN_ROOT_SIZE``, lowered to the
+    size of the ``MIN_ROOTS``-th largest cluster when fewer reach it (all of them when fewer
+    exist). No clusters leaves the default, and the caller's ``no_roots`` refusal."""
+    ranked = sorted(sizes, reverse=True)
+    if not ranked:
+        return DEFAULT_MIN_ROOT_SIZE
+    return min(DEFAULT_MIN_ROOT_SIZE, ranked[min(MIN_ROOTS, len(ranked)) - 1])
 
 
 @asynccontextmanager
@@ -101,10 +116,17 @@ async def prepare_loop(
         await reader.pin()
     except NoServingPartitionError as exc:
         raise rejection(422, 'no_roots', str(exc)) from None
-    roots = await reader.survey(
-        PartitionScope(
-            cluster_uids=request.scope.cluster_uids, min_root_size=request.scope.min_root_size
+    min_root_size = request.scope.min_root_size
+    if min_root_size is None:
+        every = await reader.survey(
+            PartitionScope(cluster_uids=request.scope.cluster_uids, min_root_size=1)
         )
+        min_root_size = sized_min_root_size([r.members for r in every])
+        request = request.model_copy(
+            update={'scope': request.scope.model_copy(update={'min_root_size': min_root_size})}
+        )
+    roots = await reader.survey(
+        PartitionScope(cluster_uids=request.scope.cluster_uids, min_root_size=min_root_size)
     )
     if not roots:
         raise rejection(
@@ -130,4 +152,4 @@ async def prepare_loop(
     )
 
 
-__all__ = ['PreparedLoop', 'clustering_is_live', 'prepare_loop']
+__all__ = ['PreparedLoop', 'clustering_is_live', 'prepare_loop', 'sized_min_root_size']

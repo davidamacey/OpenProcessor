@@ -7,13 +7,13 @@ title: Compose profiles
 
 `docker-compose.yml` defines every service. The services with no profile are
 Triton, the API, OpenSearch and the control plane (PostgreSQL, Valkey, the
-one-shot `db-migrate`, `jobs-worker`, `periodic-worker`, `open-vocab-worker` and
+one-shot `db-migrate`, `jobs-worker`, `interactive-worker`, `periodic-worker`, `open-vocab-worker` and
 `jobs-beat`), so a plain `docker compose up -d` (or `make up`) starts those.
 Everything else is opt-in.
 
 | Profile | Services | Needs a GPU | Start with |
 |---|---|---|---|
-| *(none)* | `triton-server`, `api`, `opensearch`, `postgres`, `valkey`, `db-migrate`, `jobs-worker`, `periodic-worker`, `open-vocab-worker`, `jobs-beat` | Triton, and the API for torch fallbacks | `docker compose up -d` / `make up` |
+| *(none)* | `triton-server`, `api`, `opensearch`, `postgres`, `valkey`, `db-migrate`, `jobs-worker`, `interactive-worker`, `periodic-worker`, `open-vocab-worker`, `jobs-beat` | Triton, and the API for torch fallbacks | `docker compose up -d` / `make up` |
 | `setup` | `model-export` (TensorRT and ModelOpt export toolchain, one-shot) | yes | never started by `up`; `./openprocessor models install` and `export` run it with `docker compose run --rm model-export ...` |
 | `export` | `model-export-worker` (runs the engine builds queued by `POST /models/upload` and `POST /models/{model_name}/export`) | yes | `docker compose --profile export up -d model-export-worker` |
 | `curation` | `curation-detection-worker`, `curation-vlm-worker`, `curation-auto-label-worker`, `curation-assist-loop-worker`, `cluster-worker` | no | `docker compose --profile curation up -d` / `make curation-up` |

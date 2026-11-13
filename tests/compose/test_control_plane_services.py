@@ -25,7 +25,13 @@ NEW = (
     'jobs-beat',
     'flower',
 )
-CELERY_WORKERS = ('jobs-worker', 'periodic-worker', 'open-vocab-worker', 'cluster-worker')
+CELERY_WORKERS = (
+    'jobs-worker',
+    'interactive-worker',
+    'periodic-worker',
+    'open-vocab-worker',
+    'cluster-worker',
+)
 # Python services that run the application image (db-migrate is the one that migrates).
 PYTHON_SERVICES = (
     'api',
