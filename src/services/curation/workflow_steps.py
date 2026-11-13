@@ -8,6 +8,7 @@ promotions from PostgreSQL. ``workspace_default_view`` is decided only here.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Final, Literal
@@ -16,7 +17,7 @@ from sqlalchemy import exists, func, select
 
 from src.config.curation_accessors import images_index, items_index
 from src.db.models.jobs import Job
-from src.db.models.training import DatasetExport, Promotion, TrainingRun
+from src.db.models.training import Promotion, TrainingRun
 from src.db.repos import near_dup as near_dup_repo
 from src.db.session import project_tx
 from src.domain import job_states as js
@@ -30,6 +31,7 @@ from src.services.curation.audit import has_pending_sample
 from src.services.curation.dataset_thresholds import HARD_MIN_CROPS_PER_CLASS, adequacy
 from src.services.curation.detector_adoption import detector_census, plan_adoption
 from src.services.curation.detector_vocabulary import DETECTOR_CLASS_GROUP
+from src.services.curation.export_datasets import scan_export_datasets
 from src.services.curation.open_vocab_run import OPEN_VOCAB_CLASS_GROUP
 from src.services.curation.region_class import REGION_CLASS_GROUP
 from src.services.curation.review_tab_status import NO_AUDIT_SAMPLE
@@ -395,7 +397,7 @@ async def gather_facts(
             item_partition_serving=serving is not None,
             image_near_dup_run=await near_dup_repo.current_run(session, project, 'image')
             is not None,
-            exports=await _count(session, DatasetExport, project),
+            exports=len(await asyncio.to_thread(scan_export_datasets)),
             training_runs=await _count(session, TrainingRun, project),
             training_finished=len(finished),
             training_classes_missing=classes_left_out(classes, counts, finished[:1]),
