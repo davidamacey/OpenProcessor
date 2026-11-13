@@ -236,55 +236,55 @@
          export (formatCount renders "—"); the whole block hides when
          nothing here was ever recorded. -->
     {#if run.exportState.require_fully_labeled_images != null || run.exportState.unlabeled_items_on_exported_images != null || run.exportState.images_with_unlabeled_items != null || run.exportState.images_dropped_not_fully_labeled != null || run.exportState.skipped_items != null}
-      <div class="mt-2 flex flex-wrap gap-2 text-meta text-fg-2">
+      <dl
+        class="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-meta"
+        data-testid="export-quality"
+      >
         {#if run.exportState.require_fully_labeled_images != null}
-          <span class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1">
-            require_fully_labeled_images: <span class="text-fg-1"
-              >{run.exportState.require_fully_labeled_images ? 'true' : 'false'}</span
-            >
-          </span>
+          <dt class="text-fg-3">Only fully labelled photos</dt>
+          <dd class="text-fg-1">
+            {run.exportState.require_fully_labeled_images ? 'on' : 'off'}
+          </dd>
         {/if}
         {#if run.exportState.unlabeled_items_on_exported_images != null}
-          <span
-            class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1"
-            title="Objects on exported images the export did not label — learned as background."
+          <dt
+            class="text-fg-3"
+            title="Objects on exported photos the export did not label; they are learned as background."
           >
-            unlabeled objects on exported images: <span class="text-fg-1 tabular-nums"
-              >{formatCount(run.exportState.unlabeled_items_on_exported_images)}</span
-            >
-          </span>
+            Unlabelled objects on exported photos
+          </dt>
+          <dd class="text-fg-1 tabular-nums">
+            {formatCount(run.exportState.unlabeled_items_on_exported_images)}
+          </dd>
         {/if}
         {#if run.exportState.images_with_unlabeled_items != null}
-          <span class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1">
-            images with an unlabeled object: <span class="text-fg-1 tabular-nums"
-              >{formatCount(run.exportState.images_with_unlabeled_items)}</span
-            >
-          </span>
+          <dt class="text-fg-3">Photos with an unlabelled object</dt>
+          <dd class="text-fg-1 tabular-nums">
+            {formatCount(run.exportState.images_with_unlabeled_items)}
+          </dd>
         {/if}
         {#if run.exportState.images_dropped_not_fully_labeled != null}
-          <span
-            class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1"
-            title="Images left out by require_fully_labeled_images (0 when it was off)."
+          <dt
+            class="text-fg-3"
+            title="Photos left out because only fully labelled photos was on (0 when it was off)."
           >
-            images dropped (not fully labeled): <span class="text-fg-1 tabular-nums"
-              >{formatCount(run.exportState.images_dropped_not_fully_labeled)}</span
-            >
-          </span>
+            Photos left out (not fully labelled)
+          </dt>
+          <dd class="text-fg-1 tabular-nums">
+            {formatCount(run.exportState.images_dropped_not_fully_labeled)}
+          </dd>
         {/if}
         {#if run.exportState.skipped_items != null}
-          <span
-            class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1"
-            title="Validated items the export couldn't write: no source image id, or no usable box/class."
-            data-testid="export-skipped-items"
-          >
-            skipped items: <span class="text-fg-1 tabular-nums"
-              >{formatCount(run.exportState.skipped_items.no_image_id)} no image id · {formatCount(
-                run.exportState.skipped_items.no_usable_box_or_class,
-              )} no usable box/class</span
-            >
-          </span>
+          <dt class="text-fg-3" title="Validated items the export could not write.">
+            Items skipped
+          </dt>
+          <dd class="text-fg-1 tabular-nums" data-testid="export-skipped-items">
+            {formatCount(run.exportState.skipped_items.no_image_id)} without a source image
+            id · {formatCount(run.exportState.skipped_items.no_usable_box_or_class)} without
+            a usable box or class
+          </dd>
         {/if}
-      </div>
+      </dl>
     {/if}
 
     {#if run.exportState.class_split_counts && run.exportState.class_split_counts.length > 0}

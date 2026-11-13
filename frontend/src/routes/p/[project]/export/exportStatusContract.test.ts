@@ -200,7 +200,7 @@ describe('/export — served split counts (OpenProcessor df01309)', () => {
     expect(target.textContent).toContain('grouped by image_id');
     expect(target.textContent).toContain('images: train 400');
     expect(target.textContent).toContain('objects: train 500');
-    expect(target.textContent).toContain('images dropped');
+    expect(target.textContent).toContain('Photos left out');
     expect(target.textContent).toContain('30');
 
     const summary = Array.from(target.querySelectorAll('summary')).find((s) =>
@@ -240,7 +240,7 @@ describe('/export — served split counts (OpenProcessor df01309)', () => {
     // split_object_counts is null -> that badge doesn't render at all.
     expect(target.textContent).not.toContain('objects: train');
     // No partial-frame block — every field on it is null.
-    expect(target.textContent).not.toContain('require_fully_labeled_images');
+    expect(target.textContent).not.toContain('Only fully labelled photos');
     // class_split_counts is null -> no per-class table.
     expect(
       Array.from(target.querySelectorAll('summary')).some((s) =>
@@ -270,8 +270,16 @@ describe('/export — served split counts (OpenProcessor df01309)', () => {
 
     const chip = target.querySelector('[data-testid="export-skipped-items"]');
     expect(chip?.textContent?.replace(/\s+/g, ' ')).toContain(
-      '3 no image id · 7 no usable box/class',
+      '3 without a source image id · 7 without a usable box or class',
     );
+    // Plain labels, never the raw parameter names.
+    expect(target.textContent).not.toContain('require_fully_labeled_images');
+    expect(target.textContent).not.toContain('no_image_id');
+    expect(
+      target
+        .querySelector('[data-testid="export-quality"]')
+        ?.textContent?.replace(/\s+/g, ' '),
+    ).toContain('Only fully labelled photos on');
   });
 });
 

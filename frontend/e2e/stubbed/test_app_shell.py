@@ -95,3 +95,15 @@ def test_an_unknown_page_in_a_project_is_a_404_with_the_nav(stub, page, app_url)
     expect(page.get_by_role('main').get_by_role('link', name='Dashboard')).to_have_attribute(
         'href', '/p/default/dashboard'
     )
+
+
+def test_the_404_keeps_the_nav_and_shows_the_hamburger_on_a_phone(stub, page, app_url):
+    _stub_classes(stub)
+    page.set_viewport_size(NARROW)
+    page.goto(f'{app_url}/p/default/no-such-page')
+    expect(page.get_by_role('heading', name='Page not found')).to_be_visible(
+        timeout=ACTION_TIMEOUT_MS
+    )
+    expect(page.get_by_role('button', name='Open navigation')).to_be_visible()
+    page.get_by_role('button', name='Open navigation').click()
+    expect(page.get_by_test_id('drawer-nav').get_by_role('link', name='Workspace')).to_be_visible()
