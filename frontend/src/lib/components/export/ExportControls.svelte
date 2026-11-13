@@ -126,7 +126,11 @@
     </div>
   </div>
 
-  {#if run.preview}
+  {#if run.previewError}
+    <p class="mt-2 text-meta text-warn-text" data-testid="export-preview-error">
+      No count: {run.previewError}
+    </p>
+  {:else if run.preview}
     <p class="mt-2 text-meta text-fg-2" data-testid="export-preview">
       This export would hold
       <span class="text-fg-1 tabular-nums">{formatCount(run.preview.object_count)}</span>
