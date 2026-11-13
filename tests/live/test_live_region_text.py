@@ -11,13 +11,14 @@ user follows with a plate number.
 
 from __future__ import annotations
 
+import json
 import subprocess  # nosec B404 - removes the one container the fixture started
 from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from ._ingest_support import IngestProject, ingest_project, picture
-from .conftest import compose, wait_until
+from .conftest import VERIFY_DATA_DIR, compose, wait_until
 
 
 if TYPE_CHECKING:
@@ -34,6 +35,18 @@ PROFILE = 'text_reading'
 def project(api: Any, opensearch: Any) -> Iterator[IngestProject]:
     with ingest_project(api, opensearch, 'regtext') as handle:
         yield handle
+
+
+def _worker_idle(slug: str) -> bool:
+    """The worker's own liveness file for the project reports nothing in flight.
+
+    The worker rewrites it within a second of its last item landing (``liveness_loop``). A
+    container removed before that leaves a file that still says busy, and the project delete then
+    answers ``project_busy`` until the file ages out (``worker_liveness.DEFAULT_MAX_AGE_S``, 120 s).
+    """
+    state_dir = VERIFY_DATA_DIR / 'state' / 'projects' / slug
+    files = list(state_dir.glob('runtime_detection_worker_*.json'))
+    return bool(files) and all(json.loads(f.read_text()).get('inflight') == 0 for f in files)
 
 
 @pytest.fixture(scope='module')
@@ -56,6 +69,7 @@ def worker(project: IngestProject) -> Iterator[str]:
     try:
         yield container
     finally:
+        wait_until(lambda: _worker_idle(project.slug), timeout=30, interval=0.5)
         subprocess.run(  # nosec B603 B607 - fixed argv, the container this fixture started
             ['docker', 'rm', '-f', container], check=False, capture_output=True, timeout=120
         )
