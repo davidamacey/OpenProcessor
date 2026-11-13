@@ -472,7 +472,7 @@ def own_registry(api: Any) -> Iterator[Any]:
 
     The shared registry has every hotkey letter held after the other tests ran, so a test about
     hotkeys cannot find a free one there and must not take one from a class it did not create."""
-    slug = f'live_hotkeys_{uuid.uuid4().hex[:8]}'
+    slug = f'live-hotkeys-{uuid.uuid4().hex[:8]}'
     create_project(api, slug, 'Hotkey registry')
     prefix = f'{API_PREFIX}/projects/{slug}'
 
