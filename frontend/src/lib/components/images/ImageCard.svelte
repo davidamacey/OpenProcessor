@@ -136,19 +136,16 @@
     <span
       class="chip tabular-nums"
       data-testid="chip-items"
-      title="Detections on this image"
+      title="Detections on this image, {card.counts.labeled} with a class"
       >{card.counts.items} detection{card.counts.items === 1 ? '' : 's'}</span
     >
-    <span
-      class="chip tabular-nums"
-      data-testid="chip-labeled"
-      title="Detections with a class">{card.counts.labeled} labelled</span
-    >
-    <span
-      class="chip tabular-nums {card.counts.unlabeled > 0 ? 'unlabeled-chip' : ''}"
-      data-testid="chip-unlabeled"
-      title="Detections without a class">{card.counts.unlabeled} unlabelled</span
-    >
+    {#if card.counts.unlabeled > 0}
+      <span
+        class="chip tabular-nums unlabeled-chip"
+        data-testid="chip-unlabeled"
+        title="Detections without a class">{card.counts.unlabeled} unlabelled</span
+      >
+    {/if}
   </div>
   <div
     class="mt-auto flex items-center justify-between gap-2 px-2 pb-1.5 text-caption text-fg-2"

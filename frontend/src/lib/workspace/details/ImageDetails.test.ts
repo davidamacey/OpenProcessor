@@ -24,7 +24,9 @@ describe('ImageDetails', () => {
     flushSync();
     const h = el.querySelector('h2')!;
     expect(h.className).not.toContain('uppercase');
-    (el.querySelector('[data-testid="lightbox-image"]') as HTMLElement).click();
+    const full = el.querySelector('[data-testid="lightbox-image"]') as HTMLElement;
+    expect(full.textContent).toContain('View full size');
+    full.click();
     expect(ws.openLightbox).toHaveBeenCalledWith('img-1', h.textContent?.trim());
   });
 
