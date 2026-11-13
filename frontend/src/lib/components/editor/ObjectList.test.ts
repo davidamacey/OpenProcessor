@@ -60,6 +60,8 @@ describe('ObjectList', () => {
     const locks = target.querySelectorAll('[data-testid="object-locked"]');
     expect(locks).toHaveLength(1);
     expect(locks[0].getAttribute('title')).toBe('Placed by a person');
+    // The reason is the visible word, not an unexplained "Locked".
+    expect(locks[0].textContent?.trim()).toBe('Placed by a person');
   });
 
   it('marks a deleted object and offers no actions on it', () => {

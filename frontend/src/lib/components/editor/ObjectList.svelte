@@ -55,7 +55,7 @@
             title={row.lockLabel ?? 'Locked'}
             data-testid="object-locked"
           >
-            Locked
+            {row.lockLabel ?? 'Locked'}
           </span>
         {/if}
         {#if row.regionCount > 0}
