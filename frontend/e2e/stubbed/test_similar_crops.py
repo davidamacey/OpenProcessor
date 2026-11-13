@@ -5,6 +5,7 @@ deployment serves semantic search.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -170,7 +171,7 @@ def test_text_search_in_a_picked_embedding_space_sends_space_and_fuse(stub, page
 
     stub.on('GET', r'/search/text(\?|$)', text_search)
     page.goto(f'{app_url}/p/default/workspace?view=clusters')
-    box = page.get_by_placeholder('Search, e.g. "blurry closeup"')
+    box = page.get_by_placeholder(re.compile('^Search clusters and crops'))
     picker = page.get_by_test_id('search-space-picker')
     expect(picker).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     box.fill('red widget')

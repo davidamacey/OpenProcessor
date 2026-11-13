@@ -119,7 +119,7 @@ def test_nudges_stay_in_edit_mode_and_save_to_the_edited_crop(stub, page, app_ur
     page.goto(review_url(app_url, REGION_TAB_URL_ID))
     counter = page.get_by_test_id('queue-counter').first
     counter.wait_for(timeout=ACTION_TIMEOUT_MS)
-    expect(counter).to_contain_text('3 total', timeout=ACTION_TIMEOUT_MS)
+    expect(counter).to_contain_text('of 3', timeout=ACTION_TIMEOUT_MS)
     counter_before = counter.inner_text()
 
     page.keyboard.press('e')

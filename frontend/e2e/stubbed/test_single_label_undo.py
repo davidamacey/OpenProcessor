@@ -73,6 +73,8 @@ def test_single_label_undo_survives_a_reload(stub, page, app_url):
 
     page.goto(review_url(app_url, 'to_label'))
     page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    # The keys register with the item: wait for its Confirm button before pressing Enter.
+    page.get_by_role('button', name='Confirm', exact=True).wait_for(timeout=ACTION_TIMEOUT_MS)
     with page.expect_response(
         lambda r: r.request.method == 'PUT' and r.url.endswith('/label'), timeout=ACTION_TIMEOUT_MS
     ):
