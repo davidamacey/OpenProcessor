@@ -154,12 +154,12 @@ def test_export_status_renders_served_split_counts_and_highlights_zero_classes(s
     details = page.locator('details', has_text='Per-class object counts')
     audi_row = details.locator('tr', has_text='audi')
     audi_row.wait_for(timeout=ACTION_TIMEOUT_MS)
-    assert 'bg-red-500/10' in (audi_row.get_attribute('class') or ''), (
+    assert 'bg-danger/10' in (audi_row.get_attribute('class') or ''), (
         'audi has 0 train instances and must be highlighted'
     )
 
     bmw_row = details.locator('tr', has_text='bmw')
-    assert 'bg-red-500/10' not in (bmw_row.get_attribute('class') or '')
+    assert 'bg-danger/10' not in (bmw_row.get_attribute('class') or '')
 
     errors = [c for c in stub.console_errors if c.startswith('pageerror')]
     assert not errors, f'no pageerror expected: {errors[:3]}'
