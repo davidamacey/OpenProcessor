@@ -198,5 +198,35 @@ def test_the_class_picker_serves_one_key_per_recent_class() -> None:
 
 
 def test_the_recent_class_keys_collide_with_nothing() -> None:
-    report, _, _, _ = validate_keymap({}, project='default', classes=[], previous_overrides={})
-    assert report.ok, [e.code for e in report.errors]
+    registry = load_registry()
+    active = registry.active_set('class_picker')
+    recent = {f'class_picker.recent_{n}' for n in range(1, 10)}
+    taken = {
+        key
+        for action_id, action in registry.actions.items()
+        if action.context in active and action_id not in recent
+        for key in effective_keys(action, {})
+    }
+    keys = [
+        key
+        for action_id in sorted(recent)
+        for key in effective_keys(registry.actions[action_id], {})
+    ]
+    assert len(keys) == len(set(keys)) == 9
+    assert not taken & set(keys)
+
+
+@pytest.mark.parametrize('n', range(1, 10))
+def test_rebinding_a_picker_neighbour_onto_a_recent_class_key_is_refused(n: int) -> None:
+    report, _, _, _ = validate_keymap(
+        {'global.shortcuts_overlay': [str(n)]},
+        project='default',
+        classes=[],
+        previous_overrides={},
+    )
+    picker = [e for e in report.errors if e.detail.get('context') == 'class_picker']
+    assert [e.code for e in picker] == ['keymap_context_collision']
+    assert picker[0].detail['action_ids'] == [
+        f'class_picker.recent_{n}',
+        'global.shortcuts_overlay',
+    ]
