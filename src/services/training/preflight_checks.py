@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from opensearchpy.exceptions import OpenSearchException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 from src.config import get_curation_config, get_region_fields
 from src.config.curation_accessors import items_index
@@ -40,6 +40,33 @@ F = get_region_fields()
 PreflightSeverity = Literal['ok', 'warn', 'block', 'unknown']
 
 
+CHECK_LABELS: dict[str, str] = {
+    'active_run': 'Another run',
+    'augmentation_preset': 'Augmentation preset',
+    'class_balance': 'Class balance',
+    'dataset_export_dir': 'Dataset export',
+    'empty_labels': 'Empty labels',
+    'export_class_split_coverage': 'Class coverage in the splits',
+    'export_generation': 'Export is current',
+    'export_manifest': 'Export manifest',
+    'export_not_empty': 'Export has images',
+    'export_splits_nonempty': 'Train, validation and test splits',
+    'export_unlabeled_objects': 'Unlabelled objects',
+    'free_disk': 'Free disk space',
+    'gpu_arbiter': 'GPU hand-over',
+    'include_classes_resolvable': 'Chosen classes',
+    'ingest_idle': 'Ingest backlog',
+    'optimizer_not_auto': 'Optimizer',
+    'region_pairing': 'Region pairing',
+    'test_holdout': 'Test set',
+    'trainer_gpus': 'Trainer GPUs',
+    'trainer_reachable': 'Trainer service',
+    'unregistered_class_ids': 'Classes in the export',
+}
+"""The served name of each preflight row, keyed by the row's ``name``. Every row the code can
+emit is here (``tests/curation/test_preflight_check_labels.py`` reads the sources for them)."""
+
+
 class PreflightCheck(BaseModel):
     """Single row in the preflight report."""
 
@@ -47,6 +74,12 @@ class PreflightCheck(BaseModel):
     severity: PreflightSeverity
     message: str
     detail: dict[str, Any] | None = None
+
+    @computed_field  # type: ignore[prop-decorator]  # pydantic documents decorating a property
+    @property
+    def label(self) -> str:
+        """What the form shows for ``name``; a ``KeyError`` for a row nobody named."""
+        return CHECK_LABELS[self.name]
 
 
 class PreflightReport(BaseModel):

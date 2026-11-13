@@ -25950,6 +25950,12 @@
             ],
             "title": "Detail"
           },
+          "label": {
+            "description": "What the form shows for ``name``; a ``KeyError`` for a row nobody named.",
+            "readOnly": true,
+            "title": "Label",
+            "type": "string"
+          },
           "message": {
             "title": "Message",
             "type": "string"
@@ -25972,7 +25978,8 @@
         "required": [
           "name",
           "severity",
-          "message"
+          "message",
+          "label"
         ],
         "title": "PreflightCheck",
         "type": "object"

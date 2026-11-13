@@ -13,6 +13,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Added
 
+- **Preflight row labels.** Every row of `POST /train/preflight` serves `label` beside `name` ("Class balance", "Trainer GPUs", ...), so the form shows names, not ids.
 - **Recent-class keys in the class picker.** The keymap serves a `class_picker` context with `class_picker.recent_1` to `class_picker.recent_9` (keys `1` to `9`, rebindable), so the most recently used classes are one keypress in the open picker.
 - **Audit outcome filter.** `audit_outcome` (repeatable: `agree`, `detector_wrong`, `vlm_wrong`, `both_wrong`) on the shared item filter and every route that takes it, such as `GET /crops`: the audited crops a person labelled and whose label still stands, so each count of the accuracy audit report lists its crops.
 - **Map match counts.** `GET /map/cells` serves `n_located_matching` and `n_unlocated_matching`: how many photos match the request filter with and without a position, across the whole map (the viewport box does not narrow them), so the map can say "12 of 63 located photos match" or why it is empty.
