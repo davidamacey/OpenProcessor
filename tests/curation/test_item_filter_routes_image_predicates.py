@@ -85,6 +85,7 @@ BODY_ROUTES: dict[tuple[str, str], Body] = {
     ('POST', '/reprocess'): lambda f: {'targets': {'filter': f}, 'scopes': ['embed']},
     ('POST', '/select/diverse'): lambda f: {'scope': {'item_filter': f}, 'k': 3},
     ('POST', '/selection/summary'): _selection,
+    ('POST', '/label_ops/accept_machine'): lambda f: {'filter': f, 'min_confidence': 0.9},
 }
 
 
