@@ -1,6 +1,6 @@
 /** `runExport`: the synchronous export response is rendered as served. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { exportStatus, exportYolo } from '$lib/api_export';
+import { exportStatus, exportYolo, previewExportYolo } from '$lib/api_export';
 import { ApiError } from '$lib/api_errors';
 import { toastStore } from '$stores/toast.svelte';
 import { createExportRunController } from './exportRunController.svelte';
@@ -8,6 +8,7 @@ import { createExportRunController } from './exportRunController.svelte';
 vi.mock('$lib/api_export', () => ({
   exportYolo: vi.fn(),
   exportStatus: vi.fn(),
+  previewExportYolo: vi.fn(),
 }));
 
 beforeEach(() => {
@@ -15,6 +16,54 @@ beforeEach(() => {
   vi.spyOn(toastStore, 'error').mockImplementation(() => undefined as never);
   vi.spyOn(toastStore, 'success').mockImplementation(() => undefined as never);
   vi.spyOn(toastStore, 'info').mockImplementation(() => undefined as never);
+});
+
+describe('refreshPreview', () => {
+  const small = {
+    image_count: 1,
+    object_count: 1,
+    images_dropped_not_fully_labeled: 38,
+    images_with_unlabeled_items: 0,
+    unlabeled_items_on_exported_images: 0,
+    warning: 'Only 1 image would be exported; 38 are left out.',
+  };
+
+  it('asks the server for the counts of the current options and serves its warning', async () => {
+    vi.mocked(previewExportYolo).mockResolvedValue(small);
+    const c = createExportRunController(async () => {});
+    c.requireFullyLabeled = true;
+    await c.refreshPreview();
+    expect(previewExportYolo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        require_fully_labeled_images: true,
+        collapse_near_duplicates: false,
+      }),
+    );
+    expect(c.preview?.warning).toContain('Only 1 image');
+    c.dispose();
+  });
+
+  it('drops a stale answer when a newer one was asked for', async () => {
+    let release: (v: typeof small) => void = () => {};
+    vi.mocked(previewExportYolo)
+      .mockImplementationOnce(() => new Promise((r) => (release = r)))
+      .mockResolvedValueOnce({ ...small, image_count: 9, warning: null });
+    const c = createExportRunController(async () => {});
+    const first = c.refreshPreview();
+    await c.refreshPreview();
+    release(small);
+    await first;
+    expect(c.preview?.image_count).toBe(9);
+    c.dispose();
+  });
+
+  it('a failed preview shows nothing instead of blocking the export', async () => {
+    vi.mocked(previewExportYolo).mockRejectedValue(new Error('down'));
+    const c = createExportRunController(async () => {});
+    await c.refreshPreview();
+    expect(c.preview).toBeNull();
+    c.dispose();
+  });
 });
 
 describe('runExport', () => {

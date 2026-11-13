@@ -5,6 +5,7 @@ import { apiBase, apiFetch, qs, scoped } from '$lib/api';
 import type { ItemFilter } from '$lib/types_itemFilter';
 import type {
   ExportDatasetList,
+  ExportPreview,
   ExportResult,
   ExportStatus,
   SingleClassExportResult,
@@ -14,21 +15,16 @@ import type {
 } from '$lib/types_export';
 import type { DatasetExportSpec } from '$lib/annotations/datasetExport';
 
-/**
- * Kick off a YOLO export job. Optional `version_tag` is included in the
- * manifest (Section L14). Server returns 202 + job id while it runs.
- */
-export function exportYolo(
-  opts: {
-    version_tag?: string;
-    require_fully_labeled_images?: boolean;
-    /** Keep one item per near-duplicate group; needs a current near-duplicate run. */
-    collapse_near_duplicates?: boolean;
-    /** The shared item filter; sent only when it names something. */
-    item_filter?: ItemFilter;
-  } = {},
-  signal?: AbortSignal,
-): Promise<ExportResult> {
+type ExportYoloOptions = {
+  version_tag?: string;
+  require_fully_labeled_images?: boolean;
+  /** Keep one item per near-duplicate group; needs a current near-duplicate run. */
+  collapse_near_duplicates?: boolean;
+  /** The shared item filter; sent only when it names something. */
+  item_filter?: ItemFilter;
+};
+
+function exportYoloBody(opts: ExportYoloOptions): string {
   const body: Record<string, unknown> = {};
   if (opts.item_filter && Object.keys(opts.item_filter).length > 0) {
     body.item_filter = opts.item_filter;
@@ -40,9 +36,35 @@ export function exportYolo(
     body.require_fully_labeled_images = true;
   }
   if (opts.collapse_near_duplicates) body.collapse_near_duplicates = true;
+  return JSON.stringify(body);
+}
+
+/**
+ * Kick off a YOLO export job. Optional `version_tag` is included in the
+ * manifest (Section L14). Server returns 202 + job id while it runs.
+ */
+export function exportYolo(
+  opts: ExportYoloOptions = {},
+  signal?: AbortSignal,
+): Promise<ExportResult> {
   return apiFetch<ExportResult>(
     `${scoped()}/export/yolo`,
-    { method: 'POST', body: JSON.stringify(body) },
+    { method: 'POST', body: exportYoloBody(opts) },
+    signal,
+  );
+}
+
+/**
+ * `POST {API_PREFIX}/export/yolo/preview`: the counts an export with the same options would
+ * write, served without writing anything (`warning` is the served reason to think twice).
+ */
+export function previewExportYolo(
+  opts: ExportYoloOptions = {},
+  signal?: AbortSignal,
+): Promise<ExportPreview> {
+  return apiFetch<ExportPreview>(
+    `${scoped()}/export/yolo/preview`,
+    { method: 'POST', body: exportYoloBody(opts) },
     signal,
   );
 }

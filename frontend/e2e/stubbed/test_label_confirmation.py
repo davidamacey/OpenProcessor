@@ -346,6 +346,18 @@ def test_export_warns_that_only_validated_crops_are_exported(stub, page, app_url
     )
     stub.on('GET', r'/export/status(\?|$)', {'status': 'idle', 'last_run': None})
     stub.on('GET', r'/export/datasets(\?|$)', {'datasets': [], 'count': 0})
+    stub.on(
+        'POST',
+        r'/export/yolo/preview(\?|$)',
+        {
+            'image_count': 0,
+            'object_count': 0,
+            'images_dropped_not_fully_labeled': 0,
+            'images_with_unlabeled_items': 0,
+            'unlabeled_items_on_exported_images': 0,
+            'warning': None,
+        },
+    )
     page.goto(f'{app_url}/p/default/export')
     notice = page.get_by_test_id('validated-ratio')
     expect(notice).to_be_visible(timeout=ACTION_TIMEOUT_MS)

@@ -308,6 +308,18 @@ def test_export_filter_sends_item_filter_and_shows_the_served_count(stub, page, 
 
     stub.on('GET', r'/export/status(\?|$)', status_handler)
     stub.on('GET', r'/export/datasets(\?|$)', {'datasets': []})
+    stub.on(
+        'POST',
+        r'/export/yolo/preview(\?|$)',
+        {
+            'image_count': 0,
+            'object_count': 0,
+            'images_dropped_not_fully_labeled': 0,
+            'images_with_unlabeled_items': 0,
+            'unlabeled_items_on_exported_images': 0,
+            'warning': None,
+        },
+    )
 
     def export_handler(request, _match):
         posts.append(request.post_data_json or {})

@@ -135,6 +135,18 @@ def register_export_mount(stub):
     stub.on('GET', r'/test_holdout/stats(\?|$)', HOLDOUT_STATS_EMPTY)
     stub.on('GET', r'/export/status(\?|$)', EXPORT_STATUS_SUCCESS)
     stub.on('GET', r'/export/datasets(\?|$)', {'datasets': []})
+    stub.on(
+        'POST',
+        r'/export/yolo/preview(\?|$)',
+        {
+            'image_count': 0,
+            'object_count': 0,
+            'images_dropped_not_fully_labeled': 0,
+            'images_with_unlabeled_items': 0,
+            'unlabeled_items_on_exported_images': 0,
+            'warning': None,
+        },
+    )
 
 
 def test_export_status_renders_served_split_counts_and_highlights_zero_classes(stub, page, app_url):
@@ -288,6 +300,18 @@ def test_export_shows_trainable_vs_held_out_and_classes_with_objects(stub, page,
     ]
     stub.on('GET', r'/export/status(\?|$)', status)
     stub.on('GET', r'/export/datasets(\?|$)', {'datasets': []})
+    stub.on(
+        'POST',
+        r'/export/yolo/preview(\?|$)',
+        {
+            'image_count': 0,
+            'object_count': 0,
+            'images_dropped_not_fully_labeled': 0,
+            'images_with_unlabeled_items': 0,
+            'unlabeled_items_on_exported_images': 0,
+            'warning': None,
+        },
+    )
 
     page.goto(f'{app_url}/p/default/export')
     bmw = page.locator('table tr', has_text='bmw').first
@@ -364,6 +388,18 @@ def test_export_class_count_chip_prefers_served_classes_with_objects(stub, page,
     status['classes_with_objects'] = 2
     stub.on('GET', r'/export/status(\?|$)', status)
     stub.on('GET', r'/export/datasets(\?|$)', {'datasets': []})
+    stub.on(
+        'POST',
+        r'/export/yolo/preview(\?|$)',
+        {
+            'image_count': 0,
+            'object_count': 0,
+            'images_dropped_not_fully_labeled': 0,
+            'images_with_unlabeled_items': 0,
+            'unlabeled_items_on_exported_images': 0,
+            'warning': None,
+        },
+    )
 
     page.goto(f'{app_url}/p/default/export')
     bmw = page.locator('table tr', has_text='bmw').first

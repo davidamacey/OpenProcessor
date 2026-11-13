@@ -101,6 +101,17 @@ export interface ExportSkippedItems {
   no_usable_box_or_class: number;
 }
 
+/** `POST {API_PREFIX}/export/yolo/preview`: what an export would write, nothing written. */
+export interface ExportPreview {
+  image_count: number;
+  object_count: number;
+  images_dropped_not_fully_labeled: number;
+  images_with_unlabeled_items: number;
+  unlabeled_items_on_exported_images: number;
+  /** The served reason to think twice; null when the export looks fine. */
+  warning: string | null;
+}
+
 /**
  * Server response from `POST {API_PREFIX}/export/yolo` — synchronous
  * (verified live against OpenProcessor's `export_yolo`, `src/routers/curation/export.py`:
