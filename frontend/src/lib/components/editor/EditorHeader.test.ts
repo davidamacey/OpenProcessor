@@ -18,7 +18,7 @@ function render(over: Record<string, unknown> = {}) {
   instance = mount(EditorHeader, {
     target,
     props: {
-      backHref: '/p/default/clusters',
+      backHref: '/p/default/workspace',
       fileName: 'street.jpg',
       index: 4,
       total: 20,
@@ -39,7 +39,7 @@ describe('EditorHeader', () => {
     expect(target.querySelector('h1')!.textContent).toBe('street.jpg');
     expect(
       target.querySelector('[data-testid="editor-back"]')!.getAttribute('href'),
-    ).toBe('/p/default/clusters');
+    ).toBe('/p/default/workspace');
     expect(
       target.querySelector('[data-testid="editor-position"]')!.textContent?.trim(),
     ).toBe('5 of 20');

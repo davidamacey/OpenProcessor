@@ -1,4 +1,4 @@
-/** Query by picture on /clusters, and the Crops / Regions target shared by every search. */
+/** Query by picture on the workspace, and the Crops / Regions target shared by every search. */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '$lib/api_errors';
 import type { Crop } from '$lib/types';
@@ -15,7 +15,7 @@ vi.mock('$lib/api_clusters', () => ({
 }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p }));
-vi.mock('$app/state', () => ({ page: { url: new URL('http://x/p/default/clusters') } }));
+vi.mock('$app/state', () => ({ page: { url: new URL('http://x/p/default/workspace') } }));
 vi.mock('$lib/projectPaths', () => ({ projectHref: (p: string) => `/p/default${p}` }));
 
 import { createClusterSearchModes } from './clusterSearchModes.svelte';
