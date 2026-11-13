@@ -1,4 +1,4 @@
-"""Fixtures for the trainer conformance tests: the shared jobs volume and a frozen export."""
+"""Fixtures for the trainer conformance tests: the project data root and a frozen export."""
 
 from __future__ import annotations
 
@@ -15,41 +15,27 @@ if str(TRAINER_DIR) not in sys.path:
 
 
 @pytest.fixture
-def jobs_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A shared /jobs volume both halves of the protocol point at.
+def project_data_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Point ``default``'s ``export_root`` at ``tmp_path``.
 
-    Also points ``default``'s ``export_root`` (and so its stamped
-    ``project_export_root``, projects_plan.md §5.3) at ``tmp_path``'s
-    project data root via ``OP_PROJECTS_DATA_ROOT`` (``OP_EXPORT_ROOT``
-    is retired -- P1 removed the env-derived default special case) --
-    every fixture's ``export_dir`` lives under it, so the trainer's
-    export-containment check never rejects these fixtures' export dirs
-    as escaping the project. Resets the cached ``CurationConfig``
-    singleton (the codebase's existing pattern, e.g.
-    ``test_export_datasets.py``) so the env var actually takes. Returns
-    the resolved ``.../projects/default`` subdir -- default is an
-    ordinary project (no special-casing), so that's where job files
-    actually land.
+    ``OP_PROJECTS_DATA_ROOT`` makes ``default``'s export root (and so its
+    stamped ``project_export_root``) ``tmp_path/default/exports`` (``OP_EXPORT_ROOT``
+    is retired), so every fixture's ``export_dir`` lives under it and the
+    trainer's export-containment check never rejects it as escaping the
+    project. Resets the cached ``CurationConfig`` singleton so the env var
+    takes (the pattern in ``test_export_datasets.py``).
     """
     import src.config.curation_accessors as curation_config_mod
 
-    d = tmp_path / 'jobs'
-    d.mkdir()
-    # default's export_root resolves to OP_PROJECTS_DATA_ROOT/default/exports
-    # (P1: no special-casing); point OP_PROJECTS_DATA_ROOT at tmp_path
-    # directly so export_dir (below) can build under exactly that path.
     monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path))
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
-    resolved = d / 'projects' / 'default'
-    resolved.mkdir(parents=True, exist_ok=True)
-    return resolved
 
 
 @pytest.fixture
-def export_dir(tmp_path: Path, jobs_dir: Path) -> Path:
+def export_dir(tmp_path: Path, project_data_root: None) -> Path:
     """A minimal frozen export: 3 classes, one labeled image per split.
 
-    Depends on ``jobs_dir`` for its ``OP_PROJECTS_DATA_ROOT`` side
+    Depends on ``project_data_root`` for its ``OP_PROJECTS_DATA_ROOT`` side
     effect (must run first) and builds under ``default``'s real
     ``export_root`` (``OP_PROJECTS_DATA_ROOT/default/exports``) so the
     trainer's export-containment check never rejects it.

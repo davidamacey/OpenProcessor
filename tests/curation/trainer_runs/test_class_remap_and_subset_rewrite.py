@@ -10,7 +10,7 @@ import job_spec
 import pytest
 import subset_dataset
 
-from curation.trainer_protocol._helpers import make_spec
+from curation.trainer_runs._helpers import make_spec
 from src.services.training.class_remap import build_class_id_to_name, resolve_class_remap
 
 
@@ -93,7 +93,7 @@ def test_subset_rewrite_rejects_a_registry_id_outside_the_export(
 
 
 def test_class_remap_copy_reports_failure_loudly_for_a_subset_run(
-    jobs_dir: Path, export_dir: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    project_data_root: None, export_dir: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """A subset run whose remap never reaches the weights dir must say so.
 
@@ -119,7 +119,7 @@ def test_class_remap_copy_reports_failure_loudly_for_a_subset_run(
 
 
 def test_class_remap_copy_is_a_no_op_for_a_whole_export_run_missing_the_remap(
-    jobs_dir: Path, export_dir: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    project_data_root: None, export_dir: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Without ``write_full_class_remap`` having run (this test parses the
     spec directly, skipping ``prepare_dataset``), a full-class run has no
@@ -135,7 +135,7 @@ def test_class_remap_copy_is_a_no_op_for_a_whole_export_run_missing_the_remap(
 
 
 def test_write_full_class_remap_for_a_whole_export_run_with_a_registry_gap(
-    jobs_dir: Path, export_dir: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    project_data_root: None, export_dir: Path, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """The root-cause fix: a whole-export run's dense export ids (0/1/2) do
     NOT equal its registry ids (5/9/12, the ``export_dir`` fixture's
@@ -180,7 +180,7 @@ def test_write_full_class_remap_for_a_whole_export_run_with_a_registry_gap(
 
 
 def test_text_classes_resolve_by_name_against_the_training_data_yaml(
-    jobs_dir: Path, export_dir: Path
+    project_data_root: None, export_dir: Path
 ) -> None:
     spec = make_spec(
         dataset_export_dir=str(export_dir),
@@ -192,7 +192,7 @@ def test_text_classes_resolve_by_name_against_the_training_data_yaml(
 
 
 def test_text_classes_follow_the_subset_renumbering(
-    tmp_path: Path, jobs_dir: Path, export_dir: Path
+    tmp_path: Path, project_data_root: None, export_dir: Path
 ) -> None:
     """After a subset rewrite the same name must resolve to its NEW id."""
     out = tmp_path / 'subset'
@@ -209,7 +209,7 @@ def test_text_classes_follow_the_subset_renumbering(
 
 
 def test_text_classes_fall_back_to_the_deployment_default(
-    jobs_dir: Path, export_dir: Path, monkeypatch: pytest.MonkeyPatch
+    project_data_root: None, export_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv('OP_TRAIN_TEXT_CLASS_NAMES', 'serial_plate,absent_class')
     spec = make_spec(dataset_export_dir=str(export_dir))

@@ -13,7 +13,7 @@ import campaign
 import job_status
 import pytest
 
-from curation.trainer_protocol._helpers import make_spec
+from curation.trainer_runs._helpers import make_spec
 from src.db.repos.training_runs import RunRow
 
 
@@ -177,9 +177,6 @@ def test_auto_quantize_posts_the_bakeoff_run_request(
     """
     import requests
 
-    bakeoff_jobs = tmp_path / 'bakeoff_jobs'
-    bakeoff_jobs.mkdir()
-    monkeypatch.setattr(campaign, 'BAKEOFF_JOBS_DIR', bakeoff_jobs, raising=False)
     monkeypatch.setattr(campaign, 'API_BASE_URL', 'http://api.test:8000')
     monkeypatch.setattr(campaign, 'API_PREFIX', '/curation')
     calls: list[tuple[str, dict[str, Any]]] = []
@@ -223,7 +220,6 @@ def test_auto_quantize_posts_the_bakeoff_run_request(
             },
         )
     ]
-    assert list(bakeoff_jobs.iterdir()) == []
     # The request body is accepted by the API's own request model.
     from src.schemas.bakeoff.run import BakeoffRunRequest
 

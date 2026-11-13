@@ -44,7 +44,6 @@ COMPOSE_FILE_ARGS = compose_file_args(os.environ)
 # another one without sharing fixed container names.
 COMPOSE_PROJECT = os.environ.get('VERIFY_COMPOSE_PROJECT', 'op-live-verify')
 VERIFY_DATA_DIR = REPO_ROOT / 'docker' / 'test' / 'verify-data'
-JOBS_DIR = VERIFY_DATA_DIR / 'jobs'
 EXPORTS_DIR = VERIFY_DATA_DIR / 'projects' / 'default' / 'exports'
 
 API_URL = os.environ.get('VERIFY_API_URL', 'http://localhost:14701')

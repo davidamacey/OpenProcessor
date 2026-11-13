@@ -34,9 +34,29 @@ export default defineConfig({
     },
     ...(process.env.VITEST ? { conditions: ['browser'] } : {}),
   },
+  // Test Projects (vitest.dev/guide/projects; extends is on by default since
+  // 5.0): jsdom is created once per test file, which was 34% of the time
+  // for the files directly under src/lib. Those run in node; a file that
+  // needs the DOM opts in with `// @vitest-environment jsdom`
+  // (vitest.dev/guide/environment). Everything else keeps jsdom.
   test: {
-    environment: 'jsdom',
-    include: ['src/**/*.test.ts'],
     setupFiles: ['src/lib/test/setup.ts'],
+    projects: [
+      {
+        test: {
+          name: 'logic',
+          environment: 'node',
+          include: ['src/lib/*.test.ts'],
+        },
+      },
+      {
+        test: {
+          name: 'dom',
+          environment: 'jsdom',
+          include: ['src/**/*.test.ts'],
+          exclude: ['src/lib/*.test.ts', 'node_modules/**'],
+        },
+      },
+    ],
   },
 });

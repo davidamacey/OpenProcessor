@@ -93,11 +93,9 @@ def test_export_prune_after_write_pins_the_projects_own_training_run(
 
 
 def test_the_results_directory_keeps_its_on_disk_path(tmp_path: Path) -> None:
-    """The field was renamed from ``bakeoff_jobs_dir``; results already on disk must still be found."""
+    """Results already on disk under ``bakeoff_jobs`` must still be found."""
     from src.config.projects import resources_for_new
 
     base = base_curation_config()
     resources = resources_for_new('alpha', base)
     assert resources.bakeoff_results_dir == base.state_dir / 'projects' / 'alpha' / 'bakeoff_jobs'
-    assert not hasattr(resources, 'bakeoff_jobs_dir')
-    assert not hasattr(base, 'bakeoff_jobs_dir')

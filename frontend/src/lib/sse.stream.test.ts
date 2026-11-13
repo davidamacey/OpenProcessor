@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * The three subscriptions share one open / backoff / reconnect loop. These
  * tests drive a fake EventSource through that loop for each of them.

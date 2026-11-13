@@ -256,7 +256,16 @@ def test_a_failing_pe_encoder_warmup_does_not_block_startup(world: World) -> Non
     assert 'pe_encoder_warm' in world.events
 
 
-@pytest.mark.parametrize('failing', ['pool_close', 'triton_clients_close', 'opensearch_close'])
+@pytest.mark.parametrize(
+    'failing',
+    [
+        'pool_close',
+        'triton_clients_close',
+        'opensearch_close',
+        'project_registry_shutdown',
+        'config_store_shutdown',
+    ],
+)
 def test_a_failing_shutdown_step_does_not_skip_the_ones_after_it(
     world: World, failing: str
 ) -> None:
@@ -279,13 +288,6 @@ def test_a_failing_cpu_pool_shutdown_is_logged_by_step_and_skips_nothing(
         'shutdown_step_failed',
         {'step': 'cpu_executor', 'error': 'cpu_executor_shutdown failed'},
     ) in logged
-
-
-@pytest.mark.parametrize('failing', ['project_registry_shutdown', 'config_store_shutdown'])
-def test_a_failing_background_stop_does_not_skip_the_rest(world: World, failing: str) -> None:
-    world.fail = {failing}
-    _run_lifespan()
-    assert _normalized(world.events)[len(EXPECTED_STARTUP) :] == EXPECTED_SHUTDOWN
 
 
 def test_startup_failures_before_serving_propagate(world: World) -> None:
