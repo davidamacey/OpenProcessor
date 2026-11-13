@@ -32,6 +32,9 @@ class LabeledStats(BaseModel):
     by_human: int
     by_vlm: int
     by_classifier: int
+    by_detector: int = Field(
+        description='Classes the detector named and nobody has checked (`class_source` detector).'
+    )
     by_import: int
     other: int
     total: int = Field(description='Every provenance summed; the rows add up to it.')

@@ -42,6 +42,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Changed
 
+- **Detector labels have their own row.** `GET /stats/dataset` serves `labeled.by_detector` and a `labeled.rows` entry "Detector, unchecked" for classes the detector named and nobody has checked, so they are no longer counted under "Other". The `label` step of `GET /next_steps` names where the work is ("1,131 machine labels to check in Check machine labels") and links the queue.
 - **Cluster facets name their review filters.** In `GET /clusters/{cluster_uid}/facets`, `review_tabs` is a list of `{value, count, label}` (it was an object of counts) and every `FacetCount` carries `label` (the served name; null for a class or a source), so the review chips show "VLM unsure" instead of `vlm_low_conf`.
 - **The detector's class is a machine label by default.** `detect.class_resolution` of the ingest policy now defaults to `by_name`: a detection gets the registry class named like its detector label, written with the new non-confident `class_source` `detector` (reviewable in Check machine labels, still in the clustering pool, still open to the VLM). A label the registry lacks is added by name, once per ingest; a deprecated or region class of that name is never brought back or duplicated, and a detection below the primary's confidence floor stays a low-confidence proposal. `proposal` is the opt-out; policies saved with it keep it. Human, import and validated classes are untouched.
 - `GET /crops/{crop_id}/thumbnail` accepts `size` up to 1024 (was 512).

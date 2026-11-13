@@ -14,13 +14,14 @@ from typing import TYPE_CHECKING, Any, Final, Literal
 
 from sqlalchemy import exists, func, select
 
-from src.config.curation_accessors import images_index
+from src.config.curation_accessors import images_index, items_index
 from src.db.models.training import DatasetExport, Promotion, TrainingRun
 from src.db.repos import near_dup as near_dup_repo
 from src.db.session import project_tx
 from src.schemas.curation.workflow_steps import WorkflowStep, WorkflowSteps
 from src.services.clustering.assign import serving_partition_id
 from src.services.clustering.partitions import list_partitions
+from src.services.curation import review_queries, review_tabs
 from src.services.curation.audit import has_pending_sample
 from src.services.curation.dataset_thresholds import adequacy
 from src.services.curation.detector_adoption import detector_census, plan_adoption
@@ -51,6 +52,7 @@ class WorkflowFacts:
     audit_pending: bool = False
     detector_classes_missing: int = 0
     detector_items_undecided: int = 0
+    machine_labels_unchecked: int = 0
 
 
 def _plural(count: int, one: str, many: str) -> str:
@@ -87,6 +89,32 @@ def _classes_step(f: WorkflowFacts) -> WorkflowStep:
     )
 
 
+def _label_step(f: WorkflowFacts) -> WorkflowStep:
+    """Done when every class has enough validated examples; says where the work is: the machine
+    labels nobody has checked wait in the Check machine labels queue."""
+    if f.active_classes and not f.classes_below_floor:
+        floor = 'Every class has enough validated examples.'
+    elif f.classes_below_floor:
+        floor = (
+            f'{_plural(f.classes_below_floor, "class has", "classes have")} too few '
+            'validated examples.'
+        )
+    else:
+        floor = 'There are no classes to label.'
+    queue = review_tabs.QUEUE_LABELS['check_machine'][0]
+    unchecked = f.machine_labels_unchecked
+    noun = 'machine label' if unchecked == 1 else 'machine labels'
+    waiting = f'{unchecked:,} {noun} to check in {queue}. ' if unchecked else ''
+    return WorkflowStep(
+        id='label',
+        label='Label enough examples of every class',
+        detail=waiting + floor,
+        done=f.active_classes > 0 and f.classes_below_floor == 0,
+        section='workspace',
+        query='queue=check_machine' if f.machine_labels_unchecked else None,
+    )
+
+
 def build_steps(f: WorkflowFacts) -> WorkflowSteps:
     steps = [
         WorkflowStep(
@@ -119,18 +147,7 @@ def build_steps(f: WorkflowFacts) -> WorkflowSteps:
             section='workspace',
             query='view=clusters',
         ),
-        WorkflowStep(
-            id='label',
-            label='Label enough examples of every class',
-            detail='Every class has enough validated examples.'
-            if f.active_classes and not f.classes_below_floor
-            else f'{_plural(f.classes_below_floor, "class has", "classes have")} too few '
-            'validated examples.'
-            if f.classes_below_floor
-            else 'There are no classes to label.',
-            done=f.active_classes > 0 and f.classes_below_floor == 0,
-            section='workspace',
-        ),
+        _label_step(f),
         WorkflowStep(
             id='hotkeys',
             label='Give every class a hotkey letter',
@@ -225,6 +242,17 @@ async def gather_facts(
         (await opensearch.count(index=images_index(), body={'query': {'match_all': {}}}))['count']
     )
     active, missing, below = class_facts(classes, counts)
+    must, must_not, _reason = review_queries.build_tab_query(
+        'check_machine', include_test=False, text=None, max_rank=None, vector_field=None
+    )
+    unchecked = int(
+        (
+            await opensearch.count(
+                index=items_index(),
+                body={'query': {'bool': {'must': must, 'must_not': must_not}}},
+            )
+        )['count']
+    )
     plan = plan_adoption(await detector_census(opensearch), classes)
     async with project_tx(session, project):
         partitions = await list_partitions(session, target='item', limit=1)
@@ -245,6 +273,7 @@ async def gather_facts(
             audit_pending=await has_pending_sample(opensearch),
             detector_classes_missing=len(plan.create),
             detector_items_undecided=plan.items,
+            machine_labels_unchecked=unchecked,
             promoted_model=await _flag(
                 session,
                 select(Promotion.id).where(

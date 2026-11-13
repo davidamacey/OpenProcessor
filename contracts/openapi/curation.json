@@ -20254,6 +20254,11 @@
             "title": "By Classifier",
             "type": "integer"
           },
+          "by_detector": {
+            "description": "Classes the detector named and nobody has checked (`class_source` detector).",
+            "title": "By Detector",
+            "type": "integer"
+          },
           "by_human": {
             "title": "By Human",
             "type": "integer"
@@ -20287,6 +20292,7 @@
           "by_human",
           "by_vlm",
           "by_classifier",
+          "by_detector",
           "by_import",
           "other",
           "total",

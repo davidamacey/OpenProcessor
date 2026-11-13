@@ -129,7 +129,14 @@ def test_labeled_rows_cover_every_provenance_and_sum_to_total() -> None:
     from src.services.curation.stats_dataset import labeled_block
 
     block = labeled_block(
-        {'by_human': 100, 'by_vlm': 0, 'by_classifier': 5, 'by_import': 185, 'other': 0}
+        {
+            'by_human': 100,
+            'by_vlm': 0,
+            'by_classifier': 5,
+            'by_detector': 0,
+            'by_import': 185,
+            'other': 0,
+        }
     )
     assert block['total'] == 290
     assert sum(r['count'] for r in block['rows']) == block['total']
@@ -143,7 +150,14 @@ def test_labeled_rows_empty_when_nothing_is_labeled() -> None:
     from src.services.curation.stats_dataset import labeled_block
 
     block = labeled_block(
-        {'by_human': 0, 'by_vlm': 0, 'by_classifier': 0, 'by_import': 0, 'other': 0}
+        {
+            'by_human': 0,
+            'by_vlm': 0,
+            'by_classifier': 0,
+            'by_detector': 0,
+            'by_import': 0,
+            'other': 0,
+        }
     )
     assert block['total'] == 0
     assert all(r['share'] == 0 for r in block['rows'])
