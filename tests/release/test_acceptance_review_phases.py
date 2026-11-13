@@ -70,9 +70,9 @@ def _cluster_routes(cards, facets_ok=True):
         return 200, {
             'cluster_uid': 'u1', 'total': 10,
             'validation': {'validated': 4, 'unvalidated': 6 if facets_ok else 5},
-            'detector_classes': [{'value': 'car', 'count': 3}],
-            'class_sources': [{'value': 'vlm', 'count': 7}],
-            'review_tabs': {'all': 10},
+            'detector_classes': [{'value': 'car', 'count': 3, 'label': None}],
+            'class_sources': [{'value': 'vlm', 'count': 7, 'label': None}],
+            'review_tabs': [{'value': 'all', 'count': 10, 'label': 'Needs review'}],
         }  # fmt: skip
 
     def crops(_p, q):

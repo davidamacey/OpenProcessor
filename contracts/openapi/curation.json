@@ -6028,11 +6028,12 @@
             "type": "integer"
           },
           "review_tabs": {
-            "additionalProperties": {
-              "type": "integer"
+            "description": "One entry per review filter: `value` is the `review_tab` id, `label` its name.",
+            "items": {
+              "$ref": "#/components/schemas/FacetCount"
             },
             "title": "Review Tabs",
-            "type": "object"
+            "type": "array"
           },
           "total": {
             "description": "Members, without the test holdout and excluded items.",
@@ -13685,6 +13686,18 @@
             "title": "Count",
             "type": "integer"
           },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The served name to show for `value`; null when the value is its own name.",
+            "title": "Label"
+          },
           "value": {
             "title": "Value",
             "type": "string"
@@ -13692,7 +13705,8 @@
         },
         "required": [
           "value",
-          "count"
+          "count",
+          "label"
         ],
         "title": "FacetCount",
         "type": "object"

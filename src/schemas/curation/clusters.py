@@ -141,6 +141,12 @@ class ClusterListResponse(TypedDict):
 class FacetCount(TypedDict):
     value: str
     count: int
+    label: Annotated[
+        str | None,
+        Field(
+            description='The served name to show for `value`; null when the value is its own name.'
+        ),
+    ]
 
 
 class ValidationCounts(TypedDict):
@@ -176,7 +182,12 @@ class ClusterFacets(TypedDict):
     detector_classes: Annotated[list[FacetCount], Field(description='Top 20 by count.')]
     class_sources: list[FacetCount]
     validation: ValidationCounts
-    review_tabs: dict[str, int]
+    review_tabs: Annotated[
+        list[FacetCount],
+        Field(
+            description='One entry per review filter: `value` is the `review_tab` id, `label` its name.'
+        ),
+    ]
     detector_confidence: Annotated[
         list[ConfidenceBin], Field(description='Ten fixed bins of 0.1; members with a confidence.')
     ]

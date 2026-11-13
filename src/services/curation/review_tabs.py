@@ -51,6 +51,24 @@ QUEUE_LABELS: dict[str, tuple[str, str]] = {
 }
 
 
+# The review filters a cluster card and the cluster facets count that are not queues.
+PRESET_LABELS: dict[str, str] = {
+    'all': 'Needs review',
+    'detector_disagreements': 'Detector disagrees',
+    'outliers': 'Outliers',
+    'vlm_low_conf': 'VLM unsure',
+    'mismatches': 'VLM matched no class',
+}
+
+
+def review_tab_label(tab: str) -> str:
+    """The served name of a ``review_tab`` filter value: a queue's own label, else its preset's.
+    ``KeyError`` for a value with neither, so a new facet cannot ship without a name."""
+    if tab in QUEUE_LABELS:
+        return QUEUE_LABELS[tab][0]
+    return PRESET_LABELS[tab]
+
+
 # Query filters every tab honours (``GET /review/{tab}`` and its locate
 # twin). ``build_tab_query`` / ``build_review_request`` read this same
 # table, so the served catalog can never advertise a filter a tab ignores.

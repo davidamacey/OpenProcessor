@@ -93,7 +93,7 @@ def test_the_response_has_the_documented_shape(client: TestClient) -> None:
     assert body['total'] == 8
     assert _crops_total(client) == body['total']
     assert len(body['detector_confidence']) == 10
-    assert set(body['review_tabs']) == set(cluster_cards.CLUSTER_REVIEW_TABS)
+    assert [t['value'] for t in body['review_tabs']] == list(cluster_cards.CLUSTER_REVIEW_TABS)
 
 
 def test_other_clusters_holdout_and_excluded_values_never_appear(client: TestClient) -> None:
@@ -123,12 +123,22 @@ def test_validation_counts_equal_the_filtered_crops(client: TestClient) -> None:
 
 
 def test_review_tab_counts_equal_the_filtered_crops(client: TestClient) -> None:
-    tabs = _facets(client)['review_tabs']
+    tabs = {t['value']: t['count'] for t in _facets(client)['review_tabs']}
     for tab, count in tabs.items():
         assert count == _crops_total(client, review_tab=tab), tab
     assert tabs['outliers'] == 1
     assert tabs['detector_disagreements'] == 2
     assert tabs['all'] >= tabs['outliers']
+
+
+def test_every_review_tab_facet_is_served_with_a_label_the_ui_can_show(client: TestClient) -> None:
+    facet = _facets(client)['review_tabs']
+    labels = {t['value']: t['label'] for t in facet}
+    assert set(labels) == set(cluster_cards.CLUSTER_REVIEW_TABS)
+    assert all(isinstance(label, str) and label and label != tab for tab, label in labels.items())
+    assert labels['vlm_low_conf'] == 'VLM unsure'
+    # a class or source facet has no served label of its own
+    assert {f['label'] for f in _facets(client)['detector_classes']} == {None}
 
 
 def test_confidence_histogram_bins_are_the_filtered_crops_and_sum_to_the_total(
