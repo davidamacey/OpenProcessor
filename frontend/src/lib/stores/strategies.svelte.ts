@@ -40,7 +40,8 @@ class StrategiesStore {
    * — kept for future observability, not because it's expected to fire.
    */
   async init(): Promise<void> {
-    if (this.loaded) return;
+    // A load that failed is not a load: the next caller (a view switch, a page mounting) retries.
+    if (this.loaded && this.error === null) return;
     if (this.#inflight) return this.#inflight;
     this.loading = true;
     const gen = this.#gen;

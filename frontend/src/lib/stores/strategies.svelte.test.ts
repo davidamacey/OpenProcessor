@@ -144,6 +144,26 @@ describe('strategiesStore', () => {
     expect(strategiesStore.error).toBeTruthy();
   });
 
+  it('a failed load is retried by the next init(), which clears the error and shows the capabilities', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ detail: 'not found' }), { status: 404 }),
+      )
+      .mockResolvedValue(jsonResponse(METHODS_TODAY));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await strategiesStore.init();
+    expect(strategiesStore.error).toBeTruthy();
+    expect(strategiesStore.methods.review_sorts).toHaveLength(0);
+
+    await strategiesStore.init();
+    expect(strategiesStore.error).toBeNull();
+    expect(strategiesStore.methods.review_sorts).toHaveLength(1);
+    await strategiesStore.init();
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(3);
+  });
+
   it('only fetches once across repeated init() calls (idempotent load)', async () => {
     const fetchMock = vi
       .fn()

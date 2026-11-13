@@ -11,10 +11,16 @@
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
   import type { ViewId } from '$lib/workspace/workspaceUrl';
   import { keymapStore } from '$stores/keymap.svelte';
+  import { strategiesStore } from '$stores/strategies.svelte';
 
   let { ws }: { ws: WorkspaceController } = $props();
   const current = $derived(viewEntry(ws.view).id);
   const views = $derived(availableViews(ws));
+  // The Embedding tab waits on `/methods`; if the first read failed, a view switch reads it again.
+  $effect(() => {
+    void current;
+    void strategiesStore.init();
+  });
 </script>
 
 <div
