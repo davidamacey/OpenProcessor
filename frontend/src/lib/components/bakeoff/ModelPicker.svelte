@@ -93,7 +93,7 @@
 
 <div class="space-y-3" data-testid="model-picker">
   <div>
-    <p class="text-caption uppercase tracking-wide text-fg-3">Trained runs</p>
+    <p class="text-meta text-fg-2 font-semibold">Trained runs</p>
     {#each trained as t (t.run_id)}
       <div
         class="rounded px-1 py-1 text-meta hover:bg-surface-2/50"
@@ -155,7 +155,7 @@
   </div>
 
   <div>
-    <p class="text-caption uppercase tracking-wide text-fg-3">Baselines</p>
+    <p class="text-meta text-fg-2 font-semibold">Baselines</p>
     {#each baselines as b (b.name)}
       <label
         class="flex items-center gap-1.5 rounded px-1 py-1 text-meta hover:bg-surface-2/50"
@@ -179,7 +179,7 @@
 
   {#if customRefs.length}
     <div>
-      <p class="text-caption uppercase tracking-wide text-fg-3">Custom</p>
+      <p class="text-meta text-fg-2 font-semibold">Custom</p>
       {#each customRefs as c, i (i)}
         <div class="flex items-center gap-1.5 px-1 py-1 text-meta">
           <span class="font-mono text-fg-1">{c.display_name ?? c.name}</span>

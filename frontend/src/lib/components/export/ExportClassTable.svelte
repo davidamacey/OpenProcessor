@@ -151,7 +151,7 @@
   {:else}
     <table class="w-full text-body">
       <thead
-        class="sticky top-0 z-10 border-b border-line bg-surface-0 text-left text-meta uppercase text-fg-2"
+        class="sticky top-0 z-10 border-b border-line bg-surface-0 text-left text-meta text-fg-2 font-medium"
       >
         <tr>
           {@render header('class_name', 'Class', '')}

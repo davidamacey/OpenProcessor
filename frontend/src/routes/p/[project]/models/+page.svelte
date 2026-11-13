@@ -215,7 +215,7 @@
                   {m.friendly_name}
                 </h2>
                 <span
-                  class="shrink-0 whitespace-nowrap rounded-sm border px-1.5 py-0.5 text-caption font-medium uppercase tracking-wide {pill(
+                  class="shrink-0 whitespace-nowrap rounded-sm border px-1.5 py-0.5 text-caption font-medium capitalize {pill(
                     m,
                   ).className}"
                   title={pill(m).title}
@@ -229,7 +229,7 @@
               </p>
             </div>
             <span
-              class="rounded border border-line-strong bg-surface-0 px-2 py-0.5 text-caption uppercase tracking-wide text-fg-2"
+              class="rounded border border-line-strong bg-surface-0 px-2 py-0.5 text-caption text-fg-2"
               title="Service kind"
             >
               {m.kind}
@@ -237,7 +237,7 @@
             {#if m.kind === 'vlm' && m.active}
               <!-- Served: this registered endpoint is the project's active one. -->
               <span
-                class="rounded border border-success-line bg-success-soft px-2 py-0.5 text-caption uppercase tracking-wide text-success-text"
+                class="rounded border border-success-line bg-success-soft px-2 py-0.5 text-caption text-success-text"
                 data-testid="model-vlm-active"
                 title={m.active_in?.length
                   ? `Active in ${m.active_in.join(', ')}`
@@ -254,26 +254,26 @@
             class="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-line pt-3 text-body"
           >
             <div>
-              <dt class="text-caption uppercase tracking-wide text-fg-3">Type</dt>
+              <dt class="text-meta text-fg-3">Type</dt>
               <dd class="text-fg-1">{m.model_type}</dd>
             </div>
             <div>
-              <dt class="text-caption uppercase tracking-wide text-fg-3">Endpoint</dt>
+              <dt class="text-meta text-fg-3">Endpoint</dt>
               <dd class="truncate font-mono text-meta text-fg-2" title={m.endpoint ?? ''}>
                 {m.endpoint ?? '—'}
               </dd>
             </div>
             <div>
-              <dt class="text-caption uppercase tracking-wide text-fg-3">Inferences</dt>
+              <dt class="text-meta text-fg-3">Inferences</dt>
               <dd class="font-mono text-fg-1">{fmtCount(m.inference_count)}</dd>
             </div>
             <div>
-              <dt class="text-caption uppercase tracking-wide text-fg-3">Avg latency</dt>
+              <dt class="text-meta text-fg-3">Avg latency</dt>
               <dd class="font-mono text-fg-1">{fmtMs(m.avg_latency_ms)}</dd>
             </div>
             {#if m.kind === 'vlm'}
               <div class="col-span-2">
-                <dt class="text-caption uppercase tracking-wide text-fg-3">Model</dt>
+                <dt class="text-meta text-fg-3">Model</dt>
                 <dd
                   class="truncate font-mono text-meta text-fg-2"
                   title={m.model ?? ''}
@@ -285,13 +285,11 @@
             {/if}
             {#if m.kind === 'triton'}
               <div>
-                <dt class="text-caption uppercase tracking-wide text-fg-3">
-                  Batched execs
-                </dt>
+                <dt class="text-meta text-fg-3">Batched execs</dt>
                 <dd class="font-mono text-fg-1">{fmtCount(m.exec_count)}</dd>
               </div>
               <div>
-                <dt class="text-caption uppercase tracking-wide text-fg-3">Failures</dt>
+                <dt class="text-meta text-fg-3">Failures</dt>
                 <dd
                   class="font-mono {m.inference_failed && m.inference_failed > 0
                     ? 'text-danger-text'
@@ -365,7 +363,7 @@
                  button at all, just this explanatory chip. -->
             <div class="mt-3 flex justify-end border-t border-line pt-3">
               <span
-                class="rounded border border-line-strong bg-surface-0 px-2 py-1 text-caption uppercase tracking-wide text-fg-3"
+                class="rounded border border-line-strong bg-surface-0 px-2 py-1 text-caption text-fg-3"
                 title="Hard-blocked server-side — DELETE 403s unconditionally, no force flow"
               >
                 protected: in use by the pipeline

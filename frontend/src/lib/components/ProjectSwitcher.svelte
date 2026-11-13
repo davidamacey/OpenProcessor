@@ -126,14 +126,14 @@
     >
     {#if current && current.status !== 'active'}
       <span
-        class="shrink-0 rounded bg-warn-soft px-1 text-caption uppercase tracking-wide text-warn-text"
+        class="shrink-0 rounded bg-warn-soft px-1 text-caption text-warn-text"
         data-testid="project-switcher-status"
         >{projectsStore.statusLabel(current.status)}</span
       >
     {/if}
     {#if paused}
       <span
-        class="shrink-0 rounded bg-warn-soft px-1 text-caption uppercase tracking-wide text-warn-text"
+        class="shrink-0 rounded bg-warn-soft px-1 text-caption text-warn-text"
         title={pausedTitle}
         data-testid="project-switcher-paused">paused</span
       >
@@ -182,7 +182,7 @@
         data-testid="project-switcher-list"
       >
         {#if picker.query.trim() === '' && picker.recents.length > 0}
-          <p class="px-3 pt-1 text-caption uppercase tracking-wide text-fg-3">Recent</p>
+          <p class="px-3 pt-1 text-meta text-fg-2 font-semibold">Recent</p>
           {#each picker.recents as r (r.slug)}
             <button
               type="button"
@@ -191,7 +191,7 @@
               onclick={() => choose(r.slug)}>{r.display_name}</button
             >
           {/each}
-          <p class="px-3 pt-1 text-caption uppercase tracking-wide text-fg-3">All</p>
+          <p class="px-3 pt-1 text-meta text-fg-2 font-semibold">All</p>
         {/if}
         {#each picker.projects as p, i (p.slug)}
           <div
@@ -213,8 +213,7 @@
               >
             </span>
             {#if p.status !== 'active'}
-              <span
-                class="shrink-0 rounded bg-warn-soft px-1 text-caption uppercase tracking-wide text-warn-text"
+              <span class="shrink-0 rounded bg-warn-soft px-1 text-caption text-warn-text"
                 >{projectsStore.statusLabel(p.status)}</span
               >
             {/if}

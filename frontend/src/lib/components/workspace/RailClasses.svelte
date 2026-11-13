@@ -117,9 +117,7 @@
 <!-- Narrow screens: a short strip above the content, so the page keeps the full width.
      md and up: the fixed 16rem column beside it. -->
 <section class="relative flex min-h-0 flex-1 flex-col" aria-label="Classes">
-  <h2 class="p-3 pb-1 text-meta font-semibold tracking-wide text-fg-2 uppercase">
-    Classes
-  </h2>
+  <h2 class="p-3 pb-1 text-meta font-semibold text-fg-2">Classes</h2>
   {#if classesStore.thresholds.warn_below > 0}
     <!-- The count chips use the served adequacy tiers; this says what each colour means. -->
     <p class="px-3 pb-2 text-caption text-fg-2" data-testid="class-count-legend">
@@ -211,8 +209,7 @@
                   <span class="flex grow items-center gap-1.5 truncate">
                     {#if cls.hotkey_letter}
                       <kbd
-                        class="rounded bg-surface-2 px-1 py-0.5 font-mono text-caption uppercase
-                             text-accent-text"
+                        class="rounded bg-surface-2 px-1 py-0.5 font-mono text-caption text-accent-text"
                         title="Press '{cls.hotkey_letter}' to assign selected crops to {cls.name}"
                       >
                         {cls.hotkey_letter}

@@ -33,7 +33,7 @@
   {@const data = slotOf(crop, spec)}
   {#if slotIsPresent(data)}
     <div class="mt-4 border-t border-line pt-3">
-      <div class="mb-1.5 text-caption uppercase tracking-wider text-fg-3">
+      <div class="mb-1.5 text-meta text-fg-2 font-semibold">
         {spec.label.title}
       </div>
       <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-meta">

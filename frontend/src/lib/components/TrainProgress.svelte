@@ -58,7 +58,7 @@
   <header class="mb-3 flex flex-wrap items-center gap-3">
     <h2 class="font-mono text-body text-white">{status.job_id}</h2>
     <span
-      class="rounded-sm border px-1.5 py-0.5 text-caption font-medium uppercase tracking-wide {statePillClass(
+      class="rounded-sm border px-1.5 py-0.5 text-caption font-medium capitalize {statePillClass(
         status.state,
       )}"
     >
@@ -91,7 +91,7 @@
 
   <div class="mb-3 grid grid-cols-1 gap-2 text-body sm:grid-cols-2 lg:grid-cols-4">
     <div>
-      <dt class="text-caption uppercase tracking-wide text-fg-3">Epoch</dt>
+      <dt class="text-meta text-fg-3">Epoch</dt>
       <dd class="font-mono text-fg-1">
         {cur} / {tot || '—'}
         {#if status.epoch_time_s}
@@ -100,12 +100,12 @@
       </dd>
     </div>
     <div>
-      <dt class="text-caption uppercase tracking-wide text-fg-3">ETA</dt>
+      <dt class="text-meta text-fg-3">ETA</dt>
       <dd class="font-mono text-fg-1">{formatDuration(etaSec)}</dd>
     </div>
     <div>
       <dt
-        class="text-caption uppercase tracking-wide text-fg-3"
+        class="text-meta text-fg-3"
         title="The last completed training epoch's own validation pass — not the best checkpoint's, which Ultralytics only re-validates once, after training ends"
       >
         Last epoch mAP50{#if lastEpoch?.epoch != null}
@@ -115,7 +115,7 @@
       <dd class="font-mono text-fg-1">{formatMetric(lastEpoch?.map50)}</dd>
     </div>
     <div>
-      <dt class="text-caption uppercase tracking-wide text-fg-3">Last epoch mAP50-95</dt>
+      <dt class="text-meta text-fg-3">Last epoch mAP50-95</dt>
       <dd class="font-mono text-fg-1">{formatMetric(lastEpoch?.map50_95)}</dd>
     </div>
   </div>

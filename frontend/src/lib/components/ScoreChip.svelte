@@ -42,6 +42,6 @@
   class="chip border-holdout/50 bg-holdout/10 text-holdout-text {sizeCls} font-mono"
   title={tooltip}
 >
-  <span class="uppercase tracking-wide opacity-80">{label}</span>
+  <span class="font-medium opacity-80">{label}</span>
   <span>{pct}</span>
 </span>

@@ -49,7 +49,7 @@
 </script>
 
 <div class="mt-4 border-t border-line pt-3">
-  <div class="mb-1.5 text-caption uppercase tracking-wider text-fg-3">Source image</div>
+  <div class="mb-1.5 text-meta text-fg-2 font-semibold">Source image</div>
   {#if imageLoading}
     <p class="text-caption text-fg-3">Loading…</p>
   {:else if imageError}
@@ -72,7 +72,7 @@
       >Open image</a
     >
     {#if siblings && siblings.length > 0}
-      <div class="mt-2 text-caption uppercase tracking-wider text-fg-3">
+      <div class="mt-2 text-meta text-fg-2 font-semibold">
         Siblings ({siblings.length})
       </div>
       <div class="mt-1 flex flex-wrap gap-1.5">

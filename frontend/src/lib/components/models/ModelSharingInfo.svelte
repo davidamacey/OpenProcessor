@@ -47,7 +47,7 @@
           data-testid="model-project-chip">from {projectName(model.project)}</span
         >
         <span
-          class="rounded border border-line-strong bg-surface-0 px-1.5 py-0.5 text-caption uppercase tracking-wide text-fg-2"
+          class="rounded border border-line-strong bg-surface-0 px-1.5 py-0.5 text-caption text-fg-2"
           >shared</span
         >
       </div>
@@ -103,7 +103,7 @@
           {:else if mappingState?.status === 'ok'}
             {@const m = mappingState.mapping}
             <table class="mt-1 w-full" data-testid="model-mapping-table">
-              <thead class="text-left text-caption uppercase tracking-wide text-fg-3">
+              <thead class="text-left text-meta text-fg-2 font-medium">
                 <tr>
                   <th class="py-0.5 pr-2 font-normal">Model class</th>
                   <th class="py-0.5 pr-2 font-normal">This project</th>

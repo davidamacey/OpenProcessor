@@ -13,7 +13,7 @@
 </script>
 
 <div class="mt-4 border-t border-line pt-3">
-  <div class="mb-1.5 text-caption uppercase tracking-wider text-fg-3">History</div>
+  <div class="mb-1.5 text-meta text-fg-2 font-semibold">History</div>
   {#if historyLoading}
     <p class="text-caption text-fg-3">Loading…</p>
   {:else if historyError}

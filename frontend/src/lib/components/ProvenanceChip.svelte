@@ -92,9 +92,7 @@
     >{regionVocabularyStore.labelFor(parsed.detector)}</span
   >
   {#if parsed.tag}
-    <span
-      class="max-w-[140px] min-w-0 shrink truncate text-caption uppercase tracking-wide"
-    >
+    <span class="max-w-[140px] min-w-0 shrink truncate text-caption">
       {parsed.tag}
     </span>
   {/if}

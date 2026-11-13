@@ -18,12 +18,12 @@
 <!-- Preflight panel -->
 <section class="rounded-md border border-line bg-surface-1 p-3">
   <header class="mb-2 flex items-center gap-3">
-    <h3 class="text-caption uppercase tracking-wide text-fg-3">Preflight</h3>
+    <h3 class="text-meta text-fg-2 font-semibold">Preflight</h3>
     {#if preflighting}
       <span class="text-caption text-fg-2">checking…</span>
     {:else if preflight}
       <span
-        class="rounded-sm border px-1.5 py-0.5 text-caption font-medium uppercase tracking-wide {preflight.blocked
+        class="rounded-sm border px-1.5 py-0.5 text-caption font-medium capitalize {preflight.blocked
           ? 'border-danger/40 bg-danger/10 text-danger-text'
           : 'border-success/40 bg-success/10 text-success-text'}"
       >
@@ -70,7 +70,7 @@
       c.severity,
     )}"
   >
-    <span class="font-mono text-caption uppercase tracking-wide opacity-70">
+    <span class="font-mono text-caption opacity-70 capitalize">
       {c.severity}
     </span>
     <span class="font-mono text-caption text-fg-2">{c.name}</span>

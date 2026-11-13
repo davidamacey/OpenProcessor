@@ -223,7 +223,7 @@
       <!-- Preset chips -->
       {#if presets.length > 0}
         <div class="mb-3 flex flex-wrap gap-1.5">
-          <span class="text-caption uppercase tracking-wide text-fg-3">Presets:</span>
+          <span class="text-meta text-fg-2 font-semibold">Presets:</span>
           {#each presets as p (p.name)}
             <button
               type="button"

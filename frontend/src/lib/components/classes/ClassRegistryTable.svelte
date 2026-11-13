@@ -54,7 +54,7 @@
   {:else}
     <table class="w-full text-body">
       <thead
-        class="sticky top-0 z-10 border-b border-line bg-surface-0 text-left text-meta uppercase text-fg-2"
+        class="sticky top-0 z-10 border-b border-line bg-surface-0 text-left text-meta text-fg-2 font-medium"
       >
         <tr>
           <!-- L5: ID and Added hide below lg (1024px) so the table fits 800px. -->
@@ -142,7 +142,7 @@
                 placeholder="—"
                 aria-label="Hotkey for {cls.name}"
                 title="Single char keyboard shortcut for this class. Empty to clear."
-                class="w-10 rounded border border-line-strong bg-surface-1 px-1 py-0.5 text-center font-mono text-meta uppercase focus:border-accent focus:outline-none"
+                class="w-10 rounded border border-line-strong bg-surface-1 px-1 py-0.5 text-center font-mono text-meta focus:border-accent focus:outline-none"
                 onchange={(e) =>
                   void setHotkey(cls, (e.currentTarget as HTMLInputElement).value)}
                 disabled={busy}

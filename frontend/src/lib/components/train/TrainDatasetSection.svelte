@@ -22,7 +22,7 @@
 <!-- Dataset header -->
 <section class="rounded-md border border-line bg-surface-1 p-4">
   <div class="flex items-center justify-between gap-3">
-    <h2 class="text-caption uppercase tracking-wide text-fg-3">Dataset</h2>
+    <h2 class="text-meta text-fg-2 font-semibold">Dataset</h2>
     <div class="flex gap-1 text-meta">
       <button
         type="button"
@@ -176,7 +176,7 @@
   <!-- Single-class dataset export, gated on the /methods `export` axis -->
   <section class="rounded-md border border-line bg-surface-1 p-4">
     <div class="flex items-center justify-between gap-3">
-      <h2 class="text-caption uppercase tracking-wide text-fg-3">
+      <h2 class="text-meta text-fg-2 font-semibold">
         {dataset.datasetExportSpec.label}
       </h2>
       <button

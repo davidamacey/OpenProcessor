@@ -70,7 +70,7 @@
   <header class="mb-3 flex flex-wrap items-center gap-3">
     <h2 class="font-mono text-body text-white">{campaignId}</h2>
     <span
-      class="rounded-sm border border-accent/40 bg-accent/10 px-1.5 py-0.5 text-caption uppercase tracking-wide text-accent-text"
+      class="rounded-sm border border-accent/40 bg-accent/10 px-1.5 py-0.5 text-caption text-accent-text"
     >
       campaign
     </span>
@@ -105,7 +105,7 @@
         class="grid grid-cols-1 gap-2 px-3 py-2 text-body sm:grid-cols-[auto_8rem_auto_1fr]"
       >
         <span
-          class="rounded-sm border px-1.5 py-0.5 text-center text-caption font-medium uppercase tracking-wide {statePillClass(
+          class="rounded-sm border px-1.5 py-0.5 text-center text-caption font-medium capitalize {statePillClass(
             r.state,
           )}"
         >

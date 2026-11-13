@@ -9,7 +9,7 @@
 </script>
 
 <section class="space-y-2 text-body" data-testid="selection-details">
-  <h2 class="text-meta font-semibold tracking-wide text-fg-2 uppercase">Selection</h2>
+  <h2 class="text-meta font-semibold text-fg-2">Selection</h2>
   {#if ws.summary.failure}
     <ErrorState
       title="The selection could not be counted"

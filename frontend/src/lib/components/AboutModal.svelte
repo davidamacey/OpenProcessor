@@ -28,9 +28,7 @@
     </p>
 
     <div class="mb-4 rounded-md border border-line bg-surface-1/50 p-3">
-      <p class="mb-2 text-caption font-medium tracking-wide text-fg-3 uppercase">
-        The dataset cycle
-      </p>
+      <p class="mb-2 text-meta font-medium text-fg-2">The dataset cycle</p>
       <svg
         viewBox="0 0 400 210"
         class="w-full"

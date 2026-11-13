@@ -34,9 +34,7 @@
       <p class="px-3 py-3 text-meta text-fg-3">No runs yet. Start one above.</p>
     {:else}
       <table class="w-full min-w-[42rem] table-fixed text-body">
-        <thead
-          class="sticky top-0 bg-surface-1 text-caption uppercase tracking-wide text-fg-3"
-        >
+        <thead class="sticky top-0 bg-surface-1 text-meta text-fg-2 font-medium">
           <tr>
             <th class="px-3 py-2 text-left">Name</th>
             <th class="w-20 px-3 py-2 text-left">Family</th>
@@ -76,7 +74,7 @@
               </td>
               <td class="px-3 py-2">
                 <span
-                  class="rounded-sm border px-1.5 py-0.5 text-caption font-medium uppercase tracking-wide {statePillClass(
+                  class="rounded-sm border px-1.5 py-0.5 text-caption font-medium capitalize {statePillClass(
                     r.state,
                   )}"
                 >

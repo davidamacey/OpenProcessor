@@ -36,7 +36,7 @@
     <button type="button" class="btn" onclick={() => ws.toggleRail()}>Close</button>
   </div>
   <section aria-label="Queues" class="border-b border-line pb-2">
-    <h2 class="p-3 text-meta font-semibold tracking-wide text-fg-2 uppercase">Queues</h2>
+    <h2 class="p-3 text-meta font-semibold text-fg-2">Queues</h2>
     <ul>
       {#each queues as q (q.id)}
         <li>

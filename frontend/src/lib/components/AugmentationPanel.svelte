@@ -252,7 +252,7 @@
         </div>
 
         <fieldset class="rounded border border-line p-3">
-          <legend class="px-1 text-caption uppercase tracking-wide text-fg-3">
+          <legend class="px-1 text-meta text-fg-2 font-semibold">
             Per-class oversampling
           </legend>
           <div class="mb-2 flex gap-3 text-meta text-fg-2">

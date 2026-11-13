@@ -11,7 +11,7 @@
 {#if crop.item_text_lines && crop.item_text_lines.length > 0}
   <div class="mt-4 border-t border-line pt-3">
     <div
-      class="mb-1.5 flex items-center justify-between text-caption uppercase tracking-wider text-fg-3"
+      class="mb-1.5 flex items-center justify-between text-meta text-fg-2 font-semibold"
     >
       <span>Item text</span>
       <button

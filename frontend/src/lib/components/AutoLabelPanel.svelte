@@ -220,7 +220,7 @@
            tells the operator whether a previous run failed. -->
       <div class="flex flex-wrap items-center gap-2 text-meta">
         <span
-          class="rounded px-2 py-0.5 font-mono uppercase
+          class="rounded px-2 py-0.5 font-mono capitalize
             {job.status === 'running'
             ? 'bg-accent/20 text-accent-text'
             : job.status === 'completed'

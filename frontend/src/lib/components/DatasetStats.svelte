@@ -81,7 +81,7 @@
            streaming errors isn't "live" in any sense an operator cares
            about. -->
       <span
-        class="rounded px-1.5 py-0.5 text-caption uppercase tracking-wide"
+        class="rounded px-1.5 py-0.5 text-meta font-semibold"
         class:bg-success={connected && !error}
         class:text-success-text={connected && !error}
         class:bg-warn={connected && !!error}
@@ -116,7 +116,7 @@
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-4">
       <!-- Headline -->
       <div class="surface p-4 lg:col-span-1">
-        <div class="text-meta uppercase tracking-wide text-fg-3">Total crops</div>
+        <div class="text-meta text-fg-2 font-semibold">Total crops</div>
         <div class="mt-2 font-mono text-kpi font-semibold text-fg-1">
           {fmt(stats.total_crops)}
         </div>

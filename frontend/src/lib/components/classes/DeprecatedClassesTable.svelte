@@ -31,7 +31,7 @@
     {#if showDeprecated}
       <div class="surface mt-2 overflow-auto">
         <table class="w-full text-body">
-          <thead class="border-b border-line text-left text-meta uppercase text-fg-3">
+          <thead class="border-b border-line text-left text-meta text-fg-2 font-medium">
             <tr>
               <th class="px-3 py-2 font-medium">ID</th>
               <th class="px-3 py-2 font-medium">Name</th>

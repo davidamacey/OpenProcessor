@@ -74,7 +74,7 @@
 
 <div class="space-y-2" data-testid="dataset-picker">
   <div>
-    <p class="text-caption uppercase tracking-wide text-fg-3">Exported test splits</p>
+    <p class="text-meta text-fg-2 font-semibold">Exported test splits</p>
     {#each grouped.exports as d (d.id)}
       {@render row(d)}
     {:else}
@@ -83,7 +83,7 @@
   </div>
   {#each grouped.external as g (g.group)}
     <div>
-      <p class="text-caption uppercase tracking-wide text-fg-3">
+      <p class="text-meta text-fg-2 font-semibold">
         External · {g.group}
       </p>
       {#each g.datasets as d (d.id)}

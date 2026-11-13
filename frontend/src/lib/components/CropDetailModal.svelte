@@ -35,7 +35,7 @@
          component the review page and the crop-card lightbox use, so the
          rendering matches across surfaces. -->
   <div class="flex min-h-0 flex-col gap-2">
-    <div class="text-meta uppercase tracking-wider text-fg-3">Source</div>
+    <div class="text-meta text-fg-2 font-semibold">Source</div>
     <!-- A definite height: SourceImageOverlay sizes its image with
            percentages, which collapse under an auto-height parent and left the
            boxes off the picture. No stretched background either — a flex-1 box

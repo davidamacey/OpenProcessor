@@ -174,9 +174,7 @@
     <nav aria-label="Primary (menu)" class="flex flex-col py-2" data-testid="drawer-nav">
       {#each NAV_GROUPS as group (group.id)}
         {#if group.sections.length > 1}
-          <p
-            class="px-4 pt-3 pb-1 text-caption font-medium tracking-wide text-fg-3 uppercase"
-          >
+          <p class="px-4 pt-3 pb-1 text-meta font-medium text-fg-2">
             {group.label}
           </p>
         {:else if group.id !== 'home'}

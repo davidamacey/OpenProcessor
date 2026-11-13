@@ -254,7 +254,7 @@
   <!-- Model size + profile -->
   <div class="rounded-md border border-line bg-surface-1 p-3">
     <div class="mb-3 flex flex-wrap items-center gap-3">
-      <span class="text-caption uppercase tracking-wide text-fg-3">Model size</span>
+      <span class="text-meta text-fg-2 font-semibold">Model size</span>
       {#each SIZES as s (s)}
         <button
           type="button"
@@ -270,7 +270,7 @@
     </div>
 
     <div class="flex flex-wrap items-center gap-3">
-      <span class="text-caption uppercase tracking-wide text-fg-3">Profile</span>
+      <span class="text-meta text-fg-2 font-semibold">Profile</span>
       {#each PROFILE_NAMES as p (p)}
         {@const desc = profiles.find((x) => x.name === p)?.description ?? ''}
         <button
@@ -289,7 +289,7 @@
 
   <!-- GPU -->
   <div class="rounded-md border border-line bg-surface-1 p-3">
-    <span class="mb-2 block text-caption uppercase tracking-wide text-fg-3">GPUs</span>
+    <span class="mb-2 block text-meta text-fg-2 font-semibold">GPUs</span>
     {#if gpuError}
       <p class="text-caption text-danger-text">GPU options unavailable: {gpuError}</p>
     {:else if !gpuOptions}

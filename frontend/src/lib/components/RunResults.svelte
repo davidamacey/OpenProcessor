@@ -155,12 +155,10 @@
            run whose status.json predates these fields (no incorrect
            back-fill) renders "—", never a guessed value. -->
       <section>
-        <h3 class="mb-1 text-caption uppercase tracking-wide text-fg-3">
-          Metrics — training epochs
-        </h3>
+        <h3 class="mb-1 text-meta text-fg-2 font-semibold">Metrics — training epochs</h3>
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <p class="mb-1 text-caption uppercase tracking-wide text-fg-3">
+            <p class="mb-1 text-meta text-fg-2 font-semibold">
               last epoch{#if metricEpochLabel(lastEpochMetric)}
                 ({metricEpochLabel(lastEpochMetric)}){/if}
             </p>
@@ -181,7 +179,7 @@
           </div>
           <div>
             <p
-              class="mb-1 text-caption uppercase tracking-wide text-fg-3"
+              class="mb-1 text-meta text-fg-2 font-semibold"
               title="Ultralytics re-validates the best checkpoint once more after training completes — not the same pass as the frozen-holdout eval below"
             >
               best checkpoint{#if metricEpochLabel(bestCheckpointMetric)}
@@ -208,7 +206,7 @@
       <!-- Eval: overall + per-class, labelled by whichever pass actually
            produced each half (see TrainEval's doc comment). -->
       <section>
-        <h3 class="mb-1 text-caption uppercase tracking-wide text-fg-3">Evaluation</h3>
+        <h3 class="mb-1 text-meta text-fg-2 font-semibold">Evaluation</h3>
         {#if evalData}
           <p class="mb-2 text-fg-2">
             overall: <span class="text-fg-1">{evalSplitLabel(evalData)}</span>
@@ -256,7 +254,7 @@
             <div class="overflow-auto rounded border border-line">
               <table class="w-full text-meta">
                 <thead
-                  class="border-b border-line bg-surface-0 text-left uppercase text-fg-3"
+                  class="border-b border-line bg-surface-0 text-left text-fg-2 font-medium"
                 >
                   <tr>
                     <th class="px-2 py-1 font-medium">Class</th>
@@ -324,7 +322,7 @@
       <!-- MLflow + checkpoint -->
       <section class="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div>
-          <dt class="text-caption uppercase tracking-wide text-fg-3">MLflow run</dt>
+          <dt class="text-meta text-fg-3">MLflow run</dt>
           <dd class="break-all font-mono text-fg-1">
             {#if mlflowRunUrl}
               <!-- eslint-disable svelte/no-navigation-without-resolve -- external MLflow server URL, not a SvelteKit route -->
@@ -348,18 +346,14 @@
           </dd>
         </div>
         <div>
-          <dt class="text-caption uppercase tracking-wide text-fg-3">
-            Checkpoint SHA-256
-          </dt>
+          <dt class="text-meta text-fg-3">Checkpoint SHA-256</dt>
           <dd class="break-all font-mono text-fg-1">{formatScalar(checkpointSha)}</dd>
         </div>
       </section>
 
       <!-- Lineage (manifest) -->
       <section>
-        <h3 class="mb-1 text-caption uppercase tracking-wide text-fg-3">
-          Lineage (manifest)
-        </h3>
+        <h3 class="mb-1 text-meta text-fg-2 font-semibold">Lineage (manifest)</h3>
         {#if manifestLoading}
           <p class="text-fg-3">Loading manifest…</p>
         {:else if manifestError}
@@ -436,7 +430,7 @@
             <div class="mt-2 overflow-auto rounded border border-line">
               <table class="w-full text-meta">
                 <thead
-                  class="border-b border-line bg-surface-0 text-left uppercase text-fg-3"
+                  class="border-b border-line bg-surface-0 text-left text-fg-2 font-medium"
                 >
                   <tr>
                     <th class="px-2 py-1 font-medium">New ID</th>

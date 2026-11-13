@@ -16,7 +16,7 @@
 </script>
 
 <section class="space-y-2 text-body" data-testid="cluster-details">
-  <h2 class="text-meta font-semibold tracking-wide text-fg-2 uppercase">Cluster</h2>
+  <h2 class="text-meta font-semibold text-fg-2">Cluster</h2>
   {#if card}
     <p class="text-fg-1">
       Cluster {displayNoText(card)}

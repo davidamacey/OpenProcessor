@@ -104,7 +104,7 @@
         </ul>
       {/if}
       <table class="mt-2 w-full">
-        <thead class="text-left text-caption uppercase text-fg-3">
+        <thead class="text-left text-meta text-fg-2 font-medium">
           <tr>
             <th class="py-1 pr-2">Model</th>
             <th class="py-1 pr-2">Dataset</th>

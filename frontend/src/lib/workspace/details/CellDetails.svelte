@@ -21,7 +21,7 @@
 </script>
 
 <section class="space-y-2 text-body" data-testid="cell-details">
-  <h2 class="text-meta font-semibold tracking-wide text-fg-2 uppercase">Map cell</h2>
+  <h2 class="text-meta font-semibold text-fg-2">Map cell</h2>
   {#if !ctl || !cell}
     <p class="text-fg-3">Select a cell on the map to see its photos.</p>
   {:else if ctl.cellFailure}

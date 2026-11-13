@@ -56,7 +56,7 @@
 <nav class="hidden flex-col gap-4 md:flex" aria-label={label} data-testid="sidebar-nav">
   {#each groups as g (g.heading)}
     <div>
-      <p class="mb-1 px-3 text-caption font-medium tracking-wide text-fg-3 uppercase">
+      <p class="mb-1 px-3 text-meta font-medium text-fg-2">
         {g.heading}
       </p>
       {#each g.items as item (item.id)}

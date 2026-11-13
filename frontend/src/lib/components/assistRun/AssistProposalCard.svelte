@@ -129,7 +129,7 @@
 
     {#if proposal.attribute_summary.length > 0}
       <div class="flex flex-col gap-1" data-testid="proposal-attributes">
-        <span class="text-caption uppercase tracking-wide text-fg-3"
+        <span class="text-meta text-fg-2 font-semibold"
           >Attribute suggestions, not labels</span
         >
         {#each proposal.attribute_summary as a (a.key)}

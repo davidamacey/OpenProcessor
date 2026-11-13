@@ -82,7 +82,7 @@
     </div>
 
     <section class="mb-5">
-      <h3 class="mb-2 text-meta font-semibold tracking-wide text-fg-2 uppercase">
+      <h3 class="mb-2 text-meta font-semibold text-fg-2">
         {scopeLabel} actions
       </h3>
       {#if shortcuts.length === 0}
@@ -104,9 +104,7 @@
     </section>
 
     <section class="mb-5">
-      <h3
-        class="mb-2 flex items-center gap-2 text-meta font-semibold tracking-wide text-fg-2 uppercase"
-      >
+      <h3 class="mb-2 flex items-center gap-2 text-meta font-semibold text-fg-2">
         Class hotkeys
         <span class="text-caption font-normal normal-case text-fg-3">
           (single letter; tab to next class; Enter to save)
@@ -147,7 +145,7 @@
                 onblur={(e) => {
                   void setHotkey(cls, (e.currentTarget as HTMLInputElement).value);
                 }}
-                class="w-10 rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-center font-mono text-meta uppercase text-accent-text focus:border-accent focus:outline-none disabled:opacity-50"
+                class="w-10 rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-center font-mono text-meta text-accent-text focus:border-accent focus:outline-none disabled:opacity-50"
                 aria-label={`hotkey for ${cls.name}`}
               />
             </li>
@@ -157,9 +155,7 @@
     </section>
 
     <section>
-      <h3 class="mb-2 text-meta font-semibold tracking-wide text-fg-2 uppercase">
-        Always
-      </h3>
+      <h3 class="mb-2 text-meta font-semibold text-fg-2">Always</h3>
       <ul class="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
         <li class="flex items-center justify-between gap-3 text-body">
           <span class="text-fg-2">{keymapStore.label('global.shortcuts_overlay')}</span>

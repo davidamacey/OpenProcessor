@@ -92,7 +92,7 @@
           >
             {#if cls.hotkey_letter}
               <kbd
-                class="rounded bg-surface-2 px-1 py-0.5 font-mono text-caption uppercase text-accent-text"
+                class="rounded bg-surface-2 px-1 py-0.5 font-mono text-caption text-accent-text"
                 >{cls.hotkey_letter}</kbd
               >
             {/if}

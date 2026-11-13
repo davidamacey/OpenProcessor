@@ -43,7 +43,7 @@
   <div class="space-y-3" data-testid="dataset-issues">
     {#each groups as g (g.id)}
       <section data-testid="dataset-issues-{g.id}">
-        <h4 class="mb-1 text-meta font-semibold tracking-wide text-fg-2 uppercase">
+        <h4 class="mb-1 text-meta font-semibold text-fg-2">
           {g.title}
         </h4>
         <ul class="space-y-1">
