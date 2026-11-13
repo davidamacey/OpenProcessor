@@ -85,6 +85,10 @@ class ReviewEmptyState(BaseModel):
 
 class ReviewTabsResponse(BaseModel):
     tabs: list[ReviewTab]
+    default_tab: str | None = Field(
+        description='The first queue in `tabs` order with `count` above zero, null when every '
+        'queue is empty: the queue Review opens on when none is named.'
+    )
     empty_state: ReviewEmptyState
 
 

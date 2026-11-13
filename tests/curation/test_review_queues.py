@@ -286,3 +286,20 @@ def test_a_sort_whose_field_no_item_carries_is_not_offered(
     assert 'atypicality' not in offered
     assert 'representativeness' not in offered
     assert 'recent' in offered
+
+
+def test_default_tab_is_the_first_queue_with_work(monkeypatch: pytest.MonkeyPatch) -> None:
+    docs = {'m': _machine('m'), 'v': _machine('v', class_validated=True)}
+    response = _client(docs, monkeypatch).get(f'{BASE}/review/tabs')
+    assert response.status_code == 200, response.text
+    body = response.json()
+    # nothing is unclassed, so To label is empty and the machine labels are where the work is
+    assert [t['count'] for t in body['tabs'][:2]] == [0, 1]
+    assert body['default_tab'] == 'check_machine'
+
+
+def test_default_tab_is_null_when_every_queue_is_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    docs = {'v': _machine('v', class_validated=True)}
+    body = _client(docs, monkeypatch).get(f'{BASE}/review/tabs').json()
+    assert all(t['count'] == 0 for t in body['tabs'])
+    assert body['default_tab'] is None

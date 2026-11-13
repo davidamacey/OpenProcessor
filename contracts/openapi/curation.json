@@ -36411,6 +36411,18 @@
       },
       "ReviewTabsResponse": {
         "properties": {
+          "default_tab": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The first queue in `tabs` order with `count` above zero, null when every queue is empty: the queue Review opens on when none is named.",
+            "title": "Default Tab"
+          },
           "empty_state": {
             "$ref": "#/components/schemas/ReviewEmptyState"
           },
@@ -36424,6 +36436,7 @@
         },
         "required": [
           "tabs",
+          "default_tab",
           "empty_state"
         ],
         "title": "ReviewTabsResponse",

@@ -7,10 +7,14 @@ Owns *which queues exist and what each one advertises* (``GET {prefix}/review/ta
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.services.curation import review_filter_specs
 from src.services.curation.review_filters import REGION_STATUS_DEFAULT
+
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
 
 
 # The queues, in the order the rail shows them. Every other id in
@@ -83,6 +87,12 @@ TAB_FILTER_DEFAULTS: dict[str, dict[str, Any]] = {
     'classifier_blind_spots': {'max_rank': PRIMARY_SUBJECT_MAX_RANK},
     'regions': {'region_status': REGION_STATUS_DEFAULT},
 }
+
+
+def default_tab(tabs: Iterable[Mapping[str, Any]]) -> str | None:
+    """The first queue in served order that holds work (``count`` above zero), else ``None``:
+    the queue Review opens on when the address names none."""
+    return next((str(t['id']) for t in tabs if t['count'] > 0), None)
 
 
 def tab_filters(tab: str) -> tuple[str, ...]:
