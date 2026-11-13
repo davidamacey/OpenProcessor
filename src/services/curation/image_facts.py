@@ -14,6 +14,7 @@ from src.schemas.curation.images import ImageLocation, ImageNearDup
 IMAGE_SOURCE_FIELDS: tuple[str, ...] = (
     'image_id',
     'image_path',
+    'source_identifier',
     'width',
     'height',
     'source',
@@ -28,7 +29,11 @@ IMAGE_SOURCE_FIELDS: tuple[str, ...] = (
 
 
 def file_name(src: dict[str, Any]) -> str:
-    return posixpath.basename(str(src.get('image_path') or '').replace('\\', '/'))
+    """The name to show: the uploader's own file name (``source_identifier``) when the bytes were
+    uploaded and stored under a content hash, else the stored path's name."""
+    original = str(src.get('source_identifier') or '')
+    stored = str(src.get('image_path') or '')
+    return posixpath.basename((original or stored).replace('\\', '/'))
 
 
 def served_capture(src: dict[str, Any], policy: str) -> dict[str, Any]:
