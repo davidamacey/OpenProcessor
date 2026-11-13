@@ -79,6 +79,14 @@
     })),
   );
 
+  // A sibling picked in the details panel: the served locate moves Review to it.
+  $effect(() => {
+    ws.setReviewOpen((cropId) => {
+      tabs.pendingCropId = cropId;
+    });
+    return () => ws.setReviewOpen(null);
+  });
+
   // A Reprocess in the details panel re-reads the item: take it into the queue.
   $effect(() => {
     ws.setReviewAdopt((c) => {

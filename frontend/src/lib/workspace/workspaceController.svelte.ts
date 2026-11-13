@@ -51,6 +51,8 @@ export interface SelectablePage {
   kind: SelectionKind;
   ids: () => string[];
   total: () => number;
+  /** The name a full-size view of `id` is titled with (an image's file name). */
+  label?: (id: string) => string | undefined;
   /** Puts `ids` into the view's own selection, which the view mirrors back to the controller. */
   apply: (ids: string[]) => void;
 }
@@ -271,7 +273,9 @@ export class WorkspaceController {
 
   stepLightbox(step: -1 | 1): void {
     const next = this.lightboxNeighbour(step);
-    if (next) this.lightbox = { imageId: next, label: 'Image' };
+    if (!next) return;
+    this.lightbox = { imageId: next, label: this.#page?.label?.(next) ?? 'Image' };
+    this.setFocus({ kind: 'image', id: next });
   }
 
   /** Opens a cluster in place; the filter and the view stay. */
@@ -301,6 +305,18 @@ export class WorkspaceController {
 
   adoptReviewItem(crop: Crop): void {
     this.#adoptReviewItem?.(crop);
+  }
+
+  #openReviewItem: ((cropId: string) => void) | null = null;
+
+  /** The Review view's way to move to an item it has not loaded (a sibling on the same image). */
+  setReviewOpen(open: ((cropId: string) => void) | null): void {
+    this.#openReviewItem = open;
+  }
+
+  /** Review hops to `cropId`: the served locate finds where it sits in the open queue. */
+  openReviewItem(cropId: string): void {
+    this.#openReviewItem?.(cropId);
   }
 
   /** Leaves Review for the grid it was opened from, focused on the item Review stopped on. */
