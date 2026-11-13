@@ -7,7 +7,7 @@ vi.mock('$lib/api_cropRead', async () => {
 });
 
 import { getCrops } from '$lib/api_cropRead';
-import { createMatchingItems } from './matchingItems.svelte';
+import { createMatchingItems, MATCHING_PAGE_SIZE } from './matchingItems.svelte';
 import type { Crop } from '$lib/types';
 
 const crop = (id: string) => ({ id }) as unknown as Crop;
@@ -15,6 +15,12 @@ const crop = (id: string) => ({ id }) as unknown as Crop;
 afterEach(() => vi.clearAllMocks());
 
 describe('createMatchingItems', () => {
+  it('asks for pages big enough to read far quickly, within the served cap', () => {
+    // GET /crops serves at most 500 per page; 48 took minutes to reach item 10,000.
+    expect(MATCHING_PAGE_SIZE).toBeGreaterThanOrEqual(200);
+    expect(MATCHING_PAGE_SIZE).toBeLessThanOrEqual(500);
+  });
+
   it('sends the whole filter, open-vocabulary pair included, on every page', async () => {
     vi.mocked(getCrops).mockImplementation(async (_f, cursor) => ({
       items: [crop(cursor === null ? 'p1' : 'p2')],
@@ -33,7 +39,7 @@ describe('createMatchingItems', () => {
       class_name: ['widget'],
       open_vocab_set: 'tags',
       source_prompt: 'blue widget',
-      limit: 48,
+      limit: MATCHING_PAGE_SIZE,
     };
     expect(vi.mocked(getCrops).mock.calls.map(([f, cursor]) => [f, cursor])).toEqual([
       [filter, null],

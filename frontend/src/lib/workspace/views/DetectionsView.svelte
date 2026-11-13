@@ -144,6 +144,7 @@
         use:infiniteScroll={{
           onload: () => pager.loadMore(),
           disabled: !pager.hasMore || pager.loading || pager.loadingMore,
+          rootMargin: '1600px',
         }}
         class="mt-4 h-1"
         aria-hidden="true"
