@@ -10,6 +10,13 @@
   }
 
   let { historyEntries, historyError, historyLoading }: Props = $props();
+
+  /** The newest writes shown before "Show all"; the served order is oldest first. */
+  const RECENT = 3;
+  let showAll = $state(false);
+  const shown = $derived(
+    historyEntries && !showAll ? historyEntries.slice(-RECENT) : (historyEntries ?? []),
+  );
 </script>
 
 <div class="mt-4 border-t border-line pt-3">
@@ -22,7 +29,7 @@
     <p class="text-caption text-fg-3">No prior writes recorded.</p>
   {:else}
     <ul class="space-y-1 text-caption">
-      {#each historyEntries as entry, i (i)}
+      {#each shown as entry, i (i)}
         <!-- K7 (visual audit 2026-09-24): every row names its resulting
              class ("no class" when the write left none) with the source
              labelled, and a short timestamp (raw value in the tooltip). -->
@@ -48,5 +55,13 @@
         </li>
       {/each}
     </ul>
+    {#if !showAll && historyEntries.length > RECENT}
+      <button
+        type="button"
+        class="mt-1 text-caption text-accent-text underline underline-offset-2"
+        data-testid="history-show-all"
+        onclick={() => (showAll = true)}>Show all {historyEntries.length}</button
+      >
+    {/if}
   {/if}
 </div>
