@@ -105,3 +105,24 @@ async def test_a_call_in_flight_on_a_server_dropped_by_a_new_router_fails_closed
     )  # it already holds its channel; nothing new goes to the dropped server
     await pool.infer('yolo', [], [])
     assert clients['a:8001'].calls == 1
+
+
+@pytest.mark.asyncio
+async def test_stream_one_loads_the_model_before_streaming(monkeypatch: pytest.MonkeyPatch) -> None:
+    pool, clients = _pool(None, ('a:8001',))
+    events: list[str] = []
+
+    async def record_load(_client: Any, model_name: str) -> None:
+        events.append(f'load:{model_name}')
+
+    async def stream_infer(requests: Any, **_k: Any) -> Any:
+        events.append('stream')
+        async for _ in requests:
+            pass
+        yield 'result', None
+
+    monkeypatch.setattr(triton_pool_core, 'ensure_loaded', record_load)
+    clients['a:8001'].stream_infer = stream_infer
+
+    assert await pool.stream_one('gpu_image_prep', []) == 'result'
+    assert events == ['load:gpu_image_prep', 'stream']
