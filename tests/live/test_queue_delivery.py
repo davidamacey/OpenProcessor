@@ -22,8 +22,9 @@ import pytest
 from src.config.job_kinds import KINDS
 from src.config.queue import NON_JOB_QUEUES, TaskQueues
 from tests.live import _compose
+from tests.live._ingest_support import count, ingest_project, picture
 from tests.live._jobs import send_task, start_job_in_project
-from tests.live.conftest import wait_until
+from tests.live.conftest import wait_job, wait_until
 
 
 pytestmark = pytest.mark.live
@@ -42,6 +43,9 @@ JOB_QUEUES: dict[str, tuple[str, str, dict[str, Any]]] = {
 # each is claimed and finished by its consumer in test_live_clusters.py, test_live_train.py and
 # test_live_assist_loop.py.
 PROVED_ELSEWHERE = (TaskQueues.ASSIST_LOOP, TaskQueues.CLUSTER, TaskQueues.GPU_TRAIN)
+# The interactive queue carries label_op and label_undo, which need items and a class, so the case
+# is a real labeling write (test_a_label_write_and_its_undo_run_on_the_interactive_worker below).
+PROVED_HERE_WITH_DATA = (TaskQueues.INTERACTIVE,)
 TICK_QUEUES: dict[str, tuple[str, str]] = {
     TaskQueues.PERIODIC: ('periodic-worker', 'op.periodic.job_stats'),
     TaskQueues.ARBITER: ('arbiter-worker', 'op.periodic.gpu_arbiter'),
@@ -49,7 +53,9 @@ TICK_QUEUES: dict[str, tuple[str, str]] = {
 
 
 def test_every_queue_is_covered_by_this_file_or_a_named_one() -> None:
-    assert set(JOB_QUEUES) | set(TICK_QUEUES) | set(PROVED_ELSEWHERE) == set(TaskQueues.ALL)
+    assert (
+        set(JOB_QUEUES) | set(TICK_QUEUES) | set(PROVED_ELSEWHERE) | set(PROVED_HERE_WITH_DATA)
+    ) == set(TaskQueues.ALL)
     assert set(TICK_QUEUES) == NON_JOB_QUEUES
 
 
@@ -95,3 +101,46 @@ def test_a_tick_sent_to_each_beat_queue_runs_on_its_consumer(queue: str) -> None
     others = [s for q, (s, _) in TICK_QUEUES.items() if q != queue]
     for other in others:
         assert task_id not in _compose.compose('logs', '--no-log-prefix', other).stdout
+
+
+def test_a_label_write_and_its_undo_run_on_the_interactive_worker(
+    api: Any, opensearch: Any
+) -> None:
+    """``label_op`` and ``label_undo`` are routed to ``interactive``: a real bulk label, then its
+    undo, each claimed by an ``interactive-worker`` container and by no other."""
+    assert KINDS['label_op'].queue == TaskQueues.INTERACTIVE
+    assert KINDS['label_undo'].queue == TaskQueues.INTERACTIVE
+    with ingest_project(api, opensearch, 'qdeliv') as project:
+        resp = api.post(
+            f'{project.prefix}/ingest/upload',
+            files=[('images', ('q.jpg', picture((10, 120, 200)), 'image/jpeg'))],
+        )
+        assert resp.status_code == 200, resp.text
+        count(opensearch, project.items_index)
+        hits = opensearch.post(
+            f'/{project.items_index}/_search', json={'size': 1, 'query': {'match_all': {}}}
+        ).json()['hits']['hits']
+        assert hits, 'the upload stored no item'
+        crop_id = hits[0]['_source']['crop_id']
+        class_id = api.get(f'{project.prefix}/classes').json()['classes'][0]['class_id']
+
+        labeled = api.put(
+            f'{project.prefix}/crops/batch_label',
+            json={'crop_ids': [crop_id], 'class_id': class_id},
+        )
+        assert labeled.status_code == 202, labeled.text
+        jobs = {'label_op': labeled.json()['job_id']}
+        assert wait_job(api, jobs['label_op'], prefix=project.prefix)['status'] == 'completed'
+        undone = api.post(
+            f'{project.prefix}/label_ops/{labeled.json()["op_id"]}/undo', json={'dry_run': False}
+        )
+        assert undone.status_code == 202, undone.text
+        jobs['label_undo'] = undone.json()['job_id']
+        assert wait_job(api, jobs['label_undo'], prefix=project.prefix)['status'] == 'completed'
+
+        expected = _compose.service_hostnames('interactive-worker')
+        for kind, job_id in jobs.items():
+            owners = _compose.psql(f"SELECT owner FROM job_attempts WHERE job_id = '{job_id}'")
+            assert owners.split(':')[0] in expected, (
+                f'{kind} {job_id} claimed by {owners}, expected an interactive-worker container'
+            )
