@@ -134,10 +134,7 @@ def test_dockerfile_segmenter_replaces_the_base_python_packages_the_scan_flags()
     text = (REPO_ROOT / 'docker' / 'segmenter' / 'Dockerfile').read_text()
     runtime_start = text.rindex('FROM pytorch/pytorch')
     builder, runtime = text[:runtime_start], text[runtime_start:]
-    assert (
-        'pip install --user --no-cache-dir --no-warn-script-location -r /tmp/requirements.txt'
-        in builder
-    )
+    assert 'pip install --user --no-warn-script-location -r /tmp/requirements.txt' in builder
     pins = (REPO_ROOT / 'docker' / 'segmenter' / 'requirements.txt').read_text()
     floors = {
         'fastapi': (0, 162, 0),

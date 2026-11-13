@@ -82,16 +82,16 @@ RUN actual="$(dpkg-query -W -f='${Version}' libnvinfer-bin)" \
 # - starlette, anyio, certifi, filelock in the image's python env lag their
 #   security fixes; docker/triton/requirements-security.txt carries the exact floors.
 COPY docker/triton/ /tmp/triton-requirements/
-RUN rm -rf /usr/local/cuda-*/NsightSystems-cli-* \
-    && pip install --no-cache-dir --upgrade -r /tmp/triton-requirements/requirements-security.txt \
+RUN --mount=type=cache,target=/root/.cache/pip rm -rf /usr/local/cuda-*/NsightSystems-cli-* \
+    && pip install --upgrade -r /tmp/triton-requirements/requirements-security.txt \
     && pip uninstall -y virtualenv tritonfrontend tritonserver
 
 # PyTorch and TorchVision (CUDA 13.x wheels) for the Python backend models, then OpenCV,
 # pyclipper and CuPy (see the header of each requirements file).
-RUN pip install --no-cache-dir \
+RUN --mount=type=cache,target=/root/.cache/pip pip install \
         -r /tmp/triton-requirements/requirements-torch.txt \
         --index-url https://download.pytorch.org/whl/cu132 \
-    && pip install --no-cache-dir -r /tmp/triton-requirements/requirements.txt \
+    && pip install -r /tmp/triton-requirements/requirements.txt \
     && rm -rf /tmp/triton-requirements \
     && python3 -c "import torch; print(f'PyTorch {torch.__version__} installed, CUDA: {torch.cuda.is_available()}')" \
     && python3 -c "import torchvision; print(f'TorchVision {torchvision.__version__} installed')" \

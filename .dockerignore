@@ -53,6 +53,17 @@ frontend/
 .claude/
 .install/
 export_*/
+# Runtime data, secrets, generated contracts, monitoring configs and side-car image contexts:
+# none is COPY-ed by Dockerfile, Dockerfile.triton or docker/trainer/Dockerfile. docker/hardened
+# stays: its Dockerfile builds from this context.
+data/
+secrets/
+contracts/
+monitoring/
+docker/bench/
+docker/segmenter/
+docker/test/
+.test_durations
 
 # Documentation (not needed in containers)
 docs/

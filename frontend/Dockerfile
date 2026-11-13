@@ -1,10 +1,11 @@
+# syntax=docker/dockerfile:1
 # The bundle is architecture-independent static files, so build it once on
 # the native build platform; only the nginx stage below is per-arch. This
 # keeps a multi-arch (amd64 + arm64) build from running npm under emulation.
 FROM --platform=$BUILDPLATFORM node:26-alpine@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94 AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci
 COPY . .
 # $contracts (vite alias, tsconfig path) resolves to ../contracts, i.e. /contracts. The generated
 # TypeScript lives outside this build context, so it comes in as the named context "contracts"
@@ -22,6 +23,30 @@ RUN npm run build
 # rebuild never silently changes what's shipped; Dependabot bumps this.
 FROM nginxinc/nginx-unprivileged:1.31.2-alpine3.23@sha256:6320020c7da8714feab524e02c08c5a1958675c4e68700e93a2fd8970b065786
 
+USER root
+# curl is dropped: it was the source of most base-image CVEs and is
+# unused — the HEALTHCHECK below uses busybox wget, already on the base.
+RUN apk upgrade --no-cache && apk del --no-cache curl && rm -rf /usr/share/nginx/html/*
+# The runtime-config script rewrites placeholders in the bundle and in default.conf with
+# `sed -i` at container start, as uid 101 (group 0, group-writable). Ownership and mode are set
+# on COPY (--chown/--chmod) so no file is rewritten into a second layer; the directories
+# themselves, empty or already present, are the only paths changed here.
+RUN mkdir -p /etc/nginx/gateway.d /etc/nginx/auth.d \
+    && chown 101:0 /usr/share/nginx/html /etc/nginx/conf.d /etc/nginx/gateway.d /etc/nginx/auth.d \
+    && chmod g+w /usr/share/nginx/html /etc/nginx/conf.d /etc/nginx/gateway.d /etc/nginx/auth.d
+COPY --from=builder --chown=101:0 --chmod=g+w /app/build /usr/share/nginx/html
+COPY --chown=101:0 --chmod=g+w nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx-security-headers.conf /etc/nginx/snippets/security-headers.conf
+COPY nginx-gateway.conf /etc/nginx/snippets/gateway-subpaths.conf
+COPY --chmod=0755 docker-entrypoint.sh /docker-entrypoint.d/40-runtime-config.sh
+USER 101
+
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD ["sh", "-c", "wget -q --spider http://127.0.0.1:8080/nginx-health || exit 1"]
+
+# Build identity last: VERSION and REVISION change per release or commit, and an ARG above a RUN
+# invalidates that RUN's cache.
 ARG VERSION=0.6.0
 ARG REVISION=unknown
 LABEL org.opencontainers.image.title="Cropwright" \
@@ -30,24 +55,3 @@ LABEL org.opencontainers.image.title="Cropwright" \
       org.opencontainers.image.licenses="AGPL-3.0-only" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${REVISION}"
-
-USER root
-# curl is dropped: it was the source of most base-image CVEs and is
-# unused — the HEALTHCHECK below uses busybox wget, already on the base.
-RUN apk upgrade --no-cache && apk del --no-cache curl && rm -rf /usr/share/nginx/html/*
-COPY --from=builder /app/build /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY nginx-security-headers.conf /etc/nginx/snippets/security-headers.conf
-COPY nginx-gateway.conf /etc/nginx/snippets/gateway-subpaths.conf
-COPY docker-entrypoint.sh /docker-entrypoint.d/40-runtime-config.sh
-# The runtime-config script rewrites placeholders in the bundle and in
-# default.conf with `sed -i` at container start, as uid 101.
-RUN chmod 0755 /docker-entrypoint.d/40-runtime-config.sh \
-    && mkdir -p /etc/nginx/gateway.d /etc/nginx/auth.d \
-    && chown -R 101:0 /usr/share/nginx/html /etc/nginx/conf.d /etc/nginx/gateway.d /etc/nginx/auth.d \
-    && chmod -R g+w /usr/share/nginx/html /etc/nginx/conf.d /etc/nginx/gateway.d /etc/nginx/auth.d
-USER 101
-
-EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD ["sh", "-c", "wget -q --spider http://127.0.0.1:8080/nginx-health || exit 1"]

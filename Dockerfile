@@ -116,10 +116,10 @@ RUN apt-get update && apt-get upgrade -y \
 
 COPY requirements.txt .
 
-RUN pip install --user --no-cache-dir --no-warn-script-location \
+RUN --mount=type=cache,target=/root/.cache/pip pip install --user --no-warn-script-location \
         --extra-index-url https://pypi.nvidia.com \
         -r requirements.txt \
-    && pip install --user --no-cache-dir --no-warn-script-location --no-deps \
+    && pip install --user --no-warn-script-location --no-deps \
         "perception_models @ git+https://github.com/facebookresearch/perception_models.git@3e352cca660658d4b5c90f42a7808b11469e4c66"
 
 # The CLIP text tokenizer, fetched here once so the API never reaches huggingface.co at run time
@@ -148,8 +148,8 @@ COPY requirements-export.txt ./
 
 # Under the runtime freeze nothing in the runtime set can move; the superset check and the
 # delta script fail the build if it did anyway.
-RUN bash /usr/local/share/op-build/site_delta.sh snapshot /root/.local /tmp/pre.sha \
-    && pip install --user --no-cache-dir --no-warn-script-location \
+RUN --mount=type=cache,target=/root/.cache/pip bash /usr/local/share/op-build/site_delta.sh snapshot /root/.local /tmp/pre.sha \
+    && pip install --user --no-warn-script-location \
         -c /tmp/runtime.freeze \
         --extra-index-url https://pypi.nvidia.com \
         -r requirements-export.txt \
@@ -170,8 +170,8 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 COPY scripts/curation/bakeoff/requirements.txt bakeoff-requirements.txt
 
-RUN bash /usr/local/share/op-build/site_delta.sh snapshot /root/.local /tmp/pre.sha \
-    && pip install --user --no-cache-dir --no-warn-script-location \
+RUN --mount=type=cache,target=/root/.cache/pip bash /usr/local/share/op-build/site_delta.sh snapshot /root/.local /tmp/pre.sha \
+    && pip install --user --no-warn-script-location \
         -c /tmp/runtime.freeze \
         -r bakeoff-requirements.txt \
     && pip freeze --user | grep -v '^perception' | LC_ALL=C sort > /tmp/eval.freeze \
