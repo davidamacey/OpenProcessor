@@ -17,6 +17,7 @@
     icon?: IconName;
     tone?: 'danger';
     disabled?: boolean;
+    testid?: string;
   }
   interface Props {
     label: string;
@@ -24,6 +25,7 @@
     current?: string;
     align?: 'start' | 'end';
     triggerClass?: string;
+    triggerTestid?: string;
   }
   let {
     label,
@@ -31,6 +33,7 @@
     current,
     align = 'start',
     triggerClass = 'btn-sm btn-ghost',
+    triggerTestid,
   }: Props = $props();
 
   let open = $state(false);
@@ -71,7 +74,7 @@
 
 <Popover {label} {align} bind:open panelClass="min-w-48 py-1">
   {#snippet trigger({ open: isOpen, attrs })}
-    <button type="button" class={triggerClass} {...attrs}>
+    <button type="button" class={triggerClass} data-testid={triggerTestid} {...attrs}>
       {label}
       <Icon name={isOpen ? 'chevron-up' : 'chevron-down'} size={14} />
     </button>
@@ -91,6 +94,7 @@
           class="{ITEM} {toneClass(item)} {current === item.id ? 'font-medium' : ''}"
           href={resolve(item.href as '/')}
           aria-current={current === item.id ? 'page' : undefined}
+          data-testid={item.testid}
           onclick={() => choose(item)}
         >
           {#if item.icon}<Icon name={item.icon} size={14} />{/if}
@@ -102,6 +106,7 @@
           role="menuitem"
           class="{ITEM} {toneClass(item)} disabled:opacity-50"
           disabled={item.disabled}
+          data-testid={item.testid}
           onclick={() => choose(item)}
         >
           {#if item.icon}<Icon name={item.icon} size={14} />{/if}

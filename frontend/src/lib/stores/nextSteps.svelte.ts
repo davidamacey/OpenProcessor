@@ -12,8 +12,12 @@ class NextStepsStore {
   next = $state<WorkflowStep | null>(null);
   defaultView = $state<WorkflowSteps['workspace_default_view'] | null>(null);
   loaded = $state(false);
+  /** True from the moment the Workspace is entered until the read for that visit has landed:
+   *  the cached default view is then an earlier visit's, and must not open the Workspace. */
+  stale = $state(false);
   #inflight: Promise<void> | null = null;
   #gen = 0;
+  #seq = 0;
 
   async init(): Promise<void> {
     if (this.loaded) return;
@@ -21,9 +25,16 @@ class NextStepsStore {
     return this.refresh();
   }
 
+  /** The Workspace opens: the cached default view is stale until this visit's read lands. */
+  enter(): Promise<void> {
+    this.stale = true;
+    return this.refresh();
+  }
+
   /** Re-read after a write that can finish a step (a label, an activation). */
   refresh(): Promise<void> {
     const gen = this.#gen;
+    const seq = ++this.#seq;
     const run = (async () => {
       try {
         const res = await getNextSteps();
@@ -39,6 +50,7 @@ class NextStepsStore {
       } finally {
         if (gen === this.#gen) {
           this.loaded = true;
+          if (seq === this.#seq) this.stale = false;
           this.#inflight = null;
         }
       }
@@ -54,6 +66,7 @@ class NextStepsStore {
     this.next = null;
     this.defaultView = null;
     this.loaded = false;
+    this.stale = false;
   }
 }
 

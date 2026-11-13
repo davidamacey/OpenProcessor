@@ -7,6 +7,7 @@
   import { locateCrop } from '$lib/api_cropRead';
   import CropResultGrid from '$components/CropResultGrid.svelte';
   import HiddenItemsNote from '$components/itemFilter/HiddenItemsNote.svelte';
+  import ViewMoreMenu from '$components/workspace/ViewMoreMenu.svelte';
   import BulkBar from '$components/workspace/BulkBar.svelte';
   import EmptyNextSteps from '$components/workspace/EmptyNextSteps.svelte';
   import ViewState from '$components/state/ViewState.svelte';
@@ -99,14 +100,35 @@
 <div class="flex min-h-0 flex-1 flex-col" data-testid="detections-view">
   <h1 class="sr-only">Detections</h1>
   <BulkBar {ws} onapplied={() => void pager.loadFirst()} />
-  <div class="min-h-0 flex-1 overflow-auto p-4">
-    <p class="mb-3 text-meta text-fg-2" data-testid="detections-header">
+  <!-- The controls sit above the scroller: a menu that opens from them is not clipped by it. -->
+  <div
+    class="flex shrink-0 flex-wrap items-center gap-3 px-4 pt-4 pb-3 text-meta text-fg-2"
+  >
+    <p data-testid="detections-header">
       <strong class="text-fg-1" data-testid="detections-total"
         >{pager.total.toLocaleString()}</strong
       >
       detection{pager.total === 1 ? '' : 's'}
       <HiddenItemsNote hidden={items.hidden} />
     </p>
+    {#if ws.url.scope?.kind === 'image'}
+      <span class="chip chip-accent" data-testid="detections-image-scope"
+        >One image's detections</span
+      >
+    {/if}
+    <span class="grow"></span>
+    <button
+      type="button"
+      class="btn btn-primary"
+      data-testid="detections-review"
+      title="Review these items one by one"
+      onclick={() => ws.setView('review')}
+    >
+      Review these
+    </button>
+    <ViewMoreMenu {ws} />
+  </div>
+  <div class="min-h-0 flex-1 overflow-auto px-4 pb-4">
     <ViewState
       {status}
       message={pager.error ?? 'No detections match this filter.'}
@@ -126,7 +148,7 @@
         aria-hidden="true"
       ></div>
       <p class="mt-2 text-meta text-fg-3 tabular-nums" data-testid="detections-footer">
-        {pager.items.length} / {pager.total}
+        {pager.items.length.toLocaleString()} of {pager.total.toLocaleString()}
       </p>
     </ViewState>
     {#if status === 'empty'}

@@ -1,5 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { goto } from '$app/navigation';
+  import { resolve } from '$app/paths';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
   import { slotForClassName } from '$lib/annotations/registeredSlots';
   import type { SlotSpec } from '$lib/annotations/types';
@@ -10,12 +12,11 @@
   import { findActiveClassByName } from '$lib/classNameKey';
   import { createClusterListController } from '$lib/clusters/clusterListController.svelte';
   import { createClusterSearchModes } from '$lib/clusters/clusterSearchModes.svelte';
-  import { createSlotInventory } from '$lib/clusters/slotInventory.svelte';
+  import { clusterHref } from '$lib/clusters/clusterHref';
   import { clusterFilterToUrl } from '$lib/clusters/clusterListFilter';
-  import ClusterListFilterBar from '$lib/components/clusters/ClusterListFilterBar.svelte';
+  import ClusterListHeader from '$lib/components/clusters/ClusterListHeader.svelte';
   import ClustersGrid from '$lib/components/clusters/ClustersGrid.svelte';
   import ClustersStatusBar from '$lib/components/clusters/ClustersStatusBar.svelte';
-  import ClustersToolbar from '$lib/components/clusters/ClustersToolbar.svelte';
   import CropDetailModal from '$lib/components/CropDetailModal.svelte';
   import { withoutOpenVocab } from '$lib/itemFilter/itemFilterState.svelte';
   import type { ItemFilter, ItemFilterQuery } from '$lib/types_itemFilter';
@@ -26,7 +27,6 @@
 
   let { ws }: { ws: WorkspaceController } = $props();
 
-  const slotInventory = createSlotInventory();
   // The controller is created once per mount and never swapped.
   // svelte-ignore state_referenced_locally
   const list = createClusterListController({
@@ -39,7 +39,6 @@
     get gridFilterKey() {
       return gridFilterKey;
     },
-    slotInventory,
     gridItemFilter,
     initialUrlParams: ws.searchParams,
     writeUrl: syncClusterListUrl,
@@ -144,24 +143,6 @@
   const isSlotFilter = $derived(gallerySlot != null);
   const slotGallery = $derived(gallerySlot ? galleryFor(gallerySlot) : null);
 
-  // M4: `loadSlotInventoryCards` used to run exactly once, right after the
-  // first `loadFirst()` — if the root layout's own `classesStore.acquire()`
-  // fetch hadn't resolved yet at that moment, `classesStore.classes` was
-  // still empty, the slot class lookup failed, and the card never
-  // retried (observed live: ~1 render in 8). Re-running whenever the
-  // classes list changes (classesStore's own 30s poll, or a slower first
-  // load) makes the card deterministic instead of a load-order race.
-  $effect(() => {
-    if (
-      slotInventory.slotInventoryCards.length === 0 &&
-      classesStore.classes.length > 0 &&
-      list.clusterPager.error == null &&
-      !isSlotFilter
-    ) {
-      untrack(() => void slotInventory.loadSlotInventoryCards());
-    }
-  });
-
   // M6: Z on the slot gallery reverses the most recent region write
   // (bulk status change or a single bbox edit) — same key, same
   // undoStore, as the card-grid view's label-undo Z above; see
@@ -178,6 +159,16 @@
     return off;
   });
 
+  // The first served card, opened by the header's primary and by `.`: the start of the loop.
+  function openFirst(): void {
+    const first = list.gridItems[0];
+    if (first) void goto(resolve(clusterHref(first.uid, first.dominant_class_name)));
+  }
+  $effect(() => {
+    if (matchingModeActive || modes.searchModeActive || isSlotFilter) return;
+    return keyboardStore.registerAction('workspace.scope_next', openFirst, 'workspace');
+  });
+
   // Re-load the gallery whenever a filter, the top-N rank gate, or the
   // selected region cluster changes (typed filters debounce, the cluster
   // grid reloads only for the rank gate or a closed bucket; see
@@ -188,7 +179,8 @@
 </script>
 
 <div class="flex h-full flex-col">
-  <ClustersToolbar
+  <ClusterListHeader
+    {ws}
     {list}
     {modes}
     {classFilter}
@@ -197,11 +189,8 @@
     {matchingModeActive}
     {enterMatchingMode}
     {exitMatchingMode}
+    {openFirst}
   />
-
-  {#if !isSlotFilter && !matchingModeActive && !modes.ignoredModeActive && !modes.searchModeActive && !modes.itemTextModeActive}
-    <ClusterListFilterBar {list} />
-  {/if}
 
   <ClustersGrid
     {list}
@@ -214,14 +203,7 @@
     ondetail={(c) => (detailSearchCrop = c)}
   />
 
-  <ClustersStatusBar
-    {list}
-    {modes}
-    {slotInventory}
-    {classFilter}
-    {matchingModeActive}
-    {slotGallery}
-  />
+  <ClustersStatusBar {list} {modes} {matchingModeActive} {slotGallery} />
 </div>
 
 {#if detailSearchCrop}

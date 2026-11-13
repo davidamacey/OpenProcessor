@@ -3,7 +3,9 @@
   with its bound hotkey, plus the button that opens the class picker.
 -->
 <script lang="ts">
+  import Kbd from '$components/ui/Kbd.svelte';
   import { kg } from '$lib/review/reviewKeys';
+  import { keymapStore } from '$stores/keymap.svelte';
   import type { RegistryClass } from '$lib/types_classes';
 
   interface Props {
@@ -28,11 +30,7 @@
       onclick={() => assign(cls.id)}
     >
       {#if cls.hotkey_letter}
-        <kbd
-          class="mr-1.5 rounded bg-surface-2 px-1 py-0.5 text-caption text-accent-text"
-        >
-          {cls.hotkey_letter}
-        </kbd>
+        <Kbd combo={cls.hotkey_letter} class="mr-1.5 text-caption text-accent-text" />
       {/if}
       {cls.name}
     </button>
@@ -48,9 +46,10 @@
     title="Search all classes ({kg('review.queue.class_picker')})"
     onclick={openPicker}
   >
-    <kbd class="mr-1.5 rounded bg-surface-2 px-1 py-0.5 text-caption text-accent-text">
-      {kg('review.queue.class_picker')}
-    </kbd>
+    <Kbd
+      combo={keymapStore.combo('review.queue.class_picker')}
+      class="mr-1.5 text-caption text-accent-text"
+    />
     search all classes…
   </button>
 </div>

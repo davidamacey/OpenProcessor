@@ -22,6 +22,8 @@ class ReviewTabsVocabularyStore {
   /** #36 item 9: whether this deployment has any probe predictions/item
    *  scores at all — `null` until loaded (or when the read failed). */
   emptyState = $state<ReviewEmptyState | null>(null);
+  /** The first queue with work, as served (`default_tab`); null when every queue is empty. */
+  defaultTab = $state<string | null>(null);
   #byId = $derived(new Map(this.list.map((t) => [t.id, t])));
   #inflight: Promise<void> | null = null;
   #gen = 0;
@@ -49,6 +51,7 @@ class ReviewTabsVocabularyStore {
         if (!current()) return;
         this.list = res.tabs;
         this.emptyState = res.empty_state;
+        this.defaultTab = res.default_tab ?? null;
       } catch {
         if (!current()) return;
         this.list = [];
@@ -120,6 +123,7 @@ class ReviewTabsVocabularyStore {
     this.#key = null;
     this.list = [];
     this.emptyState = null;
+    this.defaultTab = null;
     this.loaded = false;
   }
 }

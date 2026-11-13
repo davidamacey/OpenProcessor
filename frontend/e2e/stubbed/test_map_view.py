@@ -55,7 +55,14 @@ def _cells(pin: str | None = None) -> dict[str, Any]:
         geometry=fill('MapCellGeometry', coordinates=list(CELL)),
         properties=props,
     )
-    return fill('MapCellCollection', features=[feature], precision=12)
+    # No filter: every located and unlocated photo of the meta matches.
+    return fill(
+        'MapCellCollection',
+        features=[feature],
+        precision=12,
+        n_located_matching=1920,
+        n_unlocated_matching=88,
+    )
 
 
 def _card(i: int) -> dict[str, Any]:

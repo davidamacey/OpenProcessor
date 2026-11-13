@@ -58,7 +58,7 @@ describe('ClusterGridCard name', () => {
     const el = render({ display_name: 'bus', display_name_kind: 'detector' });
     expect(name(el)?.textContent).toBe('bus');
     expect(el.textContent).toContain('from the detector');
-    expect(el.textContent).not.toContain('needs label');
+    expect(el.textContent).not.toContain('needs a label');
   });
 
   it('shows a class name without that note', () => {
@@ -71,16 +71,16 @@ describe('ClusterGridCard name', () => {
     const el = render();
     expect(name(el)).toBeNull();
     expect(el.textContent).toContain('Unlabeled #4');
-    expect(el.textContent).toContain('needs label');
+    expect(el.textContent).toContain('needs a label');
   });
 });
 
 describe('ClusterGridCard duplicates', () => {
-  it('shows how many duplicate groups the members are in, and nothing when none', () => {
-    const chip = (el: HTMLElement) =>
-      el.querySelector('[data-testid="cluster-near-dups"]')?.textContent?.trim();
-    expect(chip(render({ near_dup_group_count: 3 }))).toBe('3 duplicate groups');
-    expect(chip(render({ near_dup_group_count: 1 }))).toBe('1 duplicate group');
-    expect(chip(render({ near_dup_group_count: 0 }))).toBeUndefined();
+  it('keeps the duplicate-group count in the hover text, not as a chip', () => {
+    const hover = (el: HTMLElement) => el.querySelector('button')!.getAttribute('title');
+    expect(hover(render({ near_dup_group_count: 3 }))).toContain('3 duplicate groups');
+    expect(hover(render({ near_dup_group_count: 1 }))).toContain('1 duplicate group');
+    expect(hover(render({ near_dup_group_count: 0 }))).not.toContain('duplicate group');
+    expect(render({ near_dup_group_count: 3 }).textContent).not.toContain('duplicate');
   });
 });

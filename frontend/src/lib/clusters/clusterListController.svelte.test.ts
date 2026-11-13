@@ -64,7 +64,6 @@ const withReps = (c: Cluster): Cluster => ({
 });
 
 let cleanup: (() => void) | undefined;
-let slotCards: Cluster[] = [];
 
 function wire(opts: { params?: string; writeUrl?: (...a: unknown[]) => void } = {}) {
   let list!: ReturnType<typeof createClusterListController>;
@@ -73,12 +72,6 @@ function wire(opts: { params?: string; writeUrl?: (...a: unknown[]) => void } = 
       classFilter: null,
       isSlotFilter: false,
       gridFilterKey: '{}',
-      slotInventory: {
-        get slotInventoryCards() {
-          return slotCards;
-        },
-        loadSlotInventoryCards: async () => {},
-      } as never,
       gridItemFilter: () => ({}),
       initialUrlParams: new URLSearchParams(opts.params ?? ''),
       writeUrl: opts.writeUrl ?? (() => {}),
@@ -99,7 +92,6 @@ const lastQuery = () => vi.mocked(getClusters).mock.calls.at(-1)![0]!;
 
 beforeEach(() => {
   sessionStorage.clear();
-  slotCards = [];
   vi.mocked(getClusters).mockResolvedValue(response([]));
 });
 afterEach(() => {
@@ -263,16 +255,22 @@ describe('cluster list rendering', () => {
     expect(list.detectorClassOptions).toEqual(['widget_x', 'widget_y']);
   });
 
-  it('pins the slot inventory cards first only when no card filter is set', async () => {
-    slotCards = [{ ...card(900), isSlotCard: true }];
-    vi.mocked(getClusters).mockResolvedValue(response([card(1)]));
+  it('lists exactly the served clusters, so a served empty list is an empty grid with its reason', async () => {
+    vi.mocked(getClusters).mockResolvedValue({
+      ...response([]),
+      empty_reason: 'pending_activation',
+      empty_message: 'A new partition is ready.',
+      pending_partition: { partition_id: 'p2', clusters: 46, items: 279 },
+    });
     const list = wire();
     await settle();
-    expect(list.gridItems.map((c) => c.uid)).toEqual(['uid-900', 'uid-1']);
-    list.setFilter({ ...EMPTY_CLUSTER_FILTER, needs_review: true });
-    flushSync();
-    await settle();
-    expect(list.gridItems.map((c) => c.uid)).toEqual(['uid-1']);
+    expect(list.gridItems).toEqual([]);
+    expect(list.emptyReason).toBe('pending_activation');
+    expect(list.pendingPartition).toEqual({
+      partition_id: 'p2',
+      clusters: 46,
+      items: 279,
+    });
   });
 });
 

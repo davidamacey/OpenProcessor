@@ -6,6 +6,7 @@
    * selection survive a view switch and Back restores the previous view.
    */
   import { onDestroy } from 'svelte';
+  import AdoptBanner from '$components/workspace/AdoptBanner.svelte';
   import DetailsPanel from '$components/workspace/DetailsPanel.svelte';
   import Lightbox from '$components/ui/Lightbox.svelte';
   import FilterBar from '$components/workspace/FilterBar.svelte';
@@ -16,15 +17,14 @@
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { nextStepsStore } from '$stores/nextSteps.svelte';
 
+  // The default view is the served one of this visit: a cached one from before a clustering was
+  // activated would open the Gallery on a project that now serves clusters.
+  void nextStepsStore.enter();
   const ws = createWorkspaceController();
   onDestroy(() => ws.dispose());
 
   const entry = $derived(viewEntry(ws.view));
   const View = $derived(entry.component);
-
-  $effect(() => {
-    void nextStepsStore.init();
-  });
 
   $effect(() => {
     keyboardStore.setScope(entry.keyContext);
@@ -125,9 +125,14 @@
   <div class="flex min-h-0 flex-1">
     <WorkspaceRail {ws} />
     <div class="min-w-0 flex-1 overflow-auto" data-testid="workspace-view">
-      {#key entry.id}
-        <View {ws} />
-      {/key}
+      {#if !ws.viewPending}
+        {#if ['clusters', 'gallery', 'detections'].includes(ws.view)}
+          <AdoptBanner />
+        {/if}
+        {#key entry.id}
+          <View {ws} />
+        {/key}
+      {/if}
     </div>
     <DetailsPanel {ws} />
   </div>

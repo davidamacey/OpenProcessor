@@ -37,7 +37,10 @@ export function createReviewItemActions(loader: ReviewQueueLoader) {
   // nothing to confirm (67/100 `all`-tab items today). Drives the Confirm
   // button's disabled state and whether Enter confirms vs. opens the class
   // picker.
-  const canConfirm = $derived(resolveConfirmClassId(current) != null);
+  // A label a person or an import already validated is never asked to be confirmed again.
+  const canConfirm = $derived(
+    current?.class_validated !== true && resolveConfirmClassId(current) != null,
+  );
 
   /**
    * Optimistically drop an item from the queue and advance. Thin wrapper

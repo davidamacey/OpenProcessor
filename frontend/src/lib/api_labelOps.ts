@@ -5,6 +5,8 @@
  */
 import { apiFetch, qs, scoped } from '$lib/api';
 import type {
+  AcceptMachineRequest,
+  AcceptMachineResponse,
   AdoptDetectorResponse,
   LabelOpAccepted,
   LabelOpList,
@@ -61,6 +63,20 @@ export function adoptDetector(
   return apiFetch<AdoptDetectorResponse>(
     `${scoped()}/label_ops/adopt_detector`,
     { method: 'POST', body: JSON.stringify({ dry_run: dryRun }) },
+    signal,
+  );
+}
+
+/** `POST /label_ops/accept_machine`: validates the detector's (and the VLM's) confident labels
+ *  as a person's decision. A dry run counts and writes nothing; a real run answers `op_id` and
+ *  `job_id` (undo it by `op_id`, as any label operation). */
+export function acceptMachine(
+  body: AcceptMachineRequest,
+  signal?: AbortSignal,
+): Promise<AcceptMachineResponse> {
+  return apiFetch<AcceptMachineResponse>(
+    `${scoped()}/label_ops/accept_machine`,
+    { method: 'POST', body: JSON.stringify(body) },
     signal,
   );
 }

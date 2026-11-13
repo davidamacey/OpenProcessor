@@ -40,6 +40,10 @@ afterEach(() => {
   classesStore.classes = prevClasses;
 });
 
+const openMore = (): void => {
+  q('[data-testid="item-filter-more-toggle"]')?.click();
+  flushSync();
+};
 const q = (sel: string) => target.querySelector<HTMLElement>(sel);
 const has = (param: string) => q(`[data-testid="served-filter-${param}"]`) != null;
 
@@ -47,6 +51,7 @@ describe('ItemFilterBar', () => {
   it('draws every shared control by default, without the open-vocabulary pair', () => {
     instance = mount(ItemFilterBar, { target, props: { state: new ItemFilterState() } });
     flushSync();
+    openMore();
     for (const p of [
       'class_name',
       'exclude_class_name',
@@ -69,6 +74,7 @@ describe('ItemFilterBar', () => {
     const state = new ItemFilterState();
     instance = mount(ItemFilterBar, { target, props: { state } });
     flushSync();
+    openMore();
     const input = q('[data-testid="served-filter-taken_from"] input') as HTMLInputElement;
     input.value = '2024-03-05';
     input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -80,24 +86,26 @@ describe('ItemFilterBar', () => {
       props: { state, visible: (p: string) => !p.startsWith('taken_') },
     });
     flushSync();
+    openMore();
     expect(has('taken_from')).toBe(false);
     expect(has('taken_to')).toBe(false);
   });
 
-  it('only the class control is inline; the rest sit in a More filters disclosure that opens when one is active', () => {
+  it('only the class control is inline; the rest sit in a More filters popover that counts the active ones', () => {
     const state = new ItemFilterState();
     instance = mount(ItemFilterBar, { target, props: { state } });
     flushSync();
-    const more = q('[data-testid="item-filter-more"]') as HTMLDetailsElement;
-    expect(more.open).toBe(false);
-    expect(more.textContent).toContain('More filters');
+    const toggle = q('[data-testid="item-filter-more-toggle"]') as HTMLButtonElement;
+    expect(toggle.textContent).toContain('More filters');
+    expect(q('[data-testid="served-filter-origin"]')).toBeNull();
+    openMore();
+    const more = q('[data-testid="item-filter-more"]')!;
     expect(more.querySelector('[data-testid="served-filter-origin"]')).not.toBeNull();
     expect(more.querySelector('[data-testid="served-filter-class_name"]')).toBeNull();
-    expect(q('[data-testid="served-filter-class_name"]')!.closest('details')).toBeNull();
+    expect(q('[data-testid="served-filter-class_name"]')).not.toBeNull();
     state.origin = ['sam3'];
     flushSync();
-    expect(more.open).toBe(true);
-    expect(more.textContent).toContain('More filters (1)');
+    expect(toggle.textContent).toContain('More filters (1)');
   });
 
   it('showOpenVocab adds the set and prompt text controls', () => {
@@ -119,6 +127,7 @@ describe('ItemFilterBar', () => {
       },
     });
     flushSync();
+    openMore();
     expect(has('origin')).toBe(false);
     expect(has('conf_min')).toBe(false);
     expect(has('conf_max')).toBe(true);
@@ -144,6 +153,7 @@ describe('ItemFilterBar', () => {
       props: { state: new ItemFilterState(), served },
     });
     flushSync();
+    openMore();
     const field = q('[data-testid="served-filter-conf_min"]')!;
     expect(field.textContent).toContain('Served min confidence');
     expect(field.getAttribute('title')).toBe('Served help');
@@ -175,6 +185,7 @@ describe('ItemFilterBar', () => {
     const state = new ItemFilterState();
     instance = mount(ItemFilterBar, { target, props: { state } });
     flushSync();
+    openMore();
     const buttons = [
       ...q('[data-testid="served-filter-origin"]')!.querySelectorAll('button'),
     ];

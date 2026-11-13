@@ -218,7 +218,13 @@ PAGES = [
         'cluster-detail-facets',
         f'/p/default/workspace?view=clusters&scope=cluster:{FACET_UID}',
         serve_cluster_with_facets,
-        '[data-testid="cluster-facets"]',
+        '[data-testid="scope-refine"]',
+        lambda page: (
+            page.get_by_test_id('scope-refine').click(),
+            expect(page.locator('[data-testid="cluster-facets"]').first).to_be_visible(
+                timeout=ACTION_TIMEOUT_MS
+            ),
+        ),
     ),
     ('workspace-map', '/p/default/workspace?view=map', serve_map, '[data-testid=map-located]'),
     (

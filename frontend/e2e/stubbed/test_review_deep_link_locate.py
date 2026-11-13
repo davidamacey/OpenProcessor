@@ -81,6 +81,7 @@ def review_item(i: int) -> dict:
         proposed_class_id=1,
         proposed_class_name='ducati',
         label_validated=False,
+        class_validated=False,
         label_source='model_suggestion',
         thumbnail_url=f'/curation/crops/crop-{i}/thumbnail',
     )
@@ -195,7 +196,7 @@ def test_deep_link_fetches_only_the_located_page_and_ignores_early_keys(stub, pa
     # F8 D6: the counter shows the served queue position (index 3000 ->
     # #3001), not the cursor's index within the one loaded page.
     counter = page.get_by_test_id('queue-counter').first.inner_text()
-    assert counter.startswith('#3001 '), counter
+    assert counter.startswith('#3,001 '), counter
 
     errors = [c for c in stub.console_errors if c.startswith('pageerror')]
     assert not errors, f'no pageerror expected: {errors[:3]}'

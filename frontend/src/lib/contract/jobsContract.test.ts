@@ -25,6 +25,7 @@ describe('job runtime contract', () => {
       scope: true,
       queue: true,
       params: true,
+      queue_ahead: true,
       progress: true,
       progress_updated_at: true,
       result: true,

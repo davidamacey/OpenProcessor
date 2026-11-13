@@ -29,6 +29,19 @@
     >
       <div class="flex items-start gap-2">
         <span class="grow whitespace-pre-wrap break-words">{t.text}</span>
+        {#if t.action}
+          <button
+            type="button"
+            class="font-medium text-fg-1 underline underline-offset-2 hover:text-white"
+            data-testid="toast-action"
+            onclick={() => {
+              toastStore.dismiss(t.id);
+              t.action?.run();
+            }}
+          >
+            {t.action.label}
+          </button>
+        {/if}
         <button
           type="button"
           class="text-fg-2 hover:text-white"

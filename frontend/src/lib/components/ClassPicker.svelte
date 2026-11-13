@@ -6,6 +6,7 @@
    * never offered.
    */
   import Modal from '$components/Modal.svelte';
+  import Kbd from '$components/ui/Kbd.svelte';
   import { createClassPicker } from '$lib/classes/classPicker.svelte';
   import { keymapStore } from '$stores/keymap.svelte';
   import type { RegistryClass } from '$lib/types_classes';
@@ -90,10 +91,14 @@
             onclick={() => picker.pick(cls)}
             onmouseenter={() => (picker.index = i)}
           >
+            {#if i < picker.recentCount}
+              <Kbd
+                combo={keymapStore.combo(`class_picker.recent_${i + 1}`)}
+                class="text-caption text-fg-2"
+              />
+            {/if}
             {#if cls.hotkey_letter}
-              <kbd class="rounded bg-surface-2 px-1 py-0.5 text-caption text-accent-text"
-                >{cls.hotkey_letter}</kbd
-              >
+              <Kbd combo={cls.hotkey_letter} class="text-caption text-accent-text" />
             {/if}
             <span class="grow truncate">{cls.name}</span>
             <span class="shrink-0 text-caption text-fg-2">{cls.count}</span>
@@ -128,7 +133,7 @@
       </p>
     {/if}
     <p class="border-t border-line px-3 py-1.5 text-caption text-fg-3">
-      Move with the arrow keys · <kbd>{keymapStore.glyph('global.close_overlay')}</kbd> closes
+      Move with the arrow keys · <Kbd combo={keymapStore.combo('global.close_overlay')} /> closes
     </p>
   </Modal>
 {/if}

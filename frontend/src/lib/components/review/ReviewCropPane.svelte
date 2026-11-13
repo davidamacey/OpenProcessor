@@ -12,7 +12,10 @@
   import ReviewSlotPanel from '$lib/components/review/ReviewSlotPanel.svelte';
   import VectorRefreshNotice from '$lib/components/review/VectorRefreshNotice.svelte';
   import { resolve } from '$app/paths';
+  import Kbd from '$components/ui/Kbd.svelte';
   import Segmented from '$components/ui/Segmented.svelte';
+  import { classSourcesStore } from '$stores/classSources.svelte';
+  import { keymapStore } from '$stores/keymap.svelte';
   import { getPreviewUrl, type CropPreviewMode } from '$lib/api_cropRead';
   import { similarHref } from '$lib/projectPaths';
   import { fetchSourceMissing, type SourceMissing } from '$lib/sourceMissing';
@@ -41,6 +44,12 @@
 
   let { current, tabs, loader, actions, picker, edit, slot }: Props = $props();
 
+  /** The day a label was written, from the served timestamp. */
+  const formatDay = (iso: string | null | undefined): string =>
+    iso ? iso.slice(0, 10) : '';
+
+  /** Under `lg` the source image is a 120 px strip under the crop; a tap opens it. */
+  let sourceOpen = $state(false);
   let sourceMissing = $state<SourceMissing | null>(null);
   /** The crop is shown with its surroundings by default; "Tight" is the box alone, enlarged. */
   let previewMode = $state<CropPreviewMode>('context');
@@ -86,13 +95,24 @@
 
 <!-- Source image with bbox -->
 <div
-  class="flex h-[35vh] flex-col surface p-2 lg:h-auto lg:min-h-0"
+  class="order-2 flex flex-col surface p-2 lg:order-none lg:h-auto lg:min-h-0 {sourceOpen
+    ? 'h-[50vh]'
+    : 'h-[120px]'}"
   data-testid="review-source-panel"
 >
   <div class="mb-2 flex items-center gap-2 px-1 text-meta text-fg-2">
-    <span>source</span>
+    <span>Source</span>
     <span class="grow"></span>
     <span>{current.source ?? ''}</span>
+    <button
+      type="button"
+      class="btn-sm btn-ghost lg:hidden"
+      aria-expanded={sourceOpen}
+      data-testid="review-source-toggle"
+      onclick={() => (sourceOpen = !sourceOpen)}
+    >
+      {sourceOpen ? 'Collapse' : 'Expand'}
+    </button>
   </div>
   <!-- V-3: top-aligned, so on a tall pane the image sits at the top
        rather than mid-way down an empty black panel. -->
@@ -114,9 +134,12 @@
 </div>
 
 <!-- Crop + meta -->
-<div class="flex flex-col surface p-2 lg:min-h-0" data-testid="review-crop-panel">
+<div
+  class="order-1 flex flex-col surface p-2 lg:order-none lg:min-h-0"
+  data-testid="review-crop-panel"
+>
   <div class="mb-2 flex items-center gap-2 px-1 text-meta text-fg-2">
-    <span>crop</span>
+    <span>Crop</span>
     <Segmented
       label="Crop view"
       size="sm"
@@ -294,6 +317,36 @@
 
     {#if activeSlot && slotLabels}
       <ReviewSlotPanel {current} {activeSlot} {slotLabels} {edit} {slot} {skip} />
+    {:else if current.class_validated}
+      <!-- Already validated by a person or an import: nothing to confirm, so no Confirm. -->
+      <p class="mt-3 text-meta text-fg-2" data-testid="review-validated">
+        Already validated · {classSourcesStore.labelFor(current.label_source)} · {formatDay(
+          current.updated_at,
+        )}
+      </p>
+      <div
+        class="sticky bottom-0 z-10 mt-2 flex flex-wrap gap-2 bg-surface-1 py-1"
+        data-testid="review-actions"
+      >
+        <button
+          class="btn btn-primary"
+          type="button"
+          onclick={skip}
+          data-testid="review-next"
+        >
+          Next <Kbd combo={keymapStore.combo('review.skip')} />
+        </button>
+        <button
+          class="btn"
+          type="button"
+          onclick={picker.openPicker}
+          data-testid="review-change-class"
+        >
+          Change class
+        </button>
+        <button class="btn btn-danger" type="button" onclick={discard}>Discard</button>
+        <button class="btn" type="button" onclick={undoLast}>Undo</button>
+      </div>
     {:else}
       <div
         class="sticky bottom-0 z-10 mt-3 flex flex-wrap gap-2 bg-surface-1 py-1"
@@ -308,11 +361,17 @@
             ? undefined
             : `No proposed class on this item — press ${kg('review.queue.class_picker')} or ${kg('review.queue.confirm')} to search.`}
         >
-          Confirm
+          Confirm <Kbd combo={keymapStore.combo('review.queue.confirm')} />
         </button>
-        <button class="btn" type="button" onclick={skip}>Skip</button>
-        <button class="btn btn-danger" type="button" onclick={discard}>Discard</button>
-        <button class="btn" type="button" onclick={undoLast}>Undo</button>
+        <button class="btn" type="button" onclick={skip}>
+          Skip <Kbd combo={keymapStore.combo('review.skip')} />
+        </button>
+        <button class="btn btn-danger" type="button" onclick={discard}>
+          Discard <Kbd combo={keymapStore.combo('review.queue.discard')} />
+        </button>
+        <button class="btn" type="button" onclick={undoLast}>
+          Undo <Kbd combo={keymapStore.combo('review.undo')} />
+        </button>
       </div>
     {/if}
 

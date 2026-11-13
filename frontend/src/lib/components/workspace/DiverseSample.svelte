@@ -5,10 +5,12 @@
    * large one; this shows which, with a Cancel while it runs.
    */
   import { onDestroy } from 'svelte';
+  import Modal from '$components/Modal.svelte';
   import { createDiverseSample } from '$lib/workspace/diverseSample.svelte';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
 
-  let { ws }: { ws: WorkspaceController } = $props();
+  let { ws, open = $bindable(false) }: { ws: WorkspaceController; open?: boolean } =
+    $props();
 
   // `ws` is fixed for the life of the bar.
   const sample = createDiverseSample({
@@ -16,49 +18,37 @@
     selectItems: (ids) => ws.selectItems(ids),
   });
   onDestroy(() => sample.dispose());
-  let open = $state(false);
 </script>
 
-<div class="inline-flex sm:relative" data-testid="diverse-sample">
-  <button
-    type="button"
-    class="btn"
-    aria-expanded={open}
-    data-testid="diverse-sample-open"
-    onclick={() => (open = !open)}
+{#if open}
+  <Modal
+    label="Select a diverse sample"
+    onclose={() => (open = false)}
+    panelClass="w-full max-w-sm rounded-lg border border-line bg-surface-0 p-5 shadow-2xl"
   >
-    Diverse sample…
-  </button>
-  {#if open}
     <form
-      class="absolute top-full right-4 left-4 z-20 mt-1 flex flex-col gap-2 rounded border border-line-strong bg-surface-1 p-3 shadow-lg sm:right-0 sm:left-auto sm:w-64"
+      class="flex flex-col gap-3"
+      data-testid="diverse-sample"
       onsubmit={(e) => {
         e.preventDefault();
         void sample.start();
       }}
     >
+      <h3 class="text-title font-semibold text-fg-1">Select a diverse sample</h3>
       <label class="flex items-center justify-between gap-2 text-fg-1">
         How many
         <input
           type="number"
           min="1"
-          class="w-24 rounded border border-line-strong bg-surface-0 px-2 py-1 text-right"
+          class="input w-24 text-right"
           data-testid="diverse-sample-k"
           bind:value={sample.k}
         />
       </label>
-      <p class="text-fg-2">
+      <p class="text-body text-fg-2">
         Picks the items that differ most from each other among those the filter matches.
       </p>
-      <div class="flex gap-2">
-        <button
-          type="submit"
-          class="btn btn-primary"
-          disabled={sample.phase === 'running' || !(sample.k >= 1)}
-          data-testid="diverse-sample-start"
-        >
-          {sample.phase === 'running' ? 'Picking…' : 'Pick'}
-        </button>
+      <div class="flex justify-end gap-2">
         {#if sample.phase === 'running'}
           <button
             type="button"
@@ -68,7 +58,17 @@
           >
             Cancel
           </button>
+        {:else}
+          <button type="button" class="btn" onclick={() => (open = false)}>Close</button>
         {/if}
+        <button
+          type="submit"
+          class="btn btn-primary"
+          disabled={sample.phase === 'running' || !(sample.k >= 1)}
+          data-testid="diverse-sample-start"
+        >
+          {sample.phase === 'running' ? 'Picking…' : 'Pick'}
+        </button>
       </div>
       {#if sample.message}
         <p class="text-fg-1" role="status" data-testid="diverse-sample-message">
@@ -76,5 +76,5 @@
         </p>
       {/if}
     </form>
-  {/if}
-</div>
+  </Modal>
+{/if}

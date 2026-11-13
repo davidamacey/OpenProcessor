@@ -153,6 +153,7 @@ describe('class identity is by name on the list routes', () => {
       has_location: true,
       viz_box: '0,0,1,1',
       near_dup_group: 'g1',
+      audit_outcome: ['both_wrong'],
     } satisfies Required<
       Omit<ItemFilterQuery, 'open_vocab_set' | 'source_prompt' | 'region_text_match'>
     >;

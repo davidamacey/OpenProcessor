@@ -289,14 +289,6 @@ export interface Cluster {
   // this undefined; the grid then falls back to getThumbUrl().
   representative_thumb_urls?: string[];
   updated_at: string | null;
-  /** Set only on the client-built region inventory entry pinned
-   *  atop `/clusters` (M4, interactive pass) —
-   *  it is not a real cluster, so the grid must not key it against a
-   *  real cluster uid. Absent (not false) on every server-served Cluster. */
-  isSlotCard?: boolean;
-  /** The slot's served display name (e.g. its tab label), set only on
-   *  that inventory entry (F8 D7): the card is titled by it. */
-  slotDisplayName?: string;
 }
 
 /** Items the default list views hide, served on the item list pages. */
@@ -451,6 +443,8 @@ export interface ToastMessage {
   kind: 'info' | 'success' | 'warn' | 'error';
   text: string;
   ttl_ms?: number;
+  /** One follow-up the toast offers (Undo), run once and the toast closes. */
+  action?: { label: string; run: () => void };
 }
 
 export interface KeyboardShortcut {

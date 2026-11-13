@@ -402,11 +402,23 @@ def review_tab(tab_id: str, label: str, **over: Any) -> dict[str, Any]:
     }
 
 
+_UNSET: Any = object()
+
+
 def review_tabs(
-    *tabs: dict[str, Any], empty_state: dict[str, bool] | None = None
+    *tabs: dict[str, Any],
+    empty_state: dict[str, bool] | None = None,
+    default_tab: Any = _UNSET,
 ) -> dict[str, Any]:
-    """A full `ReviewTabsResponse` body."""
-    return {'tabs': list(tabs), 'empty_state': empty_state or dict(REVIEW_EMPTY_STATE)}
+    """A full `ReviewTabsResponse` body. `default_tab` is the served first queue with work (the
+    first tab, in order, with a count above zero) unless a test names it."""
+    if default_tab is _UNSET:
+        default_tab = next((t['id'] for t in tabs if t['count'] > 0), None)
+    return {
+        'tabs': list(tabs),
+        'empty_state': empty_state or dict(REVIEW_EMPTY_STATE),
+        'default_tab': default_tab,
+    }
 
 
 def make_box(box_id: str = 'b1', **over: Any) -> dict[str, Any]:

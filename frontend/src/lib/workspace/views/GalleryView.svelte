@@ -9,33 +9,18 @@
   import SortSelect from '$components/workspace/SortSelect.svelte';
   import EmptyNextSteps from '$components/workspace/EmptyNextSteps.svelte';
   import ViewState from '$components/state/ViewState.svelte';
-  import Segmented from '$components/ui/Segmented.svelte';
-  import type { NearDupFilter } from '$lib/types_images';
+  import DuplicatesControl from '$components/workspace/DuplicatesControl.svelte';
+  import ViewMoreMenu from '$components/workspace/ViewMoreMenu.svelte';
   import ImageGrid from '$components/images/ImageGrid.svelte';
   import { createImageGalleryController } from '$lib/images/imageGalleryController.svelte';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
-
-  /** The served `near_dup` values, in plain words; `all` leaves the filter off. */
-  const NEAR_DUP_OPTIONS = [
-    { value: 'all', label: 'All images' },
-    {
-      value: 'collapsed',
-      label: 'One per group',
-      title: 'Collapse each duplicate group to its representative',
-    },
-    {
-      value: 'member',
-      label: 'Extra copies',
-      title: 'Images in a group that are not its representative',
-    },
-    { value: 'none', label: 'Not duplicated', title: 'Images in no duplicate group' },
-  ];
 
   let { ws }: { ws: WorkspaceController } = $props();
 
   const gallery = createImageGalleryController({
     itemQuery: () => ws.itemQuery(),
     sortId: () => ws.url.sort.gallery ?? null,
+    nearDup: () => ws.url.nearDup,
   });
 
   // The selection survives a view switch: seed the grid's own from it, then mirror it back.
@@ -80,46 +65,54 @@
 <div class="flex min-h-0 flex-1 flex-col" data-testid="gallery-view">
   <h1 class="sr-only">Gallery</h1>
   <BulkBar {ws} onapplied={() => void gallery.loadFirst()} />
-  <div class="min-h-0 flex-1 overflow-auto p-4">
-    <div class="mb-3 flex flex-wrap items-center gap-3 text-meta text-fg-2">
-      <p data-testid="gallery-header">
-        <strong class="text-fg-1" data-testid="gallery-total"
-          >{gallery.total.toLocaleString()}</strong
-        >
-        image{gallery.total === 1 ? '' : 's'}
-        <HiddenItemsNote hidden={gallery.hidden} />
-      </p>
-      <button
-        type="button"
-        class="chip needs-work"
-        class:active={gallery.unlabeledOnly}
-        aria-pressed={gallery.unlabeledOnly}
-        data-testid="chip-has-unlabeled"
-        onclick={() => (gallery.unlabeledOnly = !gallery.unlabeledOnly)}
+  <!-- The controls sit above the scroller: a popover that opens from them is not clipped by it. -->
+  <div
+    class="flex shrink-0 flex-wrap items-center gap-3 px-4 pt-4 pb-3 text-meta text-fg-2"
+  >
+    <p data-testid="gallery-header">
+      <strong class="text-fg-1" data-testid="gallery-total"
+        >{gallery.total.toLocaleString()}</strong
       >
-        Has unlabelled objects
-      </button>
-      <Segmented
-        label="Duplicates"
-        size="sm"
-        options={NEAR_DUP_OPTIONS}
-        value={gallery.nearDup ?? 'all'}
-        onchange={(v) => (gallery.nearDup = v === 'all' ? null : (v as NearDupFilter))}
+      photo{gallery.total === 1 ? '' : 's'}
+      <HiddenItemsNote hidden={gallery.hidden} />
+    </p>
+    <button
+      type="button"
+      class="chip needs-work"
+      class:active={gallery.unlabeledOnly}
+      aria-pressed={gallery.unlabeledOnly}
+      data-testid="chip-has-unlabeled"
+      onclick={() => (gallery.unlabeledOnly = !gallery.unlabeledOnly)}
+    >
+      Has unlabelled objects
+    </button>
+    <DuplicatesControl value={ws.url.nearDup} onchange={(v) => ws.setNearDup(v)} />
+    {#if gallery.sortOptions.length > 0}
+      <SortSelect
+        testid="gallery-sort"
+        options={gallery.sortOptions}
+        applied={gallery.sortApplied ?? ''}
+        onchange={(id) => ws.setSort('gallery', id)}
       />
-      {#if gallery.sortOptions.length > 0}
-        <SortSelect
-          testid="gallery-sort"
-          options={gallery.sortOptions}
-          applied={gallery.sortApplied ?? ''}
-          onchange={(id) => ws.setSort('gallery', id)}
-        />
-      {/if}
-      {#if gallery.joinTruncated}
-        <span class="text-fg-3" data-testid="gallery-join-truncated"
-          >The item filter matched more images than can be listed; narrow it.</span
-        >
-      {/if}
-    </div>
+    {/if}
+    <span class="grow"></span>
+    <button
+      type="button"
+      class="btn btn-primary"
+      data-testid="gallery-review"
+      title="Review these items one by one"
+      onclick={() => ws.setView('review')}
+    >
+      Review these
+    </button>
+    <ViewMoreMenu {ws} />
+    {#if gallery.joinTruncated}
+      <span class="text-fg-3" data-testid="gallery-join-truncated"
+        >The item filter matched more images than can be listed; narrow it.</span
+      >
+    {/if}
+  </div>
+  <div class="min-h-0 flex-1 overflow-auto px-4 pb-4">
     <ViewState
       status={gallery.status}
       message={gallery.error ?? gallery.emptyMessage}
@@ -138,7 +131,7 @@
         onloadmore={() => void gallery.loadMore()}
       />
       <p class="mt-2 text-meta text-fg-3 tabular-nums" data-testid="gallery-footer">
-        {gallery.cards.length} / {gallery.total}
+        {gallery.cards.length.toLocaleString()} of {gallery.total.toLocaleString()}
       </p>
     </ViewState>
     {#if gallery.status === 'empty'}

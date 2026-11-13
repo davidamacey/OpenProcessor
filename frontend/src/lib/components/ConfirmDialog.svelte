@@ -13,6 +13,10 @@
     confirmLabel?: string;
     danger?: boolean;
     busy?: boolean;
+    /** What the confirm button says while `busy` (the served state, say); "Working…" otherwise. */
+    busyLabel?: string;
+    /** Extra buttons before Cancel (a "Run in background"). */
+    actions?: Snippet;
     confirmDisabled?: boolean;
     onconfirm: () => void;
     oncancel: () => void;
@@ -24,6 +28,8 @@
     confirmLabel = 'Confirm',
     danger = false,
     busy = false,
+    busyLabel = 'Working…',
+    actions,
     confirmDisabled = false,
     onconfirm,
     oncancel,
@@ -49,6 +55,7 @@
     {@render children()}
   </div>
   <div class="flex justify-end gap-2">
+    {@render actions?.()}
     <button type="button" class="btn" onclick={oncancel}>Cancel</button>
     <button
       bind:this={confirmButton}
@@ -57,7 +64,7 @@
       disabled={busy || confirmDisabled}
       onclick={onconfirm}
     >
-      {busy ? 'Working…' : confirmLabel}
+      {busy ? busyLabel : confirmLabel}
     </button>
   </div>
 </Modal>

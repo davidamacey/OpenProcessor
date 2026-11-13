@@ -37,6 +37,17 @@
   }: Props = $props();
 
   let root = $state<HTMLDivElement | null>(null);
+  let panel = $state<HTMLDivElement | null>(null);
+  // The side the panel really opens to: the requested one unless it would leave the viewport.
+  let side = $state<'start' | 'end'>('start');
+
+  $effect(() => {
+    if (!open || !panel || !root) return;
+    const anchor = root.getBoundingClientRect();
+    const width = panel.offsetWidth;
+    if (align === 'end') side = anchor.right - width < 0 ? 'start' : 'end';
+    else side = anchor.left + width > window.innerWidth ? 'end' : 'start';
+  });
 
   function close(): void {
     open = false;
@@ -66,7 +77,8 @@
   {#if open}
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
-      class="absolute top-full z-60 mt-1 max-w-[calc(100vw-1rem)] rounded-card border border-line bg-surface-3 shadow-e3 {align ===
+      bind:this={panel}
+      class="absolute top-full z-60 mt-1 max-w-[calc(100vw-1rem)] rounded-card border border-line bg-surface-3 shadow-e3 {side ===
       'end'
         ? 'right-0'
         : 'left-0'} {panelClass}"

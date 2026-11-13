@@ -4,7 +4,7 @@
  * class's share of the LABELLED members.
  */
 import type { Cluster, ClusterNameKind } from '$lib/types';
-import type { ValidationState } from '$lib/types_clusterList';
+import type { ClusterFlag, ValidationState } from '$lib/types_clusterList';
 
 /** "#7", or "" when the serving partition gave the cluster no number. */
 export function displayNoText(c: { display_no?: number | null }): string {
@@ -36,20 +36,6 @@ export function dominantShareTitle(
   return `Share of labeled members that are ${name}`;
 }
 
-/** "widget_x 62% · conf 0.81", or null when the detector served no class. */
-export function detectorText(
-  c: Pick<Cluster, 'detector_top_class' | 'detector_top_share' | 'detector_conf_mean'>,
-): string | null {
-  if (!c.detector_top_class) return null;
-  const share = c.detector_top_share == null ? '' : ` ${pct(c.detector_top_share)}`;
-  const conf =
-    c.detector_conf_mean == null ? '' : ` · conf ${c.detector_conf_mean.toFixed(2)}`;
-  return `${c.detector_top_class}${share}${conf}`;
-}
-
-export const DETECTOR_TOOLTIP =
-  "The detector's most common class among the members, its share of the members that have one, and the mean detector confidence.";
-
 /** The words for the three served validation states. */
 export const VALIDATION_TEXT: Record<ValidationState, string> = {
   none: 'not validated',
@@ -61,4 +47,80 @@ export const VALIDATION_TEXT: Record<ValidationState, string> = {
 export function reviewCountsTitle(counts: Record<string, number> | undefined): string {
   const parts = Object.entries(counts ?? {}).map(([tab, n]) => `${tab}: ${n}`);
   return parts.length > 0 ? `Members in each review tab. ${parts.join(' · ')}` : '';
+}
+
+export interface CardStatus {
+  /** The words on the chip: a served flag label, or the served review count. */
+  label: string;
+  tone: 'warn' | 'info';
+  /** The chip's tooltip: the served flag description or the review counts. */
+  title: string;
+}
+
+/**
+ * The one status a cluster card shows: the highest of needs review, mixed detector classes and
+ * unvalidated, in a warn or info tone (never danger). Labels and descriptions are the served
+ * flag vocabulary; nothing else about a cluster is a status.
+ */
+export function cardStatus(
+  c: Pick<Cluster, 'needs_review_count' | 'review_counts' | 'flags' | 'validation_state'>,
+  vocabulary: readonly ClusterFlag[],
+): CardStatus | null {
+  const flag = (id: string) => vocabulary.find((f) => f.id === id);
+  if (c.needs_review_count)
+    return {
+      label: `${c.needs_review_count.toLocaleString()} to review`,
+      tone: 'warn',
+      title: reviewCountsTitle(c.review_counts),
+    };
+  const mixed = c.flags?.includes('mixed_detector_classes')
+    ? flag('mixed_detector_classes')
+    : null;
+  if (mixed) return { label: mixed.label, tone: 'warn', title: mixed.description };
+  if (c.validation_state === 'none') {
+    const un = flag('unvalidated');
+    return {
+      label: un?.label ?? VALIDATION_TEXT.none,
+      tone: 'info',
+      title: un?.description ?? '',
+    };
+  }
+  return null;
+}
+
+/** "100% labelled · detector: cup 50%", from the served shares; empty when neither is served. */
+export function cardMeta(
+  c: Pick<Cluster, 'labelled_share' | 'detector_top_class' | 'detector_top_share'>,
+): string {
+  const parts: string[] = [];
+  if (c.labelled_share != null) parts.push(`${pct(c.labelled_share)} labelled`);
+  if (c.detector_top_class) {
+    const share = c.detector_top_share == null ? '' : ` ${pct(c.detector_top_share)}`;
+    parts.push(`detector: ${c.detector_top_class}${share}`);
+  }
+  return parts.join(' \u00b7 ');
+}
+
+/** The card's hover text: what the page keeps out of the card (agreement, confidence, counts). */
+export function cardHoverText(
+  c: Pick<
+    Cluster,
+    | 'dominant_pct'
+    | 'detector_conf_mean'
+    | 'validated_count'
+    | 'size'
+    | 'near_dup_group_count'
+    | 'display_name'
+  >,
+): string {
+  const parts: string[] = [];
+  if (c.dominant_pct != null) parts.push(`agreement ${pct(c.dominant_pct)}`);
+  if (c.detector_conf_mean != null)
+    parts.push(`detector confidence ${c.detector_conf_mean.toFixed(2)}`);
+  parts.push(`${c.validated_count} of ${c.size} validated`);
+  if (c.near_dup_group_count > 0)
+    parts.push(
+      `${c.near_dup_group_count} duplicate group${c.near_dup_group_count === 1 ? '' : 's'}`,
+    );
+  return parts.join(' \u00b7 ');
 }

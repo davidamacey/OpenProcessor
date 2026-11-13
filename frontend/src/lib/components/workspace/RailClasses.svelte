@@ -1,6 +1,9 @@
 <script lang="ts">
   import { dndzone } from 'svelte-dnd-action';
   import ClassPicker from '$components/ClassPicker.svelte';
+  import Icon from '$components/ui/Icon.svelte';
+  import Kbd from '$components/ui/Kbd.svelte';
+  import Popover from '$components/ui/Popover.svelte';
   import { adequacyChipClass } from '$lib/adequacy';
   import { isAssignableClass } from '$lib/classVisibility';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
@@ -117,18 +120,33 @@
 <!-- Narrow screens: a short strip above the content, so the page keeps the full width.
      md and up: the fixed 16rem column beside it. -->
 <section class="relative flex min-h-0 flex-1 flex-col" aria-label="Classes">
-  <h2 class="p-3 pb-1 text-meta font-semibold text-fg-2">Classes</h2>
-  {#if classesStore.thresholds.warn_below > 0}
-    <!-- The count chips use the served adequacy tiers; this says what each colour means. -->
-    <p class="px-3 pb-2 text-caption text-fg-2" data-testid="class-count-legend">
-      Count colour: validated examples.
-      <span class="text-danger-text">Red</span> under {classesStore.thresholds
-        .block_below},
-      <span class="text-warn-text">amber</span> under {classesStore.thresholds
-        .warn_below},
-      <span class="text-success-text">green</span> from there.
-    </p>
-  {/if}
+  <div class="flex items-center gap-1 p-3 pb-1">
+    <h2 class="text-meta font-semibold text-fg-2">Classes</h2>
+    {#if classesStore.thresholds.warn_below > 0}
+      <!-- The count chips use the served adequacy tiers; the legend says what each colour means. -->
+      <Popover label="What the count colours mean" panelClass="w-64 p-3">
+        {#snippet trigger({ attrs })}
+          <button
+            type="button"
+            class="btn-icon btn-ghost btn-sm"
+            aria-label="What the count colours mean"
+            data-testid="class-count-legend-toggle"
+            {...attrs}
+          >
+            <Icon name="info" size={14} />
+          </button>
+        {/snippet}
+        <p class="text-meta text-fg-2" data-testid="class-count-legend">
+          Count colour: validated examples.
+          <span class="text-danger-text">Red</span> under {classesStore.thresholds
+            .block_below},
+          <span class="text-warn-text">amber</span> under {classesStore.thresholds
+            .warn_below},
+          <span class="text-success-text">green</span> from there.
+        </p>
+      </Popover>
+    {/if}
+  </div>
 
   <!-- Drop hint is an ABSOLUTE overlay (pointer-events-none) so it can't
        reflow the class list mid-drag. Previously it was in flow and its
@@ -208,12 +226,10 @@
                 >
                   <span class="flex grow items-center gap-1.5 truncate">
                     {#if cls.hotkey_letter}
-                      <kbd
-                        class="rounded bg-surface-2 px-1 py-0.5 text-caption text-accent-text"
-                        title="Press '{cls.hotkey_letter}' to assign selected crops to {cls.name}"
-                      >
-                        {cls.hotkey_letter}
-                      </kbd>
+                      <Kbd
+                        combo={cls.hotkey_letter}
+                        class="text-caption text-accent-text"
+                      />
                     {/if}
                     <span class="truncate">{cls.name}</span>
                   </span>
@@ -241,9 +257,10 @@
     <button
       type="button"
       class="btn w-full justify-center"
+      data-testid="new-class"
       onclick={() => (createOpen = true)}
     >
-      + New class
+      <Icon name="plus" size={14} />New class
     </button>
   </div>
 </section>

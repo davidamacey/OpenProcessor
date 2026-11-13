@@ -155,6 +155,20 @@ describe('WorkspaceController', () => {
     expect(nav.goto).not.toHaveBeenCalled();
   });
 
+  it('does not open on a cached default view while this visit read is pending, then follows the served one', () => {
+    nextStepsStore.defaultView = 'gallery';
+    nextStepsStore.stale = true;
+    const c = make();
+    expect(c.viewPending).toBe(true);
+    expect(nav.goto).not.toHaveBeenCalled();
+
+    nextStepsStore.defaultView = 'clusters';
+    nextStepsStore.stale = false;
+    flushSync();
+    expect(c.viewPending).toBe(false);
+    expect(lastGoto().href).toBe('/p/default/workspace?view=clusters');
+  });
+
   it('keeps an explicit view over the served default', () => {
     nextStepsStore.defaultView = 'clusters';
     visit('?view=gallery');

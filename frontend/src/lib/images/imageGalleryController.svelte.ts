@@ -18,13 +18,14 @@ export interface ImageGalleryDeps {
   itemQuery(): ItemFilterQuery;
   /** The gallery's sort id from the URL; null = the server's default. */
   sortId(): string | null;
+  /** The near-duplicate role from the URL; null lists every photo. */
+  nearDup(): NearDupFilter | null;
 }
 
 export type GalleryStatus = 'loading' | 'error' | 'empty' | 'ready';
 
 export function createImageGalleryController(deps: ImageGalleryDeps) {
   let unlabeledOnly = $state(false);
-  let nearDup = $state<NearDupFilter | null>(null);
   let sortApplied = $state<string | null>(null);
   let sortOptions = $state<SortOption[]>([]);
   let emptyMessage = $state<string | null>(null);
@@ -33,7 +34,11 @@ export function createImageGalleryController(deps: ImageGalleryDeps) {
   const selection = createSelection({ plainClick: 'replace' });
 
   const query = () =>
-    imageListQuery(deps.itemQuery(), { unlabeledOnly, sort: deps.sortId(), nearDup });
+    imageListQuery(deps.itemQuery(), {
+      unlabeledOnly,
+      sort: deps.sortId(),
+      nearDup: deps.nearDup(),
+    });
 
   const pager = createPager<ImageCardWire>({
     fetchPage: async (cursor) => {
@@ -97,13 +102,6 @@ export function createImageGalleryController(deps: ImageGalleryDeps) {
     },
     set unlabeledOnly(v: boolean) {
       unlabeledOnly = v;
-    },
-    /** Which images by near-duplicate role (the served `near_dup` filter); null = all. */
-    get nearDup() {
-      return nearDup;
-    },
-    set nearDup(v: NearDupFilter | null) {
-      nearDup = v;
     },
     /** Changes with anything that re-fetches the list; the view reloads on it. */
     get queryKey() {

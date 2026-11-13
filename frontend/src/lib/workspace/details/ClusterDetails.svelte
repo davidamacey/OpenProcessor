@@ -1,6 +1,7 @@
 <script lang="ts">
   /** The open cluster's served card: size, dominant class, label agreement and counts. */
   import Button from '$components/ui/Button.svelte';
+  import Icon from '$components/ui/Icon.svelte';
   import { displayNameNote, displayNoText } from '$lib/clusters/clusterCardText';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
   import { classesStore } from '$stores/classes.svelte';
@@ -18,9 +19,18 @@
 <section class="space-y-2 text-body" data-testid="cluster-details">
   <h2 class="text-meta font-semibold text-fg-2">Cluster</h2>
   {#if card}
-    <p class="text-fg-1">
+    <p class="flex items-center gap-1.5 text-fg-1">
       Cluster {displayNoText(card)}
-      <code class="text-meta text-fg-3">{card.uid}</code>
+      <code class="truncate text-meta text-fg-3" title={card.uid}>{card.uid}</code>
+      <button
+        type="button"
+        class="btn-icon btn-ghost btn-sm"
+        aria-label="Copy the cluster id"
+        data-testid="copy-cluster-uid"
+        onclick={() => void navigator.clipboard?.writeText(card.uid)}
+      >
+        <Icon name="copy" size={14} />
+      </button>
     </p>
     <p class="text-fg-2" data-testid="cluster-details-name">
       size {card.size.toLocaleString()} ·
@@ -37,11 +47,9 @@
          bar, the selection is "everything this cluster scope matches", and the server counts it. -->
     <Button
       icon="pencil"
-      data-testid="label-cluster"
-      onclick={() => {
-        ws.confirmSelectAllMatching();
-        ws.pickerOpen = true;
-      }}>Label all {card.size.toLocaleString()} in this cluster…</Button
+      data-testid="label-cluster-details"
+      onclick={() => ws.startLabelCluster()}
+      >Label all {card.size.toLocaleString()} as…</Button
     >
     {#if card.label_agreement != null}
       <p class="text-meta text-fg-2 tabular-nums" data-testid="cluster-agreement">

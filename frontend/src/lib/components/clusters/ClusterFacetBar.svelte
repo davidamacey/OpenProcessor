@@ -9,14 +9,6 @@
   let { view }: { view: ClusterDetailController } = $props();
 
   const facets = $derived(view.facets);
-  // Open on a wide screen; on a narrow one the chip rows would push the grid
-  // out of view, so they start folded.
-  let open = $state(
-    typeof window === 'undefined' ||
-      typeof window.matchMedia !== 'function' ||
-      window.matchMedia('(min-width: 768px)').matches,
-  );
-
   function binLabel(b: ConfidenceBin): string {
     return b.max == null
       ? `${b.min.toFixed(1)}+`
@@ -34,23 +26,15 @@
 </script>
 
 {#if view.facetsError}
-  <p
-    class="border-b border-line px-4 py-1.5 text-meta text-warn-text"
-    role="alert"
-    data-testid="cluster-facets-error"
-  >
+  <p class="text-meta text-warn-text" role="alert" data-testid="cluster-facets-error">
     Facet counts unavailable: {view.facetsError}
   </p>
 {:else if facets}
-  <details
-    bind:open
-    class="border-b border-line px-4 py-2 text-meta"
-    data-testid="cluster-facets"
-  >
-    <summary class="cursor-pointer text-fg-2">
+  <section class="text-meta" data-testid="cluster-facets">
+    <p class="mb-1.5 font-semibold text-fg-2">
       Facets{view.facetFilterActive ? ' (filtered)' : ''}
-    </summary>
-    <div class="mt-2 flex flex-col gap-1.5" role="group" aria-label="Cluster facets">
+    </p>
+    <div class="flex flex-col gap-1.5" role="group" aria-label="Cluster facets">
       {#if facets.detector_classes.length > 0}
         <div class="flex flex-wrap items-center gap-1.5">
           <span class="w-28 shrink-0 text-fg-3">Detector class</span>
@@ -136,23 +120,6 @@
           </span>
         </div>
       {/if}
-
-      <div class="flex flex-wrap items-center gap-1.5">
-        <label class="flex items-center gap-2 text-fg-3">
-          <span class="w-28 shrink-0">Sort by</span>
-          <select
-            class="select-sm"
-            data-testid="facet-sort"
-            value={view.detectorSort}
-            onchange={(e) =>
-              (view.detectorSort = e.currentTarget.value as 'default' | 'desc' | 'asc')}
-          >
-            <option value="default">Cluster order</option>
-            <option value="desc">Detector confidence, high first</option>
-            <option value="asc">Detector confidence, low first</option>
-          </select>
-        </label>
-      </div>
     </div>
-  </details>
+  </section>
 {/if}

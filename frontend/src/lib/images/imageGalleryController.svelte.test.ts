@@ -3,15 +3,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('$lib/api_images', () => ({ listImages: vi.fn() }));
 import { listImages } from '$lib/api_images';
 import { imageCard, imagePage } from '$lib/test/fixtures/imagePage';
+import type { NearDupFilter } from '$lib/types_images';
 import { toItemSelection } from '$lib/workspace/selection';
 import { createImageGalleryController } from './imageGalleryController.svelte';
 
 const mocked = vi.mocked(listImages);
 
-function make(sort: string | null = null) {
+function make(
+  sort: string | null = null,
+  nearDup: () => NearDupFilter | null = () => null,
+) {
   return createImageGalleryController({
     itemQuery: () => ({ class_name: ['widget'] }),
     sortId: () => sort,
+    nearDup,
   });
 }
 
@@ -85,15 +90,16 @@ describe('createImageGalleryController', () => {
     expect(mocked.mock.calls[0]![1]).toBeNull();
   });
 
-  it('sends the served near-duplicate filter and reloads on it', async () => {
+  it('sends the served near-duplicate filter from the URL and reloads on it', async () => {
     mocked.mockResolvedValue(imagePage([imageCard({ image_id: 'a' })]));
-    const g = make();
+    let role = $state<NearDupFilter | null>(null);
+    const g = make(null, () => role);
     const before = g.queryKey;
-    g.nearDup = 'representative';
+    role = 'collapsed';
     expect(g.queryKey).not.toBe(before);
     await g.loadFirst();
-    expect(mocked.mock.calls[0]![0]).toMatchObject({ near_dup: 'representative' });
-    g.nearDup = null;
+    expect(mocked.mock.calls[0]![0]).toMatchObject({ near_dup: 'collapsed' });
+    role = null;
     await g.loadFirst();
     expect(mocked.mock.calls[1]![0]).not.toHaveProperty('near_dup');
   });

@@ -212,6 +212,8 @@ export function createReviewQueueLoader(opts: ReviewQueueLoaderOptions) {
     // first page only once the vocabulary says which the URL's values are, so a link's filter is
     // never missing from the first request.
     if (tabs.queue && !reviewTabsVocabularyStore.loaded) return;
+    // No queue yet: the served default queue is about to open, or there is nothing to review.
+    if (tabs.defaultPending || tabs.nothingToReview) return;
     if (key === lastKey) return;
     lastKey = key;
     untrack(() => {

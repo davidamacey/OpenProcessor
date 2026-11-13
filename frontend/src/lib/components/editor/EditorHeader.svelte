@@ -38,9 +38,14 @@
   >
     <Icon name="chevron-left" size={14} />Workspace
   </a>
-  <h1 class="min-w-0 truncate text-body font-medium text-fg-1" title={fileName}>
+  <h1 class="sr-only">{fileName}</h1>
+  <span
+    class="min-w-0 truncate text-body font-medium text-fg-1"
+    title={fileName}
+    aria-hidden="true"
+  >
     {fileName}
-  </h1>
+  </span>
   {#if index !== null && total !== null}
     <span class="text-meta text-fg-2" data-testid="editor-position">
       {index + 1} of {total}

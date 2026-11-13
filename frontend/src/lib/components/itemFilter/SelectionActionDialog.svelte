@@ -8,6 +8,7 @@
   import { classesStore } from '$stores/classes.svelte';
   import { SELECTION_SAMPLES } from '$lib/types_itemFilter';
   import { humanizeId } from '$lib/humanizeId';
+  import { opStatusLine } from '$lib/labelOps/opStatusLine';
   import type {
     SelectionActionController,
     SelectionActionId,
@@ -19,9 +20,13 @@
     onapplied?: () => void;
     /** Who the action acts on, in words ("the 3 selected items"), shown above the count. */
     subject?: string;
+    /** The whole-cluster label offers to open the next cluster once it is written. */
+    openNext?: { checked: boolean; onchange: (checked: boolean) => void };
+    /** A caution the host wants read before the write (a mixed cluster). */
+    warning?: string | null;
   }
 
-  let { controller: c, onapplied, subject }: Props = $props();
+  let { controller: c, onapplied, subject, openNext, warning }: Props = $props();
 
   const TITLES: Record<SelectionActionId, string> = {
     exclude: 'Ignore matching items',
@@ -29,6 +34,14 @@
     label: 'Label matching items',
     move: 'Move matching items to a cluster',
   };
+
+  const VERBS: Partial<Record<SelectionActionId, string>> = {
+    label: 'Labeling',
+    move: 'Moving',
+  };
+  const statusLine = $derived(
+    c.action && c.loading ? opStatusLine(c.job, VERBS[c.action] ?? 'Working') : null,
+  );
 
   const classOptions = $derived(classesStore.classes.filter((cls) => !cls.deprecated));
 
@@ -47,16 +60,29 @@
   }
 </script>
 
-{#if c.action}
+{#if c.action && !c.detached}
   <ConfirmDialog
     title={TITLES[c.action]}
     confirmLabel="Apply"
     danger={c.action === 'exclude'}
     busy={c.loading && c.selected != null}
+    busyLabel={statusLine ?? 'Working…'}
     confirmDisabled={!c.canConfirm}
     onconfirm={confirm}
-    oncancel={() => c.cancel()}
+    oncancel={() => (c.job ? c.runInBackground() : c.cancel())}
   >
+    {#snippet actions()}
+      {#if c.loading && c.job}
+        <button
+          type="button"
+          class="btn"
+          data-testid="selection-background"
+          onclick={() => c.runInBackground()}
+        >
+          Run in background
+        </button>
+      {/if}
+    {/snippet}
     {#if c.action === 'label'}
       <label class="flex items-center gap-2">
         <span class="text-fg-2">Class</span>
@@ -95,6 +121,16 @@
           {/each}
         </select>
       </label>
+    {/if}
+
+    {#if warning && c.action === 'label'}
+      <p
+        class="rounded border border-warn/40 bg-warn/10 px-3 py-2 text-warn-text"
+        role="note"
+        data-testid="selection-warning"
+      >
+        {warning}
+      </p>
     {/if}
 
     {#if subject}
@@ -163,6 +199,30 @@
         </label>
       {/if}
     </div>
+
+    {#if openNext && c.action === 'label'}
+      <label class="flex items-center gap-2 text-meta text-fg-2">
+        <input
+          type="checkbox"
+          checked={openNext.checked}
+          data-testid="open-next-after-label"
+          onchange={(e) => openNext.onchange(e.currentTarget.checked)}
+        />
+        Open the next cluster after labelling
+      </label>
+    {/if}
+
+    {#if statusLine}
+      <p class="text-fg-1" data-testid="selection-job">
+        {statusLine}.
+        {#if c.job?.status === 'queued'}
+          <span class="text-fg-2"
+            >You can close this: the change runs in the background and shows in Label
+            history.</span
+          >
+        {/if}
+      </p>
+    {/if}
 
     {#if c.error}
       <p class="text-danger-text" role="alert" data-testid="selection-error">{c.error}</p>

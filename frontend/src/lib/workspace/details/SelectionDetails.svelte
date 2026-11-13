@@ -20,11 +20,11 @@
   {:else if s}
     <p class="text-fg-1">{s.summary_text}</p>
     <dl class="grid grid-cols-2 gap-x-3 gap-y-1 text-meta text-fg-2 tabular-nums">
-      <dt class="text-fg-3">clusters</dt>
+      <dt class="text-fg-3">Clusters</dt>
       <dd>{s.clusters.toLocaleString()}</dd>
-      <dt class="text-fg-3">in test holdout</dt>
+      <dt class="text-fg-3">In the test holdout</dt>
       <dd>{s.in_holdout.toLocaleString()}</dd>
-      <dt class="text-fg-3">with a position</dt>
+      <dt class="text-fg-3">With a position</dt>
       <dd>{s.located.toLocaleString()}</dd>
     </dl>
     <ul class="space-y-0.5 text-meta text-fg-2" data-testid="selection-by-class">

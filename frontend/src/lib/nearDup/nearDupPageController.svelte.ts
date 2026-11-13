@@ -64,6 +64,18 @@ export function createNearDupPageController() {
     }
   }
 
+  /** Only the per-level status (the Gallery's Duplicates control reads no run history). */
+  async function loadStatus(): Promise<void> {
+    abort ??= new AbortController();
+    const signal = abort.signal;
+    try {
+      status = await getNearDupStatus(signal);
+      loadError = null;
+    } catch (e) {
+      if (!signal.aborted) loadError = apiErrorText(e);
+    }
+  }
+
   async function loadGroups(append = false): Promise<void> {
     if (append && !nextCursor) return;
     const token = ++groupsToken;
@@ -106,7 +118,11 @@ export function createNearDupPageController() {
   }
 
   /** Start a run of one level and follow its job; the served refusal (409) is shown as sent. */
-  async function startRun(runLevel: NearDupLevel, mode: NearDupRunMode): Promise<void> {
+  async function startRun(
+    runLevel: NearDupLevel,
+    mode: NearDupRunMode,
+    reload: 'overview' | 'status' = 'overview',
+  ): Promise<void> {
     if (busyLevel) return;
     busyLevel = runLevel;
     runError = null;
@@ -133,10 +149,13 @@ export function createNearDupPageController() {
     } finally {
       busyLevel = null;
     }
-    if (!signal.aborted) {
-      await loadOverview();
-      await showGroups(level, purpose);
+    if (signal.aborted) return;
+    if (reload === 'status') {
+      await loadStatus();
+      return;
     }
+    await loadOverview();
+    await showGroups(level, purpose);
   }
 
   function dispose(): void {
@@ -191,6 +210,7 @@ export function createNearDupPageController() {
       return runError;
     },
     loadOverview,
+    loadStatus,
     loadGroups,
     showGroups,
     startRun,

@@ -5,8 +5,6 @@
   import type { OverlayShape } from '$lib/configTest/overlayShapes';
   import type { CropMetaLoader } from '$lib/cropMeta/cropMetaLoader.svelte';
   import { formatTimestamp } from '$lib/format/date';
-  import { resolve } from '$app/paths';
-  import { projectHref } from '$lib/projectPaths';
 
   let {
     crop,
@@ -65,12 +63,6 @@
         />
       </div>
     {/if}
-    <a
-      class="text-caption text-info-text underline hover:text-info-text"
-      data-testid="open-image"
-      href={resolve(projectHref(`/images/${encodeURIComponent(imageMeta.image_id)}`))}
-      >Open image</a
-    >
     {#if siblings && siblings.length > 0}
       <div class="mt-2 text-meta text-fg-2 font-semibold">
         Siblings ({siblings.length})

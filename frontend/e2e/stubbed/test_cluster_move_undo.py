@@ -84,8 +84,8 @@ def test_move_then_undo_follows_the_job_and_undoes_by_op_id(stub, page, app_url)
     page.keyboard.press('m')
     target = page.get_by_test_id('move-target')
     target.wait_for(timeout=ACTION_TIMEOUT_MS)
-    assert 'Assign class…' in page.get_by_test_id('move-relabel-hint').inner_text()
-    assert page.get_by_test_id('assign-selected').inner_text().strip() == 'Assign class…'
+    assert 'Label as…' in page.get_by_test_id('move-relabel-hint').inner_text()
+    assert page.get_by_test_id('assign-selected').inner_text().strip() == 'Label as…'
     target.select_option(TARGET_UID)
     with page.expect_response(
         lambda r: r.request.method == 'POST' and r.url.endswith('/crops/move'),

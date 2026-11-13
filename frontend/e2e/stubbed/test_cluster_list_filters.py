@@ -128,11 +128,11 @@ def test_cards_render_in_the_served_order_with_served_quality_fields(stub, page,
     assert requests[0]['offset'] == ['0']
     assert requests[0]['limit'] == ['24']
     second = page.locator('[data-testid=workspace-view] ul > li').nth(1)
-    expect(second.get_by_test_id('cluster-detector')).to_contain_text('widget_x')
-    expect(second.get_by_test_id('cluster-needs-review')).to_contain_text('9 to review')
-    flags = second.get_by_test_id('cluster-flag')
-    expect(flags).to_have_text(['Unvalidated', 'Mixed detector classes'])
-    expect(flags.nth(1)).to_have_attribute('title', 'The detector gave different classes.')
+    # One meta line and at most one status chip: the highest of review, mixed, unvalidated.
+    expect(second.get_by_test_id('cluster-meta')).to_contain_text('detector: widget_x')
+    status = second.get_by_test_id('cluster-status')
+    expect(status).to_have_count(1)
+    expect(status).to_contain_text('9 to review')
     options = page.get_by_test_id('cluster-sort').locator('option').all_inner_texts()
     assert options == ['Largest first', 'Most to review', 'Smallest first']
 
@@ -160,20 +160,24 @@ def test_filters_reach_the_server_survive_a_reload_and_clear(stub, page, app_url
     expect(page.locator('[data-testid=workspace-view] ul > li button').first).to_be_visible(
         timeout=ACTION_TIMEOUT_MS
     )
+    page.get_by_test_id('cluster-refine').click()
     page.get_by_test_id('cluster-flag-filter-mixed_detector_classes').click()
     expect(page.locator('[data-testid=workspace-view] ul > li')).to_have_count(
         1, timeout=ACTION_TIMEOUT_MS
     )
     assert requests[-1]['flag'] == ['mixed_detector_classes']
-    assert 'flag=mixed_detector_classes' in page.url
+    expect(page).to_have_url(re.compile('flag=mixed_detector_classes'), timeout=ACTION_TIMEOUT_MS)
 
     page.reload()
     expect(page.locator('[data-testid=workspace-view] ul > li')).to_have_count(
         1, timeout=ACTION_TIMEOUT_MS
     )
+    expect(page.get_by_test_id('refinement-chips')).to_contain_text('Mixed detector classes')
+    page.get_by_test_id('cluster-refine').click()
     expect(page.get_by_test_id('cluster-flag-filter-mixed_detector_classes')).to_have_attribute(
         'aria-pressed', 'true'
     )
+    page.keyboard.press('Escape')
 
     page.get_by_test_id('cluster-filters-clear').click()
     expect(page.locator('[data-testid=workspace-view] ul > li')).to_have_count(
@@ -189,9 +193,11 @@ def test_a_filter_with_no_match_shows_the_empty_state_and_clears(stub, page, app
     expect(page.locator('[data-testid=workspace-view] ul > li button').first).to_be_visible(
         timeout=ACTION_TIMEOUT_MS
     )
+    page.get_by_test_id('cluster-refine').click()
     page.get_by_test_id('cluster-flag-filter-label_disagreement').click()
     empty = page.get_by_test_id('clusters-filtered-empty')
     expect(empty).to_contain_text('No clusters match these filters', timeout=ACTION_TIMEOUT_MS)
+    page.keyboard.press('Escape')
     empty.get_by_role('button', name='Clear filters').click()
     expect(page.locator('[data-testid=workspace-view] ul > li')).to_have_count(
         3, timeout=ACTION_TIMEOUT_MS

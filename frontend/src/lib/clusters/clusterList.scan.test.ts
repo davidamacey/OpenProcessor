@@ -17,8 +17,8 @@ const FILES = [
   'clusters/clusterCardText.ts',
   'components/clusters/ClustersGrid.svelte',
   'components/clusters/ClusterGridCard.svelte',
-  'components/clusters/ClustersToolbar.svelte',
-  'components/clusters/ClusterListFilterBar.svelte',
+  'components/clusters/ClusterListHeader.svelte',
+  'components/clusters/ClusterRefinePanel.svelte',
   'components/clusters/ClustersStatusBar.svelte',
 ];
 

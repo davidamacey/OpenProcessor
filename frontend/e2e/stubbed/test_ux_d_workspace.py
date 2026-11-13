@@ -187,8 +187,9 @@ def test_cluster_cards_show_the_served_name(stub, page, app_url):
     name = page.get_by_test_id('cluster-name')
     expect(name).to_have_text('bus', timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_text('from the detector')).to_be_visible()
-    expect(page.get_by_test_id('cluster-near-dups')).to_have_text('2 duplicate groups')
-    expect(page.get_by_text('needs label')).to_have_count(1)
+    # The duplicate-group count is in the card's hover text, not a chip.
+    assert '2 duplicate groups' in page.locator('[data-grid-item]').first.get_attribute('title')
+    expect(page.get_by_text('needs a label')).to_have_count(1)
     shot(page, 'clusters-names', widths=(1600, 430))
 
 
@@ -197,10 +198,13 @@ def test_gallery_duplicates_control_sends_the_served_filter(stub, page, app_url)
     serve_gallery(stub, queries)
     page.goto(f'{app_url}/p/default/workspace?view=gallery')
     expect(page.get_by_test_id('image-card').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    page.get_by_test_id('duplicates-toggle').click()
+    expect(page.get_by_test_id('duplicates-purpose')).to_contain_text('Nothing is deleted')
     with page.expect_request(lambda r: '/images?' in r.url and 'near_dup=collapsed' in r.url):
         page.get_by_role('radio', name='One per group').click()
+    page.get_by_test_id('duplicates-toggle').click()
     with page.expect_request(lambda r: r.url.endswith('/images')):
-        page.get_by_role('radio', name='All images').click()
+        page.get_by_role('radio', name='All photos').click()
     shot(page, 'gallery-duplicates', widths=(1600, 430))
 
 

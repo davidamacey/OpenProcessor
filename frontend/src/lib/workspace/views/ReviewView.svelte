@@ -1,9 +1,9 @@
 <script lang="ts">
   /**
    * Review: the two panes of the old Review page over the Workspace's own query and order. The
-   * items come from the served queue (or the Detections order when no queue is set), the item to
-   * land on is `focus`, and the filter is the Workspace filter; this view is wiring only, each
-   * concern lives in a controller under `$lib/review` and renders through a component under
+   * items come from the served queue (no queue opens the served default one; a focused item from
+   * a grid keeps that grid's Detections order), the item to land on is `focus`, and the filter is
+   * the Workspace filter; this view is wiring only, each concern lives in a controller under `$lib/review` and renders through a component under
    * `$lib/components/review`. Enter on a grid card opens it here; Esc returns to the same card.
    */
   import { pickerRecent } from '$lib/review/pickerRecent';
@@ -97,8 +97,6 @@
     liveNewCount={live.liveNewCount}
     refreshFromLive={live.refreshFromLive}
     toggleDismissedPanel={dismissed.toggleDismissedPanel}
-    isMultiBoxSlot={edit.isMultiBoxSlot}
-    editMode={edit.editMode}
   />
   <QueueFilters {ws} {tabs} />
 
@@ -110,6 +108,8 @@
   >
     {#if queue.loading && queue.items.length === 0}
       <p class="col-span-full text-body text-fg-3">Loading...</p>
+    {:else if tabs.defaultPending}
+      <p class="col-span-full text-body text-fg-3">Opening the first queue with work…</p>
     {:else if tabs.awaitingDeepLink}
       <!-- Page 1 (item #1) may already be loaded underneath this: don't render it, or the
            operator briefly sees and could act on the wrong item while the target is located. -->

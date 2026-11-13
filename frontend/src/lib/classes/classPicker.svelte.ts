@@ -10,6 +10,8 @@ import { apiErrorText } from '$lib/api_errors';
 import { itemClassTargets, searchClasses } from '$lib/classPicker';
 import type { RegistryClass } from '$lib/types_classes';
 import { classesStore } from '$stores/classes.svelte';
+import { keymapStore } from '$stores/keymap.svelte';
+import { recentClassesStore, RECENT_CLASS_LIMIT } from '$stores/recentClasses.svelte';
 
 const MAX_ROWS = 50;
 
@@ -30,11 +32,13 @@ export function createClassPicker(opts: ClassPickerOptions) {
   let busy = $state(false);
 
   const targets = $derived(itemClassTargets(classesStore.classes));
+  // The caller's own ranking (an item's proposal), then what was assigned last.
   const recentIds = $derived(
-    opts
-      .recent()
+    [...opts.recent(), ...recentClassesStore.names]
+      .filter((n, i, all) => all.indexOf(n) === i)
       .map((n) => targets.find((c) => c.name === n)?.id)
-      .filter((id): id is number => id != null),
+      .filter((id): id is number => id != null)
+      .slice(0, RECENT_CLASS_LIMIT),
   );
   const results = $derived(
     opts.mode() === 'create' ? [] : searchClasses(targets, query, MAX_ROWS, recentIds),
@@ -68,7 +72,10 @@ export function createClassPicker(opts: ClassPickerOptions) {
       const { class_name } = await addClass({ name });
       await classesStore.clearAndRefetch();
       const created = classesStore.classes.find((c) => c.name === class_name);
-      if (created) opts.onpick(created);
+      if (created) {
+        recentClassesStore.note(created.name);
+        opts.onpick(created);
+      }
       opts.onclose();
     } catch (e) {
       error = apiErrorText(e);
@@ -78,6 +85,7 @@ export function createClassPicker(opts: ClassPickerOptions) {
   }
 
   function pick(cls: RegistryClass): void {
+    recentClassesStore.note(cls.name);
     opts.onpick(cls);
     opts.onclose();
   }
@@ -101,7 +109,21 @@ export function createClassPicker(opts: ClassPickerOptions) {
     } else if (e.key === 'Enter') {
       e.preventDefault();
       activate();
+    } else if (query === '' && pickRecentKey(e)) {
+      e.preventDefault();
     }
+  }
+
+  /** A digit on an empty box picks the Nth recent class (the served `class_picker.recent_N`
+   *  keys, rebindable); once something is typed a digit is just text. */
+  function pickRecentKey(e: KeyboardEvent): boolean {
+    if (e.ctrlKey || e.metaKey || e.altKey) return false;
+    const action = keymapStore.actionFor('class_picker', e.key.toLowerCase());
+    const n = Number(action?.match(/^class_picker\.recent_(\d)$/)?.[1]);
+    const cls = n >= 1 && n <= recentIds.length ? results[n - 1] : undefined;
+    if (!cls) return false;
+    pick(cls);
+    return true;
   }
 
   return {
@@ -122,6 +144,9 @@ export function createClassPicker(opts: ClassPickerOptions) {
     },
     get results() {
       return results;
+    },
+    get recentCount() {
+      return query === '' ? recentIds.length : 0;
     },
     get createName() {
       return createName;

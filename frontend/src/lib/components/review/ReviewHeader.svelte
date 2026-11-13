@@ -3,14 +3,14 @@
   live "N new" pill, the Dismissed panel toggle and the key hints for the active kind of queue.
 -->
 <script lang="ts">
+  import Menu, { type MenuItem } from '$components/ui/Menu.svelte';
+  import AcceptConfidentDialog from '$components/review/AcceptConfidentDialog.svelte';
   import HiddenItemsNote from '$lib/components/itemFilter/HiddenItemsNote.svelte';
   import SemanticSearchBox from '$lib/components/SemanticSearchBox.svelte';
   import ShortcutsButton from '$lib/components/ShortcutsButton.svelte';
   import SortSelect from '$lib/components/workspace/SortSelect.svelte';
   import { withoutOpenVocab } from '$lib/itemFilter/itemFilterState.svelte';
-  import { kg } from '$lib/review/reviewKeys';
   import type { ReviewQueueLoader } from '$lib/review/reviewQueueLoader.svelte';
-  import { rejectKeyGlyph } from '$lib/review/slotKeymap';
   import type { ReviewTabsController } from '$lib/review/reviewTabsController.svelte';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
   import { regionProfileStore } from '$stores/regionProfile.svelte';
@@ -22,23 +22,21 @@
     liveNewCount: number;
     refreshFromLive: () => void;
     toggleDismissedPanel: () => void;
-    isMultiBoxSlot: boolean;
-    editMode: boolean;
   }
 
-  let {
-    ws,
-    tabs,
-    loader,
-    liveNewCount,
-    refreshFromLive,
-    toggleDismissedPanel,
-    isMultiBoxSlot,
-    editMode,
-  }: Props = $props();
+  let { ws, tabs, loader, liveNewCount, refreshFromLive, toggleDismissedPanel }: Props =
+    $props();
 
   const queue = $derived(loader.queue);
-  const activeSlot = $derived(tabs.activeSlot);
+  let acceptOpen = $state(false);
+  const moreItems: MenuItem[] = [
+    {
+      id: 'dismissed',
+      label: 'Dismissed items…',
+      testid: 'review-dismissed-open',
+      onselect: () => toggleDismissedPanel(),
+    },
+  ];
 
   // The search runs over the Workspace query: its filter, the open queue (as `tab`; the region
   // queue is no `review_tab` filter value) and the queue's own filters.
@@ -66,17 +64,23 @@
   class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-4 py-2"
   data-testid="review-header"
 >
-  <h1 class="text-body font-medium text-fg-1" data-testid="review-queue-label">
+  <h1 class="sr-only" data-testid="review-queue-label">{tabs.activeQueueLabel}</h1>
+  <span class="text-body font-medium text-fg-1" aria-hidden="true">
     {tabs.activeQueueLabel}
-  </h1>
+  </span>
   {#if regionProfileStore.unknown}
     <span class="text-caption text-fg-3" data-testid="region-profile-loading"
       >loading region profile…</span
     >
   {/if}
-  <span data-testid="queue-counter" class="text-meta text-fg-3 tabular-nums">
-    {queue.items.length > 0 ? `#${loader.currentPosition}` : '—'} · {queue.items.length} loaded
-    · {queue.total} total
+  <span
+    data-testid="queue-counter"
+    class="text-meta text-fg-2 tabular-nums"
+    title="{queue.items.length.toLocaleString()} loaded of {queue.total.toLocaleString()}"
+  >
+    {queue.items.length > 0
+      ? `#${loader.currentPosition.toLocaleString()} of ${queue.total.toLocaleString()}`
+      : '—'}
   </span>
   <HiddenItemsNote hidden={loader.hidden} />
   {#if loader.sortOptions.length > 0 && !loader.searchActive}
@@ -111,42 +115,25 @@
     {/key}
   {/if}
   <span class="grow"></span>
-  <span class="hidden text-caption text-fg-3 lg:inline">
-    {#if isMultiBoxSlot && activeSlot}
-      <kbd>{kg('review.region.confirm')}</kbd> confirm proposed ·
-      <kbd>{kg('review.region.accept_box')}</kbd> accept box ·
-      <kbd>{kg('review.region.reject_box')}</kbd> reject box ·
-      <kbd>{kg('box_edit.next_box')}</kbd> next box
-      {#if editMode}
-        · <kbd>{kg('box_edit.delete_box')}</kbd> delete box · drag empty area to add
-      {:else}
-        · <kbd>{kg('review.region.edit_box')}</kbd> edit
-      {/if}
-      · <kbd>{kg('review.skip')}</kbd> skip
-    {:else if activeSlot}
-      <kbd>{kg('review.region.confirm')}</kbd> confirm ·
-      <kbd>{rejectKeyGlyph(activeSlot)}</kbd> reject
-      {#if activeSlot.capabilities.lifecycle?.falsePositiveState}
-        · <kbd>{kg('review.region.false_positive')}</kbd> false-pos
-      {/if}
-      · <kbd>{kg('review.skip')}</kbd> skip · <kbd>{kg('review.region.back')}</kbd> back
-    {:else}
-      per-class letter assigns · <kbd>{kg('review.queue.class_picker')}</kbd> search all
-      classes · <kbd>{kg('review.queue.confirm')}</kbd> confirm ·
-      <kbd>{kg('review.skip')}</kbd> skip · <kbd>{kg('review.queue.discard')}</kbd>
-      discard · <kbd>{kg('review.undo')}</kbd> undo
-    {/if}
-    · <kbd>{kg('workspace.escape')}</kbd> back to the grid
-  </span>
+  {#if tabs.queue === 'check_machine'}
+    <button
+      type="button"
+      class="btn"
+      data-testid="accept-confident-open"
+      title="Validate the machine labels above a confidence bar in one undoable operation"
+      onclick={() => (acceptOpen = true)}
+    >
+      Accept confident labels…
+    </button>
+  {/if}
+  <Menu
+    label="More"
+    items={moreItems}
+    align="end"
+    triggerClass="btn"
+    triggerTestid="review-more"
+  />
   <ShortcutsButton />
-  <button
-    type="button"
-    class="shrink-0 rounded border border-line-strong px-2 py-1 text-caption text-fg-2 hover:border-fg-3 hover:text-fg-1"
-    onclick={toggleDismissedPanel}
-    title="Crops permanently dismissed from review — restore one back into the queue"
-  >
-    Dismissed
-  </button>
   {#if liveNewCount > 0}
     <button
       type="button"
@@ -158,3 +145,11 @@
     </button>
   {/if}
 </div>
+
+{#if acceptOpen}
+  <AcceptConfidentDialog
+    filter={() => ws.itemBody()}
+    onclose={() => (acceptOpen = false)}
+    onapplied={() => void loader.loadFirst()}
+  />
+{/if}
