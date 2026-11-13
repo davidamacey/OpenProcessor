@@ -85,6 +85,7 @@ class _ContainerHolder:
         self.error: str | None = None
 
     def start(self) -> None:
+        container: Any = None
         try:
             from testcontainers.community.postgres import PostgresContainer
 
@@ -98,6 +99,14 @@ class _ContainerHolder:
             container.start()
         except Exception as exc:  # any start failure is reported as unavailable
             self.error = f'cannot start the test PostgreSQL container: {type(exc).__name__}: {exc}'
+            if container is not None:
+                # What DockerContainer.__enter__ does when start() raises; calling start()
+                # directly skips it, and a container that came up but failed its readiness wait
+                # would stay on the host.
+                try:
+                    container.stop()
+                except Exception as stop_exc:  # the start failure stays the reported cause
+                    self.error += f' (and it could not be removed: {stop_exc})'
             return
         self.container = container
         self.server = PgServer(

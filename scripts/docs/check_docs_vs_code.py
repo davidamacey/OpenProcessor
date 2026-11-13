@@ -39,6 +39,7 @@ Exit status is 1 when any check finds a miss.
 
 from __future__ import annotations
 
+import collections
 import json
 import re
 import subprocess  # nosec B404 - fixed git invocation, no shell
@@ -249,6 +250,7 @@ def check_env() -> list[str]:
 _COMPOSE_VAR_RE = re.compile(r'(?<!\$)\$\{([A-Za-z_][A-Za-z0-9_]*)')
 _TEMPLATE_ASSIGN_RE = re.compile(r'^#?[ \t]*([A-Z][A-Z0-9_]*)=', re.M)
 _RETIRED_BLOCK_RE = re.compile(r'RETIRED_ENV_NAMES=\((.*?)\)', re.S)
+_WORD_RE = re.compile(r'\w+')
 
 
 def _template_names() -> set[str]:
@@ -283,13 +285,15 @@ def check_template_names() -> list[str]:
     """A non-OP_ setting in env.template that no compose file, script or code reads is
     advertised but does nothing (OP_ names are covered by tests/test_env_surface.py)."""
     template = (REPO_ROOT / 'env.template').read_text(encoding='utf-8', errors='replace')
-    corpus = _env_corpus()
+    # One pass over each text: `\bNAME\b` matches exactly the `\w+` tokens equal to NAME, so
+    # counting tokens once replaces a regex scan of the whole corpus per name.
+    in_corpus = collections.Counter(_WORD_RE.findall(_env_corpus()))
+    in_template = collections.Counter(_WORD_RE.findall(template))
     errors = []
     for name in sorted(_template_names()):
         if name.startswith('OP_'):
             continue
-        word = re.compile(rf'\b{re.escape(name)}\b')
-        if len(word.findall(corpus)) <= len(word.findall(template)):
+        if in_corpus[name] <= in_template[name]:
             errors.append(
                 f'env.template: {name} is set by no compose file, script or code'
             )  # the append carries a formatted message built next to its check

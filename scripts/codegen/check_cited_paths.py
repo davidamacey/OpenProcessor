@@ -37,14 +37,11 @@ CITATION = re.compile(
 
 
 def missing_citations(repo_root: Path, rel: str) -> int:
-    source = (repo_root / rel).read_text(encoding='utf-8')
-    texts = (
-        ids._comment_texts_python(source, rel)
-        if rel.endswith('.py')
-        else ids._comment_texts_other(source, rel)
-    )
     return sum(
-        1 for text in texts for cited in CITATION.findall(text) if not (repo_root / cited).is_file()
+        1
+        for text in ids.comment_texts(repo_root, rel)
+        for cited in CITATION.findall(text)
+        if not (repo_root / cited).is_file()
     )
 
 
@@ -61,6 +58,7 @@ def scan(repo_root: Path) -> tuple[dict[str, int], list[str]]:
             continue
         if n:
             found[rel] = n
+    ids.save_text_caches()
     return found, broken
 
 
