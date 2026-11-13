@@ -36,7 +36,8 @@ def _boom(*_a: object, **_k: object) -> None:
 def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     from src.main import app
 
-    monkeypatch.setattr('src.clients.fast_face_client._cached_face_client', _boom, raising=False)
+    monkeypatch.setattr('src.services.sync_triton.routed_face_client', _boom)
+    monkeypatch.setattr('src.services.inference.routed_face_client', _boom)
     monkeypatch.setattr('src.services.face_identity.get_face_identity_service', _boom)
     monkeypatch.setattr('src.routers.persons.get_face_identity_service', _boom)
     return TestClient(app, raise_server_exceptions=False)
