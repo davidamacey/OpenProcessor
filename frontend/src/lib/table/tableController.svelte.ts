@@ -7,6 +7,7 @@ import { SvelteSet } from 'svelte/reactivity';
 import { getTable, getTableColumns } from '$lib/api_table';
 import { createPager } from '$lib/pager.svelte';
 import type { HiddenCounts } from '$lib/types';
+import type { NearDupFilter } from '$lib/types_images';
 import type { ItemFilterQuery } from '$lib/types_itemFilter';
 import type { SortOption } from '$lib/types_cursor';
 import type {
@@ -29,6 +30,8 @@ export interface TableDeps {
   /** What the page was opened with (read once). */
   readonly initial: TableUrlState;
   itemFilter(): ItemFilterQuery;
+  /** The near-duplicate role from the URL; null lists every row. */
+  nearDup(): NearDupFilter | null;
   writeUrl(state: TableUrlState): void;
 }
 
@@ -51,7 +54,7 @@ export function createTableController(deps: TableDeps) {
   const pager = createPager<TableRow>({
     fetchPage: async (cursor) => {
       const res: TablePage = await getTable(
-        { rows: rowsKind, columns: chosen, sort, cursor },
+        { rows: rowsKind, columns: chosen, sort, cursor, near_dup: deps.nearDup() },
         deps.itemFilter(),
       );
       shownColumns = res.columns;

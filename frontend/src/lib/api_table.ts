@@ -28,6 +28,7 @@ export function getTable(
       columns: query.columns.length > 0 ? query.columns.join(',') : undefined,
       sort: query.sort ?? undefined,
       cursor: query.cursor ?? undefined,
+      near_dup: query.near_dup ?? undefined,
       limit: query.limit,
     })}`,
     {},

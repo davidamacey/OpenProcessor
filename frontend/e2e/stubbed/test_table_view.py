@@ -10,7 +10,7 @@ from urllib.parse import parse_qs, urlparse
 
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.screens import SCREENS
-from harness.waits import wait_for_url_state
+from harness.waits import expect_handled, wait_for_url_state
 from playwright.sync_api import expect
 
 
@@ -116,6 +116,18 @@ def serve(stub) -> list[dict]:
     )
     stub.on('GET', r'/table$', table)
     return seen
+
+
+def test_the_table_honours_near_dup_and_the_duplicates_control(stub, page, app_url):
+    seen = serve(stub)
+    page.goto(f'{app_url}/p/default/workspace?view=table&near_dup=collapsed')
+    expect(page.get_by_test_id('data-table-row')).to_have_count(4, timeout=ACTION_TIMEOUT_MS)
+    assert seen[-1]['near_dup'] == 'collapsed', seen[-1]
+    page.get_by_role('button', name='Duplicates: One per group').click()
+    with expect_handled(page, lambda r: '/table?' in r.url and 'near_dup' not in r.url):
+        page.get_by_role('radio', name='All photos').click()
+    assert 'near_dup' not in seen[-1], seen[-1]
+    wait_for_url_state(page, lacks=('near_dup',))
 
 
 def test_header_click_asks_for_the_served_sort(stub, page, app_url):
