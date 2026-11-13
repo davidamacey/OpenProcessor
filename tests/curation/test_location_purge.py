@@ -139,3 +139,69 @@ async def test_an_unknown_step_is_refused(monkeypatch: pytest.MonkeyPatch) -> No
     bind_backfill(monkeypatch, 'drop')
     with pytest.raises(job.UnknownStepError):
         await job.run(BackfillCtx(FakeBackfillOpenSearch({}, {}), ['frobnicate']))
+
+
+class _ConflictingOpenSearch(FakeBackfillOpenSearch):
+    """The first ``conflict_passes`` passes skip every document on a version conflict, as
+    `conflicts=proceed` does when a concurrent writer touched them."""
+
+    def __init__(self, images: dict[str, dict[str, Any]], conflict_passes: int | None) -> None:
+        super().__init__(images, {})
+        self.conflict_passes = conflict_passes
+
+    async def update_by_query(
+        self, *, index: str, body: dict[str, Any], **kw: Any
+    ) -> dict[str, Any]:
+        if self.conflict_passes is None or len(self.by_query_calls) < self.conflict_passes:
+            self.by_query_calls.append({'index': index, 'body': body, **kw})
+            return {'updated': 0, 'version_conflicts': 1}
+        return await super().update_by_query(index=index, body=body, **kw)
+
+
+@pytest.fixture
+def sleeps(monkeypatch: pytest.MonkeyPatch) -> list[float]:
+    waited: list[float] = []
+
+    async def sleep(seconds: float) -> None:
+        waited.append(seconds)
+
+    monkeypatch.setattr(job.asyncio, 'sleep', sleep)
+    return waited
+
+
+@pytest.mark.asyncio
+async def test_a_pass_with_conflicts_then_a_clean_pass_completes_and_counts_only_updates(
+    monkeypatch: pytest.MonkeyPatch, sleeps: list[float]
+) -> None:
+    bind_backfill(monkeypatch, 'store_coarse')
+    monkeypatch.setattr(job, 'settle', lambda: _noop())
+    images = {'a': _image(47.123456, 8.987654)}
+    client = _ConflictingOpenSearch(images, conflict_passes=2)
+
+    result = await job.run(BackfillCtx(client, ['location_purge']))
+
+    assert isinstance(result, JobResult)
+    assert result.result is not None
+    assert result.result['location_purged'] == 1
+    assert images['a']['capture']['location_precision'] == 'coarse'
+    assert sleeps == [job.CONFLICT_BACKOFF_S] * 2
+
+
+@pytest.mark.asyncio
+async def test_persistent_conflicts_fail_the_job_instead_of_completing(
+    monkeypatch: pytest.MonkeyPatch, sleeps: list[float]
+) -> None:
+    bind_backfill(monkeypatch, 'store_coarse')
+    monkeypatch.setattr(job, 'settle', lambda: _noop())
+    images = {'a': _image(47.123456, 8.987654)}
+    client = _ConflictingOpenSearch(images, conflict_passes=None)
+
+    with pytest.raises(job.PurgeIncompleteError, match='1 documents still hold coordinates'):
+        await job.run(BackfillCtx(client, ['location_purge']))
+
+    assert len(client.by_query_calls) == job.MAX_CONFLICT_PASSES
+    assert images['a']['capture']['location_precision'] == 'exact'
+
+
+async def _noop() -> None:
+    return None

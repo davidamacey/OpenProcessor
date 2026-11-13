@@ -13,6 +13,7 @@ carry over.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
@@ -37,8 +38,18 @@ STEP_LOCATION_PURGE: Final = 'location_purge'
 STEPS: Final = (STEP_CONTENT, STEP_CAPTURE, STEP_LOCATION_PURGE)
 
 
+#: Passes in a row that only skipped documents on a version conflict before the purge gives up,
+#: and the pause between them.
+MAX_CONFLICT_PASSES: Final = 12
+CONFLICT_BACKOFF_S: Final = 2.0
+
+
 class UnknownStepError(ValueError):
     """``params['steps']`` names a step this job does not have."""
+
+
+class PurgeIncompleteError(RuntimeError):
+    """The purge could not change every document that violates the policy: fail, never complete."""
 
 
 async def _page(
@@ -163,16 +174,29 @@ async def _purge(
     if not state.settled and await _stored_policy() != 'store':
         await settle()
         state.settled = True
+    conflict_passes = 0
     while True:
         if (stop := await _interrupted(ctx, state)) is not None:
             return stop
-        changed = await purge_pass(client, await _stored_policy())
-        state.purged += changed
+        done = await purge_pass(client, await _stored_policy())
+        state.purged += done.updated
         state.walked = True
         await ctx.checkpoint(state.cursor())
         await ctx.progress(state.purged, None, STEP_LOCATION_PURGE, state.tally())
-        if changed == 0:
-            return None
+        if done.conflicts == 0:
+            if done.updated == 0:
+                return None
+            conflict_passes = 0
+            continue
+        conflict_passes = conflict_passes + 1 if done.updated == 0 else 0
+        if conflict_passes >= MAX_CONFLICT_PASSES:
+            msg = (
+                f'location_purge: {done.conflicts} documents still hold coordinates after '
+                f'{conflict_passes} passes that only hit version conflicts'
+            )
+            raise PurgeIncompleteError(msg)
+        if done.updated == 0:
+            await asyncio.sleep(CONFLICT_BACKOFF_S)
 
 
 async def run(ctx: JobContext) -> JobResult | Yield | Paused:

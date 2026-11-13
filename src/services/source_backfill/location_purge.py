@@ -15,7 +15,7 @@ in the window is then still caught.
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, NamedTuple
 
 from src.clients.curation_opensearch.capture_fields import LOCATION_FIELDS
 from src.config.curation_accessors import images_index
@@ -76,10 +76,20 @@ def _script(policy: str) -> dict[str, Any]:
     }
 
 
-async def purge_pass(client: AsyncOpenSearch, policy: str) -> int:
-    """One bounded `update_by_query` pass; the number of documents it changed."""
+class PassCounts(NamedTuple):
+    """What one pass did: documents changed, and documents skipped on a version conflict."""
+
+    updated: int
+    conflicts: int
+
+
+async def purge_pass(client: AsyncOpenSearch, policy: str) -> PassCounts:
+    """One bounded `update_by_query` pass. With `conflicts=proceed` a document a concurrent writer
+    changed after the snapshot is skipped and counted in `version_conflicts` instead of failing
+    the call, so a pass that only skipped is not "nothing left": the caller repeats it
+    (OpenSearch docs, update by query: https://docs.opensearch.org/latest/api-reference/document-apis/update-by-query/)."""
     if policy == 'store':
-        return 0
+        return PassCounts(0, 0)
     resp = await client.update_by_query(
         index=images_index(),
         body={'query': _query(policy), 'script': _script(policy)},
@@ -87,7 +97,7 @@ async def purge_pass(client: AsyncOpenSearch, policy: str) -> int:
         conflicts='proceed',
         refresh=True,
     )
-    return int(resp.get('updated', 0))
+    return PassCounts(int(resp.get('updated', 0)), int(resp.get('version_conflicts', 0)))
 
 
 async def settle() -> None:
@@ -95,4 +105,4 @@ async def settle() -> None:
     await asyncio.sleep(SETTLE_S)
 
 
-__all__ = ['PURGE_BATCH', 'SETTLE_S', 'purge_pass', 'settle']
+__all__ = ['PURGE_BATCH', 'SETTLE_S', 'PassCounts', 'purge_pass', 'settle']

@@ -16,18 +16,16 @@ from __future__ import annotations
 
 import json
 import os
-import string
 import subprocess  # nosec B404 - drives the harness's own compose project
 import time
-from collections.abc import Mapping
+import uuid
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
 import httpx
 import pytest
-
-from src.services.curation.keymap import reserved_hotkeys
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -465,14 +463,24 @@ def class_ids(api_client: Any) -> dict[str, int]:
     return {c['class_name']: c['class_id'] for c in resp.json()['classes']}
 
 
-def free_hotkey_letter(api_client: Any) -> str:
-    """A letter no class holds and no keymap action reserves right now. New classes take the first
-    free letter automatically, so a fixed letter is not free on a registry other tests wrote to."""
-    resp = api_client.get('/classes')
-    resp.raise_for_status()
-    blocked = {c['hotkey_letter'] for c in resp.json()['classes'] if c.get('hotkey_letter')}
-    blocked |= set(reserved_hotkeys({}))
-    return next(letter for letter in string.ascii_lowercase if letter not in blocked)
+@pytest.fixture
+def own_registry(api: Any) -> Iterator[Any]:
+    """A client for a project created for this test, so its class registry is empty.
+
+    The shared registry has every hotkey letter held after the other tests ran, so a test about
+    hotkeys cannot find a free one there and must not take one from a class it did not create."""
+    slug = f'live_hotkeys_{uuid.uuid4().hex[:8]}'
+    create_project(api, slug, 'Hotkey registry')
+    prefix = f'{API_PREFIX}/projects/{slug}'
+
+    class _Own:
+        def __getattr__(self, name: str) -> Any:
+            method = getattr(api, name)
+            return lambda path, *args, **kwargs: method(f'{prefix}{path}', *args, **kwargs)
+
+    yield _Own()
+    deleted = api.delete(f'{API_PREFIX}/projects/{slug}', params={'confirm': slug})
+    assert deleted.status_code == 202, deleted.text
 
 
 @pytest.fixture

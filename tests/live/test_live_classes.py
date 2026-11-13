@@ -22,7 +22,6 @@ from .conftest import (
     MERGE_SOURCE_CLASS,
     MERGE_TARGET_CLASS,
     crop_ids_in,
-    free_hotkey_letter,
     get_doc,
     refresh,
     request_when_free,
@@ -53,7 +52,7 @@ def test_registry_lists_the_seeded_classes_with_live_counts(
 
 
 # The registry lives in PostgreSQL and outlives a harness reseed, so a probe class is named per
-# session and its hotkey is released at the end of the rename test.
+# session.
 _PROBE = f'live_probe_{uuid.uuid4().hex[:8]}'
 
 
@@ -72,7 +71,7 @@ def test_create_class_appends_to_the_registry(api_client: Any) -> None:
     assert dup.status_code == 409, dup.text
 
 
-def test_rename_and_hotkey_update_persist(api_client: Any) -> None:
+def test_rename_persists(api_client: Any) -> None:
     classes = _classes(api_client)
     target = next(c for c in classes.values() if c['class_name'] == _PROBE)
     class_id = target['class_id']
@@ -82,21 +81,41 @@ def test_rename_and_hotkey_update_persist(api_client: Any) -> None:
     assert resp.status_code == 200, resp.text
     assert resp.json()['class_name'] == renamed
 
-    letter = free_hotkey_letter(api_client)
-    resp = api_client.put(f'/classes/{class_id}', json={'hotkey_letter': letter})
-    assert resp.status_code == 200, resp.text
-    try:
-        assert resp.json()['hotkey_letter'] == letter
+    assert _classes(api_client)[class_id]['class_name'] == renamed
 
-        # A reserved action letter must be refused rather than silently bound.
-        resp = api_client.put(
-            f'/classes/{class_id}', json={'hotkey_letter': reserved_hotkeys({})[0]}
-        )
-        assert resp.status_code == 422, resp.text
 
-        assert _classes(api_client)[class_id]['class_name'] == renamed
-    finally:
-        api_client.put(f'/classes/{class_id}', json={'hotkey_letter': ''}).raise_for_status()
+def test_hotkey_set_clear_and_refusals_in_a_registry_of_its_own(own_registry: Any) -> None:
+    def classes() -> dict[int, dict[str, Any]]:
+        resp = own_registry.get('/classes')
+        resp.raise_for_status()
+        return {c['class_id']: c for c in resp.json()['classes']}
+
+    first = own_registry.post('/classes', json={'name': 'alpha'})
+    second = own_registry.post('/classes', json={'name': 'bravo'})
+    assert first.status_code == 201, first.text
+    assert second.status_code == 201, second.text
+    first_id, second_id = first.json()['class_id'], second.json()['class_id']
+    letter = classes()[first_id]['hotkey_letter']
+    assert letter, 'a new class takes the first free letter'
+    assert classes()[second_id]['hotkey_letter'] != letter
+
+    # Release the class's own letter, read the release back, set it again, read that back.
+    cleared = own_registry.put(f'/classes/{first_id}', json={'hotkey_letter': ''})
+    assert cleared.status_code == 200, cleared.text
+    assert classes()[first_id]['hotkey_letter'] is None
+    again = own_registry.put(f'/classes/{first_id}', json={'hotkey_letter': letter})
+    assert again.status_code == 200, again.text
+    assert again.json()['hotkey_letter'] == letter
+    assert classes()[first_id]['hotkey_letter'] == letter
+
+    # A letter another class holds is a conflict; a reserved action letter is refused.
+    taken = own_registry.put(f'/classes/{second_id}', json={'hotkey_letter': letter})
+    assert taken.status_code == 409, taken.text
+    reserved = own_registry.put(
+        f'/classes/{second_id}', json={'hotkey_letter': reserved_hotkeys({})[0]}
+    )
+    assert reserved.status_code == 422, reserved.text
+    assert classes()[second_id]['hotkey_letter'] != letter
 
 
 def test_settings_put_then_get_round_trips(api_client: Any) -> None:
