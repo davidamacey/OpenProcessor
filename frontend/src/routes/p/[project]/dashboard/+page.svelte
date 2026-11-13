@@ -1,7 +1,7 @@
 <script lang="ts">
   /*
    * Pipeline dashboard route: the app's single home page. Top to bottom: the Next steps
-   * stepper (served, in loop order), four headline numbers, the clustering card beside the
+   * stepper (served, in loop order), four headline numbers, Labeled by source, the clustering card beside the
    * Data quality card, the class balance, then "Pipeline details" and "Recent labels" as
    * collapsed disclosures. Refresh is the header action; the YOLO export lives on Model >
    * Export and VLM activation in Next steps and Settings.
@@ -18,6 +18,7 @@
   import { keyboardStore } from '$stores/keyboard.svelte';
   import ClusterRunPanel from '$components/clusters/ClusterRunPanel.svelte';
   import DashboardKpis from '$components/dashboard/DashboardKpis.svelte';
+  import LabeledBySourceCard from '$components/dashboard/LabeledBySourceCard.svelte';
   import DataQualityCard from '$components/dashboard/DataQualityCard.svelte';
   import DatasetStats from '$components/DatasetStats.svelte';
   import DetectionsSummaryPanel from '$lib/components/detector/DetectionsSummaryPanel.svelte';
@@ -112,6 +113,7 @@
   {/if}
 
   <DashboardKpis stats={feed.stats} />
+  <LabeledBySourceCard stats={feed.stats} />
 
   <div class="grid gap-6 lg:grid-cols-2">
     <ClusterRunPanel primary={false} />
@@ -136,7 +138,7 @@
       >Pipeline details</summary
     >
     <div class="mt-4 space-y-6">
-      <DatasetStats {feed} />
+      <DatasetStats {feed} showLabeled={false} />
       <DetectionsSummaryPanel />
     </div>
   </details>

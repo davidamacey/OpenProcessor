@@ -32,10 +32,10 @@
     fmt,
     fmtRelative,
     formatRate,
-    labeledRowsOf,
     slotRowsOf,
     summarizeStatsError,
   } from '$lib/datasetStats';
+  import LabeledBySourceCard from '$components/dashboard/LabeledBySourceCard.svelte';
   import { formatTimestamp } from '$lib/format/date';
 
   // The slot whose `stats` capability titles this panel (its stats key,
@@ -48,8 +48,10 @@
   interface Props {
     /** The page's feed, when other panels read the same stats; one SSE connection is enough. */
     feed?: StatsFeed;
+    /** False when the page shows the Labeled-by-source card itself, above these details. */
+    showLabeled?: boolean;
   }
-  const { feed: shared }: Props = $props();
+  const { feed: shared, showLabeled = true }: Props = $props();
 
   // Created once at init: a prop that arrives later would not change which stream is live.
   const feed = untrack(() => shared) ?? createDatasetStatsFeed();
@@ -61,8 +63,6 @@
   const etaSeconds = $derived(feed.etaSeconds);
 
   const stateChips = $derived(embeddingStateChips(stats?.embedding?.by_state));
-  const labeledTotal = $derived(stats?.labeled?.total ?? 0);
-  const labeledRows = $derived(labeledRowsOf(stats));
   const slotRows = $derived(slotRowsOf(stats, statsSlot?.stats?.key));
 </script>
 
@@ -135,44 +135,9 @@
         </dl>
       </div>
 
-      <!-- Labeled breakdown -->
-      <div class="surface p-4 lg:col-span-2">
-        <header class="mb-3 flex items-center justify-between">
-          <h3 class="text-body font-semibold text-fg-2">Labeled by source</h3>
-          <span class="text-meta text-fg-3" data-testid="labeled-total"
-            >{fmt(labeledTotal)} total</span
-          >
-        </header>
-        <p class="mb-2 text-meta text-fg-3" data-testid="labeled-not-ground-truth">
-          A label is not ground truth until a human validates it. Only {fmt(
-            stats.validated,
-          )} of {fmt(stats.total_crops)} crops are validated; VLM and detector labels are suggestions.
-        </p>
-        {#if labeledRows.length === 0}
-          <p class="text-body text-fg-3">No labels yet.</p>
-        {:else}
-          <ul class="space-y-1.5">
-            {#each labeledRows as row (row.key)}
-              <li class="flex items-center gap-3 text-meta">
-                <span class="w-24 shrink-0 text-fg-2">{row.label}</span>
-                <div class="relative h-3 grow overflow-hidden rounded bg-surface-1">
-                  <div
-                    class="h-full {row.tone}"
-                    style:width="{Math.max(0.5, row.pct)}%"
-                    title="{row.pct}%"
-                  ></div>
-                </div>
-                <span class="w-20 shrink-0 text-right text-fg-2 tabular-nums">
-                  {fmt(row.count)}
-                </span>
-                <span class="w-12 shrink-0 text-right text-fg-3 tabular-nums">
-                  {row.pct.toFixed(1)}%
-                </span>
-              </li>
-            {/each}
-          </ul>
-        {/if}
-      </div>
+      {#if showLabeled}
+        <LabeledBySourceCard {stats} class="lg:col-span-2" />
+      {/if}
 
       <!-- Embedding (v0.4.0): items with and without a vector, as served. -->
       {#if stats.embedding}
