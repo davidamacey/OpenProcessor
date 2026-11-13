@@ -200,6 +200,6 @@ def test_a_mixed_cluster_warns_before_the_whole_cluster_is_labelled(stub, page, 
     page.get_by_role('combobox', name='Search classes').fill('widget')
     page.keyboard.press('Enter')
     warning = page.get_by_test_id('selection-warning')
-    expect(warning).to_contain_text('This cluster is mixed', timeout=ACTION_TIMEOUT_MS)
+    expect(warning).to_contain_text('Mixed:', timeout=ACTION_TIMEOUT_MS)
     expect(warning).to_contain_text('cup')
     expect(warning).to_contain_text('Or choose a class below to label all of them')
