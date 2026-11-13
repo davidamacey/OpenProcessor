@@ -23,7 +23,7 @@ from typing import Any
 
 from fixtures.contract import image_detail
 from harness.constants import ACTION_TIMEOUT_MS
-from harness.waits import expect_handled
+from harness.waits import expect_handled, wait_for_paint
 from playwright.sync_api import expect
 from test_prompt_packs import BODY as PACK_BODY, CLEAN, open_editor as open_pack_editor, serve_packs
 from test_region_profiles import open_editor as open_profile_editor, serve_profiles
@@ -465,7 +465,7 @@ def test_pack_test_overlay_is_bounded_and_does_not_overlap(stub, page, app_url):
     SHOT_DIR.mkdir(parents=True, exist_ok=True)
     for w in (1600, 800):
         page.set_viewport_size({'width': w, 'height': 1400})
-        page.wait_for_timeout(200)
+        wait_for_paint(page)
         assert_no_overlap(page, '[data-testid="test-result-item"]')
         panel.screenshot(path=str(SHOT_DIR / f'pack-test-{w}.png'))
 
@@ -486,7 +486,7 @@ def test_profile_test_overlay_is_bounded_and_does_not_overlap(stub, page, app_ur
     SHOT_DIR.mkdir(parents=True, exist_ok=True)
     for w in (1600, 800):
         page.set_viewport_size({'width': w, 'height': 1600})
-        page.wait_for_timeout(200)
+        wait_for_paint(page)
         # The preview and crop-frame columns sit side by side (stacked
         # narrow): neither may overlap the other.
         rects = page.evaluate(

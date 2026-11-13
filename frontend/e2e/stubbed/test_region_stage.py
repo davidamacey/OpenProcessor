@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from harness.constants import ACTION_TIMEOUT_MS
-from harness.waits import expect_handled
+from harness.waits import expect_handled, wait_for_paint
 from playwright.sync_api import expect
 from test_ingest import _base_ingest_stubs as _serve_ingest_baseline
 
@@ -48,7 +48,7 @@ def shoot(page: Any, name: str) -> None:
     original = page.viewport_size
     for w in (1600, 800):
         page.set_viewport_size({'width': w, 'height': 1400})
-        page.wait_for_timeout(200)
+        wait_for_paint(page)
         overflow = page.evaluate('() => document.documentElement.scrollWidth - window.innerWidth')
         assert overflow <= 1, f'{name}@{w}: horizontal overflow {overflow}px'
         page.get_by_test_id('region-stage-panel').screenshot(path=str(SHOT_DIR / f'{name}-{w}.png'))

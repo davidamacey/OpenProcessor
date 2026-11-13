@@ -19,6 +19,7 @@ from typing import Any
 from fixtures.image_editor import Editor
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.label_ops import stub_label_op_undo
+from harness.waits import wait_for_paint
 from playwright.sync_api import expect
 
 
@@ -41,7 +42,7 @@ def shots(page: Any, name: str) -> None:
     SCREENS.mkdir(parents=True, exist_ok=True)
     for label, size in (('1600', (1600, 1000)), ('430', (430, 1000))):
         page.set_viewport_size({'width': size[0], 'height': size[1]})
-        time.sleep(0.4)
+        wait_for_paint(page)
         page.screenshot(path=str(SCREENS / f'{name}-{label}.png'), full_page=True)
     page.set_viewport_size({'width': 1600, 'height': 1000})
 
