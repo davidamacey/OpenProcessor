@@ -36,7 +36,8 @@ NO_CHECKPOINT_STATUS = {
 
 def _open_results(page, app_url, job_id: str):
     page.goto(f'{app_url}/p/default/train')
-    page.get_by_text(job_id, exact=False).first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    # Past runs are labelled by start time (12f); the job id is the label's title.
+    page.locator(f'[data-testid="run-label"][title="{job_id}"]').wait_for(timeout=ACTION_TIMEOUT_MS)
     results_button = page.get_by_role('button', name='Results')
     results_button.wait_for(timeout=10000)
     results_button.click()
