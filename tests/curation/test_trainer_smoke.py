@@ -1,6 +1,6 @@
 """End-to-end smoke test: a *real* Ultralytics training run through the trainer.
 
-the ``trainer_protocol`` tests stub Ultralytics out, which proves the trainer's
+the ``trainer_runs`` tests stub Ultralytics out, which proves the trainer's
 orchestration but not that it can actually drive a training loop. This
 module runs the genuine thing -- ``trainer.run_training`` -> ``ultralytics`` ->
 ``best.pt`` -> ``results.csv`` -> the run state and manifest -- on a
@@ -94,7 +94,7 @@ def test_a_real_training_run_completes_end_to_end(
     from dataset_prep import read_class_remap
     from job_manifest import build_manifest
 
-    from curation.trainer_protocol._helpers import make_spec
+    from curation.trainer_runs._helpers import make_spec
 
     monkeypatch.setattr(trainer_kwargs, 'RUNS_ROOT', str(tmp_path / 'runs'))
     monkeypatch.setattr(job_spec, 'TMP_ROOT', tmp_path / 'scratch')
