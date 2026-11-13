@@ -132,6 +132,7 @@ jobs:
     timeout-minutes: 30
     env:
       OP_TEST_DATABASE_URL: postgresql://op_super:op-test-super-password@localhost:5432/postgres
+      COVERAGE_FILE: .coverage.shard-db
     services:
       postgres:
         image: postgres:18.6-trixie@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583
@@ -161,15 +162,26 @@ jobs:
           pip install --index-url https://download.pytorch.org/whl/cpu torch==2.15.0 torchvision==0.29.1
           pip install -r requirements-test.txt
 
+      # The repositories and most job and project services run only against PostgreSQL, so the
+      # coverage floor counts this tier together with the offline shards.
       - name: Run the db tier
-        run: python -m pytest tests/ -q -n 2 -m db --no-cov
+        run: python -m pytest tests/ -q -n 2 -m db --cov=src --cov=scripts --cov-report=
 
-  # Line coverage of src/ and scripts/ measured 84.95 percent in the full local environment;
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coverage-shard-db
+          path: .coverage.shard-db
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  # Line coverage of src/ and scripts/ over the offline shards plus the db tier measured 89.28
+  # percent locally (2026-11-13); the offline shards alone measured 78.45.
   # the floor sits below it because this runner installs fewer packages and so skips more
   # tests. Raise it to the measured value minus one whenever a change raises coverage.
   coverage:
     name: coverage floor (all shards)
-    needs: pytest
+    needs: [pytest, db]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
