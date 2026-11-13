@@ -61,4 +61,32 @@ describe('nextStepsStore', () => {
     expect(nextStepsStore.steps).toEqual([]);
     expect(nextStepsStore.loaded).toBe(false);
   });
+
+  it('entering the Workspace re-reads, and the default view is stale until that read lands', async () => {
+    api.getNextSteps.mockResolvedValueOnce({
+      steps: [],
+      next: null,
+      workspace_default_view: 'gallery',
+    });
+    await nextStepsStore.init();
+    expect(nextStepsStore.defaultView).toBe('gallery');
+
+    api.getNextSteps.mockResolvedValueOnce({
+      steps: [STEP],
+      next: STEP,
+      workspace_default_view: 'clusters',
+    });
+    const read = nextStepsStore.enter();
+    expect(nextStepsStore.stale).toBe(true);
+    await read;
+    expect(nextStepsStore.stale).toBe(false);
+    expect(nextStepsStore.defaultView).toBe('clusters');
+  });
+
+  it('a failed entry read is not stale for ever', async () => {
+    api.getNextSteps.mockRejectedValue(new Error('down'));
+    await nextStepsStore.enter();
+    expect(nextStepsStore.stale).toBe(false);
+    expect(nextStepsStore.defaultView).toBeNull();
+  });
 });

@@ -115,7 +115,8 @@ export class WorkspaceController {
       });
       $effect(() => {
         const served = nextStepsStore.defaultView;
-        if (this.#url.view === null && served) this.#write({ view: served }, true);
+        if (this.#url.view === null && served && !nextStepsStore.stale)
+          this.#write({ view: served }, true);
       });
     });
   }
@@ -131,6 +132,11 @@ export class WorkspaceController {
 
   get view(): ViewId {
     return this.#url.view ?? nextStepsStore.defaultView ?? 'gallery';
+  }
+
+  /** The URL names no view and this visit's served default has not landed: nothing to open yet. */
+  get viewPending(): boolean {
+    return this.#url.view === null && nextStepsStore.stale;
   }
 
   /** The kind of selection the current view makes. */
