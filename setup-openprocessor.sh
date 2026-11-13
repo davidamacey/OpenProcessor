@@ -1824,7 +1824,7 @@ _health_host() {
 
 # wait_http URL SECONDS [GREP_FIXED [CURL_FLAGS]] -- until 200 (and body contains GREP); -sS accepts any status
 wait_http() {
-    local url="$1" secs="$2" want="${3:-}" waited=0 body curlf="${4:--fsS}" cfg="${5:-}"
+    local url="$1" secs="$2" want="${3:-}" waited=0 step body curlf="${4:--fsS}" cfg="${5:-}"
     local -a extra=()
     [[ -n "$cfg" ]] && extra=(-K "$cfg")
     local cap="${OP_HEALTH_TIMEOUT:-}"
@@ -1837,8 +1837,10 @@ wait_http() {
             fi
         fi
         (( waited >= secs )) && return 1
-        sleep 5
-        waited=$((waited + 5))
+        # The last pause stops at the deadline, so OP_HEALTH_TIMEOUT=1 waits 1 s, not 5.
+        step=$(( secs - waited < 5 ? secs - waited : 5 ))
+        sleep "$step"
+        waited=$((waited + step))
     done
 }
 
