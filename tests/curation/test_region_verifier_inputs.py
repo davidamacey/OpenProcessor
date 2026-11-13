@@ -112,6 +112,7 @@ class TestVisibilityNoVerdict:
             segmenter=RegionCandidate(bbox_norm=(0.3, 0.6, 0.6, 0.75), score=0.5, source='seg'),
             reply=VlmCombinedReply(img_id='c1', region_visible=True, region_bbox_correct=True),
             visible=None,
+            until=lambda m: m['vlm'].region_visible_batch.await_count >= 2,
         )
         assert mocks['vlm'].region_visible_batch.await_count >= 2
         assert fake_os.writes == []

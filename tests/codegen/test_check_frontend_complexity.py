@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
 
 import check_frontend_complexity as guard
@@ -73,10 +74,14 @@ def test_a_stale_entry_fails_and_tighten_drops_it(scratch_repo: ScratchRepo, bas
 
 def test_the_committed_baseline_matches_the_tree() -> None:
     """The hook passes on the real tree in both modes, so ``--all-files`` and a staged run agree."""
-    assert guard.main([]) == 0
     files = [
         f'frontend/{p.relative_to(guard.REPO_ROOT / "frontend").as_posix()}'
         for p in sorted((guard.REPO_ROOT / 'frontend' / 'src').rglob('*'))
         if p.suffix in {'.js', '.ts', '.svelte'}
     ]
-    assert guard.main(files) == 0
+    # Each mode is one eslint pass over the whole tree; the two are independent subprocesses, so
+    # they run side by side.
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        default_mode, staged_mode = pool.map(guard.main, [[], files])
+    assert default_mode == 0
+    assert staged_mode == 0
