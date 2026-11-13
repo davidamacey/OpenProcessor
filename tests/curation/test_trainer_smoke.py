@@ -75,7 +75,14 @@ def _build_synthetic_export(root: Path) -> Path:
         'nc: 1\n'
         "names: ['block']\n"
     )
-    (root / 'manifest.json').write_text(json.dumps({'frozen_test_sha': 'smoke-frozen-sha'}))
+    # What the exporter writes: the export's own dataset_sha plus the frozen test hashes,
+    # and class_registry.json carrying the dense-id map promote resolves names from.
+    (root / 'manifest.json').write_text(
+        json.dumps({'dataset_sha': 'smoke-dataset-sha', 'frozen_test_sha': 'smoke-frozen-sha'})
+    )
+    (root / 'class_registry.json').write_text(
+        json.dumps({'export_id_map': {'0': 0}, 'classes': [{'class_id': 0, 'class_name': 'block'}]})
+    )
     return root
 
 
@@ -151,7 +158,9 @@ def test_a_real_training_run_completes_end_to_end(
     assert manifest is not None
     assert manifest['results']['final_state'] == 'finished'
     assert manifest['results']['checkpoint_sha256']
-    assert manifest['lineage']['dataset_sha'] == 'smoke-frozen-sha'
+    assert manifest['lineage']['dataset_sha'] == 'smoke-dataset-sha'
+    assert manifest['lineage']['frozen_test_sha'] == 'smoke-frozen-sha'
+    assert manifest['lineage']['class_remap']['names'] == ['block']
     assert manifest['lineage']['training_seed'] == 11
     assert manifest['code_versions']['ultralytics_pkg']
 
