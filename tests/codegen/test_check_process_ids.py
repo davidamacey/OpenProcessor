@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import TYPE_CHECKING
 
 import check_process_ids as guard
@@ -126,6 +128,51 @@ def test_a_syntax_error_fails_closed(
 ) -> None:
     scratch_repo.write('src/a.py', 'def broken(:\n')
     assert run(scratch_repo, baseline_file('')) == 1
+
+
+def _fresh_process() -> None:
+    """Forget the in-memory text caches, as a new hook run starts without them."""
+    guard._CACHES.clear()
+
+
+def test_the_text_cache_is_written_and_a_changed_file_is_read_again(
+    scratch_repo: ScratchRepo, baseline_file: Callable[[str], Path]
+) -> None:
+    scratch_repo.write('src/a.py', '# clean\n')
+    assert run(scratch_repo, baseline_file('')) == 0
+    cache = scratch_repo.root / '.cache' / 'codegen' / 'comment_texts.json'
+    assert 'src/a.py' in json.loads(cache.read_text(encoding='utf-8'))['files']
+
+    _fresh_process()
+    scratch_repo.write('src/a.py', '# W8.2: planted after the cache was written\n')
+    assert run(scratch_repo, baseline_file('')) == 1
+
+
+def test_a_corrupt_text_cache_is_ignored(
+    scratch_repo: ScratchRepo, baseline_file: Callable[[str], Path]
+) -> None:
+    scratch_repo.write('src/a.py', '# W8.2: planted\n')
+    cache = scratch_repo.root / '.cache' / 'codegen' / 'comment_texts.json'
+    cache.parent.mkdir(parents=True)
+    cache.write_text('{not json', encoding='utf-8')
+    assert run(scratch_repo, baseline_file('')) == 1
+    assert json.loads(cache.read_text(encoding='utf-8'))['files']['src/a.py']
+
+
+def test_a_text_cache_from_other_code_is_discarded(
+    scratch_repo: ScratchRepo, baseline_file: Callable[[str], Path]
+) -> None:
+    source = '# W8.2: planted\n'
+    scratch_repo.write('src/a.py', source)
+    cache = scratch_repo.root / '.cache' / 'codegen' / 'comment_texts.json'
+    cache.parent.mkdir(parents=True)
+    digest = hashlib.sha256(source.encode()).hexdigest()
+    cache.write_text(
+        json.dumps({'salt': 'another-version', 'files': {'src/a.py': [digest, []]}}),
+        encoding='utf-8',
+    )
+    assert run(scratch_repo, baseline_file('')) == 1
+    assert json.loads(cache.read_text(encoding='utf-8'))['salt'] != 'another-version'
 
 
 def test_the_real_repo_passes() -> None:
