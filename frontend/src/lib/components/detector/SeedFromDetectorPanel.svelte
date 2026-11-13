@@ -41,10 +41,10 @@
 
 {#if controller.available}
   <details class="surface mt-4 p-4" data-testid="seed-panel">
-    <summary class="cursor-pointer text-sm font-semibold text-fg-1">
+    <summary class="cursor-pointer text-body font-semibold text-fg-1">
       Create classes from the detector
     </summary>
-    <div class="mt-3 space-y-3 text-xs">
+    <div class="mt-3 space-y-3 text-meta">
       <p class="text-fg-2">
         Choose detector labels to turn into classes. With none chosen, every label is
         used.
@@ -97,7 +97,7 @@
             <ul class="list-disc pl-5" data-testid="seed-created">
               {#each r.created as c (c.detector_label)}
                 <li class="text-fg-1">
-                  would create <span class="font-mono">{c.name}</span> (from {c.detector_label})
+                  would create <span>{c.name}</span> (from {c.detector_label})
                 </li>
               {/each}
             </ul>
@@ -108,7 +108,7 @@
             <ul class="list-disc pl-5" data-testid="seed-skipped">
               {#each r.skipped as s (s.detector_label)}
                 <li class="text-fg-2">
-                  skipped <span class="font-mono">{s.name}</span>: {humanizeId(s.reason)}
+                  skipped <span>{s.name}</span>: {humanizeId(s.reason)}
                 </li>
               {/each}
             </ul>
@@ -117,8 +117,7 @@
             <ul class="list-disc pl-5" data-testid="seed-conflicts">
               {#each r.conflicts as c (c.class_id_in_detector)}
                 <li class="text-warn-text">
-                  conflict on <span class="font-mono">{c.detector_label}</span> (detector
-                  class
+                  conflict on <span>{c.detector_label}</span> (detector class
                   {c.class_id_in_detector}): {humanizeId(c.reason)}
                 </li>
               {/each}
@@ -138,7 +137,7 @@
     onconfirm={() => void doCreate()}
     oncancel={() => (confirming = false)}
   >
-    <p class="text-sm text-fg-2">
+    <p class="text-body text-fg-2">
       {controller.result.created.length} new classes will be added to the registry, one per
       detector label listed in the preview.
     </p>

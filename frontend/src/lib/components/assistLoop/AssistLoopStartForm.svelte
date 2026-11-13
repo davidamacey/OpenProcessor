@@ -39,7 +39,7 @@
   }}
 >
   <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-    <label class="flex flex-col gap-1 text-xs text-fg-2">
+    <label class="flex flex-col gap-1 text-meta text-fg-2">
       VLM crop budget
       <input
         class="input"
@@ -51,7 +51,7 @@
         data-testid="loop-budget"
       />
     </label>
-    <label class="flex flex-col gap-1 text-xs text-fg-2">
+    <label class="flex flex-col gap-1 text-meta text-fg-2">
       Smallest cluster to work on
       <input
         class="input"
@@ -63,7 +63,7 @@
         data-testid="loop-min-root"
       />
     </label>
-    <label class="flex flex-col gap-1 text-xs text-fg-2">
+    <label class="flex flex-col gap-1 text-meta text-fg-2">
       Homogeneity to show (theta)
       <input
         class="input"
@@ -76,7 +76,7 @@
         data-testid="loop-theta"
       />
     </label>
-    <label class="flex flex-col gap-1 text-xs text-fg-2">
+    <label class="flex flex-col gap-1 text-meta text-fg-2">
       Split depth
       <input
         class="input"
@@ -88,7 +88,7 @@
         data-testid="loop-depth"
       />
     </label>
-    <label class="flex flex-col gap-1 text-xs text-fg-2">
+    <label class="flex flex-col gap-1 text-meta text-fg-2">
       Seed
       <input
         class="input"
@@ -100,7 +100,7 @@
     </label>
   </div>
 
-  <div class="flex flex-wrap items-start gap-x-6 gap-y-3 text-xs">
+  <div class="flex flex-wrap items-start gap-x-6 gap-y-3 text-meta">
     <VlmRunPicker
       vlm={ctl.vlm}
       acknowledgeExternal={ctl.acknowledgeExternal}
@@ -140,37 +140,37 @@
   </div>
 
   <div
-    class="rounded border border-line bg-surface-1/40 p-3 text-xs"
+    class="rounded border border-line bg-surface-1/40 p-3 text-meta"
     aria-live="polite"
     data-testid="loop-plan"
   >
-    <h3 class="mb-1 text-sm font-medium text-fg-1">Dry run</h3>
+    <h3 class="mb-1 text-body font-medium text-fg-1">Dry run</h3>
     {#if ctl.planError}
       <p class="text-danger-text" data-testid="loop-plan-error">{ctl.planError}</p>
     {:else if plan}
       <dl class="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-4">
         <div>
           <dt class="text-fg-3">Clusters to work on</dt>
-          <dd class="font-mono text-fg-1" data-testid="loop-plan-roots">
+          <dd class="text-fg-1 tabular-nums" data-testid="loop-plan-roots">
             {formatCount(plan.roots)}
           </dd>
         </div>
         <div>
           <dt class="text-fg-3">Items it could label</dt>
-          <dd class="font-mono text-fg-1" data-testid="loop-plan-items">
+          <dd class="text-fg-1 tabular-nums" data-testid="loop-plan-items">
             {formatCount(plan.eligible_items)}
           </dd>
         </div>
         <div>
           <dt class="text-fg-3">Root level costs about</dt>
-          <dd class="font-mono text-fg-1" data-testid="loop-plan-crops">
+          <dd class="text-fg-1 tabular-nums" data-testid="loop-plan-crops">
             {formatCount(plan.estimated_vlm_crops_root_level)} crops,
             {formatCount(plan.estimated_vlm_requests_root_level)} requests
           </dd>
         </div>
         <div>
           <dt class="text-fg-3">Fits the budget</dt>
-          <dd class="font-mono text-fg-1" data-testid="loop-plan-fits">
+          <dd class="text-fg-1" data-testid="loop-plan-fits">
             {plan.fits_budget === null ? '—' : plan.fits_budget ? 'yes' : 'no'}
           </dd>
         </div>
@@ -198,7 +198,7 @@
                 <th scope="col" class="font-normal">Answers at 0, 1, 2, 3 dissent</th>
               </tr>
             </thead>
-            <tbody class="font-mono text-fg-1">
+            <tbody class="text-fg-1 tabular-nums">
               {#each plan.required_sample_table as row (row.n_members)}
                 <tr>
                   <td class="pr-4">{formatCount(row.n_members)}</td>
@@ -215,7 +215,7 @@
   </div>
 
   {#if ctl.actionError}
-    <p class="text-xs text-danger-text" role="alert" data-testid="loop-action-error">
+    <p class="text-meta text-danger-text" role="alert" data-testid="loop-action-error">
       {ctl.actionError}
     </p>
   {/if}
@@ -229,7 +229,7 @@
     >
       Start the loop
     </button>
-    <span class="text-xs text-fg-3">
+    <span class="text-meta text-fg-3">
       Writes machine labels (not validated, kept out of the export until reviewed). A
       rollback restores them.
     </span>

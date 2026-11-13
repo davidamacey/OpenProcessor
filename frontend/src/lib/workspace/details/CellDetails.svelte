@@ -20,8 +20,8 @@
   );
 </script>
 
-<section class="space-y-2 text-sm" data-testid="cell-details">
-  <h2 class="text-xs font-semibold tracking-wide text-fg-2 uppercase">Map cell</h2>
+<section class="space-y-2 text-body" data-testid="cell-details">
+  <h2 class="text-meta font-semibold text-fg-2">Map cell</h2>
   {#if !ctl || !cell}
     <p class="text-fg-3">Select a cell on the map to see its photos.</p>
   {:else if ctl.cellFailure}
@@ -35,13 +35,13 @@
     <p class="text-fg-3" role="status">Loading…</p>
   {:else}
     <p class="text-fg-1" data-testid="cell-summary">{ctl.summary.summary_text}</p>
-    <p class="text-xs text-fg-2">
+    <p class="text-meta text-fg-2">
       {ctl.summary.images.toLocaleString()} photo{ctl.summary.images === 1 ? '' : 's'}
       here
       {#if ctl.cards.total > CELL_CARDS}· showing the first {CELL_CARDS}{/if}
     </p>
     {#if ctl.summary.join_truncated}
-      <p class="text-xs text-warn-text">
+      <p class="text-meta text-warn-text">
         The cell holds more photos than can be counted at once; zoom in to narrow it.
       </p>
     {/if}

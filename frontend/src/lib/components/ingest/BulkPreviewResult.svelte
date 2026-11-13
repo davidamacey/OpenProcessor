@@ -41,10 +41,10 @@
 </script>
 
 <section
-  class="space-y-2 rounded border border-line p-3 text-xs"
+  class="space-y-2 rounded border border-line p-3 text-meta"
   data-testid="bulk-preview"
 >
-  <p class="font-mono break-all text-fg-2">{preview.target}</p>
+  <p class="break-all text-fg-2"><code>{preview.target}</code></p>
   {#if preview.partial && preview.stop_reason}
     <p
       class="rounded border border-warn-line px-2 py-1 text-warn-text"
@@ -54,14 +54,14 @@
       at least the figures; the source holds more.
     </p>
   {/if}
-  <p class="text-sm text-fg-1" data-testid="bulk-preview-total">
+  <p class="text-body text-fg-1" data-testid="bulk-preview-total">
     {preview.files} files · {formatBytes(preview.total_bytes)}
   </p>
   <table class="w-full max-w-sm text-fg-2">
     <tbody>
       {#each extensions as [ext, totals] (ext)}
         <tr>
-          <td class="font-mono">{ext}</td>
+          <td><code>{ext}</code></td>
           <td class="text-right">{totals.files}</td>
           <td class="text-right">{formatBytes(totals.bytes)}</td>
         </tr>
@@ -91,7 +91,7 @@
         <li>{n} {label}</li>
       {/each}
       {#each preview.unreadable_samples as path (path)}
-        <li class="font-mono break-all text-fg-2">{path}</li>
+        <li class="break-all text-fg-2"><code>{path}</code></li>
       {/each}
     </ul>
   {/if}

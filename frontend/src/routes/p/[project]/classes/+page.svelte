@@ -263,7 +263,7 @@
 
   {#if reservedConflicts.length > 0}
     <div
-      class="mb-4 rounded-md border border-warn/40 bg-warn/10 px-4 py-3 text-xs text-warn-text"
+      class="mb-4 rounded-md border border-warn/40 bg-warn/10 px-4 py-3 text-meta text-warn-text"
     >
       <strong>Reserved-hotkey conflict:</strong>
       {#each reservedConflicts as c, i (c.id)}{i > 0 ? ', ' : ''}<strong>{c.name}</strong>

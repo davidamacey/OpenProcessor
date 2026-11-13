@@ -17,7 +17,7 @@
 {#if ed.viewing}
   {@const v = ed.viewing}
   <div
-    class="flex flex-wrap items-center gap-2 rounded border border-info/40 bg-info/10 px-3 py-2 text-sm text-info-text"
+    class="flex flex-wrap items-center gap-2 rounded border border-info/40 bg-info/10 px-3 py-2 text-body text-info-text"
     data-testid="viewing-banner"
   >
     <span>Viewing revision {v.revision} (read-only)</span>

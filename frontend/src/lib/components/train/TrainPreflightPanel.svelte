@@ -18,26 +18,26 @@
 <!-- Preflight panel -->
 <section class="rounded-md border border-line bg-surface-1 p-3">
   <header class="mb-2 flex items-center gap-3">
-    <h3 class="text-caption uppercase tracking-wide text-fg-3">Preflight</h3>
+    <h3 class="text-meta text-fg-2 font-semibold">Preflight</h3>
     {#if preflighting}
       <span class="text-caption text-fg-2">checking…</span>
     {:else if preflight}
       <span
-        class="rounded-sm border px-1.5 py-0.5 text-caption font-medium uppercase tracking-wide {preflight.blocked
+        class="rounded-sm border px-1.5 py-0.5 text-caption font-medium capitalize {preflight.blocked
           ? 'border-danger/40 bg-danger/10 text-danger-text'
           : 'border-success/40 bg-success/10 text-success-text'}"
       >
         {preflight.blocked ? 'blocked' : 'ok'}
       </span>
-      <span class="text-xs text-fg-2">{preflight.summary ?? ''}</span>
+      <span class="text-meta text-fg-2">{preflight.summary ?? ''}</span>
     {/if}
   </header>
   {#if !preflight && !preflighting}
-    <p class="text-xs text-fg-3" data-testid="preflight-empty">
+    <p class="text-meta text-fg-3" data-testid="preflight-empty">
       Not checked yet. Run the preflight to check the dataset before a run.
     </p>
   {:else if preflight && preflight.checks.length === 0}
-    <p class="text-xs text-fg-3" data-testid="preflight-empty">
+    <p class="text-meta text-fg-3" data-testid="preflight-empty">
       No checks were reported for this dataset.
     </p>
   {/if}
@@ -66,21 +66,21 @@
 
 {#snippet row(c: PreflightCheck)}
   <li
-    class="flex items-start gap-2 rounded border px-2 py-1.5 text-xs {checkSeverityClass(
+    class="flex items-start gap-2 rounded border px-2 py-1.5 text-meta {checkSeverityClass(
       c.severity,
     )}"
   >
-    <span class="font-mono text-caption uppercase tracking-wide opacity-70">
+    <span class="text-caption opacity-70 capitalize">
       {c.severity}
     </span>
-    <span class="font-mono text-caption text-fg-2">{c.name}</span>
+    <code class="text-caption text-fg-2">{c.name}</code>
     <span class="grow">
       {c.message}
       {#if c.detail && Object.keys(c.detail).length > 0}
         <details class="mt-1">
           <summary class="cursor-pointer text-caption text-fg-3">detail</summary>
           <pre
-            class="mt-1 font-mono text-caption break-all whitespace-pre-wrap text-fg-2">{JSON.stringify(
+            class="mt-1 text-caption break-all whitespace-pre-wrap text-fg-2">{JSON.stringify(
               c.detail,
               null,
               2,

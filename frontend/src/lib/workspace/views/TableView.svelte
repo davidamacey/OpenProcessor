@@ -169,7 +169,7 @@
 <div class="flex min-h-0 flex-1 flex-col" data-testid="table-view">
   <h1 class="sr-only">Table</h1>
   <BulkBar {ws} onapplied={() => void ctl.reload()} />
-  <div class="flex items-center gap-3 px-4 pt-3 text-xs text-fg-2">
+  <div class="flex items-center gap-3 px-4 pt-3 text-meta text-fg-2">
     <div role="group" aria-label="Rows" class="flex gap-1">
       {#each ['detections', 'images'] as const as kind (kind)}
         <button

@@ -93,10 +93,10 @@
 
 <div class="space-y-3" data-testid="model-picker">
   <div>
-    <p class="text-caption uppercase tracking-wide text-fg-3">Trained runs</p>
+    <p class="text-meta text-fg-2 font-semibold">Trained runs</p>
     {#each trained as t (t.run_id)}
       <div
-        class="rounded px-1 py-1 text-xs hover:bg-surface-2/50"
+        class="rounded px-1 py-1 text-meta hover:bg-surface-2/50"
         data-testid="run-row"
         data-run-id={t.run_id}
       >
@@ -106,7 +106,7 @@
             checked={selectedRuns.includes(t.run_id)}
             onchange={(e) => onToggleRun(t.run_id, e.currentTarget.checked)}
           />
-          <span class="font-mono text-fg-1">{t.display_name}</span>
+          <span class="text-fg-1">{t.display_name}</span>
           {#if t.model_family || t.model_size}
             <span class="rounded bg-accent-soft px-1 text-caption text-accent-text"
               >{t.model_family ?? ''}{t.model_size ?? ''}</span
@@ -130,7 +130,7 @@
         {#each selectedDatasets as dsId (dsId)}
           {@const f = facts[dsId]?.[t.run_id]}
           <div class="ml-6 text-caption text-fg-3" data-testid="run-facts">
-            <span class="font-mono">{datasetName(dsId)}</span>:
+            <span>{datasetName(dsId)}</span>:
             {#if facts[dsId] === undefined}
               loading…
             {:else if !f}
@@ -150,15 +150,15 @@
         {/each}
       </div>
     {:else}
-      <p class="px-1 text-xs text-fg-3">No finished training run with a checkpoint.</p>
+      <p class="px-1 text-meta text-fg-3">No finished training run with a checkpoint.</p>
     {/each}
   </div>
 
   <div>
-    <p class="text-caption uppercase tracking-wide text-fg-3">Baselines</p>
+    <p class="text-meta text-fg-2 font-semibold">Baselines</p>
     {#each baselines as b (b.name)}
       <label
-        class="flex items-center gap-1.5 rounded px-1 py-1 text-xs hover:bg-surface-2/50"
+        class="flex items-center gap-1.5 rounded px-1 py-1 text-meta hover:bg-surface-2/50"
         data-testid="baseline-row"
       >
         <input
@@ -166,23 +166,23 @@
           checked={selectedBaselines.includes(b.name)}
           onchange={(e) => onToggleBaseline(b.name, e.currentTarget.checked)}
         />
-        <span class="font-mono text-fg-1">{b.name}</span>
+        <code class="text-fg-1">{b.name}</code>
         <span class="rounded bg-surface-2 px-1 text-caption text-fg-2">{b.backend}</span>
         {#if b.training_data}
           <span class="text-caption text-fg-3">trained on {b.training_data}</span>
         {/if}
       </label>
     {:else}
-      <p class="px-1 text-xs text-fg-3">This profile registers no baselines.</p>
+      <p class="px-1 text-meta text-fg-3">This profile registers no baselines.</p>
     {/each}
   </div>
 
   {#if customRefs.length}
     <div>
-      <p class="text-caption uppercase tracking-wide text-fg-3">Custom</p>
+      <p class="text-meta text-fg-2 font-semibold">Custom</p>
       {#each customRefs as c, i (i)}
-        <div class="flex items-center gap-1.5 px-1 py-1 text-xs">
-          <span class="font-mono text-fg-1">{c.display_name ?? c.name}</span>
+        <div class="flex items-center gap-1.5 px-1 py-1 text-meta">
+          <span class="text-fg-1">{c.display_name ?? c.name}</span>
           <span class="rounded bg-surface-2 px-1 text-caption text-fg-2">{c.backend}</span
           >
           <button
@@ -195,7 +195,7 @@
     </div>
   {/if}
 
-  <details class="rounded border border-line px-2 py-1 text-xs">
+  <details class="rounded border border-line px-2 py-1 text-meta">
     <summary class="cursor-pointer text-fg-2">Add a custom model</summary>
     <div class="mt-2 grid grid-cols-2 gap-2">
       <label class="flex flex-col gap-0.5"

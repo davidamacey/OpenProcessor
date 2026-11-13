@@ -23,11 +23,11 @@
 {#if datasetsAvailability.available === true && datasetsAvailability.formats}
   {@render children(datasetsAvailability.formats)}
 {:else if datasetsAvailability.available === false}
-  <p class="text-sm text-fg-2" data-testid="datasets-unavailable">
+  <p class="text-body text-fg-2" data-testid="datasets-unavailable">
     Dataset import isn't available on this backend.
   </p>
 {:else if datasetsAvailability.error}
-  <div class="space-y-2 text-sm">
+  <div class="space-y-2 text-body">
     <p class="text-danger-text">
       Could not load the dataset formats: {datasetsAvailability.error}
     </p>
@@ -38,5 +38,5 @@
     >
   </div>
 {:else}
-  <p class="text-sm text-fg-3">Loading…</p>
+  <p class="text-body text-fg-3">Loading…</p>
 {/if}

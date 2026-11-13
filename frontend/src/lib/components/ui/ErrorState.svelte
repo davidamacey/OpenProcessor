@@ -49,7 +49,7 @@
   {/if}
   {#if shownId}
     <p class="text-meta text-fg-2">
-      Request id <code class="font-mono text-fg-1" data-testid="error-state-request-id"
+      Request id <code class="text-fg-1" data-testid="error-state-request-id"
         >{shownId}</code
       >
     </p>

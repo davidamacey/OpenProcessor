@@ -133,9 +133,9 @@
 
 <div class="relative flex h-full w-full flex-col {className}" data-align={align}>
   {#if loading && !context}
-    <p class="text-xs text-fg-3">Loading…</p>
+    <p class="text-meta text-fg-3">Loading…</p>
   {:else if error}
-    <p class="text-xs text-danger-text">Source image unavailable: {error}</p>
+    <p class="text-meta text-danger-text">Source image unavailable: {error}</p>
   {:else if sourceMissing}
     <div class="relative h-full min-h-40 w-full">
       <SourceMissingBadge missing={sourceMissing} />

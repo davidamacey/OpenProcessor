@@ -56,18 +56,18 @@
   onconfirm={() => onconfirm(name, description, fromProject || null)}
   {oncancel}
 >
-  <label class="flex flex-col gap-1 text-xs text-fg-2">
+  <label class="flex flex-col gap-1 text-meta text-fg-2">
     {nameLabel}
     <input class="input input-sm font-mono" bind:value={name} data-testid="clone-name" />
   </label>
   {#if withDescription}
-    <label class="flex flex-col gap-1 text-xs text-fg-2">
+    <label class="flex flex-col gap-1 text-meta text-fg-2">
       Description (optional)
       <input class="input input-sm" bind:value={description} />
     </label>
   {/if}
   {#if offerProjects && otherProjects.length > 0}
-    <label class="flex flex-col gap-1 text-xs text-fg-2">
+    <label class="flex flex-col gap-1 text-meta text-fg-2">
       Copy from another project (optional)
       <select
         class="input input-sm"

@@ -45,8 +45,8 @@
 
 <div class="space-y-4" data-testid="ingest-policy-form">
   <section class="surface space-y-3 p-4">
-    <h2 class="text-sm font-semibold">Embedding</h2>
-    <label class="flex flex-col gap-1 text-xs">
+    <h2 class="text-body font-semibold">Embedding</h2>
+    <label class="flex flex-col gap-1 text-meta">
       <span class="text-fg-2">Mode</span>
       <select
         class="input w-48"
@@ -68,7 +68,7 @@
         value={embedding.classes ?? []}
         onchange={(next) => setEmbedding({ classes: next })}
       />
-      <div class="flex flex-wrap gap-3 text-xs">
+      <div class="flex flex-wrap gap-3 text-meta">
         <label class="flex flex-col gap-1">
           <span class="text-fg-2">Min confidence</span>
           <input
@@ -106,8 +106,8 @@
   </section>
 
   <section class="surface space-y-2 p-4">
-    <h2 class="text-sm font-semibold">Clustering</h2>
-    <label class="flex items-center gap-2 text-xs">
+    <h2 class="text-body font-semibold">Clustering</h2>
+    <label class="flex items-center gap-2 text-meta">
       <input
         type="checkbox"
         data-testid="policy-clustering-automatic"
@@ -116,18 +116,18 @@
       />
       <span class="text-fg-1">Cluster automatically</span>
     </label>
-    <p class="text-xs text-fg-3">
+    <p class="text-meta text-fg-3">
       Off: new items are not placed in clusters, and the refresh and idle retrains skip
       this project. Cluster when you ask.
     </p>
   </section>
 
   <details class="surface p-4" data-testid="policy-detect-section">
-    <summary class="cursor-pointer text-sm font-semibold">
+    <summary class="cursor-pointer text-body font-semibold">
       Detect filter (advanced)
     </summary>
     <div class="mt-3 space-y-3">
-      <label class="flex items-center gap-2 text-xs">
+      <label class="flex items-center gap-2 text-meta">
         <input
           type="checkbox"
           data-testid="policy-limit-classes"
@@ -150,7 +150,7 @@
         value={detect.exclude_classes ?? []}
         onchange={(next) => setDetect({ exclude_classes: next })}
       />
-      <div class="flex flex-wrap gap-3 text-xs">
+      <div class="flex flex-wrap gap-3 text-meta">
         <label class="flex flex-col gap-1">
           <span class="text-fg-2">Min confidence</span>
           <input
@@ -182,7 +182,7 @@
           />
         </label>
       </div>
-      <label class="flex flex-col gap-1 text-xs">
+      <label class="flex flex-col gap-1 text-meta">
         <span class="text-fg-2">Class resolution</span>
         <select
           class="input w-48"

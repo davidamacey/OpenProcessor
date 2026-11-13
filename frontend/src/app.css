@@ -92,6 +92,15 @@
   --text-h1--line-height: 1.75rem;
   --text-kpi: 1.75rem;
   --text-kpi--line-height: 2rem;
+
+  /* Type families, both bundled (Fontsource, OFL-1.1) so a LAN-only deployment needs no CDN.
+     `cv11` and `ss01` are Inter's single-storey a and open digits. Tailwind's preflight reads
+     the feature-settings token for `html`. Mono is for code, ids, hashes and paths only. */
+  --font-sans: 'Inter Variable', system-ui, 'Segoe UI', 'Noto Sans', sans-serif;
+  --font-sans--font-feature-settings: 'cv11', 'ss01';
+  --font-mono:
+    'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, Consolas,
+    'DejaVu Sans Mono', monospace;
 }
 
 :root {
@@ -125,9 +134,7 @@ html,
 body {
   background-color: var(--color-surface-0);
   color: var(--color-fg-1);
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
-  font-feature-settings: 'cv11', 'ss01';
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -139,6 +146,11 @@ body {
 @layer base {
   * {
     border-color: var(--color-line);
+  }
+
+  code {
+    font-family: var(--font-mono);
+    font-size: 0.92em;
   }
 }
 
@@ -382,6 +394,13 @@ button {
     opacity: 0.6;
     cursor: not-allowed;
   }
+  /* An interactive chip is a 20px target, under WCAG 2.5.8's 24px: the margin keeps its
+     neighbours at least 4px away, which meets that criterion's spacing exception. */
+  button.chip,
+  a.chip,
+  summary.chip {
+    margin: 0.125rem;
+  }
   /* Chip tones (ui/Chip.svelte `tone`). */
   .chip-accent {
     background-color: var(--color-accent-soft);
@@ -422,7 +441,7 @@ button {
        contained a <kbd> hint taller than its kbd-less siblings in the same
        row (32px -> 38px). Matches the xs control tier's line-height. */
     line-height: 0.75rem;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: 0.75rem;
     background-color: var(--color-surface-3);
     border: 1px solid var(--color-line-strong);

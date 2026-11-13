@@ -54,4 +54,37 @@ describe('Tabs in a page', () => {
     list.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
     expect(onselect).toHaveBeenLastCalledWith('b');
   });
+
+  it('marks the active tab for the strip to scroll into view', () => {
+    const el = mountUi(Tabs, { items: inPage, value: 'b', label: 'Sections' });
+    const tabs = el.querySelectorAll<HTMLElement>('[role="tab"]');
+    expect(tabs[0]!.getAttribute('data-active')).toBeNull();
+    expect(tabs[1]!.getAttribute('data-active')).toBe('true');
+  });
+});
+
+describe('Tabs on a narrow screen', () => {
+  const widths = { clientWidth: 100, scrollWidth: 300 };
+  const stub = (name: 'clientWidth' | 'scrollWidth') =>
+    Object.defineProperty(HTMLElement.prototype, name, {
+      configurable: true,
+      get: () => widths[name],
+    });
+  it('show a "more" button when tabs are cut off, for both tab kinds', () => {
+    stub('clientWidth');
+    stub('scrollWidth');
+    try {
+      for (const items of [route, inPage]) {
+        const el = mountUi(Tabs, { items, value: items[0]!.id, label: 'Sections' });
+        flushSync();
+        expect(
+          el.querySelector('[data-testid="tabs-strip-more-right"]'),
+          items === route ? 'route tabs' : 'in-page tabs',
+        ).not.toBeNull();
+      }
+    } finally {
+      Reflect.deleteProperty(HTMLElement.prototype, 'clientWidth');
+      Reflect.deleteProperty(HTMLElement.prototype, 'scrollWidth');
+    }
+  });
 });

@@ -90,24 +90,24 @@
 {#snippet classRow(row: ExportRow)}
   <tr class="border-b border-line hover:bg-surface-1/40">
     <td class="px-3 py-1.5 text-fg-1">{row.class_name}</td>
-    <td class="px-3 py-1.5 font-mono text-xs text-fg-3">{row.class_id}</td>
-    <td class="px-3 py-1.5 text-right font-mono text-fg-2">
+    <td class="px-3 py-1.5 text-meta text-fg-3"><code>{row.class_id}</code></td>
+    <td class="px-3 py-1.5 text-right text-fg-2 tabular-nums">
       {row.total.toLocaleString()}
     </td>
-    <td class="px-3 py-1.5 text-right font-mono text-fg-2">
+    <td class="px-3 py-1.5 text-right text-fg-2 tabular-nums">
       {row.validated.toLocaleString()}
     </td>
-    <td class="px-3 py-1.5 text-right font-mono text-fg-1">
+    <td class="px-3 py-1.5 text-right text-fg-1 tabular-nums">
       {row.trainable.toLocaleString()}
     </td>
-    <td class="px-3 py-1.5 text-right font-mono text-fg-2">
+    <td class="px-3 py-1.5 text-right text-fg-2 tabular-nums">
       {row.aug_target.toLocaleString()}
     </td>
     <td class="px-3 py-1.5 text-right">
       <span
-        class="rounded-md border px-1.5 py-0.5 font-mono text-xs {gapClass(
+        class="rounded-md border px-1.5 py-0.5 text-meta {gapClass(
           row.trainableGap,
-        )}"
+        )} tabular-nums"
         title={gapCellTitle(row.trainableGap, blockBelow)}
       >
         {row.trainableGap > 0 ? '+' : ''}{row.trainableGap.toLocaleString()}
@@ -115,21 +115,19 @@
     </td>
     <td class="px-3 py-1.5 text-right">
       <span
-        class="rounded-md border px-1.5 py-0.5 font-mono text-xs {testBadge(
+        class="rounded-md border px-1.5 py-0.5 text-meta {testBadge(
           row.testDeficient,
-        )}"
+        )} tabular-nums"
       >
         {row.test_count}
       </span>
     </td>
     <td class="px-3 py-1.5 text-right">
       {#if row.adequacy == null}
-        <span class="font-mono text-xs text-fg-3">—</span>
+        <span class="text-meta text-fg-3">—</span>
       {:else}
         <span
-          class="rounded-md border px-1.5 py-0.5 font-mono text-xs {adequacyClass(
-            row.adequacy,
-          )}"
+          class="rounded-md border px-1.5 py-0.5 text-meta {adequacyClass(row.adequacy)}"
         >
           {row.adequacy}
         </span>
@@ -141,17 +139,17 @@
 <!-- Dataset table -->
 <section class="surface max-h-[70vh] shrink-0 overflow-auto">
   {#if loading && rows.length === 0}
-    <div class="p-6 text-sm text-fg-3">Loading dataset stats…</div>
+    <div class="p-6 text-body text-fg-3">Loading dataset stats…</div>
   {:else if error}
-    <div class="p-6 text-sm text-danger-text">{error}</div>
+    <div class="p-6 text-body text-danger-text">{error}</div>
   {:else if rows.length === 0}
-    <div class="p-6 text-sm text-fg-3">
+    <div class="p-6 text-body text-fg-3">
       No classes in this project yet. Add them on the Classes page.
     </div>
   {:else}
-    <table class="w-full text-sm">
+    <table class="w-full text-body">
       <thead
-        class="sticky top-0 z-10 border-b border-line bg-surface-0 text-left text-xs uppercase text-fg-2"
+        class="sticky top-0 z-10 border-b border-line bg-surface-0 text-left text-meta text-fg-2 font-medium"
       >
         <tr>
           {@render header('class_name', 'Class', '')}
@@ -201,7 +199,7 @@
             <td colspan="9" class="px-3 py-1.5">
               <button
                 type="button"
-                class="text-xs text-fg-2 hover:text-fg-1"
+                class="text-meta text-fg-2 hover:text-fg-1"
                 aria-expanded={showEmptyClasses}
                 data-testid="export-empty-classes-toggle"
                 onclick={() => (showEmptyClasses = !showEmptyClasses)}

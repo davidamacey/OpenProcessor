@@ -14,17 +14,19 @@
 </script>
 
 {#if ed.revisions}
-  <section class="surface flex flex-col gap-2 p-4 text-sm" aria-label="Revisions">
-    <h2 class="text-sm font-semibold">Revisions</h2>
-    {#if ed.revisionError}<p class="text-xs text-danger-text">{ed.revisionError}</p>{/if}
+  <section class="surface flex flex-col gap-2 p-4 text-body" aria-label="Revisions">
+    <h2 class="text-body font-semibold">Revisions</h2>
+    {#if ed.revisionError}<p class="text-meta text-danger-text">
+        {ed.revisionError}
+      </p>{/if}
     <ul class="space-y-1" data-testid="revisions">
       {#each ed.revisions as r (r.revision)}
         <li
-          class="flex flex-wrap items-center gap-2 text-xs"
+          class="flex flex-wrap items-center gap-2 text-meta"
           data-testid="revision-row"
           data-revision={r.revision}
         >
-          <span class="font-mono">r{r.revision}</span>
+          <span class="tabular-nums">r{r.revision}</span>
           <span class="text-fg-3" title={r.saved_at}>{formatTimestamp(r.saved_at)}</span>
           {#if r.revision === ed.doc?.revision}<span class="text-fg-2">latest</span>{/if}
           {#if ed.doc?.active && r.revision === ed.doc.active_revision}<span
@@ -41,7 +43,7 @@
             <span class="w-full text-fg-2">{r.description}</span>
           {/if}
           {#if r.cloned_from}
-            <span class="w-full font-mono text-fg-3">cloned from {r.cloned_from}</span>
+            <span class="w-full text-fg-3">cloned from <code>{r.cloned_from}</code></span>
           {/if}
         </li>
       {/each}

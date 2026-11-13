@@ -33,17 +33,17 @@
 </script>
 
 <section
-  class="space-y-2 rounded border border-line bg-surface-1/40 p-3 text-sm"
+  class="space-y-2 rounded border border-line bg-surface-1/40 p-3 text-body"
   data-testid="ingest-detector-card"
 >
   <h2 class="font-medium text-fg-1">Detector</h2>
   {#if detector === null}
     <p class="text-fg-2">No detector reported.</p>
   {:else}
-    <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+    <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-meta">
       <dt class="text-fg-3">Model</dt>
-      <dd class="font-mono text-fg-1">
-        {detector.model} (version {detector.version})
+      <dd class="text-fg-1">
+        <code>{detector.model}</code> (version {detector.version})
       </dd>
       <dt class="text-fg-3">Input size</dt>
       <dd class="text-fg-1">{detector.input_size}</dd>
@@ -58,7 +58,7 @@
       <dt class="text-fg-3">Confidence floor applies</dt>
       <dd class="text-fg-1">{detector.confidence_floor_applies ? 'yes' : 'no'}</dd>
     </dl>
-    <details class="text-xs">
+    <details class="text-meta">
       <summary class="cursor-pointer text-fg-2">{detector.n_labels} labels</summary>
       <table class="mt-2 w-full text-left">
         <thead class="text-fg-3">
@@ -67,9 +67,9 @@
         <tbody>
           {#each detector.labels as l (l.class_id)}
             <tr class="border-t border-line">
-              <td class="pr-3 font-mono text-fg-2">{l.class_id}</td>
+              <td class="pr-3 text-fg-2"><code>{l.class_id}</code></td>
               <td class="pr-3 text-fg-1">{l.name}</td>
-              <td class="font-mono text-fg-2">{l.slug}</td>
+              <td class="text-fg-2"><code>{l.slug}</code></td>
             </tr>
           {/each}
         </tbody>
@@ -77,7 +77,7 @@
     </details>
   {/if}
   {#if policy}
-    <p class="text-xs text-fg-2" data-testid="detector-policy-summary">
+    <p class="text-meta text-fg-2" data-testid="detector-policy-summary">
       Embedding: {policy.embedding?.mode ?? 'all'}{#if detectFacts.length > 0}; detect
         filter: {detectFacts.join(', ')}{/if}.
       <a

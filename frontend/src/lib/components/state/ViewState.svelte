@@ -36,7 +36,7 @@
   </div>
 {:else}
   <div
-    class="flex flex-col items-center gap-3 p-8 text-center text-sm"
+    class="flex flex-col items-center gap-3 p-8 text-center text-body"
     role={status === 'error' ? 'alert' : 'status'}
     data-testid="view-state-{status}"
   >

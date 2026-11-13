@@ -54,17 +54,17 @@
 </script>
 
 <section
-  class="surface flex flex-col gap-3 p-4 text-sm"
+  class="surface flex flex-col gap-3 p-4 text-body"
   data-testid="profile-test-panel"
   aria-label="Test on a crop"
 >
-  <h2 class="text-base font-semibold">Test on a crop</h2>
-  <p class="text-xs text-fg-2">
+  <h2 class="text-title font-semibold">Test on a crop</h2>
+  <p class="text-meta text-fg-2">
     Runs this profile's detection on one stored crop and shows every candidate it found
     and what the selection kept. Nothing is written.
   </p>
   <div class="grid gap-2 sm:grid-cols-2">
-    <label class="flex flex-col gap-1 text-xs text-fg-2 sm:col-span-2">
+    <label class="flex flex-col gap-1 text-meta text-fg-2 sm:col-span-2">
       Crop id (from review or browse)
       <input
         class="input input-sm font-mono {t.missingCropIds.length > 0
@@ -78,14 +78,14 @@
       {#if t.missingCropIds.length > 0}
         <span class="text-danger-text" data-testid="test-missing-ids">
           Not found:
-          {#each t.missingCropIds as id, i (id)}<code class="font-mono">{id}</code>{i <
+          {#each t.missingCropIds as id, i (id)}<code>{id}</code>{i <
             t.missingCropIds.length - 1
               ? ', '
               : ''}{/each}
         </span>
       {/if}
     </label>
-    <label class="flex flex-col gap-1 text-xs text-fg-2">
+    <label class="flex flex-col gap-1 text-meta text-fg-2">
       Profile version
       <select class="select select-sm" bind:value={t.source} data-testid="test-source">
         {#if !savedOnly}<option value="draft">Unsaved draft</option>{/if}
@@ -94,7 +94,7 @@
         >
       </select>
     </label>
-    <label class="flex flex-col gap-1 text-xs text-fg-2">
+    <label class="flex flex-col gap-1 text-meta text-fg-2">
       Segmenter prompt (optional, replaces the profile's)
       <input
         class="input input-sm"
@@ -102,7 +102,7 @@
         data-testid="test-segmenter-prompt"
       />
     </label>
-    <label class="flex items-center gap-2 text-xs text-fg-2 sm:col-span-2">
+    <label class="flex items-center gap-2 text-meta text-fg-2 sm:col-span-2">
       <input type="checkbox" bind:checked={t.verify} data-testid="test-verify" />
       Verify with the VLM (uses the active prompt pack)
     </label>
@@ -120,9 +120,9 @@
   </div>
   <TestRunOutcome {t} onrun={run}>
     {#snippet result(r)}
-      <p class="text-xs">
+      <p class="text-meta">
         <span class="text-fg-3">Profile</span>
-        <span class="font-mono" data-testid="test-profile-ref">{refText(r.profile)}</span>
+        <code data-testid="test-profile-ref">{refText(r.profile)}</code>
       </p>
       {#if !r.testable}
         <p class="text-warn-text" data-testid="test-not-testable">
@@ -139,7 +139,7 @@
       <ProfileTestLegs legs={r.legs} />
 
       <div>
-        <h3 class="mb-1 text-xs font-semibold text-fg-2">
+        <h3 class="mb-1 text-meta font-semibold text-fg-2">
           {PREVIEW_HEADINGS[r.preview_basis]}
         </h3>
         <div class="grid gap-3 lg:grid-cols-[minmax(0,36rem)_auto] lg:justify-start">
@@ -168,14 +168,14 @@
           class="flex flex-col gap-2 rounded border border-line p-3"
           data-testid="test-verify-block"
         >
-          <h3 class="text-xs font-semibold text-fg-2">VLM verification</h3>
+          <h3 class="text-meta font-semibold text-fg-2">VLM verification</h3>
           <TestRefs
             pack={v.pack}
             packLabel="Prompt pack"
             vlm={v.vlm}
             latencyMs={v.latency_ms}
           />
-          <p class="text-xs" data-testid="test-parse-status">
+          <p class="text-meta" data-testid="test-parse-status">
             {#if v.parse_ok}
               <span class="rounded border border-success/40 px-1.5 text-success-text"
                 >parsed</span
@@ -189,7 +189,7 @@
             {/if}
           </p>
           <details>
-            <summary class="cursor-pointer text-xs text-fg-2">Prompt sent</summary>
+            <summary class="cursor-pointer text-meta text-fg-2">Prompt sent</summary>
             <p class="mt-1 text-caption text-fg-3">System</p>
             <pre
               class="max-h-60 overflow-auto rounded bg-surface-1 p-2 text-caption whitespace-pre-wrap"
@@ -200,14 +200,14 @@
               data-testid="test-prompt-user">{v.prompt.user_text ?? ''}</pre>
           </details>
           <div>
-            <p class="text-xs text-fg-3">Raw reply</p>
+            <p class="text-meta text-fg-3">Raw reply</p>
             <pre
               class="max-h-60 overflow-auto rounded bg-surface-1 p-2 text-caption whitespace-pre-wrap"
               data-testid="test-raw-reply">{v.raw_reply ?? ''}</pre>
           </div>
           {#if v.reasoning}
             <div>
-              <p class="text-xs text-fg-3">Reasoning</p>
+              <p class="text-meta text-fg-3">Reasoning</p>
               <pre
                 class="max-h-40 overflow-auto rounded bg-surface-1 p-2 text-caption whitespace-pre-wrap">{v.reasoning}</pre>
             </div>

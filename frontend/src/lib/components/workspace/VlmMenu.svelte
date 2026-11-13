@@ -74,13 +74,13 @@
         Assist on {opener.title.toLowerCase()}…
       </button>
       {#if !active}
-        <span class="text-xs text-fg-2" data-testid="vlm-menu-off"
+        <span class="text-meta text-fg-2" data-testid="vlm-menu-off"
           >Assist and the loop need an active VLM.</span
         >
       {/if}
       <span class="grow"></span>
       <a
-        class="text-xs text-fg-2 underline"
+        class="text-meta text-fg-2 underline"
         data-testid="vlm-menu-models"
         href={resolve(projectHref('/settings/models'))}
         >{active ? 'Models settings' : 'Activate a VLM in Models settings'}</a

@@ -36,9 +36,9 @@
 </script>
 
 <div class="space-y-1" data-testid="class-name-picker">
-  <p class="text-xs text-fg-2">{label}</p>
+  <p class="text-meta text-fg-2">{label}</p>
   {#if options.length > 0}
-    <div class="flex max-h-32 flex-wrap gap-x-3 gap-y-1 overflow-y-auto text-xs">
+    <div class="flex max-h-32 flex-wrap gap-x-3 gap-y-1 overflow-y-auto text-meta">
       {#each options as name, i (i)}
         <label class="flex items-center gap-1">
           <input
@@ -65,7 +65,7 @@
   {/if}
   <div class="flex gap-1">
     <input
-      class="input w-48 text-xs"
+      class="input w-48 text-meta"
       placeholder="Another class name"
       bind:value={extra}
       onkeydown={(e) => {

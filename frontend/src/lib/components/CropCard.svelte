@@ -278,7 +278,7 @@
 
     {#if noSlot}
       <span
-        class="pointer-events-none absolute top-1 left-1 max-w-[40%] truncate rounded-sm border border-fg-3/60 bg-surface-3/70 px-1 py-0.5 font-mono text-caption text-fg-1"
+        class="pointer-events-none absolute top-1 left-1 max-w-[40%] truncate rounded-sm border border-fg-3/60 bg-surface-3/70 px-1 py-0.5 text-caption text-fg-1"
         title="{activeSlot?.label.title ??
           'Slot'} marked as not visible by a human reviewer"
       >
@@ -307,7 +307,7 @@
         ></div>
       {/each}
       <span
-        class="pointer-events-none absolute top-1 left-1 max-w-[40%] truncate rounded-sm border border-accent/60 bg-accent/30 px-1 py-0.5 font-mono text-caption text-white"
+        class="pointer-events-none absolute top-1 left-1 max-w-[40%] truncate rounded-sm border border-accent/60 bg-accent/30 px-1 py-0.5 text-caption text-white"
       >
         {activeSlot?.label.singular ?? 'box'}
       </span>
@@ -315,7 +315,7 @@
 
     {#if conf}
       <span
-        class="absolute right-1 bottom-1 rounded-sm bg-black/60 px-1.5 py-0.5 font-mono text-caption text-white"
+        class="absolute right-1 bottom-1 rounded-sm bg-black/60 px-1.5 py-0.5 text-caption text-white tabular-nums"
       >
         {conf}
       </span>
@@ -324,7 +324,7 @@
     {#if rankClarityLabel}
       <span
         data-testid="rank-clarity-chip"
-        class="absolute bottom-1 left-1 rounded-sm bg-black/60 px-1.5 py-0.5 font-mono text-caption text-fg-1"
+        class="absolute bottom-1 left-1 rounded-sm bg-black/60 px-1.5 py-0.5 text-caption text-fg-1"
         title="Size rank among the objects in its photo, and how sharp it is"
       >
         {rankClarityLabel}
@@ -425,7 +425,7 @@
     {/each}
     {#if hasClass}
       <span
-        class="shrink-0 rounded-sm border px-1 py-0.5 font-mono text-caption font-medium {badge.cls}"
+        class="shrink-0 rounded-sm border px-1 py-0.5 text-caption font-medium {badge.cls}"
         title="Label source: {badge.text.replace(/ ·$/, '')}{badge.unvalidated
           ? ' — not yet validated'
           : ''}"
@@ -436,7 +436,7 @@
           : ''}
       </span>
       <span
-        class="min-w-0 grow truncate text-xs text-fg-1"
+        class="min-w-0 grow truncate text-meta text-fg-1"
         title={crop.class_name ?? ''}
         data-testid="class-name"
       >
@@ -444,7 +444,7 @@
       </span>
     {:else}
       <span
-        class="min-w-0 grow truncate text-xs text-warn-text/90"
+        class="min-w-0 grow truncate text-meta text-warn-text/90"
         data-testid="class-name"
       >
         Unlabeled
@@ -452,7 +452,7 @@
     {/if}
     {#if hasClass && crop.class_confidence != null}
       <span
-        class="shrink-0 font-mono text-caption text-fg-3"
+        class="shrink-0 text-caption text-fg-3 tabular-nums"
         title="{crop.class_confidence_source === 'vlm'
           ? 'VLM'
           : crop.class_confidence_source === 'model'
@@ -483,7 +483,9 @@
   {/if}
 
   {#if crop.vlm_suggested_class_id != null && !crop.class_validated}
-    <div class="flex items-center gap-1 border-t border-line bg-warn/5 px-2 py-1 text-xs">
+    <div
+      class="flex items-center gap-1 border-t border-line bg-warn/5 px-2 py-1 text-meta"
+    >
       <span
         class="grow truncate text-warn-text"
         title={crop.vlm_suggested_class_name ?? ''}
@@ -518,7 +520,7 @@
     </div>
   {:else if crop.vlm_suggested_class_name && !crop.class_validated}
     <div
-      class="border-t border-line bg-warn/5 px-2 py-1 text-xs text-warn-text"
+      class="border-t border-line bg-warn/5 px-2 py-1 text-meta text-warn-text"
       title="The VLM proposed a class that isn't in the registry yet"
     >
       VLM suggests new class: {crop.vlm_suggested_class_name}
@@ -574,7 +576,7 @@
     {/if}
     <button
       type="button"
-      class="absolute -top-3 -right-3 rounded-full border border-line-strong bg-surface-1 px-2 py-1 text-sm text-white"
+      class="absolute -top-3 -right-3 rounded-full border border-line-strong bg-surface-1 px-2 py-1 text-body text-white"
       onclick={() => (expanded = false)}
       aria-label="Close"
     >

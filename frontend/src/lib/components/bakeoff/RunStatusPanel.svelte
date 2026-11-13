@@ -39,22 +39,22 @@
 </script>
 
 <section
-  class="mb-6 rounded-lg border border-line bg-surface-1/50 p-4 text-sm"
+  class="mb-6 rounded-lg border border-line bg-surface-1/50 p-4 text-body"
   data-testid="run-status"
 >
   <div class="flex flex-wrap items-center gap-2">
     <span class="text-fg-2">Job</span>
     <code class="text-fg-1">{jobId}</code>
     <span
-      class="rounded px-1.5 py-0.5 text-xs {status?.state === 'error'
+      class="rounded px-1.5 py-0.5 text-meta {status?.state === 'error'
         ? 'bg-danger-soft text-danger-text'
         : status?.state === 'done'
           ? 'bg-success-soft text-success-text'
           : 'bg-surface-2 text-fg-2'}"
       data-testid="run-state">{status?.state ?? 'enqueued'}</span
     >
-    {#if status?.profile}<span class="text-xs text-fg-3"
-        >profile <span class="font-mono">{status.profile}</span></span
+    {#if status?.profile}<span class="text-meta text-fg-3"
+        >profile <code>{status.profile}</code></span
       >{/if}
   </div>
 
@@ -65,25 +65,25 @@
           <div class="h-full bg-success transition-all" style="width: {pct}%"></div>
         </div>
       {/if}
-      <p class="mt-1 text-xs text-fg-3" data-testid="run-progress">
+      <p class="mt-1 text-meta text-fg-3" data-testid="run-progress">
         {progress.done} / {progress.total} evaluations
       </p>
     </div>
   {/if}
 
   {#if status?.error}
-    <p class="mt-3 text-xs text-danger-text" data-testid="run-job-error">
+    <p class="mt-3 text-meta text-danger-text" data-testid="run-job-error">
       Job failed: {status.error}
     </p>
   {/if}
   {#if status?.failed?.length}
     <div
-      class="mt-3 rounded border border-danger-line bg-danger-soft p-2 text-xs text-danger-text"
+      class="mt-3 rounded border border-danger-line bg-danger-soft p-2 text-meta text-danger-text"
     >
       <p class="mb-1 font-medium">
         {status.failed.length} failed piece{status.failed.length === 1 ? '' : 's'}
       </p>
-      <ul class="max-h-40 space-y-0.5 overflow-auto font-mono" data-testid="run-failures">
+      <ul class="max-h-40 space-y-0.5 overflow-auto" data-testid="run-failures">
         {#each status.failed as f, i (i)}
           <li>{failureWhere(f)} — {f.error}</li>
         {/each}
@@ -92,7 +92,7 @@
   {/if}
 
   {#if mine}
-    <details class="mt-3 text-xs" open={hasNotes} data-testid="enqueue-summary">
+    <details class="mt-3 text-meta" open={hasNotes} data-testid="enqueue-summary">
       <summary class="cursor-pointer text-fg-2">
         Class mapping at enqueue{mine.warnings.length
           ? ` · ${mine.warnings.length} warning${mine.warnings.length === 1 ? '' : 's'}`
@@ -104,7 +104,7 @@
         </ul>
       {/if}
       <table class="mt-2 w-full">
-        <thead class="text-left text-caption uppercase text-fg-3">
+        <thead class="text-left text-meta text-fg-2 font-medium">
           <tr>
             <th class="py-1 pr-2">Model</th>
             <th class="py-1 pr-2">Dataset</th>
@@ -117,8 +117,8 @@
             {#each Object.entries(m.class_mapping) as [dsId, cm] (dsId)}
               {@const overlap = m.train_test_overlap?.[dsId]}
               <tr class="border-t border-line align-top">
-                <td class="py-1 pr-2 font-mono">{m.display_name}</td>
-                <td class="py-1 pr-2 font-mono">{datasetName(dsId)}</td>
+                <td class="py-1 pr-2">{m.display_name}</td>
+                <td class="py-1 pr-2">{datasetName(dsId)}</td>
                 <td class="py-1 pr-2">{cm.method}</td>
                 <td class="py-1 text-fg-2">
                   {#if cm.not_covered_eval_classes.length}

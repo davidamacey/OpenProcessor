@@ -28,21 +28,21 @@
 <ul class="flex flex-col gap-2" data-testid="label-ops-list">
   {#each items as op (op.op_id)}
     <li
-      class="surface flex flex-wrap items-center gap-x-4 gap-y-2 p-3 text-sm"
+      class="surface flex flex-wrap items-center gap-x-4 gap-y-2 p-3 text-body"
       data-testid="label-op-row"
     >
       <div class="flex min-w-0 grow flex-col gap-0.5">
         <span class="truncate font-medium" data-testid="label-op-title">{title(op)}</span>
-        <span class="text-xs text-fg-2" title={op.at}>
+        <span class="text-meta text-fg-2" title={op.at}>
           {when(op)}
         </span>
       </div>
-      <span class="text-xs text-fg-2" data-testid="label-op-count">
-        <span class="font-mono">{formatCount(op.count)}</span> items,
-        <span class="font-mono">{formatCount(op.current)}</span> still labeled
+      <span class="text-meta text-fg-2" data-testid="label-op-count">
+        <span class="tabular-nums">{formatCount(op.count)}</span> items,
+        <span class="tabular-nums">{formatCount(op.current)}</span> still labeled
       </span>
       <span
-        class="rounded border border-line-strong px-1.5 py-0.5 text-xs text-fg-2"
+        class="rounded border border-line-strong px-1.5 py-0.5 text-meta text-fg-2"
         data-testid="label-op-status">{humanizeId(op.status)}</span
       >
       <button

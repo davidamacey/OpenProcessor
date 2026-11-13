@@ -23,7 +23,9 @@
      (model / vlm / human / low_conf / ...) without changing
      the cluster card stats. Active filter is reflected in the URL-free
      reactive state so re-mounting the page resets to "all". -->
-<div class="flex flex-wrap items-center gap-1.5 border-b border-line px-4 py-1.5 text-xs">
+<div
+  class="flex flex-wrap items-center gap-1.5 border-b border-line px-4 py-1.5 text-meta"
+>
   <span class="text-fg-3">source:</span>
   <label class="flex items-center gap-1.5">
     <select
@@ -54,7 +56,7 @@
      (what the business sorts on) and hide too-blurry crops. View-only —
      no data is deleted; the slider commits on release to avoid a reload
      per pixel. -->
-<div class="flex flex-wrap items-center gap-3 border-b border-line px-4 py-1.5 text-xs">
+<div class="flex flex-wrap items-center gap-3 border-b border-line px-4 py-1.5 text-meta">
   <!-- Cluster-scoped semantic search — left-aligned, first control in
        the row, so it reads as the primary way in rather than a control
        squeezed wherever there happens to be leftover flex space. -->

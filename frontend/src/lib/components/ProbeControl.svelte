@@ -183,7 +183,7 @@
 </script>
 
 {#if eligible || runningHere || lastResult}
-  <div class="flex flex-wrap items-center gap-2 text-xs" data-testid="probe-control">
+  <div class="flex flex-wrap items-center gap-2 text-meta" data-testid="probe-control">
     <span class="font-semibold text-fg-2">Probe predictions</span>
     {#if runningHere}
       <span class="text-fg-2">
@@ -233,14 +233,13 @@
 
 {#if confirmOpen}
   <Modal label="Confirm run probe predictions" onclose={closeConfirm}>
-    <h3 class="mb-3 text-base font-semibold">Run probe predictions</h3>
-    <p class="mb-3 text-sm text-fg-2">
+    <h3 class="mb-3 text-title font-semibold">Run probe predictions</h3>
+    <p class="mb-3 text-body text-fg-2">
       Runs this run's exported checkpoint over the crop pool to populate
-      <code class="font-mono">probe_pred_*</code>. This is what the Uncertainty and
-      Model-disagreements review queues need — they stay empty until a probe has run at
-      least once.
+      <code>probe_pred_*</code>. This is what the Uncertainty and Model-disagreements
+      review queues need — they stay empty until a probe has run at least once.
     </p>
-    <p class="mb-3 text-xs text-fg-2">
+    <p class="mb-3 text-meta text-fg-2">
       Deployment-wide, potentially long-running. Only one probe job can run at a time.
     </p>
     <div class="flex justify-end gap-2">

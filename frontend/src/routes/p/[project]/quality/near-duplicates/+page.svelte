@@ -62,7 +62,7 @@
 
   {#if ctl.loadError}
     <section
-      class="surface flex flex-col gap-3 p-6 text-sm"
+      class="surface flex flex-col gap-3 p-6 text-body"
       data-testid="near-dup-load-error"
     >
       <p class="text-danger-text" role="alert">{ctl.loadError}</p>
@@ -71,7 +71,7 @@
       >
     </section>
   {:else if ctl.loading && !ctl.status}
-    <section class="surface p-6 text-sm text-fg-3">
+    <section class="surface p-6 text-body text-fg-3">
       Loading near-duplicate status…
     </section>
   {:else}

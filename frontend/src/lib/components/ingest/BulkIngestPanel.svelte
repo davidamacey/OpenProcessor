@@ -47,19 +47,19 @@
 
 <div class="space-y-4" data-testid="bulk-ingest">
   {#if controller.configError}
-    <p class="text-xs text-danger-text">
+    <p class="text-meta text-danger-text">
       Could not load bulk ingest: {controller.configError}
     </p>
   {:else if !config}
-    <p class="text-xs text-fg-3">Loading…</p>
+    <p class="text-meta text-fg-3">Loading…</p>
   {:else}
-    <p class="text-xs text-fg-2">
+    <p class="text-meta text-fg-2">
       Ingest a whole folder or a list of images that already lie under a source root on
       the server. The run continues if you leave this page.
     </p>
-    <ul class="text-xs text-fg-2" data-testid="bulk-roots">
+    <ul class="text-meta text-fg-2" data-testid="bulk-roots">
       {#each config.source_roots as root (root)}
-        <li class="font-mono break-all">{root}</li>
+        <li class="break-all"><code>{root}</code></li>
       {/each}
     </ul>
 
@@ -70,7 +70,7 @@
         void controller.start();
       }}
     >
-      <div class="flex flex-wrap gap-4 text-xs text-fg-2">
+      <div class="flex flex-wrap gap-4 text-meta text-fg-2">
         <label class="flex items-center gap-1">
           <input
             type="radio"
@@ -90,10 +90,10 @@
           /> Manifest
         </label>
       </div>
-      <label class="block text-xs text-fg-2">
+      <label class="block text-meta text-fg-2">
         {pathLabel}
         <input
-          class="input block w-full font-mono text-xs"
+          class="input block w-full font-mono text-meta"
           data-testid="bulk-path"
           placeholder={config.source_roots[0] ?? '/data/source/…'}
           bind:value={controller.form.path}
@@ -101,7 +101,7 @@
         />
       </label>
       <div class="flex flex-wrap items-end gap-3">
-        <label class="text-xs text-fg-2">
+        <label class="text-meta text-fg-2">
           Source tag
           <input
             class="input input-sm block"
@@ -129,7 +129,7 @@
           {controller.previewing ? 'Scanning… (click to cancel)' : 'Preview'}
         </button>
       </div>
-      <details class="text-xs text-fg-2">
+      <details class="text-meta text-fg-2">
         <summary class="cursor-pointer">Advanced</summary>
         <div class="mt-2 flex flex-wrap items-end gap-3">
           <label>
@@ -170,7 +170,7 @@
     </form>
 
     {#if controller.previewError}
-      <p class="text-xs text-danger-text" data-testid="bulk-preview-error">
+      <p class="text-meta text-danger-text" data-testid="bulk-preview-error">
         {controller.previewError}
       </p>
     {/if}
@@ -179,12 +179,12 @@
     {/if}
 
     {#if controller.actionError}
-      <p class="text-xs text-danger-text" data-testid="bulk-action-error">
+      <p class="text-meta text-danger-text" data-testid="bulk-action-error">
         {controller.actionError}
       </p>
     {/if}
     {#if controller.loadError}
-      <p class="text-xs text-warn-text" data-testid="bulk-load-error">
+      <p class="text-meta text-warn-text" data-testid="bulk-load-error">
         Could not refresh: {controller.loadError}
       </p>
     {/if}
@@ -196,11 +196,11 @@
         data-status={run.status}
       >
         <div class="flex flex-wrap items-baseline justify-between gap-2">
-          <p class="min-w-0 text-xs text-fg-2">
-            <span class="font-mono break-all">{run.source.label ?? run.source.path}</span>
+          <p class="min-w-0 text-meta text-fg-2">
+            <code class="break-all">{run.source.label ?? run.source.path}</code>
           </p>
           <span
-            class="text-sm font-semibold {STATUS_TONE[run.status]}"
+            class="text-body font-semibold {STATUS_TONE[run.status]}"
             data-testid="bulk-status"
           >
             {run.cancel_requested ? 'cancelling…' : run.status.replaceAll('_', ' ')}
@@ -219,7 +219,7 @@
             style="width: {progressPercent(progress)}%"
           ></div>
         </div>
-        <p class="text-xs text-fg-2" data-testid="bulk-counts">
+        <p class="text-meta text-fg-2" data-testid="bulk-counts">
           {progress.processed} of {progress.discovered}{progress.discovery_complete
             ? ''
             : run.can_cancel
@@ -228,16 +228,16 @@
           {#if progress.skipped > 0}· {progress.skipped} already stored by this run{/if}
         </p>
         {#if progress.unreadable > 0}
-          <div class="text-xs text-warn-text" data-testid="bulk-unreadable">
+          <div class="text-meta text-warn-text" data-testid="bulk-unreadable">
             <p>{progress.unreadable} entries could not be read and were skipped.</p>
             <ul class="mt-1">
               {#each progress.unreadable_samples as path (path)}
-                <li class="font-mono break-all text-fg-2">{path}</li>
+                <li class="break-all text-fg-2"><code>{path}</code></li>
               {/each}
             </ul>
           </div>
         {/if}
-        <div class="flex flex-wrap gap-2 text-xs">
+        <div class="flex flex-wrap gap-2 text-meta">
           <span class="chip" data-testid="bulk-ingested"
             >ingested {progress.ingested}</span
           >
@@ -253,7 +253,7 @@
               · encoder failed {progress.n_embed_failed}{/if}</span
           >
         </div>
-        <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-4">
+        <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-meta sm:grid-cols-4">
           <div>
             <dt class="text-fg-3">Speed</dt>
             <dd class="text-fg-1" data-testid="bulk-rate">
@@ -289,7 +289,9 @@
         </dl>
 
         {#if run.error}
-          <p class="text-xs text-danger-text" data-testid="bulk-run-error">{run.error}</p>
+          <p class="text-meta text-danger-text" data-testid="bulk-run-error">
+            {run.error}
+          </p>
         {/if}
 
         <div class="flex flex-wrap gap-2">
@@ -314,20 +316,20 @@
             >
               Resume
             </button>
-            <span class="self-center text-xs text-fg-3">
+            <span class="self-center text-meta text-fg-3">
               Images already stored are skipped.
             </span>
           {/if}
         </div>
 
         {#if stageRows(run).length > 0}
-          <details class="text-xs text-fg-2">
+          <details class="text-meta text-fg-2">
             <summary class="cursor-pointer">Where the time went</summary>
             <table class="mt-2 w-full max-w-md" data-testid="bulk-stages">
               <tbody>
                 {#each stageRows(run) as [stage, seconds] (stage)}
                   <tr>
-                    <td class="pr-4 font-mono">{stage}</td>
+                    <td class="pr-4">{stage}</td>
                     <td class="text-right">{seconds.toFixed(1)} s</td>
                   </tr>
                 {/each}
@@ -341,22 +343,22 @@
 
         {#if controller.failures && controller.failures.total > 0}
           <div class="space-y-1" data-testid="bulk-failures">
-            <p class="text-xs font-semibold text-danger-text">
+            <p class="text-meta font-semibold text-danger-text">
               {controller.failures.total} failed image{controller.failures.total === 1
                 ? ''
                 : 's'}
             </p>
-            <ul class="max-h-48 overflow-y-auto text-xs">
+            <ul class="max-h-48 overflow-y-auto text-meta">
               {#each controller.failures.items as f (f.path)}
                 <li class="border-b border-line py-1 break-all">
-                  <span class="font-mono">{f.path}</span>
+                  <code>{f.path}</code>
                   <span class="text-fg-3"> [{f.error_kind}]</span>
                   <span class="text-danger-text"> — {f.error}</span>
                 </li>
               {/each}
             </ul>
             {#if controller.failures.total > FAILURES_PAGE_SIZE}
-              <div class="flex gap-2 text-xs">
+              <div class="flex gap-2 text-meta">
                 <button
                   class="btn btn-sm"
                   type="button"
@@ -384,12 +386,12 @@
     {/if}
 
     {#if controller.recent.length > 1}
-      <details class="text-xs text-fg-2" data-testid="bulk-recent">
+      <details class="text-meta text-fg-2" data-testid="bulk-recent">
         <summary class="cursor-pointer">Recent runs</summary>
         <ul class="mt-2 space-y-1">
           {#each controller.recent as r (r.run_id)}
             <li class="flex flex-wrap items-baseline gap-2">
-              <span class="font-mono break-all">{r.source.label ?? r.source.path}</span>
+              <code class="break-all">{r.source.label ?? r.source.path}</code>
               <span class={STATUS_TONE[r.status]}>{r.status.replaceAll('_', ' ')}</span>
               <span>{r.progress.ingested} ingested · {r.progress.failed} failed</span>
               <button

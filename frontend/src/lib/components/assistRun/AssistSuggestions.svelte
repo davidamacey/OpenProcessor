@@ -36,7 +36,7 @@
     data-testid="assist-suggestions"
     title="Suggestions from the VLM, not labels. Nothing here changes the item's class or boxes."
   >
-    <span class="text-caption uppercase tracking-wide text-fg-3">VLM suggests</span>
+    <span class="text-meta text-fg-2 font-semibold">VLM suggests</span>
     {#if said}
       <span
         class="rounded border border-dashed border-warn/50 px-1 text-warn-text"

@@ -13,7 +13,7 @@
 </script>
 
 <div class="mt-4 border-t border-line pt-3">
-  <div class="mb-1.5 text-caption uppercase tracking-wider text-fg-3">History</div>
+  <div class="mb-1.5 text-meta text-fg-2 font-semibold">History</div>
   {#if historyLoading}
     <p class="text-caption text-fg-3">Loading…</p>
   {:else if historyError}
@@ -30,7 +30,7 @@
           class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-fg-2"
           data-testid="history-entry"
         >
-          <span class="font-mono text-fg-2">{entry.writer ?? 'unknown'}</span>
+          <code class="text-fg-2">{entry.writer ?? 'unknown'}</code>
           <span class={entry.class_name ? '' : 'text-fg-3'}
             >→ {entry.class_name ?? 'no class'}</span
           >
@@ -41,7 +41,7 @@
             >
           {/if}
           {#if entry.at}
-            <span class="font-mono text-fg-3" title={entry.at}
+            <span class="text-fg-3 tabular-nums" title={entry.at}
               >{formatTimestamp(entry.at)}</span
             >
           {/if}

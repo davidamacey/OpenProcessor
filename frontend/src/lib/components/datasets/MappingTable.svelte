@@ -47,7 +47,7 @@
 </script>
 
 <div class="overflow-x-auto">
-  <table class="w-full text-left text-xs" data-testid="mapping-table">
+  <table class="w-full text-left text-meta" data-testid="mapping-table">
     <thead class="text-fg-3">
       <tr>
         <th class="px-2 py-1">Dataset class</th>
@@ -82,8 +82,11 @@
               </div>
             {/if}
           </td>
-          <td class="px-2 py-1.5 text-right font-mono">{row.boxes.toLocaleString()}</td>
-          <td class="px-2 py-1.5 text-right font-mono">{row.images.toLocaleString()}</td>
+          <td class="px-2 py-1.5 text-right tabular-nums">{row.boxes.toLocaleString()}</td
+          >
+          <td class="px-2 py-1.5 text-right tabular-nums"
+            >{row.images.toLocaleString()}</td
+          >
           <td class="px-2 py-1.5">
             {#if row.suggestion}
               <span

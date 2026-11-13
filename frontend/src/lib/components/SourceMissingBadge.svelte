@@ -17,13 +17,13 @@
     ? 'inset-x-1 bottom-1 rounded'
     : 'pointer-events-none inset-0'}"
 >
-  <span class={compact ? 'text-caption font-semibold' : 'text-sm font-semibold'}>
+  <span class={compact ? 'text-caption font-semibold' : 'text-body font-semibold'}>
     {missing.root_mounted ? 'Image file missing' : 'Source not mounted'}
   </span>
-  <span class="max-w-full truncate font-mono {compact ? 'text-caption' : 'text-xs'}">
+  <code class="max-w-full truncate {compact ? 'text-caption' : 'text-meta'}">
     {missing.alias}
-  </span>
+  </code>
   {#if !compact}
-    <span class="text-xs text-fg-2">{missing.message}</span>
+    <span class="text-meta text-fg-2">{missing.message}</span>
   {/if}
 </div>

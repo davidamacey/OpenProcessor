@@ -15,11 +15,11 @@
   {@const members = groupMembers(g)}
   {@const canonical = ctl.groupCanonicalKeys(g)}
   <details class="mb-3 rounded border border-line" open data-testid={`group-${g}`}>
-    <summary class="cursor-pointer px-3 py-2 text-xs font-semibold text-fg-2">
+    <summary class="cursor-pointer px-3 py-2 text-meta font-semibold text-fg-2">
       {groupLabel(g)}
       <span class="ml-1 font-normal text-fg-3">applies on every page</span>
     </summary>
-    <table class="w-full text-xs">
+    <table class="w-full text-meta">
       <tbody>
         <tr class="border-t border-line">
           <td class="px-3 py-1.5 text-fg-2">{groupLabel(g)} (every page)</td>
@@ -36,8 +36,8 @@
       </tbody>
     </table>
     <details class="border-t border-line px-3 py-1.5">
-      <summary class="cursor-pointer text-xs text-fg-3">Customize per page</summary>
-      <table class="w-full text-xs">
+      <summary class="cursor-pointer text-meta text-fg-3">Customize per page</summary>
+      <table class="w-full text-meta">
         <tbody>
           {#each members as action (action.id)}
             {@const field = `overrides.${action.id}`}

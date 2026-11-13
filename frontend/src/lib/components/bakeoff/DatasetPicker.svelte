@@ -25,7 +25,7 @@
 
 {#snippet row(d: EvalDataset)}
   <label
-    class="flex items-start gap-2 rounded px-1 py-1 text-xs hover:bg-surface-2/50"
+    class="flex items-start gap-2 rounded px-1 py-1 text-meta hover:bg-surface-2/50"
     data-testid="dataset-row"
     data-dataset-id={d.id}
   >
@@ -37,7 +37,7 @@
     />
     <span class="min-w-0 flex-1">
       <span class="flex flex-wrap items-center gap-1.5">
-        <span class="font-mono text-fg-1">{d.name}</span>
+        <span class="text-fg-1">{d.name}</span>
         {#if d.is_current}
           <span
             class="rounded bg-success-soft px-1 text-caption text-success-text"
@@ -74,16 +74,16 @@
 
 <div class="space-y-2" data-testid="dataset-picker">
   <div>
-    <p class="text-caption uppercase tracking-wide text-fg-3">Exported test splits</p>
+    <p class="text-meta text-fg-2 font-semibold">Exported test splits</p>
     {#each grouped.exports as d (d.id)}
       {@render row(d)}
     {:else}
-      <p class="px-1 text-xs text-fg-3">No export with a test split yet.</p>
+      <p class="px-1 text-meta text-fg-3">No export with a test split yet.</p>
     {/each}
   </div>
   {#each grouped.external as g (g.group)}
     <div>
-      <p class="text-caption uppercase tracking-wide text-fg-3">
+      <p class="text-meta text-fg-2 font-semibold">
         External · {g.group}
       </p>
       {#each g.datasets as d (d.id)}

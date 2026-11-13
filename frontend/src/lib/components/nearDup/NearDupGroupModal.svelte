@@ -56,7 +56,7 @@
   data-testid="near-dup-group-modal"
 >
   <header class="mb-3 flex items-baseline gap-3">
-    <h2 class="text-lg font-semibold">
+    <h2 class="text-title font-semibold">
       {group.purpose === 'dedup' ? 'Duplicate group' : 'Leak group'}{group.size == null
         ? ''
         : `, ${group.size} members`}
@@ -75,19 +75,19 @@
   </header>
 
   {#if ctl.loading}
-    <p class="text-sm text-fg-3">Loading the group…</p>
+    <p class="text-body text-fg-3">Loading the group…</p>
   {:else if ctl.error}
-    <p class="text-sm text-danger-text" role="alert" data-testid="near-dup-group-error">
+    <p class="text-body text-danger-text" role="alert" data-testid="near-dup-group-error">
       {ctl.error}
     </p>
   {:else if ctl.detail}
-    <p class="mb-3 text-xs text-fg-2">
+    <p class="mb-3 text-meta text-fg-2">
       A decision applies from the next run. "Not a duplicate" pins the member apart from
       the representative; "Keep together" pins it to the representative.
     </p>
     {#if ctl.actionError}
       <p
-        class="mb-2 text-xs text-danger-text"
+        class="mb-2 text-meta text-danger-text"
         role="alert"
         data-testid="near-dup-action-error"
       >
@@ -102,8 +102,8 @@
           data-testid="near-dup-member"
         >
           <NearDupThumb url={m.thumbnail_url} label={`${level} ${m.member_id}`} />
-          <div class="flex min-w-0 flex-col gap-1 text-xs text-fg-2">
-            <span class="break-all font-mono text-fg-1">{m.member_id}</span>
+          <div class="flex min-w-0 flex-col gap-1 text-meta text-fg-2">
+            <code class="break-all text-fg-1">{m.member_id}</code>
             {#if m.class_name}<span>{m.class_name}</span>{/if}
             {#if m.in_holdout}
               <span class="chip w-fit border-warn-line text-warn-text"
@@ -155,7 +155,7 @@
       {/each}
     </ul>
     {#if ctl.pinned > 0}
-      <p class="mt-3 text-xs text-warn-text" data-testid="near-dup-decided-note">
+      <p class="mt-3 text-meta text-warn-text" data-testid="near-dup-decided-note">
         {ctl.pinned} decision{ctl.pinned === 1 ? '' : 's'} saved; run the level again to apply
         {ctl.pinned === 1 ? 'it' : 'them'}.
       </p>

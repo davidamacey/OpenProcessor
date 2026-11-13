@@ -45,4 +45,27 @@ describe('DataTable', () => {
     expect(plain.querySelector('button')).toBeNull();
     expect(plain.hasAttribute('aria-sort')).toBe(false);
   });
+
+  it('numeric columns align their figures: tabular-nums on the header and every cell', () => {
+    const el = mountUi(DataTableHarness);
+    const th = [...el.querySelectorAll('th')].find((h) =>
+      h.textContent?.includes('Items'),
+    )!;
+    expect(th.className).toContain('tabular-nums');
+    const cells = el.querySelectorAll('tbody tr td:nth-child(2)');
+    expect(cells.length).toBe(3);
+    for (const c of cells) expect(c.className).toContain('tabular-nums');
+    expect(el.querySelector('tbody tr td:nth-child(1)')!.className).not.toContain(
+      'tabular-nums',
+    );
+  });
+
+  it('keeps the first column in view while a narrow screen scrolls sideways', () => {
+    const el = mountUi(DataTableHarness);
+    for (const c of el.querySelectorAll('thead th:first-child, tbody td:first-child')) {
+      expect(c.className, c.textContent ?? '').toContain('max-md:sticky');
+      expect(c.className).toContain('max-md:left-0');
+    }
+    expect(el.querySelector('tbody td:nth-child(2)')!.className).not.toContain('sticky');
+  });
 });

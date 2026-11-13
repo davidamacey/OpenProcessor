@@ -66,7 +66,7 @@
   class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-line px-4 py-2"
   data-testid="review-header"
 >
-  <h1 class="text-sm font-medium text-fg-1" data-testid="review-queue-label">
+  <h1 class="text-body font-medium text-fg-1" data-testid="review-queue-label">
     {tabs.activeQueueLabel}
   </h1>
   {#if regionProfileStore.unknown}
@@ -74,7 +74,7 @@
       >loading region profile…</span
     >
   {/if}
-  <span data-testid="queue-counter" class="font-mono text-xs text-fg-3">
+  <span data-testid="queue-counter" class="text-meta text-fg-3 tabular-nums">
     {queue.items.length > 0 ? `#${loader.currentPosition}` : '—'} · {queue.items.length} loaded
     · {queue.total} total
   </span>

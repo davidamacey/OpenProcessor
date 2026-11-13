@@ -49,7 +49,7 @@
 
 <section class="surface flex flex-col gap-3 p-4" data-testid="near-dup-groups">
   <header class="flex flex-wrap items-center gap-3">
-    <h2 class="text-base font-semibold">Groups</h2>
+    <h2 class="text-title font-semibold">Groups</h2>
     <div class="flex gap-1" role="group" aria-label="Level">
       {#each LEVELS as l (l.id)}
         <button
@@ -73,19 +73,19 @@
       {/each}
     </div>
   </header>
-  <p class="text-xs text-fg-2">{PURPOSE_HINT[ctl.purpose]}</p>
+  <p class="text-meta text-fg-2">{PURPOSE_HINT[ctl.purpose]}</p>
 
   {#if ctl.groupsError}
-    <div class="flex flex-col gap-2 text-sm" data-testid="near-dup-groups-error">
+    <div class="flex flex-col gap-2 text-body" data-testid="near-dup-groups-error">
       <p class="text-danger-text" role="alert">{ctl.groupsError}</p>
       <button type="button" class="btn w-fit" onclick={() => void ctl.loadGroups()}
         >Retry</button
       >
     </div>
   {:else if !ctl.groupsLoaded}
-    <p class="text-xs text-fg-3">Loading groups…</p>
+    <p class="text-meta text-fg-3">Loading groups…</p>
   {:else if ctl.groups.length === 0}
-    <p class="text-sm text-fg-2" data-testid="near-dup-groups-empty">
+    <p class="text-body text-fg-2" data-testid="near-dup-groups-empty">
       {ctl.emptyReason}
     </p>
   {:else}
@@ -103,8 +103,8 @@
               label={`${ctl.level} ${g.representative_id}`}
               size="sm"
             />
-            <span class="flex min-w-0 flex-col gap-1 text-xs text-fg-2">
-              <span class="text-sm font-medium text-fg-1">{g.size} members</span>
+            <span class="flex min-w-0 flex-col gap-1 text-meta text-fg-2">
+              <span class="text-body font-medium text-fg-1">{g.size} members</span>
               <span>Lowest edge cosine {cos(g.min_edge_cosine)}</span>
               <span>Lowest to representative {cos(g.min_cosine_to_rep)}</span>
               {#if g.has_holdout}
@@ -116,7 +116,7 @@
           </button>
           {#if ctl.level === 'image'}
             <a
-              class="mt-1 inline-block text-xs text-accent-text hover:underline"
+              class="mt-1 inline-block text-meta text-accent-text hover:underline"
               data-testid="near-dup-group-workspace"
               href={resolve(projectHref(`/workspace${workspaceSearch(g.group_id)}`))}
               >Open in the Workspace</a

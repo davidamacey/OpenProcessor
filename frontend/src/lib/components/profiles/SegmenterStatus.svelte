@@ -16,7 +16,7 @@
 </script>
 
 <div
-  class="rounded border border-line bg-surface-1/40 p-2 text-xs"
+  class="rounded border border-line bg-surface-1/40 p-2 text-meta"
   data-testid="segmenter-status"
 >
   {#if segmenters.length === 0}
@@ -36,15 +36,15 @@
         {#each segmenters as s (s.name)}
           <tr class="border-t border-line" data-testid="segmenter-row">
             <td class="py-0.5 pr-3">
-              <span class="font-mono">{s.choice.label}</span>
-              {#if s.endpoint}<span class="block font-mono text-caption text-fg-3"
-                  >{s.endpoint}</span
+              <span>{s.choice.label}</span>
+              {#if s.endpoint}<code class="block text-caption text-fg-3"
+                  >{s.endpoint}</code
                 >{/if}
             </td>
-            <td class="py-0.5 pr-3 font-mono">{s.status}</td>
+            <td class="py-0.5 pr-3">{s.status}</td>
             <td class="py-0.5 pr-3">{s.masks ? 'yes' : 'no'}</td>
-            <td class="py-0.5 pr-3 text-right font-mono">{s.max_candidates ?? '—'}</td>
-            <td class="py-0.5 text-right font-mono">{s.default_min_score ?? '—'}</td>
+            <td class="py-0.5 pr-3 text-right tabular-nums">{s.max_candidates ?? '—'}</td>
+            <td class="py-0.5 text-right tabular-nums">{s.default_min_score ?? '—'}</td>
           </tr>
         {/each}
       </tbody>

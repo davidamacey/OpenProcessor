@@ -58,9 +58,9 @@
    button (or D) marks the slot's rejectState. The whole flow
    is two keystrokes per crop on average: minor twitch with
    arrows / handles, then Enter. -->
-<div class="mt-3 grid grid-cols-2 gap-y-1 text-xs">
+<div class="mt-3 grid grid-cols-2 gap-y-1 text-meta">
   <span class="text-fg-3">{slotLabels.scoreLabel}</span>
-  <span class="font-mono text-fg-1">
+  <span class="text-fg-1 tabular-nums">
     {#if isMultiBoxSlot && selectedSlotBox?.score != null}
       {(selectedSlotBox.score * 100).toFixed(1)}%
     {:else if !isMultiBoxSlot && slotData?.subBox?.score != null}
@@ -75,7 +75,7 @@
       aria-label={slotLabels.statusLabel}
       bind:value={edit.editedSlotStatus}
       onchange={() => void commitSlotStatus()}
-      class="rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-xs text-fg-1 focus:border-accent focus:outline-none"
+      class="rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-meta text-fg-1 focus:border-accent focus:outline-none"
     >
       <option value="">—</option>
       {#each slotStatusOptions as opt (opt.value)}
@@ -216,9 +216,9 @@
         autocapitalize={activeSlot.capabilities.text?.transform === 'uppercase'
           ? 'characters'
           : 'off'}
-        class="w-28 rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-xs text-fg-1 placeholder:italic placeholder:text-fg-3 focus:border-accent focus:outline-none {activeSlot
+        class="w-28 rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-meta text-fg-1 placeholder:italic placeholder:text-fg-3 focus:border-accent focus:outline-none {activeSlot
           .capabilities.text?.monospace
-          ? 'font-mono'
+          ? ''
           : ''}"
       />
       {#if isMultiBoxSlot ? selectedSlotBox?.textSource : slotData?.text?.source}
@@ -298,7 +298,7 @@
             }
           }}
           placeholder="e.g. blurred, occluded, glare"
-          class="w-44 rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-xs text-fg-1 focus:border-accent focus:outline-none"
+          class="w-44 rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-meta text-fg-1 focus:border-accent focus:outline-none"
         />
       {/if}
     </span>

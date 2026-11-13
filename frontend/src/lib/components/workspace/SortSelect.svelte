@@ -26,7 +26,7 @@
   }: Props = $props();
 </script>
 
-<label class="flex items-center gap-2 text-xs text-fg-2">
+<label class="flex items-center gap-2 text-meta text-fg-2">
   <span>Sort</span>
   <select
     class="select"

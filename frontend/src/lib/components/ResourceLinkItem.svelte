@@ -22,7 +22,7 @@
     >
     <!-- eslint-enable svelte/no-navigation-without-resolve -->
     {#if view.notRunning}
-      <span class="text-xs text-warn-text" data-testid="resource-not-running"
+      <span class="text-meta text-warn-text" data-testid="resource-not-running"
         >not running</span
       >
     {/if}

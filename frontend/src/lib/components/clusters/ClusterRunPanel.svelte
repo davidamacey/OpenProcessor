@@ -42,8 +42,8 @@
 >
   <div class="flex flex-wrap items-center justify-between gap-3">
     <div class="min-w-0">
-      <h2 class="text-base font-semibold">Clusters</h2>
-      <p class="mt-0.5 text-xs text-fg-2" data-testid="cluster-run-serving">
+      <h2 class="text-title font-semibold">Clusters</h2>
+      <p class="mt-0.5 text-meta text-fg-2" data-testid="cluster-run-serving">
         {#if ctl.loadError}
           <span class="text-danger-text" role="alert">{ctl.loadError}</span>
         {:else if ctl.serving}
@@ -71,7 +71,7 @@
 
   {#if ctl.pending}
     <div
-      class="mt-3 flex flex-wrap items-center gap-3 rounded border border-warn/40 bg-warn/10 p-2 text-xs"
+      class="mt-3 flex flex-wrap items-center gap-3 rounded border border-warn/40 bg-warn/10 p-2 text-meta"
       data-testid="cluster-run-pending"
     >
       <span class="text-warn-text">
@@ -90,12 +90,16 @@
     </div>
   {/if}
   {#if ctl.message}
-    <p class="mt-2 text-xs text-fg-2" role="status" data-testid="cluster-run-message">
+    <p class="mt-2 text-meta text-fg-2" role="status" data-testid="cluster-run-message">
       {ctl.message}
     </p>
   {/if}
   {#if ctl.actionError}
-    <p class="mt-2 text-xs text-danger-text" role="alert" data-testid="cluster-run-error">
+    <p
+      class="mt-2 text-meta text-danger-text"
+      role="alert"
+      data-testid="cluster-run-error"
+    >
       {ctl.actionError}
     </p>
   {/if}

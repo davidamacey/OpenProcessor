@@ -28,7 +28,7 @@
 
 <section class="surface space-y-3 p-4" data-testid="detections-summary">
   <div class="flex items-center gap-3">
-    <h2 class="text-sm font-semibold text-fg-2">Detections</h2>
+    <h2 class="text-body font-semibold text-fg-2">Detections</h2>
     <span class="grow"></span>
     <button
       type="button"
@@ -48,10 +48,10 @@
       />
     </div>
   {:else if !s}
-    <p class="text-xs text-fg-3">Loading...</p>
+    <p class="text-meta text-fg-3">Loading...</p>
   {:else}
-    <div class="flex flex-wrap items-center gap-3 text-xs">
-      <span class="font-mono text-fg-1" data-testid="detections-total"
+    <div class="flex flex-wrap items-center gap-3 text-meta">
+      <span class="text-fg-1 tabular-nums" data-testid="detections-total"
         >{fmt(s.total)} detections</span
       >
       <span class="text-fg-2"
@@ -75,7 +75,7 @@
     </div>
 
     {#if s.by_label.length > 0}
-      <table class="w-full text-left text-xs" data-testid="detections-by-label">
+      <table class="w-full text-left text-meta" data-testid="detections-by-label">
         <thead class="text-fg-3">
           <tr>
             <th class="py-0.5 pr-3 font-normal">Label</th>
@@ -84,10 +84,10 @@
             <th class="py-0.5 text-right font-normal">Not embedded</th>
           </tr>
         </thead>
-        <tbody class="font-mono">
+        <tbody class="tabular-nums">
           {#each s.by_label as l, i (i)}
             <tr class="border-t border-line">
-              <td class="py-0.5 pr-3 font-sans text-fg-1">{l.name}</td>
+              <td class="py-0.5 pr-3 text-fg-1">{l.name}</td>
               <td class="py-0.5 pr-3 text-right">{fmt(l.count)}</td>
               <td class="py-0.5 pr-3 text-right">{fmt(l.embedding.embedded)}</td>
               <td class="py-0.5 text-right">{fmt(l.embedding.not_embedded)}</td>
@@ -97,7 +97,7 @@
       </table>
     {/if}
     {#if s.labels_truncated}
-      <p class="text-xs text-fg-3" data-testid="detections-truncated">
+      <p class="text-meta text-fg-3" data-testid="detections-truncated">
         The label list is truncated; only the labels with the most detections are shown.
       </p>
     {/if}

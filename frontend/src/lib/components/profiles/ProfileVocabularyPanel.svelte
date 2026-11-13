@@ -23,10 +23,10 @@
 
 {#snippet models(list: VocabModel[], testid: string)}
   {#if list.length === 0}
-    <p class="text-xs text-fg-3">None served.</p>
+    <p class="text-meta text-fg-3">None served.</p>
   {:else}
     <div class="overflow-x-auto">
-      <table class="w-full text-left text-xs" data-testid={testid}>
+      <table class="w-full text-left text-meta" data-testid={testid}>
         <thead class="text-fg-3">
           <tr>
             <th class="py-0.5 pr-3 font-normal">Model</th>
@@ -38,9 +38,9 @@
         <tbody>
           {#each list as m (m.name + (m.project ?? ''))}
             <tr class="border-t border-line">
-              <td class="py-0.5 pr-3 font-mono">{m.choice.label}</td>
-              <td class="py-0.5 pr-3 font-mono">{m.source}</td>
-              <td class="py-0.5 pr-3 font-mono">
+              <td class="py-0.5 pr-3">{m.choice.label}</td>
+              <td class="py-0.5 pr-3">{m.source}</td>
+              <td class="py-0.5 pr-3">
                 {m.state ?? '—'}{m.ready === false ? ' (not ready)' : ''}
               </td>
               <td class="py-0.5 text-fg-2">
@@ -48,9 +48,7 @@
                     >configured for this role</span
                   >{/if}
                 {#if m.project}<span class="mr-2"
-                    >project <span class="font-mono">{m.project}</span>{m.shared
-                      ? ' · shared'
-                      : ''}</span
+                    >project <code>{m.project}</code>{m.shared ? ' · shared' : ''}</span
                   >{/if}
                 {#if m.class_mapping}
                   <span
@@ -69,36 +67,36 @@
   {/if}
 {/snippet}
 
-<div class="flex flex-col gap-4 text-sm" data-testid="vocabulary-panel">
+<div class="flex flex-col gap-4 text-body" data-testid="vocabulary-panel">
   <section class="flex flex-col gap-1">
-    <h3 class="text-sm font-semibold text-fg-1">Detectors</h3>
+    <h3 class="text-body font-semibold text-fg-1">Detectors</h3>
     {@render models(vocab.detectors, 'vocab-detectors')}
   </section>
 
   <section class="flex flex-col gap-1">
-    <h3 class="text-sm font-semibold text-fg-1">Segmenters</h3>
+    <h3 class="text-body font-semibold text-fg-1">Segmenters</h3>
     <SegmenterStatus segmenters={vocab.segmenters} />
   </section>
 
   <section class="flex flex-col gap-1">
-    <h3 class="text-sm font-semibold text-fg-1">
-      OCR <span class="text-xs font-normal text-fg-2"
+    <h3 class="text-body font-semibold text-fg-1">
+      OCR <span class="text-meta font-normal text-fg-2"
         >({vocab.ocr.available ? 'available' : 'not available'})</span
       >
     </h3>
     {#each ocrLists as l (l.id)}
-      <p class="text-xs text-fg-2">{l.label}</p>
+      <p class="text-meta text-fg-2">{l.label}</p>
       {@render models(l.models, `vocab-ocr-${l.id}`)}
     {/each}
   </section>
 
   <section class="flex flex-col gap-1">
-    <h3 class="text-sm font-semibold text-fg-1">Text-reading modes</h3>
-    <ul class="space-y-0.5 text-xs" data-testid="vocab-text-modes">
+    <h3 class="text-body font-semibold text-fg-1">Text-reading modes</h3>
+    <ul class="space-y-0.5 text-meta" data-testid="vocab-text-modes">
       {#each vocab.text_reader_modes as m (m.id)}
         <li>
           <span class="text-fg-1">{m.label}</span>
-          <code class="ml-1 font-mono text-fg-3">{m.id}</code>
+          <code class="ml-1 text-fg-3">{m.id}</code>
           <span class="ml-1 text-fg-2"
             >{m.reads_text ? 'reads text' : 'no text'}{m.needs_vlm
               ? ' · needs the VLM'
@@ -110,12 +108,12 @@
   </section>
 
   <section class="flex flex-col gap-1">
-    <h3 class="text-sm font-semibold text-fg-1">VLM endpoints</h3>
+    <h3 class="text-body font-semibold text-fg-1">VLM endpoints</h3>
     {#if vocab.vlm.endpoints.length === 0}
-      <p class="text-xs text-fg-3">No VLM is configured.</p>
+      <p class="text-meta text-fg-3">No VLM is configured.</p>
     {:else}
       <div class="overflow-x-auto">
-        <table class="w-full text-left text-xs" data-testid="vocab-vlm">
+        <table class="w-full text-left text-meta" data-testid="vocab-vlm">
           <thead class="text-fg-3">
             <tr>
               <th class="py-0.5 pr-3 font-normal">Endpoint</th>
@@ -127,24 +125,26 @@
           <tbody>
             {#each vocab.vlm.endpoints as v (v.name)}
               <tr class="border-t border-line">
-                <td class="py-0.5 pr-3 font-mono"
-                  >{v.name}{#if v.active}<span class="ml-1 font-sans text-success-text"
+                <td class="py-0.5 pr-3"
+                  ><code>{v.name}</code>{#if v.active}<span class="ml-1 text-success-text"
                       >active</span
                     >{/if}</td
                 >
-                <td class="py-0.5 pr-3 font-mono"
-                  >{v.model ?? '—'}{v.resolved_model && v.resolved_model !== v.model
-                    ? ` (${v.resolved_model})`
-                    : ''}</td
+                <td class="py-0.5 pr-3"
+                  ><code
+                    >{v.model ?? '—'}{v.resolved_model && v.resolved_model !== v.model
+                      ? ` (${v.resolved_model})`
+                      : ''}</code
+                  ></td
                 >
                 <td class="py-0.5 pr-3"
                   >{v.locality ?? '—'}{v.sends_images_externally
                     ? ' · sends images externally'
                     : ''}</td
                 >
-                <td class="py-0.5 font-mono"
+                <td class="py-0.5"
                   >{v.status ?? '—'}{#if v.warning}<span
-                      class="ml-1 rounded border border-danger/40 bg-danger/10 px-1 font-sans text-danger-text"
+                      class="ml-1 rounded border border-danger/40 bg-danger/10 px-1 text-danger-text"
                       data-testid="vocab-vlm-warning">{v.warning}</span
                     >{/if}</td
                 >

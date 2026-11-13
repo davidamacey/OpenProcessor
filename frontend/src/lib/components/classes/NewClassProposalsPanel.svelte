@@ -21,9 +21,9 @@
      backend genuinely failed (e.g. the opensearch aggregation 500 seen
      live), never a page-breaking crash. -->
 {#if p.proposalsLoading}
-  <div class="surface mt-4 p-4 text-xs text-fg-3">Loading proposals…</div>
+  <div class="surface mt-4 p-4 text-meta text-fg-3">Loading proposals…</div>
 {:else if p.proposalsError}
-  <div class="surface mt-4 flex items-center gap-3 p-4 text-xs text-danger-text">
+  <div class="surface mt-4 flex items-center gap-3 p-4 text-meta text-danger-text">
     <span>Proposals unavailable: {p.proposalsError}</span>
     <button type="button" class="btn-sm" onclick={() => void p.loadProposals()}>
       retry
@@ -31,14 +31,14 @@
   </div>
 {:else if p.proposalsSummary && (p.proposalsSummary.top_terms.length > 0 || p.proposalsSummary.flagged_terms.length > 0)}
   <details class="surface mt-4 p-4" data-testid="proposals-section">
-    <summary class="cursor-pointer text-sm font-semibold text-fg-1">
+    <summary class="cursor-pointer text-body font-semibold text-fg-1">
       New class proposals
       <span class="ml-1 font-normal text-fg-3"
         >({p.proposalsSummary.total_pending} pending{#if p.proposalsSummary.without_term > 0},
           {p.proposalsSummary.without_term} with no proposed term{/if})</span
       >
     </summary>
-    <p class="mb-3 mt-2 text-xs text-fg-3">
+    <p class="mb-3 mt-2 text-meta text-fg-3">
       Crops the VLM flagged as needing a class the registry doesn't have yet. Each row is
       a proposed term with a few sample thumbnails — create a class or map onto an
       existing one to resolve <strong>every</strong> pending crop proposing that term (not
@@ -82,7 +82,7 @@
             {/each}
           </div>
           <div class="min-w-0 shrink-0">
-            <div class="text-sm text-fg-1">{term.label}</div>
+            <div class="text-body text-fg-1">{term.label}</div>
             <div class="text-caption text-fg-3">
               {term.count} crop(s)
               {#if term.flag}

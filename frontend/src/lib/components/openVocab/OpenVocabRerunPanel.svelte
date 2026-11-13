@@ -56,12 +56,12 @@
 
 {#if active && datasetsAvailability.available === true}
   <section
-    class="surface flex flex-col gap-2 p-4 text-sm"
+    class="surface flex flex-col gap-2 p-4 text-body"
     data-testid="open-vocab-rerun"
     aria-label="Run on existing images"
   >
-    <h2 class="text-base font-semibold">Run on existing images</h2>
-    <p class="text-xs text-fg-2">
+    <h2 class="text-title font-semibold">Run on existing images</h2>
+    <p class="text-meta text-fg-2">
       New images are covered as they arrive. To run the active set on the images already
       in the pool, check what would run first, then confirm.
     </p>

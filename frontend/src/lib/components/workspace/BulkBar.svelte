@@ -78,7 +78,7 @@
 </script>
 
 <div
-  class="relative flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line bg-surface-1/60 px-4 py-2 text-xs"
+  class="relative flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line bg-surface-1/60 px-4 py-2 text-meta"
   role="toolbar"
   aria-label="Bulk actions"
   data-testid="bulk-bar"
@@ -90,7 +90,7 @@
     data-testid="bulk-summary">{text}</span
   >
   {#if count !== null}
-    <span class="font-mono text-fg-3" data-testid="bulk-count">{count} selected</span>
+    <span class="text-fg-3 tabular-nums" data-testid="bulk-count">{count} selected</span>
   {/if}
   {#if ws.pendingSelectAll}
     <button
@@ -160,7 +160,7 @@
         {#each excludeReasonsStore.reasons as r (r.id)}
           <button
             type="button"
-            class="block w-full px-3 py-1 text-left text-xs text-fg-1 hover:bg-surface-2"
+            class="block w-full px-3 py-1 text-left text-meta text-fg-1 hover:bg-surface-2"
             onclick={() => ignore(r.id)}
           >
             {r.label}

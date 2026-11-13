@@ -307,7 +307,7 @@
   let expanded = $state(false);
 </script>
 
-<div class="inline-flex min-w-0 max-w-full flex-wrap items-center gap-1.5 text-xs">
+<div class="inline-flex min-w-0 max-w-full flex-wrap items-center gap-1.5 text-meta">
   {#if !expanded}
     <button
       type="button"
@@ -361,7 +361,7 @@
       {/if}
       {#if currentIsBeta}
         <span
-          class="rounded border border-warn/60 bg-warn/15 px-1 text-caption uppercase tracking-wide text-warn-text"
+          class="rounded border border-warn/60 bg-warn/15 px-1 text-caption text-warn-text"
         >
           beta
         </span>
@@ -399,7 +399,7 @@
     {/if}
     {#if currentIsBeta}
       <span
-        class="rounded border border-warn/60 bg-warn/15 px-1.5 py-0.5 text-caption uppercase tracking-wide text-warn-text"
+        class="rounded border border-warn/60 bg-warn/15 px-1.5 py-0.5 text-caption text-warn-text"
         title="Experimental — not yet fully validated (OpenProcessor docs/research/curation_scores.md)"
       >
         beta

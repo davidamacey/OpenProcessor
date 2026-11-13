@@ -38,11 +38,11 @@
   {#if detail}
     {@const image = detail.image}
     {@const counts = detail.counts}
-    <section class="space-y-3 text-sm" data-testid="image-details">
+    <section class="space-y-3 text-body" data-testid="image-details">
       <h2 class="truncate text-title font-semibold text-fg-1" title={image.file_name}>
         {image.file_name}
       </h2>
-      <dl class="grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-xs text-fg-2">
+      <dl class="grid grid-cols-2 gap-x-3 gap-y-1 text-meta text-fg-2 tabular-nums">
         {#if image.width != null && image.height != null}
           <dt class="text-fg-3">size</dt>
           <dd>{image.width}×{image.height}</dd>

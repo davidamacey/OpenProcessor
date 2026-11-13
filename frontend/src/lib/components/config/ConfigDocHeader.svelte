@@ -19,31 +19,31 @@
 </script>
 
 <header class="flex flex-wrap items-baseline gap-3">
-  <h1 class="font-mono text-2xl font-semibold tracking-tight">{name}</h1>
+  <h1 class="text-h1 font-semibold tracking-tight">{name}</h1>
   {#if d}
-    <span class="text-sm text-fg-2" data-testid="config-meta">
+    <span class="text-body text-fg-2" data-testid="config-meta">
       {d.source}{d.revision != null ? ` · revision ${d.revision}` : ''}{d.read_only
         ? ' · read-only'
         : ''}
     </span>
     {#if d.active}
       <span
-        class="rounded border border-success/40 bg-success/10 px-1.5 text-xs text-success-text"
+        class="rounded border border-success/40 bg-success/10 px-1.5 text-meta text-success-text"
         >active{d.active_revision != null ? ` r${d.active_revision}` : ''}</span
       >
       {#if lineage && d.revision != null && d.active_revision != null && d.revision !== d.active_revision}
-        <span class="text-xs text-warn-text" data-testid="saved-vs-active"
+        <span class="text-meta text-warn-text" data-testid="saved-vs-active"
           >saved r{d.revision}, active r{d.active_revision}</span
         >
       {/if}
     {/if}
     {#if lineage && d.cloned_from}
-      <span class="font-mono text-xs text-fg-3">cloned from {d.cloned_from}</span>
+      <span class="text-meta text-fg-3">cloned from <code>{d.cloned_from}</code></span>
     {/if}
   {/if}
   <span class="grow"></span>
   <a
-    class="text-xs text-accent-text hover:underline"
+    class="text-meta text-accent-text hover:underline"
     href={resolve(projectHref(listPath))}>{listLabel}</a
   >
 </header>

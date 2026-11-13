@@ -31,7 +31,7 @@
   onconfirm={() => 'body' in parsed && oncreate(name, description, parsed.body)}
   {oncancel}
 >
-  <label class="flex flex-col gap-1 text-xs text-fg-2">
+  <label class="flex flex-col gap-1 text-meta text-fg-2">
     Name
     <input
       class="input input-sm font-mono"
@@ -39,24 +39,24 @@
       data-testid="preset-new-name"
     />
   </label>
-  <label class="flex flex-col gap-1 text-xs text-fg-2">
+  <label class="flex flex-col gap-1 text-meta text-fg-2">
     Description (optional)
     <input class="input input-sm" bind:value={description} />
   </label>
-  <label class="flex flex-col gap-1 text-xs text-fg-2">
+  <label class="flex flex-col gap-1 text-meta text-fg-2">
     Body (JSON)
     <textarea
-      class="input min-h-40 font-mono text-xs"
+      class="input min-h-40 font-mono text-meta"
       spellcheck="false"
       bind:value={text}
       data-testid="preset-new-body"></textarea>
   </label>
   {#if 'error' in parsed}
-    <p class="text-xs text-warn-text" data-testid="preset-new-json-error">
+    <p class="text-meta text-warn-text" data-testid="preset-new-json-error">
       {parsed.error}
     </p>
   {/if}
-  <p class="text-xs text-fg-3">
+  <p class="text-meta text-fg-3">
     The server checks the body when you create it and names each field it refuses. To
     start from a document that exists, clone it from the list.
   </p>

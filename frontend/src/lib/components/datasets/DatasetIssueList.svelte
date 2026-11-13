@@ -38,22 +38,25 @@
 </script>
 
 {#if issues.length === 0}
-  <p class="text-xs text-fg-3" data-testid="dataset-issues-none">No issues.</p>
+  <p class="text-meta text-fg-3" data-testid="dataset-issues-none">No issues.</p>
 {:else}
   <div class="space-y-3" data-testid="dataset-issues">
     {#each groups as g (g.id)}
       <section data-testid="dataset-issues-{g.id}">
-        <h4 class="mb-1 text-xs font-semibold tracking-wide text-fg-2 uppercase">
+        <h4 class="mb-1 text-meta font-semibold text-fg-2">
           {g.title}
         </h4>
         <ul class="space-y-1">
           {#each g.items as issue (issue.id)}
-            <li class="rounded border px-3 py-2 text-xs {g.tone}" data-code={issue.code}>
+            <li
+              class="rounded border px-3 py-2 text-meta {g.tone}"
+              data-code={issue.code}
+            >
               <div class="flex flex-wrap items-baseline gap-2">
                 <span class="font-semibold"
                   >{labelByCode.get(issue.code) ?? issue.code}</span
                 >
-                <span class="font-mono text-caption opacity-70"
+                <span class="text-caption opacity-70 tabular-nums"
                   >{issue.count.toLocaleString()}</span
                 >
                 {#if issue.blocking}
@@ -69,10 +72,12 @@
                   <summary class="cursor-pointer opacity-80">
                     {issue.samples.length} sample{issue.samples.length === 1 ? '' : 's'}
                   </summary>
-                  <ul class="mt-1 space-y-0.5 font-mono text-caption">
-                    {#each issue.samples as s, i (i)}
-                      <li>{s.file}{s.line != null ? `:${s.line}` : ''}</li>
-                    {/each}
+                  <ul class="mt-1 space-y-0.5 text-caption">
+                    <code
+                      >{#each issue.samples as s, i (i)}
+                        <li>{s.file}{s.line != null ? `:${s.line}` : ''}</li>
+                      {/each}</code
+                    >
                   </ul>
                 </details>
               {/if}

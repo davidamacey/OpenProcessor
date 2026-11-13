@@ -34,13 +34,13 @@
 
 <!-- Toolbar -->
 <div class="flex flex-wrap items-center gap-3 border-b border-line px-4 py-2.5">
-  <h1 class="text-lg font-semibold">Clusters</h1>
+  <h1 class="text-title font-semibold">Clusters</h1>
   <ShortcutsButton />
 
   {#if classFilter != null}
     <!-- C2 (visual audit 2026-09-24): name the class, not its id. -->
     <span
-      class="rounded-md border border-accent/40 bg-accent/10 px-2 py-0.5 text-xs text-accent-text"
+      class="rounded-md border border-accent/40 bg-accent/10 px-2 py-0.5 text-meta text-accent-text"
       title="class id {classFilter}"
       data-testid="class-filter-chip"
     >
@@ -87,7 +87,7 @@
       />
     {/key}
     <div
-      class="inline-flex overflow-hidden rounded-md border border-line-strong text-xs"
+      class="inline-flex overflow-hidden rounded-md border border-line-strong text-meta"
       role="group"
       aria-label="Search target"
       data-testid="search-target"
@@ -121,9 +121,9 @@
       type="text"
       bind:value={modes.itemTextQuery}
       placeholder="Item text…"
-      class="w-28 rounded border border-line-strong bg-surface-1 px-2 py-1 text-xs text-fg-1 focus:border-accent focus:outline-none"
+      class="w-28 rounded border border-line-strong bg-surface-1 px-2 py-1 text-meta text-fg-1 focus:border-accent focus:outline-none"
     />
-    <button type="submit" class="btn-sm border border-line-strong bg-surface-1 text-xs">
+    <button type="submit" class="btn-sm border border-line-strong bg-surface-1 text-meta">
       Search text
     </button>
   </form>
@@ -138,7 +138,7 @@
       if (modes.ignoredModeActive) modes.exitIgnoredMode();
       else void modes.loadIgnored();
     }}
-    class="btn-sm border text-xs transition-colors {modes.ignoredModeActive
+    class="btn-sm border text-meta transition-colors {modes.ignoredModeActive
       ? 'border-warn/60 bg-warn/20 text-warn-text'
       : 'border-line-strong bg-surface-1 text-fg-2 hover:border-warn/40'}"
     title="Crops excluded from training + clustering"
@@ -154,7 +154,7 @@
   <button
     type="button"
     onclick={() => (matchingModeActive ? exitMatchingMode() : enterMatchingMode())}
-    class="btn-sm border text-xs transition-colors {matchingModeActive
+    class="btn-sm border text-meta transition-colors {matchingModeActive
       ? 'border-accent/60 bg-accent/20 text-accent-text'
       : 'border-line-strong bg-surface-1 text-fg-2 hover:border-accent/40'}"
     data-testid="matching-mode-toggle"
@@ -176,10 +176,10 @@
     <!-- Primary-subject grid filters: scope cards to the largest / clear
        crops. Card size + reps reflect only passing crops, so a filtered
        grid is ready to drag-drop + AHC-refine on the subjects that matter. -->
-    <div class="text-xs">
+    <div class="text-meta">
       <SubjectScopeToggle bind:value={list.subjectScope} />
     </div>
-    <div class="text-xs">
+    <div class="text-meta">
       <BlurSlider
         bind:value={list.blurSlider}
         oncommit={list.commitClusterBlur}

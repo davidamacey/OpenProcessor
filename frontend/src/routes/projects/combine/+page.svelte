@@ -54,15 +54,17 @@
 
 <div class="flex min-h-screen flex-col bg-surface-0 text-fg-1">
   <header class="flex h-12 shrink-0 items-center gap-4 border-b border-line px-4">
-    <span class="text-sm font-semibold tracking-tight">{appName}</span>
+    <span class="text-body font-semibold tracking-tight">{appName}</span>
     <span class="text-fg-3">/</span>
-    <a href={resolve('/projects')} class="text-sm text-fg-2 hover:text-white">Projects</a>
+    <a href={resolve('/projects')} class="text-body text-fg-2 hover:text-white"
+      >Projects</a
+    >
     <span class="text-fg-3">/</span>
-    <h1 class="text-sm text-fg-1">Combine projects</h1>
+    <h1 class="text-body text-fg-1">Combine projects</h1>
   </header>
 
   <main class="mx-auto w-full max-w-5xl flex-1 space-y-6 p-4">
-    <p class="text-xs text-fg-2">
+    <p class="text-meta text-fg-2">
       Merge several projects into a new one. The sources are left untouched; the target is
       created and filled by a background job.
     </p>
@@ -74,7 +76,7 @@
     />
 
     {#if wizard.previewError}
-      <p class="text-sm text-danger-text" data-testid="combine-preview-error">
+      <p class="text-body text-danger-text" data-testid="combine-preview-error">
         {wizard.previewError}
       </p>
     {/if}
@@ -82,7 +84,7 @@
     {#if preview}
       <section class="space-y-3" data-testid="combine-step-mapping">
         <div class="flex items-center gap-3">
-          <h2 class="text-sm font-semibold text-fg-1">2. Class mapping</h2>
+          <h2 class="text-body font-semibold text-fg-1">2. Class mapping</h2>
           <span class="grow"></span>
           <button
             type="button"
@@ -91,7 +93,7 @@
             onclick={() => wizard.resetToSuggestions()}>Reset to suggestions</button
           >
         </div>
-        <p class="text-xs text-fg-3">
+        <p class="text-meta text-fg-3">
           Untouched rows follow the server's suggestions. A class is its name: a
           <em>create</em> row defines a target class and a <em>map</em> row points at one.
         </p>
@@ -104,7 +106,7 @@
     <CombineOptions {wizard} />
 
     {#if wizard.previewing && !preview}
-      <p class="text-xs text-fg-3" data-testid="combine-previewing">Previewing…</p>
+      <p class="text-meta text-fg-3" data-testid="combine-previewing">Previewing…</p>
     {/if}
     {#if preview}
       <CombinePreviewSummary {preview} stale={wizard.stale || wizard.previewing} />
@@ -113,7 +115,7 @@
     <section class="space-y-2" data-testid="combine-step-start">
       {#if wizard.refusal}
         <div
-          class="space-y-1 rounded border border-danger-line bg-danger-soft p-2 text-xs text-danger-text"
+          class="space-y-1 rounded border border-danger-line bg-danger-soft p-2 text-meta text-danger-text"
           data-testid="combine-start-refusal"
           data-code={wizard.refusal.code ?? ''}
         >
@@ -163,7 +165,7 @@
     oncancel={() => (confirmOpen = false)}
   >
     <p data-testid="combine-confirm-body">
-      Creates project <span class="font-mono text-fg-1">{preview.target.slug}</span>
+      Creates project <code class="text-fg-1">{preview.target.slug}</code>
       from {wizard.sources.length} source{wizard.sources.length === 1 ? '' : 's'}:
       {formatCount(preview.target.projected_images)} images, {formatCount(
         preview.target.projected_items,
@@ -171,7 +173,7 @@
       {formatCount(preview.target.holdout_images)} test images,
       {(preview.target.classes ?? []).length} classes.
     </p>
-    <p class="text-xs text-fg-2">
+    <p class="text-meta text-fg-2">
       Images to link: {formatBytes(preview.bytes?.to_link)} · to copy: {formatBytes(
         preview.bytes?.to_copy,
       )}. The sources are not changed. You can undo it later by deleting the target.

@@ -54,7 +54,7 @@
   });
 </script>
 
-<details class="mt-3 text-xs" open={active} data-testid="export-item-filter">
+<details class="mt-3 text-meta" open={active} data-testid="export-item-filter">
   <summary class="cursor-pointer text-fg-2">Only items matching a filter</summary>
   <div class="mt-2 space-y-2">
     <ItemFilterBar state={filter} visible={withoutOpenVocab} {error} />

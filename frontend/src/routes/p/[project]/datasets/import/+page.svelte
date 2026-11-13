@@ -116,7 +116,7 @@
 
   <DatasetsGate>
     {#snippet children(formats)}
-      <p class="text-xs text-fg-3">
+      <p class="text-meta text-fg-3">
         The dataset is imported into this project. To import into a new project,
         <a class="text-accent-text hover:underline" href={resolve('/projects')}
           >create it</a
@@ -128,9 +128,9 @@
         class="space-y-3 rounded-lg border border-line p-4"
         data-testid="import-source"
       >
-        <h2 class="text-sm font-semibold text-fg-1">Source</h2>
+        <h2 class="text-body font-semibold text-fg-1">Source</h2>
         <div class="grid gap-3 sm:grid-cols-[1fr_auto]">
-          <label class="block text-xs">
+          <label class="block text-meta">
             <span class="mb-0.5 block text-fg-2">Server path</span>
             <input
               class="input w-full font-mono"
@@ -141,7 +141,7 @@
                 wizard.setSource((e.currentTarget as HTMLInputElement).value)}
             />
           </label>
-          <label class="block text-xs">
+          <label class="block text-meta">
             <span class="mb-0.5 block text-fg-2">Format</span>
             <select
               class="select"
@@ -156,13 +156,15 @@
           </label>
         </div>
         {#if sourceRoots.length > 0}
-          <div class="text-xs text-fg-3" data-testid="source-roots">
+          <div class="text-meta text-fg-3" data-testid="source-roots">
             Allowed roots:
-            {#each sourceRoots as r, i (r)}<code class="font-mono text-fg-2">{r}</code
-              >{i < sourceRoots.length - 1 ? ', ' : ''}{/each}
+            {#each sourceRoots as r, i (r)}<code class="text-fg-2">{r}</code>{i <
+              sourceRoots.length - 1
+                ? ', '
+                : ''}{/each}
           </div>
         {/if}
-        <div class="text-xs">
+        <div class="text-meta">
           <label class="inline-flex items-center gap-2">
             <span class="text-fg-2">Or upload an archive</span>
             <input
@@ -188,32 +190,32 @@
       <!-- 2. Preview -->
       <section class="space-y-3 rounded-lg border border-line p-4">
         <div class="flex items-baseline justify-between">
-          <h2 class="text-sm font-semibold text-fg-1">Preview</h2>
+          <h2 class="text-body font-semibold text-fg-1">Preview</h2>
           {#if wizard.previewing}
-            <span class="text-xs text-fg-3" data-testid="previewing"
+            <span class="text-meta text-fg-3" data-testid="previewing"
               >Checking the dataset…</span
             >
           {/if}
         </div>
         {#if wizard.previewError}
-          <p class="text-sm text-danger-text" data-testid="preview-error">
+          <p class="text-body text-danger-text" data-testid="preview-error">
             {wizard.previewError}
           </p>
         {:else if wizard.preview}
           <PreviewSummary preview={wizard.preview} {formats} />
         {:else}
-          <p class="text-xs text-fg-3">Enter a server path or upload an archive.</p>
+          <p class="text-meta text-fg-3">Enter a server path or upload an archive.</p>
         {/if}
       </section>
 
       {#if wizard.preview}
         <!-- 3. Class mapping -->
         <section class="space-y-3 rounded-lg border border-line p-4">
-          <h2 class="text-sm font-semibold text-fg-1">Class mapping</h2>
-          <p class="text-xs text-fg-3">
+          <h2 class="text-body font-semibold text-fg-1">Class mapping</h2>
+          <p class="text-meta text-fg-3">
             Classes are matched by name. Pick the same class on two rows to merge them.
           </p>
-          <div class="flex flex-wrap items-center gap-4 text-xs">
+          <div class="flex flex-wrap items-center gap-4 text-meta">
             <label class="inline-flex items-center gap-2">
               <input
                 type="checkbox"
@@ -247,7 +249,7 @@
 
         <!-- 4. Options -->
         <section class="space-y-3 rounded-lg border border-line p-4">
-          <h2 class="text-sm font-semibold text-fg-1">Options</h2>
+          <h2 class="text-body font-semibold text-fg-1">Options</h2>
           <ImportOptions {wizard} {formats} />
         </section>
 
@@ -255,7 +257,7 @@
         <section class="space-y-3" data-testid="import-start">
           {#if wizard.refusal}
             <div
-              class="space-y-2 rounded border border-danger-line bg-danger-soft p-3 text-sm text-danger-text"
+              class="space-y-2 rounded border border-danger-line bg-danger-soft p-3 text-body text-danger-text"
               data-testid="start-refusal"
             >
               <p>{wizard.refusal.message}</p>
@@ -285,7 +287,7 @@
             </div>
           {/if}
           {#if wizard.reusedJob}
-            <p class="text-sm text-fg-2" data-testid="start-reused">
+            <p class="text-body text-fg-2" data-testid="start-reused">
               Already imported.
               <a
                 class="text-accent-text hover:underline"
@@ -306,13 +308,13 @@
             Start import
           </button>
           {#if wizard.unmappedRows.length > 0}
-            <span class="ml-2 text-xs text-warn-text">
+            <span class="ml-2 text-meta text-warn-text">
               {wizard.unmappedRows.length === 1
                 ? '1 class still needs a mapping.'
                 : `${wizard.unmappedRows.length} classes still need a mapping.`}
             </span>
           {:else if wizard.preview.blocking && !wizard.canStart}
-            <span class="ml-2 text-xs text-danger-text"
+            <span class="ml-2 text-meta text-danger-text"
               >The issues above block this import.</span
             >
           {/if}
@@ -330,7 +332,7 @@
               Import {wizard.preview.totals.images.toLocaleString()} images and
               {wizard.preview.totals.boxes.toLocaleString()} boxes into this project.
             </p>
-            <p class="text-xs text-fg-2">
+            <p class="text-meta text-fg-2">
               {wizard.preview.totals.images_to_ingest.toLocaleString()} images to ingest,
               {wizard.preview.totals.images_already_indexed.toLocaleString()} already here.
               An import can be undone from its page.
@@ -347,8 +349,7 @@
           oncancel={() => (resumeTarget = null)}
         >
           <p>
-            Resume import <code class="font-mono">{resumeTarget}</code> from its last finished
-            chunk.
+            Resume import <code>{resumeTarget}</code> from its last finished chunk.
           </p>
         </ConfirmDialog>
       {/if}

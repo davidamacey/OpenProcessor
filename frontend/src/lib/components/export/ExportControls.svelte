@@ -26,10 +26,10 @@
 
 <!-- Export controls + downloads + training command -->
 <section class="surface p-4">
-  <h2 class="mb-3 text-sm font-semibold text-fg-2">Export to staging</h2>
+  <h2 class="mb-3 text-body font-semibold text-fg-2">Export to staging</h2>
   <NearDupStalePanel refresh={run.nearDup} />
   <div class="flex flex-wrap items-end gap-3">
-    <label class="text-xs">
+    <label class="text-meta">
       <span class="mb-1 block text-fg-2">Version tag (optional)</span>
       <input
         type="text"
@@ -39,7 +39,7 @@
       />
     </label>
     <label
-      class="flex cursor-pointer items-center gap-2 pb-1.5 text-xs text-fg-2"
+      class="flex cursor-pointer items-center gap-2 pb-1.5 text-meta text-fg-2"
       title="Drop any exported image that still has an unvalidated or otherwise unlabeled object on it, instead of letting the detector learn that object as background."
     >
       <input
@@ -50,7 +50,7 @@
       Only images whose every object is labeled
     </label>
     <label
-      class="flex cursor-pointer items-center gap-2 pb-1.5 text-xs text-fg-2"
+      class="flex cursor-pointer items-center gap-2 pb-1.5 text-meta text-fg-2"
       title="Keep one item per near-duplicate group. Needs a current near-duplicate run."
     >
       <input
@@ -118,7 +118,7 @@
 
   {#if run.exportBlocked && run.blockingReasons.length > 0}
     <ul
-      class="mt-2 list-inside list-disc text-xs text-warn-text"
+      class="mt-2 list-inside list-disc text-meta text-warn-text"
       data-testid="export-blocking-reasons"
     >
       {#each run.blockingReasons as reason, i (i)}
@@ -130,20 +130,20 @@
   <ExportItemFilter state={run.exportFilter} />
 
   {#if run.exportState}
-    <div class="mt-3 text-xs text-fg-2">
-      Last status: <span class="font-mono text-fg-1">{run.exportState.status}</span>
+    <div class="mt-3 text-meta text-fg-2">
+      Last status: <span class="text-fg-1">{run.exportState.status}</span>
       {#if run.exportState.last_run}
         · {formatTimestamp(run.exportState.last_run)}
       {/if}
       {#if run.exportState.export_dir}
-        · <span class="font-mono text-fg-2">{run.exportState.export_dir}</span>
+        · <code class="text-fg-2">{run.exportState.export_dir}</code>
       {/if}
       {#if run.exportState.error}
         · <span class="text-danger-text">{run.exportState.error}</span>
       {/if}
     </div>
     {#if run.exportState.status === 'success'}
-      <p class="mt-2 text-xs text-fg-2">
+      <p class="mt-2 text-meta text-fg-2">
         Next: <a
           href={resolve(projectHref('/train'))}
           class="text-accent-text underline hover:text-accent-text"
@@ -159,14 +159,14 @@
          (formatCount); with none of them served (no export yet) this
          whole block doesn't render rather than showing blanks. -->
     {#if run.exportState.image_count != null || run.exportState.object_count != null || run.exportState.class_count != null || run.exportState.split_counts}
-      <div class="mt-3 flex flex-wrap gap-2 text-xs">
+      <div class="mt-3 flex flex-wrap gap-2 text-meta">
         {#if run.exportState.image_count != null || run.exportState.object_count != null}
           <span class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1">
-            <span class="ml-1 font-mono text-fg-1"
+            <span class="ml-1 text-fg-1 tabular-nums"
               >{formatCount(run.exportState.object_count)}</span
             >
             <span class="text-fg-3">objects in</span>
-            <span class="ml-1 font-mono text-fg-1"
+            <span class="ml-1 text-fg-1 tabular-nums"
               >{formatCount(run.exportState.image_count)}</span
             >
             <span class="text-fg-3">images</span>
@@ -187,7 +187,7 @@
             data-testid="export-class-count"
           >
             {#if run.exportState.classes_with_objects != null}
-              <span class="font-mono text-fg-1"
+              <span class="text-fg-1 tabular-nums"
                 >{run.exportState.classes_with_objects}</span
               >
               <span class="text-fg-3">classes with objects</span>
@@ -195,7 +195,7 @@
                 >({run.exportState.class_count} in registry)</span
               >
             {:else if run.exportState.class_split_counts}
-              <span class="font-mono text-fg-1"
+              <span class="text-fg-1 tabular-nums"
                 >{run.exportClassSplit.withObjects.length}</span
               >
               <span class="text-fg-3">classes with objects</span>
@@ -204,13 +204,15 @@
               >
             {:else}
               <span class="text-fg-3">classes in registry</span>
-              <span class="ml-1 font-mono text-fg-1">{run.exportState.class_count}</span>
+              <span class="ml-1 text-fg-1 tabular-nums"
+                >{run.exportState.class_count}</span
+              >
             {/if}
           </span>
         {/if}
         {#if run.exportState.split_counts}
           <span
-            class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1 font-mono"
+            class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1 tabular-nums"
             title="Images per split"
           >
             images: train {run.exportState.split_counts.train.toLocaleString()} · val {run.exportState.split_counts.val.toLocaleString()}
@@ -219,7 +221,7 @@
         {/if}
         {#if run.exportState.split_object_counts}
           <span
-            class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1 font-mono"
+            class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1 tabular-nums"
             title="Objects (label lines) per split"
           >
             objects: train {run.exportState.split_object_counts.train.toLocaleString()} · val
@@ -234,10 +236,10 @@
          export (formatCount renders "—"); the whole block hides when
          nothing here was ever recorded. -->
     {#if run.exportState.require_fully_labeled_images != null || run.exportState.unlabeled_items_on_exported_images != null || run.exportState.images_with_unlabeled_items != null || run.exportState.images_dropped_not_fully_labeled != null || run.exportState.skipped_items != null}
-      <div class="mt-2 flex flex-wrap gap-2 text-xs text-fg-2">
+      <div class="mt-2 flex flex-wrap gap-2 text-meta text-fg-2">
         {#if run.exportState.require_fully_labeled_images != null}
           <span class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1">
-            require_fully_labeled_images: <span class="font-mono text-fg-1"
+            require_fully_labeled_images: <span class="text-fg-1"
               >{run.exportState.require_fully_labeled_images ? 'true' : 'false'}</span
             >
           </span>
@@ -247,14 +249,14 @@
             class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1"
             title="Objects on exported images the export did not label — learned as background."
           >
-            unlabeled objects on exported images: <span class="font-mono text-fg-1"
+            unlabeled objects on exported images: <span class="text-fg-1 tabular-nums"
               >{formatCount(run.exportState.unlabeled_items_on_exported_images)}</span
             >
           </span>
         {/if}
         {#if run.exportState.images_with_unlabeled_items != null}
           <span class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1">
-            images with an unlabeled object: <span class="font-mono text-fg-1"
+            images with an unlabeled object: <span class="text-fg-1 tabular-nums"
               >{formatCount(run.exportState.images_with_unlabeled_items)}</span
             >
           </span>
@@ -264,7 +266,7 @@
             class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1"
             title="Images left out by require_fully_labeled_images (0 when it was off)."
           >
-            images dropped (not fully labeled): <span class="font-mono text-fg-1"
+            images dropped (not fully labeled): <span class="text-fg-1 tabular-nums"
               >{formatCount(run.exportState.images_dropped_not_fully_labeled)}</span
             >
           </span>
@@ -275,7 +277,7 @@
             title="Validated items the export couldn't write: no source image id, or no usable box/class."
             data-testid="export-skipped-items"
           >
-            skipped items: <span class="font-mono text-fg-1"
+            skipped items: <span class="text-fg-1 tabular-nums"
               >{formatCount(run.exportState.skipped_items.no_image_id)} no image id · {formatCount(
                 run.exportState.skipped_items.no_usable_box_or_class,
               )} no usable box/class</span
@@ -286,7 +288,7 @@
     {/if}
 
     {#if run.exportState.class_split_counts && run.exportState.class_split_counts.length > 0}
-      <details class="mt-3 text-xs">
+      <details class="mt-3 text-meta">
         <summary class="cursor-pointer text-fg-2 hover:text-fg-1">
           Per-class object counts ({run.exportClassSplit.withObjects.length} classes with objects)
         </summary>

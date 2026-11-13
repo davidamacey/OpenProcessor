@@ -11,7 +11,7 @@
 {#if crop.item_text_lines && crop.item_text_lines.length > 0}
   <div class="mt-4 border-t border-line pt-3">
     <div
-      class="mb-1.5 flex items-center justify-between text-caption uppercase tracking-wider text-fg-3"
+      class="mb-1.5 flex items-center justify-between text-meta text-fg-2 font-semibold"
     >
       <span>Item text</span>
       <button
@@ -43,15 +43,15 @@
         {/each}
       </div>
     {/if}
-    <ul class="space-y-0.5 text-xs">
+    <ul class="space-y-0.5 text-meta">
       {#each crop.item_text_lines as line, i (i)}
         <li class="flex items-center gap-1.5">
           <span
-            class="rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 font-mono text-fg-1"
+            class="rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-fg-1"
           >
             {line.text || '∅'}
           </span>
-          <span class="font-mono text-caption text-fg-3">{pct(line.confidence)}</span>
+          <span class="text-caption text-fg-3 tabular-nums">{pct(line.confidence)}</span>
         </li>
       {/each}
     </ul>

@@ -71,23 +71,23 @@
 </script>
 
 <section
-  class="surface flex flex-col gap-3 p-4 text-sm"
+  class="surface flex flex-col gap-3 p-4 text-body"
   data-testid="open-vocab-test-panel"
   aria-label="Test a target"
 >
-  <h2 class="text-base font-semibold">Test a target</h2>
-  <p class="text-xs text-fg-2">
+  <h2 class="text-title font-semibold">Test a target</h2>
+  <p class="text-meta text-fg-2">
     Runs one target (as drafted, saved or not) on one image and shows every candidate the
     segmenter found and what selection kept. Nothing is written.
   </p>
 
   {#if targets.length === 0}
-    <p class="text-xs text-fg-3" data-testid="test-no-targets">
+    <p class="text-meta text-fg-3" data-testid="test-no-targets">
       Add a target to test it.
     </p>
   {:else}
     <div class="grid gap-2 sm:grid-cols-2">
-      <label class="flex flex-col gap-1 text-xs text-fg-2">
+      <label class="flex flex-col gap-1 text-meta text-fg-2">
         Target
         <select class="select select-sm" bind:value={index} data-testid="ov-test-target">
           {#each targets as tg, i (i)}
@@ -95,7 +95,7 @@
           {/each}
         </select>
       </label>
-      <label class="flex flex-col gap-1 text-xs text-fg-2">
+      <label class="flex flex-col gap-1 text-meta text-fg-2">
         Image
         <select
           class="select select-sm"
@@ -107,7 +107,7 @@
         </select>
       </label>
       {#if t.source === 'crop'}
-        <label class="flex flex-col gap-1 text-xs text-fg-2 sm:col-span-2">
+        <label class="flex flex-col gap-1 text-meta text-fg-2 sm:col-span-2">
           Crop id (from review or browse)
           <input
             class="input input-sm font-mono"
@@ -117,7 +117,7 @@
           />
         </label>
       {:else}
-        <label class="flex flex-col gap-1 text-xs text-fg-2 sm:col-span-2">
+        <label class="flex flex-col gap-1 text-meta text-fg-2 sm:col-span-2">
           JPEG or PNG
           <input
             type="file"
@@ -127,7 +127,7 @@
           />
         </label>
       {/if}
-      <label class="flex items-center gap-2 text-xs text-fg-2 sm:col-span-2">
+      <label class="flex items-center gap-2 text-meta text-fg-2 sm:col-span-2">
         <input type="checkbox" bind:checked={t.precheck} data-testid="ov-test-precheck" />
         Run the VLM pre-check
       </label>
@@ -158,18 +158,18 @@
       class="flex flex-col gap-3 border-t border-line pt-3"
       data-testid="ov-test-result"
     >
-      <p class="text-xs text-fg-2">
+      <p class="text-meta text-fg-2">
         <span class="text-fg-3">Prompt</span>
-        <span class="font-mono text-fg-1">{r.prompt}</span>
+        <span class="text-fg-1">{r.prompt}</span>
         <span class="ml-2 text-fg-3">Class</span>
-        <span class="font-mono text-fg-1" data-testid="ov-test-class"
+        <span class="text-fg-1" data-testid="ov-test-class"
           >{r.class_name || 'discovery'}</span
         >
         <span class="ml-2 text-fg-3">Took</span>
-        <span class="font-mono text-fg-1">{Math.round(r.elapsed_ms)} ms</span>
+        <span class="text-fg-1 tabular-nums">{Math.round(r.elapsed_ms)} ms</span>
       </p>
       <p
-        class="text-xs {r.gate.run ? 'text-fg-2' : 'text-warn-text'}"
+        class="text-meta {r.gate.run ? 'text-fg-2' : 'text-warn-text'}"
         data-testid="ov-test-gate"
       >
         {#if r.gate.run}
@@ -190,12 +190,12 @@
       {/if}
 
       {#if r.hits.length === 0}
-        <p class="text-xs text-fg-2" data-testid="ov-test-no-hits">
+        <p class="text-meta text-fg-2" data-testid="ov-test-no-hits">
           The segmenter returned no candidates.
         </p>
       {:else}
         <div class="overflow-x-auto">
-          <table class="w-full text-left text-xs" data-testid="ov-test-hits">
+          <table class="w-full text-left text-meta" data-testid="ov-test-hits">
             <thead class="text-fg-3">
               <tr>
                 <th class="py-1 pr-3 font-normal">Hit</th>
@@ -211,8 +211,8 @@
                   data-testid="ov-test-hit"
                   data-selected={h.selected}
                 >
-                  <td class="py-1 pr-3 font-mono">#{i}</td>
-                  <td class="py-1 pr-3 font-mono">{h.score.toFixed(2)}</td>
+                  <td class="py-1 pr-3 tabular-nums">#{i}</td>
+                  <td class="py-1 pr-3 tabular-nums">{h.score.toFixed(2)}</td>
                   <td class="py-1 pr-3">{h.selected ? 'yes' : 'no'}</td>
                   <td class="py-1" title={h.drop_reason ?? ''}
                     >{dropReasonText(h.drop_reason, vocabulary.drop_reasons)}</td

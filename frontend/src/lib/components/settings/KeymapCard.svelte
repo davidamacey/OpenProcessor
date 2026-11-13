@@ -53,7 +53,7 @@
 
   {#if ctl.revisionConflictMessage}
     <div
-      class="mb-3 rounded border border-danger-line bg-danger-soft p-2 text-xs text-danger-text"
+      class="mb-3 rounded border border-danger-line bg-danger-soft p-2 text-meta text-danger-text"
     >
       {ctl.revisionConflictMessage} Shortcuts were changed elsewhere.
       <button class="ml-2 underline" onclick={() => void ctl.reloadAfterConflict()}>
@@ -64,7 +64,7 @@
 
   {#if ctl.conflictClasses && ctl.conflictClasses.length > 0}
     <div
-      class="mb-3 rounded border border-warn-line bg-warn-soft p-2 text-xs text-warn-text"
+      class="mb-3 rounded border border-warn-line bg-warn-soft p-2 text-meta text-warn-text"
       data-testid="class-conflict-dialog"
     >
       <p class="mb-1">These class hotkeys would collide:</p>
@@ -104,12 +104,12 @@
 
   <div class="mt-3">
     <button
-      class="text-sm text-fg-2 underline hover:text-fg-1"
+      class="text-body text-fg-2 underline hover:text-fg-1"
       onclick={() => (ctl.resetAllOpen = true)}
     >
       Reset all to defaults
     </button>
-    {#if ctl.validating}<span class="ml-3 text-xs text-fg-3">Checking…</span>{/if}
+    {#if ctl.validating}<span class="ml-3 text-meta text-fg-3">Checking…</span>{/if}
   </div>
 
   <SaveBar

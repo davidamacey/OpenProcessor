@@ -135,7 +135,7 @@
             {:else}
               {#if !config.uploadPersistsBytes}
                 <p
-                  class="rounded border border-warn-line bg-warn-soft p-3 text-xs text-warn-text"
+                  class="rounded border border-warn-line bg-warn-soft p-3 text-meta text-warn-text"
                 >
                   This backend indexes uploads without keeping the image; use server-path
                   ingest or the command-line uploader.
@@ -147,7 +147,7 @@
                   onselect={(files) => (selectedFiles = files)}
                 />
                 {#if selectedFiles.length > 0}
-                  <p class="text-xs text-fg-2">{selectedFiles.length} files selected</p>
+                  <p class="text-meta text-fg-2">{selectedFiles.length} files selected</p>
                 {/if}
                 <IngestRunPanel
                   files={selectedFiles}

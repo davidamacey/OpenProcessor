@@ -68,9 +68,9 @@
 
 <section class="rounded-md border border-line bg-surface-1 p-4">
   <header class="mb-3 flex flex-wrap items-center gap-3">
-    <h2 class="font-mono text-sm text-white">{campaignId}</h2>
+    <h2 class="text-body text-white"><code>{campaignId}</code></h2>
     <span
-      class="rounded-sm border border-accent/40 bg-accent/10 px-1.5 py-0.5 text-caption uppercase tracking-wide text-accent-text"
+      class="rounded-sm border border-accent/40 bg-accent/10 px-1.5 py-0.5 text-caption text-accent-text"
     >
       campaign
     </span>
@@ -102,22 +102,22 @@
   <ul class="divide-y divide-line rounded border border-line bg-surface-0">
     {#each ordered as r (r.job_id)}
       <li
-        class="grid grid-cols-1 gap-2 px-3 py-2 text-sm sm:grid-cols-[auto_8rem_auto_1fr]"
+        class="grid grid-cols-1 gap-2 px-3 py-2 text-body sm:grid-cols-[auto_8rem_auto_1fr]"
       >
         <span
-          class="rounded-sm border px-1.5 py-0.5 text-center text-caption font-medium uppercase tracking-wide {statePillClass(
+          class="rounded-sm border px-1.5 py-0.5 text-center text-caption font-medium capitalize {statePillClass(
             r.state,
           )}"
         >
           {r.state}
         </span>
-        <span class="truncate font-mono text-xs text-fg-2" title={r.job_id}>
+        <code class="truncate text-meta text-fg-2" title={r.job_id}>
           {r.job_id}
-        </span>
-        <span class="font-mono text-xs text-fg-2">
+        </code>
+        <span class="text-meta text-fg-2 tabular-nums">
           {r.current_epoch ?? '—'} / {r.total_epochs ?? '—'} epochs
         </span>
-        <span class="font-mono text-xs text-fg-2">
+        <span class="text-meta text-fg-2 tabular-nums">
           mAP50 {bestMapDisplay(r).value?.toFixed(3) ?? '—'}
           <span class="text-fg-3">·</span>
           mAP50-95 {r.eval?.map50_95?.toFixed(3) ?? '—'}
@@ -127,12 +127,12 @@
   </ul>
 
   {#if best}
-    <p class="mt-3 text-xs text-fg-2">
+    <p class="mt-3 text-meta text-fg-2">
       Best so far:
-      <span class="font-mono text-fg-1">{best.job_id}</span>
+      <code class="text-fg-1">{best.job_id}</code>
       <span class="text-fg-3">·</span>
       mAP50
-      <span class="font-mono text-fg-1"
+      <span class="text-fg-1 tabular-nums"
         >{bestMapDisplay(best).value?.toFixed(3) ?? '—'}</span
       >
     </p>

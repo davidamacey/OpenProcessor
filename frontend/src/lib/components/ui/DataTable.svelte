@@ -14,7 +14,9 @@
    * A compact table for many rows: a sticky header inside a scrolling frame, click-to-sort
    * headers (`aria-sort`, ascending then descending), and one `cell` snippet that renders each
    * body cell. Sorting is by the column's `value(row)`; filtering and what a row is are the
-   * caller's. The frame scrolls both ways, so a wide matrix never widens the page.
+   * caller's. The frame scrolls both ways, so a wide matrix never widens the page; below `md`
+   * the first column stays pinned while the rest scrolls. Right-aligned (numeric) columns use
+   * tabular figures so digits line up.
    */
   import { untrack, type Snippet } from 'svelte';
   import Icon from './Icon.svelte';
@@ -60,6 +62,10 @@
     });
   });
 
+  const PINNED_HEAD = 'max-md:sticky max-md:left-0 max-md:z-[1] max-md:bg-surface-2';
+  const PINNED_CELL =
+    'max-md:sticky max-md:left-0 max-md:z-[1] max-md:bg-surface-1 max-md:group-hover:bg-surface-2';
+
   function toggle(col: Column<T>): void {
     if (!col.value) return;
     sort =
@@ -78,19 +84,19 @@
 </script>
 
 <div
-  class="overflow-auto rounded-card border border-line {maxHeightClass}"
+  class="overflow-auto rounded-card border border-line bg-surface-1 {maxHeightClass}"
   data-testid="data-table"
 >
   <table class="w-full border-collapse text-body" aria-label={label}>
     <thead class="sticky top-0 z-10 bg-surface-2 text-meta text-fg-2">
       <tr>
-        {#each columns as col (col.id)}
+        {#each columns as col, i (col.id)}
           <th
             scope="col"
             class="border-b border-line px-3 py-1.5 font-medium whitespace-nowrap {col.align ===
             'right'
-              ? 'text-right'
-              : 'text-left'}"
+              ? 'text-right tabular-nums'
+              : 'text-left'} {i === 0 ? PINNED_HEAD : ''}"
             aria-sort={ariaSort(col)}
             title={col.title}
           >
@@ -114,10 +120,12 @@
     </thead>
     <tbody>
       {#each sorted as row (rowKey(row))}
-        <tr class="border-b border-line last:border-b-0 hover:bg-surface-2">
-          {#each columns as col (col.id)}
+        <tr class="group border-b border-line last:border-b-0 hover:bg-surface-2">
+          {#each columns as col, i (col.id)}
             <td
-              class="px-3 py-1 {col.align === 'right' ? 'text-right tabular-nums' : ''}"
+              class="px-3 py-1 {col.align === 'right'
+                ? 'text-right tabular-nums'
+                : ''} {i === 0 ? PINNED_CELL : ''}"
             >
               {@render cell(row, col)}
             </td>

@@ -20,14 +20,14 @@
 
 <section class="surface flex flex-col gap-2 p-4" data-testid={testId}>
   <div>
-    <h3 class="text-sm font-semibold text-fg-1">{title}</h3>
-    <p class="text-xs text-fg-3">{blurb}</p>
+    <h3 class="text-body font-semibold text-fg-1">{title}</h3>
+    <p class="text-meta text-fg-3">{blurb}</p>
   </div>
   {#if stats.length === 0}
-    <p class="text-sm text-fg-3">No audited crops yet.</p>
+    <p class="text-body text-fg-3">No audited crops yet.</p>
   {:else}
     <div class="overflow-x-auto">
-      <table class="w-full text-left text-xs">
+      <table class="w-full text-left text-meta">
         <thead class="text-fg-3">
           <tr>
             <th class="py-1 pr-3 font-medium">Class</th>
@@ -55,9 +55,9 @@
                   >
                 {/if}
               </td>
-              <td class="py-1.5 pr-3 text-right font-mono">{row.n}</td>
-              <td class="py-1.5 pr-3 text-right font-mono">{row.correct}</td>
-              <td class="py-1.5 text-right font-mono">
+              <td class="py-1.5 pr-3 text-right tabular-nums">{row.n}</td>
+              <td class="py-1.5 pr-3 text-right tabular-nums">{row.correct}</td>
+              <td class="py-1.5 text-right tabular-nums">
                 <span data-testid="audit-precision">{percentText(row.precision, 1)}</span>
                 <span class="block text-caption whitespace-nowrap text-fg-3"
                   >{percentText(row.ci_low, 1)} to {percentText(row.ci_high, 1)}</span

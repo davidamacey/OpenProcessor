@@ -16,19 +16,19 @@
 </script>
 
 <details class="surface p-4" data-testid="near-dup-profile">
-  <summary class="cursor-pointer text-base font-semibold">Advanced: thresholds</summary>
+  <summary class="cursor-pointer text-title font-semibold">Advanced: thresholds</summary>
   <div class="mt-3 flex flex-col gap-3">
-    <p class="text-xs text-fg-2">
+    <p class="text-meta text-fg-2">
       Cosine similarity cuts per level. Members at or above the duplicate cut are
       duplicates; members at or above the leak cut must stay on one split side, so the
       leak cut cannot exceed the duplicate cut. Few projects need to change these; the
       defaults are the seeded values.
     </p>
     {#if ctl.loading && !ctl.draft}
-      <p class="text-xs text-fg-3">Loading the profile…</p>
+      <p class="text-meta text-fg-3">Loading the profile…</p>
     {:else if ctl.loadError}
       <p
-        class="text-sm text-danger-text"
+        class="text-body text-danger-text"
         role="alert"
         data-testid="near-dup-profile-error"
       >
@@ -37,13 +37,13 @@
     {:else if ctl.draft}
       {@const d = ctl.draft}
       {@const s = ctl.seeded}
-      <p class="text-xs text-fg-2">
-        Active: <span class="font-mono">{ctl.name}</span> revision {ctl.revision}
+      <p class="text-meta text-fg-2">
+        Active: <code>{ctl.name}</code> revision {ctl.revision}
       </p>
       <div class="grid gap-4 md:grid-cols-2">
         <fieldset class="flex flex-col gap-2 rounded border border-line p-3">
-          <legend class="px-1 text-sm font-medium">Image level</legend>
-          <label class="flex flex-col gap-1 text-xs">
+          <legend class="px-1 text-body font-medium">Image level</legend>
+          <label class="flex flex-col gap-1 text-meta">
             <span class="text-fg-2"
               >Duplicate cosine{#if s}&nbsp;(default {s.image.dedup_cosine}){/if}</span
             >
@@ -55,7 +55,7 @@
               bind:value={d.image.dedup_cosine}
             />
           </label>
-          <label class="flex flex-col gap-1 text-xs">
+          <label class="flex flex-col gap-1 text-meta">
             <span class="text-fg-2"
               >Leak cosine{#if s}&nbsp;(default {s.image.leak_cosine}){/if}</span
             >
@@ -67,7 +67,7 @@
               bind:value={d.image.leak_cosine}
             />
           </label>
-          <label class="flex flex-col gap-1 text-xs">
+          <label class="flex flex-col gap-1 text-meta">
             <span class="text-fg-2"
               >Neighbours per member (k){#if s}&nbsp;(default {s.image.k}){/if}</span
             >
@@ -79,7 +79,7 @@
               bind:value={d.image.k}
             />
           </label>
-          <label class="flex flex-col gap-1 text-xs">
+          <label class="flex flex-col gap-1 text-meta">
             <span class="text-fg-2"
               >Largest group{#if s}&nbsp;(default {s.image.max_group_size}){/if}</span
             >
@@ -93,8 +93,8 @@
           </label>
         </fieldset>
         <fieldset class="flex flex-col gap-2 rounded border border-line p-3">
-          <legend class="px-1 text-sm font-medium">Item level</legend>
-          <label class="flex flex-col gap-1 text-xs">
+          <legend class="px-1 text-body font-medium">Item level</legend>
+          <label class="flex flex-col gap-1 text-meta">
             <span class="text-fg-2"
               >Duplicate cosine{#if s}&nbsp;(default {s.item.dedup_cosine}){/if}</span
             >
@@ -106,7 +106,7 @@
               bind:value={d.item.dedup_cosine}
             />
           </label>
-          <label class="flex flex-col gap-1 text-xs">
+          <label class="flex flex-col gap-1 text-meta">
             <span class="text-fg-2"
               >Leak cosine{#if s}&nbsp;(default {s.item.leak_cosine}){/if}</span
             >
@@ -118,7 +118,7 @@
               bind:value={d.item.leak_cosine}
             />
           </label>
-          <label class="flex flex-col gap-1 text-xs">
+          <label class="flex flex-col gap-1 text-meta">
             <span class="text-fg-2"
               >Largest group{#if s}&nbsp;(default {s.item.max_group_size}){/if}</span
             >
@@ -130,7 +130,7 @@
               bind:value={d.item.max_group_size}
             />
           </label>
-          <label class="flex items-center gap-2 text-xs">
+          <label class="flex items-center gap-2 text-meta">
             <input
               type="checkbox"
               data-testid="np-item-same-class"
@@ -147,7 +147,7 @@
       </div>
       {#if ctl.saveError}
         <div
-          class="text-xs text-danger-text"
+          class="text-meta text-danger-text"
           role="alert"
           data-testid="near-dup-profile-refused"
         >
@@ -161,7 +161,7 @@
       {/if}
       {#if ctl.notice}
         <p
-          class="text-xs text-success-text"
+          class="text-meta text-success-text"
           role="status"
           data-testid="near-dup-profile-notice"
         >

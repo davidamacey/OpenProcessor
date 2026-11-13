@@ -25,16 +25,15 @@
   <ul class="space-y-1" data-testid="config-issues">
     {#each issues as i (i.id)}
       <li
-        class="rounded border px-2 py-1 text-xs {TONE[i.severity] ?? TONE.info}"
+        class="rounded border px-2 py-1 text-meta {TONE[i.severity] ?? TONE.info}"
         data-testid="config-issue"
         data-code={i.code}
         data-severity={i.severity}
       >
         <span class="font-semibold">{i.severity}</span>
-        {#if showField && i.field}<code class="ml-1 font-mono opacity-80">{i.field}</code
-          >{/if}
+        {#if showField && i.field}<code class="ml-1 opacity-80">{i.field}</code>{/if}
         <span class="ml-1">{i.message}</span>
-        <code class="ml-1 font-mono text-caption opacity-60">{i.code}</code>
+        <code class="ml-1 text-caption opacity-60">{i.code}</code>
         {#if i.bypassable}<span class="ml-1 text-caption opacity-80"
             >(can be overridden)</span
           >{/if}

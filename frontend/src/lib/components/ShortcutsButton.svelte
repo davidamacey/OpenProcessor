@@ -12,6 +12,6 @@
   onclick={() => keyboardStore.toggleOverlay()}
   title="Keyboard shortcuts ({keymapStore.glyph('global.shortcuts_overlay')})"
 >
-  <span class="font-mono">?</span>
+  <span>?</span>
   <span class="hidden sm:inline">shortcuts</span>
 </button>

@@ -38,11 +38,11 @@
     <h1 class="text-h1 font-semibold text-fg-1">Prompt packs</h1>
     <span class="grow"></span>
     <a
-      class="text-xs text-accent-text hover:underline"
+      class="text-meta text-accent-text hover:underline"
       href={resolve(projectHref('/settings'))}>Back to settings</a
     >
   </header>
-  <p class="text-sm text-fg-2">
+  <p class="text-body text-fg-2">
     A prompt pack holds the instructions the VLM gets for classifying items and checking
     regions. Open a pack to edit it, test it on a crop and make it the active one.
   </p>
@@ -56,16 +56,16 @@
     <PackActivePanel ctl={list.active} onrollback={() => list.rollback()} />
 
     {#if list.loadError && !list.list}
-      <p class="text-sm text-danger-text" data-testid="packs-load-error">
+      <p class="text-body text-danger-text" data-testid="packs-load-error">
         {list.loadError}
       </p>
     {:else if !list.list}
-      <p class="text-sm text-fg-3">Loading…</p>
+      <p class="text-body text-fg-3">Loading…</p>
     {:else}
       {@const l = list.list}
       <section class="surface overflow-x-auto p-4" aria-label="Packs">
-        <table class="w-full text-left text-sm" data-testid="packs-table">
-          <thead class="text-xs text-fg-3">
+        <table class="w-full text-left text-body" data-testid="packs-table">
+          <thead class="text-meta text-fg-3">
             <tr>
               <th class="py-1 pr-3 font-normal">Name</th>
               <th class="py-1 pr-3 font-normal">Source</th>
@@ -80,10 +80,10 @@
               <tr class="border-t border-line" data-testid="pack-row" data-name={p.name}>
                 <td class="py-1.5 pr-3">
                   <a
-                    class="font-mono text-accent-text hover:underline"
+                    class="text-accent-text hover:underline"
                     href={resolve(
                       projectHref(`/settings/prompt-packs/${encodeURIComponent(p.name)}`),
-                    )}>{p.name}</a
+                    )}><code>{p.name}</code></a
                   >
                   {#if p.active}
                     <span
@@ -98,11 +98,11 @@
                     <span class="ml-1 text-caption text-fg-3">asks for region text</span>
                   {/if}
                 </td>
-                <td class="py-1.5 pr-3 text-xs text-fg-2">
+                <td class="py-1.5 pr-3 text-meta text-fg-2">
                   {p.source}{p.read_only ? ' · read-only' : ''}
                 </td>
-                <td class="py-1.5 pr-3 font-mono text-xs">{p.revision ?? '—'}</td>
-                <td class="py-1.5 pr-3 text-xs text-fg-2">{p.description ?? ''}</td>
+                <td class="py-1.5 pr-3 text-meta tabular-nums">{p.revision ?? '—'}</td>
+                <td class="py-1.5 pr-3 text-meta text-fg-2">{p.description ?? ''}</td>
                 <ConfigRowTail row={p} {flow} />
               </tr>
             {/each}
@@ -112,15 +112,15 @@
 
       {#if l.templates.length > 0}
         <section class="surface flex flex-col gap-2 p-4" aria-label="Templates">
-          <h2 class="text-base font-semibold">Templates</h2>
-          <p class="text-xs text-fg-2">
+          <h2 class="text-title font-semibold">Templates</h2>
+          <p class="text-meta text-fg-2">
             Starting points. Clone one to get a pack you can edit.
           </p>
-          <ul class="space-y-1 text-sm" data-testid="templates">
+          <ul class="space-y-1 text-body" data-testid="templates">
             {#each l.templates as t (t.name + t.path)}
               <li class="flex flex-wrap items-center gap-2" data-testid="template-row">
-                <span class="font-mono">{t.name}</span>
-                <code class="text-xs text-fg-3">{t.path}</code>
+                <code>{t.name}</code>
+                <code class="text-meta text-fg-3">{t.path}</code>
                 <button
                   type="button"
                   class="btn btn-sm"

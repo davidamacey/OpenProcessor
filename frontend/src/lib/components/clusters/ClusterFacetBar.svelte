@@ -26,7 +26,7 @@
     view.facetBand?.min === b.min && view.facetBand?.max === b.max;
 
   const chip = (on: boolean): string =>
-    `btn-sm border text-xs transition-colors ${
+    `btn-sm border text-meta transition-colors ${
       on
         ? 'border-accent/60 bg-accent/20 text-accent-text'
         : 'border-line-strong bg-surface-1 text-fg-2 hover:border-accent/40'
@@ -35,7 +35,7 @@
 
 {#if view.facetsError}
   <p
-    class="border-b border-line px-4 py-1.5 text-xs text-warn-text"
+    class="border-b border-line px-4 py-1.5 text-meta text-warn-text"
     role="alert"
     data-testid="cluster-facets-error"
   >
@@ -44,7 +44,7 @@
 {:else if facets}
   <details
     bind:open
-    class="border-b border-line px-4 py-2 text-xs"
+    class="border-b border-line px-4 py-2 text-meta"
     data-testid="cluster-facets"
   >
     <summary class="cursor-pointer text-fg-2">
@@ -63,7 +63,7 @@
               onclick={() => view.toggleDetectorClass(f.value)}
             >
               {f.value}
-              <span class="ml-1 font-mono text-fg-2">{f.count.toLocaleString()}</span>
+              <span class="ml-1 text-fg-2 tabular-nums">{f.count.toLocaleString()}</span>
             </button>
           {/each}
         </div>
@@ -79,7 +79,7 @@
           onclick={() => view.toggleValidated(true)}
         >
           validated
-          <span class="ml-1 font-mono text-fg-2"
+          <span class="ml-1 text-fg-2 tabular-nums"
             >{facets.validation.validated.toLocaleString()}</span
           >
         </button>
@@ -91,7 +91,7 @@
           onclick={() => view.toggleValidated(false)}
         >
           not validated
-          <span class="ml-1 font-mono text-fg-2"
+          <span class="ml-1 text-fg-2 tabular-nums"
             >{facets.validation.unvalidated.toLocaleString()}</span
           >
         </button>
@@ -110,7 +110,7 @@
               onclick={() => view.toggleReviewTab(tab)}
             >
               {label ?? tab}
-              <span class="ml-1 font-mono text-fg-2">{count.toLocaleString()}</span>
+              <span class="ml-1 text-fg-2 tabular-nums">{count.toLocaleString()}</span>
             </button>
           {/each}
         </div>
@@ -128,7 +128,7 @@
               onclick={() => view.toggleBand(b)}
             >
               {binLabel(b)}
-              <span class="ml-1 font-mono text-fg-2">{b.count.toLocaleString()}</span>
+              <span class="ml-1 text-fg-2 tabular-nums">{b.count.toLocaleString()}</span>
             </button>
           {/each}
           <span class="text-fg-3" data-testid="facet-confidence-missing">

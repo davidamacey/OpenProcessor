@@ -108,17 +108,17 @@
   data-type={field.type}
 >
   <div class="flex flex-wrap items-baseline gap-2">
-    <label class="text-sm font-medium text-fg-1" for={id}>{field.label}</label>
-    <code class="font-mono text-caption text-fg-3">{field.field}</code>
+    <label class="text-body font-medium text-fg-1" for={id}>{field.label}</label>
+    <code class="text-caption text-fg-3">{field.field}</code>
     {#if field.advanced}
       <span class="rounded border border-line-strong px-1 text-caption text-fg-2"
         >advanced</span
       >
     {/if}
   </div>
-  {#if field.help}<p class="text-xs text-fg-2">{field.help}</p>{/if}
+  {#if field.help}<p class="text-meta text-fg-2">{field.help}</p>{/if}
   <p class="text-caption text-fg-3" data-testid="field-facts">
-    default: <span class="font-mono">{valueText(field.default)}</span>
+    default: <code>{valueText(field.default)}</code>
     {#if rangeText}· {rangeText}{/if}
   </p>
   {#if applies === false}
@@ -128,7 +128,7 @@
   {/if}
 
   {#if field.type === 'bool'}
-    <label class="flex items-center gap-2 text-sm">
+    <label class="flex items-center gap-2 text-body">
       <input
         {id}
         type="checkbox"
@@ -153,7 +153,7 @@
   {:else if field.type === 'string' && choices}
     <select
       {id}
-      class="select select-sm max-w-md font-mono {hasError ? 'border-danger/60' : ''}"
+      class="select select-sm max-w-md {hasError ? 'border-danger/60' : ''}"
       value={typeof value === 'string' ? value : ''}
       disabled={readonly}
       data-testid="field-choice"
@@ -166,7 +166,7 @@
   {:else if field.type === 'string'}
     <input
       {id}
-      class="input input-sm max-w-md font-mono {hasError ? 'border-danger/60' : ''}"
+      class="input input-sm max-w-md {hasError ? 'border-danger/60' : ''}"
       value={typeof value === 'string' ? value : ''}
       {readonly}
       oninput={(e) => onchange((e.currentTarget as HTMLInputElement).value)}
@@ -175,7 +175,7 @@
     <input
       {id}
       type="number"
-      class="input input-sm w-40 font-mono {hasError ? 'border-danger/60' : ''}"
+      class="input input-sm w-40 {hasError ? 'border-danger/60' : ''}"
       step={field.type === 'int' ? 1 : 'any'}
       min={field.min ?? undefined}
       max={field.max ?? undefined}
@@ -188,7 +188,7 @@
     <div class="flex flex-wrap items-center gap-1" data-testid="field-list">
       {#each list as item, idx (idx)}
         <span
-          class="flex items-center gap-1 rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 font-mono text-xs"
+          class="flex items-center gap-1 rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-meta"
           data-testid="list-item"
           >{choices?.find((c) => c.id === item)?.label ?? String(item)}
           {#if !readonly}
@@ -201,13 +201,13 @@
           {/if}
         </span>
       {/each}
-      {#if list.length === 0}<span class="text-xs text-fg-3">none</span>{/if}
+      {#if list.length === 0}<span class="text-meta text-fg-3">none</span>{/if}
     </div>
     {#if !readonly}
       <div class="flex flex-wrap items-center gap-2">
         <input
           {id}
-          class="input input-sm w-56 font-mono"
+          class="input input-sm w-56"
           type="text"
           inputmode={field.type === 'int_list' ? 'numeric' : undefined}
           list={choices ? `${id}-choices` : undefined}
@@ -243,7 +243,7 @@
         <input
           id={i === 0 ? id : `${id}-${i}`}
           type="number"
-          class="input input-sm w-24 font-mono"
+          class="input input-sm w-24"
           step={field.type === 'rgb' ? 1 : 'any'}
           min={field.min ?? undefined}
           max={field.max ?? undefined}
@@ -257,18 +257,13 @@
   {:else if !known.includes(field.type)}
     <textarea
       {id}
-      class="input min-h-16 w-full resize-y font-mono text-xs"
+      class="input min-h-16 w-full resize-y font-mono text-meta"
       value={JSON.stringify(value ?? null)}
       {readonly}
       data-testid="field-json"
       oninput={(e) => setJson((e.currentTarget as HTMLTextAreaElement).value)}></textarea>
   {:else}
-    <input
-      {id}
-      class="input input-sm max-w-md font-mono"
-      value={valueText(value)}
-      readonly
-    />
+    <input {id} class="input input-sm max-w-md" value={valueText(value)} readonly />
   {/if}
 
   <ConfigIssueList {issues} showField={issues.some((i) => i.field !== field.field)} />

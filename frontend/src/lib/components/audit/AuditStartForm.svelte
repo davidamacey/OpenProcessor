@@ -19,15 +19,15 @@
 
 <section class="surface flex flex-col gap-3 p-4" data-testid="audit-start">
   <div>
-    <h2 class="text-base font-semibold">Draw a sample</h2>
-    <p class="text-xs text-fg-2">
+    <h2 class="text-title font-semibold">Draw a sample</h2>
+    <p class="text-meta text-fg-2">
       Picks machine-labelled crops that no human has validated, spread over the detector's
       classes. Labeling them (in Review or from the list below) is what measures the
       detector and the VLM. Drawing a sample never changes a class.
     </p>
   </div>
   <div class="flex flex-wrap items-end gap-3">
-    <label class="flex flex-col gap-1 text-xs text-fg-2">
+    <label class="flex flex-col gap-1 text-meta text-fg-2">
       Sample size
       <input
         class="input w-32"
@@ -40,7 +40,7 @@
         data-testid="audit-sample-size"
       />
     </label>
-    <label class="flex flex-col gap-1 text-xs text-fg-2">
+    <label class="flex flex-col gap-1 text-meta text-fg-2">
       Crops per class
       <input
         class="input w-32"
@@ -66,7 +66,7 @@
 
   {#if audit.startLines.length > 0}
     <div
-      class="rounded border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger-text"
+      class="rounded border border-danger/40 bg-danger/10 px-3 py-2 text-meta text-danger-text"
       data-testid="audit-start-error"
     >
       {#each audit.startLines as line (line)}
@@ -77,7 +77,7 @@
 
   {#if audit.started}
     {@const s = audit.started}
-    <div class="flex flex-col gap-1 text-xs text-fg-2" data-testid="audit-started">
+    <div class="flex flex-col gap-1 text-meta text-fg-2" data-testid="audit-started">
       <p>Drew {s.sampled} of the {s.requested} requested crops.</p>
       <ul class="flex flex-wrap gap-1.5">
         {#each s.strata as st (st.detector_class)}

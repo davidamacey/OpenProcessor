@@ -26,7 +26,7 @@
     ontoggle={(e) => (open = e.currentTarget.open)}
   >
     <summary
-      class="flex cursor-pointer flex-wrap items-baseline gap-x-2 px-3 py-2 text-sm"
+      class="flex cursor-pointer flex-wrap items-baseline gap-x-2 px-3 py-2 text-body"
     >
       <span class="font-medium text-fg-1"
         >VLM proposal for {scopeLabel(run.request.target)}:</span
@@ -34,11 +34,11 @@
       <span class="text-fg-1" data-testid="proposal-summary-class"
         >{proposal.class_name ?? 'no class reached the gate'}</span
       >
-      <span class="text-xs text-fg-2"
+      <span class="text-meta text-fg-2"
         >{Math.round(proposal.agreement * 100)}% of {proposal.answered} answers</span
       >
       {#if run.scope_now?.changed}
-        <span class="text-xs text-warn-text">scope changed since</span>
+        <span class="text-meta text-warn-text">scope changed since</span>
       {/if}
     </summary>
     {#if open}

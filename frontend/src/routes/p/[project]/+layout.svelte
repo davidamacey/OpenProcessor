@@ -197,7 +197,7 @@
       <!-- Served `writable: false` (e.g. an archived project): reads
            work, every write answers 409 server-side. -->
       <div
-        class="shrink-0 border-b border-warn-line bg-warn-soft px-4 py-1.5 text-xs text-warn-text"
+        class="shrink-0 border-b border-warn-line bg-warn-soft px-4 py-1.5 text-meta text-warn-text"
         data-testid="project-read-only-banner"
       >
         {active.display_name} is {projectsStore.statusLabel(active.status).toLowerCase()} and

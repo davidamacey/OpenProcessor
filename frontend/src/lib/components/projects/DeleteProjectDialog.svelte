@@ -126,18 +126,21 @@
     panelClass="w-full max-w-lg rounded-lg border border-line bg-surface-0 p-5 shadow-2xl"
     data-testid="delete-project-dialog"
   >
-    <h3 class="mb-1 text-base font-semibold" data-testid="delete-project-title">
+    <h3 class="mb-1 text-title font-semibold" data-testid="delete-project-title">
       {title ? `${title}: ${project.display_name}?` : `Delete ${project.display_name}?`}
     </h3>
-    <p class="mb-3 text-xs text-fg-2">
+    <p class="mb-3 text-meta text-fg-2">
       This permanently removes the project's data. Its slug
-      <span class="font-mono text-fg-1">{project.slug}</span> can never be reused.
+      <code class="text-fg-1">{project.slug}</code> can never be reused.
     </p>
 
     {#if loadingReport}
-      <p class="mb-3 text-xs text-fg-3">Checking what would be deleted…</p>
+      <p class="mb-3 text-meta text-fg-3">Checking what would be deleted…</p>
     {:else if dryRunError}
-      <p class="mb-3 text-xs text-danger-text" data-testid="delete-project-dry-run-error">
+      <p
+        class="mb-3 text-meta text-danger-text"
+        data-testid="delete-project-dry-run-error"
+      >
         {dryRunError}
       </p>
       {#if canRetry}
@@ -149,23 +152,23 @@
         >
       {/if}
     {:else if report}
-      <div class="mb-3 max-h-56 overflow-auto rounded border border-line p-2 text-xs">
+      <div class="mb-3 max-h-56 overflow-auto rounded border border-line p-2 text-meta">
         <p class="mb-1 text-fg-2">Would delete:</p>
         <ul class="space-y-0.5 text-fg-2" data-testid="delete-project-report">
           {#each report.indexes as ix (ix.name)}
-            <li>index <span class="font-mono">{ix.name}</span> · {ix.docs} docs</li>
+            <li>index <code>{ix.name}</code> · {ix.docs} docs</li>
           {/each}
           {#each report.dirs as d (d.path)}
             <li>
-              directory <span class="font-mono">{d.path}</span> · {formatBytes(d.bytes)}
+              directory <code>{d.path}</code> · {formatBytes(d.bytes)}
             </li>
           {/each}
           {#each report.promoted_models as m (m)}
-            <li>model <span class="font-mono">{m}</span></li>
+            <li>model <code>{m}</code></li>
           {/each}
           {#if report.mlflow_experiment}
             <li>
-              experiment <span class="font-mono">{report.mlflow_experiment}</span>
+              experiment <code>{report.mlflow_experiment}</code>
             </li>
           {/if}
         </ul>
@@ -175,16 +178,16 @@
       </div>
       {#if report.referenced_by.length > 0}
         <div
-          class="mb-3 rounded border border-warn-line bg-warn-soft px-2 py-1.5 text-xs text-warn-text"
+          class="mb-3 rounded border border-warn-line bg-warn-soft px-2 py-1.5 text-meta text-warn-text"
           data-testid="delete-project-references"
         >
           <p class="mb-1 font-semibold">Used by other projects:</p>
           <ul class="list-inside list-disc">
             {#each report.referenced_by as r (`${r.project}/${r.profile ?? ''}`)}
               <li>
-                <span class="font-mono">{r.project}</span> uses a shared model{r.profile
+                <code>{r.project}</code> uses a shared model{r.profile
                   ? ' (profile '
-                  : ''}{#if r.profile}<span class="font-mono">{r.profile}</span>){/if}
+                  : ''}{#if r.profile}<code>{r.profile}</code>){/if}
               </li>
             {/each}
           </ul>
@@ -192,7 +195,7 @@
       {/if}
       {#if blocking.length > 0}
         <div
-          class="mb-3 rounded border border-danger-line bg-danger-soft px-2 py-1.5 text-xs text-danger-text"
+          class="mb-3 rounded border border-danger-line bg-danger-soft px-2 py-1.5 text-meta text-danger-text"
           data-testid="delete-project-blocking"
         >
           <p class="mb-1 font-semibold">Can't delete:</p>
@@ -212,27 +215,27 @@
       }}
     >
       {#if report && !blocked}
-        <label class="mb-3 block text-sm">
-          <span class="mb-1 block text-xs text-fg-2"
-            >Type <span class="font-mono text-fg-1">{project.slug}</span> to confirm</span
+        <label class="mb-3 block text-body">
+          <span class="mb-1 block text-meta text-fg-2"
+            >Type <code class="text-fg-1">{project.slug}</code> to confirm</span
           >
           <input
             type="text"
             bind:value={typed}
             autocomplete="off"
             data-testid="delete-project-confirm"
-            class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 font-mono text-sm text-fg-1 focus:border-danger focus:outline-none"
+            class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 font-mono text-body text-fg-1 focus:border-danger focus:outline-none"
           />
         </label>
       {/if}
       {#if errorText}
-        <p class="mb-3 text-xs text-danger-text" data-testid="delete-project-error">
+        <p class="mb-3 text-meta text-danger-text" data-testid="delete-project-error">
           {errorText}
         </p>
       {/if}
       {#if inUseText}
-        <p class="mb-3 text-xs text-fg-2" data-testid="delete-project-in-use">
-          In use by: <span class="font-mono">{inUseText}</span>
+        <p class="mb-3 text-meta text-fg-2" data-testid="delete-project-in-use">
+          In use by: <code>{inUseText}</code>
         </p>
       {/if}
       <div class="flex items-center justify-end gap-2">

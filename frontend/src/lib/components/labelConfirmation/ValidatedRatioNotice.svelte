@@ -19,14 +19,14 @@
 </script>
 
 <section
-  class="rounded-md border px-4 py-3 text-sm {partial
+  class="rounded-md border px-4 py-3 text-body {partial
     ? 'border-warn/40 bg-warn/10 text-warn-text'
     : 'border-success/40 bg-success/10 text-success-text'}"
   data-testid="validated-ratio"
   data-level={none ? 'none' : partial ? 'partial' : 'full'}
 >
   <p>
-    <span class="font-mono font-semibold" data-testid="validated-ratio-counts"
+    <span class="font-semibold tabular-nums" data-testid="validated-ratio-counts"
       >{formatCount(validated)} of {formatCount(total)}</span
     >
     crops are validated.

@@ -105,8 +105,8 @@
     data-testid="recluster-header"
   >
     <div class="min-w-0 xl:max-w-md" data-testid="recluster-description">
-      <h2 class="text-base font-semibold">Auto-label</h2>
-      <p class="mt-0.5 text-xs text-fg-2">
+      <h2 class="text-title font-semibold">Auto-label</h2>
+      <p class="mt-0.5 text-meta text-fg-2">
         Optionally embeds the items that have no vector, and runs the VLM over the
         unvalidated crops (off by default — see "Run VLM labeling stage" below), then
         finalizes. The classifier's confident labels and human validations are never
@@ -120,7 +120,7 @@
           <AssistScopeBar {scope} classes={classesStore.classes} disabled={busy} />
         {/if}
         <label
-          class="flex items-center gap-1.5 text-xs text-fg-2"
+          class="flex items-center gap-1.5 text-meta text-fg-2"
           title="pipeline.py's run_vlm — off by default, matching the backend. Implied automatically when a class, prompt pack or VLM endpoint is scoped above."
         >
           <input
@@ -133,7 +133,7 @@
           Run VLM labeling stage
         </label>
         <label
-          class="flex items-center gap-1.5 text-xs text-fg-2"
+          class="flex items-center gap-1.5 text-meta text-fg-2"
           title="Embed the items that have no vector (a lazy ingest policy, a failed encoder) before clustering. Off by default."
         >
           <input
@@ -192,10 +192,10 @@
 
   {#if confirmOpen}
     <Modal label="Confirm auto-label" onclose={closeConfirmStart}>
-      <h3 class="mb-3 text-base font-semibold">
+      <h3 class="mb-3 text-title font-semibold">
         {scopeClassName ? `Auto-label · VLM: ${scopeClassName}` : 'Auto-label now'}
       </h3>
-      <p class="mb-4 text-xs text-fg-2">
+      <p class="mb-4 text-meta text-fg-2">
         Queues the auto-label run{resolveAutoLabelRunVlm(
           scope.toStartParams(),
           ctl.runVlm,
@@ -218,10 +218,10 @@
     <div class="mt-4 space-y-3">
       <!-- Status chip + stage label. Status drives the color so a glance
            tells the operator whether a previous run failed. -->
-      <div class="flex flex-wrap items-center gap-2 text-xs">
+      <div class="flex flex-wrap items-center gap-2 text-meta">
         <span
-          class="rounded px-2 py-0.5 font-mono uppercase
-            {job.status === 'running'
+          class="rounded px-2 py-0.5 capitalize
+ {job.status === 'running'
             ? 'bg-accent/20 text-accent-text'
             : job.status === 'completed'
               ? 'bg-success/20 text-success-text'
@@ -245,7 +245,7 @@
         {/if}
         {#if isLive}
           <span class="text-fg-2">{STAGE_LABEL[job.stage] ?? job.stage}</span>
-          <span class="font-mono text-fg-3">
+          <span class="text-fg-3 tabular-nums">
             stage {stageIdx + 1}/{stageOrder.length}
           </span>
         {:else if job.status !== 'idle' && !isPaused && job.finished_at}
@@ -264,7 +264,7 @@
           {/if}
         </div>
         <div
-          class="flex flex-wrap items-center justify-between gap-2 font-mono text-caption text-fg-2"
+          class="flex flex-wrap items-center justify-between gap-2 text-caption text-fg-2 tabular-nums"
         >
           <span>
             {#if job.total > 0}
@@ -284,10 +284,10 @@
       {/if}
 
       {#if job.error}
-        <p class="text-xs text-danger-text">Error: {job.error}</p>
+        <p class="text-meta text-danger-text">Error: {job.error}</p>
       {/if}
       {#if job.error_detail}
-        <p class="text-xs text-danger-text/80" data-testid="auto-label-error-detail">
+        <p class="text-meta text-danger-text/80" data-testid="auto-label-error-detail">
           {job.error_detail}
         </p>
       {/if}
@@ -297,9 +297,9 @@
              a compact table above the raw JSON so operators can answer
              "where did the wall time go?" without parsing the full result. -->
         {#if stageDurations.length > 0}
-          <div class="space-y-1 text-xs text-fg-2">
+          <div class="space-y-1 text-meta text-fg-2">
             {#if stageDurations.length > 0}
-              <table class="font-mono text-caption">
+              <table class="text-meta tabular-nums">
                 <tbody>
                   {#each stageDurations as [name, sec] (name)}
                     <tr>
@@ -313,7 +313,7 @@
           </div>
         {/if}
         {#if job.result?.stages}
-          <details class="text-xs text-fg-2">
+          <details class="text-meta text-fg-2">
             <summary class="cursor-pointer text-fg-2 hover:text-fg-1">
               Last run summary
             </summary>
@@ -342,11 +342,11 @@
                     <td class="py-1 pr-3 text-fg-1" title={row.key}>
                       {STAGE_LABEL[row.key] ?? row.key}
                     </td>
-                    <td class="py-1 pr-3 font-mono text-fg-2">{row.status}</td>
+                    <td class="py-1 pr-3 text-fg-2">{row.status}</td>
                     <td class="py-1 text-fg-2">
                       {#if row.reason}<span class="mr-2">{row.reason}</span>{/if}
                       {#each row.fields as f (f.name)}
-                        <span class="mr-2 inline-block font-mono text-caption"
+                        <span class="mr-2 inline-block text-caption"
                           ><span class="text-fg-3">{f.name}</span> {f.value}</span
                         >
                       {/each}
@@ -360,7 +360,7 @@
                 Raw JSON
               </summary>
               <pre
-                class="mt-1 max-h-64 overflow-auto rounded bg-surface-1 p-2 font-mono text-caption text-fg-2">{JSON.stringify(
+                class="mt-1 max-h-64 overflow-auto rounded bg-surface-1 p-2 text-caption text-fg-2">{JSON.stringify(
                   job.result,
                   null,
                   2,

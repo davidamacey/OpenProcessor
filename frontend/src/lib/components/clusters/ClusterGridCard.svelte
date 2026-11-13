@@ -90,7 +90,7 @@
     <div class="p-3">
       <div class="mb-1 flex items-center gap-2">
         {#if c.isSlotCard}
-          <span class="text-sm font-semibold" data-testid="slot-card-title"
+          <span class="text-body font-semibold" data-testid="slot-card-title"
             >{c.slotDisplayName ?? c.dominant_class_name}</span
           >
           <span
@@ -100,7 +100,7 @@
           </span>
         {:else}
           <span
-            class="font-mono text-sm font-semibold"
+            class="text-body font-semibold tabular-nums"
             title={c.uid}
             data-testid="cluster-uid">{numberText}</span
           >
@@ -121,16 +121,16 @@
         {#if c.isSlotCard}
           <!-- C4: the inventory count's scope, see SlotGallery. -->
           <span
-            class="font-mono text-xs text-fg-2"
+            class="text-meta text-fg-2 tabular-nums"
             title="Regions the browse endpoint lists: test-holdout items and active filters excluded. The sidebar's class count and the dashboard total include test-holdout items, and the review queue applies its own queue filters, so those can differ."
             >{c.size.toLocaleString()} listed</span
           >
         {:else}
-          <span class="font-mono text-xs text-fg-2">{c.size}</span>
+          <span class="text-meta text-fg-2 tabular-nums">{c.size}</span>
         {/if}
       </div>
       <div
-        class="truncate text-sm text-fg-2"
+        class="truncate text-body text-fg-2"
         title={c.display_name || `Unlabeled cluster ${c.uid}`}
       >
         {#if c.isSlotCard}
@@ -140,7 +140,7 @@
                F8 D7: the title carries the served display name,
                so this line names the class once, as a class. -->
           <span class="text-fg-3">class</span>
-          <span class="font-mono">{c.dominant_class_name}</span>
+          <span>{c.dominant_class_name}</span>
         {:else if c.display_name_kind !== 'none'}
           <span data-testid="cluster-name">{c.display_name}</span>
           {#if c.display_name_kind === 'class' && dominantShareText(c)}

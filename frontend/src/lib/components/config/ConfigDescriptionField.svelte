@@ -12,10 +12,10 @@
   let { ed }: Props = $props();
 </script>
 
-<label class="flex flex-col gap-1 text-xs text-fg-2">
+<label class="flex flex-col gap-1 text-meta text-fg-2">
   Description
   <input
-    class="input input-sm text-sm"
+    class="input input-sm text-body"
     value={ed.viewing ? (ed.viewing.description ?? '') : ed.draftDescription}
     readonly={!ed.editable}
     oninput={(e) => ed.setDescription((e.currentTarget as HTMLInputElement).value)}

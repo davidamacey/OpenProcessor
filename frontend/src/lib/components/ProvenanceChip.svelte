@@ -83,7 +83,7 @@
      container's width (max-w-full + min-w-0 inner spans), so on a narrow
      region card the two inner caps can't still add up past the card edge. -->
 <span
-  class="chip max-w-full min-w-0 overflow-hidden {palette.border} {palette.bg} {palette.text} {sizeCls} font-mono {muted
+  class="chip max-w-full min-w-0 overflow-hidden {palette.border} {palette.bg} {palette.text} {sizeCls} {muted
     ? 'opacity-60'
     : ''}"
   title={version ? `${parsed.detector ?? ''} v${version}` : (parsed.detector ?? '')}
@@ -92,9 +92,7 @@
     >{regionVocabularyStore.labelFor(parsed.detector)}</span
   >
   {#if parsed.tag}
-    <span
-      class="max-w-[140px] min-w-0 shrink truncate text-caption uppercase tracking-wide"
-    >
+    <span class="max-w-[140px] min-w-0 shrink truncate text-caption">
       {parsed.tag}
     </span>
   {/if}

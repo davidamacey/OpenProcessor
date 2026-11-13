@@ -72,7 +72,7 @@
 
   {#if s.loadErrors.length}
     <ul
-      class="mb-4 space-y-0.5 rounded border border-danger-line bg-danger-soft p-3 text-sm text-danger-text"
+      class="mb-4 space-y-0.5 rounded border border-danger-line bg-danger-soft p-3 text-body text-danger-text"
       data-testid="load-errors"
     >
       {#each s.loadErrors as e, i (i)}<li>{e}</li>{/each}
@@ -80,15 +80,15 @@
   {/if}
 
   <section class="mb-6 rounded-lg border border-line bg-surface-1/50 p-4">
-    <h2 class="mb-3 text-sm font-medium text-fg-2">Set up a comparison</h2>
+    <h2 class="mb-3 text-body font-medium text-fg-2">Set up a comparison</h2>
 
-    <div class="mb-4 flex flex-wrap items-center gap-3 text-sm">
+    <div class="mb-4 flex flex-wrap items-center gap-3 text-body">
       <label>
         <span class="text-fg-2">Profile</span>
         <select
           value={s.profile}
           onchange={(e) => void controller.setProfile(e.currentTarget.value)}
-          class="ml-2 rounded border border-line-strong bg-surface-0 px-2 py-1 text-xs"
+          class="ml-2 rounded border border-line-strong bg-surface-0 px-2 py-1 text-meta"
           data-testid="profile-select"
         >
           {#if !s.profiles.some((p) => p.name === s.profile)}
@@ -100,7 +100,7 @@
         </select>
       </label>
       {#if activeProfile}
-        <span class="text-xs text-fg-3" data-testid="profile-summary">
+        <span class="text-meta text-fg-3" data-testid="profile-summary">
           {activeProfile.description}{activeProfile.description ? ' · ' : ''}ranked by
           {metricLabel(activeProfile.rank_metric)} · op conf {activeProfile.op_conf} · op IoU
           {activeProfile.op_iou} · {activeProfile.imgsz}px
@@ -110,14 +110,14 @@
       {/if}
     </div>
     {#if s.profileDefaultError}
-      <p class="mb-3 text-xs text-warn-text" data-testid="profile-default-error">
+      <p class="mb-3 text-meta text-warn-text" data-testid="profile-default-error">
         The configured default profile is invalid: {s.profileDefaultError}
       </p>
     {/if}
 
     <div class="grid gap-4 md:grid-cols-2">
       <div>
-        <h3 class="mb-2 text-sm font-medium text-fg-2">
+        <h3 class="mb-2 text-body font-medium text-fg-2">
           Datasets ({s.selectedDatasets.length}/{s.datasets.length})
         </h3>
         <div class="max-h-80 overflow-auto pr-1">
@@ -129,7 +129,7 @@
         </div>
       </div>
       <div>
-        <h3 class="mb-2 text-sm font-medium text-fg-2">Models ({nModels})</h3>
+        <h3 class="mb-2 text-body font-medium text-fg-2">Models ({nModels})</h3>
         <div class="max-h-80 overflow-auto pr-1">
           <ModelPicker
             trained={s.trained}
@@ -163,7 +163,8 @@
         Run comparison
       </button>
       {#if !canRun}
-        <span class="text-xs text-fg-3">Select at least one dataset and one model.</span>
+        <span class="text-meta text-fg-3">Select at least one dataset and one model.</span
+        >
       {/if}
     </div>
   </section>
@@ -191,21 +192,21 @@
 
   <div class="grid grid-cols-[220px_minmax(0,1fr)] gap-6">
     <aside>
-      <h2 class="mb-2 text-sm font-medium text-fg-2">Previous runs</h2>
+      <h2 class="mb-2 text-body font-medium text-fg-2">Previous runs</h2>
       <ul class="space-y-1" data-testid="runs-list">
         {#each s.runs as r (r.job_id)}
           <li>
             <button
               type="button"
               onclick={() => void controller.viewRun(r.job_id)}
-              class="w-full rounded px-2 py-1 text-left text-xs hover:bg-surface-2 {s.viewJob ===
+              class="w-full rounded px-2 py-1 text-left text-meta hover:bg-surface-2 {s.viewJob ===
               r.job_id
                 ? 'bg-surface-2'
                 : ''}"
               data-job-id={r.job_id}
             >
               <div class="flex items-center justify-between gap-2">
-                <span class="truncate font-mono" title={r.job_id}>{r.job_id}</span>
+                <code class="truncate" title={r.job_id}>{r.job_id}</code>
                 <span class="shrink-0 text-fg-3">{r.state}</span>
               </div>
               <div class="text-caption text-fg-3">
@@ -218,19 +219,19 @@
             </button>
           </li>
         {:else}
-          <li class="text-xs text-fg-3">No comparison runs yet.</li>
+          <li class="text-meta text-fg-3">No comparison runs yet.</li>
         {/each}
       </ul>
     </aside>
 
     <section class="min-w-0" data-testid="results">
       {#if s.viewJob}
-        <h2 class="mb-3 text-sm font-medium text-fg-2">
-          Results · <span class="font-mono">{s.viewJob}</span>
+        <h2 class="mb-3 text-body font-medium text-fg-2">
+          Results · <code>{s.viewJob}</code>
         </h2>
         {#if s.matrixError}
           <p
-            class="mb-3 rounded border border-danger-line bg-danger-soft p-3 text-sm text-danger-text"
+            class="mb-3 rounded border border-danger-line bg-danger-soft p-3 text-body text-danger-text"
           >
             {s.matrixError}
           </p>
@@ -247,7 +248,7 @@
                 type="button"
                 role="tab"
                 aria-selected={s.viewDataset === id}
-                class="rounded px-2 py-1 text-xs {s.viewDataset === id
+                class="rounded px-2 py-1 text-meta {s.viewDataset === id
                   ? 'bg-surface-3 text-fg-1'
                   : 'bg-surface-1 text-fg-2 hover:bg-surface-2'}"
                 onclick={() => void controller.setViewDataset(id)}
@@ -263,7 +264,7 @@
           loading={s.loadingResults}
         />
       {:else}
-        <p class="text-sm text-fg-3">Select a run to view its results.</p>
+        <p class="text-body text-fg-3">Select a run to view its results.</p>
       {/if}
     </section>
   </div>

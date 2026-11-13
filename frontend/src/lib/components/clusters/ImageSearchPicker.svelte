@@ -103,7 +103,7 @@
   </button>
   {#if open}
     <div
-      class="absolute left-0 top-full z-30 mt-1 w-80 max-sm:max-h-[70dvh] max-sm:max-w-none max-sm:overflow-y-auto rounded-md border border-line-strong bg-surface-1 p-3 text-xs shadow-lg"
+      class="absolute left-0 top-full z-30 mt-1 w-80 max-sm:max-h-[70dvh] max-sm:max-w-none max-sm:overflow-y-auto rounded-md border border-line-strong bg-surface-1 p-3 text-meta shadow-lg"
       style={narrowStyle}
       data-testid="image-search-panel"
     >

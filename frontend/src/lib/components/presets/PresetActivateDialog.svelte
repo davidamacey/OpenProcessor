@@ -54,7 +54,7 @@
   }}
 >
   {#if axes.length > 1}
-    <label class="flex flex-col gap-1 text-xs text-fg-2">
+    <label class="flex flex-col gap-1 text-meta text-fg-2">
       Activate for
       <select class="input input-sm" bind:value={chosen} data-testid="activate-axis">
         <option value="" disabled>Choose a target</option>
@@ -64,14 +64,14 @@
   {/if}
   {#if !needsChoice}
     <p data-testid="activate-from-to">
-      <span class="font-mono">{refText(current?.name, current?.revision)}</span>
+      <code>{refText(current?.name, current?.revision)}</code>
       →
-      <strong class="font-mono">{refText(target.name, target.revision)}</strong>
+      <code>{refText(target.name, target.revision)}</code>
     </p>
   {/if}
-  <p class="text-xs text-fg-2">{activationReach(kind)}</p>
+  <p class="text-meta text-fg-2">{activationReach(kind)}</p>
   {#if unsaved}
-    <p class="text-xs text-warn-text" data-testid="activate-unsaved-note">
+    <p class="text-meta text-warn-text" data-testid="activate-unsaved-note">
       This activates the saved revision; your unsaved edits are not included.
     </p>
   {/if}

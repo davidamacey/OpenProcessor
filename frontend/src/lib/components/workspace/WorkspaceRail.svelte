@@ -36,13 +36,13 @@
     <button type="button" class="btn" onclick={() => ws.toggleRail()}>Close</button>
   </div>
   <section aria-label="Queues" class="border-b border-line pb-2">
-    <h2 class="p-3 text-xs font-semibold tracking-wide text-fg-2 uppercase">Queues</h2>
+    <h2 class="p-3 text-meta font-semibold text-fg-2">Queues</h2>
     <ul>
       {#each queues as q (q.id)}
         <li>
           <button
             type="button"
-            class="flex min-h-9 w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm hover:bg-surface-1 {ws
+            class="flex min-h-9 w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-body hover:bg-surface-1 {ws
               .url.queue === q.id
               ? 'bg-surface-2 text-white'
               : 'text-fg-2'}"
@@ -52,7 +52,9 @@
             onclick={() => ws.setQueue(ws.url.queue === q.id ? null : q.id)}
           >
             <span class="truncate">{q.label}</span>
-            <span class="font-mono text-xs text-fg-2">{q.count.toLocaleString()}</span>
+            <span class="text-meta text-fg-2 tabular-nums"
+              >{q.count.toLocaleString()}</span
+            >
           </button>
         </li>
       {/each}

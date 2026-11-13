@@ -6,8 +6,11 @@
    *   `aria-current="page"`. The URL is the state, so reload and back work.
    * - in-page tabs: no `href`; `value` and `onselect` drive it, with the tablist keyboard
    *   pattern (arrows, Home, End; the tab panel is the caller's).
+   * Both sit in a `ScrollStrip`: on a narrow screen the row scrolls sideways, a button shows
+   * on each side that has hidden tabs, and the active tab is kept in view.
    */
   import { resolve } from '$app/paths';
+  import ScrollStrip from '$components/ScrollStrip.svelte';
   import Badge from './Badge.svelte';
   import Icon from './Icon.svelte';
   import type { IconName } from './iconRegistry';
@@ -31,7 +34,7 @@
 
   const asLinks = $derived(items.length > 0 && items.every((i) => i.href));
   const BASE =
-    'relative inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-control';
+    'relative inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-control';
   const cls = (item: TabItem): string =>
     `${BASE} ${
       item.id === value
@@ -62,9 +65,9 @@
   {#if item.count !== undefined}<Badge>{item.count}</Badge>{/if}
 {/snippet}
 
-<div class="mb-4 overflow-x-auto border-b border-line" data-testid="tabs">
+<div class="mb-4 border-b border-line" data-testid="tabs">
   {#if asLinks}
-    <nav class="flex min-w-max" aria-label={label}>
+    <ScrollStrip navLabel={label} activeKey={value} testId="tabs-strip">
       {#each items as item (item.id)}
         <a
           class={cls(item)}
@@ -76,29 +79,32 @@
           {@render inner(item)}
         </a>
       {/each}
-    </nav>
+    </ScrollStrip>
   {:else}
-    <div
-      class="flex min-w-max"
-      role="tablist"
-      aria-label={label}
-      {onkeydown}
-      tabindex="-1"
-    >
-      {#each items as item (item.id)}
-        <button
-          type="button"
-          role="tab"
-          class={cls(item)}
-          data-tab={item.id}
-          aria-selected={item.id === value}
-          tabindex={item.id === value ? 0 : -1}
-          disabled={item.disabled}
-          onclick={() => onselect?.(item.id)}
-        >
-          {@render inner(item)}
-        </button>
-      {/each}
-    </div>
+    <ScrollStrip activeKey={value} testId="tabs-strip">
+      <div
+        class="flex min-w-max"
+        role="tablist"
+        aria-label={label}
+        {onkeydown}
+        tabindex="-1"
+      >
+        {#each items as item (item.id)}
+          <button
+            type="button"
+            role="tab"
+            class={cls(item)}
+            data-tab={item.id}
+            data-active={item.id === value ? 'true' : undefined}
+            aria-selected={item.id === value}
+            tabindex={item.id === value ? 0 : -1}
+            disabled={item.disabled}
+            onclick={() => onselect?.(item.id)}
+          >
+            {@render inner(item)}
+          </button>
+        {/each}
+      </div>
+    </ScrollStrip>
   {/if}
 </div>

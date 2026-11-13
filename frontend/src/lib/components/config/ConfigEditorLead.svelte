@@ -22,7 +22,7 @@
 />
 
 {#if ed.doc?.read_only}
-  <div class="flex flex-wrap items-center gap-2 text-sm text-fg-2">
+  <div class="flex flex-wrap items-center gap-2 text-body text-fg-2">
     <span>This {noun} is read-only. Clone it to make an editable copy.</span>
     <button type="button" class="btn btn-sm" onclick={() => flow.startClone()}
       >Clone to edit</button

@@ -15,22 +15,20 @@
   <Modal label="About {appName}" {onclose}>
     <div class="mb-3 flex items-center gap-2">
       <AppLogo class="h-8 w-8 shrink-0 rounded border border-line-strong" />
-      <h3 class="text-base font-semibold">{appName}</h3>
+      <h3 class="text-title font-semibold">{appName}</h3>
     </div>
 
-    <p class="mb-2 text-sm font-medium text-fg-1">
+    <p class="mb-2 text-body font-medium text-fg-1">
       Sort your crops smarter — cluster, label, and review with AI-assisted suggestions.
     </p>
-    <p class="mb-3 text-sm text-fg-2">
+    <p class="mb-3 text-body text-fg-2">
       Any object class can be configured as an "annotation slot" — secondary bbox
       detection, OCR/text fields, detector provenance, and review-queue lifecycle — so the
       same app works across domains, not just one dataset.
     </p>
 
     <div class="mb-4 rounded-md border border-line bg-surface-1/50 p-3">
-      <p class="mb-2 text-caption font-medium tracking-wide text-fg-3 uppercase">
-        The dataset cycle
-      </p>
+      <p class="mb-2 text-meta font-medium text-fg-2">The dataset cycle</p>
       <svg
         viewBox="0 0 400 210"
         class="w-full"
@@ -205,7 +203,7 @@
       </svg>
     </div>
 
-    <dl class="mb-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs text-fg-2">
+    <dl class="mb-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-meta text-fg-2">
       <dt class="text-fg-3">License</dt>
       <dd>AGPL-3.0</dd>
       <dt class="text-fg-3">Stack</dt>

@@ -162,8 +162,8 @@
        runs into the description. -->
   <header class="mb-6 flex flex-wrap items-end justify-between gap-3">
     <div class="min-w-0 flex-1 basis-80">
-      <h1 class="text-xl font-semibold tracking-tight">Models</h1>
-      <p class="mt-1 text-sm text-fg-2">
+      <h1 class="text-h1 font-semibold tracking-tight">Models</h1>
+      <p class="mt-1 text-body text-fg-2">
         Inference services that drive the labeling pipeline. Locally-hosted models run on
         the GPU box; each registered VLM endpoint is listed as its own row, and which one
         a project uses is chosen on Settings → Models. Models other projects shared with
@@ -172,7 +172,7 @@
       </p>
     </div>
     <div
-      class="flex shrink-0 items-center gap-3 text-xs text-fg-3"
+      class="flex shrink-0 items-center gap-3 text-meta text-fg-3"
       data-testid="models-status"
     >
       {#if lastUpdated}
@@ -191,16 +191,16 @@
 
   {#if error}
     <div
-      class="mb-4 rounded border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger-text"
+      class="mb-4 rounded border border-danger/40 bg-danger/10 px-3 py-2 text-body text-danger-text"
     >
       Failed to load models: {error}
     </div>
   {/if}
 
   {#if loading && models.length === 0}
-    <p class="text-sm text-fg-3">Loading…</p>
+    <p class="text-body text-fg-3">Loading…</p>
   {:else if models.length === 0}
-    <p class="text-sm text-fg-3">No models reported.</p>
+    <p class="text-body text-fg-3">No models reported.</p>
   {:else}
     <ul class="grid grid-cols-1 gap-4 md:grid-cols-2">
       {#each models as m, i (`${i}:${m.name}`)}
@@ -209,13 +209,13 @@
             <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <h2
-                  class="min-w-0 break-words text-base font-semibold text-white"
+                  class="min-w-0 break-words text-title font-semibold text-white"
                   title={m.friendly_name}
                 >
                   {m.friendly_name}
                 </h2>
                 <span
-                  class="shrink-0 whitespace-nowrap rounded-sm border px-1.5 py-0.5 text-caption font-medium uppercase tracking-wide {pill(
+                  class="shrink-0 whitespace-nowrap rounded-sm border px-1.5 py-0.5 text-caption font-medium capitalize {pill(
                     m,
                   ).className}"
                   title={pill(m).title}
@@ -224,12 +224,12 @@
                   {pill(m).label}
                 </span>
               </div>
-              <p class="mt-1 truncate font-mono text-xs text-fg-3" title={m.name}>
-                {m.name}{m.version ? ` (v${m.version})` : ''}
+              <p class="mt-1 truncate text-meta text-fg-3" title={m.name}>
+                <code>{m.name}{m.version ? ` (v${m.version})` : ''}</code>
               </p>
             </div>
             <span
-              class="rounded border border-line-strong bg-surface-0 px-2 py-0.5 text-caption uppercase tracking-wide text-fg-2"
+              class="rounded border border-line-strong bg-surface-0 px-2 py-0.5 text-caption text-fg-2"
               title="Service kind"
             >
               {m.kind}
@@ -237,7 +237,7 @@
             {#if m.kind === 'vlm' && m.active}
               <!-- Served: this registered endpoint is the project's active one. -->
               <span
-                class="rounded border border-success-line bg-success-soft px-2 py-0.5 text-caption uppercase tracking-wide text-success-text"
+                class="rounded border border-success-line bg-success-soft px-2 py-0.5 text-caption text-success-text"
                 data-testid="model-vlm-active"
                 title={m.active_in?.length
                   ? `Active in ${m.active_in.join(', ')}`
@@ -248,52 +248,52 @@
             {/if}
           </div>
 
-          <p class="mb-3 text-sm text-fg-2">{m.role}</p>
+          <p class="mb-3 text-body text-fg-2">{m.role}</p>
 
-          <dl class="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-line pt-3 text-sm">
+          <dl
+            class="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-line pt-3 text-body"
+          >
             <div>
-              <dt class="text-caption uppercase tracking-wide text-fg-3">Type</dt>
+              <dt class="text-meta text-fg-3">Type</dt>
               <dd class="text-fg-1">{m.model_type}</dd>
             </div>
             <div>
-              <dt class="text-caption uppercase tracking-wide text-fg-3">Endpoint</dt>
-              <dd class="truncate font-mono text-xs text-fg-2" title={m.endpoint ?? ''}>
-                {m.endpoint ?? '—'}
+              <dt class="text-meta text-fg-3">Endpoint</dt>
+              <dd class="truncate text-meta text-fg-2" title={m.endpoint ?? ''}>
+                <code>{m.endpoint ?? '—'}</code>
               </dd>
             </div>
             <div>
-              <dt class="text-caption uppercase tracking-wide text-fg-3">Inferences</dt>
-              <dd class="font-mono text-fg-1">{fmtCount(m.inference_count)}</dd>
+              <dt class="text-meta text-fg-3">Inferences</dt>
+              <dd class="text-fg-1 tabular-nums">{fmtCount(m.inference_count)}</dd>
             </div>
             <div>
-              <dt class="text-caption uppercase tracking-wide text-fg-3">Avg latency</dt>
-              <dd class="font-mono text-fg-1">{fmtMs(m.avg_latency_ms)}</dd>
+              <dt class="text-meta text-fg-3">Avg latency</dt>
+              <dd class="text-fg-1 tabular-nums">{fmtMs(m.avg_latency_ms)}</dd>
             </div>
             {#if m.kind === 'vlm'}
               <div class="col-span-2">
-                <dt class="text-caption uppercase tracking-wide text-fg-3">Model</dt>
+                <dt class="text-meta text-fg-3">Model</dt>
                 <dd
-                  class="truncate font-mono text-xs text-fg-2"
+                  class="truncate text-meta text-fg-2"
                   title={m.model ?? ''}
                   data-testid="model-vlm-model"
                 >
-                  {m.model ?? '—'}
+                  <code>{m.model ?? '—'}</code>
                 </dd>
               </div>
             {/if}
             {#if m.kind === 'triton'}
               <div>
-                <dt class="text-caption uppercase tracking-wide text-fg-3">
-                  Batched execs
-                </dt>
-                <dd class="font-mono text-fg-1">{fmtCount(m.exec_count)}</dd>
+                <dt class="text-meta text-fg-3">Batched execs</dt>
+                <dd class="text-fg-1 tabular-nums">{fmtCount(m.exec_count)}</dd>
               </div>
               <div>
-                <dt class="text-caption uppercase tracking-wide text-fg-3">Failures</dt>
+                <dt class="text-meta text-fg-3">Failures</dt>
                 <dd
-                  class="font-mono {m.inference_failed && m.inference_failed > 0
+                  class="{m.inference_failed && m.inference_failed > 0
                     ? 'text-danger-text'
-                    : 'text-fg-1'}"
+                    : 'text-fg-1'} tabular-nums"
                 >
                   {fmtCount(m.inference_failed)}
                 </dd>
@@ -303,7 +303,7 @@
 
           {#if m.last_error}
             <p
-              class="mt-3 truncate rounded border border-danger/30 bg-danger/10 px-2 py-1 font-mono text-caption text-danger-text"
+              class="mt-3 truncate rounded border border-danger/30 bg-danger/10 px-2 py-1 text-caption text-danger-text"
               title={m.last_error}
             >
               {m.last_error}
@@ -311,13 +311,13 @@
           {/if}
 
           {#if m.job_id}
-            <p class="mt-3 truncate font-mono text-caption text-fg-3" title={m.job_id}>
-              promoted from job {m.job_id}
+            <p class="mt-3 truncate text-caption text-fg-3" title={m.job_id}>
+              promoted from job <code>{m.job_id}</code>
             </p>
           {/if}
 
           {#if m.kind === 'vlm' && vlmAvailability.available === true}
-            <p class="mt-3 text-xs">
+            <p class="mt-3 text-meta">
               <a
                 class="text-accent-text hover:underline"
                 href={resolve(projectHref('/settings/models'))}
@@ -337,7 +337,7 @@
             <div class="mt-3 flex justify-end border-t border-line pt-3">
               <button
                 type="button"
-                class="rounded border px-2 py-1 text-xs transition {unloadButtonState(
+                class="rounded border px-2 py-1 text-meta transition {unloadButtonState(
                   m,
                 ) === 'force-required'
                   ? 'border-danger-line bg-danger-soft text-danger-text hover:bg-danger-soft'
@@ -363,7 +363,7 @@
                  button at all, just this explanatory chip. -->
             <div class="mt-3 flex justify-end border-t border-line pt-3">
               <span
-                class="rounded border border-line-strong bg-surface-0 px-2 py-1 text-caption uppercase tracking-wide text-fg-3"
+                class="rounded border border-line-strong bg-surface-0 px-2 py-1 text-caption text-fg-3"
                 title="Hard-blocked server-side — DELETE 403s unconditionally, no force flow"
               >
                 protected: in use by the pipeline

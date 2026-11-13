@@ -109,7 +109,7 @@
     {/if}
     {#if selected}
       <span
-        class="pointer-events-none absolute top-1 left-1 flex h-5 w-5 items-center justify-center rounded-full bg-info text-xs text-white"
+        class="pointer-events-none absolute top-1 left-1 flex h-5 w-5 items-center justify-center rounded-full bg-info text-meta text-white"
         aria-hidden="true"><Icon name="check" size={14} /></span
       >
     {/if}
@@ -130,7 +130,7 @@
       </span>
     {/if}
   </div>
-  <div class="flex flex-wrap items-center gap-1 px-2 py-1.5 text-xs">
+  <div class="flex flex-wrap items-center gap-1 px-2 py-1.5 text-meta">
     <span class="chip" data-testid="chip-items" title="Items on this image"
       >{card.counts.items} items</span
     >

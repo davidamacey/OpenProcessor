@@ -19,7 +19,7 @@
   {:else}
     {#each states as [space, state] (space)}
       <div data-testid="embedding-row-space" data-space={space}>
-        <span class="font-mono text-fg-2">{space}</span>
+        <code class="text-fg-2">{space}</code>
         {#if state === 'embedded'}
           embedded
         {:else}

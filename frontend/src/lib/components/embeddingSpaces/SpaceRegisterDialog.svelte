@@ -53,7 +53,7 @@
       {spaces.modelsError ?? 'This deployment serves no encoder to build a space from.'}
     </p>
   {/if}
-  <label class="flex flex-col gap-1 text-xs text-fg-2">
+  <label class="flex flex-col gap-1 text-meta text-fg-2">
     Encoder
     <select class="input input-sm" bind:value={choice} data-testid="register-model">
       <option value="" disabled>Choose an encoder</option>
@@ -66,14 +66,14 @@
       {/each}
     </select>
   </label>
-  <label class="flex flex-col gap-1 text-xs text-fg-2">
+  <label class="flex flex-col gap-1 text-meta text-fg-2">
     Target
     <select class="input input-sm" bind:value={target} data-testid="register-target">
       {#each EMBEDDING_TARGETS as t (t)}<option value={t}>{t}</option>{/each}
     </select>
   </label>
   {#if picked && picked.matryoshka_dims.length > 0}
-    <label class="flex flex-col gap-1 text-xs text-fg-2">
+    <label class="flex flex-col gap-1 text-meta text-fg-2">
       Size
       <select class="input input-sm" bind:value={dim} data-testid="register-dim">
         <option value="">Native ({picked.native_dim})</option>

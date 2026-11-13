@@ -68,7 +68,7 @@
   });
 </script>
 
-<dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
+<dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-meta">
   {#if currentSlotRejectionReason}
     {@const reasonKind = regionVocabularyStore.rejectionReasonKind(
       currentSlotRejectionReason,
@@ -202,7 +202,7 @@
   <dt class="text-fg-3">
     {isCurrentLabelVlmSourced ? 'Detector score' : 'Confidence'}
   </dt>
-  <dd class="font-mono">
+  <dd class="tabular-nums">
     {current.label_confidence != null
       ? `${(current.label_confidence * 100).toFixed(1)}%`
       : '—'}
@@ -224,7 +224,7 @@
 
   {#if current.vlm_confidence}
     <dt class="text-fg-3">VLM confidence</dt>
-    <dd class="font-mono text-fg-1">
+    <dd class="text-fg-1">
       {current.vlm_confidence}
       <!-- class_confidence is the numeric mapping of this same
            categorical value when VLM-sourced — shown inline
@@ -259,7 +259,7 @@
 
   {#if current.rank_label || current.clarity_label}
     <dt class="text-fg-3">Rank · clarity</dt>
-    <dd class="font-mono text-fg-2">
+    <dd class="text-fg-2">
       {[current.rank_label, current.clarity_label].filter(Boolean).join(' · ')}
     </dd>
   {/if}

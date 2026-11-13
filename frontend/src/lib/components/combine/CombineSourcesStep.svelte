@@ -27,22 +27,22 @@
 </script>
 
 <section class="space-y-3" data-testid="combine-step-sources">
-  <h2 class="text-sm font-semibold text-fg-1">1. Sources and target</h2>
+  <h2 class="text-body font-semibold text-fg-1">1. Sources and target</h2>
 
   <ol class="space-y-1" data-testid="combine-source-list">
     {#each wizard.sources as s, i (s.project)}
       <li
-        class="flex flex-wrap items-center gap-2 rounded border border-line bg-surface-1/40 px-2 py-1.5 text-sm"
+        class="flex flex-wrap items-center gap-2 rounded border border-line bg-surface-1/40 px-2 py-1.5 text-body"
         data-testid="combine-source-{s.project}"
       >
-        <span class="w-5 text-right text-xs text-fg-3">{i + 1}.</span>
+        <span class="w-5 text-right text-meta text-fg-3">{i + 1}.</span>
         <span class="text-fg-1">{nameOf(s.project)}</span>
-        <span class="font-mono text-caption text-fg-3">{s.project}</span>
+        <code class="text-caption text-fg-3">{s.project}</code>
         <span class="grow"></span>
-        <label class="flex items-center gap-1 text-xs text-fg-2">
+        <label class="flex items-center gap-1 text-meta text-fg-2">
           Labels
           <select
-            class="rounded border border-line-strong bg-surface-1 px-1 py-0.5 text-xs text-fg-1"
+            class="rounded border border-line-strong bg-surface-1 px-1 py-0.5 text-meta text-fg-1"
             data-testid="combine-label-states-{s.project}"
             value={s.label_states ?? 'all'}
             onchange={(e) =>
@@ -80,20 +80,20 @@
         >
       </li>
     {:else}
-      <li class="text-xs text-fg-3">No sources yet. Add at least one.</li>
+      <li class="text-meta text-fg-3">No sources yet. Add at least one.</li>
     {/each}
   </ol>
   {#if wizard.sources.length > 1}
-    <p class="text-xs text-fg-3">
+    <p class="text-meta text-fg-3">
       Order is priority: the first source wins a label conflict and donates the image of a
       duplicate.
     </p>
   {/if}
 
-  <label class="block text-sm">
-    <span class="mb-1 block text-xs text-fg-2">Add a source project</span>
+  <label class="block text-body">
+    <span class="mb-1 block text-meta text-fg-2">Add a source project</span>
     <select
-      class="w-full max-w-xs rounded border border-line-strong bg-surface-1 px-2 py-1.5 text-sm text-fg-1"
+      class="w-full max-w-xs rounded border border-line-strong bg-surface-1 px-2 py-1.5 text-body text-fg-1"
       data-testid="combine-add-source"
       value=""
       disabled={available.length === 0}
@@ -111,11 +111,11 @@
   </label>
 
   <div class="grid gap-3 sm:grid-cols-2">
-    <label class="block text-sm">
-      <span class="mb-1 block text-xs text-fg-2">Target slug</span>
+    <label class="block text-body">
+      <span class="mb-1 block text-meta text-fg-2">Target slug</span>
       <input
         type="text"
-        class="w-full rounded border border-line-strong bg-surface-1 px-2 py-1.5 font-mono text-sm text-fg-1"
+        class="w-full rounded border border-line-strong bg-surface-1 px-2 py-1.5 font-mono text-body text-fg-1"
         data-testid="combine-target-slug"
         autocomplete="off"
         value={wizard.slug}
@@ -124,15 +124,15 @@
       />
       {#if slugPattern}
         <span class="mt-0.5 block text-caption text-fg-3" data-testid="combine-slug-hint"
-          >Pattern: <code class="font-mono">{slugPattern}</code></span
+          >Pattern: <code>{slugPattern}</code></span
         >
       {/if}
     </label>
-    <label class="block text-sm">
-      <span class="mb-1 block text-xs text-fg-2">Display name</span>
+    <label class="block text-body">
+      <span class="mb-1 block text-meta text-fg-2">Display name</span>
       <input
         type="text"
-        class="w-full rounded border border-line-strong bg-surface-1 px-2 py-1.5 text-sm text-fg-1"
+        class="w-full rounded border border-line-strong bg-surface-1 px-2 py-1.5 text-body text-fg-1"
         data-testid="combine-target-name"
         value={wizard.displayName}
         oninput={(e) =>
@@ -140,11 +140,11 @@
       />
     </label>
   </div>
-  <label class="block text-sm">
-    <span class="mb-1 block text-xs text-fg-2">Description (optional)</span>
+  <label class="block text-body">
+    <span class="mb-1 block text-meta text-fg-2">Description (optional)</span>
     <input
       type="text"
-      class="w-full rounded border border-line-strong bg-surface-1 px-2 py-1.5 text-sm text-fg-1"
+      class="w-full rounded border border-line-strong bg-surface-1 px-2 py-1.5 text-body text-fg-1"
       data-testid="combine-target-description"
       value={wizard.description}
       oninput={(e) =>

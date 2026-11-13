@@ -73,21 +73,21 @@
 
 {#if crop.class_excluded}
   <div
-    class="mb-3 rounded border border-warn/40 bg-warn/10 px-2 py-1.5 text-xs text-warn-text"
+    class="mb-3 rounded border border-warn/40 bg-warn/10 px-2 py-1.5 text-meta text-warn-text"
   >
     <span class="font-medium">Ignored</span>
     {#if crop.excluded_reason}
       <span class="ml-1 text-warn-text/80">({crop.excluded_reason})</span>
     {/if}
     {#if crop.excluded_at}
-      <span class="ml-1 font-mono text-warn-text/60" title={crop.excluded_at}
+      <span class="ml-1 text-warn-text/60 tabular-nums" title={crop.excluded_at}
         >{formatTimestamp(crop.excluded_at)}</span
       >
     {/if}
   </div>
 {/if}
 
-<dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
+<dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-meta">
   {#if !embedded}
     <dt class="text-fg-3">Class</dt>
     <dd class="text-fg-1">
@@ -128,7 +128,7 @@
        categorical confidence (`vlm_confidence`, served separately) as
        its own row instead of folding it in as a same-row detail. -->
     <dt class="text-fg-3">{isVlmSourced ? 'Detector score' : 'Confidence'}</dt>
-    <dd class="font-mono">{pct(crop.label_confidence)}</dd>
+    <dd class="tabular-nums">{pct(crop.label_confidence)}</dd>
 
     {#if isVlmSourced && crop.detector_class_name}
       <dt class="text-fg-3">Detector class</dt>
@@ -137,7 +137,7 @@
 
     {#if vlmConf}
       <dt class="text-fg-3">VLM confidence</dt>
-      <dd class="font-mono text-fg-1">{vlmConf}</dd>
+      <dd class="text-fg-1 tabular-nums">{vlmConf}</dd>
     {/if}
   {/if}
 
@@ -157,7 +157,7 @@
        for human labels, so this row is omitted then. -->
   {#if !embedded && crop.class_confidence != null}
     <dt class="text-fg-3">Label confidence</dt>
-    <dd class="font-mono text-fg-1">
+    <dd class="text-fg-1 tabular-nums">
       {classConfidenceSourceLabel}
       {pct(crop.class_confidence)}
     </dd>
@@ -187,18 +187,18 @@
     <dd class="text-warn-text">
       {crop.vlm_suggested_class_name ?? '—'}
       {#if crop.vlm_confidence}
-        <span class="ml-1 font-mono text-warn-text/70">{crop.vlm_confidence}</span>
+        <span class="ml-1 text-warn-text/70 tabular-nums">{crop.vlm_confidence}</span>
       {/if}
     </dd>
   {/if}
 
   <dt class="text-fg-3">Cluster</dt>
-  <dd class="font-mono text-fg-1">
+  <dd class="text-fg-1 tabular-nums">
     {#if crop.cluster}
-      <span title={crop.cluster.uid ?? crop.cluster.partition_id}
+      <code title={crop.cluster.uid ?? crop.cluster.partition_id}
         >{crop.cluster.uid
           ? crop.cluster.uid.slice(0, 8)
-          : (crop.cluster.state ?? '—')}</span
+          : (crop.cluster.state ?? '—')}</code
       >
       {#if crop.cluster.state && crop.cluster.uid}
         <span class="ml-1 text-fg-3">{crop.cluster.state}</span>
@@ -213,7 +213,7 @@
 
   {#if crop.near_dup_group_id}
     <dt class="text-fg-3">Near-duplicates</dt>
-    <dd class="font-mono text-fg-1" data-testid="meta-near-dup">
+    <dd class="text-fg-1 tabular-nums" data-testid="meta-near-dup">
       {crop.near_dup_group_size ?? '?'} in group{crop.near_dup_is_representative
         ? ', representative'
         : ''}
@@ -235,7 +235,7 @@
     <!-- p6 (2026-09-24 interactive pass): the ISO timestamp has no
          whitespace to wrap on, so it overflowed the fixed-width panel and
          got visually clipped ("…+00:0") instead of wrapping. -->
-    <dd class="font-mono text-fg-2" title={crop.class_labeled_at}>
+    <dd class="text-fg-2 tabular-nums" title={crop.class_labeled_at}>
       {formatTimestamp(crop.class_labeled_at)}
     </dd>
   {/if}

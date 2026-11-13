@@ -47,19 +47,19 @@
 
 {#if proposal && run.run_id}
   <section
-    class="flex flex-col gap-3 rounded-md border border-info/30 bg-info/5 p-3 text-sm"
+    class="flex flex-col gap-3 rounded-md border border-info/30 bg-info/5 p-3 text-body"
     data-testid="assist-proposal-card"
   >
     <header class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-      <h3 class="text-sm font-semibold text-fg-1">
+      <h3 class="text-body font-semibold text-fg-1">
         VLM proposal for {scopeLabel(run.request.target)}
       </h3>
-      <span class="text-xs text-fg-3">run {run.run_id}</span>
+      <span class="text-meta text-fg-3">run {run.run_id}</span>
     </header>
 
     {#if run.scope_now?.changed}
       <p
-        class="rounded border border-warn/40 bg-warn/10 px-2 py-1 text-xs text-warn-text"
+        class="rounded border border-warn/40 bg-warn/10 px-2 py-1 text-meta text-warn-text"
         data-testid="proposal-stale"
       >
         The scope has changed since this run: {run.scope_now.overlap} of the
@@ -71,11 +71,11 @@
     {#if proposal.class_name}
       <p class="flex flex-wrap items-baseline gap-2">
         <span class="text-fg-2">Proposed class</span>
-        <strong class="text-base text-fg-1" data-testid="proposal-class"
+        <strong class="text-title text-fg-1" data-testid="proposal-class"
           >{proposal.class_name}</strong
         >
         {#if !proposal.in_registry}
-          <span class="text-xs text-warn-text">not in the class registry</span>
+          <span class="text-meta text-warn-text">not in the class registry</span>
         {/if}
       </p>
     {:else}
@@ -85,7 +85,7 @@
       </p>
     {/if}
 
-    <p class="text-xs text-fg-2" data-testid="proposal-agreement">
+    <p class="text-meta text-fg-2" data-testid="proposal-agreement">
       {pct(proposal.agreement)} agreement across {proposal.answered} sampled answers (gate
       {pct(proposal.min_agreement)}), from {run.resolved.sampled} of
       {run.resolved.scope_count} members.
@@ -93,7 +93,7 @@
 
     <ul class="flex flex-col gap-1" data-testid="proposal-distribution">
       {#each proposal.distribution as d (d.class_name)}
-        <li class="flex items-center gap-2 text-xs">
+        <li class="flex items-center gap-2 text-meta">
           <span class="w-32 shrink-0 truncate text-fg-1" title={d.class_name}
             >{d.class_name}</span
           >
@@ -103,7 +103,7 @@
               style="width: {(d.votes / maxVotes) * 100}%"
             ></span>
           </span>
-          <span class="w-8 shrink-0 text-right font-mono text-fg-2">{d.votes}</span>
+          <span class="w-8 shrink-0 text-right text-fg-2 tabular-nums">{d.votes}</span>
           <button
             type="button"
             class="btn-sm"
@@ -116,7 +116,7 @@
     </ul>
 
     {#if proposal.new_class_proposals.length > 0}
-      <p class="text-xs text-fg-2" data-testid="proposal-new-classes">
+      <p class="text-meta text-fg-2" data-testid="proposal-new-classes">
         The VLM also proposed classes the registry lacks:
         {#each proposal.new_class_proposals as n, i (n.name)}
           <span class="text-fg-1">{n.name}</span> ({n.votes}){i <
@@ -129,11 +129,11 @@
 
     {#if proposal.attribute_summary.length > 0}
       <div class="flex flex-col gap-1" data-testid="proposal-attributes">
-        <span class="text-caption uppercase tracking-wide text-fg-3"
+        <span class="text-meta text-fg-2 font-semibold"
           >Attribute suggestions, not labels</span
         >
         {#each proposal.attribute_summary as a (a.key)}
-          <div class="flex flex-wrap items-center gap-1 text-xs">
+          <div class="flex flex-wrap items-center gap-1 text-meta">
             <span class="text-fg-2">{a.key} ({a.answered} answered):</span>
             {#each a.values as v (v.value)}
               <span
@@ -148,7 +148,7 @@
 
     {#if ctl.applied}
       <p
-        class="rounded border border-success/40 bg-success/10 px-2 py-1 text-xs text-success-text"
+        class="rounded border border-success/40 bg-success/10 px-2 py-1 text-meta text-success-text"
         data-testid="proposal-applied"
       >
         Labeled {ctl.applied.updated ?? 0} crops as {ctl.applied.class_name}; {ctl.applied
@@ -158,7 +158,7 @@
     {:else}
       {#if ctl.error}
         <p
-          class="rounded border border-danger/40 bg-danger/10 px-2 py-1 text-xs text-danger-text"
+          class="rounded border border-danger/40 bg-danger/10 px-2 py-1 text-meta text-danger-text"
           data-testid="proposal-error"
         >
           {ctl.error}
@@ -197,7 +197,7 @@
           >
             Apply {chosen} to {ctl.dry.selected} members
           </button>
-          <span class="text-xs text-fg-2" data-testid="proposal-locked">
+          <span class="text-meta text-fg-2" data-testid="proposal-locked">
             {ctl.dry.skipped_locked} left alone: locked, validated or held out. Labels are written
             as a human's.
           </span>

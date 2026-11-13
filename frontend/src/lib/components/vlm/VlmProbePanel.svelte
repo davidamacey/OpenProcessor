@@ -23,7 +23,7 @@
   const num = (v: number | null | undefined): string => (v == null ? '—' : String(v));
 </script>
 
-<div class="flex flex-col gap-2 text-xs" data-testid="vlm-probe">
+<div class="flex flex-col gap-2 text-meta" data-testid="vlm-probe">
   <div class="flex flex-wrap items-center gap-2">
     <span
       class="rounded border px-1.5 py-0.5 {probe.ok
@@ -37,27 +37,31 @@
   </div>
   <dl class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-0.5">
     <dt class="text-fg-3">Latency</dt>
-    <dd class="font-mono">{formatLatencyMs(probe.latency_ms)}</dd>
+    <dd class="tabular-nums">{formatLatencyMs(probe.latency_ms)}</dd>
     <dt class="text-fg-3">Models listed</dt>
-    <dd class="break-all font-mono">
-      {(probe.models_listed ?? []).length > 0 ? probe.models_listed!.join(', ') : '—'}
+    <dd class="break-all">
+      <code
+        >{(probe.models_listed ?? []).length > 0
+          ? probe.models_listed!.join(', ')
+          : '—'}</code
+      >
     </dd>
     <dt class="text-fg-3">Configured model listed</dt>
-    <dd class="font-mono">{yn(probe.model_listed)}</dd>
+    <dd>{yn(probe.model_listed)}</dd>
     <dt class="text-fg-3">Root</dt>
-    <dd class="break-all font-mono">{probe.root ?? '—'}</dd>
+    <dd class="break-all"><code>{probe.root ?? '—'}</code></dd>
     <dt class="text-fg-3">Max model length</dt>
-    <dd class="font-mono">{num(probe.max_model_len)}</dd>
+    <dd class="tabular-nums">{num(probe.max_model_len)}</dd>
     <dt class="text-fg-3">Reads images</dt>
-    <dd class="font-mono">{yn(probe.vision_ok)}</dd>
+    <dd>{yn(probe.vision_ok)}</dd>
     <dt class="text-fg-3">JSON mode</dt>
-    <dd class="font-mono">{yn(probe.json_mode_supported)}</dd>
+    <dd>{yn(probe.json_mode_supported)}</dd>
     <dt class="text-fg-3">Reasoning channel</dt>
-    <dd class="font-mono">{yn(probe.reasoning_channel)}</dd>
+    <dd>{yn(probe.reasoning_channel)}</dd>
     <dt class="text-fg-3">Tokens per image</dt>
-    <dd class="font-mono">{num(probe.image_tokens)}</dd>
+    <dd class="tabular-nums">{num(probe.image_tokens)}</dd>
     <dt class="text-fg-3">Max images per call ok</dt>
-    <dd class="font-mono">{yn(probe.max_images_ok)}</dd>
+    <dd>{yn(probe.max_images_ok)}</dd>
   </dl>
   <ConfigIssueList issues={probe.issues ?? []} showField />
 </div>

@@ -264,7 +264,7 @@
 </script>
 
 <div class="flex flex-col gap-2" data-testid="embedding-plot">
-  <div class="flex flex-wrap items-center gap-2 text-xs text-fg-2">
+  <div class="flex flex-wrap items-center gap-2 text-meta text-fg-2">
     {#if built && points.length > 0}
       <button
         type="button"
@@ -305,7 +305,7 @@
 
   {#if bannerRequired}
     <div
-      class="rounded border border-warn/50 bg-warn/10 px-3 py-1.5 text-xs text-warn-text"
+      class="rounded border border-warn/50 bg-warn/10 px-3 py-1.5 text-meta text-warn-text"
     >
       This projection is approximate — nearby points on screen are not guaranteed to share
       a cluster. Use it to spot rough neighborhoods, not to make final labeling decisions.
@@ -318,14 +318,14 @@
       class="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-md border border-line"
     >
       {#if !loaded}
-        <p class="p-4 text-sm text-fg-3" role="status">Loading embedding projection…</p>
+        <p class="p-4 text-body text-fg-3" role="status">Loading embedding projection…</p>
       {:else if loadError}
-        <p class="p-4 text-sm text-danger-text" role="alert">{loadError}</p>
+        <p class="p-4 text-body text-danger-text" role="alert">{loadError}</p>
       {:else if !built}
         <div
           class="flex h-full flex-col items-center justify-center gap-3 p-6 text-center"
         >
-          <p class="text-sm text-fg-2">
+          <p class="text-body text-fg-2">
             No projection has been built yet. Building one runs as a background job (it
             never fits on the request path), so this can take a while on a large pool.
           </p>
@@ -343,7 +343,7 @@
           </button>
         </div>
       {:else if points.length === 0}
-        <p class="p-4 text-sm text-fg-2">No item has a point on the projection yet.</p>
+        <p class="p-4 text-body text-fg-2">No item has a point on the projection yet.</p>
         {@render empty?.()}
       {:else}
         <canvas
@@ -360,7 +360,7 @@
           onpointerleave={finishDrag}
         ></canvas>
         <p
-          class="pointer-events-none absolute bottom-1.5 right-2 font-mono text-caption text-fg-3"
+          class="pointer-events-none absolute bottom-1.5 right-2 text-caption text-fg-3 tabular-nums"
           data-testid="embedding-count"
         >
           {points.length.toLocaleString()}

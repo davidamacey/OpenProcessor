@@ -12,9 +12,9 @@
 </script>
 
 <div class="overflow-auto rounded border border-line {className}">
-  <table class="w-full text-xs">
+  <table class="w-full text-meta">
     <thead
-      class="sticky top-0 border-b border-line bg-surface-0 text-left uppercase text-fg-3"
+      class="sticky top-0 border-b border-line bg-surface-0 text-left text-fg-2 font-medium"
     >
       <tr>
         <th class="px-2 py-1 font-medium">Class</th>
@@ -32,9 +32,9 @@
             : 'text-fg-2'}"
         >
           <td class="px-2 py-1">{c.class_name}</td>
-          <td class="px-2 py-1 text-right font-mono">{c.train.toLocaleString()}</td>
-          <td class="px-2 py-1 text-right font-mono">{c.val.toLocaleString()}</td>
-          <td class="px-2 py-1 text-right font-mono">{c.test.toLocaleString()}</td>
+          <td class="px-2 py-1 text-right tabular-nums">{c.train.toLocaleString()}</td>
+          <td class="px-2 py-1 text-right tabular-nums">{c.val.toLocaleString()}</td>
+          <td class="px-2 py-1 text-right tabular-nums">{c.test.toLocaleString()}</td>
         </tr>
       {/each}
     </tbody>

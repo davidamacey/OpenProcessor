@@ -72,7 +72,7 @@
       class="input w-full rounded-none border-0 border-b border-line bg-surface-1"
       onkeydown={picker.onKeydown}
     />
-    <ul id={listId} role="listbox" class="max-h-72 overflow-y-auto py-1 text-sm">
+    <ul id={listId} role="listbox" class="max-h-72 overflow-y-auto py-1 text-body">
       {#if rowCount === 0}
         <li class="px-3 py-2 text-fg-3" role="presentation">No matching class.</li>
       {/if}
@@ -91,8 +91,7 @@
             onmouseenter={() => (picker.index = i)}
           >
             {#if cls.hotkey_letter}
-              <kbd
-                class="rounded bg-surface-2 px-1 py-0.5 font-mono text-caption uppercase text-accent-text"
+              <kbd class="rounded bg-surface-2 px-1 py-0.5 text-caption text-accent-text"
                 >{cls.hotkey_letter}</kbd
               >
             {/if}
@@ -124,7 +123,7 @@
       {/if}
     </ul>
     {#if picker.error}
-      <p class="border-t border-line px-3 py-1.5 text-xs text-danger-text" role="alert">
+      <p class="border-t border-line px-3 py-1.5 text-meta text-danger-text" role="alert">
         {picker.error}
       </p>
     {/if}

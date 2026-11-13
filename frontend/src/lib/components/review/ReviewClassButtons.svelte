@@ -19,7 +19,7 @@
   {#each topClasses as cls (cls.id)}
     <button
       type="button"
-      class="rounded border border-line-strong bg-surface-1 px-2 py-1 text-xs text-fg-1
+      class="rounded border border-line-strong bg-surface-1 px-2 py-1 text-meta text-fg-1
          hover:border-accent/60 hover:bg-accent/10 hover:text-white
          focus:outline-none focus:ring-2 focus:ring-accent/40"
       title={cls.hotkey_letter
@@ -29,7 +29,7 @@
     >
       {#if cls.hotkey_letter}
         <kbd
-          class="mr-1.5 rounded bg-surface-2 px-1 py-0.5 font-mono text-caption uppercase text-accent-text"
+          class="mr-1.5 rounded bg-surface-2 px-1 py-0.5 text-caption text-accent-text"
         >
           {cls.hotkey_letter}
         </kbd>
@@ -42,15 +42,13 @@
      classes (same action as pressing /). -->
   <button
     type="button"
-    class="rounded border border-dashed border-line-strong bg-surface-1 px-2 py-1 text-xs text-fg-2
+    class="rounded border border-dashed border-line-strong bg-surface-1 px-2 py-1 text-meta text-fg-2
        hover:border-accent/60 hover:bg-accent/10 hover:text-white
        focus:outline-none focus:ring-2 focus:ring-accent/40"
     title="Search all classes ({kg('review.queue.class_picker')})"
     onclick={openPicker}
   >
-    <kbd
-      class="mr-1.5 rounded bg-surface-2 px-1 py-0.5 font-mono text-caption text-accent-text"
-    >
+    <kbd class="mr-1.5 rounded bg-surface-2 px-1 py-0.5 text-caption text-accent-text">
       {kg('review.queue.class_picker')}
     </kbd>
     search all classes…

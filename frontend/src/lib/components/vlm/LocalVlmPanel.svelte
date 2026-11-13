@@ -64,13 +64,13 @@
 
 <div class="flex flex-col gap-3" data-testid="local-vlm">
   {#if !local.configured}
-    <p class="text-sm text-fg-2" data-testid="local-vlm-reason">{local.reason}</p>
+    <p class="text-body text-fg-2" data-testid="local-vlm-reason">{local.reason}</p>
   {:else}
-    <p class="text-xs text-fg-2" data-testid="local-vlm-served">
+    <p class="text-meta text-fg-2" data-testid="local-vlm-served">
       Serving:
-      <span class="font-mono text-fg-1">{local.served?.model ?? '—'}</span>
+      <code class="text-fg-1">{local.served?.model ?? '—'}</code>
       {#if local.served?.catalog_id}
-        (catalog <span class="font-mono">{local.served.catalog_id}</span>)
+        (catalog <code>{local.served.catalog_id}</code>)
       {/if}
       {#if local.gpu_total_gb != null}
         · GPU memory {local.gpu_total_gb} GB
@@ -79,17 +79,17 @@
 
     {#if local.restart_required}
       <div
-        class="flex flex-col gap-2 rounded border border-warn/40 bg-warn/10 p-3 text-sm text-warn-text"
+        class="flex flex-col gap-2 rounded border border-warn/40 bg-warn/10 p-3 text-body text-warn-text"
         data-testid="local-vlm-restart"
       >
         <p>{local.reason}</p>
         {#if local.desired}
-          <p class="text-xs">
-            Requested: <span class="font-mono">{local.desired.catalog_id}</span>
+          <p class="text-meta">
+            Requested: <code>{local.desired.catalog_id}</code>
           </p>
           <div class="flex flex-wrap items-center gap-2">
             <code
-              class="break-all rounded bg-surface-0 px-2 py-1 font-mono text-xs text-fg-1"
+              class="break-all rounded bg-surface-0 px-2 py-1 text-meta text-fg-1"
               data-testid="local-vlm-command">{local.desired.command}</code
             >
             <button
@@ -114,11 +114,11 @@
     {/if}
 
     {#if error && !switching && !cancelling}
-      <p class="text-sm text-danger-text" data-testid="local-vlm-error">{error}</p>
+      <p class="text-body text-danger-text" data-testid="local-vlm-error">{error}</p>
     {/if}
 
     <div class="overflow-x-auto">
-      <table class="w-full text-left text-xs" data-testid="local-vlm-table">
+      <table class="w-full text-left text-meta" data-testid="local-vlm-table">
         <thead class="text-fg-3">
           <tr>
             <th class="py-1 pr-3 font-normal">Model</th>
@@ -153,7 +153,7 @@
                     data-testid="local-vlm-desired">requested</span
                   >{/if}
               </td>
-              <td class="py-1.5 pr-3 font-mono break-all">{e.hf_repo}</td>
+              <td class="py-1.5 pr-3 break-all"><code>{e.hf_repo}</code></td>
               <td class="py-1.5 pr-3">
                 {#if externalHref(e.license_url)}
                   <!-- eslint-disable svelte/no-navigation-without-resolve -- external license page, not a SvelteKit route -->
@@ -168,18 +168,20 @@
                   {e.license}
                 {/if}{#if e.gated}<span class="ml-1 text-warn-text">gated</span>{/if}
               </td>
-              <td class="py-1.5 pr-3 font-mono"
+              <td class="py-1.5 pr-3 tabular-nums"
                 >{e.params_b == null ? '—' : `${e.params_b}B`}{e.quantization
                   ? ` ${e.quantization}`
                   : ''}</td
               >
-              <td class="py-1.5 pr-3 font-mono">{e.vram_gb} / {num(e.disk_gb)} disk</td>
-              <td class="py-1.5 pr-3 font-mono">{e.context_max} / {e.max_model_len}</td>
-              <td class="py-1.5 pr-3 font-mono">{e.max_images}</td>
+              <td class="py-1.5 pr-3 tabular-nums">{e.vram_gb} / {num(e.disk_gb)} disk</td
+              >
+              <td class="py-1.5 pr-3 tabular-nums">{e.context_max} / {e.max_model_len}</td
+              >
+              <td class="py-1.5 pr-3 tabular-nums">{e.max_images}</td>
               <td class="py-1.5 pr-3">{catalog.labels.status[e.status] ?? e.status}</td>
-              <td class="py-1.5 pr-3 font-mono">{yn(e.fits)}</td>
-              <td class="py-1.5 pr-3 font-mono">{yn(e.multi_box_verified)}</td>
-              <td class="py-1.5 pr-3 font-mono">{yn(e.text_reading_verified)}</td>
+              <td class="py-1.5 pr-3">{yn(e.fits)}</td>
+              <td class="py-1.5 pr-3">{yn(e.multi_box_verified)}</td>
+              <td class="py-1.5 pr-3">{yn(e.text_reading_verified)}</td>
               <td class="py-1.5">
                 {#if !e.serving}
                   <button
@@ -208,7 +210,7 @@
     onconfirm={() => void confirmSwitch()}
     oncancel={() => (switching = null)}
   >
-    <p class="text-xs text-fg-2">
+    <p class="text-meta text-fg-2">
       This records a request. The server keeps serving the current model until it is
       restarted.
     </p>
@@ -216,7 +218,7 @@
         {error}
       </p>{/if}
     {#if errorCode === 'vlm_catalog_does_not_fit'}
-      <label class="flex items-center gap-2 text-xs text-warn-text">
+      <label class="flex items-center gap-2 text-meta text-warn-text">
         <input type="checkbox" bind:checked={force} data-testid="local-vlm-force" />
         Select anyway (the server says this does not fit the GPU)
       </label>
@@ -233,7 +235,7 @@
     onconfirm={() => void confirmCancel()}
     oncancel={() => (cancelling = false)}
   >
-    <p class="text-xs text-fg-2">
+    <p class="text-meta text-fg-2">
       The server keeps serving its current model; the pending request is dropped.
     </p>
     {#if error}<p class="text-danger-text" data-testid="local-vlm-cancel-error">

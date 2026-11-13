@@ -35,7 +35,7 @@
          component the review page and the crop-card lightbox use, so the
          rendering matches across surfaces. -->
   <div class="flex min-h-0 flex-col gap-2">
-    <div class="text-xs uppercase tracking-wider text-fg-3">Source</div>
+    <div class="text-meta text-fg-2 font-semibold">Source</div>
     <!-- A definite height: SourceImageOverlay sizes its image with
            percentages, which collapse under an auto-height parent and left the
            boxes off the picture. No stretched background either — a flex-1 box
@@ -51,7 +51,7 @@
       {/if}
     </div>
     <div class="flex items-center gap-3">
-      <div class="text-xs text-fg-3">Crop</div>
+      <div class="text-meta text-fg-3">Crop</div>
       <img
         src={getThumbUrl(crop.id, 192)}
         alt="crop"
@@ -71,7 +71,7 @@
 
   <button
     type="button"
-    class="absolute top-2 right-2 z-10 rounded-full border border-line-strong bg-surface-1 px-2 py-1 text-sm text-white shadow-lg hover:bg-surface-2"
+    class="absolute top-2 right-2 z-10 rounded-full border border-line-strong bg-surface-1 px-2 py-1 text-body text-white shadow-lg hover:bg-surface-2"
     onclick={onclose}
     aria-label="Close"
   >

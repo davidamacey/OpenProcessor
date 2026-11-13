@@ -171,7 +171,7 @@
        the page defaults when it finishes. -->
   {#if runs.isActive}
     <p
-      class="rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-accent-text"
+      class="rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-meta text-accent-text"
     >
       A run is in progress. Submit a new run after it finishes — the trainer handles one
       job at a time.
@@ -179,7 +179,7 @@
   {/if}
   {#if !dataset.datasetExportDir}
     <p
-      class="rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn-text"
+      class="rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-meta text-warn-text"
     >
       Form disabled until a frozen export is available.
     </p>

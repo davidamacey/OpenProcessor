@@ -45,16 +45,15 @@
   data-testid="project-unavailable"
 >
   {#if resolution.kind === 'not_found'}
-    <p class="text-lg font-semibold">Project not found</p>
-    <p class="max-w-md text-sm text-fg-2">
-      There is no project named <span class="font-mono text-fg-1">{resolution.slug}</span
-      >.
+    <p class="text-title font-semibold">Project not found</p>
+    <p class="max-w-md text-body text-fg-2">
+      There is no project named <code class="text-fg-1">{resolution.slug}</code>.
     </p>
   {:else}
-    <p class="text-lg font-semibold">Project not available</p>
-    <p class="max-w-md text-sm text-fg-2">
+    <p class="text-title font-semibold">Project not available</p>
+    <p class="max-w-md text-body text-fg-2">
       <span class="text-fg-1">{resolution.project.display_name}</span>
-      (<span class="font-mono">{resolution.project.slug}</span>) is
+      (<code>{resolution.project.slug}</code>) is
       <span data-testid="project-unavailable-status"
         >{projectsStore.statusLabel(resolution.project.status).toLowerCase()}</span
       > and can't be opened right now.
@@ -63,14 +62,14 @@
   <div class="flex gap-2">
     <a
       href={resolve('/projects')}
-      class="rounded border border-line-strong px-3 py-1.5 text-sm hover:border-fg-3"
+      class="rounded border border-line-strong px-3 py-1.5 text-body hover:border-fg-3"
       >All projects</a
     >
     {#if fallback}
       <a
         data-sveltekit-preload-data="tap"
         href={resolve(projectHref('/dashboard', fallback.slug))}
-        class="rounded border border-line-strong px-3 py-1.5 text-sm hover:border-fg-3"
+        class="rounded border border-line-strong px-3 py-1.5 text-body hover:border-fg-3"
         >Open {fallback.display_name}</a
       >
     {/if}

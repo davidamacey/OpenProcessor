@@ -23,7 +23,7 @@
     typeof v === 'boolean' ? (v ? 'yes' : 'no') : String(v);
 </script>
 
-<table class="w-full text-left text-xs" data-testid="reprocess-counts">
+<table class="w-full text-left text-meta" data-testid="reprocess-counts">
   <thead class="text-fg-3">
     <tr>
       <th class="py-0.5 pr-3">Scope</th>
@@ -34,10 +34,10 @@
       <th class="py-0.5 text-right">Not found</th>
     </tr>
   </thead>
-  <tbody class="font-mono">
+  <tbody class="tabular-nums">
     {#each res.scopes as s (s.scope)}
       <tr class="border-t border-line">
-        <td class="py-0.5 pr-3 font-sans">{scopeLabel(s.scope)}</td>
+        <td class="py-0.5 pr-3">{scopeLabel(s.scope)}</td>
         <td class="py-0.5 pr-3 text-right">{count(s.selected)}</td>
         <td class="py-0.5 pr-3 text-right">{count(s.locked_skipped)}</td>
         <td class="py-0.5 pr-3 text-right">{count(s.queued)}</td>
@@ -46,11 +46,11 @@
       </tr>
       {#if s.detail && Object.keys(s.detail).length > 0}
         <tr data-testid="reprocess-detail">
-          <td class="py-0.5 pr-3 pl-3 font-sans" colspan="6">
+          <td class="py-0.5 pr-3 pl-3" colspan="6">
             <dl class="grid grid-cols-[auto_1fr] gap-x-3 text-fg-2">
               {#each Object.entries(s.detail) as [k, v] (k)}
                 <dt>{humanizeId(k)}</dt>
-                <dd class="font-mono text-fg-1">{detailValue(v)}</dd>
+                <dd class="text-fg-1">{detailValue(v)}</dd>
               {/each}
             </dl>
           </td>
@@ -58,7 +58,7 @@
       {/if}
       {#each s.breakdown ?? [] as b (b.detector + ':' + b.reason)}
         <tr class="text-fg-3" data-testid="reprocess-breakdown">
-          <td class="py-0.5 pr-3 pl-3 font-sans" colspan="5">
+          <td class="py-0.5 pr-3 pl-3" colspan="5">
             {b.detector} · {b.reason}
           </td>
           <td class="py-0.5 text-right">{b.count.toLocaleString()}</td>

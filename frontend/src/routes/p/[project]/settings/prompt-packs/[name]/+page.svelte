@@ -93,9 +93,11 @@
     testid="packs-unavailable"
   >
     {#if ed.loadError && !ed.doc}
-      <p class="text-sm text-danger-text" data-testid="pack-load-error">{ed.loadError}</p>
+      <p class="text-body text-danger-text" data-testid="pack-load-error">
+        {ed.loadError}
+      </p>
     {:else if !ed.doc || !ed.schema}
-      <p class="text-sm text-fg-3">Loading…</p>
+      <p class="text-body text-fg-3">Loading…</p>
     {:else}
       {@const d = ed.doc}
       <PackActivePanel ctl={ed.active} onrollback={() => ed.active.rollback()} />
@@ -107,15 +109,15 @@
           <ConfigDescriptionField {ed} />
 
           {#if ed.schema.placeholders.length > 0}
-            <details class="text-xs">
+            <details class="text-meta">
               <summary class="cursor-pointer text-fg-2">Placeholders</summary>
               <dl class="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
                 {#each ed.schema.placeholders as p (p.name)}
-                  <dt class="font-mono text-info-text">{`{${p.name}}`}</dt>
+                  <dt class="text-info-text"><code>{`{${p.name}}`}</code></dt>
                   <dd class="text-fg-2">
                     {p.meaning}
-                    {#if p.example}<span class="block font-mono text-fg-3"
-                        >e.g. {p.example}</span
+                    {#if p.example}<span class="block text-fg-3"
+                        >e.g. <code>{p.example}</code></span
                       >{/if}
                   </dd>
                 {/each}
@@ -131,7 +133,7 @@
               data-testid="pack-group"
               data-group={g.id}
             >
-              <h2 class="text-sm font-semibold text-fg-1">{g.label}</h2>
+              <h2 class="text-body font-semibold text-fg-1">{g.label}</h2>
               {#each g.fields as f (f.field)}
                 <PackFieldEditor
                   field={f}

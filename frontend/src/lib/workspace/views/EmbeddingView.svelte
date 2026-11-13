@@ -41,7 +41,7 @@
   <BulkBar {ws} onapplied={() => void plot?.reload()} />
   <div class="min-h-0 flex-1 overflow-auto p-4">
     {#if strategiesStore.loaded && !available}
-      <p class="text-sm text-fg-2" data-testid="embedding-unavailable">
+      <p class="text-body text-fg-2" data-testid="embedding-unavailable">
         This deployment does not offer the embedding projection (the server reports it as
         off).
       </p>

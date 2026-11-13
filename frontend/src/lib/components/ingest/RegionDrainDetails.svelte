@@ -16,29 +16,29 @@
 </script>
 
 <div>
-  <h3 class="mb-2 text-sm font-semibold text-fg-1">Region detection worklog</h3>
+  <h3 class="mb-2 text-body font-semibold text-fg-1">Region detection worklog</h3>
   {#if error}
-    <p class="text-xs text-danger-text">
+    <p class="text-meta text-danger-text">
       Detection worklog unavailable (backend: {error})
     </p>
   {:else if !drain}
-    <p class="text-xs text-fg-3">Loading…</p>
+    <p class="text-meta text-fg-3">Loading…</p>
   {:else}
-    <div class="flex gap-4 text-xs">
+    <div class="flex gap-4 text-meta">
       <div>
         <div class="text-fg-3">Pending detection</div>
-        <div class="font-mono text-fg-1">{drain.pending_detection}</div>
+        <div class="text-fg-1 tabular-nums">{drain.pending_detection}</div>
       </div>
       <div>
         <div class="text-fg-3">Pending verification</div>
-        <div class="font-mono text-fg-1">{drain.pending_verification}</div>
+        <div class="text-fg-1 tabular-nums">{drain.pending_verification}</div>
       </div>
       <div>
         <div class="text-fg-3">Total unfinished</div>
         <div
-          class="font-mono {drain.total_unfinished === 0
+          class="{drain.total_unfinished === 0
             ? 'text-success-text'
-            : 'text-fg-1'}"
+            : 'text-fg-1'} tabular-nums"
           data-testid="region-drain-total-unfinished"
         >
           {drain.total_unfinished}
@@ -47,7 +47,7 @@
       <div>
         <div class="text-fg-3">Drained</div>
         <div
-          class="font-mono {drain.drained ? 'text-success-text' : 'text-fg-1'}"
+          class={drain.drained ? 'text-success-text' : 'text-fg-1'}
           data-testid="region-drain-drained"
         >
           {drain.drained ? 'yes' : 'no'}
@@ -57,7 +57,7 @@
     {#if drain.stall_reason}
       <!-- V-1: why the worklog can't drain, served verbatim. -->
       <p
-        class="mt-2 rounded border border-warn/40 bg-warn/10 px-2 py-1 text-xs text-warn-text"
+        class="mt-2 rounded border border-warn/40 bg-warn/10 px-2 py-1 text-meta text-warn-text"
         data-testid="region-drain-stall-reason"
       >
         Stalled: {drain.stall_reason}
@@ -68,7 +68,7 @@
         {#each drain.region_dependencies.filter((d) => !d.ready) as dep (dep.role + dep.model)}
           <li class="text-fg-2">
             <span class="text-fg-2">{dep.role}</span>
-            <span class="font-mono">{dep.model}</span>: not ready — {dep.detail}
+            <code>{dep.model}</code>: not ready — {dep.detail}
           </li>
         {/each}
       </ul>

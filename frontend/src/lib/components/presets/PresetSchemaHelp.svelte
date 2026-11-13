@@ -17,8 +17,8 @@
   const fields = $derived(schema ? schemaFields(schema) : []);
 </script>
 
-<section class="surface flex min-w-0 flex-col gap-2 p-4 text-sm" aria-label="Fields">
-  <h2 class="text-base font-semibold">Fields</h2>
+<section class="surface flex min-w-0 flex-col gap-2 p-4 text-body" aria-label="Fields">
+  <h2 class="text-title font-semibold">Fields</h2>
   {#if error}
     <p class="text-danger-text" data-testid="preset-schema-error">{error}</p>
   {:else if !schema}
@@ -32,22 +32,22 @@
           data-path={f.path}
         >
           <div class="flex flex-wrap items-baseline gap-x-2">
-            <span class="font-mono text-xs break-all text-fg-1">{f.path}</span>
-            <span class="text-xs text-fg-2">{f.type}</span>
-            {#if f.required}<span class="text-xs text-warn-text">required</span>{/if}
+            <code class="text-meta break-all text-fg-1">{f.path}</code>
+            <span class="text-meta text-fg-2">{f.type}</span>
+            {#if f.required}<span class="text-meta text-warn-text">required</span>{/if}
           </div>
-          {#if f.description}<p class="text-xs text-fg-2">{f.description}</p>{/if}
+          {#if f.description}<p class="text-meta text-fg-2">{f.description}</p>{/if}
           {#if f.choices.length > 0}
-            <p class="text-xs text-fg-2">
-              One of <span class="font-mono">{f.choices.join(', ')}</span>
+            <p class="text-meta text-fg-2">
+              One of <code>{f.choices.join(', ')}</code>
             </p>
           {/if}
           {#if f.limits.length > 0}
-            <p class="text-xs text-fg-2">{f.limits.join(', ')}</p>
+            <p class="text-meta text-fg-2">{f.limits.join(', ')}</p>
           {/if}
           {#if f.default !== null}
-            <p class="text-xs text-fg-2">
-              Default <span class="font-mono">{f.default}</span>
+            <p class="text-meta text-fg-2">
+              Default <code>{f.default}</code>
             </p>
           {/if}
         </li>

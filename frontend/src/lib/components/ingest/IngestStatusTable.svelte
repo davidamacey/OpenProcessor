@@ -54,22 +54,22 @@
 </script>
 
 <div>
-  <h3 class="mb-2 text-sm font-semibold text-fg-1">Ingest status</h3>
+  <h3 class="mb-2 text-body font-semibold text-fg-1">Ingest status</h3>
   {#if error}
-    <p class="text-xs text-danger-text">Ingest status unavailable: {error}</p>
+    <p class="text-meta text-danger-text">Ingest status unavailable: {error}</p>
   {:else if !status}
-    <p class="text-xs text-fg-3">Loading…</p>
+    <p class="text-meta text-fg-3">Loading…</p>
   {:else}
-    <p class="mb-2 text-xs text-fg-2">
+    <p class="mb-2 text-meta text-fg-2">
       Total images:
-      <span class="font-mono text-fg-1" data-testid="ingest-status-total"
+      <span class="text-fg-1 tabular-nums" data-testid="ingest-status-total"
         >{status.total}</span
       >
     </p>
     {#if status.by_source.length === 0}
-      <p class="text-xs text-fg-3">No sources yet.</p>
+      <p class="text-meta text-fg-3">No sources yet.</p>
     {:else}
-      <table class="w-full text-xs">
+      <table class="w-full text-meta">
         <thead>
           <tr class="text-left text-fg-3">
             <th class="pb-1 font-normal">Source</th>
@@ -79,8 +79,8 @@
         <tbody>
           {#each status.by_source as bucket (bucket.key)}
             <tr class="border-t border-line">
-              <td class="py-1 font-mono text-fg-2">{bucket.key}</td>
-              <td class="py-1 font-mono text-fg-2">{bucket.doc_count}</td>
+              <td class="py-1 text-fg-2"><code>{bucket.key}</code></td>
+              <td class="py-1 text-fg-2 tabular-nums">{bucket.doc_count}</td>
             </tr>
           {/each}
         </tbody>

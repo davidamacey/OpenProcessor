@@ -63,16 +63,16 @@
 
 {#if compact}
   <div data-testid="region-drain-compact">
-    <h3 class="mb-1 text-sm font-semibold text-fg-1">Pending detection</h3>
+    <h3 class="mb-1 text-body font-semibold text-fg-1">Pending detection</h3>
     {#if error}
-      <p class="text-xs text-danger-text">
+      <p class="text-meta text-danger-text">
         Detection worklog unavailable (backend: {error})
       </p>
     {:else if !drain}
-      <p class="text-xs text-fg-3">Loading…</p>
+      <p class="text-meta text-fg-3">Loading…</p>
     {:else}
-      <p class="text-xs text-fg-2">
-        <span class="font-mono text-lg text-fg-1" data-testid="region-drain-pending"
+      <p class="text-meta text-fg-2">
+        <span class="text-title text-fg-1 tabular-nums" data-testid="region-drain-pending"
           >{drain.pending_detection}</span
         >
         images waiting for the detector{drain.drained ? ' (drained)' : ''}

@@ -58,11 +58,11 @@
 
 <div class="flex flex-col gap-4">
   {#if !kind || !list || !flow}
-    <p class="text-sm text-fg-2" data-testid="preset-unknown-kind">
+    <p class="text-body text-fg-2" data-testid="preset-unknown-kind">
       There is no such kind of preset.
     </p>
     <a
-      class="text-xs text-accent-text hover:underline"
+      class="text-meta text-accent-text hover:underline"
       href={resolve(projectHref('/settings'))}>Back to settings</a
     >
   {:else}
@@ -75,20 +75,20 @@
       >
       <span class="grow"></span>
       <a
-        class="text-xs text-accent-text hover:underline"
+        class="text-meta text-accent-text hover:underline"
         href={resolve(projectHref('/settings'))}>Back to settings</a
       >
     </header>
-    <p class="text-sm text-fg-2">{kind.blurb} {activationReach(kind)}</p>
+    <p class="text-body text-fg-2">{kind.blurb} {activationReach(kind)}</p>
 
     <PresetActiveSummary active={list.active} />
 
     {#if list.loadError && !list.list}
-      <p class="text-sm text-danger-text" data-testid="preset-load-error">
+      <p class="text-body text-danger-text" data-testid="preset-load-error">
         {list.loadError}
       </p>
     {:else if !list.list}
-      <p class="text-sm text-fg-3">Loading…</p>
+      <p class="text-body text-fg-3">Loading…</p>
     {:else}
       {@const items = list.list.items}
       <section
@@ -96,7 +96,7 @@
         aria-label="Documents"
       >
         <div class="mb-2 flex items-center gap-3">
-          <h2 class="text-base font-semibold">Documents</h2>
+          <h2 class="text-title font-semibold">Documents</h2>
           <span class="grow"></span>
           <button
             type="button"
@@ -108,8 +108,8 @@
             }}>New {kind.noun}</button
           >
         </div>
-        <table class="w-full text-left text-sm" data-testid="preset-table">
-          <thead class="text-xs text-fg-3">
+        <table class="w-full text-left text-body" data-testid="preset-table">
+          <thead class="text-meta text-fg-3">
             <tr>
               <th class="py-1 pr-3 font-normal">Name</th>
               <th class="py-1 pr-3 font-normal">Description</th>
@@ -127,8 +127,9 @@
               >
                 <td class="py-1.5 pr-3">
                   <a
-                    class="font-mono text-accent-text hover:underline"
-                    href={resolve(projectHref(editorPath(d.name)))}>{d.name}</a
+                    class="text-accent-text hover:underline"
+                    href={resolve(projectHref(editorPath(d.name)))}
+                    ><code>{d.name}</code></a
                   >
                   {#each list.active.entries.filter((e) => e.state === 'active' && e.name === d.name) as e (e.axis ?? 'deployment')}
                     <div
@@ -147,8 +148,8 @@
                     </div>
                   {/each}
                 </td>
-                <td class="py-1.5 pr-3 text-xs text-fg-2">{d.description || '—'}</td>
-                <td class="py-1.5 pr-3 font-mono text-xs">{d.revision}</td>
+                <td class="py-1.5 pr-3 text-meta text-fg-2">{d.description || '—'}</td>
+                <td class="py-1.5 pr-3 text-meta tabular-nums">{d.revision}</td>
                 <ConfigRowTail row={d} {flow}>
                   {#snippet lead()}
                     <a class="btn btn-sm" href={resolve(projectHref(editorPath(d.name)))}
@@ -161,7 +162,7 @@
           </tbody>
         </table>
         {#if items.length === 0}
-          <p class="mt-2 text-sm text-fg-2" data-testid="preset-empty">
+          <p class="mt-2 text-body text-fg-2" data-testid="preset-empty">
             No {kind.title.toLowerCase()} yet.
           </p>
         {/if}

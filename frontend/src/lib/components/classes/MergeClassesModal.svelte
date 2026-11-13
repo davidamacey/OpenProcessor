@@ -17,17 +17,17 @@
 <!-- Merge modal -->
 {#if m.mergeOpen}
   <Modal label="Merge classes" onclose={m.closeMerge}>
-    <h3 class="mb-3 text-base font-semibold">Merge classes</h3>
-    <p class="mb-3 text-xs text-fg-2">
+    <h3 class="mb-3 text-title font-semibold">Merge classes</h3>
+    <p class="mb-3 text-meta text-fg-2">
       Source class is marked deprecated; all crops + label rows are relabeled to the
       target.
     </p>
 
-    <label class="mb-3 block text-sm">
+    <label class="mb-3 block text-body">
       <span class="mb-1 block text-fg-2">Source (will be merged away)</span>
       <select
         bind:value={m.mergeSourceId}
-        class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 text-sm focus:border-accent focus:outline-none"
+        class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 text-body focus:border-accent focus:outline-none"
       >
         <option value={null}>— pick source —</option>
         {#each allClasses.filter((c) => !c.deprecated) as c (c.id)}
@@ -36,11 +36,11 @@
       </select>
     </label>
 
-    <label class="mb-3 block text-sm">
+    <label class="mb-3 block text-body">
       <span class="mb-1 block text-fg-2">Target (kept)</span>
       <select
         bind:value={m.mergeTargetId}
-        class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 text-sm focus:border-accent focus:outline-none"
+        class="w-full rounded-md border border-line-strong bg-surface-1 px-2 py-1.5 text-body focus:border-accent focus:outline-none"
       >
         <option value={null}>— pick target —</option>
         {#each allClasses.filter((c) => !c.deprecated && c.id !== m.mergeSourceId) as c (c.id)}
@@ -51,16 +51,16 @@
 
     {#if m.mergeSource && m.mergeTarget}
       {#if m.mergePreviewBusy}
-        <div class="mb-3 text-xs text-fg-3">Checking impact…</div>
+        <div class="mb-3 text-meta text-fg-3">Checking impact…</div>
       {:else if m.mergePreviewError}
         <div
-          class="mb-3 rounded border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger-text"
+          class="mb-3 rounded border border-danger/40 bg-danger/10 px-3 py-2 text-meta text-danger-text"
         >
           Preview failed: {m.mergePreviewError}
         </div>
       {:else if m.mergePreview}
         <div
-          class="mb-3 rounded border px-3 py-2 text-xs {m.mergePreview.blocked
+          class="mb-3 rounded border px-3 py-2 text-meta {m.mergePreview.blocked
             ? 'border-danger/40 bg-danger/10 text-danger-text'
             : 'border-warn/40 bg-warn/10 text-warn-text'}"
         >

@@ -61,7 +61,7 @@
 
 <div class="flex items-center gap-3">
   {#if position}
-    <span class="shrink-0 text-xs text-fg-2" data-testid="filmstrip-position">
+    <span class="shrink-0 text-meta text-fg-2" data-testid="filmstrip-position">
       {position}
     </span>
   {/if}

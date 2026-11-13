@@ -26,15 +26,15 @@
 </script>
 
 <div class="space-y-1" data-testid="combine-mapping-{source.project}">
-  <h3 class="text-xs font-semibold text-fg-2">
+  <h3 class="text-meta font-semibold text-fg-2">
     {source.project}
     <span class="font-normal text-fg-3">({rows.length} classes)</span>
   </h3>
   {#if rows.length === 0}
-    <p class="text-xs text-fg-3">No labeled classes in this source.</p>
+    <p class="text-meta text-fg-3">No labeled classes in this source.</p>
   {:else}
     <div class="overflow-x-auto rounded border border-line">
-      <table class="w-full text-xs">
+      <table class="w-full text-meta">
         <thead class="bg-surface-1 text-left text-fg-2">
           <tr>
             <th class="px-2 py-1 font-normal">Source class</th>

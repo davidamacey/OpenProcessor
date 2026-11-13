@@ -36,7 +36,7 @@
 </script>
 
 <div
-  class="rounded-md border border-line bg-surface-1/60 p-3 text-xs"
+  class="rounded-md border border-line bg-surface-1/60 p-3 text-meta"
   data-testid="assist-plan"
   aria-live="polite"
 >

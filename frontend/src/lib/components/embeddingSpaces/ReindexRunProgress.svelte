@@ -9,7 +9,7 @@
   let { run }: Props = $props();
 </script>
 
-<div class="flex flex-col gap-0.5 text-xs" data-testid="run-progress" data-run={run.id}>
+<div class="flex flex-col gap-0.5 text-meta" data-testid="run-progress" data-run={run.id}>
   <div class="flex flex-wrap items-center gap-2">
     <span
       class="rounded border border-line-strong px-1.5 text-caption text-fg-1"

@@ -8,8 +8,8 @@
   const s = $derived(ws.summary.summary);
 </script>
 
-<section class="space-y-2 text-sm" data-testid="selection-details">
-  <h2 class="text-xs font-semibold tracking-wide text-fg-2 uppercase">Selection</h2>
+<section class="space-y-2 text-body" data-testid="selection-details">
+  <h2 class="text-meta font-semibold text-fg-2">Selection</h2>
   {#if ws.summary.failure}
     <ErrorState
       title="The selection could not be counted"
@@ -19,7 +19,7 @@
     />
   {:else if s}
     <p class="text-fg-1">{s.summary_text}</p>
-    <dl class="grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-xs text-fg-2">
+    <dl class="grid grid-cols-2 gap-x-3 gap-y-1 text-meta text-fg-2 tabular-nums">
       <dt class="text-fg-3">clusters</dt>
       <dd>{s.clusters.toLocaleString()}</dd>
       <dt class="text-fg-3">in test holdout</dt>
@@ -27,11 +27,11 @@
       <dt class="text-fg-3">with a position</dt>
       <dd>{s.located.toLocaleString()}</dd>
     </dl>
-    <ul class="space-y-0.5 text-xs text-fg-2" data-testid="selection-by-class">
+    <ul class="space-y-0.5 text-meta text-fg-2" data-testid="selection-by-class">
       {#each s.by_class as c (c.class_name)}
         <li class="flex justify-between gap-2">
           <span class="truncate">{c.class_name}</span>
-          <span class="font-mono">{c.count.toLocaleString()}</span>
+          <span class="tabular-nums">{c.count.toLocaleString()}</span>
         </li>
       {/each}
     </ul>

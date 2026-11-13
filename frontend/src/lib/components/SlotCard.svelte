@@ -254,7 +254,7 @@
       <!-- C3 (visual audit 2026-09-24): the text value keeps its own
          width; the disagree badge wraps under it instead of squeezing the
          value to "6…" on a narrow card. C6: plain text, no emoji glyph. -->
-      <div class="flex min-w-0 flex-wrap items-center justify-between gap-1 font-mono">
+      <div class="flex min-w-0 flex-wrap items-center justify-between gap-1 tabular-nums">
         <!-- Text-free regions: a slot with no text
            capability at all never renders a text value/row, not even a
            "—" placeholder — showing one implied the profile reads text
@@ -269,7 +269,7 @@
         </span>
         {#if box?.textDisagreement}
           <span
-            class="shrink-0 rounded border border-warn/40 bg-warn/15 px-1 text-caption font-sans text-warn-text"
+            class="shrink-0 rounded border border-warn/40 bg-warn/15 px-1 text-caption text-warn-text"
             title="vlm: {box.textVlm ?? '∅'} · ocr: {box.textOcr ?? '∅'}"
           >
             readers disagree

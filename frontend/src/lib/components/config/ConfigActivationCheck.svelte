@@ -27,12 +27,12 @@
       >{ed.activationChecking ? 'Checking…' : 'Check the draft for activation'}</button
     >
     {#if ed.activationCheckError}
-      <p class="text-xs text-danger-text">{ed.activationCheckError}</p>
+      <p class="text-meta text-danger-text">{ed.activationCheckError}</p>
     {/if}
     {#if ed.activationReport}
       {@const r = ed.activationReport}
       <div class="space-y-1" data-testid="activation-check">
-        <p class="text-xs text-fg-2">
+        <p class="text-meta text-fg-2">
           As it would be checked on activation: {r.errors.length} error{r.errors
             .length === 1
             ? ''

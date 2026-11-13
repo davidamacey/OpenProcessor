@@ -57,11 +57,11 @@
     <h1 class="text-h1 font-semibold text-fg-1">Open-vocabulary sets</h1>
     <span class="grow"></span>
     <a
-      class="text-xs text-accent-text hover:underline"
+      class="text-meta text-accent-text hover:underline"
       href={resolve(projectHref('/settings'))}>Back to settings</a
     >
   </header>
-  <p class="text-sm text-fg-2">
+  <p class="text-body text-fg-2">
     An open-vocabulary set lists things to find by describing them in words: each target
     has a prompt, and optionally the class its hits are stored as. One set is active per
     project. Open a set to edit and test it.
@@ -83,16 +83,16 @@
     />
 
     {#if list.loadError && !list.list}
-      <p class="text-sm text-danger-text" data-testid="open-vocab-load-error">
+      <p class="text-body text-danger-text" data-testid="open-vocab-load-error">
         {list.loadError}
       </p>
     {:else if !list.list}
-      <p class="text-sm text-fg-3">Loading…</p>
+      <p class="text-body text-fg-3">Loading…</p>
     {:else}
       {@const l = list.list}
       <section class="surface overflow-x-auto p-4" aria-label="Sets">
         <div class="mb-2 flex items-center gap-3">
-          <h2 class="text-base font-semibold">Sets</h2>
+          <h2 class="text-title font-semibold">Sets</h2>
           <span class="grow"></span>
           <button
             type="button"
@@ -104,8 +104,8 @@
             }}>New set</button
           >
         </div>
-        <table class="w-full text-left text-sm" data-testid="open-vocab-table">
-          <thead class="text-xs text-fg-3">
+        <table class="w-full text-left text-body" data-testid="open-vocab-table">
+          <thead class="text-meta text-fg-3">
             <tr>
               <th class="py-1 pr-3 font-normal">Name</th>
               <th class="py-1 pr-3 font-normal">Display name</th>
@@ -125,8 +125,8 @@
               >
                 <td class="py-1.5 pr-3">
                   <a
-                    class="font-mono text-accent-text hover:underline"
-                    href={resolve(editorPath(s.name))}>{s.name}</a
+                    class="text-accent-text hover:underline"
+                    href={resolve(editorPath(s.name))}><code>{s.name}</code></a
                   >
                   {#if s.active}
                     <span
@@ -143,14 +143,14 @@
                     {/if}
                   {/if}
                 </td>
-                <td class="py-1.5 pr-3 text-xs text-fg-1">{s.display_name || '—'}</td>
-                <td class="py-1.5 pr-3 font-mono text-xs">
+                <td class="py-1.5 pr-3 text-meta text-fg-1">{s.display_name || '—'}</td>
+                <td class="py-1.5 pr-3 text-meta tabular-nums">
                   {s.revision ?? '—'}{s.read_only ? ' · read-only' : ''}
                 </td>
-                <td class="py-1.5 pr-3 text-xs">
+                <td class="py-1.5 pr-3 text-meta">
                   {s.n_enabled_targets} enabled of {s.n_targets}
                 </td>
-                <td class="py-1.5 pr-3 text-xs">{s.run_on_ingest ? 'yes' : 'no'}</td>
+                <td class="py-1.5 pr-3 text-meta">{s.run_on_ingest ? 'yes' : 'no'}</td>
                 <ConfigRowTail row={s} {flow}>
                   {#snippet lead()}
                     <a class="btn btn-sm" href={resolve(editorPath(s.name))}>Open</a>
@@ -161,7 +161,7 @@
           </tbody>
         </table>
         {#if l.sets.length === 0}
-          <p class="mt-2 text-sm text-fg-2" data-testid="open-vocab-empty">
+          <p class="mt-2 text-body text-fg-2" data-testid="open-vocab-empty">
             No sets yet. Create one, or clone a template below.
           </p>
         {/if}
@@ -169,17 +169,17 @@
 
       {#if l.templates.length > 0}
         <section class="surface flex flex-col gap-2 p-4" aria-label="Templates">
-          <h2 class="text-base font-semibold">Templates</h2>
-          <p class="text-xs text-fg-2">
+          <h2 class="text-title font-semibold">Templates</h2>
+          <p class="text-meta text-fg-2">
             Starting points. Clone one to get a set you can edit and activate.
           </p>
-          <ul class="space-y-1 text-sm" data-testid="open-vocab-templates">
+          <ul class="space-y-1 text-body" data-testid="open-vocab-templates">
             {#each l.templates as t (t.name + t.path)}
               <li class="flex flex-wrap items-center gap-2" data-testid="template-row">
-                <span class="font-mono">{t.name}</span>
+                <code>{t.name}</code>
                 {#if t.display_name}<span class="text-fg-2">{t.display_name}</span>{/if}
-                <span class="text-xs text-fg-3">{t.n_targets} targets</span>
-                <code class="text-xs text-fg-3">{t.path}</code>
+                <span class="text-meta text-fg-3">{t.n_targets} targets</span>
+                <code class="text-meta text-fg-3">{t.path}</code>
                 <button
                   type="button"
                   class="btn btn-sm"
@@ -209,7 +209,7 @@
     onconfirm={() => void doCreate()}
     oncancel={() => (creating = false)}
   >
-    <label class="flex flex-col gap-1 text-xs text-fg-2">
+    <label class="flex flex-col gap-1 text-meta text-fg-2">
       Set name
       <input
         class="input input-sm font-mono"
@@ -217,7 +217,7 @@
         data-testid="open-vocab-new-name"
       />
     </label>
-    <p class="text-xs text-fg-3">
+    <p class="text-meta text-fg-3">
       The set starts with the server's defaults; add targets in the editor.
     </p>
     {#if list.createError}<p

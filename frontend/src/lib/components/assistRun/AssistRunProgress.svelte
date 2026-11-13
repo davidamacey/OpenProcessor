@@ -31,14 +31,14 @@
 </script>
 
 <div
-  class="flex flex-col gap-2 text-xs"
+  class="flex flex-col gap-2 text-meta"
   data-testid="assist-progress"
   data-status={run.status}
 >
-  <p class="text-sm text-fg-1" data-testid="assist-status">
+  <p class="text-body text-fg-1" data-testid="assist-status">
     {STATUS_TEXT[run.status] ?? run.status}
     {#if total > 0}
-      <span class="font-mono text-fg-2"
+      <span class="text-fg-2 tabular-nums"
         >{formatCount(processed)}/{formatCount(total)}</span
       >
     {/if}

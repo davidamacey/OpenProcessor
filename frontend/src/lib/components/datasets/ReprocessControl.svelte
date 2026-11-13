@@ -97,9 +97,9 @@
     label="Reprocess"
     onclose={close}
     layer="top"
-    panelClass="max-h-[90vh] w-full max-w-lg space-y-3 overflow-y-auto rounded-lg border border-line bg-surface-0 p-5 text-sm shadow-2xl"
+    panelClass="max-h-[90vh] w-full max-w-lg space-y-3 overflow-y-auto rounded-lg border border-line bg-surface-0 p-5 text-body shadow-2xl"
   >
-    <h3 class="text-base font-semibold text-fg-1">
+    <h3 class="text-title font-semibold text-fg-1">
       {#if f.target.kind === 'image'}
         Reprocess image
       {:else if f.target.kind === 'request'}
@@ -129,7 +129,7 @@
     </fieldset>
 
     {#if f.scopes.includes('region')}
-      <label class="block text-xs">
+      <label class="block text-meta">
         <span class="mb-0.5 block text-fg-2">Region mode</span>
         <select
           class="select select-sm"
@@ -149,7 +149,7 @@
     {/if}
 
     {#if f.embedOptionsEditable}
-      <fieldset class="space-y-1 text-xs" data-testid="reprocess-embed-options">
+      <fieldset class="space-y-1 text-meta" data-testid="reprocess-embed-options">
         <legend class="mb-0.5 text-fg-2">Embed options</legend>
         <label class="flex items-start gap-2">
           <input
@@ -188,8 +188,8 @@
       <div class="space-y-1" data-testid="reprocess-result">
         <ReprocessCounts res={f.result} {scopeLabel} />
         {#if f.job}
-          <p class="text-xs text-fg-2" data-testid="reprocess-job">
-            Job <code class="font-mono">{f.job.job_id}</code>:
+          <p class="text-meta text-fg-2" data-testid="reprocess-job">
+            Job <code>{f.job.job_id}</code>:
             {datasetsAvailability.statusLabel(f.job.status)}
             {#if f.job.images_total}
               · {(f.job.images_done ?? 0).toLocaleString()} / {f.job.images_total.toLocaleString()}
@@ -201,7 +201,7 @@
       </div>
     {/if}
     {#if f.error}
-      <p class="text-sm text-danger-text" data-testid="reprocess-error">{f.error}</p>
+      <p class="text-body text-danger-text" data-testid="reprocess-error">{f.error}</p>
     {/if}
 
     <div class="flex justify-end gap-2">

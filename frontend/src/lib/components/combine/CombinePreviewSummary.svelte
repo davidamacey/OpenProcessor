@@ -26,20 +26,20 @@
   data-ok={preview.ok}
   data-stale={stale}
 >
-  <h2 class="text-sm font-semibold text-fg-1">4. Preview</h2>
+  <h2 class="text-body font-semibold text-fg-1">4. Preview</h2>
   <p
-    class="text-sm {preview.ok ? 'text-success-text' : 'text-danger-text'}"
+    class="text-body {preview.ok ? 'text-success-text' : 'text-danger-text'}"
     data-testid="combine-preview-verdict"
   >
     {preview.ok ? 'No blocking problems.' : 'This combine cannot start yet.'}
-    {#if stale}<span class="ml-2 text-xs text-warn-text">Updating…</span>{/if}
+    {#if stale}<span class="ml-2 text-meta text-warn-text">Updating…</span>{/if}
   </p>
 
   <CombineIssueList issues={preview.errors} testid="combine-errors" />
   <CombineIssueList issues={preview.warnings} testid="combine-warnings" />
 
   <div class="overflow-x-auto rounded border border-line">
-    <table class="w-full text-xs" data-testid="combine-preview-sources">
+    <table class="w-full text-meta" data-testid="combine-preview-sources">
       <thead class="bg-surface-1 text-left text-fg-2">
         <tr>
           <th class="px-2 py-1 font-normal">Source</th>
@@ -52,7 +52,7 @@
       <tbody>
         {#each preview.sources as s (s.project)}
           <tr class="border-t border-line">
-            <td class="px-2 py-1 font-mono text-fg-1">{s.project}</td>
+            <td class="px-2 py-1 text-fg-1"><code>{s.project}</code></td>
             <td class="px-2 py-1 text-right tabular-nums">{formatCount(s.images)}</td>
             <td class="px-2 py-1 text-right tabular-nums">{formatCount(s.items)}</td>
             <td class="px-2 py-1 text-right tabular-nums"
@@ -68,11 +68,11 @@
   </div>
 
   <div
-    class="rounded border border-line p-2 text-xs"
+    class="rounded border border-line p-2 text-meta"
     data-testid="combine-preview-target"
   >
     <p class="mb-1 text-fg-2">
-      Target <span class="font-mono text-fg-1">{target.slug ?? '—'}</span>
+      Target <code class="text-fg-1">{target.slug ?? '—'}</code>
       {#if target.slug_available === false}
         <span class="ml-1 text-danger-text" data-testid="combine-slug-unavailable"
           >slug not available</span
@@ -107,7 +107,10 @@
     {/if}
   </div>
 
-  <div class="rounded border border-line p-2 text-xs" data-testid="combine-preview-dedup">
+  <div
+    class="rounded border border-line p-2 text-meta"
+    data-testid="combine-preview-dedup"
+  >
     <p class="mb-1 text-fg-2">Duplicates</p>
     <p class="text-fg-2">
       {formatCount(dedup.identical_images)} identical images ·
@@ -130,7 +133,7 @@
     {/if}
   </div>
 
-  <p class="text-xs text-fg-2" data-testid="combine-preview-bytes">
+  <p class="text-meta text-fg-2" data-testid="combine-preview-bytes">
     Images to link: {formatBytes(preview.bytes?.to_link)} · to copy: {formatBytes(
       preview.bytes?.to_copy,
     )}

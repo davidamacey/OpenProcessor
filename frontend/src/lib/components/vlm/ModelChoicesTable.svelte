@@ -22,12 +22,12 @@
 </script>
 
 {#if choices.length === 0}
-  <p class="text-sm text-fg-3" data-testid="model-choices-empty">
+  <p class="text-body text-fg-3" data-testid="model-choices-empty">
     No model choices served.
   </p>
 {:else}
   <div class="overflow-x-auto">
-    <table class="w-full text-left text-xs" data-testid="model-choices">
+    <table class="w-full text-left text-meta" data-testid="model-choices">
       <thead class="text-fg-3">
         <tr>
           <th class="py-1 pr-3 font-normal">Choice</th>
@@ -57,8 +57,8 @@
               {/if}
             </td>
             <td class="py-1.5 pr-3">{scopeLabels[c.scope] ?? c.scope}</td>
-            <td class="py-1.5 pr-3 font-mono">{c.current ?? '—'}</td>
-            <td class="py-1.5 pr-3 font-mono">{c.dims ?? '—'}</td>
+            <td class="py-1.5 pr-3">{c.current ?? '—'}</td>
+            <td class="py-1.5 pr-3 tabular-nums">{c.dims ?? '—'}</td>
             <td class="py-1.5 pr-3">
               {#each c.choices as ch (ch.id)}
                 <span class="mr-1 inline-block">{ch.label}</span>

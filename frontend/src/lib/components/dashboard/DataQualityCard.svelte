@@ -64,8 +64,8 @@
         <p class="text-meta text-fg-3">Accuracy audit</p>
         {#if audit && (audit.audited > 0 || audit.pending > 0)}
           <p class="text-body text-fg-1">
-            <span class="font-mono">{formatCount(audit.audited)}</span> audited,
-            <span class="font-mono">{formatCount(audit.pending)}</span> waiting
+            <span class="tabular-nums">{formatCount(audit.audited)}</span> audited,
+            <span class="tabular-nums">{formatCount(audit.pending)}</span> waiting
           </p>
         {:else}
           <p class="text-body text-fg-2">No audit yet</p>
@@ -79,9 +79,9 @@
         <p class="text-meta text-fg-3">Near-duplicates (images)</p>
         {#if run}
           <p class="text-body text-fg-1">
-            <span class="font-mono">{formatCount(run.dedup_groups)}</span> duplicate
+            <span class="tabular-nums">{formatCount(run.dedup_groups)}</span> duplicate
             groups,
-            <span class="font-mono">{formatCount(run.leak_groups)}</span> leak groups
+            <span class="tabular-nums">{formatCount(run.leak_groups)}</span> leak groups
           </p>
           {#if image && image.pending_count > 0}
             <p class="text-meta text-warn-text">
