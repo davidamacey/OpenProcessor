@@ -81,6 +81,28 @@ class TestRoute:
     def test_everything_else_stays_on_the_cpu(self, data: bytes, reason: str) -> None:
         assert fg.route(data, 0.1, 100)[0] == reason
 
+    @pytest.mark.parametrize(
+        'trailer', [b'\x00' * 7, b'SEFT' + bytes(range(256)) * 4, b'\xff\xd9junk']
+    )
+    def test_a_complete_jpeg_with_a_trailer_goes_to_the_gpu_without_it(
+        self, trailer: bytes
+    ) -> None:
+        jpeg = _jpeg(400, 300)
+        reason, header = fg.route(jpeg + trailer, 0.1, 100)
+        assert reason == 'gpu'
+        assert header.end == len(jpeg)
+
+    def test_an_end_marker_inside_a_header_segment_is_not_the_end_of_the_image(self) -> None:
+        jpeg = _jpeg(400, 300)
+        payload = b'Exif\x00\x00thumbnail\xff\xd9tail'
+        app1 = b'\xff\xe1' + (len(payload) + 2).to_bytes(2, 'big') + payload
+        data = jpeg[:2] + app1 + jpeg[2:]
+        assert fg.route(data, 0.1, 100)[0] == 'gpu'
+        assert fg.route(data[:-2], 0.1, 100)[0] == 'truncated'
+
+    def test_a_missing_end_marker_with_a_trailer_is_still_truncated(self) -> None:
+        assert fg.route(_jpeg(400, 300)[:-2] + b'\x00' * 50, 0.1, 100)[0] == 'truncated'
+
     def test_the_upper_gate(self) -> None:
         assert fg.route(_jpeg(400, 300), 0.0, 0.1)[0] == 'huge'
 
