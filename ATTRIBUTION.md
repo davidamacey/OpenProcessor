@@ -156,11 +156,15 @@ The optional segmenter container (`docker/segmenter/`) wraps Meta's SAM 3 to ser
 
 ### Repository Information
 - **Repository:** https://github.com/facebookresearch/sam3
-- **Code license:** Apache License 2.0 (the `sam3` Python library)
-- **Weight license:** **SAM License** (Meta's custom license for the
-  pretrained checkpoints) — **not Apache-2.0**. The SAM License permits
-  commercial use and redistribution provided the license text travels
-  with the weights. Gated on HuggingFace (`facebook/sam3`); requires an
+- **License (code and weights):** the **SAM License** (Meta's custom
+  license, not OSI-approved, **not Apache-2.0**; last updated November 19,
+  2025), pinned text: https://github.com/facebookresearch/sam3/blob/f1647e8d0c1d280991f4d1b7d974c2704537fe66/LICENSE.
+  "SAM Materials" covers the model code, inference-enabling code and
+  trained weights alike. Anyone who distributes them must provide a copy
+  of the license with them (section 1(b)(i)); section 1(b)(iv) forbids
+  reverse engineering and 1(b)(v) sets trade-control restrictions. The
+  segmenter image carries the text at `/usr/share/licenses/sam3/LICENSE`.
+  Weights are gated on HuggingFace (`facebook/sam3`); requires an
   accepted gate + `HF_TOKEN` to download.
 - **Model weights:** pulled from HuggingFace at first run (gated; requires `HF_TOKEN`)
 
@@ -386,8 +390,8 @@ and the project stays AGPL-3.0-or-later and depends on the AGPL-3.0 `ultralytics
 | ExifTool (`libimage-exiftool-perl` in the API image) | Perl Artistic License or GPL (dual, upstream) | ✓ Yes |
 | PyExifTool 0.5.6 | GPL-3.0-or-later or BSD (dual; the BSD terms are used) | ✓ Yes |
 | nvidia-ml-py (NVML GPU inventory in the export worker, `requirements-export.txt`) | BSD 3-Clause (NVIDIA) | ✓ Yes |
-| Meta SAM 3 (code) | Apache 2.0 | ✓ Yes (this file + `docker/segmenter/NOTICE`) |
-| Meta SAM 3 (weights) | SAM License (custom; commercial use + redistribution OK with license attached), gated on HuggingFace | ✓ Yes (this file + `docker/segmenter/NOTICE`) |
+| Meta SAM 3 (code) | SAM License (custom; not Apache 2.0) | ✓ Yes, with the license attached (this file + `docker/segmenter/NOTICE`) |
+| Meta SAM 3 (weights) | SAM License (custom; redistribution only with the license attached), gated on HuggingFace | ✓ Yes (this file + `docker/segmenter/NOTICE`) |
 | Lucide icons (`@lucide/svelte` 1.72.0, Cropwright frontend) | ISC (Feather-derived icons: MIT) | ✓ Yes (this file) |
 | Inter and JetBrains Mono (`@fontsource-variable/*` 5.3.0, Cropwright frontend) | OFL-1.1 | ✓ Yes (this file) |
 | COCO 2017 (annotations) | CC BY 4.0 (COCO Consortium) | ✓ Yes (this file) |
