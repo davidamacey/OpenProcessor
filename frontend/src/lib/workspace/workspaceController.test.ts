@@ -401,6 +401,17 @@ describe('WorkspaceController', () => {
     expect(nav.goto).not.toHaveBeenCalled();
   });
 
+  it('hands a sibling to the Review view that registered for it, and to no one after it leaves', () => {
+    const c = make();
+    const open = vi.fn();
+    c.setReviewOpen(open);
+    c.openReviewItem('crop-7');
+    expect(open).toHaveBeenCalledWith('crop-7');
+    c.setReviewOpen(null);
+    c.openReviewItem('crop-8');
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
   describe('lightbox', () => {
     it('opens on the focused image and closes', async () => {
       visit('?view=gallery&focus=image%3Aimg-2');
@@ -426,12 +437,17 @@ describe('WorkspaceController', () => {
         kind: 'images',
         ids: () => ['a', 'b', 'c'],
         total: () => 3,
+        label: (id) => `${id}.jpg`,
         apply: () => {},
       });
       await c.openLightbox('b');
       expect(c.lightboxNeighbour(-1)).toBe('a');
       c.stepLightbox(1);
       expect(c.lightbox?.imageId).toBe('c');
+      expect(c.lightbox?.label).toBe('c.jpg');
+      expect(new URLSearchParams(lastGoto().href.split('?')[1]).get('focus')).toBe(
+        'image:c',
+      );
       expect(c.lightboxNeighbour(1)).toBeNull();
       c.stepLightbox(1);
       expect(c.lightbox?.imageId).toBe('c');

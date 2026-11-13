@@ -23,7 +23,7 @@
     runProbe,
     type ProbeStatusResponse,
   } from '$lib/api_train';
-  import { canRunProbe, classifyProbePoll } from '$lib/probe';
+  import { canRunProbe, classifyProbePoll, FIND_DISAGREEMENTS } from '$lib/probe';
   import { toastStore } from '$stores/toast.svelte';
   import type { TrainJobStatus } from '$lib/types_train';
   import Modal from '$components/Modal.svelte';
@@ -187,7 +187,7 @@
     <span
       class="font-semibold text-fg-2"
       title="Runs this model over the items so Disagreements lists where it differs from your labels"
-      >Probe predictions</span
+      >New model</span
     >
     {#if runningHere}
       <span class="text-fg-2">
@@ -215,7 +215,7 @@
           ? undefined
           : 'This run has no exported checkpoint to probe from.'}
       >
-        {starting ? 'Starting…' : 'Run probe predictions'}
+        {starting ? 'Starting…' : FIND_DISAGREEMENTS}
       </button>
     {/if}
     {#if lastResult && !runningHere}
@@ -236,8 +236,8 @@
 {/if}
 
 {#if confirmOpen}
-  <Modal label="Confirm run probe predictions" onclose={closeConfirm}>
-    <h3 class="mb-3 text-title font-semibold">Run probe predictions</h3>
+  <Modal label="Confirm find disagreements" onclose={closeConfirm} layer="top">
+    <h3 class="mb-3 text-title font-semibold">{FIND_DISAGREEMENTS}</h3>
     <p class="mb-3 text-body text-fg-2">
       Runs this run's exported checkpoint over the crop pool to populate
       <code>probe_pred_*</code>. This is what the Uncertainty and Model-disagreements

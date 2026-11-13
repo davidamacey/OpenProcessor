@@ -57,3 +57,27 @@ async def test_workflow_steps_default_view_is_clusters_with_a_serving_partition(
         (project, partition),
     )
     assert (await _steps(project)).workspace_default_view == 'clusters'
+
+
+@pytest.mark.asyncio
+async def test_an_export_on_disk_and_a_finished_run_mark_both_steps_done(
+    pg_env, conn, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.services.curation import workflow_steps
+
+    project = make_project(conn, f'p{uuid.uuid4().hex[:12]}')
+    job = uuid.uuid4()
+    conn.execute(
+        'INSERT INTO jobs (id, project_id, kind, queue, status, max_queue_wait, requested_by) '
+        "VALUES (%s, %s, 'train', 'gpu_train', 'completed', interval '1 hour', 'test')",
+        (job, project),
+    )
+    conn.execute(
+        'INSERT INTO training_runs (project_id, job_id, spec, class_names, family, base_model, '
+        "artifact_prefix) VALUES (%s, %s, '{}', '{}', 'yolo', 'base', 'p/')",
+        (project, job),
+    )
+    monkeypatch.setattr(workflow_steps, 'scan_export_datasets', lambda: [{'kind': 'yolo'}])
+    done = {s.id: s.done for s in (await _steps(project)).steps}
+    assert done['export'] is True
+    assert done['train'] is True

@@ -11,6 +11,7 @@
   import SelectionActionDialog from '$components/itemFilter/SelectionActionDialog.svelte';
   import { createSelectionActionController } from '$lib/itemFilter/selectionActionController.svelte';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
+  import { mixedBreakdown } from '$lib/clusters/mixedBreakdown';
   import { classesStore } from '$stores/classes.svelte';
   import { excludeReasonsStore } from '$stores/excludeReasons.svelte';
   import { keymapStore } from '$stores/keymap.svelte';
@@ -53,14 +54,16 @@
     const card = ws.scopeCard;
     if (!card || !ws.labelThenNext || !isMixed) return null;
     const cls = classesStore.classes.find((c) => c.id === actions.classId)?.name;
-    const top = card.detector_top_class
-      ? `the detector's most common class here is ${card.detector_top_class}${
-          card.detector_top_share != null
-            ? ` (${Math.round(card.detector_top_share * 100)}%)`
-            : ''
-        }`
-      : 'the detector named more than one class here';
-    return `This cluster is mixed: ${top}. Labelling all ${actions.selected ?? card.size} as ${cls ?? 'one class'} also labels the others.`;
+    const top =
+      mixedBreakdown(split?.classes ?? []) ??
+      (card.detector_top_class
+        ? `Mixed: the detector's most common class here is ${card.detector_top_class}${
+            card.detector_top_share != null
+              ? ` (${Math.round(card.detector_top_share * 100)}%)`
+              : ''
+          }.`
+        : 'Mixed: the detector named more than one class here.');
+    return `${top} Labelling all ${actions.selected ?? card.size} as ${cls ?? 'one class'} also labels the others.`;
   });
 
   const moreItems = $derived<MenuItem[]>([

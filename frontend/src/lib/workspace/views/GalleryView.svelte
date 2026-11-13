@@ -36,6 +36,7 @@
       kind: 'images',
       ids: () => gallery.cards.map((c) => c.image_id),
       total: () => gallery.total,
+      label: (id) => gallery.cards.find((c) => c.image_id === id)?.file_name,
       apply: (ids) => gallery.replaceSelection(ids),
     }),
   );

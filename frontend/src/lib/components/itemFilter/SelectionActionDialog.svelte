@@ -74,6 +74,7 @@
     busy={c.loading && c.selected != null}
     busyLabel={statusLine ?? 'Working…'}
     confirmDisabled={!c.canConfirm}
+    focusConfirm={!(warning && c.action === 'label')}
     onconfirm={confirm}
     oncancel={() => (c.job ? c.runInBackground() : c.cancel())}
   >
@@ -98,7 +99,7 @@
         <p>{warning}</p>
         {#if split && split.classes.length > 1}
           <div class="flex flex-wrap items-center gap-1.5" data-testid="selection-split">
-            <span class="text-fg-1">Split it first:</span>
+            <span class="text-fg-1">Split by detector class:</span>
             {#each split.classes as f (f.value)}
               <button
                 type="button"

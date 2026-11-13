@@ -93,9 +93,10 @@
   );
 </script>
 
-<!-- Source image with bbox -->
+<!-- Source image with bbox. The grid stretches both panes to the taller crop pane; this one
+     sizes to its image (lg:self-start) so no empty block is left under the picture. -->
 <div
-  class="order-2 flex flex-col surface p-2 lg:order-none lg:h-auto lg:min-h-0 {sourceOpen
+  class="order-2 flex flex-col surface p-2 lg:order-none lg:h-auto lg:max-h-full lg:min-h-0 lg:self-start {sourceOpen
     ? 'h-[50vh]'
     : 'h-[120px]'}"
   data-testid="review-source-panel"

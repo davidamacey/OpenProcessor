@@ -61,6 +61,7 @@ export function createExportRunController(loadAll: () => Promise<void>) {
   let pollHandle: ReturnType<typeof setInterval> | null = null;
   let exportModalOpen = $state<boolean>(false);
   let preview = $state<ExportPreview | null>(null);
+  let previewError = $state<string | null>(null);
   let previewSeq = 0;
   const nearDup = createNearDupRefreshController();
 
@@ -164,10 +165,20 @@ export function createExportRunController(loadAll: () => Promise<void>) {
         collapse_near_duplicates: collapseNearDuplicates,
         item_filter: exportFilter.toBody(),
       });
-      if (seq === previewSeq) preview = res;
-    } catch {
-      // The preview is advice; the export reports its own refusals.
-      if (seq === previewSeq) preview = null;
+      if (seq !== previewSeq) return;
+      preview = res;
+      previewError = null;
+      if (nearDup.stale.length > 0 && !nearDup.busy) nearDup.clear();
+    } catch (e) {
+      if (seq !== previewSeq) return;
+      // The page shows the backend's own refusal (409 near_dup_stale names the stale levels and
+      // offers the run that clears them), never a count the export would not honour.
+      preview = null;
+      const levels = nearDupStaleLevels(e);
+      if (levels) {
+        previewError = null;
+        nearDup.show(levels);
+      } else previewError = apiErrorText(e);
     }
   }
 
@@ -205,6 +216,9 @@ export function createExportRunController(loadAll: () => Promise<void>) {
     nearDup,
     get preview() {
       return preview;
+    },
+    get previewError() {
+      return previewError;
     },
     refreshPreview,
     get exportRunning() {

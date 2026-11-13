@@ -26,3 +26,9 @@ def pick_hotkey(name: str, taken: Collection[str], reserved: Collection[str]) ->
         if letter not in blocked:
             return letter
     return None
+
+
+def free_letters(taken: Collection[str], reserved: Collection[str]) -> list[str]:
+    """The letters ``a`` to ``z`` that no class holds and no keymap action owns."""
+    blocked = {c.lower() for c in taken} | {c.lower() for c in reserved}
+    return [c for c in _LETTERS if c not in blocked]

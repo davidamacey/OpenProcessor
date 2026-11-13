@@ -129,9 +129,10 @@
     <h3 class="mb-1 text-title font-semibold" data-testid="delete-project-title">
       {title ? `${title}: ${project.display_name}?` : `Delete ${project.display_name}?`}
     </h3>
-    <p class="mb-3 text-meta text-fg-2">
+    <p class="mb-3 text-meta text-fg-2" data-testid="delete-project-slug-note">
       This permanently removes the project's data. Its slug
-      <code class="text-fg-1">{project.slug}</code> can never be reused.
+      <code class="text-fg-1">{project.slug}</code> is retired for good: no new project can
+      be created with it, so use a different slug to start again.
     </p>
 
     {#if loadingReport}

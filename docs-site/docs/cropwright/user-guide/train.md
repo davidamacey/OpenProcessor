@@ -32,7 +32,7 @@ Submit a training job against the current export.
 - **Promote ↑** — to the Triton model registry, with the served gate report
   and, when the backend allows it, a "promote anyway" override.
 - **Reproduce** — resubmits the same spec/lineage as a fresh job.
-- **Run probe predictions** — scores the pool with the run's checkpoint,
+- **Find disagreements with the new model** — scores the pool with the run's checkpoint,
   which is what feeds the Uncertainty and Model Disagreements review
   queues.
 

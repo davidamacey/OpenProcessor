@@ -6,12 +6,15 @@
    */
   import Menu, { type MenuItem } from '$components/ui/Menu.svelte';
   import DiverseSample from '$components/workspace/DiverseSample.svelte';
+  import FindDisagreementsDialog from '$components/workspace/FindDisagreementsDialog.svelte';
+  import { FIND_DISAGREEMENTS } from '$lib/probe';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
   import { undoStore } from '$stores/undo.svelte';
 
   let { ws, items = [] }: { ws: WorkspaceController; items?: MenuItem[] } = $props();
 
   let diverseOpen = $state(false);
+  let disagreementsOpen = $state(false);
   const all = $derived<MenuItem[]>([
     ...items,
     {
@@ -19,6 +22,12 @@
       label: 'Select a diverse sample\u2026',
       testid: 'diverse-sample-open',
       onselect: () => (diverseOpen = true),
+    },
+    {
+      id: 'find-disagreements',
+      label: `${FIND_DISAGREEMENTS}\u2026`,
+      testid: 'find-disagreements-open',
+      onselect: () => (disagreementsOpen = true),
     },
     {
       id: 'undo',
@@ -32,3 +41,6 @@
 
 <Menu label="More" items={all} align="end" triggerClass="btn" triggerTestid="view-more" />
 <DiverseSample {ws} bind:open={diverseOpen} />
+{#if disagreementsOpen}
+  <FindDisagreementsDialog onclose={() => (disagreementsOpen = false)} />
+{/if}

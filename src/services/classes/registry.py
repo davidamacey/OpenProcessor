@@ -81,7 +81,7 @@ async def project_id_for(slug: str) -> uuid.UUID:
     return pid
 
 
-async def _keymap_letters(session: AsyncSession, project_id: uuid.UUID) -> list[str]:
+async def keymap_letters(session: AsyncSession, project_id: uuid.UUID) -> list[str]:
     """The letters a keymap action of the project owns, which a class hotkey may not take."""
     from src.db.repos import settings as settings_repo
     from src.services.curation.keymap import reserved_hotkeys
@@ -149,7 +149,7 @@ class ClassRegistry:
 
         async def add(s: AsyncSession, p: uuid.UUID) -> repo.ClassRow:
             return await repo.add_class(
-                s, p, name, group, notes, hotkey_letter, await _keymap_letters(s, p)
+                s, p, name, group, notes, hotkey_letter, await keymap_letters(s, p)
             )
 
         row = await self._write(add)
@@ -166,11 +166,7 @@ class ClassRegistry:
         self, name: str, group: str = 'unknown', notes: str = ''
     ) -> tuple[RegistryClassEntry, bool]:
         """:meth:`ensure_class` returning the whole entry (callers need its spelling)."""
-
-        async def ensure(s: AsyncSession, p: uuid.UUID) -> tuple[repo.ClassRow, bool]:
-            return await repo.ensure_class(s, p, name, group, notes, await _keymap_letters(s, p))
-
-        row, created = await self._write(ensure)
+        row, created = await self._write(lambda s, p: repo.ensure_class(s, p, name, group, notes))
         return entry_from_row(row), created
 
     async def update_class(

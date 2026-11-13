@@ -18,6 +18,8 @@
     /** Extra buttons before Cancel (a "Run in background"). */
     actions?: Snippet;
     confirmDisabled?: boolean;
+    /** Off when Enter must not apply by reflex (a caution to read first): focus stays in the panel. */
+    focusConfirm?: boolean;
     onconfirm: () => void;
     oncancel: () => void;
     children: Snippet;
@@ -31,6 +33,7 @@
     busyLabel = 'Working…',
     actions,
     confirmDisabled = false,
+    focusConfirm = true,
     onconfirm,
     oncancel,
     children,
@@ -39,7 +42,7 @@
   let confirmButton = $state<HTMLButtonElement | null>(null);
   let focusedOnce = false;
   $effect(() => {
-    if (focusedOnce || busy || confirmDisabled || !confirmButton) return;
+    if (!focusConfirm || focusedOnce || busy || confirmDisabled || !confirmButton) return;
     focusedOnce = true;
     confirmButton.focus();
   });

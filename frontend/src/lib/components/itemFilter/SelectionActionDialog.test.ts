@@ -138,11 +138,25 @@ describe('SelectionActionDialog', () => {
     expect(
       split.compareDocumentPosition(classSelect) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
+    expect(split.textContent).toContain('Split by detector class');
     expect(split.textContent).toContain('chair');
+    expect(document.activeElement).not.toBe(apply());
     q('[data-testid="selection-split-class"]')!.click();
     flushSync();
     expect(onsplit).toHaveBeenCalledWith('chair');
     expect(q('[role="dialog"]')).toBeNull();
+  });
+
+  it('a pure cluster still focuses Apply so the letter then Enter applies', async () => {
+    const controller = createSelectionActionController(() => ({
+      filter: { class_names: ['widget'] },
+    }));
+    instance = mount(SelectionActionDialog, { target, props: { controller } });
+    vi.mocked(batchExcludeSelection).mockResolvedValue({ dry_run: true, selected: 3 });
+    await controller.open('exclude');
+    await tick();
+    flushSync();
+    expect(document.activeElement).toBe(apply());
   });
 
   it('the seed control exists only for a random sample, and a change re-runs the dry run', async () => {

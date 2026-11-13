@@ -57,11 +57,34 @@ describe('refreshPreview', () => {
     c.dispose();
   });
 
-  it('a failed preview shows nothing instead of blocking the export', async () => {
+  it('a failed preview shows the failure instead of a count, and never blocks the export', async () => {
     vi.mocked(previewExportYolo).mockRejectedValue(new Error('down'));
     const c = createExportRunController(async () => {});
     await c.refreshPreview();
     expect(c.preview).toBeNull();
+    expect(c.previewError).toBe('down');
+    c.dispose();
+  });
+
+  it('a 409 near_dup_stale shows the stale levels, not the count it had before', async () => {
+    vi.mocked(previewExportYolo).mockResolvedValueOnce(small);
+    const c = createExportRunController(async () => {});
+    await c.refreshPreview();
+    expect(c.preview).not.toBeNull();
+    const levels = [{ level: 'item', stale_reasons: ['no_run'], pending_count: 152 }];
+    vi.mocked(previewExportYolo).mockRejectedValueOnce(
+      new ApiError(409, '/export/yolo/preview', {
+        detail: { code: 'near_dup_stale', levels },
+      }),
+    );
+    await c.refreshPreview();
+    expect(c.preview).toBeNull();
+    expect(c.previewError).toBeNull();
+    expect(c.nearDup.stale).toEqual(levels);
+    vi.mocked(previewExportYolo).mockResolvedValueOnce(small);
+    await c.refreshPreview();
+    expect(c.nearDup.stale).toEqual([]);
+    expect(c.preview).not.toBeNull();
     c.dispose();
   });
 });

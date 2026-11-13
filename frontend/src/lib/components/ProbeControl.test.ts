@@ -1,6 +1,6 @@
 /**
  * Mount-based behavior test for ProbeControl (#36 item 8) — the /train
- * "Run probe predictions" control, following CropCard.test.ts's mount
+ * "Find disagreements" control, following CropCard.test.ts's mount
  * convention. `$lib/api`'s probe wrappers are mocked so the test drives
  * confirm/start/poll/cancel deterministically without a real backend.
  */
@@ -53,10 +53,10 @@ afterEach(() => {
 });
 
 describe('ProbeControl', () => {
-  it('offers "Run probe predictions" for a finished run with an exported checkpoint', async () => {
+  it('offers "Find disagreements with the new model" for a finished run with an exported checkpoint', async () => {
     const el = await renderControl({ status: status() });
     const btn = el.querySelector('button');
-    expect(btn?.textContent?.trim()).toBe('Run probe predictions');
+    expect(btn?.textContent?.trim()).toBe('Find disagreements with the new model');
     expect(btn?.disabled).toBe(false);
   });
 

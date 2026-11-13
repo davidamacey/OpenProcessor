@@ -51,6 +51,7 @@
     <CropMetaPanel
       {crop}
       {embedded}
+      onopencrop={embedded ? (c) => ws.openReviewItem(c.id) : undefined}
       onreprocessed={(c) => {
         crop = c;
         ws.adoptReviewItem(c);

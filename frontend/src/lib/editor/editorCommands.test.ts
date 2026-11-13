@@ -246,6 +246,23 @@ describe('CommandStack', () => {
     expect(s.status).toBe('failed');
   });
 
+  it('a command that throws, or a queued turn that runs nothing, never leaves it on saving', async () => {
+    const { s } = stack();
+    const throwing = {
+      label: 'Boom',
+      apply: () => Promise.reject(new Error('boom')),
+      revert: () => Promise.reject(new Error('boom')),
+    };
+    await expect(s.run(throwing)).rejects.toThrow('boom');
+    expect(s.saving).toBe(false);
+    expect(s.status).not.toBe('saving');
+    const first = s.run(deleteCommand(item));
+    const second = s.run(() => null);
+    await Promise.all([first, second]);
+    expect(s.saving).toBe(false);
+    expect(s.status).toBe('saved');
+  });
+
   it('runs writes one after the other', async () => {
     const order: string[] = [];
     api.excludeCrops.mockImplementationOnce(async () => {
