@@ -18,7 +18,7 @@ from fixtures.contract import crop_label_written, fill
 from fixtures.wire import make_item, review_tab, review_tabs
 from harness.constants import ACTION_TIMEOUT_MS, review_url
 from harness.screens import shot
-from harness.waits import expect_handled
+from harness.waits import expect_handled, wait_for_url_state
 from playwright.sync_api import expect
 from test_region_confirm import CLASSES as REGION_CLASSES, tag_item
 
@@ -105,7 +105,7 @@ def test_enter_opens_review_at_the_card_and_esc_returns_to_it(stub, page, app_ur
 
     expect(page.get_by_test_id('review-view')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_url('**view=review**')
-    assert 'focus=item%3Acrop-2' in page.url or 'focus=item:crop-2' in page.url, page.url
+    wait_for_url_state(page, has=('focus=item:crop-2',))
     expect(page.get_by_test_id('queue-counter').first).to_contain_text('#3')
 
     with page.expect_response(
@@ -116,8 +116,7 @@ def test_enter_opens_review_at_the_card_and_esc_returns_to_it(stub, page, app_ur
 
     page.keyboard.press('Escape')
     expect(page.get_by_test_id('detections-view')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    assert 'view=detections' in page.url, page.url
-    assert 'focus=item%3Acrop-3' in page.url or 'focus=item:crop-3' in page.url, page.url
+    wait_for_url_state(page, has=('view=detections', 'focus=item:crop-3'))
     expect(page.locator('[data-crop-id="crop-3"]')).to_be_focused(timeout=ACTION_TIMEOUT_MS)
 
 
@@ -239,13 +238,10 @@ def test_the_review_states_render_at_1600_and_430(stub, page, app_url):
     shot(page, 'review-machine-label', widths=(1600, 430))
 
     page.set_viewport_size({'width': 1600, 'height': 1000})
-    # The keys register a tick after the item renders: press until the picker answers.
+    # The keys register with the item: wait for its Confirm button, then press once.
+    page.get_by_role('button', name='Confirm', exact=True).wait_for(timeout=ACTION_TIMEOUT_MS)
     picker = page.locator('#class-picker-list')
-    for _ in range(10):
-        page.keyboard.press('/')
-        if picker.is_visible():
-            break
-        page.wait_for_timeout(300)
+    page.keyboard.press('/')
     expect(picker).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     shot(page, 'review-class-picker', widths=(1600, 430))
     page.keyboard.press('Escape')
@@ -308,12 +304,11 @@ def test_enter_on_a_table_row_opens_review_at_that_row_and_esc_returns_to_the_ta
     page.keyboard.press('Enter')
 
     expect(page.get_by_test_id('review-view')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    assert 'view=review' in page.url, page.url
-    assert 'focus=item%3Acrop-1' in page.url or 'focus=item:crop-1' in page.url, page.url
+    wait_for_url_state(page, has=('view=review', 'focus=item:crop-1'))
 
     page.keyboard.press('Escape')
     expect(page.get_by_test_id('data-table-row').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    assert 'view=table' in page.url, page.url
+    wait_for_url_state(page, has=('view=table',))
 
 
 def test_the_review_sort_is_the_served_one_and_belongs_to_its_queue(stub, page, app_url):

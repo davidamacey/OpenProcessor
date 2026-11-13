@@ -36,6 +36,7 @@ the time the key lands.
 from __future__ import annotations
 
 import threading
+import time
 from urllib.parse import parse_qs, urlparse
 
 from fixtures.contract import crop_label_written
@@ -65,11 +66,12 @@ AFTER_PREFETCH = 'cursor-after-prefetch'
 
 
 def wait_until_requested(page, requests: list, cursor: str) -> None:
-    for _ in range(40):
-        if cursor in requests:
-            return
-        page.wait_for_timeout(250)
-    raise AssertionError(f'{cursor} was never requested: {requests}')
+    """Poll the stub's request log on the browser's paint clock, bounded by the action timeout."""
+    deadline = time.monotonic() + ACTION_TIMEOUT_MS / 1000
+    while cursor not in requests:
+        if time.monotonic() > deadline:
+            raise AssertionError(f'{cursor} was never requested: {requests}')
+        wait_for_paint(page)
 
 
 def review_item(i: int) -> dict:

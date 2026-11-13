@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, urlparse
 
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.screens import SCREENS
+from harness.waits import wait_for_url_state
 from playwright.sync_api import expect
 
 
@@ -124,9 +125,7 @@ def test_header_click_asks_for_the_served_sort(stub, page, app_url):
     page.get_by_test_id('data-table-sort-detector_confidence').click()
     expect(page.locator('th[aria-sort="ascending"], th[aria-sort="descending"]')).to_have_count(1)
     assert seen[-1]['sort'] == 'detector_confidence:asc'
-    assert 'sort_table=detector_confidence%3Aasc' in page.url or (
-        'sort_table=detector_confidence:asc' in page.url
-    )
+    wait_for_url_state(page, has=('sort_table=detector_confidence:asc',))
 
 
 def test_column_choice_is_in_the_url_and_the_request(stub, page, app_url):

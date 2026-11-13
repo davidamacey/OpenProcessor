@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, urlparse
 
 from fixtures.contract import cluster_card, cluster_list, fill
 from harness.constants import ACTION_TIMEOUT_MS
+from harness.waits import wait_for_url_state
 from playwright.sync_api import expect
 
 
@@ -150,7 +151,7 @@ def test_a_chosen_sort_is_sent_and_the_served_order_is_shown(stub, page, app_url
     ).to_have_text('#2', timeout=ACTION_TIMEOUT_MS)
     assert card_ids(page) == ['#2', '#3', '#1']
     assert requests[-1]['sort'] == ['needs_review_desc']
-    assert 'sort=needs_review_desc' in page.url
+    wait_for_url_state(page, has=('sort=needs_review_desc',))
 
 
 def test_filters_reach_the_server_survive_a_reload_and_clear(stub, page, app_url):
