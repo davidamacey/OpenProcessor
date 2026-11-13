@@ -17,8 +17,6 @@
 
   let { ws }: { ws: WorkspaceController } = $props();
 
-  let open = $state(false);
-
   const queue = $derived(ws.url.queue);
   const scope = $derived(ws.url.scope);
   const queueLabel = $derived(
@@ -52,26 +50,27 @@
       return `Image: ${imageName?.id === scope.id ? imageName.name : scope.id}`;
     return `${scope.kind}: ${scope.id}`;
   });
+  // Under `md` the row is there only when it has something to say: the controls opened from the
+  // view bar, a chip, a scope, a queue or the next step.
+  const quiet = $derived(
+    !ws.filtersOpen && !scope && !queue && !next && ws.filter.chips().length === 0,
+  );
   const showOpenVocab = $derived(ws.matchingMode);
   const visible = (p: string): boolean =>
     p !== 'max_rank' && (showOpenVocab || withoutOpenVocab(p));
 </script>
 
 <div
-  class="flex flex-wrap items-center gap-2 border-b border-line bg-surface-1/40 px-4 py-2"
+  class="flex flex-wrap items-center gap-2 border-b border-line bg-surface-1/40 px-4 py-2 {quiet
+    ? 'max-md:hidden'
+    : ''}"
   data-testid="workspace-filter-bar"
 >
-  <button
-    type="button"
-    class="btn md:hidden"
-    aria-expanded={open}
-    aria-controls="workspace-filters"
-    data-testid="filters-toggle"
-    onclick={() => (open = !open)}
+  <div
+    id="workspace-filters"
+    class="contents max-md:[&:not(.open)]:hidden"
+    class:open={ws.filtersOpen}
   >
-    Filters
-  </button>
-  <div id="workspace-filters" class="contents max-md:[&:not(.open)]:hidden" class:open>
     <ItemFilterBar
       state={ws.filter}
       {visible}

@@ -61,16 +61,29 @@
       <option value={v.id}>{v.label}</option>
     {/each}
   </select>
+  <button
+    type="button"
+    class="btn btn-icon md:hidden"
+    aria-label="Filters"
+    aria-expanded={ws.filtersOpen}
+    aria-controls="workspace-filters"
+    data-testid="filters-toggle"
+    onclick={() => ws.toggleFilters()}
+  >
+    <Icon name="funnel" size={16} />
+  </button>
   <span class="grow"></span>
   <VlmMenu {ws} />
   <button
     type="button"
     class="btn btn-ghost"
+    aria-label="Details"
     aria-expanded={ws.detailsOpen}
     title="Details ({keymapStore.glyph('workspace.toggle_details')})"
     data-testid="details-toggle"
     onclick={() => ws.toggleDetails()}
   >
-    Details
+    <Icon name="info" size={16} class="md:hidden" />
+    <span class="max-md:sr-only">Details</span>
   </button>
 </div>

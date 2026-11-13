@@ -144,7 +144,7 @@
   </div>
 {:else if hasSelection || ws.pendingSelectAll}
   <div
-    class="relative flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line bg-surface-1/60 px-4 py-2 text-meta"
+    class="relative flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line bg-surface-1/60 px-4 py-2 text-meta max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-40 max-md:border-t max-md:border-b-0 max-md:bg-surface-1 max-md:shadow-e3"
     role="toolbar"
     aria-label="Bulk actions"
     data-testid="bulk-bar"

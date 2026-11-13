@@ -79,6 +79,8 @@ export class WorkspaceController {
   openNextAfterLabel = $state(true);
   /** The queues and classes rail as a drawer under `lg`. */
   railOpen = $state(false);
+  /** The filter controls as a row under `md`, where a Filters button opens them. */
+  filtersOpen = $state(false);
   /** The server's account of the selection: what a bulk action would touch. */
   summary!: SelectionSummaryState;
   /** The grid Review was opened from; `closeReview` returns to it. A Review that was
@@ -452,6 +454,10 @@ export class WorkspaceController {
         ? 'every item in this cluster'
         : 'every item matching the filter';
     return 'nothing';
+  }
+
+  toggleFilters(): void {
+    this.filtersOpen = !this.filtersOpen;
   }
 
   toggleRail(): void {
