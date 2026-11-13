@@ -1,7 +1,7 @@
 # OpenProcessor: Vision and Goals
 
 This document is the canonical statement of what OpenProcessor is for, what
-each release delivers (v0.6.0 is published; v0.7.0 is in progress), and the
+each release delivers (v0.6.0 is published; the next release is in progress), and the
 standards the codebase is held to.
 It exists so that anyone — human or AI agent — working in this repository
 can orient quickly: `CLAUDE.md` and `README.md` both link here rather than
@@ -125,10 +125,10 @@ release.
   touching data integrity, isolation, or security — an independent review
   before it lands, not batched into one release-day merge.
 
-## v0.7.0: where it stands (2026-11-12)
+## The next release: where it stands (2026-11-12)
 
-v0.6.0 is the latest published release; `VERSION` stays 0.6.0 until the v0.7.0
-release prep. The v0.7.0 work is implemented and tested on the integration
+v0.6.0 is the latest published release; `VERSION` stays 0.6.0 until the next
+release prep. The work for the next release is implemented and tested on the integration
 branch `int/b4-stateless`, not yet on `main`; `CHANGELOG.md` `[Unreleased]`
 lists it.
 
