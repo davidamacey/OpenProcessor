@@ -71,3 +71,29 @@ def test_a_truncated_image_keeps_its_own_truthful_message() -> None:
 
     assert 'pi_heif' not in str(err.value)
     assert str(err.value) != 'not a decodable image'  # Pillow identified it; say what failed
+
+
+def _jpeg_with_out_of_range_sos_params() -> bytes:
+    """libjpeg-turbo only warns "Invalid SOS parameters for sequential JPEG" (the spectral
+    end is ignored) and decodes the frame; simplejpeg turns that warning into an error."""
+    buf = io.BytesIO()
+    Image.effect_noise((64, 64), 80).convert('RGB').save(buf, format='JPEG')
+    data = bytearray(buf.getvalue())
+    sos = data.index(b'\xff\xda')
+    spectral_end = sos + 5 + 2 * data[sos + 4] + 1
+    assert data[spectral_end] == 63
+    data[spectral_end] = 0
+    return bytes(data)
+
+
+def test_a_jpeg_with_a_libjpeg_sos_warning_decodes_like_pillow() -> None:
+    data = _jpeg_with_out_of_range_sos_params()
+    decoded = decode_image(data)
+    assert decoded.pil.size == (64, 64)
+
+
+def test_a_truncated_jpeg_is_still_refused() -> None:
+    buf = io.BytesIO()
+    Image.effect_noise((64, 64), 80).convert('RGB').save(buf, format='JPEG')
+    with pytest.raises(ImageDecodeError):
+        decode_image(buf.getvalue()[:-400])
