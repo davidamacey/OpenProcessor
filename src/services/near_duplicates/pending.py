@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from src.config.curation_roles import IndexRole
 from src.config.project_context import current_project
+from src.db.checkout_budget import db_slot
 from src.db.repos import near_dup_pending as pending_repo
 from src.db.session import async_session_factory, project_tx
 from src.domain import near_dup as rules
@@ -71,7 +72,7 @@ async def enqueue_pending_bound(level: str, member_ids: Iterable[str], reason: s
     if not ids:
         return 0
     project_id = await bound_project_id()
-    async with async_session_factory()() as session, project_tx(session, project_id):
+    async with db_slot(), async_session_factory()() as session, project_tx(session, project_id):
         return await enqueue_pending(session, project_id, level, ids, reason)
 
 

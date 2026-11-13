@@ -37,6 +37,7 @@ import imohash
 from prometheus_client import Counter
 
 from src.core.logging import get_logger
+from src.db.checkout_budget import db_slot
 from src.db.repos import image_contents as repo
 from src.db.session import async_session_factory, core_tx, project_tx
 from src.services.config_store.bound_project import bound_project_id
@@ -180,7 +181,7 @@ async def claim_bound(imohash_hex: str, image_id: str, image_path: str, data: by
     ``imohash`` collision stored by another writer since the lookup).
     """
     project_id = await bound_project_id()
-    async with async_session_factory()() as session, project_tx(session, project_id):
+    async with db_slot(), async_session_factory()() as session, project_tx(session, project_id):
         verdict = await _decide(session, project_id, imohash_hex, data)
         if verdict.holder is not None:
             return verdict.holder
@@ -227,7 +228,7 @@ async def release_bound(image_ids: Iterable[str]) -> int:
     if not ids:
         return 0
     project_id = await bound_project_id()
-    async with async_session_factory()() as session, project_tx(session, project_id):
+    async with db_slot(), async_session_factory()() as session, project_tx(session, project_id):
         return await repo.release_contents(session, project_id, ids)
 
 

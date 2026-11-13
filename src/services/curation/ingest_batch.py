@@ -47,6 +47,7 @@ import time
 from typing import TYPE_CHECKING, Literal
 
 from src.core.logging import get_logger
+from src.db.checkout_budget import checkout_budget
 from src.services.curation.ingest_models import BatchIngestResult, IngestResult, IngestSummary
 from src.services.curation.ops_metrics import record_ingest_result
 from src.utils.cpu_pool import encoded_nbytes, ingest_gate, mib, run_cpu
@@ -67,6 +68,10 @@ if TYPE_CHECKING:
 
 
 logger = get_logger(__name__)
+
+#: Postgres connections one batch request may hold at once (the API pool is 16 per process, with
+#: no overflow): enough to overlap two images' short transactions.
+BATCH_DB_CONNECTIONS = 2
 
 
 async def _prefill_gpu_decode(
@@ -339,12 +344,15 @@ async def run_ingest_batch(
                     ),
                 )
 
-        results = await run_all(
-            [
-                _one(i, b, p, h)
-                for i, (b, p, h) in enumerate(zip(images, image_paths, hashes, strict=False))
-            ]
-        )
+        # The images share a few connections: each image's write phases are short transactions
+        # that queue here, not on the pool the other requests of this process draw from.
+        with checkout_budget(BATCH_DB_CONNECTIONS):
+            results = await run_all(
+                [
+                    _one(i, b, p, h)
+                    for i, (b, p, h) in enumerate(zip(images, image_paths, hashes, strict=False))
+                ]
+            )
 
     await service.refresh_indexes()
 
