@@ -45,6 +45,8 @@ LEGACY_DICT = frozenset(
         'POST /crops/{crop_id}/review_undismiss',
         'POST /crops/{crop_id}/vlm_dismiss',
         'POST /crops/{crop_id}/vlm_dismiss/undo',
+        'POST /crops/{crop_id}/probe_dismiss',
+        'POST /crops/{crop_id}/probe_dismiss/undo',
         'GET /images/cache/stats',
         'GET /review/raw_label_clusters',
         'GET /review/unmatched_terms',

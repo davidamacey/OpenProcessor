@@ -53,6 +53,7 @@ _WRITES = [
     ('delete', '/crops/c1/label', None),
     ('post', '/crops/c1/discard', {'clear_class': True}),
     ('post', '/crops/c1/vlm_dismiss', None),
+    ('post', '/crops/c1/probe_dismiss', None),
     ('post', '/crops/c1/review_undismiss', None),
 ]
 

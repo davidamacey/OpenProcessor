@@ -30,7 +30,12 @@ from src.routers.curation._batch_job_models import BatchJobAccepted
 from src.routers.curation._common import OpenSearchDep, RegionProfileDep, is_not_found, router
 from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
 from src.schemas.curation.label_ops import CropUndoBatchResponse
-from src.services.curation.edit_history import REGION_UNDO_WRITER, VLM_DISMISS_UNDO_WRITER, EditKind
+from src.services.curation.edit_history import (
+    PROBE_DISMISS_UNDO_WRITER,
+    REGION_UNDO_WRITER,
+    VLM_DISMISS_UNDO_WRITER,
+    EditKind,
+)
 from src.services.curation.edit_undo import edit_undo_update, queue_edit_undo_job, undo_edit_writes
 from src.services.curation.label_undo import items_by_ids
 from src.services.embedding_spaces.readers import vector_source_excludes
@@ -160,6 +165,23 @@ async def undo_vlm_dismiss(crop_id: str, opensearch: OpenSearchDep) -> dict[str,
     except NothingToUndoError as exc:
         raise HTTPException(
             status_code=409, detail=f'no VLM dismissal to undo for crop {crop_id}'
+        ) from exc
+    items = await items_by_ids(opensearch, [crop_id])
+    if not items:
+        raise HTTPException(status_code=404, detail=f'crop not found: {crop_id}')
+    return items[0]
+
+
+@router.post('/crops/{crop_id}/probe_dismiss/undo')
+async def undo_probe_dismiss(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any]:
+    """Undo the most recent ``POST /crops/{crop_id}/probe_dismiss``: the item is back in the
+    Disagreements queue while the model still disagrees. Returns the restored item; ``409``
+    when there is no dismissal left to undo."""
+    try:
+        await undo_edit(opensearch, crop_id, EditKind.PROBE_DISMISS, PROBE_DISMISS_UNDO_WRITER)
+    except NothingToUndoError as exc:
+        raise HTTPException(
+            status_code=409, detail=f'no probe dismissal to undo for crop {crop_id}'
         ) from exc
     items = await items_by_ids(opensearch, [crop_id])
     if not items:

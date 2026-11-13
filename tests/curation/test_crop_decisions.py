@@ -90,6 +90,60 @@ def test_vlm_dismiss_without_a_suggestion_is_409() -> None:
     assert client.post('/curation/projects/default/crops/nope/vlm_dismiss').status_code == 404
 
 
+def _probe_doc(crop_id: str, **kw: Any) -> dict[str, Any]:
+    return {
+        'crop_id': crop_id,
+        'class_id': 1,
+        'class_name': 'bus',
+        'class_source': 'human',
+        'class_validated': True,
+        'probe_pred_class': 'car',
+        'probe_disagreement': True,
+        'probe_model_version': 'run-1',
+        **kw,
+    }
+
+
+def test_probe_dismiss_keeps_the_label_and_records_history() -> None:
+    fake = QueryFakeOpenSearch({ITEMS: {'p1': _probe_doc('p1')}})
+    client = _client(fake)
+    r = client.post('/curation/projects/default/crops/p1/probe_dismiss')
+    assert r.status_code == 200, r.text
+    doc = fake.docs(ITEMS)['p1']
+    assert doc['class_name'] == 'bus'
+    assert doc['probe_dismissed_class'] == 'car'
+    assert doc['probe_dismissed_model_version'] == 'run-1'
+    assert doc['probe_dismissed_at']
+    assert doc['edit_history'][-1]['kind'] == 'probe_dismiss'
+    assert doc['edit_history'][-1]['writer'] == 'human:probe_dismiss'
+
+
+def test_probe_dismiss_undo_restores_the_disagreement() -> None:
+    fake = QueryFakeOpenSearch({ITEMS: {'p1': _probe_doc('p1')}})
+    client = _client(fake)
+    client.post('/curation/projects/default/crops/p1/probe_dismiss')
+    r = client.post('/curation/projects/default/crops/p1/probe_dismiss/undo')
+    assert r.status_code == 200, r.text
+    assert fake.docs(ITEMS)['p1'].get('probe_dismissed_at') is None
+    again = client.post('/curation/projects/default/crops/p1/probe_dismiss/undo')
+    assert again.status_code == 409
+
+
+def test_probe_dismiss_without_a_disagreement_is_409() -> None:
+    fake = QueryFakeOpenSearch(
+        {
+            ITEMS: {
+                'agrees': _probe_doc('agrees', probe_disagreement=False),
+                'blind': _probe_doc('blind', probe_disagreement=None),
+            }
+        }
+    )
+    client = _client(fake)
+    assert client.post('/curation/projects/default/crops/agrees/probe_dismiss').status_code == 409
+    assert client.post('/curation/projects/default/crops/blind/probe_dismiss').status_code == 409
+    assert client.post('/curation/projects/default/crops/nope/probe_dismiss').status_code == 404
+
+
 def test_history_returns_sanitized_entries() -> None:
     history = [
         {

@@ -53131,6 +53131,114 @@
         ]
       }
     },
+    "/curation/projects/{project}/crops/{crop_id}/probe_dismiss": {
+      "post": {
+        "description": "Keep the label against the model's disagreement (\"Keep my label\").\n\nRecords ``probe_dismissed_at`` / ``probe_dismissed_class`` /\n``probe_dismissed_model_version`` and a ``probe_dismiss`` entry in the item's edit\nhistory; the item leaves the Disagreements queue until a new probe run scores it\nagain. The class is untouched. ``POST /crops/{crop_id}/probe_dismiss/undo`` reverses it.\nReturns the post-write item; ``409`` when the model does not disagree with the label.",
+        "operationId": "dismiss_probe_disagreement_curation_projects__project__crops__crop_id__probe_dismiss_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "crop_id",
+            "required": true,
+            "schema": {
+              "title": "Crop Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Dismiss Probe Disagreement Curation Projects  Project  Crops  Crop Id  Probe Dismiss Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dismiss Probe Disagreement",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/crops/{crop_id}/probe_dismiss/undo": {
+      "post": {
+        "description": "Undo the most recent ``POST /crops/{crop_id}/probe_dismiss``: the item is back in the\nDisagreements queue while the model still disagrees. Returns the restored item; ``409``\nwhen there is no dismissal left to undo.",
+        "operationId": "undo_probe_dismiss_curation_projects__project__crops__crop_id__probe_dismiss_undo_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "crop_id",
+            "required": true,
+            "schema": {
+              "title": "Crop Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Undo Probe Dismiss Curation Projects  Project  Crops  Crop Id  Probe Dismiss Undo Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo Probe Dismiss",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/projects/{project}/crops/{crop_id}/region/undo": {
       "post": {
         "description": "Restore the crop's region to its state before its most recent human\nregion write (confirm, reject, false positive, box edit, status or text\nchange). Repeated calls step back through successive writes. Returns\nthe restored item (shared wire format). ``409`` when the crop has no\nhuman region write left to undo.",

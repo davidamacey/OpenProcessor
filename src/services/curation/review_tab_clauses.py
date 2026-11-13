@@ -360,7 +360,12 @@ def _model_disagreements_tab(include_test: bool) -> _TabQuery:
         {'script': {'script': {'source': MODEL_DISAGREES_SCRIPT, 'lang': 'painless'}}},
     ]
     # Override the default must_not — we WANT validated crops here.
-    must_not: _Clauses = [{'term': {'class_excluded': True}}, *_holdout_guard(include_test)]
+    must_not: _Clauses = [
+        {'term': {'class_excluded': True}},
+        *_holdout_guard(include_test),
+        # "Keep my label" (POST /crops/{id}/probe_dismiss); a new probe run clears it.
+        {'exists': {'field': 'probe_dismissed_at'}},
+    ]
     # Default sort: 'disagreement_entropy_asc' — most-confident
     # disagreements first, so the user can quickly distinguish "model is
     # right, human was wrong" cases — see review_sorts.py.

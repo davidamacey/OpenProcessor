@@ -197,6 +197,23 @@ def test_model_disagreements_skip_classes_the_model_has_no_opinion_on(
     ]
 
 
+def test_dismissed_model_disagreement_leaves_the_queue(monkeypatch: pytest.MonkeyPatch) -> None:
+    docs = {
+        'open': _machine(
+            'open', class_validated=True, probe_pred_class='truck', probe_disagreement=True
+        ),
+        'kept': _machine(
+            'kept',
+            class_validated=True,
+            probe_pred_class='truck',
+            probe_disagreement=True,
+            probe_dismissed_at='2026-11-13T00:00:00Z',
+        ),
+    }
+    client = _client(docs, monkeypatch)
+    assert _ids(client.get(f'{BASE}/review/disagreements')) == ['open']
+
+
 def test_audit_queue_only_while_a_sample_is_pending(monkeypatch: pytest.MonkeyPatch) -> None:
     pending = {
         'p1': _machine('p1', audit_sample=True),

@@ -34,6 +34,7 @@ from src.utils.timeutil import now_iso
 
 
 VLM_DISMISS_WRITER = 'human:vlm_dismiss'
+PROBE_DISMISS_WRITER = 'human:probe_dismiss'
 REVIEW_UNDISMISS_WRITER = 'human:review_undismiss'
 
 HISTORY_KEYS: tuple[str, ...] = (
@@ -59,6 +60,10 @@ class NothingToUndoError(Exception):
 
 class NoVlmSuggestionError(Exception):
     """The item has no VLM class suggestion to dismiss."""
+
+
+class NoProbeDisagreementError(Exception):
+    """The probe does not disagree with the item's label, so there is nothing to dismiss."""
 
 
 async def _occ_write(opensearch: Any, crop_id: str, merger: Merger, *, writer_id: str) -> None:
@@ -198,6 +203,27 @@ async def dismiss_vlm_suggestion(opensearch: Any, crop_id: str) -> None:
     """Record the rejection of the item's VLM class suggestion. Raises
     :class:`NoVlmSuggestionError` when there is none."""
     await _occ_write(opensearch, crop_id, vlm_dismiss_merger, writer_id=VLM_DISMISS_WRITER)
+
+
+def probe_dismiss_merger(current: dict[str, Any]) -> dict[str, Any]:
+    if current.get('probe_disagreement') is not True:
+        raise NoProbeDisagreementError
+    return {
+        'probe_dismissed_at': now_iso(),
+        'probe_dismissed_class': current.get('probe_pred_class'),
+        'probe_dismissed_model_version': current.get('probe_model_version'),
+        EDIT_HISTORY_FIELD: record_edit(
+            current, kind=EditKind.PROBE_DISMISS, writer=PROBE_DISMISS_WRITER
+        ),
+        'updated_at': now_iso(),
+    }
+
+
+async def dismiss_probe_disagreement(opensearch: Any, crop_id: str) -> None:
+    """Keep the person's label against the model's disagreement: the item leaves the
+    Disagreements queue until a new probe run scores it again. The class is untouched.
+    Raises :class:`NoProbeDisagreementError` when the probe does not disagree."""
+    await _occ_write(opensearch, crop_id, probe_dismiss_merger, writer_id=PROBE_DISMISS_WRITER)
 
 
 def _review_undismiss_merger(_current: dict[str, Any]) -> dict[str, Any]:
