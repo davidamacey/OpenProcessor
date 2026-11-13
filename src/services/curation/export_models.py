@@ -67,6 +67,20 @@ class SplitCounts:
         return {'train': self.train, 'val': self.val, 'test': self.test}
 
 
+@dataclass(frozen=True)
+class ExportPreview:
+    """What an export with the same options would write, counted without writing anything.
+    ``warning`` is the served reason to think twice (nothing, or mostly nothing, would be
+    exported), null otherwise."""
+
+    image_count: int
+    object_count: int
+    images_dropped_not_fully_labeled: int
+    images_with_unlabeled_items: int
+    unlabeled_items_on_exported_images: int
+    warning: str | None
+
+
 @dataclass
 class ExportResult:
     """What one export wrote. ``split_counts`` / ``image_count`` count

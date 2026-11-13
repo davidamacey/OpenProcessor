@@ -10,6 +10,7 @@ page. The narrowed single-class export lives in
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from fastapi import Depends, HTTPException, Query
@@ -71,6 +72,53 @@ class ExportYoloResponse(BaseModel):
     collapse_near_duplicates: bool
     started_at: str | None
     finished_at: str | None
+
+
+class ExportYoloPreviewResponse(BaseModel):
+    """``POST /export/yolo/preview``: what the export would write, nothing written."""
+
+    image_count: int = Field(description='Images with objects that would be exported.')
+    object_count: int = Field(description='Label lines (objects) that would be exported.')
+    images_dropped_not_fully_labeled: int = Field(
+        description='Images left out by require_fully_labeled_images (0 when it is off).'
+    )
+    images_with_unlabeled_items: int
+    unlabeled_items_on_exported_images: int
+    warning: str | None = Field(
+        description='The served reason to think twice (nothing, or mostly nothing, would be '
+        'exported); null otherwise.'
+    )
+
+
+@router.post(
+    '/export/yolo/preview',
+    response_model=ExportYoloPreviewResponse,
+    dependencies=[Depends(require_near_dup_fresh)],
+)
+async def preview_export_yolo(
+    payload: ExportYoloRequest, opensearch: OpenSearchDep
+) -> ExportYoloPreviewResponse:
+    """Count what ``POST /export/yolo`` would export with the same body, without writing.
+
+    Same selection as the export: the partial-frame policy (``require_fully_labeled_images``),
+    near-duplicate collapse, the image cap and the item filter. An empty result is a ``200``
+    with zeros and a ``warning``; ``export_dir`` and ``version_tag`` are ignored.
+    """
+    service = GenericYoloExportService(opensearch, location_policy=get_location_policy)
+    try:
+        preview = await service.preview_dataset(
+            seed=payload.seed,
+            max_images=payload.max_images,
+            collapse_near_duplicates=payload.collapse_near_duplicates,
+            require_fully_labeled_images=payload.require_fully_labeled_images,
+            item_filter=payload.item_filter,
+        )
+    except NoCurrentRunError as exc:
+        raise HTTPException(status_code=409, detail=f'near_dup_no_run: {exc}') from exc
+    except Exception as exc:
+        logger.error('export_preview_failed', error=str(exc))
+        raise server_error(500, 'export preview failed', exc) from exc
+    return ExportYoloPreviewResponse(**asdict(preview))
 
 
 @router.post(

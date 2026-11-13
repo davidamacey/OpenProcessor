@@ -62,7 +62,12 @@ from src.config import CurationConfig, get_curation_config
 from src.core.logging import get_logger
 from src.services.classes.registry import ClassRegistry, get_class_registry
 from src.services.curation.export_images import copy_export_images, select_export_images
-from src.services.curation.export_models import ARTIFACT_FILENAMES, ExportProfile, ExportResult
+from src.services.curation.export_models import (
+    ARTIFACT_FILENAMES,
+    ExportPreview,
+    ExportProfile,
+    ExportResult,
+)
 from src.services.curation.export_negatives import (
     plan_multi_class_negatives,
     scroll_negative_frames,
@@ -256,17 +261,16 @@ class GenericYoloExportService:
             raise ValueError(msg)
         started_at = datetime.now(UTC).isoformat()
         generation = await items_index_generation(self.opensearch, self.config.items_index)
-        join = await export_image_join(self.opensearch, item_filter)
-        rows, skipped_items = await self._load_rows(
-            validated_export_query(await item_write_fields(), item_filter, join)
-        )
-        registry_file = await self.registry.snapshot()
-        rows, id_map, dropped_unregistered = to_dense_ids(rows, registry_file)
-
-        images, unlabeled, selection = await select_export_images(
-            self.opensearch,
-            self.config,
-            rows,
+        (
+            registry_file,
+            id_map,
+            dropped_unregistered,
+            skipped_items,
+            images,
+            unlabeled,
+            selection,
+        ) = await self._select_images(
+            item_filter=item_filter,
             require_fully_labeled_images=require_fully_labeled_images,
             collapse_near_duplicates=collapse_near_duplicates,
             max_images=max_images,
@@ -414,6 +418,86 @@ class GenericYoloExportService:
             images_with_unlabeled_items=partial['images_with_unlabeled_items'],
             images_dropped_not_fully_labeled=partial['images_dropped_not_fully_labeled'],
             skipped_items=skipped_items,
+        )
+
+    async def _select_images(
+        self,
+        *,
+        item_filter: ItemFilter | None,
+        require_fully_labeled_images: bool,
+        collapse_near_duplicates: bool,
+        max_images: int | None,
+        seed: int,
+    ) -> tuple[Any, Any, Any, dict[str, int], list[_ExportImage], dict[str, int], Any]:
+        """The shared selection of an export and its preview: ``(registry, id_map,
+        dropped_unregistered, skipped_items, images, unlabeled, selection)``. Raises
+        :class:`NothingToExportError` when no image survives."""
+        join = await export_image_join(self.opensearch, item_filter)
+        rows, skipped_items = await self._load_rows(
+            validated_export_query(await item_write_fields(), item_filter, join)
+        )
+        registry_file = await self.registry.snapshot()
+        rows, id_map, dropped_unregistered = to_dense_ids(rows, registry_file)
+        images, unlabeled, selection = await select_export_images(
+            self.opensearch,
+            self.config,
+            rows,
+            require_fully_labeled_images=require_fully_labeled_images,
+            collapse_near_duplicates=collapse_near_duplicates,
+            max_images=max_images,
+            seed=seed,
+        )
+        return (
+            registry_file,
+            id_map,
+            dropped_unregistered,
+            skipped_items,
+            images,
+            unlabeled,
+            selection,
+        )
+
+    async def preview_dataset(
+        self,
+        *,
+        seed: int = 42,
+        max_images: int | None = None,
+        collapse_near_duplicates: bool = False,
+        require_fully_labeled_images: bool = False,
+        item_filter: ItemFilter | None = None,
+    ) -> ExportPreview:
+        """Count what :meth:`export_dataset` would export with these options, writing nothing.
+
+        The same selection runs (validated rows, registered classes, the partial-frame policy,
+        near-duplicate collapse, the image cap), so the counts match the export. An empty result
+        is not an error here: it is the preview, with a ``warning`` naming the reason.
+        """
+        try:
+            *_, images, unlabeled, selection = await self._select_images(
+                item_filter=item_filter,
+                require_fully_labeled_images=require_fully_labeled_images,
+                collapse_near_duplicates=collapse_near_duplicates,
+                max_images=max_images,
+                seed=seed,
+            )
+        except NothingToExportError as exc:
+            return ExportPreview(0, 0, 0, 0, 0, f'Nothing would be exported: {exc}.')
+        exported_unlabeled = [unlabeled.get(im.image_id, 0) for im in images]
+        dropped = selection['images_dropped_not_fully_labeled']
+        warning = None
+        if dropped > len(images):
+            warning = (
+                f'Only {len(images):,} {"image" if len(images) == 1 else "images"} would be '
+                f'exported; {dropped:,} are left out because they hold objects nobody has '
+                'labelled. Label more, or export without this option.'
+            )
+        return ExportPreview(
+            image_count=len(images),
+            object_count=sum(len(im.objects) for im in images),
+            images_dropped_not_fully_labeled=dropped,
+            images_with_unlabeled_items=sum(1 for n in exported_unlabeled if n),
+            unlabeled_items_on_exported_images=sum(exported_unlabeled),
+            warning=warning,
         )
 
     async def _load_rows(self, query: dict[str, Any]) -> tuple[list[_ExportRow], dict[str, int]]:

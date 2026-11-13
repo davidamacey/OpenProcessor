@@ -17,9 +17,12 @@ from fastapi.testclient import TestClient
 
 from src.core.exceptions import RequestRejectedError
 from src.routers.curation._export_models import ExportYoloRequest
-from src.routers.curation.export import export_yolo as export_yolo_handler
+from src.routers.curation.export import (
+    export_yolo as export_yolo_handler,
+    preview_export_yolo as preview_handler,
+)
 from src.routers.curation.near_dup_gate import require_near_dup_fresh
-from src.services.curation.export_models import ExportResult, SplitCounts
+from src.services.curation.export_models import ExportPreview, ExportResult, SplitCounts
 
 
 if TYPE_CHECKING:
@@ -537,3 +540,28 @@ def test_single_class_status_unknown_when_manifest_unreadable(
 
     assert body['status'] == 'unknown'
     assert body['export_dir'] == str(export_dir)
+
+
+@pytest.mark.asyncio
+async def test_export_preview_handler_passes_the_export_options_and_serves_the_counts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    async def _fake_preview(self: GenericYoloExportService, **kwargs: Any) -> ExportPreview:
+        captured.update(kwargs)
+        return ExportPreview(1, 1, 38, 0, 0, 'Only 1 image would be exported.')
+
+    monkeypatch.setattr(
+        'src.services.curation.export.GenericYoloExportService.preview_dataset', _fake_preview
+    )
+
+    response = await preview_handler(
+        ExportYoloRequest(require_fully_labeled_images=True, max_images=50), MagicMock()
+    )
+
+    assert captured['require_fully_labeled_images'] is True
+    assert captured['max_images'] == 50
+    assert response.image_count == 1
+    assert response.images_dropped_not_fully_labeled == 38
+    assert response.warning == 'Only 1 image would be exported.'

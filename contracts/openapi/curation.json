@@ -13558,6 +13558,56 @@
         "title": "ExportStatusResponse",
         "type": "object"
       },
+      "ExportYoloPreviewResponse": {
+        "description": "``POST /export/yolo/preview``: what the export would write, nothing written.",
+        "properties": {
+          "image_count": {
+            "description": "Images with objects that would be exported.",
+            "title": "Image Count",
+            "type": "integer"
+          },
+          "images_dropped_not_fully_labeled": {
+            "description": "Images left out by require_fully_labeled_images (0 when it is off).",
+            "title": "Images Dropped Not Fully Labeled",
+            "type": "integer"
+          },
+          "images_with_unlabeled_items": {
+            "title": "Images With Unlabeled Items",
+            "type": "integer"
+          },
+          "object_count": {
+            "description": "Label lines (objects) that would be exported.",
+            "title": "Object Count",
+            "type": "integer"
+          },
+          "unlabeled_items_on_exported_images": {
+            "title": "Unlabeled Items On Exported Images",
+            "type": "integer"
+          },
+          "warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The served reason to think twice (nothing, or mostly nothing, would be exported); null otherwise.",
+            "title": "Warning"
+          }
+        },
+        "required": [
+          "image_count",
+          "object_count",
+          "images_dropped_not_fully_labeled",
+          "images_with_unlabeled_items",
+          "unlabeled_items_on_exported_images",
+          "warning"
+        ],
+        "title": "ExportYoloPreviewResponse",
+        "type": "object"
+      },
       "ExportYoloRequest": {
         "additionalProperties": false,
         "properties": {
@@ -56379,6 +56429,59 @@
           }
         },
         "summary": "Export Yolo",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/export/yolo/preview": {
+      "post": {
+        "description": "Count what ``POST /export/yolo`` would export with the same body, without writing.\n\nSame selection as the export: the partial-frame policy (``require_fully_labeled_images``),\nnear-duplicate collapse, the image cap and the item filter. An empty result is a ``200``\nwith zeros and a ``warning``; ``export_dir`` and ``version_tag`` are ignored.",
+        "operationId": "preview_export_yolo_curation_projects__project__export_yolo_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportYoloRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportYoloPreviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Export Yolo",
         "tags": [
           "Curation"
         ]
