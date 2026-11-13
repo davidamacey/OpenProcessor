@@ -55,3 +55,20 @@ def test_overlay_drops_only_baked_in_code_mounts(service: str) -> None:
     assert not [m for m in kept if m not in _BASE[service]['volumes']], (
         f'{service}: overlay adds mounts'
     )
+
+
+_DATA_DIR = '${VERIFY_DATA_DIR:-./verify-data}'
+
+
+@pytest.mark.parametrize('name', ['compose.yml', 'compose.built.yml', 'compose.docs-shots.yml'])
+def test_every_harness_data_mount_follows_verify_data_dir(name: str) -> None:
+    """A sharded live run gives each stack its own data directory through VERIFY_DATA_DIR; a mount
+    that names ./verify-data directly would make two stacks share secrets, projects and exports."""
+    mounts = [
+        m
+        for svc in _load(name).values()
+        for m in svc.get('volumes') or []
+        if isinstance(m, str) and './verify-data' in m
+    ]
+    assert mounts or name == 'compose.docs-shots.yml'
+    assert all(m.startswith(_DATA_DIR) and m.count('./verify-data') == 1 for m in mounts), mounts

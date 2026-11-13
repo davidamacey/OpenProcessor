@@ -114,7 +114,7 @@ services:
         chmod 600 /verify-data/secrets/postgres/* /verify-data/secrets/valkey/*
         chown -R 1000:1000 /verify-data
     volumes:
-      - ./verify-data:/verify-data
+      - ${VERIFY_DATA_DIR:-./verify-data}:/verify-data
     restart: "no"
     networks:
       - verify_net
@@ -127,7 +127,7 @@ services:
       - POSTGRES_DB=openprocessor
       - POSTGRES_PASSWORD_FILE=/run/secrets/op_pg/super_password
     volumes:
-      - ./verify-data/secrets/postgres/super_password:/run/secrets/op_pg/super_password:ro
+      - ${VERIFY_DATA_DIR:-./verify-data}/secrets/postgres/super_password:/run/secrets/op_pg/super_password:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U op_super -d openprocessor"]
       interval: 3s
@@ -145,7 +145,7 @@ services:
     user: "1000:1000"
     command: ["valkey-server", "/run/secrets/op_valkey/valkey.conf", "--maxmemory", "128mb", "--maxmemory-policy", "noeviction"]
     volumes:
-      - ./verify-data/secrets/valkey:/run/secrets/op_valkey:ro
+      - ${VERIFY_DATA_DIR:-./verify-data}/secrets/valkey:/run/secrets/op_valkey:ro
     healthcheck:
       test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$(cat /run/secrets/op_valkey/password)\" valkey-cli ping | grep -q PONG"]
       interval: 3s
@@ -170,7 +170,7 @@ services:
       - ../../scripts:/app/scripts:ro
       # the builtin engine seed reads the shipped config.pbtxt files
       - ../../models:/app/models:ro
-      - ./verify-data/secrets/postgres:/run/secrets/op_pg:ro
+      - ${VERIFY_DATA_DIR:-./verify-data}/secrets/postgres:/run/secrets/op_pg:ro
     environment:
       - OP_DB_HOST=postgres
       - OP_DB_NAME=openprocessor
@@ -220,7 +220,7 @@ services:
     command: ["python", "-u", "/fake/fake_triton.py"]
     volumes:
       - ./fake_triton.py:/fake/fake_triton.py:ro
-      - ./verify-data/triton_models:/triton-models:ro
+      - ${VERIFY_DATA_DIR:-./verify-data}/triton_models:/triton-models:ro
     healthcheck:
       test:
         - CMD
@@ -274,9 +274,9 @@ services:
       # so the test process can assert on the bytes it produced. The
       # previous ad-hoc harness mounted none of these and every registry
       # write / export vanished into the container layer.
-      - ./verify-data:/verify-data
-      - ./verify-data/secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
-      - ./verify-data/secrets/valkey/password:/run/secrets/op_valkey/password:ro
+      - ${VERIFY_DATA_DIR:-./verify-data}:/verify-data
+      - ${VERIFY_DATA_DIR:-./verify-data}/secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ${VERIFY_DATA_DIR:-./verify-data}/secrets/valkey/password:/run/secrets/op_valkey/password:ro
     environment:
       <<: *process-env
       # Only the API sets this: it sizes the API pool (src/config/api_pools.py). The workers and
@@ -438,9 +438,9 @@ services:
       - ./fake_trainer.py:/opt/fake_trainer/fake_trainer.py:ro
       - ./fake_onnx.py:/opt/fake_trainer/fake_onnx.py:ro
       - ../../src:/app/src:ro
-      - ./verify-data:/verify-data
-      - ./verify-data/secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
-      - ./verify-data/secrets/valkey/password:/run/secrets/op_valkey/password:ro
+      - ${VERIFY_DATA_DIR:-./verify-data}:/verify-data
+      - ${VERIFY_DATA_DIR:-./verify-data}/secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ${VERIFY_DATA_DIR:-./verify-data}/secrets/valkey/password:/run/secrets/op_valkey/password:ro
     environment:
       <<: *process-env
       PYTHONPATH: /app:/opt/fake_trainer
@@ -467,9 +467,9 @@ services:
     volumes: &fake-volumes
       - ./fake_consumers.py:/opt/fake_consumers/fake_consumers.py:ro
       - ../../src:/app/src:ro
-      - ./verify-data:/verify-data
-      - ./verify-data/secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
-      - ./verify-data/secrets/valkey/password:/run/secrets/op_valkey/password:ro
+      - ${VERIFY_DATA_DIR:-./verify-data}:/verify-data
+      - ${VERIFY_DATA_DIR:-./verify-data}/secrets/postgres/app_password:/run/secrets/op_pg/app_password:ro
+      - ${VERIFY_DATA_DIR:-./verify-data}/secrets/valkey/password:/run/secrets/op_valkey/password:ro
     environment: &fake-env
       <<: *process-env
       PYTHONPATH: /app:/opt/fake_consumers
