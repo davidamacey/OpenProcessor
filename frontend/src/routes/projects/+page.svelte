@@ -28,6 +28,7 @@
   import { resolve } from '$app/paths';
   import CloneSettingsDialog from '$components/projects/CloneSettingsDialog.svelte';
   import CreateProjectDialog from '$components/projects/CreateProjectDialog.svelte';
+  import { MediaQuery } from 'svelte/reactivity';
   import Menu, { type MenuItem } from '$components/ui/Menu.svelte';
   import DeleteProjectDialog from '$components/projects/DeleteProjectDialog.svelte';
   import EditProjectDialog from '$components/projects/EditProjectDialog.svelte';
@@ -95,6 +96,10 @@
       toastStore.error(res.message);
     }
   }
+
+  // Rows stack below md with the actions on the left, so the menu opens from its left edge.
+  const wide =
+    typeof matchMedia === 'function' ? new MediaQuery('min-width: 768px') : null;
 
   /** The row's More menu: only the actions the served flags allow. */
   function rowMenu(p: ProjectSummary): MenuItem[] {
@@ -237,7 +242,7 @@
       </p>
     {/if}
 
-    <div class="relative overflow-x-auto rounded border border-line">
+    <div class="relative rounded border border-line">
       <table class="w-full text-body max-md:block" data-testid="projects-table">
         <thead class="bg-surface-1 text-left text-meta text-fg-2 max-md:hidden">
           <tr>
@@ -338,7 +343,7 @@
                     <span data-testid="project-more-{p.slug}">
                       <Menu
                         label="More"
-                        align="end"
+                        align={(wide?.current ?? true) ? 'end' : 'start'}
                         triggerClass="btn btn-sm"
                         items={rowMenu(p)}
                       />

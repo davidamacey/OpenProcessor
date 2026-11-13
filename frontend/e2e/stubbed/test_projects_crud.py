@@ -422,3 +422,35 @@ def test_deleting_row_disappears_without_a_reload(stub, page, app_url):
     # The background delete finishes server-side; only a re-read can show it.
     reg.rows['alpha']['status'] = 'deleted'
     page.get_by_test_id('project-row-alpha').wait_for(state='detached', timeout=10_000)
+
+
+def test_the_more_menu_is_not_clipped_by_the_table(stub, page, app_url):
+    Projects().install(stub)
+    page.set_viewport_size({'width': 1600, 'height': 1000})
+    open_projects(page, app_url)
+    first = row_action(page, 'edit', 'alpha')
+    first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    box = first.bounding_box()
+    table = page.get_by_test_id('project-row-alpha').bounding_box()
+    # The first item sits fully on screen, and the whole row is still rendered under the menu.
+    assert box is not None and box['y'] >= 0 and table is not None
+    assert page.get_by_test_id('project-row-default').is_visible()
+    assert page.get_by_test_id('project-edit-alpha').is_visible()
+    # The menu hangs below the row it belongs to, not inside a scrolled box.
+    assert (
+        page.evaluate(
+            "() => { const t = document.querySelector('[data-testid=\"project-row-alpha\"]').closest('div.relative');"
+            ' return getComputedStyle(t).overflowY; }'
+        )
+        == 'visible'
+    )
+
+
+def test_the_more_menu_stays_on_screen_on_a_phone(stub, page, app_url):
+    Projects().install(stub)
+    page.set_viewport_size({'width': 430, 'height': 900})
+    open_projects(page, app_url)
+    item = row_action(page, 'edit', 'alpha')
+    item.wait_for(timeout=ACTION_TIMEOUT_MS)
+    box = item.bounding_box()
+    assert box is not None and box['x'] >= 0 and box['x'] + box['width'] <= 430, box
