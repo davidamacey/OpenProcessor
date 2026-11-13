@@ -234,6 +234,8 @@ def test_empty_queue_shows_served_empty_reason_and_links_to_the_probe_control(st
     page.goto(review_url(app_url, 'disagreements'))
     empty = page.get_by_test_id('queue-empty')
     empty.wait_for(timeout=ACTION_TIMEOUT_MS)
+    # The panel mounts before the served reason arrives; wait for it.
+    empty.get_by_text('no probe predictions — run a probe').wait_for(timeout=ACTION_TIMEOUT_MS)
     text = empty.inner_text()
     assert 'no probe predictions — run a probe' in text, text
     assert "no item has 'probe_pred_entropy' yet" not in text, text
