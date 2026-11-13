@@ -44,7 +44,10 @@ COMPOSE_FILE_ARGS = compose_file_args(os.environ)
 # Overridable so a second harness (own project + container prefix) can run beside
 # another one without sharing fixed container names.
 COMPOSE_PROJECT = os.environ.get('VERIFY_COMPOSE_PROJECT', 'op-live-verify')
-VERIFY_DATA_DIR = REPO_ROOT / 'docker' / 'test' / 'verify-data'
+# The host side of the harness's /verify-data mount: compose.yml reads the same variable, so each
+# stack of a sharded run (scripts/dev/live_shards.sh) has its own directory. A relative value is
+# relative to docker/test, as compose resolves it.
+VERIFY_DATA_DIR = (COMPOSE_FILE.parent / os.environ.get('VERIFY_DATA_DIR', 'verify-data')).resolve()
 EXPORTS_DIR = VERIFY_DATA_DIR / 'projects' / 'default' / 'exports'
 
 API_URL = os.environ.get('VERIFY_API_URL', 'http://localhost:14701')

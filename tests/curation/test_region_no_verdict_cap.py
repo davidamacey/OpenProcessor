@@ -241,7 +241,15 @@ class TestCombinedNoVerdictIsCapped:
     ) -> None:
         monkeypatch.delenv(ENV, raising=False)
         fake_os = _FakeOpenSearch({'c1': _item()}, search_delay=0.0, lag_searches=0)
-        mocks = await _run(tmp_path, monkeypatch, fake_os, combined=_scripted('transport'))
+        mocks = await _run(
+            tmp_path,
+            monkeypatch,
+            fake_os,
+            combined=_scripted('transport'),
+            until=lambda m: (
+                m['vlm'].label_combined_batch.await_count > DEFAULT_MAX_NO_VERDICT_ATTEMPTS
+            ),
+        )
         F = get_region_fields()
         assert mocks['vlm'].label_combined_batch.await_count > DEFAULT_MAX_NO_VERDICT_ATTEMPTS
         assert fake_os.writes == []

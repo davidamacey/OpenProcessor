@@ -89,6 +89,7 @@ class TestStreamingWorker:
             primary=BOX,
             segmenter=None,
             reply=_reply(None),
+            until=lambda m: m['vlm'].label_combined_batch.await_count >= 3,
         )
         F = get_region_fields()
         assert mocks['vlm'].label_combined_batch.await_count >= 1

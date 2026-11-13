@@ -123,6 +123,10 @@ How to use them: [Ingest from S3 and watched sources](../guides/ingest-sources.m
 | `OP_S3_FETCH_WORKERS` | `8` | Download threads per API process |
 | `OP_S3_LIST_WORKERS` | `8` | Sub-prefixes listed in parallel |
 | `OP_INGEST_DISPATCH_S` | `5` | Seconds between dispatcher ticks (poll, cron, webhook drains); `0` turns every trigger off |
+| `OP_JOB_LEASE_TTL_S` | `120` | Seconds a job lease lives without a renew; the reaper acts on an expired lease |
+| `OP_JOB_HEARTBEAT_TICK_S` | `15` | Seconds between lease renews |
+| `OP_JOB_FENCE_MARGIN_S` | `30` | A holder stops writing this many seconds before its lease expires |
+| `OP_REAPER_INTERVAL_S` | `30` | Seconds between reaper runs |
 | `OP_API_LOOPBACK_URL` | `http://127.0.0.1:8000` | Where the dispatcher's runs send their batches: the API's listen address inside its container |
 
 Credentials are not an `OP_` setting: the `api` container's `AWS_ACCESS_KEY_ID` and

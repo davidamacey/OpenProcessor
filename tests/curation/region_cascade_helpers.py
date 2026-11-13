@@ -236,6 +236,7 @@ async def _drive_worker(
     combined_side_effect: Any = None,
     visible_side_effect: Any = None,
     until_writes: int = 1,
+    until: Any = None,
     on_write: Any = None,
     class_group: Any = None,
     profile_overrides: dict[str, Any] | None = None,
@@ -248,7 +249,9 @@ async def _drive_worker(
     ``combined_side_effect`` / ``visible_side_effect`` replace the VLM
     mocks' fixed answers (called with the crop list). The run stops once
     ``until_writes`` writes landed (or a timeout); ``on_write(n)`` is
-    called as the n-th write is seen. ``class_group`` overrides the
+    called as the n-th write is seen. ``until(mocks)`` replaces the write count as the stop
+    signal, for a run that must write nothing: it ends once the mocks show the retries the test
+    asserts, not at the 18 s deadline. ``class_group`` overrides the
     class -> group resolver (default: every class is group-less);
     ``profile_overrides`` re-registers the active profile with those
     dataclass fields replaced (e.g. ``secondary_shape_groups``).
@@ -364,17 +367,21 @@ async def _drive_worker(
                 seen += 1
                 if on_write is not None:
                     on_write(seen)
-            if seen >= until_writes:
+            if until is not None:
+                if until(mocks):
+                    break
+            elif seen >= until_writes:
                 break
         # Keep polling well past the write so a lagged re-fetch would show.
         await asyncio.sleep(0.6)
         handlers[0]()
 
+    mocks = {'primary': primary_det, 'seg': seg, 'vlm': vlm, 'vlm_cls': vlm_cls}
     stopper = asyncio.create_task(_stopper())
     rc = await asyncio.wait_for(runner_mod.run(args), timeout=30)
     await stopper
     assert rc == 0
-    return {'primary': primary_det, 'seg': seg, 'vlm': vlm, 'vlm_cls': vlm_cls}
+    return mocks
 
 
 def _accept(text: str = 'DNV20') -> VlmCombinedReply:

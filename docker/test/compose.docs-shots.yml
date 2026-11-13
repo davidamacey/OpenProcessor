@@ -25,8 +25,8 @@ services:
       # A stub: region profiles that name a segmenter can be activated and tested.
       - OP_SEGMENTER_URL=http://fake-segmenter:8000
     volumes:
-      - ./verify-data/source:/data/source
-      - ./verify-data/state:/var/lib/openprocessor
+      - ${VERIFY_DATA_DIR:-./verify-data}/source:/data/source
+      - ${VERIFY_DATA_DIR:-./verify-data}/state:/var/lib/openprocessor
 
   # Region profiles need a segmenter to activate; this serves fixed wheel-shaped
   # candidates so "Test on a crop" runs without a GPU. Reuses the API image for
