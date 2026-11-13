@@ -24,6 +24,7 @@ STREAM_OR_FILE = frozenset(
         'GET /crops/{crop_id}/thumbnail',
         'GET /events',
         'GET /export/registry/{artifact}',
+        'GET /crops/{crop_id}/preview',
         'GET /images/{image_id}/file',
         'GET /images/{image_id}/thumbnail',
         'GET /pipeline/events',
