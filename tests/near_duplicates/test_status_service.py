@@ -106,14 +106,14 @@ async def test_groups_page_by_size_and_open_by_lineage(pg, project) -> None:
     run = await full_build(env)
     async with async_session_factory()() as session:
         first = await service.groups(
-            session, project, level='image', purpose='dedup', min_size=2, has_holdout=None,
+            session, project, AsyncMock(), level='image', purpose='dedup', min_size=2, has_holdout=None,
             cursor=None, limit=1,
         )  # fmt: skip
     assert [g.size for g in first.items] == [3]
     assert first.next_cursor is not None
     async with async_session_factory()() as session:
         second = await service.groups(
-            session, project, level='image', purpose='dedup', min_size=2, has_holdout=None,
+            session, project, AsyncMock(), level='image', purpose='dedup', min_size=2, has_holdout=None,
             cursor=first.next_cursor, limit=1,
         )  # fmt: skip
     assert [g.size for g in second.items] == [2]
@@ -149,7 +149,7 @@ async def test_another_projects_runs_and_groups_are_not_found(pg, project) -> No
     assert missing.value.status_code == 404
     async with async_session_factory()() as session:
         page = await service.groups(
-            session, other, level='image', purpose='dedup', min_size=2, has_holdout=None,
+            session, other, AsyncMock(), level='image', purpose='dedup', min_size=2, has_holdout=None,
             cursor=None, limit=10,
         )  # fmt: skip
     assert page.items == []
@@ -159,7 +159,7 @@ async def test_a_bad_cursor_is_422(project) -> None:
     async with async_session_factory()() as session:
         with pytest.raises(RequestRejectedError) as bad:
             await service.groups(
-                session, project, level='image', purpose='dedup', min_size=2, has_holdout=None,
+                session, project, AsyncMock(), level='image', purpose='dedup', min_size=2, has_holdout=None,
                 cursor='not-a-cursor', limit=10,
             )  # fmt: skip
     assert bad.value.status_code == 422

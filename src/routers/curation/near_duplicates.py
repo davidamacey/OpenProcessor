@@ -58,6 +58,7 @@ async def get_near_duplicate_run(session: DbSessionDep, run_id: uuid.UUID) -> wi
 @router.get('/near_duplicates/groups', response_model=wire.NearDupGroupPage, tags=[TAG])
 async def list_near_duplicate_groups(
     session: DbSessionDep,
+    opensearch: OpenSearchDep,
     level: Annotated[wire.Level, Query()],
     purpose: Annotated[wire.Purpose, Query()] = 'dedup',
     min_size: Annotated[int, Query(ge=2)] = 2,
@@ -69,6 +70,7 @@ async def list_near_duplicate_groups(
     return await service.groups(
         session,
         current_project_id(),
+        opensearch,
         level=level,
         purpose=purpose,
         min_size=min_size,
