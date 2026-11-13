@@ -197,15 +197,19 @@ def wait_until(predicate: Any, *, timeout: float = 60.0, interval: float = 0.5) 
 JOB_TERMINAL = ('completed', 'completed_with_errors', 'failed', 'cancelled', 'interrupted')
 
 
-def wait_job(api_client: Any, job_id: str, *, timeout: float = 120.0) -> dict[str, Any]:
+def wait_job(
+    api_client: Any, job_id: str, *, timeout: float = 120.0, prefix: str = ''
+) -> dict[str, Any]:
     """Poll ``GET /jobs/{job_id}`` until the job is terminal; return its last view.
+
+    ``api_client`` adds the project prefix itself; a raw client names its project in ``prefix``.
 
     A job route answers 202 with a queued job; the worker finishes it afterwards. Returns the last
     view even when the deadline passes, so the caller's assertion shows what it saw.
     """
 
     def fetch() -> dict[str, Any]:
-        resp = api_client.get(f'/jobs/{job_id}')
+        resp = api_client.get(f'{prefix}/jobs/{job_id}')
         assert resp.status_code == 200, resp.text
         return resp.json()
 
