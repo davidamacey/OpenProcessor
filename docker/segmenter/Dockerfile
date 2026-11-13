@@ -110,6 +110,8 @@ RUN if getent passwd ubuntu >/dev/null; then userdel -r ubuntu; fi && \
 WORKDIR /app
 COPY --from=builder --chown=appuser:appuser /root/.local /home/appuser/.local
 COPY --chown=appuser:appuser main.py sam3_backend.py /app/
+# SAM License 1(b)(i): a copy of the licence travels with the SAM Materials.
+COPY --from=sam3-src /src/sam3/LICENSE /usr/share/licenses/sam3/LICENSE
 
 ENV PATH=/home/appuser/.local/bin:$PATH \
     PYTHONUNBUFFERED=1 \

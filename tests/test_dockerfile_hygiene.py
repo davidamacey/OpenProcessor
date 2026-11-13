@@ -93,6 +93,18 @@ def test_image_builds_dependencies_in_a_separate_stage(rel: str) -> None:
     assert installs == [], f'{rel}: the runtime stage runs pip install'
 
 
+def test_segmenter_image_ships_the_sam_license_text() -> None:
+    # SAM License 1(b)(i): distributing SAM Materials requires a copy of the licence with them.
+    copies = [
+        rest
+        for kind, rest in _stages('docker/segmenter/Dockerfile')[-1]
+        if kind == 'COPY' and '--from=sam3-src' in rest
+    ]
+    assert any(
+        '/src/sam3/LICENSE' in c and '/usr/share/licenses/sam3/LICENSE' in c for c in copies
+    ), 'the final stage must copy the sam3 LICENSE to /usr/share/licenses/sam3/LICENSE'
+
+
 # --- the root Dockerfile: one build graph, three published targets --------------------------
 _STAGE_ORDER = [
     'base',
