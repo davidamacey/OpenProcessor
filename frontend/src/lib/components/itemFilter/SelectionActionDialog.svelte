@@ -8,6 +8,7 @@
   import { classesStore } from '$stores/classes.svelte';
   import { SELECTION_SAMPLES } from '$lib/types_itemFilter';
   import { humanizeId } from '$lib/humanizeId';
+  import { opStatusLine } from '$lib/labelOps/opStatusLine';
   import type {
     SelectionActionController,
     SelectionActionId,
@@ -30,6 +31,14 @@
     move: 'Move matching items to a cluster',
   };
 
+  const VERBS: Partial<Record<SelectionActionId, string>> = {
+    label: 'Labeling',
+    move: 'Moving',
+  };
+  const statusLine = $derived(
+    c.action && c.loading ? opStatusLine(c.job, VERBS[c.action] ?? 'Working') : null,
+  );
+
   const classOptions = $derived(classesStore.classes.filter((cls) => !cls.deprecated));
 
   function intOrNull(raw: string): number | null {
@@ -47,16 +56,29 @@
   }
 </script>
 
-{#if c.action}
+{#if c.action && !c.detached}
   <ConfirmDialog
     title={TITLES[c.action]}
     confirmLabel="Apply"
     danger={c.action === 'exclude'}
     busy={c.loading && c.selected != null}
+    busyLabel={statusLine ?? 'Working…'}
     confirmDisabled={!c.canConfirm}
     onconfirm={confirm}
-    oncancel={() => c.cancel()}
+    oncancel={() => (c.job ? c.runInBackground() : c.cancel())}
   >
+    {#snippet actions()}
+      {#if c.loading && c.job}
+        <button
+          type="button"
+          class="btn"
+          data-testid="selection-background"
+          onclick={() => c.runInBackground()}
+        >
+          Run in background
+        </button>
+      {/if}
+    {/snippet}
     {#if c.action === 'label'}
       <label class="flex items-center gap-2">
         <span class="text-fg-2">Class</span>
@@ -163,6 +185,18 @@
         </label>
       {/if}
     </div>
+
+    {#if statusLine}
+      <p class="text-fg-1" data-testid="selection-job">
+        {statusLine}.
+        {#if c.job?.status === 'queued'}
+          <span class="text-fg-2"
+            >You can close this: the change runs in the background and shows in Label
+            history.</span
+          >
+        {/if}
+      </p>
+    {/if}
 
     {#if c.error}
       <p class="text-danger-text" role="alert" data-testid="selection-error">{c.error}</p>

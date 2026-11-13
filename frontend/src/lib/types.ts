@@ -451,6 +451,8 @@ export interface ToastMessage {
   kind: 'info' | 'success' | 'warn' | 'error';
   text: string;
   ttl_ms?: number;
+  /** One follow-up the toast offers (Undo), run once and the toast closes. */
+  action?: { label: string; run: () => void };
 }
 
 export interface KeyboardShortcut {

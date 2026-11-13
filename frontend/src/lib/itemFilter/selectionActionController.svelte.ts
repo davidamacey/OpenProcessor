@@ -17,6 +17,7 @@ import { getClusters } from '$lib/api_clusters';
 import { apiErrorText } from '$lib/api_errors';
 import { runLabelOp } from '$lib/labelOps/runLabelOp';
 import type { Cluster } from '$lib/types';
+import type { JobView } from '$lib/types_jobs';
 import type { LabelOpAccepted } from '$lib/types_labelOps';
 import {
   batchExcludeSelection,
@@ -48,7 +49,18 @@ function isDryRun(r: unknown): r is SelectionDryRun {
   return !!r && typeof r === 'object' && (r as { dry_run?: unknown }).dry_run === true;
 }
 
-export function createSelectionActionController(base: () => ItemSelection) {
+export interface SelectionActionOptions {
+  /** True when the host moves on as soon as the write is queued (the label-then-next flow):
+   *  the dialog then closes at once and the job is followed in the background. */
+  detachOnQueued?: () => boolean;
+  /** The dialog closed while its job runs on (a click on Run in background, or `detachOnQueued`). */
+  ondetached?: () => void;
+}
+
+export function createSelectionActionController(
+  base: () => ItemSelection,
+  options: SelectionActionOptions = {},
+) {
   let action = $state<SelectionActionId | null>(null);
   let snapshot: ItemSelection = {};
   let classId = $state<number | null>(null);
@@ -64,7 +76,14 @@ export function createSelectionActionController(base: () => ItemSelection) {
   let error = $state<string | null>(null);
   let confirmed = $state(false);
   let result = $state<SelectionActionResult | null>(null);
+  /** The served job of a queued label or move: its state, queue position and progress. */
+  let job = $state<JobView | null>(null);
+  /** The dialog is closed while the job is still followed ("Run in background"). */
+  let detached = $state(false);
   let inflight: AbortController | null = null;
+  /** Bumped by every `open` and `cancel`: a job followed in the background must not touch
+   *  the state of a dialog opened after it. */
+  let session = 0;
 
   function selection(): ItemSelection {
     const sel: ItemSelection = { ...snapshot };
@@ -122,6 +141,9 @@ export function createSelectionActionController(base: () => ItemSelection) {
   }
 
   async function open(next: SelectionActionId): Promise<void> {
+    session += 1;
+    detached = false;
+    job = null;
     action = next;
     snapshot = structuredClone($state.snapshot(base()));
     confirmed = false;
@@ -140,20 +162,61 @@ export function createSelectionActionController(base: () => ItemSelection) {
     if (optionsError) error = optionsError;
   }
 
-  function summarizeExclusion(body: ExcludeBody): string {
-    const n = body.excluded ?? body.unexcluded ?? body.updated_ids.length;
-    return `${action === 'exclude' ? 'Ignored' : 'Restored'} ${n}`;
-  }
-
   const canConfirm = $derived(
     action != null && selected != null && selected > 0 && !loading && !confirmed,
   );
+
+  /** Follows the queued label or move to its end and records its undo; returns the summary. */
+  async function followWrite(
+    doing: 'label' | 'move',
+    accepted: LabelOpAccepted,
+    signal: AbortSignal,
+    mine: number,
+  ): Promise<string> {
+    job = null;
+    if (options.detachOnQueued?.() && accepted.job_id != null) detach();
+    const out = await runLabelOp(accepted, {
+      signal,
+      onUpdate: (j) => {
+        if (mine === session) job = j;
+      },
+    });
+    // A selection names no ids; the page reloads to show the write.
+    undoStore.recordLabelOp(out.opId, []);
+    const verb = doing === 'label' ? 'Labeled' : 'Moved';
+    return out.conflicts > 0
+      ? `${verb} ${out.updated} (${out.conflicts} blocked)`
+      : `${verb} ${out.updated}`;
+  }
+
+  function finishExclusion(doing: SelectionActionId | null, body: ExcludeBody): string {
+    if (doing === 'exclude') undoStore.recordExclusion(body.updated_ids);
+    else undoStore.recordUnexclusion(body.updated_ids);
+    const n = body.excluded ?? body.unexcluded ?? body.updated_ids.length;
+    return `${doing === 'exclude' ? 'Ignored' : 'Restored'} ${n}`;
+  }
+
+  function toastDone(doing: SelectionActionId | null, summary: string): void {
+    const queued = doing === 'label' || doing === 'move';
+    toastStore.push({
+      kind: 'success',
+      text: `${summary}.`,
+      ...(queued
+        ? {
+            ttl_ms: 8000,
+            action: { label: 'Undo', run: () => void undoStore.undoLast() },
+          }
+        : {}),
+    });
+  }
 
   async function confirm(): Promise<void> {
     if (!canConfirm) return;
     inflight?.abort();
     const ctrl = new AbortController();
     inflight = ctrl;
+    const mine = session;
+    const doing = action;
     loading = true;
     error = null;
     try {
@@ -162,36 +225,43 @@ export function createSelectionActionController(base: () => ItemSelection) {
         error = 'The server answered a dry run; nothing was written.';
         return;
       }
-      let summary: string;
-      if (action === 'label' || action === 'move') {
-        const out = await runLabelOp(res as LabelOpAccepted, { signal: ctrl.signal });
-        // A selection names no ids; the page reloads to show the write.
-        undoStore.recordLabelOp(out.opId, []);
-        const verb = action === 'label' ? 'Labeled' : 'Moved';
-        summary =
-          out.conflicts > 0
-            ? `${verb} ${out.updated} (${out.conflicts} blocked)`
-            : `${verb} ${out.updated}`;
-      } else {
-        const body = res as ExcludeBody;
-        if (action === 'exclude') undoStore.recordExclusion(body.updated_ids);
-        else undoStore.recordUnexclusion(body.updated_ids);
-        summary = summarizeExclusion(body);
-      }
+      const summary =
+        doing === 'label' || doing === 'move'
+          ? await followWrite(doing, res as LabelOpAccepted, ctrl.signal, mine)
+          : finishExclusion(doing, res as ExcludeBody);
+      toastDone(doing, summary);
+      if (mine !== session) return;
       confirmed = true;
       result = { summary };
-      toastStore.success(`${result.summary}.`);
     } catch (e) {
-      error = apiErrorText(e);
+      if (mine === session) error = apiErrorText(e);
+      else toastStore.error(apiErrorText(e));
     } finally {
       if (inflight === ctrl) inflight = null;
-      loading = false;
+      if (mine === session) {
+        loading = false;
+        if (error) detached = false;
+      }
     }
   }
 
+  function detach(): void {
+    if (detached) return;
+    detached = true;
+    options.ondetached?.();
+  }
+
+  /** Closes the dialog and lets the queued job run on; its end shows as a toast. */
+  function runInBackground(): void {
+    if (loading && job) detach();
+  }
+
   function cancel(): void {
+    session += 1;
     inflight?.abort();
     inflight = null;
+    detached = false;
+    job = null;
     action = null;
     selected = null;
     error = null;
@@ -221,6 +291,12 @@ export function createSelectionActionController(base: () => ItemSelection) {
     },
     get canConfirm() {
       return canConfirm;
+    },
+    get job() {
+      return job;
+    },
+    get detached() {
+      return detached;
     },
     get classId() {
       return classId;
@@ -264,6 +340,7 @@ export function createSelectionActionController(base: () => ItemSelection) {
     open,
     refresh,
     confirm,
+    runInBackground,
     cancel,
   };
 }

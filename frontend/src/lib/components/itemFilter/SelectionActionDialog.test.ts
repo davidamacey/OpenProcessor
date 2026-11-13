@@ -13,11 +13,15 @@ vi.mock('$lib/api_select', async () => {
   };
 });
 
+vi.mock('$lib/api_jobs', () => ({ getJob: vi.fn() }));
+
+import { getJob } from '$lib/api_jobs';
 import { ApiError } from '$lib/api_errors';
 import { batchExcludeSelection, bulkLabelSelection } from '$lib/api_select';
 import SelectionActionDialog from './SelectionActionDialog.svelte';
 import { createSelectionActionController } from '$lib/itemFilter/selectionActionController.svelte';
 import { classesStore } from '$stores/classes.svelte';
+import { toastStore } from '$stores/toast.svelte';
 import { undoStore } from '$stores/undo.svelte';
 import type { RegistryClass } from '$lib/types_classes';
 
@@ -28,7 +32,7 @@ const prevClasses = classesStore.classes;
 const tick = () => new Promise((r) => setTimeout(r, 0));
 const q = (sel: string) => target.querySelector<HTMLElement>(sel);
 const apply = () =>
-  [...target.querySelectorAll('button')].find((b) => b.textContent?.includes('Apply'))!;
+  [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].at(-1)!;
 
 function mountDialog(onapplied = vi.fn()) {
   const controller = createSelectionActionController(() => ({
@@ -135,5 +139,68 @@ describe('SelectionActionDialog', () => {
       'selection matches more than 20000 items',
     );
     expect(apply().disabled).toBe(true);
+  });
+
+  it('a queued label shows the served state and the jobs ahead, never a bare "Working…"', async () => {
+    vi.mocked(bulkLabelSelection)
+      .mockResolvedValueOnce({ dry_run: true, selected: 24 })
+      .mockResolvedValueOnce({ op_id: 'op1', job_id: 'job1' });
+    vi.mocked(getJob).mockResolvedValue({
+      id: 'job1',
+      kind: 'label_op',
+      status: 'queued',
+      queue: 'interactive',
+      queue_ahead: 2,
+      progress: {},
+    } as never);
+    const { controller } = mountDialog();
+    controller.classId = 5;
+    await controller.open('label');
+    flushSync();
+    apply().click();
+    await tick();
+    await tick();
+    flushSync();
+    expect(q('[data-testid="selection-job"]')!.textContent).toContain('Queued, 2 ahead');
+    expect(apply().textContent).toContain('Queued, 2 ahead');
+    expect(apply().textContent).not.toContain('Working');
+    expect(q('[data-testid="selection-background"]')).not.toBeNull();
+    controller.cancel();
+  });
+
+  it('Run in background closes the dialog, keeps the job followed and toasts the end with Undo', async () => {
+    vi.mocked(bulkLabelSelection)
+      .mockResolvedValueOnce({ dry_run: true, selected: 24 })
+      .mockResolvedValueOnce({ op_id: 'op1', job_id: 'job1' });
+    vi.mocked(getJob)
+      .mockResolvedValueOnce({
+        id: 'job1',
+        status: 'queued',
+        queue_ahead: 1,
+        progress: {},
+      } as never)
+      .mockResolvedValue({
+        id: 'job1',
+        status: 'completed',
+        progress: {},
+        result: { op_id: 'op1', updated: 24, conflicts: 0 },
+      } as never);
+    const { controller, onapplied } = mountDialog();
+    controller.classId = 5;
+    await controller.open('label');
+    flushSync();
+    apply().click();
+    await tick();
+    await tick();
+    flushSync();
+    q('[data-testid="selection-background"]')!.click();
+    flushSync();
+    expect(q('[role="dialog"]')).toBeNull();
+    await new Promise((r) => setTimeout(r, 900));
+    flushSync();
+    expect(onapplied).toHaveBeenCalled();
+    const toast = toastStore.toasts.find((t) => t.text.startsWith('Labeled 24'));
+    expect(toast?.action?.label).toBe('Undo');
+    expect(undoStore.stack).toHaveLength(1);
   });
 });

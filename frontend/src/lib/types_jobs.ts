@@ -39,6 +39,9 @@ export interface JobView {
   scope: string;
   queue: string;
   params?: Record<string, unknown> | null;
+  /** Only on `GET /jobs/{id}` and only while `queued`: the jobs queued before this one on its
+   *  queue; null otherwise. */
+  queue_ahead?: number | null;
   progress: Record<string, unknown>;
   progress_updated_at: string | null;
   result: Record<string, unknown> | null;
