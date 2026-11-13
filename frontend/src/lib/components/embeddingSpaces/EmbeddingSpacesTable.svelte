@@ -52,15 +52,15 @@
           data-testid="space-row"
           data-space={s.space_key}
         >
-          <td class="py-1.5 pr-3 font-mono text-meta">{s.space_key}</td>
+          <td class="py-1.5 pr-3 text-meta"><code>{s.space_key}</code></td>
           <td class="py-1.5 pr-3 text-meta">{s.model_key} v{s.model_version}</td>
-          <td class="py-1.5 pr-3 font-mono text-meta">{s.dim}</td>
+          <td class="py-1.5 pr-3 text-meta tabular-nums">{s.dim}</td>
           <td class="py-1.5 pr-3 text-meta" data-testid="space-role">{s.role}</td>
           <td class="py-1.5 pr-3 text-meta" data-testid="space-status">{s.status}</td>
           <td class="py-1.5 pr-3 text-meta text-fg-2"
             >{s.ready_at ? formatTimestamp(s.ready_at) : '—'}</td
           >
-          <td class="py-1.5 pr-3 font-mono text-meta">{s.docs_with_vector ?? '—'}</td>
+          <td class="py-1.5 pr-3 text-meta tabular-nums">{s.docs_with_vector ?? '—'}</td>
           <td class="py-1.5 pr-3">
             {#if run}
               <ReindexRunProgress {run} />

@@ -85,9 +85,8 @@
             class="border-b border-line hover:bg-surface-1/40"
             data-testid="class-row-{cls.id}"
           >
-            <td
-              class="hidden px-2 py-1.5 lg:px-3 font-mono text-meta text-fg-2 lg:table-cell"
-              >{cls.id}</td
+            <td class="hidden px-2 py-1.5 lg:px-3 text-meta text-fg-2 lg:table-cell"
+              ><code>{cls.id}</code></td
             >
             <td class="px-2 py-1.5 lg:px-3">
               {#if editingId === cls.id}
@@ -142,13 +141,13 @@
                 placeholder="—"
                 aria-label="Hotkey for {cls.name}"
                 title="Single char keyboard shortcut for this class. Empty to clear."
-                class="w-10 rounded border border-line-strong bg-surface-1 px-1 py-0.5 text-center font-mono text-meta focus:border-accent focus:outline-none"
+                class="w-10 rounded border border-line-strong bg-surface-1 px-1 py-0.5 text-center text-meta focus:border-accent focus:outline-none"
                 onchange={(e) =>
                   void setHotkey(cls, (e.currentTarget as HTMLInputElement).value)}
                 disabled={busy}
               />
             </td>
-            <td class="px-2 py-1.5 lg:px-3 text-right font-mono">
+            <td class="px-2 py-1.5 lg:px-3 text-right">
               <span
                 class="rounded-md border px-1.5 py-0.5 text-meta {adequacyChipClass(
                   cls.adequacy,
@@ -165,7 +164,7 @@
               {/if}
             </td>
             <td
-              class="px-2 py-1.5 lg:px-3 text-right font-mono text-fg-2"
+              class="px-2 py-1.5 lg:px-3 text-right text-fg-2 tabular-nums"
               data-testid="item-count">{cls.count}</td
             >
             <td class="hidden px-2 py-1.5 lg:px-3 text-meta text-fg-3 lg:table-cell">

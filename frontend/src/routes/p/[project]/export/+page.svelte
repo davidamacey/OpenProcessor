@@ -117,7 +117,7 @@
       <ul class="flex flex-wrap gap-2 text-meta">
         {#each hddSources as src (src.key)}
           <li class="rounded-md border border-line-strong bg-surface-1/40 px-2 py-1">
-            <span class="font-mono text-fg-2">{src.key}</span>
+            <code class="text-fg-2">{src.key}</code>
             <span class="ml-1 text-fg-3">{src.doc_count.toLocaleString()}</span>
           </li>
         {/each}

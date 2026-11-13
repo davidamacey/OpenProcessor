@@ -206,7 +206,7 @@
               data-job-id={r.job_id}
             >
               <div class="flex items-center justify-between gap-2">
-                <span class="truncate font-mono" title={r.job_id}>{r.job_id}</span>
+                <code class="truncate" title={r.job_id}>{r.job_id}</code>
                 <span class="shrink-0 text-fg-3">{r.state}</span>
               </div>
               <div class="text-caption text-fg-3">
@@ -227,7 +227,7 @@
     <section class="min-w-0" data-testid="results">
       {#if s.viewJob}
         <h2 class="mb-3 text-body font-medium text-fg-2">
-          Results · <span class="font-mono">{s.viewJob}</span>
+          Results · <code>{s.viewJob}</code>
         </h2>
         {#if s.matrixError}
           <p

@@ -52,7 +52,7 @@
       <tbody>
         {#each preview.sources as s (s.project)}
           <tr class="border-t border-line">
-            <td class="px-2 py-1 font-mono text-fg-1">{s.project}</td>
+            <td class="px-2 py-1 text-fg-1"><code>{s.project}</code></td>
             <td class="px-2 py-1 text-right tabular-nums">{formatCount(s.images)}</td>
             <td class="px-2 py-1 text-right tabular-nums">{formatCount(s.items)}</td>
             <td class="px-2 py-1 text-right tabular-nums"
@@ -72,7 +72,7 @@
     data-testid="combine-preview-target"
   >
     <p class="mb-1 text-fg-2">
-      Target <span class="font-mono text-fg-1">{target.slug ?? '—'}</span>
+      Target <code class="text-fg-1">{target.slug ?? '—'}</code>
       {#if target.slug_available === false}
         <span class="ml-1 text-danger-text" data-testid="combine-slug-unavailable"
           >slug not available</span

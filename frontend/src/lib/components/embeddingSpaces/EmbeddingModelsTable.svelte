@@ -29,10 +29,10 @@
           data-testid="model-row"
           data-model={m.model_key}
         >
-          <td class="py-1.5 pr-3 font-mono text-meta">{m.model_key} v{m.version}</td>
+          <td class="py-1.5 pr-3 text-meta"><code>{m.model_key} v{m.version}</code></td>
           <td class="py-1.5 pr-3 text-meta">{m.modalities.join(', ')}</td>
-          <td class="py-1.5 pr-3 font-mono text-meta">{m.native_dim}</td>
-          <td class="py-1.5 pr-3 font-mono text-meta"
+          <td class="py-1.5 pr-3 text-meta tabular-nums">{m.native_dim}</td>
+          <td class="py-1.5 pr-3 text-meta tabular-nums"
             >{m.matryoshka_dims.join(', ') || '—'}</td
           >
           <td class="py-1.5 pr-3 text-meta">{m.licence}</td>

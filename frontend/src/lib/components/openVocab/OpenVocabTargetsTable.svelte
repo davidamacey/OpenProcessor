@@ -98,7 +98,7 @@
     {#each targets as t, i (i)}
       <li class="rounded border border-line p-3" data-testid="target-row" data-index={i}>
         <div class="mb-2 flex flex-wrap items-center gap-2">
-          <span class="font-mono text-meta text-fg-3">#{i}</span>
+          <span class="text-meta text-fg-3 tabular-nums">#{i}</span>
           <span class="truncate text-body text-fg-1">{t.prompt || 'untitled target'}</span
           >
           <span class="grow"></span>
@@ -138,7 +138,7 @@
                 {#if r.help}<p class="text-meta text-fg-2">{r.help}</p>{/if}
                 <input
                   id="target-{i}-class-name"
-                  class="input input-sm max-w-md font-mono"
+                  class="input input-sm max-w-md"
                   list="open-vocab-class-names"
                   value={t.class_name ?? ''}
                   {readonly}

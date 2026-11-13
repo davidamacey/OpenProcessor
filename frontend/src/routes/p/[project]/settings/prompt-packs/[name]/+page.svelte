@@ -113,11 +113,11 @@
               <summary class="cursor-pointer text-fg-2">Placeholders</summary>
               <dl class="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
                 {#each ed.schema.placeholders as p (p.name)}
-                  <dt class="font-mono text-info-text">{`{${p.name}}`}</dt>
+                  <dt class="text-info-text"><code>{`{${p.name}}`}</code></dt>
                   <dd class="text-fg-2">
                     {p.meaning}
-                    {#if p.example}<span class="block font-mono text-fg-3"
-                        >e.g. {p.example}</span
+                    {#if p.example}<span class="block text-fg-3"
+                        >e.g. <code>{p.example}</code></span
                       >{/if}
                   </dd>
                 {/each}

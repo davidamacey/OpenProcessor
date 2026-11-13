@@ -37,7 +37,7 @@
       >
         <span class="w-5 text-right text-meta text-fg-3">{i + 1}.</span>
         <span class="text-fg-1">{nameOf(s.project)}</span>
-        <span class="font-mono text-caption text-fg-3">{s.project}</span>
+        <code class="text-caption text-fg-3">{s.project}</code>
         <span class="grow"></span>
         <label class="flex items-center gap-1 text-meta text-fg-2">
           Labels
@@ -124,7 +124,7 @@
       />
       {#if slugPattern}
         <span class="mt-0.5 block text-caption text-fg-3" data-testid="combine-slug-hint"
-          >Pattern: <code class="font-mono">{slugPattern}</code></span
+          >Pattern: <code>{slugPattern}</code></span
         >
       {/if}
     </label>

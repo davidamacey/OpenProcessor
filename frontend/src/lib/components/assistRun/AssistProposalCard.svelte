@@ -103,7 +103,7 @@
               style="width: {(d.votes / maxVotes) * 100}%"
             ></span>
           </span>
-          <span class="w-8 shrink-0 text-right font-mono text-fg-2">{d.votes}</span>
+          <span class="w-8 shrink-0 text-right text-fg-2 tabular-nums">{d.votes}</span>
           <button
             type="button"
             class="btn-sm"

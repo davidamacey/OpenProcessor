@@ -137,7 +137,7 @@
             <p class="text-meta text-fg-2" data-testid="profile-effective">
               {ed.viewing ? `Revision ${ed.viewing.revision}` : 'The saved revision'}:
               finds regions with
-              <span class="font-mono text-fg-1"
+              <span class="text-fg-1"
                 >{eff.legs.length > 0 ? eff.legs.join(' + ') : 'nothing'}</span
               >;
               {eff.reads_text ? 'reads text' : 'reads no text'}{eff.text_hint_active

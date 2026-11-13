@@ -57,8 +57,8 @@
               {/if}
             </td>
             <td class="py-1.5 pr-3">{scopeLabels[c.scope] ?? c.scope}</td>
-            <td class="py-1.5 pr-3 font-mono">{c.current ?? '—'}</td>
-            <td class="py-1.5 pr-3 font-mono">{c.dims ?? '—'}</td>
+            <td class="py-1.5 pr-3">{c.current ?? '—'}</td>
+            <td class="py-1.5 pr-3 tabular-nums">{c.dims ?? '—'}</td>
             <td class="py-1.5 pr-3">
               {#each c.choices as ch (ch.id)}
                 <span class="mr-1 inline-block">{ch.label}</span>

@@ -20,7 +20,9 @@
 <section class="rounded-md border border-line bg-surface-1">
   <header class="flex items-center justify-between gap-3 border-b border-line px-3 py-2">
     <h2 class="text-body font-semibold text-fg-1">Past runs</h2>
-    <span class="font-mono text-meta text-fg-3">{ctl.runs.length} / {ctl.runsTotal}</span>
+    <span class="text-meta text-fg-3 tabular-nums"
+      >{ctl.runs.length} / {ctl.runsTotal}</span
+    >
   </header>
   {#if ctl.runsError}
     <p class="px-3 py-2 text-meta text-danger-text">
@@ -53,14 +55,11 @@
             {@const mapDisplay = bestMapDisplay(r)}
             <tr class="border-t border-line hover:bg-surface-2/50">
               <td class="px-3 py-2">
-                <div class="truncate font-mono text-meta text-fg-1" title={r.job_id}>
-                  {r.job_id}
+                <div class="truncate text-meta text-fg-1" title={r.job_id}>
+                  <code>{r.job_id}</code>
                 </div>
                 {#if r.campaign_id}
-                  <div
-                    class="truncate font-mono text-caption text-fg-3"
-                    title={r.campaign_id}
-                  >
+                  <div class="truncate text-caption text-fg-3" title={r.campaign_id}>
                     <Icon
                       name="corner-down-right"
                       size={12}
@@ -70,7 +69,7 @@
                 {/if}
               </td>
               <td class="px-3 py-2">
-                <span class="font-mono text-meta text-fg-2">{familyLabel(r)}</span>
+                <span class="text-meta text-fg-2">{familyLabel(r)}</span>
               </td>
               <td class="px-3 py-2">
                 <span
@@ -82,7 +81,7 @@
                 </span>
               </td>
               <td
-                class="px-3 py-2 text-right font-mono text-meta text-fg-1"
+                class="px-3 py-2 text-right text-meta text-fg-1 tabular-nums"
                 title={mapDisplay.source === 'test'
                   ? 'test split (frozen holdout)'
                   : mapDisplay.source === 'val'
@@ -90,7 +89,7 @@
                     : 'no eval served yet'}
               >
                 {mapDisplay.value?.toFixed(3) ?? '—'}
-                <span class="block font-sans text-caption text-fg-3">
+                <span class="block text-caption text-fg-3">
                   {mapDisplay.source === 'test'
                     ? 'test'
                     : mapDisplay.source === 'val'

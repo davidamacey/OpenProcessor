@@ -161,8 +161,7 @@
       class="rounded-md border border-danger/40 bg-danger/10 px-4 py-3 text-body text-danger-text"
     >
       <strong>API unavailable.</strong> Check that the OpenProcessor API is reachable from
-      <code class="font-mono"
-        >{apiBase || (typeof window !== 'undefined' ? window.location.host : '')}</code
+      <code>{apiBase || (typeof window !== 'undefined' ? window.location.host : '')}</code
       >.
     </div>
   {/if}
@@ -274,18 +273,18 @@
     {#if exportResult}
       <dl class="mb-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-meta">
         <dt class="text-fg-3">Status</dt>
-        <dd class="font-mono text-fg-1">{exportResult.status}</dd>
+        <dd class="text-fg-1">{exportResult.status}</dd>
         {#if exportResult.export_dir}
           <dt class="text-fg-3">Export dir</dt>
-          <dd class="break-all font-mono text-fg-1">{exportResult.export_dir}</dd>
+          <dd class="break-all text-fg-1"><code>{exportResult.export_dir}</code></dd>
         {/if}
         {#if exportResult.dataset_sha}
           <dt class="text-fg-3">Dataset SHA</dt>
-          <dd class="break-all font-mono text-fg-1">{exportResult.dataset_sha}</dd>
+          <dd class="break-all text-fg-1"><code>{exportResult.dataset_sha}</code></dd>
         {/if}
         {#if exportResult.split_counts}
           <dt class="text-fg-3">Split counts</dt>
-          <dd class="font-mono text-fg-1">
+          <dd class="text-fg-1 tabular-nums">
             {Object.entries(exportResult.split_counts)
               .map(([k, v]) => `${k}: ${v}`)
               .join(' · ')}
@@ -293,7 +292,7 @@
         {/if}
         {#if exportResult.finished_at}
           <dt class="text-fg-3">Finished</dt>
-          <dd class="font-mono text-fg-1">
+          <dd class="text-fg-1 tabular-nums">
             {formatTimestamp(exportResult.finished_at)}
           </dd>
         {/if}

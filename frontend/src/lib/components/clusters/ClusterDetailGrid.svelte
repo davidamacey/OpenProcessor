@@ -127,7 +127,7 @@
   class="flex items-center justify-between gap-2 border-t border-line px-4 py-2 text-body"
   data-testid="cluster-status-bar"
 >
-  <span class="font-mono text-meta text-fg-3">
+  <span class="text-meta text-fg-3 tabular-nums">
     <span
       title="Loaded / reviewable members matching the current filters. Test-holdout and ignored crops are never listed, so this can be lower than the header's cluster size."
       >{listedText(view.pagerState)}</span
@@ -136,7 +136,7 @@
         >· {view.sel.size} selected</span
       >{/if}
   </span>
-  <span class="font-mono text-meta text-fg-2">
+  <span class="text-meta text-fg-2 tabular-nums">
     {statusBarText(view.pagerState)}
   </span>
 </div>

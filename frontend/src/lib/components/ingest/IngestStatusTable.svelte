@@ -62,7 +62,7 @@
   {:else}
     <p class="mb-2 text-meta text-fg-2">
       Total images:
-      <span class="font-mono text-fg-1" data-testid="ingest-status-total"
+      <span class="text-fg-1 tabular-nums" data-testid="ingest-status-total"
         >{status.total}</span
       >
     </p>
@@ -79,8 +79,8 @@
         <tbody>
           {#each status.by_source as bucket (bucket.key)}
             <tr class="border-t border-line">
-              <td class="py-1 font-mono text-fg-2">{bucket.key}</td>
-              <td class="py-1 font-mono text-fg-2">{bucket.doc_count}</td>
+              <td class="py-1 text-fg-2"><code>{bucket.key}</code></td>
+              <td class="py-1 text-fg-2 tabular-nums">{bucket.doc_count}</td>
             </tr>
           {/each}
         </tbody>

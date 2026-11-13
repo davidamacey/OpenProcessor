@@ -99,7 +99,7 @@
               data-testid="clone-settings-axis-{a}"
               onchange={(e) => toggle(a, (e.currentTarget as HTMLInputElement).checked)}
             />
-            <span class="font-mono text-meta">{a}</span>
+            <code class="text-meta">{a}</code>
           </label>
         {/each}
       </fieldset>

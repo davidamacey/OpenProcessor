@@ -278,7 +278,7 @@
 
     {#if noSlot}
       <span
-        class="pointer-events-none absolute top-1 left-1 max-w-[40%] truncate rounded-sm border border-fg-3/60 bg-surface-3/70 px-1 py-0.5 font-mono text-caption text-fg-1"
+        class="pointer-events-none absolute top-1 left-1 max-w-[40%] truncate rounded-sm border border-fg-3/60 bg-surface-3/70 px-1 py-0.5 text-caption text-fg-1"
         title="{activeSlot?.label.title ??
           'Slot'} marked as not visible by a human reviewer"
       >
@@ -307,7 +307,7 @@
         ></div>
       {/each}
       <span
-        class="pointer-events-none absolute top-1 left-1 max-w-[40%] truncate rounded-sm border border-accent/60 bg-accent/30 px-1 py-0.5 font-mono text-caption text-white"
+        class="pointer-events-none absolute top-1 left-1 max-w-[40%] truncate rounded-sm border border-accent/60 bg-accent/30 px-1 py-0.5 text-caption text-white"
       >
         {activeSlot?.label.singular ?? 'box'}
       </span>
@@ -315,7 +315,7 @@
 
     {#if conf}
       <span
-        class="absolute right-1 bottom-1 rounded-sm bg-black/60 px-1.5 py-0.5 font-mono text-caption text-white"
+        class="absolute right-1 bottom-1 rounded-sm bg-black/60 px-1.5 py-0.5 text-caption text-white tabular-nums"
       >
         {conf}
       </span>
@@ -324,7 +324,7 @@
     {#if rankClarityLabel}
       <span
         data-testid="rank-clarity-chip"
-        class="absolute bottom-1 left-1 rounded-sm bg-black/60 px-1.5 py-0.5 font-mono text-caption text-fg-1"
+        class="absolute bottom-1 left-1 rounded-sm bg-black/60 px-1.5 py-0.5 text-caption text-fg-1"
         title="Size rank among the objects in its photo, and how sharp it is"
       >
         {rankClarityLabel}
@@ -425,7 +425,7 @@
     {/each}
     {#if hasClass}
       <span
-        class="shrink-0 rounded-sm border px-1 py-0.5 font-mono text-caption font-medium {badge.cls}"
+        class="shrink-0 rounded-sm border px-1 py-0.5 text-caption font-medium {badge.cls}"
         title="Label source: {badge.text.replace(/ ·$/, '')}{badge.unvalidated
           ? ' — not yet validated'
           : ''}"
@@ -452,7 +452,7 @@
     {/if}
     {#if hasClass && crop.class_confidence != null}
       <span
-        class="shrink-0 font-mono text-caption text-fg-3"
+        class="shrink-0 text-caption text-fg-3 tabular-nums"
         title="{crop.class_confidence_source === 'vlm'
           ? 'VLM'
           : crop.class_confidence_source === 'model'

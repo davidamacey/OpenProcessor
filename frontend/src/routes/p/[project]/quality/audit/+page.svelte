@@ -76,17 +76,21 @@
       data-testid="audit-summary"
     >
       <span
-        ><span class="font-mono text-title" data-testid="audit-audited">{r.audited}</span>
+        ><span class="text-title tabular-nums" data-testid="audit-audited"
+          >{r.audited}</span
+        >
         <span class="text-fg-2">labeled by a human</span></span
       >
       <span
-        ><span class="font-mono text-title" data-testid="audit-pending">{r.pending}</span>
+        ><span class="text-title tabular-nums" data-testid="audit-pending"
+          >{r.pending}</span
+        >
         <span class="text-fg-2">still waiting</span></span
       >
       <ul class="flex flex-wrap gap-2 text-meta" data-testid="audit-outcomes">
         {#each Object.entries(r.outcomes) as [outcome, n] (outcome)}
           <li class="rounded border border-line-strong px-1.5 py-0.5 text-fg-2">
-            {humanizeId(outcome)}: <span class="font-mono">{n}</span>
+            {humanizeId(outcome)}: <span class="tabular-nums">{n}</span>
           </li>
         {/each}
       </ul>

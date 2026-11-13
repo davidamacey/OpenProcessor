@@ -51,7 +51,7 @@
     <p class="text-meta text-fg-3">Loading...</p>
   {:else}
     <div class="flex flex-wrap items-center gap-3 text-meta">
-      <span class="font-mono text-fg-1" data-testid="detections-total"
+      <span class="text-fg-1 tabular-nums" data-testid="detections-total"
         >{fmt(s.total)} detections</span
       >
       <span class="text-fg-2"
@@ -84,10 +84,10 @@
             <th class="py-0.5 text-right font-normal">Not embedded</th>
           </tr>
         </thead>
-        <tbody class="font-mono">
+        <tbody class="tabular-nums">
           {#each s.by_label as l, i (i)}
             <tr class="border-t border-line">
-              <td class="py-0.5 pr-3 font-sans text-fg-1">{l.name}</td>
+              <td class="py-0.5 pr-3 text-fg-1">{l.name}</td>
               <td class="py-0.5 pr-3 text-right">{fmt(l.count)}</td>
               <td class="py-0.5 pr-3 text-right">{fmt(l.embedding.embedded)}</td>
               <td class="py-0.5 text-right">{fmt(l.embedding.not_embedded)}</td>

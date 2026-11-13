@@ -65,7 +65,7 @@
       {c.rank_scope === 'common'
         ? `the ${c.common_classes.length} class${c.common_classes.length === 1 ? '' : 'es'} every model covers`
         : "each model's own classes (not comparable)"}
-      {#if c.profile}· profile <span class="font-mono">{c.profile}</span>{/if}
+      {#if c.profile}· profile <code>{c.profile}</code>{/if}
     </div>
     {#if protocolText(c.thresholds)}
       <p
@@ -112,7 +112,7 @@
                 >{formatMetric(r.rank, 'rank')}</td
               >
               <td class="min-w-[14rem] px-3 py-2 text-meta">
-                <div class="font-mono">{r.display_name}</div>
+                <div>{r.display_name}</div>
                 <div class="text-caption text-fg-3">
                   {r.source} · {r.runtime}{r.imgsz ? ` · ${r.imgsz}px` : ''} · mapping {r
                     .class_mapping.method}
@@ -156,7 +156,7 @@
         data-testid="comparison-failed"
       >
         {#each c.failed as f (f.model)}
-          <li><span class="font-mono">{f.model}</span> — {f.error ?? 'failed'}</li>
+          <li><code>{f.model}</code> — {f.error ?? 'failed'}</li>
         {/each}
       </ul>
     {/if}
@@ -183,7 +183,7 @@
             <th class="px-3 py-2 text-left">Class</th>
             <th class="px-2 py-2 text-right">Objects</th>
             {#each c.models as r (r.model)}
-              <th class="px-2 py-2 text-right font-mono font-normal">{r.display_name}</th>
+              <th class="px-2 py-2 text-right font-normal">{r.display_name}</th>
             {/each}
           </tr>
         </thead>
@@ -191,7 +191,7 @@
           {#each c.eval_classes as ec (ec.eval_class_id)}
             <tr class="border-t border-line" data-class-id={ec.eval_class_id}>
               <td class="px-3 py-1.5 text-meta">
-                <span class="font-mono">{ec.name}</span>
+                <span>{ec.name}</span>
                 {#if c.common_classes.includes(ec.eval_class_id)}
                   <span class="ml-1 text-caption text-fg-3">common</span>
                 {/if}
@@ -225,7 +225,7 @@
           {#each c.models as r (r.model)}
             {#if r.coverage.unmapped_model_classes.length}
               <li>
-                <span class="font-mono">{r.display_name}</span>:
+                <span>{r.display_name}</span>:
                 {r.coverage.unmapped_model_classes
                   .map(
                     (u) =>

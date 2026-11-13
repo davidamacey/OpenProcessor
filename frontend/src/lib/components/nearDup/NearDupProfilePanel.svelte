@@ -38,7 +38,7 @@
       {@const d = ctl.draft}
       {@const s = ctl.seeded}
       <p class="text-meta text-fg-2">
-        Active: <span class="font-mono">{ctl.name}</span> revision {ctl.revision}
+        Active: <code>{ctl.name}</code> revision {ctl.revision}
       </p>
       <div class="grid gap-4 md:grid-cols-2">
         <fieldset class="flex flex-col gap-2 rounded border border-line p-3">

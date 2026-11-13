@@ -82,8 +82,11 @@
               </div>
             {/if}
           </td>
-          <td class="px-2 py-1.5 text-right font-mono">{row.boxes.toLocaleString()}</td>
-          <td class="px-2 py-1.5 text-right font-mono">{row.images.toLocaleString()}</td>
+          <td class="px-2 py-1.5 text-right tabular-nums">{row.boxes.toLocaleString()}</td
+          >
+          <td class="px-2 py-1.5 text-right tabular-nums"
+            >{row.images.toLocaleString()}</td
+          >
           <td class="px-2 py-1.5">
             {#if row.suggestion}
               <span

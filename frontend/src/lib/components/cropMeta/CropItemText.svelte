@@ -47,11 +47,11 @@
       {#each crop.item_text_lines as line, i (i)}
         <li class="flex items-center gap-1.5">
           <span
-            class="rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 font-mono text-fg-1"
+            class="rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-fg-1"
           >
             {line.text || '∅'}
           </span>
-          <span class="font-mono text-caption text-fg-3">{pct(line.confidence)}</span>
+          <span class="text-caption text-fg-3 tabular-nums">{pct(line.confidence)}</span>
         </li>
       {/each}
     </ul>

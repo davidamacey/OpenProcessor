@@ -100,42 +100,42 @@
     <label class="text-body font-medium text-fg-1" for="pack-field-{field.field}"
       >{field.label}</label
     >
-    <code class="font-mono text-caption text-fg-3">{field.field}</code>
+    <code class="text-caption text-fg-3">{field.field}</code>
   </div>
   {#if field.help}<p class="text-meta text-fg-2">{field.help}</p>{/if}
 
   {#if field.allowed_placeholders.length > 0 || field.expected_reply_keys.length > 0 || field.optional_reply_keys.length > 0}
     <div class="flex flex-wrap items-center gap-1 text-caption">
       {#each field.required_placeholders as p (p)}
-        <span
-          class="rounded border border-info/50 bg-info/10 px-1.5 py-0.5 font-mono text-info-text"
+        <code
+          class="rounded border border-info/50 bg-info/10 px-1.5 py-0.5 text-info-text"
           data-testid="placeholder-chip"
           data-required="true"
-          title="required placeholder">{`{${p}}`} required</span
+          title="required placeholder">{`{${p}}`} required</code
         >
       {/each}
       {#each optionalPlaceholders as p (p)}
-        <span
-          class="rounded border border-info/30 px-1.5 py-0.5 font-mono text-info-text"
+        <code
+          class="rounded border border-info/30 px-1.5 py-0.5 text-info-text"
           data-testid="placeholder-chip"
           data-required="false"
-          title="allowed placeholder">{`{${p}}`}</span
+          title="allowed placeholder">{`{${p}}`}</code
         >
       {/each}
       {#if field.expected_reply_keys.length > 0 || field.optional_reply_keys.length > 0}
         <span class="ml-1 text-fg-3">reply keys:</span>
       {/if}
       {#each field.expected_reply_keys as k (k)}
-        <span
-          class="rounded border border-line-strong px-1.5 py-0.5 font-mono text-fg-1"
-          data-testid="reply-key-chip">{k}</span
+        <code
+          class="rounded border border-line-strong px-1.5 py-0.5 text-fg-1"
+          data-testid="reply-key-chip">{k}</code
         >
       {/each}
       {#each field.optional_reply_keys as k (k)}
-        <span
-          class="rounded border border-dashed border-line-strong px-1.5 py-0.5 font-mono text-fg-2"
+        <code
+          class="rounded border border-dashed border-line-strong px-1.5 py-0.5 text-fg-2"
           data-testid="reply-key-chip"
-          data-optional="true">{k} optional</span
+          data-optional="true">{k} optional</code
         >
       {/each}
     </div>
@@ -240,7 +240,7 @@
         Unsupported field kind “{field.kind}”: shown read-only and saved unchanged.
       </p>
       <pre
-        class="max-h-48 overflow-auto rounded border border-line p-2 font-mono text-caption text-fg-2">{unknownText}</pre>
+        class="max-h-48 overflow-auto rounded border border-line p-2 text-caption text-fg-2">{unknownText}</pre>
     </div>
   {/if}
 

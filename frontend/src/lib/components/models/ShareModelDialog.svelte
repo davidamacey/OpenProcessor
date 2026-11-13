@@ -76,7 +76,7 @@
     <h3 class="mb-1 text-title font-semibold">
       {model.shared ? 'Stop sharing' : 'Share with other projects'}
     </h3>
-    <p class="mb-3 break-all font-mono text-meta text-fg-3">{model.name}</p>
+    <p class="mb-3 break-all text-meta text-fg-3"><code>{model.name}</code></p>
     <p class="mb-3 text-body text-fg-2" data-testid="share-model-text">
       {model.shared ? unshareConfirmText(model.name) : shareConfirmText(model.name)}
     </p>

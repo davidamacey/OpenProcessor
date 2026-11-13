@@ -120,16 +120,16 @@
   <Modal label="Promote to Triton" {onclose}>
     <h3 class="mb-3 text-title font-semibold">Promote to Triton</h3>
     {#if jobId}
-      <p class="mb-3 truncate font-mono text-caption text-fg-3" title={jobId}>
-        {jobId}
+      <p class="mb-3 truncate text-caption text-fg-3" title={jobId}>
+        <code>{jobId}</code>
       </p>
     {/if}
 
     {#if following && ctl.job}
       <div data-testid="promote-progress" class="mb-3 text-body">
         <p class="mb-2 text-meta text-fg-2">
-          Promoting <span class="font-mono">{ctl.job.triton_name}</span> — takes 2 to 3 minutes.
-          You can close this; it keeps running.
+          Promoting <code>{ctl.job.triton_name}</code> — takes 2 to 3 minutes. You can close
+          this; it keeps running.
         </p>
         <ol class="space-y-1">
           {#each PROMOTE_PHASES as phase, i (phase)}
@@ -250,7 +250,7 @@
               >
                 {#each gate.failures as f, i (f.code + (f.class_name ?? '') + i)}
                   <li>
-                    {#if f.class_name}<span class="font-mono">{f.class_name}:</span>{/if}
+                    {#if f.class_name}<span>{f.class_name}:</span>{/if}
                     {gateFailureMessage(f)}
                   </li>
                 {/each}

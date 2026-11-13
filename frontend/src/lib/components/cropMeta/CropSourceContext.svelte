@@ -115,14 +115,14 @@
     {#if crop.updated_at}
       <div>
         <span class="text-fg-3">updated:</span>
-        <span class="font-mono" title={crop.updated_at}
+        <span class="tabular-nums" title={crop.updated_at}
           >{formatTimestamp(crop.updated_at)}</span
         >
       </div>
     {/if}
     <div>
       <span class="text-fg-3">id:</span>
-      <span class="font-mono">{crop.id}</span>
+      <code>{crop.id}</code>
     </div>
   </div>
 {/if}

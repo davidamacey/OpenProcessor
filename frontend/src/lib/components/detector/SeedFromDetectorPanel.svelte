@@ -97,7 +97,7 @@
             <ul class="list-disc pl-5" data-testid="seed-created">
               {#each r.created as c (c.detector_label)}
                 <li class="text-fg-1">
-                  would create <span class="font-mono">{c.name}</span> (from {c.detector_label})
+                  would create <span>{c.name}</span> (from {c.detector_label})
                 </li>
               {/each}
             </ul>
@@ -108,7 +108,7 @@
             <ul class="list-disc pl-5" data-testid="seed-skipped">
               {#each r.skipped as s (s.detector_label)}
                 <li class="text-fg-2">
-                  skipped <span class="font-mono">{s.name}</span>: {humanizeId(s.reason)}
+                  skipped <span>{s.name}</span>: {humanizeId(s.reason)}
                 </li>
               {/each}
             </ul>
@@ -117,8 +117,7 @@
             <ul class="list-disc pl-5" data-testid="seed-conflicts">
               {#each r.conflicts as c (c.class_id_in_detector)}
                 <li class="text-warn-text">
-                  conflict on <span class="font-mono">{c.detector_label}</span> (detector
-                  class
+                  conflict on <span>{c.detector_label}</span> (detector class
                   {c.class_id_in_detector}): {humanizeId(c.reason)}
                 </li>
               {/each}

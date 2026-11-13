@@ -125,8 +125,8 @@
               >
                 <td class="py-1.5 pr-3">
                   <a
-                    class="font-mono text-accent-text hover:underline"
-                    href={resolve(editorPath(s.name))}>{s.name}</a
+                    class="text-accent-text hover:underline"
+                    href={resolve(editorPath(s.name))}><code>{s.name}</code></a
                   >
                   {#if s.active}
                     <span
@@ -144,7 +144,7 @@
                   {/if}
                 </td>
                 <td class="py-1.5 pr-3 text-meta text-fg-1">{s.display_name || '—'}</td>
-                <td class="py-1.5 pr-3 font-mono text-meta">
+                <td class="py-1.5 pr-3 text-meta tabular-nums">
                   {s.revision ?? '—'}{s.read_only ? ' · read-only' : ''}
                 </td>
                 <td class="py-1.5 pr-3 text-meta">
@@ -176,7 +176,7 @@
           <ul class="space-y-1 text-body" data-testid="open-vocab-templates">
             {#each l.templates as t (t.name + t.path)}
               <li class="flex flex-wrap items-center gap-2" data-testid="template-row">
-                <span class="font-mono">{t.name}</span>
+                <code>{t.name}</code>
                 {#if t.display_name}<span class="text-fg-2">{t.display_name}</span>{/if}
                 <span class="text-meta text-fg-3">{t.n_targets} targets</span>
                 <code class="text-meta text-fg-3">{t.path}</code>

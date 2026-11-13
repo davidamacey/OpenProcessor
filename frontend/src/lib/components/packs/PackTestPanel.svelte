@@ -86,7 +86,7 @@
         {#if t.missingCropIds.length > 0}
           <span class="text-danger-text" data-testid="test-missing-ids">
             Not found:
-            {#each t.missingCropIds as id, i (id)}<code class="font-mono">{id}</code>{i <
+            {#each t.missingCropIds as id, i (id)}<code>{id}</code>{i <
               t.missingCropIds.length - 1
                 ? ', '
                 : ''}{/each}
@@ -169,8 +169,8 @@
                 alt="crop {res.crop_id}"
                 class="h-12 w-12 rounded object-cover"
               />
-              <code class="font-mono">{res.crop_id}</code>
-              {#if res.box_id}<code class="font-mono text-fg-2">{res.box_id}</code>{/if}
+              <code>{res.crop_id}</code>
+              {#if res.box_id}<code class="text-fg-2">{res.box_id}</code>{/if}
             </div>
             {#if res.skipped}
               <p class="text-meta text-warn-text" data-testid="test-skipped">

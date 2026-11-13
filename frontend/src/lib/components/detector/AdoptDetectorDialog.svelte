@@ -57,7 +57,7 @@
       data-testid="adopt-summary"
     >
       <dt class="text-fg-3">Items to label</dt>
-      <dd class="font-mono text-fg-1" data-testid="adopt-items">
+      <dd class="text-fg-1 tabular-nums" data-testid="adopt-items">
         {formatCount(p.items)}
       </dd>
       <dt class="text-fg-3">Classes to create</dt>

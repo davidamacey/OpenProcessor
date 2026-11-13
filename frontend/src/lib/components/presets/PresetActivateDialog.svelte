@@ -64,9 +64,9 @@
   {/if}
   {#if !needsChoice}
     <p data-testid="activate-from-to">
-      <span class="font-mono">{refText(current?.name, current?.revision)}</span>
+      <code>{refText(current?.name, current?.revision)}</code>
       →
-      <strong class="font-mono">{refText(target.name, target.revision)}</strong>
+      <code>{refText(target.name, target.revision)}</code>
     </p>
   {/if}
   <p class="text-meta text-fg-2">{activationReach(kind)}</p>

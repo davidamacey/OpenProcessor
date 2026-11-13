@@ -114,10 +114,10 @@
                   >
                 </td>
                 <td class="py-1.5 pr-3">{formats.status_labels[j.status] ?? j.status}</td>
-                <td class="py-1.5 pr-3 text-right font-mono">
+                <td class="py-1.5 pr-3 text-right tabular-nums">
                   {j.progress.images_done.toLocaleString()} / {j.progress.images_total.toLocaleString()}
                 </td>
-                <td class="py-1.5 pr-3 font-mono text-fg-2">{j.source.root}</td>
+                <td class="py-1.5 pr-3 text-fg-2"><code>{j.source.root}</code></td>
                 <td class="py-1.5 text-fg-2">{j.started_at ?? '—'}</td>
               </tr>
             {/each}

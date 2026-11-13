@@ -137,7 +137,7 @@
         onlightbox={(card) => void ws.openLightbox(card.image_id, card.file_name)}
         onloadmore={() => void gallery.loadMore()}
       />
-      <p class="mt-2 font-mono text-meta text-fg-3" data-testid="gallery-footer">
+      <p class="mt-2 text-meta text-fg-3 tabular-nums" data-testid="gallery-footer">
         {gallery.cards.length} / {gallery.total}
       </p>
     </ViewState>

@@ -257,16 +257,16 @@
                   />
                   <span class="grow truncate text-fg-1">{cls.name}</span>
                   {#if cls.group}
-                    <span class="font-mono text-caption text-fg-3">{cls.group}</span>
+                    <span class="text-caption text-fg-3">{cls.group}</span>
                   {/if}
                   {#if (cls.trainable_gap ?? 0) > 0}
                     <span
-                      class="font-mono text-caption text-warn-text"
+                      class="text-caption text-warn-text tabular-nums"
                       title="Short of the per-class minimum by {cls.trainable_gap} trainable crops (served trainable_gap)"
                       >needs {cls.trainable_gap}</span
                     >
                   {/if}
-                  <span class="font-mono text-meta text-fg-2">
+                  <span class="text-meta text-fg-2 tabular-nums">
                     {(cls.validated_count ?? 0).toLocaleString()}
                   </span>
                 </label>

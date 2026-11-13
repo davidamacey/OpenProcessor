@@ -95,7 +95,7 @@
     </p>
     <ul class="mt-1 text-meta text-fg-2">
       {#each config.batchSourceRoots as root (root)}
-        <li class="font-mono">{root}</li>
+        <li><code>{root}</code></li>
       {/each}
     </ul>
   </div>
@@ -167,8 +167,8 @@
         data-testid="batch-not-embedded-list"
       >
         {#each notEmbedded as r, i (i)}
-          <li class="border-b border-line py-1 font-mono">
-            {r.image_path}
+          <li class="border-b border-line py-1">
+            <code>{r.image_path}</code>
             <span class="text-warn-text">
               — embedded {r.n_embedded} / not embedded {r.n_not_embedded}{#if r.n_embed_failed > 0}
                 ({r.n_embed_failed} encoder failed){/if}</span
@@ -182,8 +182,8 @@
       <!-- d72cc63: these images ingested with primary-detector crops only. -->
       <ul class="max-h-32 overflow-y-auto text-meta" data-testid="batch-secondary-list">
         {#each secondaryFailures as r, i (i)}
-          <li class="border-b border-line py-1 font-mono">
-            {r.image_path}
+          <li class="border-b border-line py-1">
+            <code>{r.image_path}</code>
             <span class="text-warn-text">
               — secondary detector: {r.secondary_detector_error}</span
             >
@@ -215,8 +215,8 @@
       </div>
       <ul class="max-h-48 overflow-y-auto text-meta">
         {#each visibleFailures as r, i (i)}
-          <li class="border-b border-line py-1 font-mono">
-            {r.image_path}
+          <li class="border-b border-line py-1">
+            <code>{r.image_path}</code>
             {#if r.error_kind}
               <span class="text-fg-3"> [{r.error_kind}]</span>
             {/if}

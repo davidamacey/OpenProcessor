@@ -23,16 +23,16 @@
 <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-meta" data-testid="test-refs">
   {#if pack}
     <dt class="text-fg-3">{packLabel}</dt>
-    <dd class="font-mono" data-testid="test-pack-ref">{refText(pack)}</dd>
+    <dd data-testid="test-pack-ref"><code>{refText(pack)}</code></dd>
   {/if}
   {#if vlm}
     <dt class="text-fg-3">VLM</dt>
-    <dd class="font-mono" data-testid="test-vlm-ref">
-      {vlm.endpoint} · {vlm.model}{vlm.draft ? ' (draft)' : ''}
+    <dd data-testid="test-vlm-ref">
+      <code>{vlm.endpoint}</code> · <code>{vlm.model}</code>{vlm.draft ? ' (draft)' : ''}
     </dd>
   {/if}
   {#if latencyMs != null}
     <dt class="text-fg-3">Latency</dt>
-    <dd class="font-mono" data-testid="test-latency">{formatLatencyMs(latencyMs)}</dd>
+    <dd class="tabular-nums" data-testid="test-latency">{formatLatencyMs(latencyMs)}</dd>
   {/if}
 </dl>

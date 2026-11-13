@@ -258,8 +258,8 @@
                 aria-label={`Select ${id}`}
               />
             </td>
-            <td class="py-1.5 font-mono text-meta">{id}</td>
-            <td class="py-1.5 font-mono text-meta text-fg-3">{entry?.field ?? '—'}</td>
+            <td class="py-1.5 text-meta"><code>{id}</code></td>
+            <td class="py-1.5 text-meta text-fg-3"><code>{entry?.field ?? '—'}</code></td>
             <td class="py-1.5 text-fg-2">{formatCoverageCounts(entry)}</td>
             <td class="py-1.5 text-fg-2">{formatCoveragePct(entry)}</td>
           </tr>

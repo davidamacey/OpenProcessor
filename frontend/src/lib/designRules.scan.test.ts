@@ -64,117 +64,247 @@ const UPPERCASE = /(?<=\s|class=["'`{])uppercase(?![\w-]|\s*\??:)/;
 const RAW_H1 = /<h1(?![^>]*\bsr-only\b)[^>]*class=/;
 
 /** file (relative to src) -> why it may break a rule. */
-const ALLOWED: Record<string, { rule: 'glyph' | 'colour' | 'mono' | 'h1'; why: string }> =
-  {
-    'lib/components/clusters/ClustersToolbar.svelte': {
+const ALLOWED: { file: string; rule: 'glyph' | 'colour' | 'mono' | 'h1'; why: string }[] =
+  [
+    {
+      file: 'lib/components/ingest/SourceForm.svelte',
+      rule: 'mono',
+      why: 'a code editor: this file edits an S3 bucket, key prefix, folder path and cron expression',
+    },
+    {
+      file: 'lib/components/ingest/BulkIngestPanel.svelte',
+      rule: 'mono',
+      why: 'a code editor: this file edits a server path',
+    },
+    {
+      file: 'lib/components/ingest/IngestBatchPanel.svelte',
+      rule: 'mono',
+      why: 'a code editor: this file edits a list of server paths',
+    },
+    {
+      file: 'lib/components/combine/CombineSourcesStep.svelte',
+      rule: 'mono',
+      why: 'a code editor: this file edits a project slug',
+    },
+    {
+      file: 'lib/components/profiles/ProfileFieldEditor.svelte',
+      rule: 'mono',
+      why: 'a code editor: this file edits a JSON value',
+    },
+    {
+      file: 'lib/components/profiles/ProfileTestPanel.svelte',
+      rule: 'mono',
+      why: 'a code editor: this file edits crop ids',
+    },
+    {
+      file: 'lib/components/bakeoff/ModelPicker.svelte',
+      rule: 'mono',
+      why: 'a code editor: this file edits a class-name mapping as JSON',
+    },
+    {
+      file: 'lib/components/AugmentationPanel.svelte',
+      rule: 'mono',
+      why: 'a code editor: this file edits a class:count list',
+    },
+    {
+      file: 'lib/components/LogTail.svelte',
+      rule: 'mono',
+      why: 'a code editor: this file is a log viewer: a code view of raw lines',
+    },
+    {
+      file: 'lib/components/projects/DeleteProjectDialog.svelte',
+      rule: 'mono',
+      why: 'a code editor: this file retypes a project slug to confirm',
+    },
+    {
+      file: 'lib/components/projects/CreateProjectDialog.svelte',
+      rule: 'mono',
+      why: 'a code editor: this file edits a project slug',
+    },
+    {
+      file: 'lib/components/PromoteModal.svelte',
+      rule: 'mono',
+      why: 'a code editor: this file edits a Triton model name',
+    },
+    {
+      file: 'lib/components/presets/PresetNewDialog.svelte',
+      rule: 'mono',
+      why: 'a code editor: this file edits a preset name and its JSON body',
+    },
+    {
+      file: 'lib/components/config/ConfigCloneDialog.svelte',
+      rule: 'mono',
+      why: 'a code editor: this file edits a config document name',
+    },
+    {
+      file: 'lib/components/packs/PackFieldEditor.svelte',
+      rule: 'mono',
+      why: 'a code editor: this file edits regex patterns, mapping keys and a JSON list',
+    },
+    {
+      file: 'lib/components/packs/PackTestPanel.svelte',
+      rule: 'mono',
+      why: 'a code editor: this file edits crop ids',
+    },
+    {
+      file: 'lib/components/openVocab/OpenVocabTestPanel.svelte',
+      rule: 'mono',
+      why: 'a code editor: this file edits a crop id',
+    },
+    {
+      file: 'routes/p/[project]/settings/models/new-endpoint/+page.svelte',
+      rule: 'mono',
+      why: 'a code editor: this file edits an endpoint name',
+    },
+    {
+      file: 'routes/p/[project]/settings/presets/[kind]/[name]/+page.svelte',
+      rule: 'mono',
+      why: 'a code editor: this file edits a preset body as JSON',
+    },
+    {
+      file: 'routes/p/[project]/settings/open-vocab/+page.svelte',
+      rule: 'mono',
+      why: 'a code editor: this file edits an open-vocabulary set name',
+    },
+    {
+      file: 'routes/p/[project]/datasets/import/+page.svelte',
+      rule: 'mono',
+      why: 'a code editor: this file edits a server path',
+    },
+    {
+      file: 'lib/components/clusters/ClustersToolbar.svelte',
       rule: 'h1',
       why: 'the title moves to ui/PageHeader or an sr-only h1 when lane C restructures this view (12f section 4)',
     },
-    'lib/components/config/ConfigDocHeader.svelte': {
+    {
+      file: 'lib/components/config/ConfigDocHeader.svelte',
       rule: 'h1',
       why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11); the title shows a config name, which section 5.3 rule 4 replaces with the served label',
     },
-    'lib/components/editor/EditorHeader.svelte': {
+    {
+      file: 'lib/components/editor/EditorHeader.svelte',
       rule: 'h1',
       why: 'the title moves to ui/PageHeader or an sr-only h1 when lane C restructures this view (12f section 4)',
     },
-    'lib/components/review/ReviewHeader.svelte': {
+    {
+      file: 'lib/components/review/ReviewHeader.svelte',
       rule: 'h1',
       why: 'the title moves to ui/PageHeader or an sr-only h1 when lane C restructures this view (12f section 4)',
     },
-    'lib/components/shell/ErrorPage.svelte': {
+    {
+      file: 'lib/components/shell/ErrorPage.svelte',
       rule: 'h1',
       why: 'a full-page error state, not a titled page; it has no PageHeader slots for an action row',
     },
-    'lib/workspace/views/ClusterScope.svelte': {
+    {
+      file: 'lib/workspace/views/ClusterScope.svelte',
       rule: 'h1',
       why: 'the title moves to ui/PageHeader or an sr-only h1 when lane C restructures this view (12f section 4)',
     },
-    'routes/p/[project]/export/+page.svelte': {
+    {
+      file: 'routes/p/[project]/export/+page.svelte',
       rule: 'h1',
       why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
     },
-    'routes/p/[project]/models/+page.svelte': {
+    {
+      file: 'routes/p/[project]/models/+page.svelte',
       rule: 'h1',
       why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
     },
-    'routes/p/[project]/settings/embedding-spaces/+page.svelte': {
+    {
+      file: 'routes/p/[project]/settings/embedding-spaces/+page.svelte',
       rule: 'h1',
       why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
     },
-    'routes/p/[project]/settings/ingest-policy/+page.svelte': {
+    {
+      file: 'routes/p/[project]/settings/ingest-policy/+page.svelte',
       rule: 'h1',
       why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
     },
-    'routes/p/[project]/settings/models/+page.svelte': {
+    {
+      file: 'routes/p/[project]/settings/models/+page.svelte',
       rule: 'h1',
       why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
     },
-    'routes/p/[project]/settings/models/new-endpoint/+page.svelte': {
+    {
+      file: 'routes/p/[project]/settings/models/new-endpoint/+page.svelte',
       rule: 'h1',
       why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
     },
-    'routes/p/[project]/settings/models/vlm/[name]/+page.svelte': {
+    {
+      file: 'routes/p/[project]/settings/models/vlm/[name]/+page.svelte',
       rule: 'h1',
       why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
     },
-    'routes/p/[project]/settings/open-vocab/+page.svelte': {
+    {
+      file: 'routes/p/[project]/settings/open-vocab/+page.svelte',
       rule: 'h1',
       why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
     },
-    'routes/p/[project]/settings/presets/[kind]/+page.svelte': {
+    {
+      file: 'routes/p/[project]/settings/presets/[kind]/+page.svelte',
       rule: 'h1',
       why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
     },
-    'routes/p/[project]/settings/presets/[kind]/[name]/+page.svelte': {
+    {
+      file: 'routes/p/[project]/settings/presets/[kind]/[name]/+page.svelte',
       rule: 'h1',
       why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
     },
-    'routes/p/[project]/settings/prompt-packs/+page.svelte': {
+    {
+      file: 'routes/p/[project]/settings/prompt-packs/+page.svelte',
       rule: 'h1',
       why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
     },
-    'routes/p/[project]/settings/region-profiles/+page.svelte': {
+    {
+      file: 'routes/p/[project]/settings/region-profiles/+page.svelte',
       rule: 'h1',
       why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
     },
-    'routes/projects/+page.svelte': {
+    {
+      file: 'routes/projects/+page.svelte',
       rule: 'h1',
       why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
     },
-    'routes/projects/combine/+page.svelte': {
+    {
+      file: 'routes/projects/combine/+page.svelte',
       rule: 'h1',
       why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
     },
-    'routes/projects/combine/[job_id]/+page.svelte': {
+    {
+      file: 'routes/projects/combine/[job_id]/+page.svelte',
       rule: 'h1',
       why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
     },
-    'lib/keyboardDisplay.ts': {
+    {
+      file: 'lib/keyboardDisplay.ts',
       rule: 'glyph',
       why: 'keycap legends (arrows, shift, return, backspace) are text the keymap displays, not icons',
     },
-    'lib/annotations/config/allowLists.ts': {
+    {
+      file: 'lib/annotations/config/allowLists.ts',
       rule: 'colour',
       why: 'the sub-box ring presets are the operator-facing profile contract (examples/annotation-profiles)',
     },
-    'lib/annotations/servedRegionSlot.ts': {
+    {
+      file: 'lib/annotations/servedRegionSlot.ts',
       rule: 'colour',
       why: 'the served-slot default ring is the same contract as the ring presets',
     },
-    'lib/components/CropCard.svelte': {
+    {
+      file: 'lib/components/CropCard.svelte',
       rule: 'colour',
       why: 'the fallback ring when no slot is served is the same contract as the ring presets',
     },
-  };
+  ];
 
 function offenders(
   test: (code: string) => boolean,
   rule: 'glyph' | 'colour' | 'mono' | 'h1' | 'none',
 ): string[] {
   return FILES.filter(({ rel, code }) => {
-    const allowed = ALLOWED[path.sep === '/' ? rel : rel.replaceAll(path.sep, '/')];
-    return test(code) && !(allowed && allowed.rule === rule);
+    const file = rel.replaceAll(path.sep, '/');
+    return test(code) && !ALLOWED.some((a) => a.file === file && a.rule === rule);
   }).map(({ rel }) => rel);
 }
 
@@ -335,7 +465,7 @@ describe('product source', () => {
       mono: (c: string) => MONO_CLASS.test(c),
       h1: (c: string) => RAW_H1.test(c),
     };
-    for (const [file, { rule }] of Object.entries(ALLOWED)) {
+    for (const { file, rule } of ALLOWED) {
       const hit = FILES.find((f) => f.rel.replaceAll(path.sep, '/') === file);
       expect(hit, `${file} no longer exists`).toBeDefined();
       const broken = TESTS[rule](hit!.code);

@@ -68,7 +68,7 @@
 
 <section class="rounded-md border border-line bg-surface-1 p-4">
   <header class="mb-3 flex flex-wrap items-center gap-3">
-    <h2 class="font-mono text-body text-white">{campaignId}</h2>
+    <h2 class="text-body text-white"><code>{campaignId}</code></h2>
     <span
       class="rounded-sm border border-accent/40 bg-accent/10 px-1.5 py-0.5 text-caption text-accent-text"
     >
@@ -111,13 +111,13 @@
         >
           {r.state}
         </span>
-        <span class="truncate font-mono text-meta text-fg-2" title={r.job_id}>
+        <code class="truncate text-meta text-fg-2" title={r.job_id}>
           {r.job_id}
-        </span>
-        <span class="font-mono text-meta text-fg-2">
+        </code>
+        <span class="text-meta text-fg-2 tabular-nums">
           {r.current_epoch ?? '—'} / {r.total_epochs ?? '—'} epochs
         </span>
-        <span class="font-mono text-meta text-fg-2">
+        <span class="text-meta text-fg-2 tabular-nums">
           mAP50 {bestMapDisplay(r).value?.toFixed(3) ?? '—'}
           <span class="text-fg-3">·</span>
           mAP50-95 {r.eval?.map50_95?.toFixed(3) ?? '—'}
@@ -129,10 +129,10 @@
   {#if best}
     <p class="mt-3 text-meta text-fg-2">
       Best so far:
-      <span class="font-mono text-fg-1">{best.job_id}</span>
+      <code class="text-fg-1">{best.job_id}</code>
       <span class="text-fg-3">·</span>
       mAP50
-      <span class="font-mono text-fg-1"
+      <span class="text-fg-1 tabular-nums"
         >{bestMapDisplay(best).value?.toFixed(3) ?? '—'}</span
       >
     </p>

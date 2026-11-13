@@ -19,7 +19,7 @@
     />
   {:else if s}
     <p class="text-fg-1">{s.summary_text}</p>
-    <dl class="grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-meta text-fg-2">
+    <dl class="grid grid-cols-2 gap-x-3 gap-y-1 text-meta text-fg-2 tabular-nums">
       <dt class="text-fg-3">clusters</dt>
       <dd>{s.clusters.toLocaleString()}</dd>
       <dt class="text-fg-3">in test holdout</dt>
@@ -31,7 +31,7 @@
       {#each s.by_class as c (c.class_name)}
         <li class="flex justify-between gap-2">
           <span class="truncate">{c.class_name}</span>
-          <span class="font-mono">{c.count.toLocaleString()}</span>
+          <span class="tabular-nums">{c.count.toLocaleString()}</span>
         </li>
       {/each}
     </ul>

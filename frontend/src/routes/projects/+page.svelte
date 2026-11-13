@@ -231,7 +231,7 @@
                     >
                   {/if}
                 </div>
-                <div class="font-mono text-caption text-fg-3">{p.slug}</div>
+                <div class="text-caption text-fg-3"><code>{p.slug}</code></div>
                 {#if p.description}
                   <div class="mt-0.5 text-meta text-fg-2">{p.description}</div>
                 {/if}

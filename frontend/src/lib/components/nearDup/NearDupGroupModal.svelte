@@ -103,7 +103,7 @@
         >
           <NearDupThumb url={m.thumbnail_url} label={`${level} ${m.member_id}`} />
           <div class="flex min-w-0 flex-col gap-1 text-meta text-fg-2">
-            <span class="break-all font-mono text-fg-1">{m.member_id}</span>
+            <code class="break-all text-fg-1">{m.member_id}</code>
             {#if m.class_name}<span>{m.class_name}</span>{/if}
             {#if m.in_holdout}
               <span class="chip w-fit border-warn-line text-warn-text"

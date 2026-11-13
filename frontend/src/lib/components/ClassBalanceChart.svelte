@@ -58,7 +58,7 @@
             {/if}
           </div>
           <span
-            class="w-44 shrink-0 whitespace-nowrap text-right font-mono text-fg-2"
+            class="w-44 shrink-0 whitespace-nowrap text-right text-fg-2 tabular-nums"
             title="{row.validated} validated, {row.test} frozen as test holdout"
           >
             {`${row.trainable} trainable`}{#if row.test > 0}<span class="text-fg-3"

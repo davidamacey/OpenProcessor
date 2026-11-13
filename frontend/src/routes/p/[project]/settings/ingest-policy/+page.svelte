@@ -121,7 +121,7 @@
         <p>These names are not in the detector's labels or the registry; saved anyway:</p>
         <ul class="mt-1 list-disc pl-5">
           {#each editor.unknownNames as n, i (i)}
-            <li class="font-mono">{n}</li>
+            <li class="tabular-nums">{n}</li>
           {/each}
         </ul>
       </div>

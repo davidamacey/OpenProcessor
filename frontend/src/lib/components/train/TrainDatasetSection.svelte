@@ -58,7 +58,7 @@
       </span>
       <select
         bind:value={dataset.selectedExportDir}
-        class="w-full rounded-md border border-line-strong bg-surface-0 px-2 py-1.5 font-mono text-meta text-fg-1 focus:border-accent focus:outline-none"
+        class="w-full rounded-md border border-line-strong bg-surface-0 px-2 py-1.5 text-meta text-fg-1 focus:border-accent focus:outline-none"
       >
         <option value="">
           current ({dataset.datasetKind === dataset.datasetExportSpec?.datasetKind
@@ -72,8 +72,8 @@
     </label>
   {/if}
   {#if dataset.datasetExportDir}
-    <p class="mt-1 break-all font-mono text-body text-fg-1">
-      {dataset.datasetExportDir}
+    <p class="mt-1 break-all text-body text-fg-1">
+      <code>{dataset.datasetExportDir}</code>
     </p>
     {#if dataset.datasetKind === dataset.datasetExportSpec?.datasetKind}
       <p class="mt-2 text-meta text-fg-2">
@@ -102,7 +102,7 @@
         {/if}
         {#if dataset.multiClassExportState.image_count != null || dataset.multiClassExportState.object_count != null}
           <span
-            class="rounded border border-line-strong bg-surface-0 px-1.5 py-0.5 font-mono"
+            class="rounded border border-line-strong bg-surface-0 px-1.5 py-0.5 tabular-nums"
           >
             {formatCount(dataset.multiClassExportState.object_count)} objects in {formatCount(
               dataset.multiClassExportState.image_count,
@@ -115,7 +115,7 @@
         {/if}
         {#if dataset.multiClassExportState.split_counts}
           <span
-            class="rounded border border-line-strong bg-surface-0 px-1.5 py-0.5 font-mono"
+            class="rounded border border-line-strong bg-surface-0 px-1.5 py-0.5 tabular-nums"
             title="Images per split"
           >
             images: train {dataset.multiClassExportState.split_counts.train.toLocaleString()}
@@ -126,7 +126,7 @@
         {/if}
         {#if dataset.multiClassExportState.split_object_counts}
           <span
-            class="rounded border border-line-strong bg-surface-0 px-1.5 py-0.5 font-mono"
+            class="rounded border border-line-strong bg-surface-0 px-1.5 py-0.5 tabular-nums"
             title="Objects (label lines) per split"
           >
             objects: train {dataset.multiClassExportState.split_object_counts.train.toLocaleString()}
@@ -155,7 +155,7 @@
           {classesStore.classes.filter((c) => !c.deprecated).length} classes (global pool)
         </span>
         <span
-          class="rounded border border-line-strong bg-surface-0 px-1.5 py-0.5 font-mono"
+          class="rounded border border-line-strong bg-surface-0 px-1.5 py-0.5 tabular-nums"
         >
           {classesStore.classes
             .reduce((acc, c) => acc + (c.validated_count ?? 0), 0)
@@ -242,8 +242,8 @@
       then a larger one from the same labeled pool for progressive training.
     </p>
     {#if dataset.singleClassExportDir}
-      <p class="mt-1 break-all font-mono text-body text-fg-1">
-        {dataset.singleClassExportDir}
+      <p class="mt-1 break-all text-body text-fg-1">
+        <code>{dataset.singleClassExportDir}</code>
       </p>
     {/if}
     {#if exporter.singleClassExportMessage}

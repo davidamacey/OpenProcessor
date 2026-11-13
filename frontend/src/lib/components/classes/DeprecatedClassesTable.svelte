@@ -42,7 +42,7 @@
           <tbody>
             {#each deprecatedRows as cls (cls.id)}
               <tr class="border-b border-line text-fg-3">
-                <td class="px-3 py-1.5 font-mono text-meta">{cls.id}</td>
+                <td class="px-3 py-1.5 text-meta"><code>{cls.id}</code></td>
                 <td class="px-3 py-1.5 line-through">{cls.name}</td>
                 <td class="px-3 py-1.5">{cls.group ?? '—'}</td>
                 <td class="px-3 py-1.5 text-right">

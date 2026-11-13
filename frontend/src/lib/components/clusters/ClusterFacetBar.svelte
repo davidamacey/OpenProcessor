@@ -63,7 +63,7 @@
               onclick={() => view.toggleDetectorClass(f.value)}
             >
               {f.value}
-              <span class="ml-1 font-mono text-fg-2">{f.count.toLocaleString()}</span>
+              <span class="ml-1 text-fg-2 tabular-nums">{f.count.toLocaleString()}</span>
             </button>
           {/each}
         </div>
@@ -79,7 +79,7 @@
           onclick={() => view.toggleValidated(true)}
         >
           validated
-          <span class="ml-1 font-mono text-fg-2"
+          <span class="ml-1 text-fg-2 tabular-nums"
             >{facets.validation.validated.toLocaleString()}</span
           >
         </button>
@@ -91,7 +91,7 @@
           onclick={() => view.toggleValidated(false)}
         >
           not validated
-          <span class="ml-1 font-mono text-fg-2"
+          <span class="ml-1 text-fg-2 tabular-nums"
             >{facets.validation.unvalidated.toLocaleString()}</span
           >
         </button>
@@ -110,7 +110,7 @@
               onclick={() => view.toggleReviewTab(tab)}
             >
               {reviewTabsVocabularyStore.labelFor(tab, tab)}
-              <span class="ml-1 font-mono text-fg-2">{count.toLocaleString()}</span>
+              <span class="ml-1 text-fg-2 tabular-nums">{count.toLocaleString()}</span>
             </button>
           {/each}
         </div>
@@ -128,7 +128,7 @@
               onclick={() => view.toggleBand(b)}
             >
               {binLabel(b)}
-              <span class="ml-1 font-mono text-fg-2">{b.count.toLocaleString()}</span>
+              <span class="ml-1 text-fg-2 tabular-nums">{b.count.toLocaleString()}</span>
             </button>
           {/each}
           <span class="text-fg-3" data-testid="facet-confidence-missing">

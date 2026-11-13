@@ -91,8 +91,7 @@
             onmouseenter={() => (picker.index = i)}
           >
             {#if cls.hotkey_letter}
-              <kbd
-                class="rounded bg-surface-2 px-1 py-0.5 font-mono text-caption text-accent-text"
+              <kbd class="rounded bg-surface-2 px-1 py-0.5 text-caption text-accent-text"
                 >{cls.hotkey_letter}</kbd
               >
             {/if}

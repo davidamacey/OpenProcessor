@@ -70,17 +70,17 @@
       c.severity,
     )}"
   >
-    <span class="font-mono text-caption opacity-70 capitalize">
+    <span class="text-caption opacity-70 capitalize">
       {c.severity}
     </span>
-    <span class="font-mono text-caption text-fg-2">{c.name}</span>
+    <code class="text-caption text-fg-2">{c.name}</code>
     <span class="grow">
       {c.message}
       {#if c.detail && Object.keys(c.detail).length > 0}
         <details class="mt-1">
           <summary class="cursor-pointer text-caption text-fg-3">detail</summary>
           <pre
-            class="mt-1 font-mono text-caption break-all whitespace-pre-wrap text-fg-2">{JSON.stringify(
+            class="mt-1 text-caption break-all whitespace-pre-wrap text-fg-2">{JSON.stringify(
               c.detail,
               null,
               2,

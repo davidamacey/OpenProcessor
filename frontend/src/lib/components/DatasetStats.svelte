@@ -117,21 +117,21 @@
       <!-- Headline -->
       <div class="surface p-4 lg:col-span-1">
         <div class="text-meta text-fg-2 font-semibold">Total crops</div>
-        <div class="mt-2 font-mono text-kpi font-semibold text-fg-1">
+        <div class="mt-2 text-kpi font-semibold text-fg-1 tabular-nums">
           {fmt(stats.total_crops)}
         </div>
         <dl class="mt-4 space-y-1.5 text-meta">
           <div class="flex justify-between">
             <dt class="text-fg-2">Validated (ground truth)</dt>
-            <dd class="font-mono text-success-text">{fmt(stats.validated)}</dd>
+            <dd class="text-success-text tabular-nums">{fmt(stats.validated)}</dd>
           </div>
           <div class="flex justify-between">
             <dt class="text-fg-2">Test holdout</dt>
-            <dd class="font-mono">{fmt(stats.test_holdout)}</dd>
+            <dd class="tabular-nums">{fmt(stats.test_holdout)}</dd>
           </div>
           <div class="flex justify-between">
             <dt class="text-fg-2">Distinct sources</dt>
-            <dd class="font-mono">{stats.by_source.length}</dd>
+            <dd class="tabular-nums">{stats.by_source.length}</dd>
           </div>
         </dl>
       </div>
@@ -163,10 +163,10 @@
                     title="{row.pct}%"
                   ></div>
                 </div>
-                <span class="w-20 shrink-0 text-right font-mono text-fg-2">
+                <span class="w-20 shrink-0 text-right text-fg-2 tabular-nums">
                   {fmt(row.count)}
                 </span>
-                <span class="w-12 shrink-0 text-right font-mono text-fg-3">
+                <span class="w-12 shrink-0 text-right text-fg-3 tabular-nums">
                   {row.pct.toFixed(1)}%
                 </span>
               </li>
@@ -182,11 +182,11 @@
           <dl class="space-y-1.5 text-meta">
             <div class="flex justify-between">
               <dt class="text-fg-2">Embedded</dt>
-              <dd class="font-mono">{fmt(stats.embedding.embedded)}</dd>
+              <dd class="tabular-nums">{fmt(stats.embedding.embedded)}</dd>
             </div>
             <div class="flex justify-between">
               <dt class="text-fg-2">Not embedded</dt>
-              <dd class="font-mono">{fmt(stats.embedding.not_embedded)}</dd>
+              <dd class="tabular-nums">{fmt(stats.embedding.not_embedded)}</dd>
             </div>
           </dl>
           {#if stateChips.length > 0}
@@ -213,7 +213,7 @@
           </div>
           <div class="flex justify-between">
             <dt class="text-fg-2">Clusters (total now)</dt>
-            <dd class="font-mono" data-testid="dataset-cluster-count">
+            <dd class="tabular-nums" data-testid="dataset-cluster-count">
               {fmt(stats.clusters.cluster_count)}
             </dd>
           </div>
@@ -225,20 +225,20 @@
               >
                 Made by last run
               </dt>
-              <dd class="font-mono">{fmt(stats.clusters.last_run_cluster_count)}</dd>
+              <dd class="tabular-nums">{fmt(stats.clusters.last_run_cluster_count)}</dd>
             </div>
           {/if}
           <div class="flex justify-between">
             <dt class="text-fg-2">Residual</dt>
-            <dd class="font-mono">{fmt(stats.clusters.residual_count)}</dd>
+            <dd class="tabular-nums">{fmt(stats.clusters.residual_count)}</dd>
           </div>
           <div class="flex justify-between">
             <dt class="text-fg-2">Noise (cid&lt;0)</dt>
-            <dd class="font-mono">{fmt(stats.clusters.noise_count)}</dd>
+            <dd class="tabular-nums">{fmt(stats.clusters.noise_count)}</dd>
           </div>
           <div class="flex justify-between">
             <dt class="text-fg-2">Method</dt>
-            <dd class="font-mono text-fg-2">
+            <dd class="text-fg-2">
               {stats.clusters.method ?? '—'}
             </dd>
           </div>
@@ -284,10 +284,10 @@
                       title="{row.pct}% of total crops"
                     ></div>
                   </div>
-                  <span class="w-20 shrink-0 text-right font-mono text-fg-2">
+                  <span class="w-20 shrink-0 text-right text-fg-2 tabular-nums">
                     {fmt(row.count)}
                   </span>
-                  <span class="w-12 shrink-0 text-right font-mono text-fg-3">
+                  <span class="w-12 shrink-0 text-right text-fg-3 tabular-nums">
                     {row.pct.toFixed(1)}%
                   </span>
                 </li>
@@ -302,7 +302,7 @@
             {statsSpec.coverageTitle}
           </h3>
           <div class="flex items-baseline gap-2">
-            <span class="font-mono text-kpi text-fg-1">
+            <span class="text-kpi text-fg-1 tabular-nums">
               {((p?.coverage_share ?? 0) * 100).toFixed(1)}%
             </span>
             <span class="text-meta text-fg-3">of crops have a box</span>
@@ -326,7 +326,7 @@
             visibility pre-filter said no), were rejected after detection, or the detectors
             haven't reached them yet.
             {fmt(p?.total_detected ?? 0)} crops carry detector credit (<code
-              class="font-mono">regions.total_detected</code
+              >regions.total_detected</code
             >) — this may not cover every rejected or box-less attempt.
           </p>
         </div>
@@ -351,19 +351,19 @@
         <dl class="space-y-1.5 text-body">
           <div class="flex justify-between">
             <dt class="text-fg-2">Pending detection</dt>
-            <dd class="font-mono text-warn-text">
+            <dd class="text-warn-text tabular-nums">
               {fmt(stats.unlabeled.pending_detection)}
             </dd>
           </div>
           <div class="flex justify-between">
             <dt class="text-fg-2">Pending verification</dt>
-            <dd class="font-mono text-warn-text">
+            <dd class="text-warn-text tabular-nums">
               {fmt(stats.unlabeled.pending_verification)}
             </dd>
           </div>
           <div class="flex justify-between">
             <dt class="text-fg-2">No label source (class_id missing)</dt>
-            <dd class="font-mono text-danger-text">
+            <dd class="text-danger-text tabular-nums">
               {fmt(stats.unlabeled.no_label_source)}
             </dd>
           </div>
@@ -377,7 +377,7 @@
             >
               VLM, no class
             </dt>
-            <dd class="font-mono text-danger-text">
+            <dd class="text-danger-text tabular-nums">
               {fmt(stats.unlabeled.vlm_no_class)}
             </dd>
           </div>
@@ -391,7 +391,7 @@
             >
               Detector proposal, no class
             </dt>
-            <dd class="font-mono text-danger-text">
+            <dd class="text-danger-text tabular-nums">
               {fmt(stats.unlabeled.by_proposal)}
             </dd>
           </div>
@@ -406,7 +406,7 @@
       <div class="surface p-4">
         <h3 class="mb-3 text-body font-semibold text-fg-2">In-flight pipeline</h3>
         <div class="flex items-baseline gap-3">
-          <span class="font-mono text-kpi text-fg-1">
+          <span class="text-kpi text-fg-1 tabular-nums">
             {fmt(stats.in_progress.region_drain_total_unfinished)}
           </span>
           <span class="text-body text-fg-2">crops awaiting detection / verification</span>
@@ -431,7 +431,7 @@
           <dl class="mt-3 space-y-1 text-meta">
             <div class="flex items-baseline justify-between">
               <dt class="text-fg-2">ETA to drain</dt>
-              <dd class="font-mono text-fg-1">
+              <dd class="text-fg-1 tabular-nums">
                 {#if etaSeconds == null}
                   <span class="text-fg-3" title="Need ≥10s + 2 samples to compute">
                     {drainRate == null
@@ -447,7 +447,7 @@
             </div>
             <div class="flex items-baseline justify-between">
               <dt class="text-fg-2">Drain rate</dt>
-              <dd class="font-mono">
+              <dd class="tabular-nums">
                 {#if drainRate == null}
                   <span class="text-fg-3">…</span>
                 {:else if drainRate < 0}
@@ -470,8 +470,8 @@
           <p class="mt-3 text-meta text-success-text">queue drained</p>
         {/if}
         <p class="mt-3 text-meta text-fg-3">
-          Matches the API's <code class="font-mono">ingest/region_drain</code> total. While
-          &gt; 0 the ingest walker waits before triggering the next clustering pass.
+          Matches the API's <code>ingest/region_drain</code> total. While &gt; 0 the ingest
+          walker waits before triggering the next clustering pass.
         </p>
       </div>
     </div>

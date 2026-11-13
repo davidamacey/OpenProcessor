@@ -236,7 +236,9 @@
 
           <label class="block">
             <span class="mb-1 block text-meta text-fg-2">
-              Multiplier <span class="font-mono text-fg-3">×{spec.multiplier ?? 1}</span>
+              Multiplier <span class="text-fg-3 tabular-nums"
+                >×{spec.multiplier ?? 1}</span
+              >
             </span>
             <input
               type="range"

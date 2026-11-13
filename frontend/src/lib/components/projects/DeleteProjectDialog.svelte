@@ -131,7 +131,7 @@
     </h3>
     <p class="mb-3 text-meta text-fg-2">
       This permanently removes the project's data. Its slug
-      <span class="font-mono text-fg-1">{project.slug}</span> can never be reused.
+      <code class="text-fg-1">{project.slug}</code> can never be reused.
     </p>
 
     {#if loadingReport}
@@ -156,19 +156,19 @@
         <p class="mb-1 text-fg-2">Would delete:</p>
         <ul class="space-y-0.5 text-fg-2" data-testid="delete-project-report">
           {#each report.indexes as ix (ix.name)}
-            <li>index <span class="font-mono">{ix.name}</span> · {ix.docs} docs</li>
+            <li>index <code>{ix.name}</code> · {ix.docs} docs</li>
           {/each}
           {#each report.dirs as d (d.path)}
             <li>
-              directory <span class="font-mono">{d.path}</span> · {formatBytes(d.bytes)}
+              directory <code>{d.path}</code> · {formatBytes(d.bytes)}
             </li>
           {/each}
           {#each report.promoted_models as m (m)}
-            <li>model <span class="font-mono">{m}</span></li>
+            <li>model <code>{m}</code></li>
           {/each}
           {#if report.mlflow_experiment}
             <li>
-              experiment <span class="font-mono">{report.mlflow_experiment}</span>
+              experiment <code>{report.mlflow_experiment}</code>
             </li>
           {/if}
         </ul>
@@ -185,9 +185,9 @@
           <ul class="list-inside list-disc">
             {#each report.referenced_by as r (`${r.project}/${r.profile ?? ''}`)}
               <li>
-                <span class="font-mono">{r.project}</span> uses a shared model{r.profile
+                <code>{r.project}</code> uses a shared model{r.profile
                   ? ' (profile '
-                  : ''}{#if r.profile}<span class="font-mono">{r.profile}</span>){/if}
+                  : ''}{#if r.profile}<code>{r.profile}</code>){/if}
               </li>
             {/each}
           </ul>
@@ -217,7 +217,7 @@
       {#if report && !blocked}
         <label class="mb-3 block text-body">
           <span class="mb-1 block text-meta text-fg-2"
-            >Type <span class="font-mono text-fg-1">{project.slug}</span> to confirm</span
+            >Type <code class="text-fg-1">{project.slug}</code> to confirm</span
           >
           <input
             type="text"
@@ -235,7 +235,7 @@
       {/if}
       {#if inUseText}
         <p class="mb-3 text-meta text-fg-2" data-testid="delete-project-in-use">
-          In use by: <span class="font-mono">{inUseText}</span>
+          In use by: <code>{inUseText}</code>
         </p>
       {/if}
       <div class="flex items-center justify-end gap-2">

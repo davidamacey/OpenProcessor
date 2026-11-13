@@ -123,7 +123,7 @@
     <h3 class="text-title font-semibold text-fg-1">
       Edit {activeSlot?.label.singular ?? 'box'}
     </h3>
-    <span class="font-mono text-caption text-fg-3">{crop.id}</span>
+    <code class="text-caption text-fg-3">{crop.id}</code>
   </header>
 
   <MultiBoxCanvas
@@ -166,7 +166,7 @@
   </div>
   <!-- Footer: hotkey reference. -->
   <footer class="flex flex-col gap-1 text-caption text-fg-2">
-    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono">
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
       <span
         ><kbd class="rounded bg-surface-2 px-1">{kg('box_edit.next_box')}</kbd> next box</span
       >

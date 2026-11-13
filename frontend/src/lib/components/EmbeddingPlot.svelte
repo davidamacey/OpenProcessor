@@ -360,7 +360,7 @@
           onpointerleave={finishDrag}
         ></canvas>
         <p
-          class="pointer-events-none absolute bottom-1.5 right-2 font-mono text-caption text-fg-3"
+          class="pointer-events-none absolute bottom-1.5 right-2 text-caption text-fg-3 tabular-nums"
           data-testid="embedding-count"
         >
           {points.length.toLocaleString()}

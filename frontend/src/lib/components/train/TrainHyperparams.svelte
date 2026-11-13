@@ -82,7 +82,7 @@
           type="text"
           value="MuSGD"
           readonly
-          class="w-full cursor-not-allowed rounded-md border border-line bg-surface-0 px-2 py-1.5 font-mono text-body text-fg-3"
+          class="w-full cursor-not-allowed rounded-md border border-line bg-surface-0 px-2 py-1.5 text-body text-fg-3"
         />
       </label>
       <label class="block">

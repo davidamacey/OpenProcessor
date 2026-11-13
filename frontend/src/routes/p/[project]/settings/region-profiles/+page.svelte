@@ -115,12 +115,12 @@
               >
                 <td class="py-1.5 pr-3">
                   <a
-                    class="font-mono text-accent-text hover:underline"
+                    class="text-accent-text hover:underline"
                     href={resolve(
                       projectHref(
                         `/settings/region-profiles/${encodeURIComponent(p.name)}`,
                       ),
-                    )}>{p.name}</a
+                    )}><code>{p.name}</code></a
                   >
                   {#if p.active}
                     <span
@@ -142,7 +142,7 @@
                 <td class="py-1.5 pr-3 text-meta">
                   <span class="text-fg-1">{p.display_name ?? '—'}</span>
                   {#if p.region_class_name}
-                    <code class="ml-1 font-mono text-fg-3">{p.region_class_name}</code>
+                    <code class="ml-1 text-fg-3">{p.region_class_name}</code>
                   {/if}
                   <span class="block text-fg-3"
                     >{p.reads_text ? 'reads text' : 'no text'}</span
@@ -151,16 +151,15 @@
                 <td class="py-1.5 pr-3 text-meta text-fg-2">
                   {p.source}{p.read_only ? ' · read-only' : ''}
                 </td>
-                <td class="py-1.5 pr-3 font-mono text-meta">{p.revision ?? '—'}</td>
+                <td class="py-1.5 pr-3 text-meta tabular-nums">{p.revision ?? '—'}</td>
                 <td class="py-1.5 pr-3 text-meta">
                   <span class="block"
                     >detector:
-                    <span class="font-mono">{p.detector_model || 'none'}</span></span
+                    <code>{p.detector_model || 'none'}</code></span
                   >
                   <span class="block"
                     >segmenter prompt:
-                    <span class="font-mono">{p.segmenter_text_prompt || 'none'}</span
-                    ></span
+                    <span>{p.segmenter_text_prompt || 'none'}</span></span
                   >
                   {#if p.max_regions_per_item != null}
                     <span class="block text-fg-3"
@@ -168,7 +167,7 @@
                     >
                   {/if}
                 </td>
-                <td class="py-1.5 pr-3 font-mono text-meta text-fg-2">
+                <td class="py-1.5 pr-3 text-meta text-fg-2">
                   {p.parent_classes.length > 0 ? p.parent_classes.join(', ') : '—'}
                 </td>
                 <ConfigRowTail row={p} {flow} />
@@ -192,7 +191,7 @@
           <ul class="space-y-1 text-body" data-testid="profile-templates">
             {#each l.templates ?? [] as t (t.name + t.path)}
               <li class="flex flex-wrap items-center gap-2" data-testid="template-row">
-                <span class="font-mono">{t.name}</span>
+                <code>{t.name}</code>
                 {#if t.display_name}<span class="text-fg-2">{t.display_name}</span>{/if}
                 <span class="text-meta text-fg-3"
                   >{t.reads_text ? 'reads text' : 'no text'}</span

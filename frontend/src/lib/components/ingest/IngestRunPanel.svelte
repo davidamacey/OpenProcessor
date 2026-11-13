@@ -331,8 +331,8 @@
       {/if}
       <ul class="max-h-64 overflow-y-auto text-meta">
         {#each run.results.page(activeTab, pageOffset[activeTab], PAGE_SIZE, activeTab === 'failed' ? (errorKindFilter ?? undefined) : undefined, activeTab === 'ingested' && notEmbeddedOnly) as [id, r] (id)}
-          <li class="border-b border-line py-1 font-mono">
-            {r.identifier}
+          <li class="border-b border-line py-1">
+            <code>{r.identifier}</code>
             {#if r.error_kind}
               <span class="text-fg-3"> [{r.error_kind}]</span>
             {/if}

@@ -26,7 +26,7 @@
   data-level={none ? 'none' : partial ? 'partial' : 'full'}
 >
   <p>
-    <span class="font-mono font-semibold" data-testid="validated-ratio-counts"
+    <span class="font-semibold tabular-nums" data-testid="validated-ratio-counts"
       >{formatCount(validated)} of {formatCount(total)}</span
     >
     crops are validated.

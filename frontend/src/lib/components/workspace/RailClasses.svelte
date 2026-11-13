@@ -209,7 +209,7 @@
                   <span class="flex grow items-center gap-1.5 truncate">
                     {#if cls.hotkey_letter}
                       <kbd
-                        class="rounded bg-surface-2 px-1 py-0.5 font-mono text-caption text-accent-text"
+                        class="rounded bg-surface-2 px-1 py-0.5 text-caption text-accent-text"
                         title="Press '{cls.hotkey_letter}' to assign selected crops to {cls.name}"
                       >
                         {cls.hotkey_letter}
@@ -218,9 +218,9 @@
                     <span class="truncate">{cls.name}</span>
                   </span>
                   <span
-                    class="rounded-md border px-1.5 py-0.5 font-mono text-meta {adequacyChipClass(
+                    class="rounded-md border px-1.5 py-0.5 text-meta {adequacyChipClass(
                       cls.adequacy,
-                    )}"
+                    )} tabular-nums"
                     title="{cls.count.toLocaleString()} items carry this class.&#10;{cls.validated_count ??
                       0} of {cls.count ??
                       0} are human-validated.&#10;Chip color reflects the server's adequacy tier ({cls.adequacy ??

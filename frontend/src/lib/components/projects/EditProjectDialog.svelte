@@ -74,7 +74,7 @@
 {#if project && base}
   <Modal label="Edit project" {onclose} data-testid="edit-project-dialog">
     <h3 class="mb-1 text-title font-semibold">Edit project</h3>
-    <p class="mb-3 font-mono text-meta text-fg-3">{base.slug}</p>
+    <p class="mb-3 text-meta text-fg-3"><code>{base.slug}</code></p>
     <form
       onsubmit={async (e) => {
         e.preventDefault();

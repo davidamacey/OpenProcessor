@@ -107,7 +107,7 @@
       <p class="text-meta text-fg-2" data-testid="vlm-health">
         {#if health}
           VLM service for this project: {health.reachable ? 'reachable' : 'not reachable'}
-          {#if health.model}· model <span class="font-mono">{health.model}</span>{/if}
+          {#if health.model}· model <code>{health.model}</code>{/if}
           {#if health.detail}· {health.detail}{/if}
           {#if health.last_error}
             · <span class="text-danger-text">{health.last_error}</span>
@@ -241,7 +241,7 @@
     {/if}
     {#if models.deleteProjects.length > 0}
       <p class="text-meta text-fg-2" data-testid="vlm-delete-projects">
-        Used by: <span class="font-mono">{models.deleteProjects.join(', ')}</span>
+        Used by: <code>{models.deleteProjects.join(', ')}</code>
       </p>
     {/if}
   </ConfirmDialog>

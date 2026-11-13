@@ -92,7 +92,7 @@
   <div class="mb-2 flex items-center gap-2 px-1 text-meta text-fg-2">
     <span>source</span>
     <span class="grow"></span>
-    <span class="font-mono">{current.source ?? ''}</span>
+    <span>{current.source ?? ''}</span>
   </div>
   <!-- V-3: top-aligned, so on a tall pane the image sits at the top
        rather than mid-way down an empty black panel. -->
@@ -128,7 +128,7 @@
       }}
     />
     <span class="grow"></span>
-    <span class="font-mono">{current.id.slice(0, 12)}…</span>
+    <code>{current.id.slice(0, 12)}…</code>
   </div>
   <!-- M2/M12 (2026-09-24 interactive pass): shrink-0 + a floor
        height so this panel never collapses toward 0px when the

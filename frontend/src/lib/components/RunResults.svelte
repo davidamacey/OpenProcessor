@@ -128,8 +128,8 @@
     <div class="space-y-4 border-t border-line bg-surface-0/40 px-3 py-3 text-meta">
       <!-- T5 (visual audit 2026-09-24): the sticky table header can cover
            the run's own row while this panel is open, so name the run here. -->
-      <p class="font-mono text-caption text-fg-2" data-testid="run-results-title">
-        Results for {status.job_id}
+      <p class="text-meta text-fg-2" data-testid="run-results-title">
+        Results for <code>{status.job_id}</code>
       </p>
       {#if status.error}
         <p
@@ -165,13 +165,13 @@
             <div class="grid grid-cols-2 gap-2">
               <div>
                 <dt class="text-fg-3">mAP50</dt>
-                <dd class="font-mono text-fg-1">
+                <dd class="text-fg-1 tabular-nums">
                   {formatMetric(lastEpochMetric?.map50)}
                 </dd>
               </div>
               <div>
                 <dt class="text-fg-3">mAP50-95</dt>
-                <dd class="font-mono text-fg-1">
+                <dd class="text-fg-1 tabular-nums">
                   {formatMetric(lastEpochMetric?.map50_95)}
                 </dd>
               </div>
@@ -188,13 +188,13 @@
             <div class="grid grid-cols-2 gap-2">
               <div>
                 <dt class="text-fg-3">mAP50</dt>
-                <dd class="font-mono text-fg-1">
+                <dd class="text-fg-1 tabular-nums">
                   {formatMetric(bestCheckpointMetric?.map50)}
                 </dd>
               </div>
               <div>
                 <dt class="text-fg-3">mAP50-95</dt>
-                <dd class="font-mono text-fg-1">
+                <dd class="text-fg-1 tabular-nums">
                   {formatMetric(bestCheckpointMetric?.map50_95)}
                 </dd>
               </div>
@@ -216,19 +216,19 @@
               title="Ultralytics' own val protocol and defaults. A bake-off scores the same split with its profile's served thresholds, so its mAP differs."
               >({TRAINER_PROTOCOL_LABEL})</span
             >
-            <span class="ml-3 font-mono text-fg-1"
+            <span class="ml-3 text-fg-1 tabular-nums"
               >mAP50 {formatMetric(evalData.map50)}</span
             >
-            <span class="ml-2 font-mono text-fg-1"
+            <span class="ml-2 text-fg-1 tabular-nums"
               >mAP50-95 {formatMetric(evalData.map50_95)}</span
             >
             {#if evalData.precision != null}
-              <span class="ml-2 font-mono text-fg-1"
+              <span class="ml-2 text-fg-1 tabular-nums"
                 >precision {formatMetric(evalData.precision)}</span
               >
             {/if}
             {#if evalData.recall != null}
-              <span class="ml-2 font-mono text-fg-1"
+              <span class="ml-2 text-fg-1 tabular-nums"
                 >recall {formatMetric(evalData.recall)}</span
               >
             {/if}
@@ -239,10 +239,10 @@
           {#if evalData.val_last}
             <p class="mb-2 text-fg-2" data-testid="eval-val-last">
               validation (last epoch):
-              <span class="ml-1 font-mono text-fg-1"
+              <span class="ml-1 text-fg-1 tabular-nums"
                 >mAP50 {formatMetric(evalData.val_last.map50)}</span
               >
-              <span class="ml-2 font-mono text-fg-1"
+              <span class="ml-2 text-fg-1 tabular-nums"
                 >mAP50-95 {formatMetric(evalData.val_last.map50_95)}</span
               >
             </p>
@@ -269,19 +269,19 @@
                   {#each perClass as row (row.class_id)}
                     <tr class="border-b border-line text-fg-2 last:border-b-0">
                       <td class="px-2 py-1">{row.name}</td>
-                      <td class="px-2 py-1 text-right font-mono"
+                      <td class="px-2 py-1 text-right tabular-nums"
                         >{formatMetric(row.precision)}</td
                       >
-                      <td class="px-2 py-1 text-right font-mono"
+                      <td class="px-2 py-1 text-right tabular-nums"
                         >{formatMetric(row.recall)}</td
                       >
-                      <td class="px-2 py-1 text-right font-mono"
+                      <td class="px-2 py-1 text-right tabular-nums"
                         >{formatMetric(row.f1)}</td
                       >
-                      <td class="px-2 py-1 text-right font-mono"
+                      <td class="px-2 py-1 text-right tabular-nums"
                         >{formatMetric(row.ap50)}</td
                       >
-                      <td class="px-2 py-1 text-right font-mono"
+                      <td class="px-2 py-1 text-right tabular-nums"
                         >{formatCount(row.support)}</td
                       >
                     </tr>
@@ -323,7 +323,7 @@
       <section class="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div>
           <dt class="text-meta text-fg-3">MLflow run</dt>
-          <dd class="break-all font-mono text-fg-1">
+          <dd class="break-all text-fg-1">
             {#if mlflowRunUrl}
               <!-- eslint-disable svelte/no-navigation-without-resolve -- external MLflow server URL, not a SvelteKit route -->
               <a
@@ -334,7 +334,7 @@
               >
               <!-- eslint-enable svelte/no-navigation-without-resolve -->
             {:else if mlflowRunId}
-              {mlflowRunId}
+              <code>{mlflowRunId}</code>
               {#if !isTerminal}
                 <span class="ml-1 text-fg-3">(url pending)</span>
               {/if}
@@ -347,7 +347,7 @@
         </div>
         <div>
           <dt class="text-meta text-fg-3">Checkpoint SHA-256</dt>
-          <dd class="break-all font-mono text-fg-1">{formatScalar(checkpointSha)}</dd>
+          <dd class="break-all text-fg-1"><code>{formatScalar(checkpointSha)}</code></dd>
         </div>
       </section>
 
@@ -364,37 +364,37 @@
           <dl class="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div>
               <dt class="text-fg-3">export_dir</dt>
-              <dd class="break-all font-mono text-fg-1">
-                {formatScalar(lineage?.export_dir)}
+              <dd class="break-all text-fg-1">
+                <code>{formatScalar(lineage?.export_dir)}</code>
               </dd>
             </div>
             <div>
               <dt class="text-fg-3">dataset_sha</dt>
-              <dd class="break-all font-mono text-fg-1">
-                {formatScalar(lineage?.dataset_sha)}
+              <dd class="break-all text-fg-1">
+                <code>{formatScalar(lineage?.dataset_sha)}</code>
               </dd>
             </div>
             <div>
               <dt class="text-fg-3">dataset_version_tag</dt>
-              <dd class="break-all font-mono text-fg-1">
-                {formatScalar(lineage?.dataset_version_tag)}
+              <dd class="break-all text-fg-1">
+                <code>{formatScalar(lineage?.dataset_version_tag)}</code>
               </dd>
             </div>
             <div>
               <dt class="text-fg-3">frozen_test_sha</dt>
-              <dd class="break-all font-mono text-fg-1">
-                {formatScalar(lineage?.frozen_test_sha)}
+              <dd class="break-all text-fg-1">
+                <code>{formatScalar(lineage?.frozen_test_sha)}</code>
               </dd>
             </div>
             <div>
               <dt class="text-fg-3">test_label_sha</dt>
-              <dd class="break-all font-mono text-fg-1">
-                {formatScalar(lineage?.test_label_sha)}
+              <dd class="break-all text-fg-1">
+                <code>{formatScalar(lineage?.test_label_sha)}</code>
               </dd>
             </div>
             <div>
               <dt class="text-fg-3">include_classes</dt>
-              <dd class="break-all font-mono text-fg-1">
+              <dd class="break-all text-fg-1">
                 {lineage?.include_classes && lineage.include_classes.length > 0
                   ? lineage.include_classes.join(', ')
                   : '—'}
@@ -402,26 +402,26 @@
             </div>
             <div>
               <dt class="text-fg-3">training_seed</dt>
-              <dd class="font-mono text-fg-1">
+              <dd class="text-fg-1 tabular-nums">
                 {formatScalar(lineage?.training_seed)}
               </dd>
             </div>
             <div>
               <dt class="text-fg-3">code: api_sha</dt>
-              <dd class="break-all font-mono text-fg-1">
-                {formatScalar(codeVersions?.api_sha)}
+              <dd class="break-all text-fg-1">
+                <code>{formatScalar(codeVersions?.api_sha)}</code>
               </dd>
             </div>
             <div>
               <dt class="text-fg-3">code: trainer_sha</dt>
-              <dd class="break-all font-mono text-fg-1">
-                {formatScalar(codeVersions?.trainer_sha)}
+              <dd class="break-all text-fg-1">
+                <code>{formatScalar(codeVersions?.trainer_sha)}</code>
               </dd>
             </div>
             <div>
               <dt class="text-fg-3">code: trainer_image_id</dt>
-              <dd class="break-all font-mono text-fg-1">
-                {formatScalar(codeVersions?.trainer_image_id)}
+              <dd class="break-all text-fg-1">
+                <code>{formatScalar(codeVersions?.trainer_image_id)}</code>
               </dd>
             </div>
           </dl>
@@ -441,8 +441,10 @@
                 <tbody>
                   {#each remapRows as row (row.newId)}
                     <tr class="border-b border-line text-fg-2 last:border-b-0">
-                      <td class="px-2 py-1 font-mono">{row.newId}</td>
-                      <td class="px-2 py-1 font-mono">{formatScalar(row.originalId)}</td>
+                      <td class="px-2 py-1"><code>{row.newId}</code></td>
+                      <td class="px-2 py-1"
+                        ><code>{formatScalar(row.originalId)}</code></td
+                      >
                       <td class="px-2 py-1">{formatScalar(row.name)}</td>
                     </tr>
                   {/each}

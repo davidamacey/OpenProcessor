@@ -20,7 +20,7 @@
   {#if card}
     <p class="text-fg-1">
       Cluster {displayNoText(card)}
-      <span class="font-mono text-meta text-fg-3">{card.uid}</span>
+      <code class="text-meta text-fg-3">{card.uid}</code>
     </p>
     <p class="text-fg-2" data-testid="cluster-details-name">
       size {card.size.toLocaleString()} ·
@@ -44,7 +44,7 @@
       }}>Label all {card.size.toLocaleString()} in this cluster…</Button
     >
     {#if card.label_agreement != null}
-      <p class="font-mono text-meta text-fg-2" data-testid="cluster-agreement">
+      <p class="text-meta text-fg-2 tabular-nums" data-testid="cluster-agreement">
         agreement {(card.label_agreement * 100).toFixed(0)}%
         {#if card.labelled_share != null}
           · labelled {(card.labelled_share * 100).toFixed(0)}%
@@ -52,7 +52,7 @@
       </p>
     {/if}
     <p
-      class="font-mono text-caption text-fg-2"
+      class="text-meta text-fg-2 tabular-nums"
       data-testid="cluster-header-counts"
       title="validated · labeled · cluster total — class-wide counts are every crop of this class (test holdout included), from the class registry; 'in this cluster' is this cluster's own member count (test holdout included). The grid lists only reviewable members."
     >

@@ -89,7 +89,7 @@
       {#if list && list.s3_allowed.length > 0}
         <p class="text-meta text-fg-3">
           Allowed by this deployment:
-          <span class="font-mono">{list.s3_allowed.join(', ')}</span>
+          <code>{list.s3_allowed.join(', ')}</code>
         </p>
       {/if}
     {:else}

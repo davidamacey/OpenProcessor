@@ -189,7 +189,7 @@
         <ReprocessCounts res={f.result} {scopeLabel} />
         {#if f.job}
           <p class="text-meta text-fg-2" data-testid="reprocess-job">
-            Job <code class="font-mono">{f.job.job_id}</code>:
+            Job <code>{f.job.job_id}</code>:
             {datasetsAvailability.statusLabel(f.job.status)}
             {#if f.job.images_total}
               · {(f.job.images_done ?? 0).toLocaleString()} / {f.job.images_total.toLocaleString()}

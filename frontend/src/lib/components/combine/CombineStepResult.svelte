@@ -47,14 +47,14 @@
     <dl class="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-0.5 text-meta">
       {#each inline as [k, v] (k)}
         <dt class="text-fg-3">{combineLabel(k)}</dt>
-        <dd class="font-mono text-fg-1" data-result-key={k}>{reportCell(v)}</dd>
+        <dd class="text-fg-1" data-result-key={k}>{reportCell(v)}</dd>
       {/each}
     </dl>
   {/if}
   {#each collapsed as [k, v] (k)}
     <details class="text-meta" data-testid="combine-step-result-detail">
       <summary class="cursor-pointer text-fg-2">{combineLabel(k)}</summary>
-      <pre class="mt-1 overflow-x-auto font-mono text-fg-2">{typeof v === 'string'
+      <pre class="mt-1 overflow-x-auto text-fg-2">{typeof v === 'string'
           ? v
           : JSON.stringify(v, null, 2)}</pre>
     </details>

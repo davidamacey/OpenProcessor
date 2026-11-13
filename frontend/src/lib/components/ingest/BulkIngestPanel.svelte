@@ -59,7 +59,7 @@
     </p>
     <ul class="text-meta text-fg-2" data-testid="bulk-roots">
       {#each config.source_roots as root (root)}
-        <li class="font-mono break-all">{root}</li>
+        <li class="break-all"><code>{root}</code></li>
       {/each}
     </ul>
 
@@ -197,7 +197,7 @@
       >
         <div class="flex flex-wrap items-baseline justify-between gap-2">
           <p class="min-w-0 text-meta text-fg-2">
-            <span class="font-mono break-all">{run.source.label ?? run.source.path}</span>
+            <code class="break-all">{run.source.label ?? run.source.path}</code>
           </p>
           <span
             class="text-body font-semibold {STATUS_TONE[run.status]}"
@@ -232,7 +232,7 @@
             <p>{progress.unreadable} entries could not be read and were skipped.</p>
             <ul class="mt-1">
               {#each progress.unreadable_samples as path (path)}
-                <li class="font-mono break-all text-fg-2">{path}</li>
+                <li class="break-all text-fg-2"><code>{path}</code></li>
               {/each}
             </ul>
           </div>
@@ -329,7 +329,7 @@
               <tbody>
                 {#each stageRows(run) as [stage, seconds] (stage)}
                   <tr>
-                    <td class="pr-4 font-mono">{stage}</td>
+                    <td class="pr-4">{stage}</td>
                     <td class="text-right">{seconds.toFixed(1)} s</td>
                   </tr>
                 {/each}
@@ -351,7 +351,7 @@
             <ul class="max-h-48 overflow-y-auto text-meta">
               {#each controller.failures.items as f (f.path)}
                 <li class="border-b border-line py-1 break-all">
-                  <span class="font-mono">{f.path}</span>
+                  <code>{f.path}</code>
                   <span class="text-fg-3"> [{f.error_kind}]</span>
                   <span class="text-danger-text"> — {f.error}</span>
                 </li>
@@ -391,7 +391,7 @@
         <ul class="mt-2 space-y-1">
           {#each controller.recent as r (r.run_id)}
             <li class="flex flex-wrap items-baseline gap-2">
-              <span class="font-mono break-all">{r.source.label ?? r.source.path}</span>
+              <code class="break-all">{r.source.label ?? r.source.path}</code>
               <span class={STATUS_TONE[r.status]}>{r.status.replaceAll('_', ' ')}</span>
               <span>{r.progress.ingested} ingested · {r.progress.failed} failed</span>
               <button

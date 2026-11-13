@@ -19,7 +19,7 @@
 </script>
 
 <header class="flex flex-wrap items-baseline gap-3">
-  <h1 class="font-mono text-h1 font-semibold tracking-tight">{name}</h1>
+  <h1 class="text-h1 font-semibold tracking-tight">{name}</h1>
   {#if d}
     <span class="text-body text-fg-2" data-testid="config-meta">
       {d.source}{d.revision != null ? ` · revision ${d.revision}` : ''}{d.read_only
@@ -38,7 +38,7 @@
       {/if}
     {/if}
     {#if lineage && d.cloned_from}
-      <span class="font-mono text-meta text-fg-3">cloned from {d.cloned_from}</span>
+      <span class="text-meta text-fg-3">cloned from <code>{d.cloned_from}</code></span>
     {/if}
   {/if}
   <span class="grow"></span>

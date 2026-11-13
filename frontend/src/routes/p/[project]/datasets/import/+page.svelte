@@ -158,8 +158,10 @@
         {#if sourceRoots.length > 0}
           <div class="text-meta text-fg-3" data-testid="source-roots">
             Allowed roots:
-            {#each sourceRoots as r, i (r)}<code class="font-mono text-fg-2">{r}</code
-              >{i < sourceRoots.length - 1 ? ', ' : ''}{/each}
+            {#each sourceRoots as r, i (r)}<code class="text-fg-2">{r}</code>{i <
+              sourceRoots.length - 1
+                ? ', '
+                : ''}{/each}
           </div>
         {/if}
         <div class="text-meta">
@@ -347,8 +349,7 @@
           oncancel={() => (resumeTarget = null)}
         >
           <p>
-            Resume import <code class="font-mono">{resumeTarget}</code> from its last finished
-            chunk.
+            Resume import <code>{resumeTarget}</code> from its last finished chunk.
           </p>
         </ConfirmDialog>
       {/if}

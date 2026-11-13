@@ -150,26 +150,26 @@
       <dl class="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-4">
         <div>
           <dt class="text-fg-3">Clusters to work on</dt>
-          <dd class="font-mono text-fg-1" data-testid="loop-plan-roots">
+          <dd class="text-fg-1 tabular-nums" data-testid="loop-plan-roots">
             {formatCount(plan.roots)}
           </dd>
         </div>
         <div>
           <dt class="text-fg-3">Items it could label</dt>
-          <dd class="font-mono text-fg-1" data-testid="loop-plan-items">
+          <dd class="text-fg-1 tabular-nums" data-testid="loop-plan-items">
             {formatCount(plan.eligible_items)}
           </dd>
         </div>
         <div>
           <dt class="text-fg-3">Root level costs about</dt>
-          <dd class="font-mono text-fg-1" data-testid="loop-plan-crops">
+          <dd class="text-fg-1 tabular-nums" data-testid="loop-plan-crops">
             {formatCount(plan.estimated_vlm_crops_root_level)} crops,
             {formatCount(plan.estimated_vlm_requests_root_level)} requests
           </dd>
         </div>
         <div>
           <dt class="text-fg-3">Fits the budget</dt>
-          <dd class="font-mono text-fg-1" data-testid="loop-plan-fits">
+          <dd class="text-fg-1" data-testid="loop-plan-fits">
             {plan.fits_budget === null ? '—' : plan.fits_budget ? 'yes' : 'no'}
           </dd>
         </div>
@@ -197,7 +197,7 @@
                 <th scope="col" class="font-normal">Answers at 0, 1, 2, 3 dissent</th>
               </tr>
             </thead>
-            <tbody class="font-mono text-fg-1">
+            <tbody class="text-fg-1 tabular-nums">
               {#each plan.required_sample_table as row (row.n_members)}
                 <tr>
                   <td class="pr-4">{formatCount(row.n_members)}</td>

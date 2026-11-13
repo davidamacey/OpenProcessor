@@ -220,8 +220,8 @@
            tells the operator whether a previous run failed. -->
       <div class="flex flex-wrap items-center gap-2 text-meta">
         <span
-          class="rounded px-2 py-0.5 font-mono capitalize
-            {job.status === 'running'
+          class="rounded px-2 py-0.5 capitalize
+ {job.status === 'running'
             ? 'bg-accent/20 text-accent-text'
             : job.status === 'completed'
               ? 'bg-success/20 text-success-text'
@@ -245,7 +245,7 @@
         {/if}
         {#if isLive}
           <span class="text-fg-2">{STAGE_LABEL[job.stage] ?? job.stage}</span>
-          <span class="font-mono text-fg-3">
+          <span class="text-fg-3 tabular-nums">
             stage {stageIdx + 1}/{stageOrder.length}
           </span>
         {:else if job.status !== 'idle' && !isPaused && job.finished_at}
@@ -264,7 +264,7 @@
           {/if}
         </div>
         <div
-          class="flex flex-wrap items-center justify-between gap-2 font-mono text-caption text-fg-2"
+          class="flex flex-wrap items-center justify-between gap-2 text-caption text-fg-2 tabular-nums"
         >
           <span>
             {#if job.total > 0}
@@ -299,7 +299,7 @@
         {#if stageDurations.length > 0}
           <div class="space-y-1 text-meta text-fg-2">
             {#if stageDurations.length > 0}
-              <table class="font-mono text-caption">
+              <table class="text-meta tabular-nums">
                 <tbody>
                   {#each stageDurations as [name, sec] (name)}
                     <tr>
@@ -342,11 +342,11 @@
                     <td class="py-1 pr-3 text-fg-1" title={row.key}>
                       {STAGE_LABEL[row.key] ?? row.key}
                     </td>
-                    <td class="py-1 pr-3 font-mono text-fg-2">{row.status}</td>
+                    <td class="py-1 pr-3 text-fg-2">{row.status}</td>
                     <td class="py-1 text-fg-2">
                       {#if row.reason}<span class="mr-2">{row.reason}</span>{/if}
                       {#each row.fields as f (f.name)}
-                        <span class="mr-2 inline-block font-mono text-caption"
+                        <span class="mr-2 inline-block text-caption"
                           ><span class="text-fg-3">{f.name}</span> {f.value}</span
                         >
                       {/each}
@@ -360,7 +360,7 @@
                 Raw JSON
               </summary>
               <pre
-                class="mt-1 max-h-64 overflow-auto rounded bg-surface-1 p-2 font-mono text-caption text-fg-2">{JSON.stringify(
+                class="mt-1 max-h-64 overflow-auto rounded bg-surface-1 p-2 text-caption text-fg-2">{JSON.stringify(
                   job.result,
                   null,
                   2,

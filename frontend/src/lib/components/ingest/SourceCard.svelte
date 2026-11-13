@@ -35,7 +35,7 @@
   <header class="flex flex-wrap items-baseline justify-between gap-2">
     <div class="min-w-0">
       <h3 class="text-body font-semibold text-fg-1">{source.name}</h3>
-      <p class="font-mono text-meta break-all text-fg-2">{source.location}</p>
+      <p class="text-meta break-all text-fg-2"><code>{source.location}</code></p>
     </div>
     <span class="chip">{source.backend === 's3' ? 'S3' : 'folder'}</span>
   </header>
@@ -83,7 +83,7 @@
     {#if triggers.schedule?.enabled}
       <div>
         <dt class="text-fg-3">
-          Schedule <span class="font-mono">{triggers.schedule.cron}</span> UTC
+          Schedule <code>{triggers.schedule.cron}</code> UTC
         </dt>
         <dd class="text-fg-1">
           last {formatWhen(source.schedule.last_fire_at)} · next {formatWhen(
@@ -95,8 +95,8 @@
     {#if triggers.webhook_enabled}
       <div class="sm:col-span-2">
         <dt class="text-fg-3">Webhook</dt>
-        <dd class="font-mono break-all text-fg-1" data-testid="source-webhook-path">
-          {source.webhook.path}
+        <dd class="break-all text-fg-1" data-testid="source-webhook-path">
+          <code>{source.webhook.path}</code>
         </dd>
         <dd class="text-fg-2">
           {source.webhook.received} received · {source.webhook.queued} queued · {source
@@ -138,7 +138,7 @@
       <ul class="mt-1 max-h-40 overflow-y-auto">
         {#each source.errors as e (e.key + e.etag)}
           <li class="border-b border-line py-1 break-all">
-            <span class="font-mono">{e.key}</span>
+            <code>{e.key}</code>
             <span class="text-fg-3"> [{e.state}, {e.attempts} tries]</span>
             <span class="text-danger-text"> — {e.error}</span>
           </li>

@@ -54,7 +54,7 @@
             <span class="text-body font-medium text-fg-1"
               >{KIND[d.decision] ?? d.decision}</span
             >
-            <span class="break-all font-mono">{d.a_id} / {d.b_id}</span>
+            <code class="break-all">{d.a_id} / {d.b_id}</code>
             <span class="text-fg-3">{d.level} level, {d.decided_by}, {d.decided_at}</span>
           </span>
           <button

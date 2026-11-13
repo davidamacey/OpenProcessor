@@ -42,8 +42,8 @@
   {:else}
     <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-meta">
       <dt class="text-fg-3">Model</dt>
-      <dd class="font-mono text-fg-1">
-        {detector.model} (version {detector.version})
+      <dd class="text-fg-1">
+        <code>{detector.model}</code> (version {detector.version})
       </dd>
       <dt class="text-fg-3">Input size</dt>
       <dd class="text-fg-1">{detector.input_size}</dd>
@@ -67,9 +67,9 @@
         <tbody>
           {#each detector.labels as l (l.class_id)}
             <tr class="border-t border-line">
-              <td class="pr-3 font-mono text-fg-2">{l.class_id}</td>
+              <td class="pr-3 text-fg-2"><code>{l.class_id}</code></td>
               <td class="pr-3 text-fg-1">{l.name}</td>
-              <td class="font-mono text-fg-2">{l.slug}</td>
+              <td class="text-fg-2"><code>{l.slug}</code></td>
             </tr>
           {/each}
         </tbody>

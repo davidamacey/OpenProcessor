@@ -34,30 +34,30 @@
 {/if}
 {#if importIds.length > 0}
   <dt class="text-fg-3">Imports</dt>
-  <dd class="flex flex-wrap gap-x-2 font-mono text-fg-1" data-testid="import-ids">
+  <dd class="flex flex-wrap gap-x-2 text-fg-1" data-testid="import-ids">
     {#each importIds as id (id)}
       {#if linkable}
         <a
           class="text-accent-text underline hover:text-accent-text"
           href={resolve(projectHref(`/datasets/imports/${encodeURIComponent(id)}`))}
-          >{id}</a
+          ><code>{id}</code></a
         >
       {:else}
-        <span>{id}</span>
+        <code>{id}</code>
       {/if}
     {/each}
   </dd>
 {/if}
 {#if crop.imported_at}
   <dt class="text-fg-3">Imported</dt>
-  <dd class="font-mono text-fg-2" title={crop.imported_at} data-testid="import-at">
+  <dd class="text-fg-2 tabular-nums" title={crop.imported_at} data-testid="import-at">
     {formatTimestamp(crop.imported_at)}
   </dd>
 {/if}
 {#if crop.proposed_by_import}
   <dt class="text-fg-3">Proposed by import</dt>
-  <dd class="font-mono text-fg-1" data-testid="import-proposed-by">
-    {crop.proposed_by_import}
+  <dd class="text-fg-1" data-testid="import-proposed-by">
+    <code>{crop.proposed_by_import}</code>
   </dd>
 {/if}
 {#if crop.on_negative_frame}
@@ -75,7 +75,7 @@
   <dd class="flex flex-wrap gap-1" data-testid="import-proposal-chain">
     {#each chain as step, i (i)}
       <span
-        class="rounded border border-line-strong bg-surface-2/60 px-1 font-mono text-caption text-fg-2"
+        class="rounded border border-line-strong bg-surface-2/60 px-1 text-caption text-fg-2"
         >{step}</span
       >
     {/each}

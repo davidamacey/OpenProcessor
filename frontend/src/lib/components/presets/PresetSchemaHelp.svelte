@@ -32,14 +32,14 @@
           data-path={f.path}
         >
           <div class="flex flex-wrap items-baseline gap-x-2">
-            <span class="font-mono text-meta break-all text-fg-1">{f.path}</span>
+            <code class="text-meta break-all text-fg-1">{f.path}</code>
             <span class="text-meta text-fg-2">{f.type}</span>
             {#if f.required}<span class="text-meta text-warn-text">required</span>{/if}
           </div>
           {#if f.description}<p class="text-meta text-fg-2">{f.description}</p>{/if}
           {#if f.choices.length > 0}
             <p class="text-meta text-fg-2">
-              One of <span class="font-mono">{f.choices.join(', ')}</span>
+              One of <code>{f.choices.join(', ')}</code>
             </p>
           {/if}
           {#if f.limits.length > 0}
@@ -47,7 +47,7 @@
           {/if}
           {#if f.default !== null}
             <p class="text-meta text-fg-2">
-              Default <span class="font-mono">{f.default}</span>
+              Default <code>{f.default}</code>
             </p>
           {/if}
         </li>

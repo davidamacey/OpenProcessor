@@ -82,7 +82,7 @@
 
 <div class="flex flex-col gap-4">
   <header class="flex flex-wrap items-baseline gap-3">
-    <h1 class="font-mono text-h1 font-semibold text-fg-1">{endpointName}</h1>
+    <h1 class="text-h1 font-semibold text-fg-1">{endpointName}</h1>
     {#if ed.doc}
       {@const d = ed.doc}
       <span class="text-body text-fg-2" data-testid="config-meta">
@@ -97,13 +97,12 @@
         >
       {/if}
       {#each d.active_in ?? [] as slug (slug)}
-        <span
-          class="rounded border border-line-strong px-1.5 font-mono text-meta text-fg-2"
-          >{slug}</span
+        <code class="rounded border border-line-strong px-1.5 text-meta text-fg-2"
+          >{slug}</code
         >
       {/each}
       {#if d.cloned_from}
-        <span class="font-mono text-meta text-fg-3">cloned from {d.cloned_from}</span>
+        <span class="text-meta text-fg-3">cloned from <code>{d.cloned_from}</code></span>
       {/if}
     {/if}
     <span class="grow"></span>

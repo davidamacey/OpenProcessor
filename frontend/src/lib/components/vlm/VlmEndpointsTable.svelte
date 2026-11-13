@@ -55,8 +55,7 @@
 <div class="flex flex-col gap-2" data-testid="vlm-endpoints">
   <p class="text-meta text-fg-2">
     The registry is shared by every project; activation is per project. External policy:
-    <span class="font-mono text-fg-1" data-testid="vlm-external-policy"
-      >{list.external_policy}</span
+    <span class="text-fg-1" data-testid="vlm-external-policy">{list.external_policy}</span
     >.
   </p>
   <div class="overflow-x-auto">
@@ -82,10 +81,10 @@
           >
             <td class="py-1.5 pr-3">
               <a
-                class="font-mono text-accent-text hover:underline"
+                class="text-accent-text hover:underline"
                 href={resolve(
                   projectHref(`/settings/models/vlm/${encodeURIComponent(e.name)}`),
-                )}>{e.name}</a
+                )}><code>{e.name}</code></a
               >
               <span class="block text-meta text-fg-3"
                 >{label(list.labels.source, e.source)}{e.revision != null
@@ -112,15 +111,15 @@
                 >
               {/if}
             </td>
-            <td class="py-1.5 pr-3 font-mono text-meta">{e.model}</td>
+            <td class="py-1.5 pr-3 text-meta"><code>{e.model}</code></td>
             <td class="py-1.5 pr-3 text-meta">
-              <span class="block break-all font-mono text-fg-2">{e.base_url}</span>
+              <code class="block break-all text-fg-2">{e.base_url}</code>
               {#if e.catalog_id}<span class="block text-fg-3"
-                  >catalog <span class="font-mono">{e.catalog_id}</span></span
+                  >catalog <code>{e.catalog_id}</code></span
                 >{/if}
               {#if e.api_key_ref}
                 <span class="block text-fg-3" data-testid="vlm-key-ref"
-                  >key <span class="font-mono">{e.api_key_ref}</span>
+                  >key <code>{e.api_key_ref}</code>
                   {e.api_key_present
                     ? '(present on the host)'
                     : '(not found on the host)'}</span
@@ -132,12 +131,11 @@
             >
             <td class="py-1.5 pr-3 text-meta" data-testid="vlm-active-in">
               {#each e.active_in ?? [] as slug (slug)}
-                <span
-                  class="mr-1 inline-block rounded border px-1 font-mono {slug ===
-                  currentSlug
+                <code
+                  class="mr-1 inline-block rounded border px-1 {slug === currentSlug
                     ? 'border-success/40 bg-success/10 text-success-text'
                     : 'border-line-strong text-fg-2'}"
-                  >{slug}{slug === currentSlug ? ' (this project)' : ''}</span
+                  >{slug}{slug === currentSlug ? ' (this project)' : ''}</code
                 >
               {:else}
                 <span class="text-fg-3">none</span>
@@ -184,7 +182,7 @@
               <td colspan="8" class="pb-2">
                 <details open class="rounded border border-line p-2">
                   <summary class="cursor-pointer text-meta text-fg-2"
-                    >Probe result for <span class="font-mono">{e.name}</span></summary
+                    >Probe result for <code>{e.name}</code></summary
                   >
                   {#if probeErrors[e.name]}
                     <p

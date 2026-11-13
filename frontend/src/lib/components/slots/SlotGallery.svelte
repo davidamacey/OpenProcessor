@@ -222,8 +222,8 @@
         >
           <Icon name="arrow-left" size={14} class="mr-1 -mt-0.5 inline-block" />Clusters
         </button>
-        <span class="font-mono text-caption text-fg-2" title={gallery.selectedCluster}
-          >cluster {gallery.selectedCluster.slice(0, 8)}</span
+        <span class="text-meta text-fg-2" title={gallery.selectedCluster}
+          >cluster <code>{gallery.selectedCluster.slice(0, 8)}</code></span
         >
       {/if}
       <span class="grow"></span>
@@ -241,7 +241,7 @@
            browse endpoint's filtered, holdout-excluded total, which differs
            from the sidebar/dashboard/review-queue counts. -->
       <span
-        class="font-mono text-caption text-fg-3"
+        class="text-meta text-fg-3 tabular-nums"
         title="Regions the browse endpoint lists: test-holdout items and active filters excluded. The sidebar's class count and the dashboard total include test-holdout items, and the review queue applies its own queue filters, so those can differ."
         data-testid="slot-gallery-count"
       >
@@ -362,7 +362,7 @@
               {/each}
             </div>
             <div class="flex items-center justify-between gap-1 p-2 text-meta">
-              <span class="font-mono font-semibold text-fg-1" title={c.uid}
+              <span class="font-semibold text-fg-1" title={c.uid}
                 >{displayNoText(c) || c.uid.slice(0, 8)}</span
               >
               <span

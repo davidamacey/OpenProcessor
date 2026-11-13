@@ -68,9 +68,9 @@
   {:else}
     <p class="text-meta text-fg-2" data-testid="local-vlm-served">
       Serving:
-      <span class="font-mono text-fg-1">{local.served?.model ?? '—'}</span>
+      <code class="text-fg-1">{local.served?.model ?? '—'}</code>
       {#if local.served?.catalog_id}
-        (catalog <span class="font-mono">{local.served.catalog_id}</span>)
+        (catalog <code>{local.served.catalog_id}</code>)
       {/if}
       {#if local.gpu_total_gb != null}
         · GPU memory {local.gpu_total_gb} GB
@@ -85,11 +85,11 @@
         <p>{local.reason}</p>
         {#if local.desired}
           <p class="text-meta">
-            Requested: <span class="font-mono">{local.desired.catalog_id}</span>
+            Requested: <code>{local.desired.catalog_id}</code>
           </p>
           <div class="flex flex-wrap items-center gap-2">
             <code
-              class="break-all rounded bg-surface-0 px-2 py-1 font-mono text-meta text-fg-1"
+              class="break-all rounded bg-surface-0 px-2 py-1 text-meta text-fg-1"
               data-testid="local-vlm-command">{local.desired.command}</code
             >
             <button
@@ -153,7 +153,7 @@
                     data-testid="local-vlm-desired">requested</span
                   >{/if}
               </td>
-              <td class="py-1.5 pr-3 font-mono break-all">{e.hf_repo}</td>
+              <td class="py-1.5 pr-3 break-all"><code>{e.hf_repo}</code></td>
               <td class="py-1.5 pr-3">
                 {#if externalHref(e.license_url)}
                   <!-- eslint-disable svelte/no-navigation-without-resolve -- external license page, not a SvelteKit route -->
@@ -168,18 +168,20 @@
                   {e.license}
                 {/if}{#if e.gated}<span class="ml-1 text-warn-text">gated</span>{/if}
               </td>
-              <td class="py-1.5 pr-3 font-mono"
+              <td class="py-1.5 pr-3 tabular-nums"
                 >{e.params_b == null ? '—' : `${e.params_b}B`}{e.quantization
                   ? ` ${e.quantization}`
                   : ''}</td
               >
-              <td class="py-1.5 pr-3 font-mono">{e.vram_gb} / {num(e.disk_gb)} disk</td>
-              <td class="py-1.5 pr-3 font-mono">{e.context_max} / {e.max_model_len}</td>
-              <td class="py-1.5 pr-3 font-mono">{e.max_images}</td>
+              <td class="py-1.5 pr-3 tabular-nums">{e.vram_gb} / {num(e.disk_gb)} disk</td
+              >
+              <td class="py-1.5 pr-3 tabular-nums">{e.context_max} / {e.max_model_len}</td
+              >
+              <td class="py-1.5 pr-3 tabular-nums">{e.max_images}</td>
               <td class="py-1.5 pr-3">{catalog.labels.status[e.status] ?? e.status}</td>
-              <td class="py-1.5 pr-3 font-mono">{yn(e.fits)}</td>
-              <td class="py-1.5 pr-3 font-mono">{yn(e.multi_box_verified)}</td>
-              <td class="py-1.5 pr-3 font-mono">{yn(e.text_reading_verified)}</td>
+              <td class="py-1.5 pr-3">{yn(e.fits)}</td>
+              <td class="py-1.5 pr-3">{yn(e.multi_box_verified)}</td>
+              <td class="py-1.5 pr-3">{yn(e.text_reading_verified)}</td>
               <td class="py-1.5">
                 {#if !e.serving}
                   <button

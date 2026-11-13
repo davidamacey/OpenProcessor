@@ -297,7 +297,7 @@
     {:else if gpuOptions.unrestricted}
       <input
         type="text"
-        class="input-sm w-40 font-mono"
+        class="input-sm w-40"
         placeholder="e.g. 0 or 0,2"
         aria-label="CUDA visible devices"
         bind:value={cudaDevices}
@@ -407,7 +407,7 @@
           min="0"
           max="1"
           bind:value={stopWhenMap50}
-          class="w-20 rounded border border-line-strong bg-surface-0 px-1.5 py-0.5 font-mono text-meta text-fg-1 focus:border-accent focus:outline-none"
+          class="w-20 rounded border border-line-strong bg-surface-0 px-1.5 py-0.5 text-meta text-fg-1 focus:border-accent focus:outline-none"
         />
       </label>
     {/if}

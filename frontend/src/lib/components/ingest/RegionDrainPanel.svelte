@@ -72,7 +72,7 @@
       <p class="text-meta text-fg-3">Loading…</p>
     {:else}
       <p class="text-meta text-fg-2">
-        <span class="font-mono text-title text-fg-1" data-testid="region-drain-pending"
+        <span class="text-title text-fg-1 tabular-nums" data-testid="region-drain-pending"
           >{drain.pending_detection}</span
         >
         images waiting for the detector{drain.drained ? ' (drained)' : ''}

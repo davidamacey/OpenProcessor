@@ -37,7 +37,7 @@
           data-testid="test-leg-status">{humanizeId(leg.status)}</span
         >
         {#if leg.elapsed_ms != null}
-          <span class="font-mono text-fg-3">{leg.elapsed_ms} ms</span>
+          <span class="text-fg-3 tabular-nums">{leg.elapsed_ms} ms</span>
         {/if}
         {#if leg.reason}
           <span class="text-fg-2" data-testid="test-leg-reason">{leg.reason}</span>
@@ -67,16 +67,14 @@
                   ? `Dropped: ${humanizeId(c.drop_reason)}`
                   : undefined}
               >
-                <td class="py-0.5 pr-3 font-mono"
-                  >{candidateLabel(leg.leg, c.candidate_index)}</td
-                >
-                <td class="py-0.5 pr-3 text-right font-mono">{num(c.score)}</td>
+                <td class="py-0.5 pr-3">{candidateLabel(leg.leg, c.candidate_index)}</td>
+                <td class="py-0.5 pr-3 text-right tabular-nums">{num(c.score)}</td>
                 <td class="py-0.5 pr-3">{c.selected ? 'yes' : 'no'}</td>
                 <td class="py-0.5 pr-3"
                   >{c.drop_reason ? humanizeId(c.drop_reason) : ''}</td
                 >
-                <td class="py-0.5 pr-3 text-right font-mono">{num(c.mask_iou)}</td>
-                <td class="py-0.5 font-mono text-fg-2">{c.detector ?? '—'}</td>
+                <td class="py-0.5 pr-3 text-right tabular-nums">{num(c.mask_iou)}</td>
+                <td class="py-0.5 text-fg-2"><code>{c.detector ?? '—'}</code></td>
               </tr>
             {/each}
           </tbody>

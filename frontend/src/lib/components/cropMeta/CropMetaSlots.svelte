@@ -77,7 +77,7 @@
 
         {#if data?.subBox?.score != null}
           <dt class="text-fg-3">Score</dt>
-          <dd class="font-mono">{pct(data.subBox.score)}</dd>
+          <dd class="tabular-nums">{pct(data.subBox.score)}</dd>
         {/if}
 
         {#if data?.boxSet && data.boxSet.setComplete === false}
@@ -103,7 +103,7 @@
               )}
               <div class="flex flex-col gap-0.5" data-testid="meta-box">
                 <div class="flex flex-wrap items-center gap-1.5">
-                  <span class="font-mono text-caption text-fg-3">#{i + 1}</span>
+                  <span class="text-caption text-fg-3 tabular-nums">#{i + 1}</span>
                   <span
                     class="rounded border px-1 py-0.5 text-caption {toneChipClass(
                       regionStatusesStore.boxStateTone(b.state),
@@ -112,7 +112,8 @@
                     {regionStatusesStore.boxStateInfo(b.state)?.label ?? b.state}
                   </span>
                   {#if b.score != null}
-                    <span class="font-mono text-caption text-fg-3">{pct(b.score)}</span>
+                    <span class="text-caption text-fg-3 tabular-nums">{pct(b.score)}</span
+                    >
                   {/if}
                   {#if b.locked}
                     <span
@@ -158,14 +159,14 @@
                 {#if b.text != null}
                   <div class="flex min-w-0 flex-wrap items-center gap-1.5">
                     <span
-                      class="rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 font-mono text-fg-1"
+                      class="rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-fg-1"
                     >
                       {b.text || '∅'}
                     </span>
                     {#if b.textSource}
                       <ProvenanceChip detector={b.textSource} size="sm" />
                     {/if}
-                    <span class="font-mono text-caption text-fg-3">
+                    <span class="text-caption text-fg-3 tabular-nums">
                       {pct(b.textConfidence)}
                     </span>
                     {#if b.textDisagreement}
@@ -183,19 +184,19 @@
                     {#if b.textVlm != null}
                       <span>
                         <span class="text-fg-3">vlm:</span>
-                        <span class="font-mono text-fg-1">{b.textVlm || '∅'}</span>
+                        <span class="text-fg-1">{b.textVlm || '∅'}</span>
                       </span>
                     {/if}
                     {#if b.textOcr != null}
                       <span>
                         <span class="text-fg-3">ocr:</span>
-                        <span class="font-mono text-fg-1">{b.textOcr || '∅'}</span>
+                        <span class="text-fg-1">{b.textOcr || '∅'}</span>
                       </span>
                     {/if}
                   </div>
                 {/if}
                 {#if b.textReader}
-                  <div class="font-mono text-caption text-fg-3">
+                  <div class="text-caption text-fg-3">
                     text reader {b.textReader}{b.textReaderVersion
                       ? ` ${b.textReaderVersion}`
                       : ''}
@@ -253,14 +254,14 @@
           <dt class="text-fg-3">Text</dt>
           <dd class="flex min-w-0 flex-wrap items-center gap-1.5">
             <span
-              class="rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 font-mono text-fg-1"
+              class="rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-fg-1"
             >
               {data.text.value || '∅'}
             </span>
             {#if data.text.source}
               <ProvenanceChip detector={data.text.source} size="sm" />
             {/if}
-            <span class="font-mono text-caption text-fg-3">
+            <span class="text-caption text-fg-3 tabular-nums">
               {pct(data.text.confidence)}
             </span>
           </dd>
@@ -268,7 +269,7 @@
 
         {#if data?.text?.engineVersion}
           <dt class="text-fg-3">Text engine</dt>
-          <dd class="font-mono text-fg-2">{data.text.engineVersion}</dd>
+          <dd class="text-fg-2">{data.text.engineVersion}</dd>
         {/if}
 
         {#if data?.lifecycle?.rejectionReason}

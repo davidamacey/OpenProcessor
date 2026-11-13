@@ -61,19 +61,22 @@
     <div class="mt-2 flex flex-wrap gap-4 text-meta">
       <div>
         <div class="text-fg-3">Pending detection</div>
-        <div class="font-mono text-fg-1" data-testid="region-stage-pending-detection">
+        <div class="text-fg-1 tabular-nums" data-testid="region-stage-pending-detection">
           {s.counts.pending_detection}
         </div>
       </div>
       <div>
         <div class="text-fg-3">Pending verification</div>
-        <div class="font-mono text-fg-1" data-testid="region-stage-pending-verification">
+        <div
+          class="text-fg-1 tabular-nums"
+          data-testid="region-stage-pending-verification"
+        >
           {s.counts.pending_verification}
         </div>
       </div>
       <div>
         <div class="text-fg-3">Gate-skipped</div>
-        <div class="font-mono text-fg-1" data-testid="region-stage-gate-skipped">
+        <div class="text-fg-1 tabular-nums" data-testid="region-stage-gate-skipped">
           {s.counts.gate_skipped}
         </div>
       </div>

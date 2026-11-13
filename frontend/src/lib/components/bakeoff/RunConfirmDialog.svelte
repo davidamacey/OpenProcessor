@@ -30,19 +30,23 @@
       datasets.length ===
     1
       ? ''
-      : 's'}, profile <span class="font-mono">{profile || 'server default'}</span>.
+      : 's'}, profile <span>{profile || 'server default'}</span>.
   </p>
   <div class="mb-3 grid grid-cols-2 gap-3 text-meta">
     <div>
       <p class="mb-1 text-fg-3">Datasets</p>
-      <ul class="space-y-0.5 font-mono text-fg-2">
-        {#each datasets as d (d)}<li>{d}</li>{/each}
+      <ul class="space-y-0.5 text-fg-2">
+        <code
+          >{#each datasets as d (d)}<li>{d}</li>{/each}</code
+        >
       </ul>
     </div>
     <div>
       <p class="mb-1 text-fg-3">Models</p>
-      <ul class="space-y-0.5 font-mono text-fg-2">
-        {#each models as m (m)}<li>{m}</li>{/each}
+      <ul class="space-y-0.5 text-fg-2">
+        <code
+          >{#each models as m (m)}<li>{m}</li>{/each}</code
+        >
       </ul>
     </div>
   </div>

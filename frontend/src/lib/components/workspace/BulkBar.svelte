@@ -90,7 +90,7 @@
     data-testid="bulk-summary">{text}</span
   >
   {#if count !== null}
-    <span class="font-mono text-fg-3" data-testid="bulk-count">{count} selected</span>
+    <span class="text-fg-3 tabular-nums" data-testid="bulk-count">{count} selected</span>
   {/if}
   {#if ws.pendingSelectAll}
     <button

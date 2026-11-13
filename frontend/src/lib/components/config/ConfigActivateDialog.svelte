@@ -81,11 +81,9 @@
   }}
 >
   <p data-testid="activate-from-to">
-    <span class="font-mono">{refText(ed.active.active?.active)}</span>
+    <code>{refText(ed.active.active?.active)}</code>
     →
-    <strong class="font-mono"
-      >{refText({ name: target.name, revision: target.revision })}</strong
-    >
+    <code>{refText({ name: target.name, revision: target.revision })}</code>
   </p>
   <p class="text-meta text-fg-2">{blurb}</p>
   {#if ack?.warning}

@@ -162,7 +162,7 @@
     data-testid="api-health"
   >
     <span class="size-2 rounded-full {dotClass}"></span>
-    <span class="hidden font-mono lg:inline" data-testid="api-health-chip"
+    <span class="hidden lg:inline" data-testid="api-health-chip"
       >{HEALTH_CHIP_TEXT[chipState]}</span
     >
     <span class="sr-only lg:hidden">{HEALTH_CHIP_TEXT[chipState]}</span>

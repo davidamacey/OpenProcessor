@@ -49,9 +49,9 @@
               {#each cols as c (c)}
                 {@const n = confusion[r]?.[c] ?? 0}
                 <td
-                  class="px-2 py-1.5 text-right font-mono {r === c
+                  class="px-2 py-1.5 text-right {r === c
                     ? 'outline outline-1 -outline-offset-1 outline-success/50'
-                    : ''} {n === 0 ? 'text-fg-3' : 'text-fg-1'}"
+                    : ''} {n === 0 ? 'text-fg-3' : 'text-fg-1'} tabular-nums"
                   data-testid="confusion-cell"
                   data-detector={r}
                   data-human={c}>{n}</td

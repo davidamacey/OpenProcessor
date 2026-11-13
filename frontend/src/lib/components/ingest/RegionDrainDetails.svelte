@@ -27,18 +27,18 @@
     <div class="flex gap-4 text-meta">
       <div>
         <div class="text-fg-3">Pending detection</div>
-        <div class="font-mono text-fg-1">{drain.pending_detection}</div>
+        <div class="text-fg-1 tabular-nums">{drain.pending_detection}</div>
       </div>
       <div>
         <div class="text-fg-3">Pending verification</div>
-        <div class="font-mono text-fg-1">{drain.pending_verification}</div>
+        <div class="text-fg-1 tabular-nums">{drain.pending_verification}</div>
       </div>
       <div>
         <div class="text-fg-3">Total unfinished</div>
         <div
-          class="font-mono {drain.total_unfinished === 0
+          class="{drain.total_unfinished === 0
             ? 'text-success-text'
-            : 'text-fg-1'}"
+            : 'text-fg-1'} tabular-nums"
           data-testid="region-drain-total-unfinished"
         >
           {drain.total_unfinished}
@@ -47,7 +47,7 @@
       <div>
         <div class="text-fg-3">Drained</div>
         <div
-          class="font-mono {drain.drained ? 'text-success-text' : 'text-fg-1'}"
+          class={drain.drained ? 'text-success-text' : 'text-fg-1'}
           data-testid="region-drain-drained"
         >
           {drain.drained ? 'yes' : 'no'}
@@ -68,7 +68,7 @@
         {#each drain.region_dependencies.filter((d) => !d.ready) as dep (dep.role + dep.model)}
           <li class="text-fg-2">
             <span class="text-fg-2">{dep.role}</span>
-            <span class="font-mono">{dep.model}</span>: not ready — {dep.detail}
+            <code>{dep.model}</code>: not ready — {dep.detail}
           </li>
         {/each}
       </ul>

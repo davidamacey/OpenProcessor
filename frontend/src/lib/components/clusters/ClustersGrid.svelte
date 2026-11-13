@@ -105,7 +105,7 @@
           {#if modes.matchOf(crop.id)}
             {@const match = modes.matchOf(crop.id)}
             <span
-              class="rounded-sm border border-accent/40 bg-accent/10 px-1 py-0.5 font-mono text-caption text-accent-text"
+              class="rounded-sm border border-accent/40 bg-accent/10 px-1 py-0.5 text-caption text-accent-text"
               title={match?.stale
                 ? 'Matched region; its vector predates a move of the box'
                 : 'Matched region'}

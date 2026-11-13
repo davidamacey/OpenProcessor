@@ -128,7 +128,7 @@
     >
       {#if view.clusterName}
         <span class="capitalize text-fg-1">{view.clusterName}</span>
-        <span class="font-mono text-body font-normal text-fg-3" title={view.clusterUid}
+        <span class="text-body font-normal text-fg-3" title={view.clusterUid}
           >{displayNoText(view.cluster ?? {})}</span
         >
       {:else}

@@ -209,8 +209,7 @@
           >
             <span class="min-w-0 flex-1">
               <span class="block truncate">{p.display_name}</span>
-              <span class="block truncate font-mono text-caption text-fg-3">{p.slug}</span
-              >
+              <code class="block truncate text-caption text-fg-3">{p.slug}</code>
             </span>
             {#if p.status !== 'active'}
               <span class="shrink-0 rounded bg-warn-soft px-1 text-caption text-warn-text"

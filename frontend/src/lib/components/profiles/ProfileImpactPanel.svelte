@@ -83,7 +83,7 @@
   <dl class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-0.5 text-meta sm:max-w-md">
     {#each IMPACT_ROWS as r (r.key)}
       <dt class="text-fg-2">{r.label}</dt>
-      <dd class="text-right font-mono" data-testid="impact-{r.key}">
+      <dd class="text-right tabular-nums" data-testid="impact-{r.key}">
         {impact[r.key].toLocaleString()}
       </dd>
     {/each}
@@ -99,8 +99,8 @@
       <tbody>
         {#each impact.by_profile as p, i (i)}
           <tr class="border-t border-line">
-            <td class="py-0.5 pr-3 font-mono">{refText(p.name, p.revision)}</td>
-            <td class="py-0.5 text-right font-mono">{p.count.toLocaleString()}</td>
+            <td class="py-0.5 pr-3"><code>{refText(p.name, p.revision)}</code></td>
+            <td class="py-0.5 text-right tabular-nums">{p.count.toLocaleString()}</td>
           </tr>
         {/each}
       </tbody>
@@ -148,7 +148,7 @@
             <ReprocessCounts res={f.result} {scopeLabel} />
             {#if f.job}
               <p class="text-meta text-fg-2" data-testid="rerun-job">
-                Job <code class="font-mono">{f.job.job_id}</code>:
+                Job <code>{f.job.job_id}</code>:
                 {datasetsAvailability.statusLabel(f.job.status)}
                 {#if f.job.error}<span class="text-danger-text">
                     — {f.job.error}</span

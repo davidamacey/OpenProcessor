@@ -117,7 +117,7 @@
             >
           {/if}
           <span class="grow"></span>
-          <span class="font-mono text-caption text-fg-3">{served.job_id}</span>
+          <code class="text-caption text-fg-3">{served.job_id}</code>
         </div>
 
         <div data-testid="combine-job-progress">
@@ -134,12 +134,12 @@
 
         <dl class="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-0.5 text-meta">
           <dt class="text-fg-3">Target</dt>
-          <dd class="font-mono text-fg-1" data-testid="combine-job-target">
-            {served.target ?? '—'}
+          <dd class="text-fg-1" data-testid="combine-job-target">
+            <code>{served.target ?? '—'}</code>
           </dd>
           <dt class="text-fg-3">Sources</dt>
-          <dd class="font-mono text-fg-1" data-testid="combine-job-sources">
-            {(served.sources ?? []).join(', ') || '—'}
+          <dd class="text-fg-1" data-testid="combine-job-sources">
+            <code>{(served.sources ?? []).join(', ') || '—'}</code>
           </dd>
           <dt class="text-fg-3">Started</dt>
           <dd class="text-fg-2">{formatTimestamp(served.started_at)}</dd>
@@ -246,7 +246,7 @@
                 {#each reportRows as [k, v] (k)}
                   <tr class="border-t border-line first:border-t-0">
                     <td class="px-2 py-1 text-fg-2">{combineLabel(k)}</td>
-                    <td class="px-2 py-1 font-mono text-fg-1" data-report-key={k}
+                    <td class="px-2 py-1 text-fg-1" data-report-key={k}
                       >{reportCell(v)}</td
                     >
                   </tr>
@@ -288,9 +288,7 @@
   >
     {#if pendingStep.reason}<p>{pendingStep.reason}</p>{/if}
     <p class="text-meta text-fg-2">
-      Runs <code class="font-mono"
-        >{pendingStep.method.toUpperCase()} {pendingStep.path}</code
-      >
+      Runs <code>{pendingStep.method.toUpperCase()} {pendingStep.path}</code>
       on {target}.
     </p>
     {#if job.actionError}<p class="text-danger-text">{job.actionError}</p>{/if}

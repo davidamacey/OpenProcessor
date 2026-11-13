@@ -16,7 +16,7 @@
 {#if crop.origin_project != null}
   <dt class="text-fg-3">Combined from</dt>
   <dd class="text-fg-1" data-testid="combine-origin-project">
-    <span class="font-mono">{crop.origin_project}</span>
+    <code>{crop.origin_project}</code>
     {#if crop.combine_conflict}
       <span
         class="ml-1 rounded border border-warn/40 bg-warn/15 px-1 text-caption text-warn-text"
@@ -26,14 +26,14 @@
   </dd>
   {#if crop.origin_item_id != null}
     <dt class="text-fg-3">Origin item</dt>
-    <dd class="break-all font-mono text-fg-1" data-testid="combine-origin-item">
-      {crop.origin_item_id}
+    <dd class="break-all text-fg-1" data-testid="combine-origin-item">
+      <code>{crop.origin_item_id}</code>
     </dd>
   {/if}
   {#if crop.origin_image_id != null}
     <dt class="text-fg-3">Origin image</dt>
-    <dd class="break-all font-mono text-fg-1" data-testid="combine-origin-image">
-      {crop.origin_image_id}
+    <dd class="break-all text-fg-1" data-testid="combine-origin-image">
+      <code>{crop.origin_image_id}</code>
     </dd>
   {/if}
   {#if crop.origin_split != null}
@@ -42,14 +42,14 @@
   {/if}
   {#if crop.combine_conflict && conflictOrigins.length > 0}
     <dt class="text-fg-3">Conflicting origins</dt>
-    <dd class="font-mono text-fg-1" data-testid="combine-origin-conflicts">
-      {conflictOrigins.join(', ')}
+    <dd class="text-fg-1" data-testid="combine-origin-conflicts">
+      <code>{conflictOrigins.join(', ')}</code>
     </dd>
   {/if}
   {#if merged.length > 0}
     <dt class="text-fg-3">Merged origins</dt>
-    <dd class="font-mono text-fg-1" data-testid="combine-origin-merged">
-      {merged.join(', ')}
+    <dd class="text-fg-1" data-testid="combine-origin-merged">
+      <code>{merged.join(', ')}</code>
     </dd>
   {/if}
 {/if}

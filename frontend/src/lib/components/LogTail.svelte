@@ -96,7 +96,7 @@
 <div class="flex flex-col rounded-md border border-line bg-surface-0">
   <div class="flex items-center justify-between gap-3 border-b border-line px-3 py-1.5">
     <h3 class="text-meta font-semibold text-fg-2">
-      Live log <span class="font-mono text-caption text-fg-3">tail {lines}</span>
+      Live log <span class="text-caption text-fg-3 tabular-nums">tail {lines}</span>
     </h3>
     <div class="flex items-center gap-2 text-caption text-fg-3">
       {#if !stickyBottom}
@@ -111,9 +111,9 @@
           jump to bottom
         </button>
       {:else if active}
-        <span class="font-mono text-success-text">tailing</span>
+        <span class="text-success-text">tailing</span>
       {:else}
-        <span class="font-mono">paused</span>
+        <span>paused</span>
       {/if}
     </div>
   </div>

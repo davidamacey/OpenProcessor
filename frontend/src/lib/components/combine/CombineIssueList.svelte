@@ -31,12 +31,12 @@
       >
         <span class="font-semibold">{severity}</span>
         {#if i.project}
-          <span class="ml-1 rounded bg-surface-2 px-1 font-mono text-caption text-fg-2"
-            >{i.project}</span
+          <code class="ml-1 rounded bg-surface-2 px-1 text-caption text-fg-2"
+            >{i.project}</code
           >
         {/if}
         <span class="ml-1">{i.message}</span>
-        <code class="ml-1 font-mono text-caption opacity-60">{i.code}</code>
+        <code class="ml-1 text-caption opacity-60">{i.code}</code>
         {#if i.detail && Object.keys(i.detail).length > 0}
           <details class="mt-1">
             <summary class="cursor-pointer text-caption opacity-80">detail</summary>

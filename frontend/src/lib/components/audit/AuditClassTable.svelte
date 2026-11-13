@@ -55,9 +55,9 @@
                   >
                 {/if}
               </td>
-              <td class="py-1.5 pr-3 text-right font-mono">{row.n}</td>
-              <td class="py-1.5 pr-3 text-right font-mono">{row.correct}</td>
-              <td class="py-1.5 text-right font-mono">
+              <td class="py-1.5 pr-3 text-right tabular-nums">{row.n}</td>
+              <td class="py-1.5 pr-3 text-right tabular-nums">{row.correct}</td>
+              <td class="py-1.5 text-right tabular-nums">
                 <span data-testid="audit-precision">{percentText(row.precision, 1)}</span>
                 <span class="block text-caption whitespace-nowrap text-fg-3"
                   >{percentText(row.ci_low, 1)} to {percentText(row.ci_high, 1)}</span

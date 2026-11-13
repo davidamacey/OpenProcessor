@@ -54,7 +54,7 @@
       data-testid="run-state">{status?.state ?? 'enqueued'}</span
     >
     {#if status?.profile}<span class="text-meta text-fg-3"
-        >profile <span class="font-mono">{status.profile}</span></span
+        >profile <code>{status.profile}</code></span
       >{/if}
   </div>
 
@@ -83,7 +83,7 @@
       <p class="mb-1 font-medium">
         {status.failed.length} failed piece{status.failed.length === 1 ? '' : 's'}
       </p>
-      <ul class="max-h-40 space-y-0.5 overflow-auto font-mono" data-testid="run-failures">
+      <ul class="max-h-40 space-y-0.5 overflow-auto" data-testid="run-failures">
         {#each status.failed as f, i (i)}
           <li>{failureWhere(f)} — {f.error}</li>
         {/each}
@@ -117,8 +117,8 @@
             {#each Object.entries(m.class_mapping) as [dsId, cm] (dsId)}
               {@const overlap = m.train_test_overlap?.[dsId]}
               <tr class="border-t border-line align-top">
-                <td class="py-1 pr-2 font-mono">{m.display_name}</td>
-                <td class="py-1 pr-2 font-mono">{datasetName(dsId)}</td>
+                <td class="py-1 pr-2">{m.display_name}</td>
+                <td class="py-1 pr-2">{datasetName(dsId)}</td>
                 <td class="py-1 pr-2">{cm.method}</td>
                 <td class="py-1 text-fg-2">
                   {#if cm.not_covered_eval_classes.length}

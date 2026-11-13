@@ -78,12 +78,12 @@
           data-name={p.name}
           data-active={p.active}
         >
-          <span class="font-mono text-fg-1">{p.name}</span>
+          <code class="text-fg-1">{p.name}</code>
           {#if p.revision !== null}<span class="text-fg-3">r{p.revision}</span>{/if}
           <span class="text-fg-2">
-            detector <span class="font-mono text-fg-1">{p.primary_model}</span>
+            detector <code class="text-fg-1">{p.primary_model}</code>
             {#if p.secondary_model}
-              + <span class="font-mono text-fg-1">{p.secondary_model}</span>{/if}
+              + <code class="text-fg-1">{p.secondary_model}</code>{/if}
           </span>
           <span class="grow"></span>
           {#if p.active}
@@ -118,7 +118,7 @@
       bind:this={refusalEl}
     >
       <p>
-        <span class="font-mono">{refusal.name}</span> was not activated.
+        <code>{refusal.name}</code> was not activated.
         {refusal.message}
       </p>
       {#if refusal.report}
@@ -146,8 +146,7 @@
       role="alert"
       data-testid="ingest-profile-followup-error"
     >
-      <span class="font-mono">{ctl.activatedName}</span> was activated, but refreshing the
-      page failed. {ctl.followUpError}
+      <code>{ctl.activatedName}</code> was activated, but refreshing the page failed. {ctl.followUpError}
     </p>
   {/if}
 

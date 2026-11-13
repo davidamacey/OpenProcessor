@@ -52,7 +52,7 @@
   <h2 class="text-title font-semibold">
     {op.kind === 'label' ? 'Label' : 'Move'} operation
   </h2>
-  <p class="break-all font-mono text-meta text-fg-3">{op.op_id}</p>
+  <p class="break-all text-meta text-fg-3"><code>{op.op_id}</code></p>
 
   <dl
     class="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-body"
@@ -60,7 +60,7 @@
   >
     {#each facts as [k, v] (k)}
       <dt class="text-fg-2">{k}</dt>
-      <dd class="font-mono text-fg-1">{v}</dd>
+      <dd class="text-fg-1 tabular-nums">{v}</dd>
     {/each}
   </dl>
 
@@ -68,21 +68,24 @@
     <section class="mt-4 text-body" data-testid="label-op-last-undo">
       <h3 class="font-medium">Last undo, {formatTimestamp(op.last_undo.at)}</h3>
       <ul class="mt-1 text-meta text-fg-2">
-        <li>Restored: <span class="font-mono">{op.last_undo.restored}</span></li>
+        <li>Restored: <span class="tabular-nums">{op.last_undo.restored}</span></li>
         <li>
-          Already undone: <span class="font-mono">{op.last_undo.already_undone}</span>
+          Already undone: <span class="tabular-nums">{op.last_undo.already_undone}</span>
         </li>
         <li>
-          Kept, changed since: <span class="font-mono">{op.last_undo.kept_changed}</span>
+          Kept, changed since: <span class="tabular-nums"
+            >{op.last_undo.kept_changed}</span
+          >
         </li>
         <li>
-          Kept, test holdout: <span class="font-mono">{op.last_undo.kept_holdout}</span>
+          Kept, test holdout: <span class="tabular-nums">{op.last_undo.kept_holdout}</span
+          >
         </li>
         <li>
           Kept, restore class renamed:
-          <span class="font-mono">{op.last_undo.kept_stale_class}</span>
+          <span class="tabular-nums">{op.last_undo.kept_stale_class}</span>
         </li>
-        <li>Conflicts: <span class="font-mono">{op.last_undo.conflicts}</span></li>
+        <li>Conflicts: <span class="tabular-nums">{op.last_undo.conflicts}</span></li>
       </ul>
     </section>
   {/if}
@@ -107,7 +110,9 @@
         {r.dry_run ? 'Dry run: nothing has been written' : 'Undo finished'}
       </h3>
       <p class="mt-1 text-meta text-fg-2">
-        Matched <span class="font-mono" data-testid="label-op-matched">{r.matched}</span> items.
+        Matched <span class="tabular-nums" data-testid="label-op-matched"
+          >{r.matched}</span
+        > items.
       </p>
       <ul class="mt-2 flex flex-col gap-0.5 text-meta">
         {#each OUTCOMES as [key, label] (key)}
@@ -115,17 +120,19 @@
             class="flex justify-between gap-3 text-fg-2"
             data-testid={`label-op-${key}`}
           >
-            <span>{label}</span><span class="font-mono">{r[key]}</span>
+            <span>{label}</span><span class="tabular-nums">{r[key]}</span>
           </li>
         {/each}
       </ul>
       {#if r.conflict_ids.length}
         <div class="mt-2 text-meta" data-testid="label-op-conflict-ids">
           <p class="text-warn-text">Conflicting items:</p>
-          <ul class="max-h-24 overflow-y-auto break-all font-mono text-fg-2">
-            {#each r.conflict_ids as id (id)}
-              <li>{id}</li>
-            {/each}
+          <ul class="max-h-24 overflow-y-auto break-all text-fg-2">
+            <code
+              >{#each r.conflict_ids as id (id)}
+                <li>{id}</li>
+              {/each}</code
+            >
           </ul>
         </div>
       {/if}

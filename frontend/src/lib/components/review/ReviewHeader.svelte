@@ -74,7 +74,7 @@
       >loading region profile…</span
     >
   {/if}
-  <span data-testid="queue-counter" class="font-mono text-meta text-fg-3">
+  <span data-testid="queue-counter" class="text-meta text-fg-3 tabular-nums">
     {queue.items.length > 0 ? `#${loader.currentPosition}` : '—'} · {queue.items.length} loaded
     · {queue.total} total
   </span>

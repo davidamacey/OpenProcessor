@@ -37,7 +37,7 @@
     />
     <span class="min-w-0 flex-1">
       <span class="flex flex-wrap items-center gap-1.5">
-        <span class="font-mono text-fg-1">{d.name}</span>
+        <span class="text-fg-1">{d.name}</span>
         {#if d.is_current}
           <span
             class="rounded bg-success-soft px-1 text-caption text-success-text"

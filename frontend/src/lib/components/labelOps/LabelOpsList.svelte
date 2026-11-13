@@ -38,8 +38,8 @@
         </span>
       </div>
       <span class="text-meta text-fg-2" data-testid="label-op-count">
-        <span class="font-mono">{formatCount(op.count)}</span> items,
-        <span class="font-mono">{formatCount(op.current)}</span> still labeled
+        <span class="tabular-nums">{formatCount(op.count)}</span> items,
+        <span class="tabular-nums">{formatCount(op.current)}</span> still labeled
       </span>
       <span
         class="rounded border border-line-strong px-1.5 py-0.5 text-meta text-fg-2"

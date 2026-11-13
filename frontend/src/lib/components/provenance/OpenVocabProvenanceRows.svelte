@@ -39,15 +39,23 @@
 {/if}
 {#if set != null}
   <dt class="text-fg-3">Open-vocabulary set</dt>
-  <dd class="font-mono text-fg-1" data-testid="ov-set">
+  <dd class="text-fg-1" data-testid="ov-set">
     {#if linkable}
       <a
         class="text-accent-text underline hover:text-accent-text"
         href={resolve(projectHref(`/settings/open-vocab/${encodeURIComponent(set)}`))}
-        >{set}{crop.open_vocab_revision != null ? `@${crop.open_vocab_revision}` : ''}</a
+        ><code
+          >{set}{crop.open_vocab_revision != null
+            ? `@${crop.open_vocab_revision}`
+            : ''}</code
+        ></a
       >
     {:else}
-      {set}{crop.open_vocab_revision != null ? `@${crop.open_vocab_revision}` : ''}
+      <code
+        >{set}{crop.open_vocab_revision != null
+          ? `@${crop.open_vocab_revision}`
+          : ''}</code
+      >
     {/if}
   </dd>
 {/if}

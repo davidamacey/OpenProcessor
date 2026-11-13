@@ -56,7 +56,7 @@
 
 <section class="rounded-md border border-line bg-surface-1 p-4">
   <header class="mb-3 flex flex-wrap items-center gap-3">
-    <h2 class="font-mono text-body text-white">{status.job_id}</h2>
+    <h2 class="text-body text-white"><code>{status.job_id}</code></h2>
     <span
       class="rounded-sm border px-1.5 py-0.5 text-caption font-medium capitalize {statePillClass(
         status.state,
@@ -92,7 +92,7 @@
   <div class="mb-3 grid grid-cols-1 gap-2 text-body sm:grid-cols-2 lg:grid-cols-4">
     <div>
       <dt class="text-meta text-fg-3">Epoch</dt>
-      <dd class="font-mono text-fg-1">
+      <dd class="text-fg-1 tabular-nums">
         {cur} / {tot || '—'}
         {#if status.epoch_time_s}
           <span class="text-fg-3">· {status.epoch_time_s.toFixed(1)}s/ep</span>
@@ -101,7 +101,7 @@
     </div>
     <div>
       <dt class="text-meta text-fg-3">ETA</dt>
-      <dd class="font-mono text-fg-1">{formatDuration(etaSec)}</dd>
+      <dd class="text-fg-1 tabular-nums">{formatDuration(etaSec)}</dd>
     </div>
     <div>
       <dt
@@ -112,11 +112,11 @@
           <span class="normal-case text-fg-3"> (ep {lastEpoch.epoch})</span>
         {/if}
       </dt>
-      <dd class="font-mono text-fg-1">{formatMetric(lastEpoch?.map50)}</dd>
+      <dd class="text-fg-1 tabular-nums">{formatMetric(lastEpoch?.map50)}</dd>
     </div>
     <div>
       <dt class="text-meta text-fg-3">Last epoch mAP50-95</dt>
-      <dd class="font-mono text-fg-1">{formatMetric(lastEpoch?.map50_95)}</dd>
+      <dd class="text-fg-1 tabular-nums">{formatMetric(lastEpoch?.map50_95)}</dd>
     </div>
   </div>
 
@@ -133,7 +133,7 @@
     <div class="flex flex-wrap gap-2">
       {#each status.gpu as g, i (g.index ?? i)}
         <span
-          class="rounded-md border border-line-strong bg-surface-0 px-2 py-1 font-mono text-meta text-fg-2"
+          class="rounded-md border border-line-strong bg-surface-0 px-2 py-1 text-meta text-fg-2 tabular-nums"
           title="GPU {g.index ?? i} utilization / memory"
         >
           GPU {g.index ?? i}
@@ -150,7 +150,7 @@
 
   {#if status.error}
     <p
-      class="mt-3 truncate rounded border border-danger/30 bg-danger/10 px-2 py-1 font-mono text-caption text-danger-text"
+      class="mt-3 truncate rounded border border-danger/30 bg-danger/10 px-2 py-1 text-caption text-danger-text"
       title={status.error}
     >
       {status.error}

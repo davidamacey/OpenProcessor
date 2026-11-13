@@ -236,9 +236,8 @@
     <h3 class="mb-3 text-title font-semibold">Run probe predictions</h3>
     <p class="mb-3 text-body text-fg-2">
       Runs this run's exported checkpoint over the crop pool to populate
-      <code class="font-mono">probe_pred_*</code>. This is what the Uncertainty and
-      Model-disagreements review queues need — they stay empty until a probe has run at
-      least once.
+      <code>probe_pred_*</code>. This is what the Uncertainty and Model-disagreements
+      review queues need — they stay empty until a probe has run at least once.
     </p>
     <p class="mb-3 text-meta text-fg-2">
       Deployment-wide, potentially long-running. Only one probe job can run at a time.

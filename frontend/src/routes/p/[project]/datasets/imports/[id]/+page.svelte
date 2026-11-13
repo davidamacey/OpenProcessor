@@ -114,7 +114,7 @@
             <span class="text-meta text-fg-3">
               {formats.formats.find((f) => f.format === j.source.format)?.label ??
                 j.source.format}
-              · <code class="font-mono">{j.source.root}</code>
+              · <code>{j.source.root}</code>
             </span>
             <a
               class="ml-auto text-meta text-accent-text underline hover:text-accent-text"
@@ -214,7 +214,7 @@
             {#each REPORT_ROWS as [key, label] (key)}
               <div>
                 <dt class="text-fg-3">{label}</dt>
-                <dd class="font-mono" data-testid="report-{key}">
+                <dd class="tabular-nums" data-testid="report-{key}">
                   {j.report[key].toLocaleString()}
                 </dd>
               </div>
@@ -355,7 +355,7 @@
                 <tbody>
                   {#each job.entries.items as e (e.rel_path)}
                     <tr class="border-t border-line">
-                      <td class="py-1 pr-3 font-mono">{e.rel_path}</td>
+                      <td class="py-1 pr-3"><code>{e.rel_path}</code></td>
                       <td class="py-1 pr-3">{e.split ?? '—'}</td>
                       <td class="py-1 pr-3">{e.label_state}</td>
                       <td class="py-1 pr-3">{e.status}</td>
@@ -440,21 +440,21 @@
                 data-testid="undo-report"
               >
                 <dt class="text-fg-3">Items deleted</dt>
-                <dd class="font-mono">{r.items_deleted}</dd>
+                <dd class="tabular-nums">{r.items_deleted}</dd>
                 <dt class="text-fg-3">Items restored</dt>
-                <dd class="font-mono">{r.items_restored}</dd>
+                <dd class="tabular-nums">{r.items_restored}</dd>
                 <dt class="text-fg-3">Labels removed</dt>
-                <dd class="font-mono">{r.class_labels_removed}</dd>
+                <dd class="tabular-nums">{r.class_labels_removed}</dd>
                 <dt class="text-fg-3">Boxes removed</dt>
-                <dd class="font-mono">{r.boxes_removed}</dd>
+                <dd class="tabular-nums">{r.boxes_removed}</dd>
                 <dt class="text-fg-3">Proposals deleted</dt>
-                <dd class="font-mono">{r.proposals_deleted}</dd>
+                <dd class="tabular-nums">{r.proposals_deleted}</dd>
                 <dt class="text-fg-3">Holdout flags cleared</dt>
-                <dd class="font-mono">{r.holdout_flags_cleared}</dd>
+                <dd class="tabular-nums">{r.holdout_flags_cleared}</dd>
                 <dt class="text-fg-3">Images deleted</dt>
-                <dd class="font-mono">{r.images_deleted}</dd>
+                <dd class="tabular-nums">{r.images_deleted}</dd>
                 <dt class="text-fg-3">Images kept</dt>
-                <dd class="font-mono">{r.images_kept}</dd>
+                <dd class="tabular-nums">{r.images_kept}</dd>
               </dl>
               {#if r.items_kept_human_edited > 0 || r.boxes_kept_human_edited > 0}
                 <p class="text-success-text" data-testid="undo-kept">
@@ -482,9 +482,11 @@
             oncancel={() => (pendingStep = null)}
           >
             <p>{pendingStep.reason}</p>
-            <p class="font-mono text-meta text-fg-3">
-              {pendingStep.method}
-              {pendingStep.path}
+            <p class="text-meta text-fg-3">
+              <code
+                >{pendingStep.method}
+                {pendingStep.path}</code
+              >
             </p>
             {#if job.actionError}<p class="text-danger-text">{job.actionError}</p>{/if}
           </ConfirmDialog>

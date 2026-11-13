@@ -69,12 +69,14 @@
           <th scope="col" class="font-normal"><span class="sr-only">Actions</span></th>
         </tr>
       </thead>
-      <tbody class="font-mono text-fg-1">
+      <tbody class="text-fg-1 tabular-nums">
         {#each ctl.nodes as n (n.path)}
           {@const open = ctl.openNode === n.path}
           <tr class="border-t border-line/70" data-testid="loop-node-row">
-            <th scope="row" class="py-1 pr-3 text-left font-normal">{n.path}</th>
-            <td class="pr-3 font-sans" title={n.reason ?? ''}>
+            <th scope="row" class="py-1 pr-3 text-left font-normal"
+              ><code>{n.path}</code></th
+            >
+            <td class="pr-3" title={n.reason ?? ''}>
               {n.decision ? LABEL[n.decision] : 'Open'}
               {#if n.decision === 'unvisited' && n.reason}
                 <span class="block text-fg-3" data-testid="loop-node-why"
@@ -82,7 +84,7 @@
                 >
               {/if}
             </td>
-            <td class="pr-3 font-sans">{n.class_name ?? '—'}</td>
+            <td class="pr-3">{n.class_name ?? '—'}</td>
             <td class="pr-3 text-right">{formatCount(n.n)}</td>
             <td class="pr-3 text-right"
               >{n.agree === null ? '—' : formatCount(n.agree)} / {formatCount(
@@ -91,7 +93,7 @@
             >
             <td class="pr-3 text-right">{n.bound === null ? '—' : n.bound.toFixed(3)}</td>
             <td class="pr-3 text-right">{formatCount(n.items_propagated)}</td>
-            <td class="whitespace-nowrap text-right font-sans">
+            <td class="whitespace-nowrap text-right">
               <button
                 type="button"
                 class="btn btn-sm"
@@ -119,7 +121,7 @@
           </tr>
           {#if open}
             <tr id="loop-node-detail-{n.path}" data-testid="loop-node-detail">
-              <td colspan="8" class="bg-surface-1/40 p-3 font-sans">
+              <td colspan="8" class="bg-surface-1/40 p-3">
                 {#if n.distribution.length > 0}
                   <p class="mb-1 text-fg-2">
                     Votes:
@@ -174,7 +176,7 @@
           {/if}
         {:else}
           <tr>
-            <td colspan="8" class="py-2 font-sans text-fg-3">
+            <td colspan="8" class="py-2 text-fg-3">
               {ctl.nodesLoading ? 'Loading…' : 'No clusters to show.'}
             </td>
           </tr>

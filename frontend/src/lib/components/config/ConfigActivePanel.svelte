@@ -108,8 +108,8 @@
           >{noneText(a.source)}</span
         >
       {:else}
-        <span class="font-mono font-medium text-success-text" data-testid="active-ref"
-          >{refText(a.active)}</span
+        <code class="font-medium text-success-text" data-testid="active-ref"
+          >{refText(a.active)}</code
         >
       {/if}
       {#if a.source}<span class="text-meta text-fg-3" data-testid="active-source"
@@ -165,11 +165,12 @@
             {#each a.applied as r, i (i)}
               <tr class="border-t border-line">
                 <td class="py-0.5 pr-3">{r.process}</td>
-                <td class="py-0.5 pr-3 font-mono">{r.host}</td>
-                <td class="py-0.5 pr-3 font-mono">{appliedRefText(r[copy.appliedRef])}</td
+                <td class="py-0.5 pr-3"><code>{r.host}</code></td>
+                <td class="py-0.5 pr-3"
+                  ><code>{appliedRefText(r[copy.appliedRef])}</code></td
                 >
-                <td class="py-0.5 pr-3 font-mono">{r.applied_config_revision}</td>
-                <td class="py-0.5 pr-3 font-mono" data-testid="applied-at"
+                <td class="py-0.5 pr-3 tabular-nums">{r.applied_config_revision}</td>
+                <td class="py-0.5 pr-3 tabular-nums" data-testid="applied-at"
                   >{formatTimestamp(r.applied_at)}</td
                 >
                 <td class="py-0.5">
@@ -203,9 +204,9 @@
     oncancel={() => (confirming = null)}
   >
     <p>
-      <span class="font-mono">{refText(ctl.active.active)}</span>
+      <code>{refText(ctl.active.active)}</code>
       →
-      <strong class="font-mono">{refText(ctl.active.previous)}</strong>
+      <code>{refText(ctl.active.previous)}</code>
     </p>
     <p class="text-meta text-fg-2">{copy.rollbackBlurb}</p>
     {#if ctl.actionError}<p class="text-danger-text" data-testid="rollback-error">
@@ -224,7 +225,7 @@
     oncancel={() => (confirming = null)}
   >
     <p>
-      <span class="font-mono">{refText(ctl.active.active)}</span>
+      <code>{refText(ctl.active.active)}</code>
       →
       <strong>{copy.noneText}</strong>
     </p>

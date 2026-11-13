@@ -32,9 +32,9 @@
             : 'text-fg-2'}"
         >
           <td class="px-2 py-1">{c.class_name}</td>
-          <td class="px-2 py-1 text-right font-mono">{c.train.toLocaleString()}</td>
-          <td class="px-2 py-1 text-right font-mono">{c.val.toLocaleString()}</td>
-          <td class="px-2 py-1 text-right font-mono">{c.test.toLocaleString()}</td>
+          <td class="px-2 py-1 text-right tabular-nums">{c.train.toLocaleString()}</td>
+          <td class="px-2 py-1 text-right tabular-nums">{c.val.toLocaleString()}</td>
+          <td class="px-2 py-1 text-right tabular-nums">{c.test.toLocaleString()}</td>
         </tr>
       {/each}
     </tbody>

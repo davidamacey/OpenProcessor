@@ -51,7 +51,7 @@
     >
   {:else}
     <header class="flex flex-wrap items-baseline gap-3">
-      <h1 class="font-mono text-h1 font-semibold text-fg-1">{name}</h1>
+      <h1 class="text-h1 font-semibold text-fg-1">{name}</h1>
       {#if ed.doc}
         <span class="text-body text-fg-2" data-testid="config-meta">
           {kind.noun} · revision {ed.doc.revision}

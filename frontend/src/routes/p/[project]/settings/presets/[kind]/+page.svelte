@@ -127,8 +127,9 @@
               >
                 <td class="py-1.5 pr-3">
                   <a
-                    class="font-mono text-accent-text hover:underline"
-                    href={resolve(projectHref(editorPath(d.name)))}>{d.name}</a
+                    class="text-accent-text hover:underline"
+                    href={resolve(projectHref(editorPath(d.name)))}
+                    ><code>{d.name}</code></a
                   >
                   {#each list.active.entries.filter((e) => e.state === 'active' && e.name === d.name) as e (e.axis ?? 'deployment')}
                     <div
@@ -148,7 +149,7 @@
                   {/each}
                 </td>
                 <td class="py-1.5 pr-3 text-meta text-fg-2">{d.description || '—'}</td>
-                <td class="py-1.5 pr-3 font-mono text-meta">{d.revision}</td>
+                <td class="py-1.5 pr-3 text-meta tabular-nums">{d.revision}</td>
                 <ConfigRowTail row={d} {flow}>
                   {#snippet lead()}
                     <a class="btn btn-sm" href={resolve(projectHref(editorPath(d.name)))}

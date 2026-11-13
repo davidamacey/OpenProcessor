@@ -94,7 +94,7 @@
               <span class="text-fg-2">{s.description}</span>
               <span class="flex gap-1">
                 {#each s.keys as k (k)}
-                  <kbd class="font-mono text-caption">{formatShortcutKey(k)}</kbd>
+                  <kbd class="text-caption">{formatShortcutKey(k)}</kbd>
                 {/each}
               </span>
             </li>
@@ -122,7 +122,7 @@
               >
                 {cls.name}
                 {#if cls.validated_count != null}
-                  <span class="ml-1 font-mono text-caption text-fg-3">
+                  <span class="ml-1 text-caption text-fg-3 tabular-nums">
                     {cls.validated_count.toLocaleString()}
                   </span>
                 {/if}
@@ -145,7 +145,7 @@
                 onblur={(e) => {
                   void setHotkey(cls, (e.currentTarget as HTMLInputElement).value);
                 }}
-                class="w-10 rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-center font-mono text-meta text-accent-text focus:border-accent focus:outline-none disabled:opacity-50"
+                class="w-10 rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-center text-meta text-accent-text focus:border-accent focus:outline-none disabled:opacity-50"
                 aria-label={`hotkey for ${cls.name}`}
               />
             </li>
@@ -159,15 +159,11 @@
       <ul class="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
         <li class="flex items-center justify-between gap-3 text-body">
           <span class="text-fg-2">{keymapStore.label('global.shortcuts_overlay')}</span>
-          <kbd class="font-mono text-caption"
-            >{keymapStore.glyph('global.shortcuts_overlay')}</kbd
-          >
+          <kbd class="text-caption">{keymapStore.glyph('global.shortcuts_overlay')}</kbd>
         </li>
         <li class="flex items-center justify-between gap-3 text-body">
           <span class="text-fg-2">{keymapStore.label('global.close_overlay')}</span>
-          <kbd class="font-mono text-caption"
-            >{keymapStore.glyph('global.close_overlay')}</kbd
-          >
+          <kbd class="text-caption">{keymapStore.glyph('global.close_overlay')}</kbd>
         </li>
       </ul>
     </section>

@@ -38,7 +38,7 @@
   <p class="text-body text-fg-1" data-testid="assist-status">
     {STATUS_TEXT[run.status] ?? run.status}
     {#if total > 0}
-      <span class="font-mono text-fg-2"
+      <span class="text-fg-2 tabular-nums"
         >{formatCount(processed)}/{formatCount(total)}</span
       >
     {/if}

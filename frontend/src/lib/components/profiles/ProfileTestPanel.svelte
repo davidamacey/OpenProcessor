@@ -78,7 +78,7 @@
       {#if t.missingCropIds.length > 0}
         <span class="text-danger-text" data-testid="test-missing-ids">
           Not found:
-          {#each t.missingCropIds as id, i (id)}<code class="font-mono">{id}</code>{i <
+          {#each t.missingCropIds as id, i (id)}<code>{id}</code>{i <
             t.missingCropIds.length - 1
               ? ', '
               : ''}{/each}
@@ -122,7 +122,7 @@
     {#snippet result(r)}
       <p class="text-meta">
         <span class="text-fg-3">Profile</span>
-        <span class="font-mono" data-testid="test-profile-ref">{refText(r.profile)}</span>
+        <code data-testid="test-profile-ref">{refText(r.profile)}</code>
       </p>
       {#if !r.testable}
         <p class="text-warn-text" data-testid="test-not-testable">

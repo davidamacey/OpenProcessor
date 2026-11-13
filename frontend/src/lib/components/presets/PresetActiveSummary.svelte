@@ -27,8 +27,8 @@
         <li class="flex flex-wrap items-baseline gap-2" data-testid="preset-active-row">
           <span class="w-36 shrink-0 text-meta text-fg-2">{label(e.axis)}</span>
           {#if e.state === 'active' && e.name}
-            <span class="font-mono">{e.name}</span>
-            <span class="font-mono text-meta text-fg-2">r{e.revision}</span>
+            <code>{e.name}</code>
+            <span class="text-meta text-fg-2 tabular-nums">r{e.revision}</span>
             {#if e.activated_at}
               <span class="text-meta text-fg-3"
                 >since {formatTimestamp(e.activated_at)}</span

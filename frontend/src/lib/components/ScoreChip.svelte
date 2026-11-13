@@ -4,7 +4,7 @@
    * §4/§5 — curation strategy plan), e.g. `mistakenness`.
    *
    * Closest existing analog is `ProvenanceChip.svelte` — same rounded
-   * border/bg/text triple, same font-mono + title-tooltip convention —
+   * border/bg/text triple, same title-tooltip convention —
    * but scores get their own color family (fuchsia) so they read as a
    * distinct kind of provenance from detector chips (which colors by
    * *which model*, not *how confident/anomalous*).
@@ -39,7 +39,7 @@
 </script>
 
 <span
-  class="chip border-holdout/50 bg-holdout/10 text-holdout-text {sizeCls} font-mono"
+  class="chip border-holdout/50 bg-holdout/10 text-holdout-text {sizeCls}"
   title={tooltip}
 >
   <span class="font-medium opacity-80">{label}</span>

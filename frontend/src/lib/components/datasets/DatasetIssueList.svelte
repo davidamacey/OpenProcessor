@@ -56,7 +56,7 @@
                 <span class="font-semibold"
                   >{labelByCode.get(issue.code) ?? issue.code}</span
                 >
-                <span class="font-mono text-caption opacity-70"
+                <span class="text-caption opacity-70 tabular-nums"
                   >{issue.count.toLocaleString()}</span
                 >
                 {#if issue.blocking}
@@ -72,10 +72,12 @@
                   <summary class="cursor-pointer opacity-80">
                     {issue.samples.length} sample{issue.samples.length === 1 ? '' : 's'}
                   </summary>
-                  <ul class="mt-1 space-y-0.5 font-mono text-caption">
-                    {#each issue.samples as s, i (i)}
-                      <li>{s.file}{s.line != null ? `:${s.line}` : ''}</li>
-                    {/each}
+                  <ul class="mt-1 space-y-0.5 text-caption">
+                    <code
+                      >{#each issue.samples as s, i (i)}
+                        <li>{s.file}{s.line != null ? `:${s.line}` : ''}</li>
+                      {/each}</code
+                    >
                   </ul>
                 </details>
               {/if}

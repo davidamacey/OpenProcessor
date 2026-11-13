@@ -33,13 +33,13 @@
     <p class="text-meta text-fg-2" data-testid="active-ingest-profile-none">
       No ingest profile is active (source {profile.source}); ingest uses the deployment's
       default detector{#if detector}:
-        <span class="font-mono text-fg-1">{detector.model}</span>
+        <code class="text-fg-1">{detector.model}</code>
         (version {detector.version}){/if}.
     </p>
   {:else}
     <p class="text-meta text-fg-2" data-testid="active-ingest-profile-name">
       Active profile
-      <span class="font-mono text-fg-1">{profile.active.name}</span>
+      <code class="text-fg-1">{profile.active.name}</code>
       {#if profile.active.revision !== null}(revision {profile.active.revision}){/if}.
     </p>
   {/if}

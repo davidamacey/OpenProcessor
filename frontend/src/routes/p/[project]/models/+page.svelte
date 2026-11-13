@@ -224,8 +224,8 @@
                   {pill(m).label}
                 </span>
               </div>
-              <p class="mt-1 truncate font-mono text-meta text-fg-3" title={m.name}>
-                {m.name}{m.version ? ` (v${m.version})` : ''}
+              <p class="mt-1 truncate text-meta text-fg-3" title={m.name}>
+                <code>{m.name}{m.version ? ` (v${m.version})` : ''}</code>
               </p>
             </div>
             <span
@@ -259,41 +259,41 @@
             </div>
             <div>
               <dt class="text-meta text-fg-3">Endpoint</dt>
-              <dd class="truncate font-mono text-meta text-fg-2" title={m.endpoint ?? ''}>
-                {m.endpoint ?? '—'}
+              <dd class="truncate text-meta text-fg-2" title={m.endpoint ?? ''}>
+                <code>{m.endpoint ?? '—'}</code>
               </dd>
             </div>
             <div>
               <dt class="text-meta text-fg-3">Inferences</dt>
-              <dd class="font-mono text-fg-1">{fmtCount(m.inference_count)}</dd>
+              <dd class="text-fg-1 tabular-nums">{fmtCount(m.inference_count)}</dd>
             </div>
             <div>
               <dt class="text-meta text-fg-3">Avg latency</dt>
-              <dd class="font-mono text-fg-1">{fmtMs(m.avg_latency_ms)}</dd>
+              <dd class="text-fg-1 tabular-nums">{fmtMs(m.avg_latency_ms)}</dd>
             </div>
             {#if m.kind === 'vlm'}
               <div class="col-span-2">
                 <dt class="text-meta text-fg-3">Model</dt>
                 <dd
-                  class="truncate font-mono text-meta text-fg-2"
+                  class="truncate text-meta text-fg-2"
                   title={m.model ?? ''}
                   data-testid="model-vlm-model"
                 >
-                  {m.model ?? '—'}
+                  <code>{m.model ?? '—'}</code>
                 </dd>
               </div>
             {/if}
             {#if m.kind === 'triton'}
               <div>
                 <dt class="text-meta text-fg-3">Batched execs</dt>
-                <dd class="font-mono text-fg-1">{fmtCount(m.exec_count)}</dd>
+                <dd class="text-fg-1 tabular-nums">{fmtCount(m.exec_count)}</dd>
               </div>
               <div>
                 <dt class="text-meta text-fg-3">Failures</dt>
                 <dd
-                  class="font-mono {m.inference_failed && m.inference_failed > 0
+                  class="{m.inference_failed && m.inference_failed > 0
                     ? 'text-danger-text'
-                    : 'text-fg-1'}"
+                    : 'text-fg-1'} tabular-nums"
                 >
                   {fmtCount(m.inference_failed)}
                 </dd>
@@ -303,7 +303,7 @@
 
           {#if m.last_error}
             <p
-              class="mt-3 truncate rounded border border-danger/30 bg-danger/10 px-2 py-1 font-mono text-caption text-danger-text"
+              class="mt-3 truncate rounded border border-danger/30 bg-danger/10 px-2 py-1 text-caption text-danger-text"
               title={m.last_error}
             >
               {m.last_error}
@@ -311,8 +311,8 @@
           {/if}
 
           {#if m.job_id}
-            <p class="mt-3 truncate font-mono text-caption text-fg-3" title={m.job_id}>
-              promoted from job {m.job_id}
+            <p class="mt-3 truncate text-caption text-fg-3" title={m.job_id}>
+              promoted from job <code>{m.job_id}</code>
             </p>
           {/if}
 

@@ -165,7 +165,7 @@
     oncancel={() => (confirmOpen = false)}
   >
     <p data-testid="combine-confirm-body">
-      Creates project <span class="font-mono text-fg-1">{preview.target.slug}</span>
+      Creates project <code class="text-fg-1">{preview.target.slug}</code>
       from {wizard.sources.length} source{wizard.sources.length === 1 ? '' : 's'}:
       {formatCount(preview.target.projected_images)} images, {formatCount(
         preview.target.projected_items,

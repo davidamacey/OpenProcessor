@@ -160,13 +160,13 @@
     >
       <p class="text-meta text-fg-2">
         <span class="text-fg-3">Prompt</span>
-        <span class="font-mono text-fg-1">{r.prompt}</span>
+        <span class="text-fg-1">{r.prompt}</span>
         <span class="ml-2 text-fg-3">Class</span>
-        <span class="font-mono text-fg-1" data-testid="ov-test-class"
+        <span class="text-fg-1" data-testid="ov-test-class"
           >{r.class_name || 'discovery'}</span
         >
         <span class="ml-2 text-fg-3">Took</span>
-        <span class="font-mono text-fg-1">{Math.round(r.elapsed_ms)} ms</span>
+        <span class="text-fg-1 tabular-nums">{Math.round(r.elapsed_ms)} ms</span>
       </p>
       <p
         class="text-meta {r.gate.run ? 'text-fg-2' : 'text-warn-text'}"
@@ -211,8 +211,8 @@
                   data-testid="ov-test-hit"
                   data-selected={h.selected}
                 >
-                  <td class="py-1 pr-3 font-mono">#{i}</td>
-                  <td class="py-1 pr-3 font-mono">{h.score.toFixed(2)}</td>
+                  <td class="py-1 pr-3 tabular-nums">#{i}</td>
+                  <td class="py-1 pr-3 tabular-nums">{h.score.toFixed(2)}</td>
                   <td class="py-1 pr-3">{h.selected ? 'yes' : 'no'}</td>
                   <td class="py-1" title={h.drop_reason ?? ''}
                     >{dropReasonText(h.drop_reason, vocabulary.drop_reasons)}</td

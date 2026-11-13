@@ -26,7 +26,7 @@
           data-testid="revision-row"
           data-revision={r.revision}
         >
-          <span class="font-mono">r{r.revision}</span>
+          <span class="tabular-nums">r{r.revision}</span>
           <span class="text-fg-3" title={r.saved_at}>{formatTimestamp(r.saved_at)}</span>
           {#if r.revision === ed.doc?.revision}<span class="text-fg-2">latest</span>{/if}
           {#if ed.doc?.active && r.revision === ed.doc.active_revision}<span
@@ -43,7 +43,7 @@
             <span class="w-full text-fg-2">{r.description}</span>
           {/if}
           {#if r.cloned_from}
-            <span class="w-full font-mono text-fg-3">cloned from {r.cloned_from}</span>
+            <span class="w-full text-fg-3">cloned from <code>{r.cloned_from}</code></span>
           {/if}
         </li>
       {/each}

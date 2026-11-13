@@ -38,9 +38,9 @@
         <tbody>
           {#each list as m (m.name + (m.project ?? ''))}
             <tr class="border-t border-line">
-              <td class="py-0.5 pr-3 font-mono">{m.choice.label}</td>
-              <td class="py-0.5 pr-3 font-mono">{m.source}</td>
-              <td class="py-0.5 pr-3 font-mono">
+              <td class="py-0.5 pr-3">{m.choice.label}</td>
+              <td class="py-0.5 pr-3">{m.source}</td>
+              <td class="py-0.5 pr-3">
                 {m.state ?? '—'}{m.ready === false ? ' (not ready)' : ''}
               </td>
               <td class="py-0.5 text-fg-2">
@@ -48,9 +48,7 @@
                     >configured for this role</span
                   >{/if}
                 {#if m.project}<span class="mr-2"
-                    >project <span class="font-mono">{m.project}</span>{m.shared
-                      ? ' · shared'
-                      : ''}</span
+                    >project <code>{m.project}</code>{m.shared ? ' · shared' : ''}</span
                   >{/if}
                 {#if m.class_mapping}
                   <span
@@ -98,7 +96,7 @@
       {#each vocab.text_reader_modes as m (m.id)}
         <li>
           <span class="text-fg-1">{m.label}</span>
-          <code class="ml-1 font-mono text-fg-3">{m.id}</code>
+          <code class="ml-1 text-fg-3">{m.id}</code>
           <span class="ml-1 text-fg-2"
             >{m.reads_text ? 'reads text' : 'no text'}{m.needs_vlm
               ? ' · needs the VLM'
@@ -127,24 +125,26 @@
           <tbody>
             {#each vocab.vlm.endpoints as v (v.name)}
               <tr class="border-t border-line">
-                <td class="py-0.5 pr-3 font-mono"
-                  >{v.name}{#if v.active}<span class="ml-1 font-sans text-success-text"
+                <td class="py-0.5 pr-3"
+                  ><code>{v.name}</code>{#if v.active}<span class="ml-1 text-success-text"
                       >active</span
                     >{/if}</td
                 >
-                <td class="py-0.5 pr-3 font-mono"
-                  >{v.model ?? '—'}{v.resolved_model && v.resolved_model !== v.model
-                    ? ` (${v.resolved_model})`
-                    : ''}</td
+                <td class="py-0.5 pr-3"
+                  ><code
+                    >{v.model ?? '—'}{v.resolved_model && v.resolved_model !== v.model
+                      ? ` (${v.resolved_model})`
+                      : ''}</code
+                  ></td
                 >
                 <td class="py-0.5 pr-3"
                   >{v.locality ?? '—'}{v.sends_images_externally
                     ? ' · sends images externally'
                     : ''}</td
                 >
-                <td class="py-0.5 font-mono"
+                <td class="py-0.5"
                   >{v.status ?? '—'}{#if v.warning}<span
-                      class="ml-1 rounded border border-danger/40 bg-danger/10 px-1 font-sans text-danger-text"
+                      class="ml-1 rounded border border-danger/40 bg-danger/10 px-1 text-danger-text"
                       data-testid="vocab-vlm-warning">{v.warning}</span
                     >{/if}</td
                 >

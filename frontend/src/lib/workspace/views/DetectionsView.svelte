@@ -125,7 +125,7 @@
         class="mt-4 h-1"
         aria-hidden="true"
       ></div>
-      <p class="mt-2 font-mono text-meta text-fg-3" data-testid="detections-footer">
+      <p class="mt-2 text-meta text-fg-3 tabular-nums" data-testid="detections-footer">
         {pager.items.length} / {pager.total}
       </p>
     </ViewState>

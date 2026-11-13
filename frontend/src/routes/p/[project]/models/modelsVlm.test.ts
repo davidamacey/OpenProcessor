@@ -118,7 +118,7 @@ async function render(): Promise<void> {
 
 const card = (name: string) =>
   [...target.querySelectorAll('li')].find((li) =>
-    li.querySelector('p.font-mono')?.textContent?.startsWith(name),
+    li.querySelector('p > code')?.textContent?.startsWith(name),
   )!;
 
 describe('/models VLM rows', () => {

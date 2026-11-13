@@ -23,7 +23,7 @@
 <div class="space-y-4" data-testid="preview-summary">
   <p class="text-meta text-fg-2">
     <span class="text-fg-1">{formatLabel}</span> at
-    <code class="font-mono">{preview.root}</code>
+    <code>{preview.root}</code>
   </p>
 
   <div class="overflow-x-auto">
@@ -38,10 +38,10 @@
           <th class="px-2 py-1 text-right">Boxes</th>
         </tr>
       </thead>
-      <tbody class="font-mono">
+      <tbody class="tabular-nums">
         {#each preview.splits as s (s.split)}
           <tr class="border-t border-line">
-            <td class="px-2 py-1 font-sans">{s.split}</td>
+            <td class="px-2 py-1">{s.split}</td>
             <td class="px-2 py-1 text-right">{s.images.toLocaleString()}</td>
             <td class="px-2 py-1 text-right">{s.labeled.toLocaleString()}</td>
             <td class="px-2 py-1 text-right">{s.negatives.toLocaleString()}</td>
@@ -56,27 +56,29 @@
   <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-meta sm:grid-cols-3">
     <div>
       <dt class="text-fg-3">Images</dt>
-      <dd class="font-mono">{preview.totals.images.toLocaleString()}</dd>
+      <dd class="tabular-nums">{preview.totals.images.toLocaleString()}</dd>
     </div>
     <div>
       <dt class="text-fg-3">Boxes</dt>
-      <dd class="font-mono">{preview.totals.boxes.toLocaleString()}</dd>
+      <dd class="tabular-nums">{preview.totals.boxes.toLocaleString()}</dd>
     </div>
     <div>
       <dt class="text-fg-3">Already in this project</dt>
-      <dd class="font-mono">{preview.totals.images_already_indexed.toLocaleString()}</dd>
+      <dd class="tabular-nums">
+        {preview.totals.images_already_indexed.toLocaleString()}
+      </dd>
     </div>
     <div>
       <dt class="text-fg-3">To ingest</dt>
-      <dd class="font-mono">{preview.totals.images_to_ingest.toLocaleString()}</dd>
+      <dd class="tabular-nums">{preview.totals.images_to_ingest.toLocaleString()}</dd>
     </div>
     <div>
       <dt class="text-fg-3">Detector runs</dt>
-      <dd class="font-mono">{preview.estimate.detector_images.toLocaleString()}</dd>
+      <dd class="tabular-nums">{preview.estimate.detector_images.toLocaleString()}</dd>
     </div>
     <div>
       <dt class="text-fg-3">Embeddings</dt>
-      <dd class="font-mono">{preview.estimate.embeddings.toLocaleString()}</dd>
+      <dd class="tabular-nums">{preview.estimate.embeddings.toLocaleString()}</dd>
     </div>
   </dl>
 

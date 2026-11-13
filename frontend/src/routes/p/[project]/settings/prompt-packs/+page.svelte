@@ -80,10 +80,10 @@
               <tr class="border-t border-line" data-testid="pack-row" data-name={p.name}>
                 <td class="py-1.5 pr-3">
                   <a
-                    class="font-mono text-accent-text hover:underline"
+                    class="text-accent-text hover:underline"
                     href={resolve(
                       projectHref(`/settings/prompt-packs/${encodeURIComponent(p.name)}`),
-                    )}>{p.name}</a
+                    )}><code>{p.name}</code></a
                   >
                   {#if p.active}
                     <span
@@ -101,7 +101,7 @@
                 <td class="py-1.5 pr-3 text-meta text-fg-2">
                   {p.source}{p.read_only ? ' · read-only' : ''}
                 </td>
-                <td class="py-1.5 pr-3 font-mono text-meta">{p.revision ?? '—'}</td>
+                <td class="py-1.5 pr-3 text-meta tabular-nums">{p.revision ?? '—'}</td>
                 <td class="py-1.5 pr-3 text-meta text-fg-2">{p.description ?? ''}</td>
                 <ConfigRowTail row={p} {flow} />
               </tr>
@@ -119,7 +119,7 @@
           <ul class="space-y-1 text-body" data-testid="templates">
             {#each l.templates as t (t.name + t.path)}
               <li class="flex flex-wrap items-center gap-2" data-testid="template-row">
-                <span class="font-mono">{t.name}</span>
+                <code>{t.name}</code>
                 <code class="text-meta text-fg-3">{t.path}</code>
                 <button
                   type="button"

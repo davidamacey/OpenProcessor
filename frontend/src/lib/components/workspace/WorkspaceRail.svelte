@@ -52,7 +52,9 @@
             onclick={() => ws.setQueue(ws.url.queue === q.id ? null : q.id)}
           >
             <span class="truncate">{q.label}</span>
-            <span class="font-mono text-meta text-fg-2">{q.count.toLocaleString()}</span>
+            <span class="text-meta text-fg-2 tabular-nums"
+              >{q.count.toLocaleString()}</span
+            >
           </button>
         </li>
       {/each}

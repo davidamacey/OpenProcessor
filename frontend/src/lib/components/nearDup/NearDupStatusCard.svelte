@@ -25,7 +25,7 @@
     <h2 class="text-title font-semibold">Status</h2>
     {#if ctl.status?.profile}
       <span class="text-meta text-fg-2" data-testid="near-dup-profile-chip">
-        Profile <span class="font-mono text-fg-1">{ctl.status.profile.name}</span>
+        Profile <code class="text-fg-1">{ctl.status.profile.name}</code>
         revision {ctl.status.profile.revision}
       </span>
     {:else if ctl.status}
@@ -53,7 +53,7 @@
         <h3 class="text-body font-medium">{LABEL[lv.level]}</h3>
         {#if lv.current_run}
           <p class="text-meta text-fg-2">
-            Current run <span class="font-mono">{lv.current_run.mode}</span>,
+            Current run <span>{lv.current_run.mode}</span>,
             {formatTimestamp(lv.current_run.finished_at ?? lv.current_run.started_at)}:
             {lv.current_run.dedup_groups} duplicate groups,
             {lv.current_run.leak_groups} leak groups,

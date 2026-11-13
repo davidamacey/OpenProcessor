@@ -90,24 +90,24 @@
 {#snippet classRow(row: ExportRow)}
   <tr class="border-b border-line hover:bg-surface-1/40">
     <td class="px-3 py-1.5 text-fg-1">{row.class_name}</td>
-    <td class="px-3 py-1.5 font-mono text-meta text-fg-3">{row.class_id}</td>
-    <td class="px-3 py-1.5 text-right font-mono text-fg-2">
+    <td class="px-3 py-1.5 text-meta text-fg-3"><code>{row.class_id}</code></td>
+    <td class="px-3 py-1.5 text-right text-fg-2 tabular-nums">
       {row.total.toLocaleString()}
     </td>
-    <td class="px-3 py-1.5 text-right font-mono text-fg-2">
+    <td class="px-3 py-1.5 text-right text-fg-2 tabular-nums">
       {row.validated.toLocaleString()}
     </td>
-    <td class="px-3 py-1.5 text-right font-mono text-fg-1">
+    <td class="px-3 py-1.5 text-right text-fg-1 tabular-nums">
       {row.trainable.toLocaleString()}
     </td>
-    <td class="px-3 py-1.5 text-right font-mono text-fg-2">
+    <td class="px-3 py-1.5 text-right text-fg-2 tabular-nums">
       {row.aug_target.toLocaleString()}
     </td>
     <td class="px-3 py-1.5 text-right">
       <span
-        class="rounded-md border px-1.5 py-0.5 font-mono text-meta {gapClass(
+        class="rounded-md border px-1.5 py-0.5 text-meta {gapClass(
           row.trainableGap,
-        )}"
+        )} tabular-nums"
         title={gapCellTitle(row.trainableGap, blockBelow)}
       >
         {row.trainableGap > 0 ? '+' : ''}{row.trainableGap.toLocaleString()}
@@ -115,21 +115,19 @@
     </td>
     <td class="px-3 py-1.5 text-right">
       <span
-        class="rounded-md border px-1.5 py-0.5 font-mono text-meta {testBadge(
+        class="rounded-md border px-1.5 py-0.5 text-meta {testBadge(
           row.testDeficient,
-        )}"
+        )} tabular-nums"
       >
         {row.test_count}
       </span>
     </td>
     <td class="px-3 py-1.5 text-right">
       {#if row.adequacy == null}
-        <span class="font-mono text-meta text-fg-3">—</span>
+        <span class="text-meta text-fg-3">—</span>
       {:else}
         <span
-          class="rounded-md border px-1.5 py-0.5 font-mono text-meta {adequacyClass(
-            row.adequacy,
-          )}"
+          class="rounded-md border px-1.5 py-0.5 text-meta {adequacyClass(row.adequacy)}"
         >
           {row.adequacy}
         </span>

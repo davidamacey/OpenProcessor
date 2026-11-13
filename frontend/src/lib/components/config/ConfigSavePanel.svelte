@@ -75,7 +75,7 @@
     <p class="text-meta text-danger-text" data-testid="save-error">{ed.saveError}</p>
     {#if ed.saveReasons.length > 0}
       <ul class="list-disc pl-5 text-meta text-danger-text" data-testid="save-reasons">
-        {#each ed.saveReasons as r (r)}<li class="font-mono">{r}</li>{/each}
+        {#each ed.saveReasons as r (r)}<li>{r}</li>{/each}
       </ul>
     {/if}
   {/if}
