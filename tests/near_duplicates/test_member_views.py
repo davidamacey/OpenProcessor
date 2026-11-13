@@ -89,7 +89,9 @@ def _space(monkeypatch: pytest.MonkeyPatch) -> None:
     from .engine import plan
 
     async def resolved(_target, _key=None):
-        return SimpleNamespace(space_key=plan().space_key)
+        return SimpleNamespace(
+            space_key=plan().space_key, index_role='images', vector_field='pe_embedding'
+        )
 
     monkeypatch.setattr(service, 'embedding_space', resolved)
 
@@ -196,13 +198,34 @@ async def test_an_empty_page_names_the_cut_and_the_scored_count(pg, project) -> 
     docs = {IMAGES: image_docs({}, ['s1', 's2', 's3'])}
     env, _ = await make_env(pg, project, docs)
     await full_build(env)
+    opensearch = AsyncMock()
+    opensearch.count.return_value = {'count': 0}
     async with async_session_factory()() as session:
         page = await service.groups(
-            session, project, AsyncMock(), level='image', purpose='dedup', min_size=2, has_holdout=None,
+            session, project, opensearch, level='image', purpose='dedup', min_size=2, has_holdout=None,
             cursor=None, limit=10,
         )  # fmt: skip
     assert page.items == []
     assert page.empty_reason == '0 dedup groups at cosine 0.98 among 3 images'
+
+
+@pytest.mark.db
+@pytest.mark.asyncio
+async def test_an_empty_page_counts_the_images_without_a_vector(pg, project) -> None:
+    docs = {IMAGES: image_docs({}, ['s1', 's2', 's3'])}
+    env, _ = await make_env(pg, project, docs)
+    await full_build(env)
+    opensearch = AsyncMock()
+    opensearch.count.return_value = {'count': 2}
+    async with async_session_factory()() as session:
+        page = await service.groups(
+            session, project, opensearch, level='image', purpose='dedup', min_size=2, has_holdout=None,
+            cursor=None, limit=10,
+        )  # fmt: skip
+    assert (page.empty_reason or '').startswith(
+        '0 dedup groups at cosine 0.98 among 3 images; 2 images have no vector'
+    )
+    opensearch.count.assert_awaited_once()
 
 
 @pytest.mark.db
