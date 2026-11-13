@@ -28,7 +28,8 @@
     {"id": "map", "label": "Map", "description": "The Workspace Map view; no class letters, so a key cannot label an area.", "includes": ["workspace"], "class_hotkeys_live": false},
     {"id": "clusters_search", "label": "Cluster search", "description": "Semantic-search results in the Workspace Clusters view.", "includes": ["global"], "class_hotkeys_live": true},
     {"id": "region_gallery", "label": "Region gallery", "description": "The region gallery in the Workspace Clusters view.", "includes": ["global"], "class_hotkeys_live": false},
-    {"id": "editor", "label": "Image editor", "description": "The image editor: draw, move and label the boxes of one image.", "includes": ["global"], "class_hotkeys_live": true}
+    {"id": "editor", "label": "Image editor", "description": "The image editor: draw, move and label the boxes of one image.", "includes": ["global"], "class_hotkeys_live": true},
+    {"id": "class_picker", "label": "Class picker", "description": "The open class picker: a digit picks one of the recently used classes.", "includes": ["global"], "class_hotkeys_live": false}
   ],
   "actions": [
     {"id": "global.shortcuts_overlay", "context": "global", "group": null, "label": "Toggle this panel", "description": "Show or hide the keyboard-shortcuts overlay.", "default": ["`", "shift+~"], "modifiable": true},
@@ -129,6 +130,16 @@
     {"id": "editor.class_picker", "context": "editor", "group": null, "label": "Search all classes...", "description": "Pick the class of the selected box.", "default": ["/"], "modifiable": true},
     {"id": "editor.prev_image", "context": "editor", "group": null, "label": "Previous image", "description": "Go to the previous image in the list you came from.", "default": [","], "modifiable": true},
     {"id": "editor.next_image", "context": "editor", "group": null, "label": "Next image", "description": "Go to the next image in the list you came from.", "default": ["."], "modifiable": true},
-    {"id": "editor.cancel", "context": "editor", "group": null, "label": "Cancel / deselect / back", "description": "Cancel the draw, then deselect, then go back to the Workspace.", "default": ["escape"], "modifiable": false}
+    {"id": "editor.cancel", "context": "editor", "group": null, "label": "Cancel / deselect / back", "description": "Cancel the draw, then deselect, then go back to the Workspace.", "default": ["escape"], "modifiable": false},
+
+    {"id": "class_picker.recent_1", "context": "class_picker", "group": null, "label": "Pick recent class 1", "description": "Pick the 1st most recently used class in the open picker.", "default": ["1"], "modifiable": true},
+    {"id": "class_picker.recent_2", "context": "class_picker", "group": null, "label": "Pick recent class 2", "description": "Pick the 2nd most recently used class in the open picker.", "default": ["2"], "modifiable": true},
+    {"id": "class_picker.recent_3", "context": "class_picker", "group": null, "label": "Pick recent class 3", "description": "Pick the 3rd most recently used class in the open picker.", "default": ["3"], "modifiable": true},
+    {"id": "class_picker.recent_4", "context": "class_picker", "group": null, "label": "Pick recent class 4", "description": "Pick the 4th most recently used class in the open picker.", "default": ["4"], "modifiable": true},
+    {"id": "class_picker.recent_5", "context": "class_picker", "group": null, "label": "Pick recent class 5", "description": "Pick the 5th most recently used class in the open picker.", "default": ["5"], "modifiable": true},
+    {"id": "class_picker.recent_6", "context": "class_picker", "group": null, "label": "Pick recent class 6", "description": "Pick the 6th most recently used class in the open picker.", "default": ["6"], "modifiable": true},
+    {"id": "class_picker.recent_7", "context": "class_picker", "group": null, "label": "Pick recent class 7", "description": "Pick the 7th most recently used class in the open picker.", "default": ["7"], "modifiable": true},
+    {"id": "class_picker.recent_8", "context": "class_picker", "group": null, "label": "Pick recent class 8", "description": "Pick the 8th most recently used class in the open picker.", "default": ["8"], "modifiable": true},
+    {"id": "class_picker.recent_9", "context": "class_picker", "group": null, "label": "Pick recent class 9", "description": "Pick the 9th most recently used class in the open picker.", "default": ["9"], "modifiable": true}
   ]
 }

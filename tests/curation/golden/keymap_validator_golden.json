@@ -103,11 +103,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -283,6 +289,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": []
@@ -403,11 +436,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -583,6 +622,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": []
@@ -703,11 +769,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -883,6 +955,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": []
@@ -1004,11 +1103,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -1184,6 +1289,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": []
@@ -1309,11 +1441,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -1489,6 +1627,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": []
@@ -1621,11 +1786,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -1801,6 +1972,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": []
@@ -1909,11 +2107,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -2089,6 +2293,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": []
@@ -2209,11 +2440,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -2389,6 +2626,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": []
@@ -2509,11 +2773,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -2689,6 +2959,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": []
@@ -2813,11 +3110,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -2993,6 +3296,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": []
@@ -3113,11 +3443,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -3293,6 +3629,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": []
@@ -3420,11 +3783,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -3600,6 +3969,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": []
@@ -3709,11 +4105,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -3889,6 +4291,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": []
@@ -4030,11 +4459,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -4210,6 +4645,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": []
@@ -4415,11 +4877,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -4595,6 +5063,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": []
@@ -4710,11 +5205,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -4890,6 +5391,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": []
@@ -5010,11 +5538,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -5190,6 +5724,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": []
@@ -5306,11 +5867,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -5486,6 +6053,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": [
@@ -5629,11 +6223,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -5809,6 +6409,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": [
@@ -5956,11 +6583,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -6136,6 +6769,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": []
@@ -6244,11 +6904,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -6424,6 +7090,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": []
@@ -6540,11 +7233,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -6720,6 +7419,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": [
@@ -6848,11 +7574,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -7028,6 +7760,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": []
@@ -7175,11 +7934,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -7355,6 +8120,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": []
@@ -7483,11 +8275,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -7663,6 +8461,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": []
@@ -7771,11 +8596,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -7951,6 +8782,33 @@
    ],
    "editor.cancel": [
     "escape"
+   ],
+   "class_picker.recent_1": [
+    "1"
+   ],
+   "class_picker.recent_2": [
+    "2"
+   ],
+   "class_picker.recent_3": [
+    "3"
+   ],
+   "class_picker.recent_4": [
+    "4"
+   ],
+   "class_picker.recent_5": [
+    "5"
+   ],
+   "class_picker.recent_6": [
+    "6"
+   ],
+   "class_picker.recent_7": [
+    "7"
+   ],
+   "class_picker.recent_8": [
+    "8"
+   ],
+   "class_picker.recent_9": [
+    "9"
    ]
   },
   "issues": []

@@ -182,3 +182,21 @@ def test_an_editor_key_clash_is_refused() -> None:
     )
     assert not report.ok
     assert [e.code for e in report.errors] == ['keymap_context_collision']
+
+
+def test_the_class_picker_serves_one_key_per_recent_class() -> None:
+    registry = load_registry()
+    assert registry.active_set('class_picker') == {'class_picker', 'global'}
+    for n in range(1, 10):
+        action = registry.actions[f'class_picker.recent_{n}']
+        assert (action.context, action.default, action.modifiable) == (
+            'class_picker',
+            (str(n),),
+            True,
+        )
+        assert str(n) in action.label
+
+
+def test_the_recent_class_keys_collide_with_nothing() -> None:
+    report, _, _, _ = validate_keymap({}, project='default', classes=[], previous_overrides={})
+    assert report.ok, [e.code for e in report.errors]
