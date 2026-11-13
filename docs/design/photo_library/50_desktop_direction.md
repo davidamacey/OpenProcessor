@@ -21,17 +21,25 @@ speed and a small footprint.
 Today the product is the server: Linux with NVIDIA GPUs (Triton, OpenSearch, Postgres, Celery). The engine work
 (P1) and phases P2a-0 to P2c come first.
 
-## 2. Building blocks to research when this starts (candidates, not decisions)
+## 2. The stack (decided by the owner, 2026-11-13)
 
-Each needs its official docs read and a measured prototype before it is chosen.
+**Rust** for the core, **[Tauri 2](https://v2.tauri.app/)** for the app shell (it reuses the Svelte UI),
+**[ONNX Runtime](https://onnxruntime.ai/docs/execution-providers/)** for models (TensorRT and CUDA on NVIDIA,
+CoreML on Apple Silicon, DirectML on Windows, CPU everywhere; from Rust via the [`ort`](https://ort.pyke.io/)
+crate), and **SQLite** for the local database. This is not a start from scratch: the owner already runs several
+Tauri apps and a Rust inference server built on ONNX Runtime and TensorRT, which give tested patterns for the
+shell, the model runtime and overlapping decode with inference.
+
+Still to choose when the work starts, by reading the official docs and measuring a prototype:
 
 | Need | Candidates |
 |---|---|
-| App shell reusing the Svelte UI | [Tauri 2](https://v2.tauri.app/) (Rust core, system web view) |
-| Model runtime on any GPU or CPU | [ONNX Runtime](https://onnxruntime.ai/docs/execution-providers/) execution providers (CUDA, TensorRT, CoreML, DirectML, OpenVINO, CPU), from Rust via the [`ort`](https://ort.pyke.io/) crate |
-| Local database and vectors | SQLite with a vector extension or an embedded vector store (for example sqlite-vec, LanceDB, USearch) |
+| Vector index next to SQLite | sqlite-vec, LanceDB, USearch |
 | Media | FFmpeg; ExifTool (a Perl program, bundled) or a Rust metadata crate if its coverage is proven equal |
 | Apple text model | Apple's Foundation Models framework (Swift) through a small bridge, macOS only |
+
+The server's backend may also move to Rust over time, starting with the hot paths, if the engine speed work (P1)
+shows the gain with measurements. Python stays until then.
 
 ## 3. What today's work keeps possible (no extra code now)
 
