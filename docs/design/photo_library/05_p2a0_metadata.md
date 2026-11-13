@@ -75,6 +75,28 @@ The source walk (bulk ingest walkers, `src/services/curation/bulk_ingest/`) rout
 
 ---
 
+### 2.5 File bundles: one photo, several files
+
+A phone photo often arrives as several files that are ONE moment. The library stores one asset per moment and
+lists its member files; the timeline never shows a member as a separate photo. On the owner's NAS, 7,392 `.AAE`
+files were found (written every year up to 2026), 3,623 of them with an `IMG_E` edited render beside the original
+and 1,073 with a same-name `.MOV`.
+
+| Member | How it is matched (ExifTool fields read by the one reader) | Role in the asset |
+|---|---|---|
+| Live Photo motion | the still's Apple MakerNotes `ContentIdentifier` equals the `.MOV`'s QuickTime `ContentIdentifier`; fallback: same stem, short clip (about 3 s), capture times within 2 s | `motion`: played on hover or press; never a separate video |
+| Edited render | `IMG_E1234.*` beside `IMG_1234.*` (iPhone transfer naming) | `edited`: the default display version; "show original" switches |
+| Edit recipe | `IMG_1234.AAE` (section on Apple edit files above) | `recipe`: recorded; crop and rotation applied to the derivative when no `edited` render exists |
+| RAW + JPEG | same stem and capture time, one RAW extension and one JPEG/HEIC | `raw`: kept with the asset; the JPEG/HEIC is shown |
+| Sidecar | `.xmp` beside the file | `sidecar` (read per the sidecar row) |
+| Burst | Apple MakerNotes `BurstUUID` (and other makers' burst tags where ExifTool reads them) | not a bundle: each frame is its own photo with a `burst_id`, collapsed into a stack in P2b |
+
+Rules: matching is deterministic and re-runnable (the same files give the same bundles); an unmatched member
+(an `.AAE` or `IMG_E` without its original) is kept as an orphan, listed in the metadata report and shown once;
+moving or renaming a member re-links it on the next scan. Verify each tag name in the ExifTool tag docs
+(Apple MakerNotes and QuickTime Keys tables) before coding. Prior art to read first: `osxphotos` (MIT) and
+Immich's Live Photo linking.
+
 ## 3. Edits stored in the database (lane L-M2)
 
 | Edit | Storage | Effect |
@@ -193,6 +215,7 @@ then:    the coordinator's sweep, the parity and round-trip runs, the owner revi
 | `tests/domain/test_quicktime_time_rules.py` | each rule row with a fixture; offset tag beats track UTC beats rule table; unknown make stays floating |
 | `tests/domain/test_gps_track.py` | `-G3` documents to ordered points; thinning to 1 Hz; `store_coarse` thinning and rounding; `drop` stores nothing |
 | `tests/library/test_geotag.py` | interpolation and extrapolation limits equal ExifTool's documented defaults; camera offset; photos with a read position untouched |
+| `tests/library/test_file_bundles.py` | Live pair by `ContentIdentifier` and by the fallback; `IMG_E` render becomes the display version; `.AAE` attached; RAW+JPEG pair; orphans kept and listed; the same files always give the same bundles; a renamed member re-links |
 | `tests/library/test_metadata_edits.py` | batch shift by camera serial; undo keeps a later edit; the reader's re-read never overwrites an override; DST and a trip across time zones keep local and UTC consistent |
 | `tests/library/test_sidecar_export.py` | round trip of every exported field; destination guard refuses originals and non-`.xmp` paths; `beside_original` refused unless enabled |
 | `tests/test_library_one_metadata_reader.py` | only `src/clients/exiftool_client.py` starts ExifTool; only `src/domain/capture_metadata.py` maps its tags (AST and `rg` scan) |
@@ -212,7 +235,9 @@ manifest before and after edits and export.
    the dry run shows before and after; apply; undo; apply again.
 3. Videos from an action camera, a drone and a phone appear with tracks; the track count matches what the
    owner expects.
-4. Upload a GPX of a walk; geotag the photos of a camera without GPS from it; spot-check 10.
-5. Export sidecars to the mirror tree; open a few in another photo tool; the edits are there; the originals'
+4. Live Photos and edited iPhone photos appear once each, with a Live badge and the edited version shown;
+   "show original" works; the metadata report lists any orphan `.AAE` or `IMG_E` files.
+5. Upload a GPX of a walk; geotag the photos of a camera without GPS from it; spot-check 10.
+6. Export sidecars to the mirror tree; open a few in another photo tool; the edits are there; the originals'
    checksums are unchanged.
-6. The parity and round-trip reports against the bars of 00 section 2.
+7. The parity and round-trip reports against the bars of 00 section 2.

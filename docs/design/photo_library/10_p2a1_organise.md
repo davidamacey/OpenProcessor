@@ -144,6 +144,7 @@ visibility; P2c adds `event`, `trip`, `calendar_event`, `holiday`.
 | URL grammar | `lib/library/libraryUrl.ts` | pattern of `lib/workspace/workspaceUrl.ts` |
 | API and types | `lib/api_library.ts`, `lib/api_libraryCollections.ts`, `lib/types_library*.ts` | `lib/api.ts`; contract test pattern of `lib/contract/` |
 | Timeline store, grid, scrubber, tile | `lib/library/timelineStore.svelte.ts`, `lib/components/library/{PhotoGrid,JustifiedSection,TimelineScrubber,PhotoTile}.svelte` | `justified-layout`, `virtua/svelte`, `thumbhash` (exact pins; README and changelog read and cited) |
+| Bundles and Live Photos | `PhotoTile` shows one tile per asset with badges (Live, Edited, RAW); `PhotoViewer` plays the Live motion on hover or press (muted by default) and has "show original" / "show edited"; the info panel lists member files. Motion clips are served as short web-playable proxies made at ingest | P2a-0 bundles |
 | Selection, bulk bar | `lib/library/librarySelection.svelte.ts`, `lib/components/library/LibraryBulkBar.svelte` | `lib/selection.svelte.ts` (extended), the `BulkBar.svelte` pattern, `ui/Menu.svelte` |
 | Viewer and info panel | `lib/components/library/{PhotoViewer,InfoPanel}.svelte`; the panel shows effective values and their sources, with edit actions for time, position, title, caption and keywords | `ui/Lightbox.svelte`, `components/Filmstrip.svelte` |
 | Metadata editing | `lib/components/library/{CaptureTimeDialog,LocationDialog,KeywordEditor,GpxUploadDialog}.svelte`, `lib/api_libraryMetadata.ts` (P2a-0) | `components/Modal.svelte` |
@@ -203,12 +204,14 @@ trash empty with the checksum manifest.
 
 1. Photos: placeholders then thumbnails; scrub to the oldest and newest years; no jump; open a photo, step
    with arrows; the info panel shows effective time, place, objects, text, keywords and where each came from.
-2. Heart ten photos; the Favourites album shows them; flag two as rejects; undo once.
-3. Fix a capture time from the info panel; batch-shift a camera's day from the dialog; the timeline moves them.
-4. Make an album, reorder; make a smart album "favourites in a country, summer, keyword X, not in album Y";
+2. Live Photos play their motion on hover; an edited iPhone photo shows the edit and "show original" works;
+   exact duplicates appear in the Duplicates view (visual near-duplicate stacks come in P2b).
+3. Heart ten photos; the Favourites album shows them; flag two as rejects; undo once.
+4. Fix a capture time from the info panel; batch-shift a camera's day from the dialog; the timeline moves them.
+5. Make an album, reorder; make a smart album "favourites in a country, summer, keyword X, not in album Y";
    ingest more photos; they appear without editing the rule.
-5. Places: country → city; a GoPro or drone track on the map; drag the time slider; the marker follows and
+6. Places: country → city; a GoPro or drone track on the map; drag the time slider; the marker follows and
    the photos along the track open.
-6. Search "beach" + place + year; facets narrow; a quoted OCR phrase matches.
-7. Trash 10 photos, empty the trash; the source checksum manifest is unchanged.
-8. Budgets of 00 section 10 on the 500k real-EXIF set and the 5M replica, with the bench header.
+7. Search "beach" + place + year; facets narrow; a quoted OCR phrase matches.
+8. Trash 10 photos, empty the trash; the source checksum manifest is unchanged.
+9. Budgets of 00 section 10 on the 500k real-EXIF set and the 5M replica, with the bench header.
