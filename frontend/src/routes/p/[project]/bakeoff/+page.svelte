@@ -66,9 +66,11 @@
   <PageHeader
     title="Bake-off: model comparison"
     description="Score trained models and baselines on frozen test splits, per class, in the on-demand evaluator. Classes a model does not cover are shown, not hidden."
-  />
-
-  <div class="mb-6"><ResourceLinksRow /></div>
+  >
+    {#snippet actions()}
+      <ResourceLinksRow />
+    {/snippet}
+  </PageHeader>
 
   {#if s.loadErrors.length}
     <ul

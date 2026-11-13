@@ -131,12 +131,12 @@ describe('L1: the Items column is the served item count', () => {
 });
 
 describe('L5: Validated says how many are frozen test crops', () => {
-  it('adds "incl. 5 test" for a class with held-out crops, nothing otherwise', async () => {
+  it('adds "5 in test" for a class with held-out crops, nothing otherwise', async () => {
     const el = await render();
     const widget_a = el.querySelector('[data-testid="class-row-5"]');
     expect(
       widget_a?.querySelector('[data-testid="validated-test-suffix"]')?.textContent,
-    ).toBe('incl. 5 test');
+    ).toBe('5 in test');
     const widget_b = el.querySelector('[data-testid="class-row-6"]');
     expect(widget_b?.querySelector('[data-testid="validated-test-suffix"]')).toBeNull();
   });

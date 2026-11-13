@@ -34,6 +34,8 @@ function render(links: ResourceLink[]): HTMLDivElement {
   document.body.appendChild(target);
   instance = mount(ResourceLinksRow, { target });
   flushSync();
+  target.querySelector<HTMLButtonElement>('[data-testid="dashboards-trigger"]')?.click();
+  flushSync();
   return target;
 }
 
@@ -68,5 +70,20 @@ describe('ResourceLinksRow', () => {
     const el = render([]);
     expect(el.querySelector('[data-testid="resource-row"]')).toBeNull();
     expect(el.textContent).not.toContain('Dashboards');
+  });
+
+  it('is one Dashboards menu button, closed until opened', () => {
+    curationSettingsStore.settings = {
+      ...EMPTY_CURATION_SETTINGS,
+      resource_links: [L({})],
+    };
+    target = document.createElement('div');
+    document.body.appendChild(target);
+    instance = mount(ResourceLinksRow, { target });
+    flushSync();
+    expect(
+      target.querySelector('[data-testid="dashboards-trigger"]')!.textContent,
+    ).toContain('Dashboards');
+    expect(target.querySelectorAll('a')).toHaveLength(0);
   });
 });

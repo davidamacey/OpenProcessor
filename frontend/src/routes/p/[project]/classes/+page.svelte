@@ -244,7 +244,7 @@
 </script>
 
 <PageShell width="wide">
-  <PageHeader title="Class management">
+  <PageHeader title="Classes">
     {#snippet actions()}
       <input
         type="search"
@@ -290,6 +290,7 @@
     {changeGroup}
     {setHotkey}
     {deprecateClassAction}
+    mergeInto={merge.openMergeWithSource}
   />
 
   <DeprecatedClassesTable {deprecatedRows} {busy} {restoreClassAction} />

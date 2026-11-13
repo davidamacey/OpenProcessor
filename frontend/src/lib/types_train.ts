@@ -307,6 +307,8 @@ export interface TrainManifest {
 
 export interface PreflightCheck {
   name: string;
+  /** The served display name of the check ("Class balance"); `name` is its id. */
+  label: string;
   severity: PreflightSeverity;
   message: string;
   detail?: Record<string, unknown> | null;

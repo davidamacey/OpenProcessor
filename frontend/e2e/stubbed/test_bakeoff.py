@@ -524,6 +524,7 @@ def test_dashboard_links_are_only_the_served_entries(stub, page, app_url):
     page.goto(f'{app_url}/p/default/bakeoff')
     row = page.get_by_test_id('resource-row')
     row.wait_for(timeout=ACTION_TIMEOUT_MS)
+    row.get_by_test_id('dashboards-trigger').click()
     links = row.get_by_test_id('resource-link')
     assert links.count() == 1
     assert links.get_attribute('href') == 'https://grafana.example/d/abc'

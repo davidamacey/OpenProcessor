@@ -116,10 +116,8 @@
     title="Train model"
     description="YOLO26 detector training over the frozen export. Submits a job to the curation-trainer container and tails progress until it finishes."
   >
-    {#snippet meta()}
-      <ResourceLinksRow />
-    {/snippet}
     {#snippet actions()}
+      <ResourceLinksRow />
       <button
         type="button"
         class="btn"

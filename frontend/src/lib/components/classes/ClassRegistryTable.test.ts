@@ -25,6 +25,7 @@ function render(allClasses: never[], activeRows: never[] = []): string {
       changeGroup: noop,
       setHotkey: noop,
       deprecateClassAction: noop,
+      mergeInto: () => {},
     },
   });
   flushSync();

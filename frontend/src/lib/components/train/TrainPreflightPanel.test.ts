@@ -5,6 +5,7 @@ import TrainPreflightPanel from './TrainPreflightPanel.svelte';
 
 const check = (name: string, severity: 'ok' | 'info' | 'warn' | 'block') => ({
   name,
+  label: `${name[0]!.toUpperCase()}${name.slice(1)} check`,
   severity,
   message: `${name} message`,
   detail: {},
@@ -27,12 +28,24 @@ describe('TrainPreflightPanel', () => {
     const open = [...el.querySelectorAll('[data-testid="preflight-open-rows"] > li')].map(
       (li) => li.textContent ?? '',
     );
-    expect(open.some((t) => t.includes('holdout'))).toBe(true);
-    expect(open.some((t) => t.includes('gpu'))).toBe(false);
+    expect(open.some((t) => t.includes('Holdout check'))).toBe(true);
+    expect(open.some((t) => t.includes('Gpu check'))).toBe(false);
     const folded = el.querySelector('[data-testid="preflight-ok-rows"]')!;
     expect(folded.tagName).toBe('DETAILS');
     expect(folded.querySelector('summary')!.textContent).toContain('3 checks passed');
-    expect(folded.textContent).toContain('gpu');
+    expect(folded.textContent).toContain('Gpu check');
+  });
+
+  it('shows the served label, never the check id, and the severity as a word', () => {
+    const el = mountUi(TrainPreflightPanel, { preflight: report, preflighting: false });
+    const row = el.querySelector('[data-testid="preflight-open-rows"] > li')!;
+    expect(row.querySelector('[data-testid="preflight-label"]')!.textContent).toBe(
+      'Holdout check',
+    );
+    expect(row.querySelector('[data-testid="preflight-severity"]')!.textContent).toBe(
+      'Warning',
+    );
+    expect(row.querySelector('code')).toBeNull();
   });
 
   it('with only OK rows there is no open list, just the disclosure', () => {

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Menu from '$components/ui/Menu.svelte';
   import { adequacyChipClass, adequacyTooltip } from '$lib/adequacy';
   import { focusOnMount } from '$lib/actions/focusOnMount';
   import { formatDateOnly } from '$lib/format/date';
@@ -21,6 +22,7 @@
     changeGroup,
     setHotkey,
     deprecateClassAction,
+    mergeInto,
   }: {
     allClasses: RegistryClass[];
     activeRows: RegistryClass[];
@@ -35,6 +37,7 @@
     changeGroup: (cls: RegistryClass, newG: string) => Promise<void>;
     setHotkey: (cls: RegistryClass, raw: string) => Promise<void>;
     deprecateClassAction: (cls: RegistryClass) => Promise<void>;
+    mergeInto: (classId: number) => void;
   } = $props();
 </script>
 
@@ -64,7 +67,7 @@
           <th class="px-2 py-2 lg:px-3 text-center font-medium">Hotkey</th>
           <th
             class="px-2 py-2 lg:px-3 text-right font-medium"
-            title="Human-validated crops, including any frozen as test holdout (shown as incl. N test)"
+            title="Human-validated crops, including any frozen as test holdout (shown as N in test)"
           >
             Validated
           </th>
@@ -149,7 +152,7 @@
             </td>
             <td class="px-2 py-1.5 lg:px-3 text-right">
               <span
-                class="rounded-md border px-1.5 py-0.5 text-meta {adequacyChipClass(
+                class="rounded-md border px-1.5 py-0.5 text-meta tabular-nums {adequacyChipClass(
                   cls.adequacy,
                 )}"
                 title={adequacyTooltip(cls.adequacy, cls.validated_count ?? 0)}
@@ -159,7 +162,7 @@
               {#if heldOut > 0}
                 <span
                   class="ml-1 whitespace-nowrap text-caption text-fg-3"
-                  data-testid="validated-test-suffix">incl. {heldOut} test</span
+                  data-testid="validated-test-suffix">{heldOut} in test</span
                 >
               {/if}
             </td>
@@ -184,23 +187,32 @@
                   Cancel
                 </button>
               {:else}
-                <button
-                  type="button"
-                  class="btn"
-                  onclick={() => startEdit(cls)}
-                  disabled={busy}
-                >
-                  Rename
-                </button>
-                <button
-                  type="button"
-                  class="btn"
-                  data-testid="deprecate-{cls.id}"
-                  onclick={() => void deprecateClassAction(cls)}
-                  disabled={busy}
-                >
-                  Deprecate
-                </button>
+                <Menu
+                  label="More"
+                  align="end"
+                  triggerClass="btn btn-sm"
+                  items={[
+                    {
+                      id: 'rename',
+                      label: 'Rename',
+                      disabled: busy,
+                      onselect: () => startEdit(cls),
+                    },
+                    {
+                      id: 'merge',
+                      label: 'Merge into…',
+                      disabled: busy,
+                      onselect: () => mergeInto(cls.id),
+                    },
+                    {
+                      id: 'deprecate',
+                      label: 'Deprecate',
+                      tone: 'danger',
+                      disabled: busy,
+                      onselect: () => void deprecateClassAction(cls),
+                    },
+                  ]}
+                />
               {/if}
             </td>
           </tr>

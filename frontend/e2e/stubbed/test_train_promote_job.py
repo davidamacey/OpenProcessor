@@ -73,7 +73,7 @@ def open_modal(stub, page, app_url, status_body=None):
         status_body if status_body is not None else {**RUN, 'promote': None},
     )
     page.goto(f'{app_url}/p/default/train')
-    page.get_by_role('button', name='Promote ↑').first.click(timeout=ACTION_TIMEOUT_MS)
+    page.get_by_role('button', name='Promote').first.click(timeout=ACTION_TIMEOUT_MS)
     page.get_by_role('dialog', name='Promote to Triton').wait_for(timeout=ACTION_TIMEOUT_MS)
 
 
