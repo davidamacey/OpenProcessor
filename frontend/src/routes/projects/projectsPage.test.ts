@@ -59,6 +59,19 @@ let target: HTMLDivElement;
 let instance: ReturnType<typeof mount> | null = null;
 
 function q<T extends Element = HTMLElement>(testId: string): T | null {
+  const row = /^project-(?:edit|clone|pause|resume|archive|unarchive|delete)-(.+)$/.exec(
+    testId,
+  );
+  if (row) {
+    // The row actions live in the More menu: open it first (a no-op when it has no actions).
+    const trigger = document.querySelector<HTMLElement>(
+      `[data-testid="project-more-${row[1]}"] button`,
+    );
+    if (trigger && trigger.getAttribute('aria-expanded') !== 'true') {
+      trigger.click();
+      flushSync();
+    }
+  }
   return document.querySelector<T>(`[data-testid="${testId}"]`);
 }
 
@@ -180,6 +193,36 @@ describe('row actions follow served flags only', () => {
     expect(q('project-unarchive-wip')).toBeNull();
     expect(q('project-status-wip')!.textContent).toBe('Building');
     expect(q('project-open-alpha')!.getAttribute('href')).toBe('/p/alpha/dashboard');
+  });
+
+  it('a building project shows a disabled "Building…" instead of Open, and an active one shows Open', async () => {
+    listed = [
+      DEFAULT,
+      testProject({
+        slug: 'wip',
+        status: 'building',
+        selectable: false,
+        writable: false,
+      }),
+    ];
+    await render();
+    const building = q<HTMLButtonElement>('project-building-wip')!;
+    expect(building.textContent).toContain('Building');
+    expect(building.disabled).toBe(true);
+    expect(q('project-open-wip')).toBeNull();
+    expect(q('project-open-default')).not.toBeNull();
+  });
+
+  it('the row actions are one More menu, closed until opened', async () => {
+    listed = [DEFAULT, testProject({ slug: 'alpha' })];
+    await render();
+    expect(document.querySelector('[data-testid="project-edit-alpha"]')).toBeNull();
+    document
+      .querySelector<HTMLElement>('[data-testid="project-more-alpha"] button')!
+      .click();
+    flushSync();
+    expect(document.querySelector('[data-testid="project-edit-alpha"]')).not.toBeNull();
+    expect(document.querySelector('[data-testid="project-delete-alpha"]')).not.toBeNull();
   });
 
   it('Archive / Unarchive read the served archivable / unarchivable, not status', async () => {

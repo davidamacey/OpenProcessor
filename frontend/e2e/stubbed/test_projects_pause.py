@@ -17,6 +17,7 @@ from typing import Any
 
 from fixtures.wire import default_project, project, projects_response
 from harness.constants import ACTION_TIMEOUT_MS
+from harness.projects import row_action, wait_row_action
 
 
 API_PREFIX = '/curation'
@@ -82,12 +83,12 @@ def test_pause_then_resume_a_project_from_the_projects_page(stub, page, app_url)
     reg = Pause()
     reg.install(stub)
     page.goto(f'{app_url}/projects')
-    page.get_by_test_id('project-pause-alpha').wait_for(timeout=ACTION_TIMEOUT_MS)
+    wait_row_action(page, 'pause', 'alpha')
     # Only selectable rows are read; the building project never is.
     assert 'wip' not in reg.reads
     assert page.get_by_test_id('project-paused-alpha').count() == 0
 
-    page.get_by_test_id('project-pause-alpha').click()
+    row_action(page, 'pause', 'alpha').click()
     page.get_by_test_id('pause-project-dialog').wait_for(timeout=ACTION_TIMEOUT_MS)
     assert reg.writes == []  # confirm-gated
     with page.expect_request(
@@ -97,7 +98,7 @@ def test_pause_then_resume_a_project_from_the_projects_page(stub, page, app_url)
     page.get_by_test_id('project-paused-alpha').wait_for(timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_test_id('project-paused-default').count() == 0
 
-    page.get_by_test_id('project-resume-alpha').click()
+    row_action(page, 'resume', 'alpha').click()
     with page.expect_request(
         lambda r: r.method == 'POST' and r.url.endswith(f'{API_PREFIX}/projects/alpha/resume')
     ):

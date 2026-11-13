@@ -17,6 +17,7 @@
     icon?: IconName;
     tone?: 'danger';
     disabled?: boolean;
+    testid?: string;
   }
   interface Props {
     label: string;
@@ -100,6 +101,7 @@
         <button
           type="button"
           role="menuitem"
+          data-testid={item.testid}
           class="{ITEM} {toneClass(item)} disabled:opacity-50"
           disabled={item.disabled}
           onclick={() => choose(item)}

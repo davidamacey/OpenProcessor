@@ -26,6 +26,7 @@ from urllib.parse import parse_qs, urlparse
 
 from fixtures.wire import project, projects_response
 from harness.constants import ACTION_TIMEOUT_MS
+from harness.projects import row_action
 from playwright.sync_api import expect
 
 
@@ -531,7 +532,7 @@ def test_failed_job_undo_opens_the_delete_dry_run(stub, page, app_url):
         page.get_by_test_id('project-combine-job-merged').get_attribute('href')
         == f'/projects/combine/{JOB_ID}'
     )
-    expect(page.get_by_test_id('project-delete-merged')).to_have_text('Undo combine')
+    expect(row_action(page, 'delete', 'merged')).to_have_text('Undo combine')
     expect(page.get_by_test_id('projects-combine')).to_be_visible()
 
 

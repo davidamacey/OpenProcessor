@@ -28,6 +28,7 @@
   import { resolve } from '$app/paths';
   import CloneSettingsDialog from '$components/projects/CloneSettingsDialog.svelte';
   import CreateProjectDialog from '$components/projects/CreateProjectDialog.svelte';
+  import Menu, { type MenuItem } from '$components/ui/Menu.svelte';
   import DeleteProjectDialog from '$components/projects/DeleteProjectDialog.svelte';
   import EditProjectDialog from '$components/projects/EditProjectDialog.svelte';
   import PauseProjectDialog from '$components/projects/PauseProjectDialog.svelte';
@@ -94,6 +95,57 @@
       toastStore.error(res.message);
     }
   }
+
+  /** The row's More menu: only the actions the served flags allow. */
+  function rowMenu(p: ProjectSummary): MenuItem[] {
+    const items: MenuItem[] = [];
+    if (p.selectable)
+      items.push({
+        id: 'edit',
+        label: 'Edit',
+        testid: `project-edit-${p.slug}`,
+        onselect: () => (editing = p),
+      });
+    if (p.writable) {
+      items.push({
+        id: 'clone',
+        label: 'Copy settings',
+        testid: `project-clone-${p.slug}`,
+        onselect: () => (cloning = p),
+      });
+      items.push({
+        id: 'pause',
+        label: p.paused ? 'Resume pipeline' : 'Pause pipeline',
+        testid: `project-${p.paused ? 'resume' : 'pause'}-${p.slug}`,
+        onselect: () => (pausing = { project: p, pause: !p.paused }),
+      });
+    }
+    if (p.archivable)
+      items.push({
+        id: 'archive',
+        label: 'Archive',
+        testid: `project-archive-${p.slug}`,
+        disabled: pending === p.slug,
+        onselect: () => void lifecycle(p, 'Archived', admin.archive),
+      });
+    if (p.unarchivable)
+      items.push({
+        id: 'unarchive',
+        label: 'Unarchive',
+        testid: `project-unarchive-${p.slug}`,
+        disabled: pending === p.slug,
+        onselect: () => void lifecycle(p, 'Restored', admin.unarchive),
+      });
+    if (p.deletable)
+      items.push({
+        id: 'delete',
+        label: combineJobOf(p) ? 'Undo combine' : 'Delete',
+        testid: `project-delete-${p.slug}`,
+        tone: 'danger',
+        onselect: () => (deleting = p),
+      });
+    return items;
+  }
 </script>
 
 <div class="flex min-h-screen flex-col bg-surface-0 text-fg-1">
@@ -128,28 +180,7 @@
       {/snippet}
     </PageHeader>
 
-    {#if capacity}
-      <section
-        class="mb-4 rounded border px-3 py-2 text-body {capacity.status === 'blocked'
-          ? 'border-danger-line bg-danger-soft'
-          : capacity.status === 'warn'
-            ? 'border-warn-line bg-warn-soft'
-            : 'border-line bg-surface-1/40'}"
-        data-testid="projects-capacity"
-        data-status={capacity.status}
-      >
-        <p class="font-semibold">{capacity.labels[capacity.status] ?? capacity.status}</p>
-        <p class="text-meta text-fg-2">{capacity.message}</p>
-        <p class="mt-1 text-meta text-fg-3">
-          {capacity.active_shards} of {capacity.soft_limit} recommended shards in use (hard
-          limit
-          {capacity.hard_limit}) · {capacity.per_project_shards} per project ·
-          {capacity.projects_until_soft_limit} more project(s) before the recommended limit
-          ·
-          {formatBytes(capacity.heap_max_bytes)} heap
-        </p>
-      </section>
-    {:else if !admin.loading && !admin.loadError}
+    {#if !capacity && !admin.loading && !admin.loadError}
       <p class="mb-4 text-meta text-fg-3" data-testid="projects-capacity-unknown">
         Capacity is unavailable right now; the server checks it when a project is created.
       </p>
@@ -285,7 +316,9 @@
                 >{formatCount(p.counts.items_embedded)}</td
               >
               <td class="px-3 py-2 max-md:w-full">
-                <div class="flex flex-wrap justify-end gap-1.5 max-md:justify-start">
+                <div
+                  class="flex flex-wrap items-center justify-end gap-1.5 max-md:justify-start"
+                >
                   {#if p.selectable}
                     <a
                       data-sveltekit-preload-data="tap"
@@ -293,58 +326,23 @@
                       class="btn btn-sm"
                       data-testid="project-open-{p.slug}">Open</a
                     >
+                  {:else if p.status === 'building'}
                     <button
                       type="button"
                       class="btn btn-sm"
-                      data-testid="project-edit-{p.slug}"
-                      onclick={() => (editing = p)}>Edit</button
+                      disabled
+                      data-testid="project-building-{p.slug}">Building…</button
                     >
                   {/if}
-                  {#if p.writable}
-                    <button
-                      type="button"
-                      class="btn btn-sm"
-                      data-testid="project-clone-{p.slug}"
-                      onclick={() => (cloning = p)}>Copy settings</button
-                    >
-                  {/if}
-                  {#if p.writable}
-                    <button
-                      type="button"
-                      class="btn btn-sm"
-                      data-testid="project-{p.paused ? 'resume' : 'pause'}-{p.slug}"
-                      onclick={() => (pausing = { project: p, pause: !p.paused })}
-                      >{p.paused ? 'Resume pipeline' : 'Pause pipeline'}</button
-                    >
-                  {/if}
-                  {#if p.archivable}
-                    <button
-                      type="button"
-                      class="btn btn-sm"
-                      data-testid="project-archive-{p.slug}"
-                      disabled={pending === p.slug}
-                      onclick={() => void lifecycle(p, 'Archived', admin.archive)}
-                      >Archive</button
-                    >
-                  {/if}
-                  {#if p.unarchivable}
-                    <button
-                      type="button"
-                      class="btn btn-sm"
-                      data-testid="project-unarchive-{p.slug}"
-                      disabled={pending === p.slug}
-                      onclick={() => void lifecycle(p, 'Restored', admin.unarchive)}
-                      >Unarchive</button
-                    >
-                  {/if}
-                  {#if p.deletable}
-                    <button
-                      type="button"
-                      class="btn btn-sm text-danger-text"
-                      data-testid="project-delete-{p.slug}"
-                      onclick={() => (deleting = p)}
-                      >{combineJobOf(p) ? 'Undo combine' : 'Delete'}</button
-                    >
+                  {#if rowMenu(p).length > 0}
+                    <span data-testid="project-more-{p.slug}">
+                      <Menu
+                        label="More"
+                        align="end"
+                        triggerClass="btn btn-sm"
+                        items={rowMenu(p)}
+                      />
+                    </span>
                   {/if}
                 </div>
               </td>
@@ -381,6 +379,35 @@
         >
       {/if}
     </div>
+    {#if capacity}
+      <footer
+        class="mt-4 rounded border px-3 py-2 text-meta {capacity.status === 'blocked'
+          ? 'border-danger-line bg-danger-soft'
+          : capacity.status === 'warn'
+            ? 'border-warn-line bg-warn-soft'
+            : 'border-line bg-surface-1/40'}"
+        data-testid="projects-capacity"
+        data-status={capacity.status}
+      >
+        <p>
+          <span class="font-semibold text-fg-1"
+            >{capacity.labels[capacity.status] ?? capacity.status}.</span
+          >
+          <span class="text-fg-2">{capacity.message}</span>
+        </p>
+        <details class="mt-1 text-fg-3">
+          <summary class="cursor-pointer">Details</summary>
+          <p class="mt-1">
+            {capacity.active_shards} of {capacity.soft_limit} recommended shards in use (hard
+            limit
+            {capacity.hard_limit}) · {capacity.per_project_shards} per project ·
+            {capacity.projects_until_soft_limit} more project(s) before the recommended limit
+            ·
+            {formatBytes(capacity.heap_max_bytes)} heap
+          </p>
+        </details>
+      </footer>
+    {/if}
   </main>
 </div>
 
