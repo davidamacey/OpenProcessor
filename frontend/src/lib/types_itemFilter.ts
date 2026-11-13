@@ -97,7 +97,7 @@ export interface ItemFilter {
   viz_box?: [number, number, number, number] | null;
   near_dup_group?: string | null;
   /** Audited crops by who was right, repeatable (OR). */
-  audit_outcome?: ('agree' | 'detector_wrong' | 'vlm_wrong' | 'both_wrong')[];
+  audit_outcome?: AuditOutcome[];
   conf_max?: number | null;
   conf_min?: number | null;
   dataset_split?: string | null;
@@ -126,7 +126,6 @@ export interface ItemFilter {
   region_text_match?: TextMatch;
   review_dismissed?: boolean | null;
   review_status?: ReviewStatus[];
-  audit_outcome?: AuditOutcome[];
   review_tab?: string | null;
   source?: string | null;
   source_prompt?: string | null;
