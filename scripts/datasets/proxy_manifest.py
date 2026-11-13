@@ -30,7 +30,10 @@ LABELS_NAME = 'labels.jsonl'
 LABEL_KEYS = ('path', 'class_name', 'taxonomy_path', 'view', 'identity')
 FILE_KEYS = ('path', 'bytes', 'sha256')
 # Names the verifier never reports as unlisted: the dataset's own metadata and partial downloads.
-DEFAULT_IGNORE = frozenset({MANIFEST_NAME, LABELS_NAME, 'ATTRIBUTION.csv', 'review_sample.csv'})
+DEFAULT_IGNORE = frozenset({
+    MANIFEST_NAME, LABELS_NAME, 'ATTRIBUTION.csv', 'review_sample.csv',
+    'labels_one_face.jsonl', 'one_face_report.json', 'DATACARD.md',
+})  # fmt: skip
 
 
 @dataclass(frozen=True)

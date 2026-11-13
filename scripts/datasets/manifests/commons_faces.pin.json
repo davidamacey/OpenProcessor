@@ -1,0 +1,14 @@
+{
+  "count": 5920,
+  "dataset": "commons_faces",
+  "licence": {
+    "name": "per file: CC0, public domain, CC BY, CC BY-SA",
+    "note": "Attribution and share-alike per file; the manifest lists author, licence and the description page for every image. The identity comes from the structured-data depicts statement and is noisy (group photos); review_sample.csv is a seeded 10 % check.",
+    "redistributable": true,
+    "url": "https://commons.wikimedia.org/wiki/Commons:Licensing"
+  },
+  "manifest_sha256": "a7cc7212d7d9e96c8b106b90273cc0d6e79a7953e0a3ba6067439700ca519cab",
+  "schema": "proxy-dataset-manifest/1-pin",
+  "source_url": "https://commons.wikimedia.org/w/api.php",
+  "total_bytes": 3345889098
+}

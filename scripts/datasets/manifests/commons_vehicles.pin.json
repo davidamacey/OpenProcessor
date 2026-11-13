@@ -1,0 +1,14 @@
+{
+  "count": 9511,
+  "dataset": "commons_vehicles",
+  "licence": {
+    "name": "per file: CC0, public domain, CC BY, CC BY-SA",
+    "note": "Attribution and share-alike per file; the manifest lists author, licence and the description page for every image. Labels come from the category and are noisy.",
+    "redistributable": true,
+    "url": "https://commons.wikimedia.org/wiki/Commons:Licensing"
+  },
+  "manifest_sha256": "83a0bb12262257a767919b7bc502f7922f341144accd302822dcb73a4790eaca",
+  "schema": "proxy-dataset-manifest/1-pin",
+  "source_url": "https://commons.wikimedia.org/w/api.php",
+  "total_bytes": 2921645924
+}

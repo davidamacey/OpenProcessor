@@ -49,6 +49,16 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def _retry_delay(exc: Exception, attempt: int) -> float:
+    """Seconds to wait before a retry: the server's ``Retry-After`` on 429/503, else backoff."""
+    if isinstance(exc, urllib.error.HTTPError) and exc.code in {429, 503}:
+        try:
+            return min(float(exc.headers.get('Retry-After') or 15 * attempt), 300.0)
+        except ValueError:
+            return 15.0 * attempt
+    return float(min(2**attempt, 10))
+
+
 def download(url: str, dest: Path, *, expected_sha256: str | None = None, retries: int = 3) -> Path:
     """Download ``url`` to ``dest`` (atomically, via a ``.part`` temp file).
 
@@ -89,7 +99,7 @@ def download(url: str, dest: Path, *, expected_sha256: str | None = None, retrie
             part.unlink(missing_ok=True)
             if attempt < retries:
                 logger.warning('download failed (%s/%s) for %s: %s', attempt, retries, url, exc)
-                time.sleep(min(2**attempt, 10))
+                time.sleep(_retry_delay(exc, attempt))
     raise FetchError(f'failed to download {url} after {retries} attempts') from last_exc
 
 
