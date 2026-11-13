@@ -54,6 +54,7 @@ def review_item(i: int) -> dict:
         proposed_class_id=1,
         proposed_class_name='widget',
         label_validated=False,
+        class_validated=False,
         label_source='model_suggestion',
         thumbnail_url=f'/curation/crops/crop-{i}/thumbnail',
     )
