@@ -9,8 +9,9 @@ sample) and ``proxy_manifest`` (manifest, labels, verification). Two steps:
 
 ``identities`` asks Wikidata for humans with a Commons category (P373) and many sitelinks, born
 1925 to 2000 so the photographs are real, counts the Commons files whose structured data
-depicts each person (P180), keeps those with enough files and picks a spread over gender and
-country. ``fetch`` lists the depicting files per person, drops files that depict two chosen
+depicts each person (P180), or the files of the person's category tree when depicts statements
+are sparse (``source`` in the identities file), keeps those with enough files and picks a spread
+over gender and country. ``fetch`` lists those files per person, drops files that depict two chosen
 people, takes up to ``--n`` per person and writes images, ``labels.jsonl``, ``manifest.json``
 and a seeded ``review_sample.csv``. Group photos stay in until ``filter_one_face.py`` runs
 against the live face API.
@@ -41,6 +42,7 @@ if str(_REPO_ROOT) not in sys.path:
 
 from scripts.datasets import proxy_commons as pc
 from scripts.datasets._common import USER_AGENT, FetchError, download, write_csv, write_json
+from scripts.datasets.fetch_hires_set import api_get
 from scripts.datasets.proxy_manifest import (
     Licence,
     build_manifest,
@@ -55,6 +57,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger('commons_faces')
 
 SPARQL_URL = 'https://query.wikidata.org/sparql'
+WIKIDATA_API = 'https://www.wikidata.org/w/api.php'
 GENDERS = {'Q6581072': 'female', 'Q6581097': 'male'}
 IDENTITY_KEYS = ('identity', 'wikidata_qid', 'category')
 THUMB_WIDTH = 1600
@@ -78,13 +81,13 @@ LICENCE = Licence(
 
 
 def sparql_query(min_sitelinks: int, limit: int) -> str:
+    """Humans with a Commons category born 1925 to 2000; the sitelink range hint keeps it fast."""
     return (
-        'SELECT ?p ?label ?cat ?gender ?countryLabel ?born WHERE { '
-        '?p wdt:P31 wd:Q5; wdt:P373 ?cat; wdt:P569 ?born; wikibase:sitelinks ?sl . '
-        f'FILTER(?sl >= {int(min_sitelinks)}) FILTER(YEAR(?born) >= 1925 && YEAR(?born) <= 2000) '
-        'OPTIONAL { ?p wdt:P21 ?gender } OPTIONAL { ?p wdt:P27 ?country } '
-        'SERVICE wikibase:label { bd:serviceParam wikibase:language "en" . '
-        '?p rdfs:label ?label . ?country rdfs:label ?countryLabel } '
+        'SELECT ?p WHERE { ?p wikibase:sitelinks ?sl . hint:Prior hint:rangeSafe true . '
+        f'FILTER(?sl >= {int(min_sitelinks)}) '
+        '?p wdt:P31 wd:Q5 ; wdt:P373 [] ; wdt:P569 ?born . '
+        'FILTER(?born >= "1925-01-01T00:00:00Z"^^xsd:dateTime && '
+        '?born < "2001-01-01T00:00:00Z"^^xsd:dateTime) '
         f'}} LIMIT {int(limit)}'
     )
 
@@ -95,35 +98,89 @@ def run_sparql(query: str, attempts: int = 5) -> dict[str, Any]:
     for attempt in range(1, attempts + 1):
         try:
             with urllib.request.urlopen(  # nosec B310  fixed public Wikidata endpoint
-                urllib.request.Request(url, headers=headers), timeout=180
+                urllib.request.Request(url, headers=headers), timeout=120
             ) as resp:
-                result: dict[str, Any] = json.load(resp)
+                result: dict[str, Any] = json.loads(resp.read(), strict=False)
                 return result
         except urllib.error.HTTPError as exc:
-            if exc.code not in {429, 503, 504} or attempt == attempts:
+            if exc.code not in {429, 502, 503, 504} or attempt == attempts:
                 raise
             time.sleep(float(exc.headers.get('Retry-After') or 30 * attempt))
+        except ValueError:  # the endpoint cut a slow answer short
+            if attempt == attempts:
+                raise
+            time.sleep(10 * attempt)
     raise FetchError('unreachable')
 
 
-def parse_sparql(doc: dict[str, Any]) -> list[dict[str, Any]]:
-    """One row per person (first binding wins), sorted by Wikidata number."""
-    people: dict[str, dict[str, Any]] = {}
-    for b in doc.get('results', {}).get('bindings', []):
-        qid = b['p']['value'].rsplit('/', 1)[-1]
-        if qid in people or 'label' not in b or 'cat' not in b:
-            continue
-        gender = GENDERS.get(b.get('gender', {}).get('value', '').rsplit('/', 1)[-1], 'unknown')
-        born = b.get('born', {}).get('value', '')[:4]
-        people[qid] = {
-            'identity': b['label']['value'],
-            'wikidata_qid': qid,
-            'category': b['cat']['value'],
-            'gender': gender,
-            'country': b.get('countryLabel', {}).get('value', 'unknown'),
-            'born': int(born) if born.isdigit() else None,
-        }
-    return [people[q] for q in sorted(people, key=lambda q: int(q[1:]))]
+def parse_qids(doc: dict[str, Any]) -> list[str]:
+    found = {b['p']['value'].rsplit('/', 1)[-1] for b in doc.get('results', {}).get('bindings', [])}
+    return sorted(found, key=lambda q: int(q[1:]))
+
+
+def _claim_qids(entity: dict[str, Any], prop: str) -> list[str]:
+    out = []
+    for claim in entity.get('claims', {}).get(prop, []):
+        value = claim.get('mainsnak', {}).get('datavalue', {}).get('value')
+        if isinstance(value, dict) and 'id' in value:
+            out.append(value['id'])
+    return out
+
+
+def _claim_text(entity: dict[str, Any], prop: str) -> str | None:
+    for claim in entity.get('claims', {}).get(prop, []):
+        value = claim.get('mainsnak', {}).get('datavalue', {}).get('value')
+        if isinstance(value, str | dict):
+            return value if isinstance(value, str) else value.get('time')
+    return None
+
+
+def person_row(entity: dict[str, Any], country_labels: dict[str, str]) -> dict[str, Any] | None:
+    """A person row from a Wikidata entity, or ``None`` without an English label or category."""
+    label = entity.get('labels', {}).get('en', {}).get('value')
+    category = _claim_text(entity, 'P373')
+    if not label or not category:
+        return None
+    genders = _claim_qids(entity, 'P21')
+    countries = _claim_qids(entity, 'P27')
+    born = (_claim_text(entity, 'P569') or '').lstrip('+')[:4]
+    return {
+        'identity': label,
+        'wikidata_qid': entity['id'],
+        'category': category,
+        'gender': GENDERS.get(genders[0], 'unknown') if genders else 'unknown',
+        'country': country_labels.get(countries[0], countries[0]) if countries else 'unknown',
+        'born': int(born) if born.isdigit() else None,
+    }
+
+
+def _wikidata_get(**params: str) -> dict[str, Any]:
+    time.sleep(pc.API_PAUSE_S)
+    url = f'{WIKIDATA_API}?{urllib.parse.urlencode({"format": "json", **params})}'
+    return api_get(url)
+
+
+def fetch_people(qids: list[str]) -> list[dict[str, Any]]:
+    """Person rows for ``qids``, via ``wbgetentities`` (50 per request)."""
+    entities: dict[str, dict[str, Any]] = {}
+    for i in range(0, len(qids), 50):
+        doc = _wikidata_get(
+            action='wbgetentities', ids='|'.join(qids[i : i + 50]), props='labels|claims',
+            languages='en',
+        )  # fmt: skip
+        entities.update(doc.get('entities', {}))
+    country_ids = sorted({c for e in entities.values() for c in _claim_qids(e, 'P27')[:1]})
+    labels: dict[str, str] = {}
+    for i in range(0, len(country_ids), 50):
+        doc = _wikidata_get(
+            action='wbgetentities', ids='|'.join(country_ids[i : i + 50]), props='labels',
+            languages='en',
+        )  # fmt: skip
+        for qid, ent in doc.get('entities', {}).items():
+            if 'en' in ent.get('labels', {}):
+                labels[qid] = ent['labels']['en']['value']
+    rows = (person_row(entities[q], labels) for q in qids if q in entities)
+    return [r for r in rows if r is not None]
 
 
 def pick_identities(
@@ -143,9 +200,9 @@ def pick_identities(
         group = 'female' if quota['female'] > 0 else 'other'
         options = [r for r in left if (r['gender'] == 'female') == (group == 'female')]
         if not options:
+            other = 'other' if group == 'female' else 'female'
+            quota[other] += quota[group]
             quota[group] = 0
-            if not any(quota.values()):
-                break
             continue
         best = min(
             options,
@@ -174,9 +231,12 @@ def load_identities(path: Path) -> list[dict[str, Any]]:
 def collect_identity(
     row: dict[str, Any], min_side: int, thumb_width: int, max_files: int
 ) -> list[dict[str, Any]]:
-    cands = pc.collect_depicted(
-        row['wikidata_qid'], min_side, thumb_width=thumb_width, max_files=max_files
+    expression = (
+        pc.deepcat_expr(row['category'])
+        if row.get('source') == 'deepcategory'
+        else pc.depicts_expr(row['wikidata_qid'])
     )
+    cands = pc.collect_search(expression, min_side, thumb_width=thumb_width, max_files=max_files)
     return [c for c in cands if not ARTWORK_TITLE.search(c['title'])]
 
 
@@ -250,18 +310,22 @@ def build_dataset(
 
 
 def cmd_identities(args: argparse.Namespace) -> int:
-    pool = parse_sparql(run_sparql(sparql_query(args.min_sitelinks, args.limit)))
-    logger.info('wikidata: %d people', len(pool))
-    random.Random(args.seed).shuffle(pool)
-    pool = pool[: args.pool]
+    qids = parse_qids(run_sparql(sparql_query(args.min_sitelinks, args.limit)))
+    random.Random(args.seed).shuffle(qids)
+    pool = fetch_people(qids[: args.pool])
+    logger.info('wikidata: %d people, %d in the pool', len(qids), len(pool))
     for row in pool:
-        row['hits'] = pc.depicts_count(row['wikidata_qid'])
+        depicts = pc.depicts_count(row['wikidata_qid'])
+        row['source'] = 'depicts' if depicts >= args.min_hits else 'deepcategory'
+        row['hits'] = (
+            depicts
+            if row['source'] == 'depicts'
+            else pc.search_count(pc.deepcat_expr(row['category']))
+        )
     chosen = pick_identities(
         pool, args.n, min_hits=args.min_hits, female_share=args.female_share, seed=args.seed
     )
-    rows = [
-        {k: v for k, v in r.items() if k != 'hits'} | {'depicts_files': r['hits']} for r in chosen
-    ]
+    rows = [{k: v for k, v in r.items() if k != 'hits'} | {'files': r['hits']} for r in chosen]
     write_json(args.out, rows)
     print(
         {
@@ -312,8 +376,8 @@ def build_parser() -> argparse.ArgumentParser:
     i = sub.add_parser('identities')
     i.add_argument('--out', type=Path, required=True)
     i.add_argument('--n', type=int, default=150)
-    i.add_argument('--min-sitelinks', type=int, default=40)
-    i.add_argument('--limit', type=int, default=4000)
+    i.add_argument('--min-sitelinks', type=int, default=50)
+    i.add_argument('--limit', type=int, default=5000)
     i.add_argument('--pool', type=int, default=700)
     i.add_argument('--min-hits', type=int, default=80)
     i.add_argument('--female-share', type=float, default=0.4)

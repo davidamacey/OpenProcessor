@@ -89,9 +89,26 @@ class TestDepicts:
         monkeypatch.setattr(pc, '_get', fake)
         assert pc.depicts_count('Q76') == 321
         assert 'haswbstatement:P180=Q76' in calls[0]['srsearch']
-        found = pc.collect_depicted('Q76', 600, thumb_width=1600, max_files=5)
+        found = pc.collect_search(pc.depicts_expr('Q76'), 600, thumb_width=1600, max_files=5)
         assert 5 <= len(found) <= 6
         assert all(c['url'].startswith('https://thumb') for c in found)
+
+
+class TestIdentitySource:
+    def test_source_selects_the_search_expression(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        seen: list[str] = []
+
+        def fake(expression: str, *a: Any, **k: Any) -> list[dict[str, Any]]:
+            seen.append(expression)
+            return [{'page_id': 1, 'title': 'Ann.jpg'}, {'page_id': 2, 'title': 'Ann painting.jpg'}]
+
+        monkeypatch.setattr(pc, 'collect_search', fake)
+        base = {'identity': 'Ann', 'wikidata_qid': 'Q5', 'category': 'Ann A'}
+        out = cf.collect_identity({**base, 'source': 'deepcategory'}, 600, 1600, 50)
+        cf.collect_identity({**base, 'source': 'depicts'}, 600, 1600, 50)
+        assert seen[0] == 'deepcategory:"Ann A" filetype:bitmap'
+        assert seen[1] == 'haswbstatement:P180=Q5 filetype:bitmap'
+        assert [c['page_id'] for c in out] == [1]
 
 
 class TestAmbiguity:
@@ -147,33 +164,45 @@ class TestDownloadRetryAfter:
 SPARQL = {
     'results': {
         'bindings': [
-            {
-                'p': {'value': 'http://www.wikidata.org/entity/Q1'},
-                'label': {'value': 'Ann'},
-                'cat': {'value': 'Ann A'},
-                'gender': {'value': 'http://www.wikidata.org/entity/Q6581072'},
-                'countryLabel': {'value': 'France'},
-                'born': {'value': '1970-01-01T00:00:00Z'},
-            },
-            {
-                'p': {'value': 'http://www.wikidata.org/entity/Q2'},
-                'label': {'value': 'Bob'},
-                'cat': {'value': 'Bob B'},
-            },
+            {'p': {'value': 'http://www.wikidata.org/entity/Q20'}},
+            {'p': {'value': 'http://www.wikidata.org/entity/Q3'}},
+            {'p': {'value': 'http://www.wikidata.org/entity/Q3'}},
         ]
     }
 }
 
 
+def _entity(qid: str, **claims: Any) -> dict[str, Any]:
+    def snak(value: Any) -> dict[str, Any]:
+        return {'mainsnak': {'datavalue': {'value': value}}}
+
+    return {
+        'id': qid,
+        'labels': {'en': {'value': 'Ann'}},
+        'claims': {k: [snak(v)] for k, v in claims.items()},
+    }
+
+
 class TestIdentities:
-    def test_parse_sparql(self) -> None:
-        rows = cf.parse_sparql(SPARQL)
-        assert rows[0] == {
+    def test_parse_qids_dedupes_and_sorts_numerically(self) -> None:
+        assert cf.parse_qids(SPARQL) == ['Q3', 'Q20']
+
+    def test_person_row_reads_claims(self) -> None:
+        ent = _entity(
+            'Q1', P373='Ann A', P21={'id': 'Q6581072'}, P27={'id': 'Q142'},
+            P569={'time': '+1970-01-01T00:00:00Z'},
+        )  # fmt: skip
+        assert cf.person_row(ent, {'Q142': 'France'}) == {
             'identity': 'Ann', 'wikidata_qid': 'Q1', 'category': 'Ann A',
             'gender': 'female', 'country': 'France', 'born': 1970,
         }  # fmt: skip
-        assert rows[1]['gender'] == 'unknown'
-        assert rows[1]['born'] is None
+
+    def test_person_row_without_category_is_dropped_and_gaps_are_unknown(self) -> None:
+        assert cf.person_row(_entity('Q2'), {}) is None
+        row = cf.person_row(_entity('Q2', P373='Ann'), {})
+        assert row is not None
+        assert row['gender'] == 'unknown'
+        assert row['born'] is None
 
     def _pool(self) -> list[dict[str, Any]]:
         return [

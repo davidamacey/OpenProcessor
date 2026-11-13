@@ -101,23 +101,34 @@ def list_files(category_title: str, thumb_width: int = THUMB_WIDTH) -> list[dict
     })  # fmt: skip
 
 
-def depicts_count(qid: str) -> int:
-    """Files whose structured data says they depict the Wikidata item ``qid`` (P180)."""
+def depicts_expr(qid: str) -> str:
+    """Search expression for files whose structured data depicts the Wikidata item (P180)."""
+    return f'haswbstatement:P180={qid} filetype:bitmap'
+
+
+def deepcat_expr(category: str) -> str:
+    """Search expression for files in a category or any of its subcategories."""
+    return f'deepcategory:"{category}" filetype:bitmap'
+
+
+def search_count(expression: str) -> int:
     doc = _get(
-        action='query', list='search', srnamespace='6', srlimit='1', srprop='',
-        srsearch=f'haswbstatement:P180={qid} filetype:bitmap',
-    )  # fmt: skip
+        action='query', list='search', srnamespace='6', srlimit='1', srprop='', srsearch=expression
+    )
     return int(doc.get('query', {}).get('searchinfo', {}).get('totalhits', 0))
 
 
-def collect_depicted(
-    qid: str, min_side: int, *, thumb_width: int = THUMB_WIDTH, max_files: int = 200
+def depicts_count(qid: str) -> int:
+    return search_count(depicts_expr(qid))
+
+
+def collect_search(
+    expression: str, min_side: int, *, thumb_width: int = THUMB_WIDTH, max_files: int = 200
 ) -> list[dict[str, Any]]:
-    """Qualifying candidates among the first ``max_files`` files depicting ``qid``, by page id."""
+    """Qualifying candidates among the first ``max_files`` search hits, sorted by page id."""
     pages = _paged({
         'action': 'query', 'generator': 'search', 'gsrnamespace': '6', 'gsrlimit': '50',
-        'gsrsearch': f'haswbstatement:P180={qid} filetype:bitmap',
-        'iiurlwidth': str(thumb_width), **_IMAGEINFO,
+        'gsrsearch': expression, 'iiurlwidth': str(thumb_width), **_IMAGEINFO,
     }, max_files)  # fmt: skip
     found: dict[int, dict[str, Any]] = {}
     for page in pages:
