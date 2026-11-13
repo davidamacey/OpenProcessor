@@ -153,12 +153,13 @@ async def place_vectors(item_ids: Sequence[str], vectors: np.ndarray) -> list[Pl
     """Place new items by the serving partition's prototypes (4F ``assign.place_new``); empty when
     the project has no serving partition for the item target. A failure of the read refuses the
     call: a placement that silently vanished would leave an item looking unclustered."""
+    from src.db.checkout_budget import db_slot
     from src.db.session import async_session_factory, project_tx
     from src.services.clustering.assign import place_new
     from src.services.config_store.bound_project import bound_project_id
 
     project = await bound_project_id()
-    async with async_session_factory()() as session, project_tx(session, project):
+    async with db_slot(), async_session_factory()() as session, project_tx(session, project):
         return await place_new(
             session, project=project, target='item', item_ids=item_ids, vectors=vectors
         )

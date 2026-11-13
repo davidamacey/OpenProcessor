@@ -7,10 +7,18 @@ on every ``api`` worker process rather than only the one that owns the run.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Protocol
 
 import httpx
 from prometheus_client.parser import text_string_to_metric_families
+from tenacity import (
+    AsyncRetrying,
+    RetryCallState,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
 
 from src.services.curation.bulk_ingest.limits import BATCH_REQUEST_TIMEOUT_S, MAX_SENDER_CONNECTIONS
 from src.services.curation.bulk_ingest.object_store import ObjectRef
@@ -19,8 +27,43 @@ from src.services.curation.bulk_ingest.object_store import ObjectRef
 _STAGE_METRIC = 'op_pipeline_stage_seconds'
 
 
+#: Attempts at one batch the route answers with a retryable 503 (``database_busy``, Triton
+#: outage); the last answer then fails the batch as a whole.
+BUSY_MAX_ATTEMPTS = 6
+RETRY_SLEEP = asyncio.sleep
+_BACKOFF = wait_exponential_jitter(initial=1.0, max=30.0)
+
+
 class BatchRequestError(Exception):
     """The ingest route refused or failed a batch as a whole."""
+
+
+class BatchBusyError(BatchRequestError):
+    """The route answered 503 with ``Retry-After``: the batch was not processed, so sending it
+    again is safe."""
+
+    def __init__(self, message: str, retry_after: float) -> None:
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+def _wait_for_busy(state: RetryCallState) -> float:
+    """The longer of the server's ``Retry-After`` and a jittered exponential backoff (tenacity
+    docs: https://tenacity.readthedocs.io/en/stable/#waiting-before-retrying)."""
+    outcome = state.outcome
+    exc = outcome.exception() if outcome is not None else None
+    hinted = exc.retry_after if isinstance(exc, BatchBusyError) else 0.0
+    return max(hinted, _BACKOFF(state))
+
+
+def _retry_after(resp: httpx.Response) -> float | None:
+    raw = resp.headers.get('Retry-After')
+    if raw is None:
+        return None
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        return None
 
 
 class BatchSender(Protocol):
@@ -55,6 +98,18 @@ class HttpBatchSender:
         return body
 
     async def post_batch(self, paths: list[str], *, source: str, run_id: str) -> dict[str, Any]:
+        async for attempt in AsyncRetrying(
+            retry=retry_if_exception_type(BatchBusyError),
+            wait=_wait_for_busy,
+            stop=stop_after_attempt(BUSY_MAX_ATTEMPTS),
+            sleep=RETRY_SLEEP,
+            reraise=True,
+        ):
+            with attempt:
+                return await self._post_once(paths, source, run_id)
+        raise AssertionError('unreachable')  # pragma: no cover - AsyncRetrying always yields
+
+    async def _post_once(self, paths: list[str], source: str, run_id: str) -> dict[str, Any]:
         try:
             resp = await self._client.post(
                 self._batch_url,
@@ -64,7 +119,11 @@ class HttpBatchSender:
         except httpx.HTTPError as exc:
             raise BatchRequestError(f'{type(exc).__name__}: {exc}'[:300]) from exc
         if resp.status_code != 200:
-            raise BatchRequestError(f'HTTP {resp.status_code}: {resp.text[:250]}')
+            message = f'HTTP {resp.status_code}: {resp.text[:250]}'
+            retry_after = _retry_after(resp) if resp.status_code == 503 else None
+            if retry_after is not None:
+                raise BatchBusyError(message, retry_after)
+            raise BatchRequestError(message)
         body: dict[str, Any] = resp.json()
         return self._answer(body, paths)
 
