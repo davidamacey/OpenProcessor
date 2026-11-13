@@ -24,7 +24,6 @@ const stale = new ApiError(409, '/x', {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.spyOn(window, 'confirm').mockReturnValue(true);
   vi.spyOn(toastStore, 'error').mockImplementation(() => undefined as never);
   vi.spyOn(toastStore, 'success').mockImplementation(() => undefined as never);
 });

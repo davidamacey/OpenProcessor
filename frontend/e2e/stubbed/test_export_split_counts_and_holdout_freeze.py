@@ -188,7 +188,6 @@ def test_freeze_modal_has_no_seed_field_and_posts_percent_only(stub, page, app_u
         'the freeze modal must not offer a Seed field — selection is deterministic (sha1 per class)'
     )
 
-    page.once('dialog', lambda d: d.accept())
     page.get_by_role('button', name='Freeze', exact=True).click()
 
     page.wait_for_function(
@@ -416,7 +415,6 @@ def test_freeze_refused_as_near_dup_stale_shows_the_panel_and_updates_the_groups
     page.goto(f'{app_url}/p/default/export')
     page.get_by_role('button', name='Freeze test set', exact=True).click()
     expect(page.get_by_role('dialog')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    page.once('dialog', lambda d: d.accept())
     page.get_by_role('button', name='Freeze', exact=True).click()
 
     panel = page.get_by_test_id('near-dup-stale')

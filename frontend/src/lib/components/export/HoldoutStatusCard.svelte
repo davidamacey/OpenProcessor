@@ -7,7 +7,7 @@
   interface Props {
     holdout: TestHoldoutStats | null;
     rows: ExportRow[];
-    onFreeze: () => void;
+    onFreeze: (opts?: { refreeze?: boolean }) => void;
   }
 
   let { holdout, rows, onFreeze }: Props = $props();
@@ -30,7 +30,7 @@
     </span>
     <span class="grow"></span>
     {#if !testFrozen}
-      <button class="btn btn-primary" type="button" onclick={onFreeze}>
+      <button class="btn btn-primary" type="button" onclick={() => onFreeze()}>
         Freeze test set
       </button>
     {:else}
@@ -39,6 +39,15 @@
       >
         frozen — {totalTestCrops.toLocaleString()} crops
       </span>
+      <button
+        class="btn"
+        type="button"
+        data-testid="refreeze-test-set"
+        title="Add crops validated since the last freeze to the test set"
+        onclick={() => onFreeze({ refreeze: true })}
+      >
+        Refreeze test set
+      </button>
     {/if}
   </header>
   {#if testFrozen}
