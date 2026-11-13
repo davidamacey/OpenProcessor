@@ -12,6 +12,8 @@ same card, and a deep link lands on its item with one locate request.
 
 from __future__ import annotations
 
+import re
+
 from fixtures.contract import crop_label_written, fill
 from fixtures.wire import make_item, review_tab, review_tabs
 from harness.constants import ACTION_TIMEOUT_MS, review_url
@@ -335,16 +337,20 @@ def test_the_review_sort_is_the_served_one_and_belongs_to_its_queue(stub, page, 
     ]
     assert select.input_value() == 'detector_confidence:desc'
 
-    select.select_option('atypicality')
+    with page.expect_response(
+        lambda r: 'sort=atypicality' in r.url and '/review/to_label' in r.url,
+        timeout=ACTION_TIMEOUT_MS,
+    ):
+        select.select_option('atypicality')
     expect(select).to_have_value('atypicality', timeout=ACTION_TIMEOUT_MS)
     assert seen[-1]['sort'] == 'atypicality', seen
-    assert 'sort_review=atypicality' in page.url, page.url
+    expect(page).to_have_url(re.compile(r'sort_review=atypicality'), timeout=ACTION_TIMEOUT_MS)
 
     page.get_by_test_id('queue-check_machine').click()
     expect(page.get_by_test_id('review-sort')).to_have_value(
         'detector_confidence:desc', timeout=ACTION_TIMEOUT_MS
     )
-    assert 'sort_review' not in page.url, page.url
+    expect(page).not_to_have_url(re.compile(r'sort_review'), timeout=ACTION_TIMEOUT_MS)
 
 
 def test_text_search_in_review_uses_the_workspace_query_and_swaps_the_queue(stub, page, app_url):
@@ -399,7 +405,7 @@ def test_text_search_in_review_uses_the_workspace_query_and_swaps_the_queue(stub
     assert q['class_name'] == ['ducati'] and q['import_id'] == ['imp_1'], q
     assert 'review_tab' not in q, q
     expect(page.get_by_text('match', exact=False).first).to_be_visible()
-    assert 'q=red+widget' in page.url or 'q=red%20widget' in page.url, page.url
+    expect(page).to_have_url(re.compile(r'q=red(\+|%20)widget'), timeout=ACTION_TIMEOUT_MS)
 
     page.get_by_title('Clear search').click()
     expect(page.get_by_test_id('queue-counter').first).to_contain_text(

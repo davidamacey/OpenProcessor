@@ -31,8 +31,13 @@ def _profile(api: Any, prefix: str, name: str, **extra: Any) -> None:
     }
     created = api.post(f'{prefix}/region_profiles', json={'name': name, 'body': body})
     assert created.status_code == 201, created.text
-    now = api.get(f'{prefix}/region_profiles/active').json()['active']
-    activated = api.post(f'{prefix}/region_profiles/{name}/activate', json={'expected_active': now})
+    now = api.get(f'{prefix}/region_profiles/active').json()
+    # `source: env` is the env default, which names a profile the project never activated: the
+    # compare-and-set sees nothing stored, so it expects null. Only a stored activation is echoed.
+    expected = None if now['source'] == 'env' else now['active']
+    activated = api.post(
+        f'{prefix}/region_profiles/{name}/activate', json={'expected_active': expected}
+    )
     assert activated.status_code == 200, activated.text
 
 

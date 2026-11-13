@@ -122,7 +122,7 @@ def test_adopt_gives_stored_items_their_detector_class_and_can_be_undone(
     started = api.post(f'{project.prefix}/label_ops/adopt_detector', json={'dry_run': False})
     assert started.status_code == 202, started.text
     op_id = started.json()['op_id']
-    job = wait_job(api, started.json()['job_id'])
+    job = wait_job(api, started.json()['job_id'], prefix=project.prefix)
     assert job['status'] == 'completed', job
 
     count(opensearch, project.items_index)
@@ -141,7 +141,7 @@ def test_adopt_gives_stored_items_their_detector_class_and_can_be_undone(
 
     undone = api.post(f'{project.prefix}/label_ops/{op_id}/undo', json={'dry_run': False})
     assert undone.status_code == 202, undone.text
-    assert wait_job(api, undone.json()['job_id'])['status'] == 'completed'
+    assert wait_job(api, undone.json()['job_id'], prefix=project.prefix)['status'] == 'completed'
     assert wait_until(
         lambda: (
             'class_id'
@@ -154,7 +154,7 @@ def test_adopt_gives_stored_items_their_detector_class_and_can_be_undone(
     # Adopt again (the undo put the item back): the next steps stop offering the action.
     again = api.post(f'{project.prefix}/label_ops/adopt_detector', json={'dry_run': False})
     assert again.status_code == 202, again.text
-    assert wait_job(api, again.json()['job_id'])['status'] == 'completed'
+    assert wait_job(api, again.json()['job_id'], prefix=project.prefix)['status'] == 'completed'
     steps = api.get(f'{project.prefix}/next_steps').json()['steps']
     classes = next(s for s in steps if s['id'] == 'classes')
     assert classes['done'] is True

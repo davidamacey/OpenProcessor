@@ -401,7 +401,7 @@ def test_import_with_mapping_starts_and_follows_the_job(stub, page, app_url):
     serve_ingest_page(stub)
 
     page.goto(f'{app_url}/p/default/ingest')
-    link = page.get_by_test_id('ingest-dataset-import-link')
+    link = page.locator('[data-tab="import"]')
     link.wait_for(timeout=ACTION_TIMEOUT_MS)
     link.click()
 
@@ -606,7 +606,7 @@ def test_feature_absent_when_formats_404(stub, page, app_url):
     with page.expect_response(lambda r: r.url.endswith('/datasets/formats')):
         page.goto(f'{app_url}/p/default/ingest')
     page.get_by_role('heading', name='Ingest', exact=True).wait_for(timeout=ACTION_TIMEOUT_MS)
-    expect(page.get_by_test_id('ingest-dataset-import-link')).to_have_count(0)
+    expect(page.locator('[data-tab="import"]')).to_have_count(0)
 
     page.goto(f'{app_url}/p/default/datasets/import')
     expect(page.get_by_test_id('datasets-unavailable')).to_be_visible(timeout=ACTION_TIMEOUT_MS)

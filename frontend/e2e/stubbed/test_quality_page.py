@@ -30,20 +30,20 @@ TABS = [
 def test_bare_quality_lands_on_the_audit_tab(stub, page, app_url):
     page.goto(f'{app_url}/p/default/quality')
     expect(page).to_have_url(re.compile(r'/p/default/quality/audit$'), timeout=ACTION_TIMEOUT_MS)
-    expect(page.get_by_test_id('quality-tab-audit')).to_have_attribute('aria-current', 'page')
+    expect(page.locator('[data-tab="audit"]')).to_have_attribute('aria-current', 'page')
 
 
 def test_each_tab_opens_its_own_route(stub, page, app_url):
     page.goto(f'{app_url}/p/default/quality/audit')
     for slug, label in TABS:
-        tab = page.get_by_test_id(f'quality-tab-{slug}')
+        tab = page.locator(f'[data-tab="{slug}"]')
         expect(tab).to_have_text(label, timeout=ACTION_TIMEOUT_MS)
         tab.click()
         expect(page).to_have_url(re.compile(rf'/p/default/quality/{slug}$'))
         expect(tab).to_have_attribute('aria-current', 'page')
         for other, _ in TABS:
             if other != slug:
-                expect(page.get_by_test_id(f'quality-tab-{other}')).not_to_have_attribute(
+                expect(page.locator(f'[data-tab="{other}"]')).not_to_have_attribute(
                     'aria-current', 'page'
                 )
 
@@ -59,5 +59,7 @@ def test_nav_has_one_quality_entry(stub, page, app_url):
 def test_screens(stub, page, app_url):
     for slug, _ in TABS:
         page.goto(f'{app_url}/p/default/quality/{slug}')
-        expect(page.get_by_test_id('quality-tabs')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+        expect(page.get_by_role('navigation', name='Data quality')).to_be_visible(
+            timeout=ACTION_TIMEOUT_MS
+        )
         save_screens(page, 'workflow_3e', f'quality-{slug}')

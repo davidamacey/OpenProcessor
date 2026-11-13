@@ -152,7 +152,7 @@ def _open_history(page, app_url):
         page.get_by_text('newest 200 bulk operations and the newest 1000 single labels')
     ).to_be_visible()
     if page.viewport_size['width'] >= 640:
-        expect(page.get_by_test_id('breadcrumb')).to_contain_text('Quality')
+        expect(page.get_by_test_id('breadcrumb')).to_contain_text('Data quality')
 
 
 def test_history_list_dry_run_then_confirm(stub, page, app_url):

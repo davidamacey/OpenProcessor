@@ -37,25 +37,28 @@ def _classes_page_stubs(stub) -> None:
     stub.on('GET', r'/test_holdout/stats(\?|$)', {'total': 0, 'by_class': []})
 
 
-def test_breadcrumb_is_not_truncated_at_800(stub, page, app_url):
-    """The route crumb next to the logo truncated to
-    "classe" at 800px."""
-    page.set_viewport_size(NARROW)
+def test_breadcrumb_is_not_truncated_where_it_shows(stub, page, app_url):
+    """The route crumb next to the logo truncated to "classe" at 800px. The top bar now hides the
+    crumb below the lg breakpoint (1024px, the nav has no room for it), so the clip check runs at
+    1100px and the narrow width must show no crumb and no horizontal overflow."""
     _classes_page_stubs(stub)
+    page.set_viewport_size(NARROW)
     page.goto(f'{app_url}/p/default/classes')
     crumb = page.locator('nav[aria-label="Breadcrumb"]')
+    crumb.wait_for(state='attached', timeout=ACTION_TIMEOUT_MS)
+    wait_for_paint(page)
+    expect(crumb).to_be_hidden()
+    assert page.evaluate('() => document.documentElement.scrollWidth <= window.innerWidth + 1'), (
+        'page overflows horizontally at 800px'
+    )
+    page.set_viewport_size({'width': 1100, 'height': 1000})
     crumb.wait_for(timeout=ACTION_TIMEOUT_MS)
-    # Layout dims need a real paint, not an arbitrary settle sleep.
     wait_for_paint(page)
     dims = crumb.evaluate('el => ({sw: el.scrollWidth, cw: el.clientWidth})')
-    assert dims['sw'] <= dims['cw'] + 1, f'breadcrumb clipped at 800px: {dims}'
+    assert dims['sw'] <= dims['cw'] + 1, f'breadcrumb clipped at 1100px: {dims}'
     link = crumb.locator('a').last
     box = link.evaluate('el => ({sw: el.scrollWidth, cw: el.clientWidth})')
     assert box['sw'] <= box['cw'] + 1, f'crumb link clipped: {box}'
-    no_overflow = page.evaluate(
-        '() => document.documentElement.scrollWidth <= window.innerWidth + 1'
-    )
-    assert no_overflow, 'page overflows horizontally at 800px'
 
 
 def test_bakeoff_ranked_table_shows_scroll_cue_at_800(stub, page, app_url):
@@ -113,7 +116,7 @@ def test_settings_unset_sort_is_not_blank(stub, page, app_url):
     }
     register(stub, methods, 200, SETTINGS_EMPTY)
     page.goto(f'{app_url}/p/default/settings')
-    sort_select = page.locator('select').nth(0)
+    sort_select = page.locator('[data-testid="settings-content"] select').nth(0)
     sort_select.wait_for(timeout=ACTION_TIMEOUT_MS)
     shown = sort_select.evaluate("el => el.options[el.selectedIndex]?.text ?? ''")
     assert shown.strip() != '', 'the unset sort select renders blank'

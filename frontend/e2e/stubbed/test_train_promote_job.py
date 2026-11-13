@@ -73,8 +73,12 @@ def open_modal(stub, page, app_url, status_body=None):
         status_body if status_body is not None else {**RUN, 'promote': None},
     )
     page.goto(f'{app_url}/p/default/train')
-    page.get_by_role('button', name='Promote ↑').first.click(timeout=ACTION_TIMEOUT_MS)
+    page.get_by_role('button', name='Promote', exact=True).first.click(timeout=ACTION_TIMEOUT_MS)
     page.get_by_role('dialog', name='Promote to Triton').wait_for(timeout=ACTION_TIMEOUT_MS)
+
+
+def modal(page):
+    return page.get_by_role('dialog', name='Promote to Triton')
 
 
 def current_phase(page):
@@ -101,7 +105,7 @@ def test_promote_walks_phases_to_done(stub, page, app_url):
     stub.on('GET', rf'/train/promote/{JOB_ID}/jobs/p1(\?|$)', walker)
     open_modal(stub, page, app_url)
 
-    page.get_by_role('button', name='Promote', exact=True).click()
+    modal(page).get_by_role('button', name='Promote', exact=True).click()
     current_phase(page).wait_for(timeout=ACTION_TIMEOUT_MS)
     seen = []
     for expected in ('queued', 'exporting', 'loading', 'building', 'warming'):
@@ -128,12 +132,14 @@ def test_promote_failed_shows_served_error(stub, page, app_url):
         ),
     )
     open_modal(stub, page, app_url)
-    page.get_by_role('button', name='Promote', exact=True).click()
+    modal(page).get_by_role('button', name='Promote', exact=True).click()
     failed = page.locator('[data-testid="promote-failed"]')
     failed.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert 'Triton refused the load (502)' in failed.inner_text()
     page.get_by_role('button', name='Edit and retry').click()
-    page.get_by_role('button', name='Promote', exact=True).wait_for(timeout=ACTION_TIMEOUT_MS)
+    modal(page).get_by_role('button', name='Promote', exact=True).wait_for(
+        timeout=ACTION_TIMEOUT_MS
+    )
 
 
 def test_promote_409_in_progress_attaches_to_active_job(stub, page, app_url):
@@ -157,7 +163,7 @@ def test_promote_409_in_progress_attaches_to_active_job(stub, page, app_url):
         PhaseWalker([job('building'), job('done', result=RESULT)]),
     )
     open_modal(stub, page, app_url)
-    page.get_by_role('button', name='Promote', exact=True).click()
+    modal(page).get_by_role('button', name='Promote', exact=True).click()
     page.locator('[data-testid="promote-phase-building"][aria-current="step"]').wait_for(
         timeout=ACTION_TIMEOUT_MS
     )

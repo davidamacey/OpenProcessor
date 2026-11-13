@@ -9,7 +9,7 @@ Before making design decisions or judgment calls, read
 [`docs/VISION_AND_GOALS.md`](docs/VISION_AND_GOALS.md): the user's job the app
 serves (an existing detector finds the objects; the user labels them in their own
 classes, cluster by cluster, then trains a model), the release scope and where
-v0.7.0 stands, and the standards the code is held to (no dead code, no
+the next release stands, and the standards the code is held to (no dead code, no
 compatibility shims, fail-closed isolation, class identity by name never index,
 review depth matched to real risk). For the work still to do, in order, read
 [`docs/design/v070_rebuild/00_master_plan.md`](docs/design/v070_rebuild/00_master_plan.md)

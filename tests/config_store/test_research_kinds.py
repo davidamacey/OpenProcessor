@@ -164,8 +164,10 @@ def test_the_serving_routes_save_activate_and_refuse_a_stale_expected_revision(
         '/curation/serving_profiles/standard/activate', json={'expected_revision': setting}
     )
     assert again.status_code == 200
+    # Activating again is a write of the setting, so its revision moves on.
+    assert again.json()['setting_revision'] == setting + 1
     active = client.get('/curation/serving_profiles/active').json()['active']
-    assert (active['name'], active['setting_revision']) == ('standard', setting)
+    assert (active['name'], active['setting_revision']) == ('standard', setting + 1)
 
 
 def test_a_serving_profile_save_is_validated_and_optimistic(client: TestClient) -> None:

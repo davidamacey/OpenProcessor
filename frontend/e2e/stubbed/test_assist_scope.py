@@ -233,7 +233,7 @@ def test_assist_scope(stub, page, app_url):
     )
     selects.first.select_option('warehouse_v1')
 
-    collapse_btn = page.get_by_role('button', name='×')
+    collapse_btn = page.get_by_role('button', name='Collapse')
     if collapse_btn.count() > 0:
         collapse_btn.first.click()
 
@@ -274,7 +274,7 @@ def test_assist_scope(stub, page, app_url):
     reset_btn = page.get_by_role('button', name='reset')
     if reset_btn.count() > 0:
         reset_btn.first.click()
-    collapse_btn2 = page.get_by_role('button', name='×')
+    collapse_btn2 = page.get_by_role('button', name='Collapse')
     if collapse_btn2.count() > 0:
         collapse_btn2.first.click()
     (

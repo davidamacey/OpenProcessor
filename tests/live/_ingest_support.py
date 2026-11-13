@@ -86,12 +86,12 @@ def ingest_project(api: Any, opensearch: Any, stem: str) -> Iterator[IngestProje
             else:
                 path.rmdir()
         project.host_dir.rmdir()
-        # A force-removed detection worker stays a running job until its liveness lapses; the
-        # served project_busy answer says to retry.
+        # A force-removed detection worker stays a running job until its liveness file ages out
+        # (worker_liveness.DEFAULT_MAX_AGE_S, 120 s); the served project_busy answer says to retry.
         deleted = request_when_free(
             lambda: api.delete(f'{API_PREFIX}/projects/{slug}', params={'confirm': slug}),
             busy='project_busy',
-            timeout=90.0,
+            timeout=150.0,
         )
         assert deleted.status_code == 202, deleted.text
 

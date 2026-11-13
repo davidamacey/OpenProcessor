@@ -432,7 +432,7 @@ def test_region_drain_shows_served_stall_reason(stub, page, app_url):
             }
         ],
     )
-    page.goto(f'{app_url}/p/default/ingest')
+    page.goto(f'{app_url}/p/default/ingest?tab=activity')
     page.wait_for_selector('h1:has-text("Ingest")')
     expect(page.get_by_test_id('region-drain-stall-reason')).to_contain_text(reason)
     expect(page.get_by_test_id('region-drain-dependencies')).to_contain_text('seg_b')
