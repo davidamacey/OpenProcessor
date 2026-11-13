@@ -4,7 +4,8 @@ A fresh interpreter, started the way the image starts it (``/app`` holds the tra
 modules and ``src`` side by side), imports ``celery_tasks`` and none of FastAPI, the OpenSearch
 client, the services or the routers may be loaded (review R-2). The image also gets the C build
 of psycopg like the api image (review R-27); the Dockerfile test reads and parses the Dockerfile
-(no image is built), and the interpreter check below runs inside the image.
+(no image is built). With ``OP_TRAINER_IMAGE=<tag>`` set, the same probe and the psycopg check also
+run in that built image through ``docker run`` from host pytest (the image carries no pytest).
 """
 
 from __future__ import annotations
@@ -67,19 +68,33 @@ def test_the_runtime_stage_copies_the_runtime_layers_and_not_the_web_ones() -> N
     assert web == ['src/services/training/augmentation_presets.py']  # the shared preset catalog
 
 
-@pytest.mark.skipif(
-    os.environ.get('OP_TRAINER_IMAGE_CHECK') != '1',
-    reason='runs inside the built trainer image (set OP_TRAINER_IMAGE_CHECK=1 there)',
+IMAGE = os.environ.get('OP_TRAINER_IMAGE')
+needs_image = pytest.mark.skipif(
+    not IMAGE, reason='set OP_TRAINER_IMAGE=<built trainer image tag> to probe the image'
 )
-def test_inside_the_image_psycopg_is_the_c_build() -> None:
+
+
+def _in_image(*python_args: str) -> str:
+    assert IMAGE
     result = subprocess.run(
-        [sys.executable, '-I', '-c', 'import psycopg; print(psycopg.pq.__impl__)'],
+        ['docker', 'run', '--rm', '--entrypoint', 'python', IMAGE, *python_args],
         capture_output=True,
         text=True,
         check=True,
-        timeout=60,
+        timeout=180,
     )
-    assert result.stdout.strip() == 'c'
+    return result.stdout.strip()
+
+
+@needs_image
+def test_inside_the_image_psycopg_is_the_c_build() -> None:
+    assert _in_image('-c', 'import psycopg; print(psycopg.pq.__impl__)') == 'c'
+
+
+@needs_image
+def test_inside_the_image_the_handler_module_loads_no_web_or_opensearch_code() -> None:
+    # /app holds the trainer's flat modules and src side by side (the image's PYTHONPATH).
+    assert _in_image('-c', _PROBE, '/app', '/app') == '|'
 
 
 _SCHEMA_PROBE = """

@@ -10,6 +10,7 @@ null inference/exec/latency fields.
 from __future__ import annotations
 
 from harness.constants import ACTION_TIMEOUT_MS
+from harness.waits import expect_handled
 
 
 MODELS = {
@@ -163,11 +164,8 @@ def test_unload_refused_detector_in_use_shows_reason_and_offers_force(stub, page
     page.goto(f'{app_url}/p/default/models')
     card = page.locator('li', has_text='PE-Core-L14-336 Image Encoder')
     card.wait_for(timeout=ACTION_TIMEOUT_MS)
-    card.get_by_role('button', name='Unload').click()
-    deadline = ACTION_TIMEOUT_MS
-    while len(seen) < 2 and deadline > 0:
-        page.wait_for_timeout(100)
-        deadline -= 100
+    with expect_handled(page, lambda r: r.method == 'DELETE' and 'force=true' in r.url):
+        card.get_by_role('button', name='Unload').click()
     assert len(seen) == 2, seen
     assert 'force=true' not in seen[0]
     assert 'force=true' in seen[1]

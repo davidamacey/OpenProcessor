@@ -1,4 +1,4 @@
-/** "More like this" on /clusters: results, the served refusal and leaving the mode. */
+/** "More like this" on the workspace: results, the served refusal and leaving the mode. */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '$lib/api_errors';
 import type { Crop } from '$lib/types';
@@ -15,7 +15,7 @@ vi.mock('$lib/api_clusters', () => ({
 vi.mock('$app/navigation', () => ({ goto: (...a: unknown[]) => goto(...a) }));
 vi.mock('$app/paths', () => ({ resolve: (p: string) => p }));
 vi.mock('$app/state', () => ({
-  page: { url: new URL('http://x/p/default/clusters?similar_to=crop-0') },
+  page: { url: new URL('http://x/p/default/workspace?similar_to=crop-0') },
 }));
 vi.mock('$lib/projectPaths', () => ({ projectHref: (p: string) => `/p/default${p}` }));
 

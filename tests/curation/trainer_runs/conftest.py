@@ -1,4 +1,4 @@
-"""Fixtures for the trainer conformance tests: the project data root and a frozen export."""
+"""Fixtures for the trainer conformance tests: a frozen export."""
 
 from __future__ import annotations
 
@@ -15,31 +15,8 @@ if str(TRAINER_DIR) not in sys.path:
 
 
 @pytest.fixture
-def project_data_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Point ``default``'s ``export_root`` at ``tmp_path``.
-
-    ``OP_PROJECTS_DATA_ROOT`` makes ``default``'s export root (and so its
-    stamped ``project_export_root``) ``tmp_path/default/exports`` (``OP_EXPORT_ROOT``
-    is retired), so every fixture's ``export_dir`` lives under it and the
-    trainer's export-containment check never rejects it as escaping the
-    project. Resets the cached ``CurationConfig`` singleton so the env var
-    takes (the pattern in ``test_export_datasets.py``).
-    """
-    import src.config.curation_accessors as curation_config_mod
-
-    monkeypatch.setenv('OP_PROJECTS_DATA_ROOT', str(tmp_path))
-    monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
-
-
-@pytest.fixture
-def export_dir(tmp_path: Path, project_data_root: None) -> Path:
-    """A minimal frozen export: 3 classes, one labeled image per split.
-
-    Depends on ``project_data_root`` for its ``OP_PROJECTS_DATA_ROOT`` side
-    effect (must run first) and builds under ``default``'s real
-    ``export_root`` (``OP_PROJECTS_DATA_ROOT/default/exports``) so the
-    trainer's export-containment check never rejects it.
-    """
+def export_dir(tmp_path: Path) -> Path:
+    """A minimal frozen export: 3 classes, one labeled image per split."""
     root = tmp_path / 'default' / 'exports' / 'export'
     for split in ('train', 'val', 'test'):
         (root / 'images' / split).mkdir(parents=True)
