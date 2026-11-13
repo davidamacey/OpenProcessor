@@ -248,11 +248,15 @@ build_image() {
 
     local -a target_args=()
     [[ -n "$target" ]] && target_args=(--target "$target")
+    # The frontend build reads the generated contracts/ts outside its context: named build context.
+    local -a ctx_args=()
+    [[ "$svc" == cropwright ]] && ctx_args=(--build-context "contracts=$EXPORT_DIR/contracts")
 
     log "building $svc -> $version_tag (cache on, $dockerfile${target:+ target $target})"
     "$DOCKER_BIN" build \
         --file "$EXPORT_DIR/$dockerfile" \
         "${target_args[@]}" \
+        "${ctx_args[@]}" \
         --tag "$version_tag" \
         --tag "$latest_tag" \
         "${build_args[@]}" \

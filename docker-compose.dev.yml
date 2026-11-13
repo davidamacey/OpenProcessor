@@ -115,6 +115,9 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      # The build reads the generated contracts/ts, which sit outside ./frontend.
+      additional_contexts:
+        contracts: ./contracts
     image: ${OP_CROPWRIGHT_IMAGE:-openprocessor-cropwright:dev}
 
   curation-detection-worker:

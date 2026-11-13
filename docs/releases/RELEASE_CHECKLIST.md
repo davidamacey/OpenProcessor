@@ -13,7 +13,7 @@ script and the installer share. After `make release` there are 17 lines:
   (`davidamacey/...:0.6.0`, plus `latest`): `api` (`openprocessor`), `triton`
   (`openprocessor-triton`), `evaluator` (`openprocessor-evaluator`), `segmenter`
   (`openprocessor-segmenter`), `trainer` (`openprocessor-trainer`) and `cropwright`
-  (`cropwright`, built from `frontend/Dockerfile` with `frontend/` as its build context).
+  (`cropwright`, built from `frontend/Dockerfile` with `frontend/` as its build context plus the named context `contracts`=`contracts/`).
 - Eleven third-party images, resolved from upstream tags by step 4: the two `vlm_*` keys,
   `opensearch`, `opensearch_dashboards`, `mlflow`, `prometheus`, `grafana`, `loki`,
   `alloy`, `node_exporter`, `dcgm_exporter`. Each tag must be pulled locally first
