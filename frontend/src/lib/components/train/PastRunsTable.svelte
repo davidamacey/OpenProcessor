@@ -3,6 +3,7 @@
   /** /train's paginated past-runs table with per-run promote/reproduce. */
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
   import RunResults from '$components/RunResults.svelte';
+  import { formatTimestamp } from '$lib/format/date';
   import { bestMapDisplay } from '$lib/trainRunsTable';
   import { isTerminalTrainState } from '$lib/trainResults';
   import { familyLabel, statePillClass } from '$lib/train/trainDisplay';
@@ -55,8 +56,18 @@
             {@const mapDisplay = bestMapDisplay(r)}
             <tr class="border-t border-line hover:bg-surface-2/50">
               <td class="px-3 py-2">
-                <div class="truncate text-meta text-fg-1" title={r.job_id}>
-                  <code>{r.job_id}</code>
+                <div class="flex items-center gap-2 text-meta text-fg-1">
+                  <span class="truncate" title={r.job_id} data-testid="run-label"
+                    >{r.started_at ? formatTimestamp(r.started_at) : r.job_id}</span
+                  >
+                  <button
+                    type="button"
+                    class="btn-sm btn-ghost"
+                    title="Copy the run id {r.job_id}"
+                    data-testid="run-copy-id"
+                    onclick={() => void navigator.clipboard?.writeText(r.job_id)}
+                    >Copy id</button
+                  >
                 </div>
                 {#if r.campaign_id}
                   <div class="truncate text-caption text-fg-3" title={r.campaign_id}>

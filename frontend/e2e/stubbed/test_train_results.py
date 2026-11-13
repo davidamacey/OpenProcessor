@@ -122,7 +122,12 @@ def test_finished_run_results_render(stub, page, app_url):
     stub.on('GET', r'/train/manifest/[^/]+(\?|$)', MANIFEST)
 
     page.goto(f'{app_url}/p/default/train')
-    page.get_by_text(JOB_ID, exact=False).first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    label = page.get_by_test_id('run-label').first
+    label.wait_for(timeout=ACTION_TIMEOUT_MS)
+    # The start time is the label; the run id is the tooltip, with a copy button.
+    assert '2026-09-24' in label.inner_text() and JOB_ID not in label.inner_text()
+    assert label.get_attribute('title') == JOB_ID
+    assert JOB_ID in (page.get_by_test_id('run-copy-id').first.get_attribute('title') or '')
 
     results_button = page.get_by_role('button', name='Results')
     results_button.wait_for(timeout=10000)
@@ -178,7 +183,7 @@ def test_failed_run_shows_served_error(stub, page, app_url):
     stub.on('GET', r'/train/manifest/[^/]+(\?|$)', (404, {'detail': 'not found'}))
 
     page.goto(f'{app_url}/p/default/train')
-    page.get_by_text(failed_job_id, exact=False).first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.get_by_test_id('run-label').first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     results_button = page.get_by_role('button', name='Results')
     results_button.wait_for(timeout=10000)
