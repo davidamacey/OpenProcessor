@@ -11,20 +11,20 @@
 # list items). https://docs.docker.com/reference/compose-file/merge/
 services:
   verify-data-init:
-    image: op-local/api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
+    image: op-local/openprocessor-api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
     build: !reset null
 
   db-migrate:
-    image: op-local/api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
+    image: op-local/openprocessor-api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
     build: !reset null
     volumes: !override
       - ./verify-data/secrets/postgres:/run/secrets/op_pg:ro
 
   fake-triton:
-    image: op-local/api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
+    image: op-local/openprocessor-api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
 
   api:
-    image: op-local/api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
+    image: op-local/openprocessor-api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
     build: !reset null
     volumes: !override
       - ./region_profile.json:/region_profile.json:ro
@@ -33,7 +33,7 @@ services:
       - ./verify-data/secrets/valkey/password:/run/secrets/op_valkey/password:ro
 
   jobs-worker:
-    image: op-local/api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
+    image: op-local/openprocessor-api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
     volumes: !override
       - ./region_profile.json:/region_profile.json:ro
       - ./verify-data:/verify-data
@@ -41,7 +41,7 @@ services:
       - ./verify-data/secrets/valkey/password:/run/secrets/op_valkey/password:ro
 
   interactive-worker:
-    image: op-local/api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
+    image: op-local/openprocessor-api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
     volumes: !override
       - ./region_profile.json:/region_profile.json:ro
       - ./verify-data:/verify-data
@@ -49,7 +49,7 @@ services:
       - ./verify-data/secrets/valkey/password:/run/secrets/op_valkey/password:ro
 
   periodic-worker:
-    image: op-local/api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
+    image: op-local/openprocessor-api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
     volumes: !override
       - ./region_profile.json:/region_profile.json:ro
       - ./verify-data:/verify-data
@@ -57,7 +57,7 @@ services:
       - ./verify-data/secrets/valkey/password:/run/secrets/op_valkey/password:ro
 
   jobs-beat:
-    image: op-local/api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
+    image: op-local/openprocessor-api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
     volumes: !override
       - ./region_profile.json:/region_profile.json:ro
       - ./verify-data:/verify-data
@@ -65,7 +65,7 @@ services:
       - ./verify-data/secrets/valkey/password:/run/secrets/op_valkey/password:ro
 
   assist-loop-worker:
-    image: op-local/api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
+    image: op-local/openprocessor-api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
     volumes: !override
       - ./region_profile.json:/region_profile.json:ro
       - ./verify-data:/verify-data
@@ -73,7 +73,7 @@ services:
       - ./verify-data/secrets/valkey/password:/run/secrets/op_valkey/password:ro
 
   cluster-worker:
-    image: op-local/api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
+    image: op-local/openprocessor-api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
     volumes: !override
       - ./region_profile.json:/region_profile.json:ro
       - ./verify-data:/verify-data
@@ -81,7 +81,7 @@ services:
       - ./verify-data/secrets/valkey/password:/run/secrets/op_valkey/password:ro
 
   arbiter-worker:
-    image: op-local/api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
+    image: op-local/openprocessor-api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
     volumes: !override
       - ./region_profile.json:/region_profile.json:ro
       - ./verify-data:/verify-data
@@ -89,7 +89,7 @@ services:
       - ./verify-data/secrets/valkey/password:/run/secrets/op_valkey/password:ro
 
   trainer:
-    image: op-local/api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
+    image: op-local/openprocessor-api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
     volumes: !override
       - ./fake_trainer.py:/opt/fake_trainer/fake_trainer.py:ro
       - ./verify-data:/verify-data
@@ -97,7 +97,7 @@ services:
       - ./verify-data/secrets/valkey/password:/run/secrets/op_valkey/password:ro
 
   open-vocab-worker:
-    image: op-local/api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
+    image: op-local/openprocessor-api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
     volumes: !override
       - ./fake_consumers.py:/opt/fake_consumers/fake_consumers.py:ro
       - ./verify-data:/verify-data
@@ -105,7 +105,7 @@ services:
       - ./verify-data/secrets/valkey/password:/run/secrets/op_valkey/password:ro
 
   autolabel-worker:
-    image: op-local/api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
+    image: op-local/openprocessor-api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
     volumes: !override
       - ./fake_consumers.py:/opt/fake_consumers/fake_consumers.py:ro
       - ./verify-data:/verify-data
@@ -113,7 +113,7 @@ services:
       - ./verify-data/secrets/valkey/password:/run/secrets/op_valkey/password:ro
 
   export-worker:
-    image: op-local/api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
+    image: op-local/openprocessor-api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
     volumes: !override
       - ./fake_consumers.py:/opt/fake_consumers/fake_consumers.py:ro
       - ./verify-data:/verify-data
@@ -121,7 +121,7 @@ services:
       - ./verify-data/secrets/valkey/password:/run/secrets/op_valkey/password:ro
 
   eval-worker:
-    image: op-local/api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
+    image: op-local/openprocessor-api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
     volumes: !override
       - ./fake_consumers.py:/opt/fake_consumers/fake_consumers.py:ro
       - ./verify-data:/verify-data
@@ -129,7 +129,7 @@ services:
       - ./verify-data/secrets/valkey/password:/run/secrets/op_valkey/password:ro
 
   detection-worker:
-    image: op-local/api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
+    image: op-local/openprocessor-api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
     volumes: !override
       - ./region_profile.json:/region_profile.json:ro
       - ./verify-data:/verify-data
@@ -137,5 +137,5 @@ services:
       - ./verify-data/secrets/valkey/password:/run/secrets/op_valkey/password:ro
 
   fake-vlm:
-    image: op-local/fake-vlm:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
+    image: op-local/openprocessor-fake-vlm:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
     build: !reset null

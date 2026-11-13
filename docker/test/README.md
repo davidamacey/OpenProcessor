@@ -156,7 +156,8 @@ containers. If the host ports are remapped too (`VERIFY_API_PORT`,
 `compose.built.yml` runs the harness on the release images with no `src/`, `scripts/` or
 `VERSION` bind mount, so a file missing from the image, a wrong entrypoint or a permission
 problem for the non-root user fails here. `OP_TEST_IMAGE_TAG` selects the
-`op-local/api` and `op-local/fake-vlm` tag; start with `--no-build`:
+`op-local/openprocessor-api` and `op-local/openprocessor-fake-vlm` tag (the api name is the one the release
+script and the sweep tag, `op-local/openprocessor-api:<tag>`); start with `--no-build`:
 
 ```bash
 export OP_TEST_IMAGE_TAG=b4-9629e5c VERIFY_CONTAINER_PREFIX=op-live-built VERIFY_COMPOSE_PROJECT=op-live-built
