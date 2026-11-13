@@ -13,7 +13,7 @@ import {
   trainStart,
   trainStartCampaign,
 } from '$lib/api_train';
-import { defaultTritonName, findActivePromote } from '$lib/promote';
+import { findActivePromote } from '$lib/promote';
 import { toastStore } from '$stores/toast.svelte';
 import type {
   PreflightReport,
@@ -153,9 +153,7 @@ export function createTrainActionsController(runs: TrainRunsController) {
       // answered by the server with the already-active job.
     }
     promoteJobId = r.job_id;
-    // the run's own id, Triton-safe. No version suffix — nothing
-    // client-side knows this deployment's versioning.
-    promoteDefaultName = defaultTritonName(r.job_id);
+    promoteDefaultName = r.suggested_triton_name ?? '';
     promoteOpen = true;
   }
 

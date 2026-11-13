@@ -47,17 +47,25 @@ class EditKind(str, Enum):  # noqa: UP042  # (str, Enum) keeps str() and format(
     REGION = 'region'
     VLM_DISMISS = 'vlm_dismiss'
     GEOMETRY = 'geometry'
+    PROBE_DISMISS = 'probe_dismiss'
 
 
 GEOMETRY_WRITER = 'human:geometry'
 GEOMETRY_UNDO_WRITER = 'human:geometry_undo'
 REGION_UNDO_WRITER = 'human:region_undo'
 VLM_DISMISS_UNDO_WRITER = 'human:vlm_dismiss_undo'
+PROBE_DISMISS_UNDO_WRITER = 'human:probe_dismiss_undo'
 
 VLM_DISMISS_FIELDS: tuple[str, ...] = (
     'vlm_dismissed_class_id',
     'vlm_dismissed_class_name',
     'vlm_dismissed_at',
+)
+
+PROBE_DISMISS_FIELDS: tuple[str, ...] = (
+    'probe_dismissed_at',
+    'probe_dismissed_class',
+    'probe_dismissed_model_version',
 )
 
 
@@ -128,6 +136,8 @@ def state_fields(kind: EditKind) -> tuple[str, ...]:
         return region_state_fields()
     if kind == EditKind.GEOMETRY:
         return GEOMETRY_FIELDS
+    if kind == EditKind.PROBE_DISMISS:
+        return PROBE_DISMISS_FIELDS
     return VLM_DISMISS_FIELDS
 
 
@@ -207,6 +217,8 @@ __all__ = [
     'GEOMETRY_UNDO_WRITER',
     'GEOMETRY_WRITER',
     'MAX_EDIT_HISTORY_ENTRIES',
+    'PROBE_DISMISS_FIELDS',
+    'PROBE_DISMISS_UNDO_WRITER',
     'REGION_REVISION_BEFORE',
     'REGION_UNDO_WRITER',
     'VLM_DISMISS_FIELDS',

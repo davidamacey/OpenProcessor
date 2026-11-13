@@ -11,6 +11,7 @@
   import { slotOf } from '$lib/annotations/cropSlots';
   import type { SlotSpec } from '$lib/annotations/types';
   import { NO_OPINION_TEXT } from '$lib/review/probeOpinion';
+  import { kg } from '$lib/review/reviewKeys';
   import { NO_CLASS_YET, vlmEmptyReasonText } from '$lib/review/reviewCopy';
   import type { ReviewItemActions } from '$lib/review/reviewItemActions.svelte';
   import type { ReviewItem } from '$lib/types_review';
@@ -25,6 +26,7 @@
     /** Match score of each text-search result, by item id. */
     searchScores: Map<string, number>;
     acceptModelClass: () => Promise<void>;
+    keepLabel: () => Promise<void>;
   }
 
   let {
@@ -34,6 +36,7 @@
     opinion,
     searchScores,
     acceptModelClass,
+    keepLabel,
   }: Props = $props();
 
   // The authoritative, kind-styled
@@ -178,6 +181,20 @@
           Accept model's class
         </button>
       {/if}
+    </dd>
+  {/if}
+
+  {#if opinion.showKeepLabel}
+    <dt class="text-fg-3">Disagreement</dt>
+    <dd>
+      <button
+        type="button"
+        class="rounded border border-line-strong bg-surface-1 px-1.5 py-0.5 text-caption text-fg-1 hover:bg-surface-2"
+        data-testid="keep-my-label"
+        onclick={keepLabel}
+      >
+        Keep my label ({kg('review.queue.keep_label')})
+      </button>
     </dd>
   {/if}
 

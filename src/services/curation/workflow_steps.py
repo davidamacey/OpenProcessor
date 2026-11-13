@@ -15,15 +15,17 @@ from typing import TYPE_CHECKING, Any, Final, Literal
 from sqlalchemy import exists, func, select
 
 from src.config.curation_accessors import images_index, items_index
+from src.db.models.jobs import Job
 from src.db.models.training import DatasetExport, Promotion, TrainingRun
 from src.db.repos import near_dup as near_dup_repo
 from src.db.session import project_tx
+from src.domain import job_states as js
 from src.schemas.curation.workflow_steps import WorkflowStep, WorkflowSteps
 from src.services.clustering.assign import serving_partition_id
 from src.services.clustering.partitions import list_partitions
 from src.services.curation import review_queries, review_tabs
 from src.services.curation.audit import has_pending_sample
-from src.services.curation.dataset_thresholds import adequacy
+from src.services.curation.dataset_thresholds import HARD_MIN_CROPS_PER_CLASS, adequacy
 from src.services.curation.detector_adoption import detector_census, plan_adoption
 from src.services.curation.review_tab_status import NO_AUDIT_SAMPLE
 
@@ -48,7 +50,11 @@ class WorkflowFacts:
     image_near_dup_run: bool = False
     exports: int = 0
     training_runs: int = 0
+    training_finished: int = 0
+    training_classes_missing: int = 0
     promoted_model: bool = False
+    probe_scored: bool = False
+    disagreements: int = 0
     audit_pending: bool = False
     detector_classes_missing: int = 0
     detector_items_undecided: int = 0
@@ -115,6 +121,63 @@ def _label_step(f: WorkflowFacts) -> WorkflowStep:
     )
 
 
+def _hotkeys_detail(f: WorkflowFacts) -> str:
+    if not f.active_classes:
+        return 'There are no classes to give a letter to.'
+    if f.hotkeys_missing:
+        return f'{_plural(f.hotkeys_missing, "class has", "classes have")} no hotkey letter.'
+    return 'Every class has a hotkey letter.'
+
+
+def _train_step(f: WorkflowFacts) -> WorkflowStep:
+    """Done when a run has finished and its latest finished run trained every class that has
+    enough trainable crops; a started, failed or partial run does not count."""
+    if f.training_finished == 0:
+        detail = (
+            f'{_plural(f.training_runs, "training run", "training runs")} started, none finished.'
+            if f.training_runs
+            else 'No model has been trained.'
+        )
+    elif f.training_classes_missing:
+        detail = (
+            f'{_plural(f.training_finished, "training run", "training runs")} finished; the '
+            f'latest left out {_plural(f.training_classes_missing, "class", "classes")} that '
+            'now have enough trainable crops.'
+        )
+    else:
+        detail = f'{_plural(f.training_finished, "training run", "training runs")} finished.'
+    return WorkflowStep(
+        id='train',
+        label='Train a model',
+        detail=detail,
+        done=f.training_finished > 0 and f.training_classes_missing == 0,
+        section='train',
+    )
+
+
+def _disagreements_step(f: WorkflowFacts) -> WorkflowStep:
+    """After a promote: first score the items with the model (the Train page's probe), then work
+    the Disagreements queue, whose count is the queue's own."""
+    if not f.probe_scored:
+        return WorkflowStep(
+            id='probe',
+            label='Find where the promoted model disagrees with your labels',
+            detail='A model is promoted; run it over the items from the Train page '
+            '(Find disagreements) to fill the Disagreements queue.',
+            done=False,
+            section='train',
+        )
+    count = _plural(f.disagreements, 'item', 'items')
+    return WorkflowStep(
+        id='review_disagreements',
+        label='Review where the model disagrees with the labels',
+        detail=f'{count} in Disagreements.' if f.disagreements else 'Disagreements is empty.',
+        done=f.disagreements == 0,
+        section='workspace',
+        query='queue=disagreements',
+    )
+
+
 def build_steps(f: WorkflowFacts) -> WorkflowSteps:
     steps = [
         WorkflowStep(
@@ -151,10 +214,8 @@ def build_steps(f: WorkflowFacts) -> WorkflowSteps:
         WorkflowStep(
             id='hotkeys',
             label='Give every class a hotkey letter',
-            detail=f'{_plural(f.hotkeys_missing, "class has", "classes have")} no hotkey letter.'
-            if f.hotkeys_missing
-            else 'Every class has a hotkey letter.',
-            done=f.hotkeys_missing == 0,
+            detail=_hotkeys_detail(f),
+            done=f.active_classes > 0 and f.hotkeys_missing == 0,
             section='classes',
         ),
         WorkflowStep(
@@ -176,27 +237,10 @@ def build_steps(f: WorkflowFacts) -> WorkflowSteps:
             done=f.exports > 0,
             section='export',
         ),
-        WorkflowStep(
-            id='train',
-            label='Train a model',
-            detail=f'{_plural(f.training_runs, "training run", "training runs")} started.'
-            if f.training_runs
-            else 'No model has been trained.',
-            done=f.training_runs > 0,
-            section='train',
-        ),
+        _train_step(f),
     ]
     if f.promoted_model:
-        steps.append(
-            WorkflowStep(
-                id='review_disagreements',
-                label='Review where the model disagrees with the labels',
-                detail='A model is promoted; its disagreements are worth a look.',
-                done=False,
-                section='workspace',
-                query='queue=disagreements',
-            )
-        )
+        steps.append(_disagreements_step(f))
     if f.images and not f.audit_pending:
         steps.append(
             WorkflowStep(
@@ -212,6 +256,38 @@ def build_steps(f: WorkflowFacts) -> WorkflowSteps:
         steps=steps,
         next=next((s for s in steps if not s.done), None),
         workspace_default_view=view,
+    )
+
+
+async def _finished_run_classes(session: AsyncSession, project: uuid.UUID) -> list[list[str]]:
+    """The class names of each finished run of the project, newest first."""
+    stmt = (
+        select(TrainingRun.class_names)
+        .join(Job, Job.id == TrainingRun.job_id)
+        .where(
+            TrainingRun.project_id == project,
+            Job.status.in_((js.COMPLETED, js.COMPLETED_WITH_ERRORS)),
+        )
+        .order_by(Job.created_at.desc(), Job.id.desc())
+    )
+    return [list(names) for names in (await session.execute(stmt)).scalars()]
+
+
+def classes_left_out(
+    classes: list[Any], counts: ClassCounts, latest_finished: list[list[str]]
+) -> int:
+    """Active item classes with enough trainable crops that the latest finished run did not train
+    (by name; 0 when no run has finished)."""
+    if not latest_finished:
+        return 0
+    trained = set(latest_finished[0])
+    return sum(
+        1
+        for c in classes
+        if not c.deprecated
+        and getattr(c, 'merged_into', None) is None
+        and counts.trainable(c.class_id) >= HARD_MIN_CROPS_PER_CLASS
+        and c.class_name not in trained
     )
 
 
@@ -254,8 +330,30 @@ async def gather_facts(
             )
         )['count']
     )
+    must, must_not, _reason = review_queries.build_tab_query(
+        'disagreements', include_test=False, text=None, max_rank=None, vector_field=None
+    )
+    disagreements = int(
+        (
+            await opensearch.count(
+                index=items_index(),
+                body={'query': {'bool': {'must': must, 'must_not': must_not}}},
+            )
+        )['count']
+    )
+    probe_scored = (
+        int(
+            (
+                await opensearch.count(
+                    index=items_index(), body={'query': {'exists': {'field': 'probe_pred_class'}}}
+                )
+            )['count']
+        )
+        > 0
+    )
     plan = plan_adoption(await detector_census(opensearch), classes)
     async with project_tx(session, project):
+        finished = await _finished_run_classes(session, project)
         partitions = await list_partitions(session, target='item', limit=1)
         serving = await serving_partition_id(
             session, project=project, target='item', level=ITEM_LEVEL
@@ -271,6 +369,10 @@ async def gather_facts(
             is not None,
             exports=await _count(session, DatasetExport, project),
             training_runs=await _count(session, TrainingRun, project),
+            training_finished=len(finished),
+            training_classes_missing=classes_left_out(classes, counts, finished[:1]),
+            probe_scored=probe_scored,
+            disagreements=disagreements,
             audit_pending=await has_pending_sample(opensearch),
             detector_classes_missing=len(plan.create),
             detector_items_undecided=plan.items,

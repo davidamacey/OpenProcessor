@@ -598,3 +598,26 @@ def test_the_default_sort_is_newest_indexed_first_with_the_image_id_as_tiebreak(
     fake.search = _record
     _client(fake, monkeypatch).get(f'{BASE}/images')
     assert bodies[0]['sort'] == [{'indexed_at': {'order': 'desc'}}, {'image_id': {'order': 'asc'}}]
+
+
+def test_an_uploaded_image_shows_the_users_file_name_not_its_content_hash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = QueryFakeOpenSearch(
+        {
+            ITEMS: {},
+            IMAGES: {
+                'img-u': _image(
+                    'img-u',
+                    '2026-09-03T00:00:00',
+                    image_path='/uploads/e0/e0ae09c3e963010a0152804bf05df975.jpg',
+                    source_identifier='trip/IMG_0042.JPG',
+                ),
+            },
+        }
+    )
+    client = _client(fake, monkeypatch)
+    card = _cards(client.get(f'{BASE}/images').json())['img-u']
+    assert card['file_name'] == 'IMG_0042.JPG'
+    detail = client.get(f'{BASE}/images/img-u').json()
+    assert detail['image']['file_name'] == 'IMG_0042.JPG'

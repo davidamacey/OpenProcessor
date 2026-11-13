@@ -184,7 +184,11 @@
 
 {#if eligible || runningHere || lastResult}
   <div class="flex flex-wrap items-center gap-2 text-meta" data-testid="probe-control">
-    <span class="font-semibold text-fg-2">Probe predictions</span>
+    <span
+      class="font-semibold text-fg-2"
+      title="Runs this model over the items so Disagreements lists where it differs from your labels"
+      >Probe predictions</span
+    >
     {#if runningHere}
       <span class="text-fg-2">
         {job?.status === 'running' ? 'Running…' : job?.status}

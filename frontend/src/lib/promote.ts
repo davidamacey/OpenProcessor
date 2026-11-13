@@ -72,22 +72,6 @@ export function gateFailureMessage(f: PromoteGateFailure): string {
     : f.message;
 }
 
-/** `PromoteRequest.triton_name` limits: `[A-Za-z0-9_-]`, 1..64 chars. */
-const TRITON_NAME_MAX = 64;
-
-/**
- * A generic default Triton model name for a run: its own job id made
- * Triton-safe (the job id already carries the timestamp and model size).
- * No version suffix: nothing here knows the deployment's versioning.
- */
-export function defaultTritonName(jobId: string): string {
-  const safe = jobId
-    .replace(/[^A-Za-z0-9_-]+/g, '_')
-    .replace(/_+/g, '_')
-    .replace(/^_|_$/g, '');
-  return safe.slice(0, TRITON_NAME_MAX) || 'model';
-}
-
 /** Success toast after a promote. Adds the slow-first-prediction note only
  *  when the server says a cold start is expected (OpenProcessor ffb88b8). */
 export function promoteSuccessMessage(

@@ -183,6 +183,18 @@ def _stub_common(stub) -> None:
     )
     stub.on('GET', r'/export/status(\?|$)', {'status': 'idle', 'last_run': None})
     stub.on('GET', r'/export/datasets(\?|$)', {'datasets': []})
+    stub.on(
+        'POST',
+        r'/export/yolo/preview(\?|$)',
+        {
+            'image_count': 0,
+            'object_count': 0,
+            'images_dropped_not_fully_labeled': 0,
+            'images_with_unlabeled_items': 0,
+            'unlabeled_items_on_exported_images': 0,
+            'warning': None,
+        },
+    )
     stub.on('GET', r'/train/status(\?|$)', {'jobs': []})
     stub.on('GET', r'/train/runs(\?|$)', {'items': [], 'total': 0})
     stub.on('GET', r'/train/profiles(\?|$)', {'profiles': []})

@@ -14,6 +14,7 @@ export type WorkflowStepId =
   | 'near_dups'
   | 'export'
   | 'train'
+  | 'probe'
   | 'review_disagreements'
   | 'audit';
 

@@ -14,6 +14,7 @@ import datetime as dt
 import uuid
 from typing import TYPE_CHECKING, Any
 
+from src.config.project_context import current_project
 from src.db.repos import near_dup as repo
 from src.db.session import project_tx
 from src.domain.embedding_spaces import Target
@@ -156,6 +157,7 @@ def _encode_cursor(row: repo.GroupSummaryRow) -> str:
 async def groups(
     session: AsyncSession,
     project: uuid.UUID,
+    opensearch: Any,
     *,
     level: wire.Level,
     purpose: wire.Purpose,
@@ -182,14 +184,40 @@ async def groups(
     return wire.NearDupGroupPage(
         items=[_summary_view(level, r) for r in page],
         next_cursor=_encode_cursor(page[-1]) if more else None,
-        empty_reason=None if rows or cursor else _empty_reason(current, level, purpose),
+        empty_reason=None
+        if rows or cursor
+        else empty_reason_text(
+            current, level, purpose, await _without_vector(opensearch, session, project, level)
+        ),
     )
 
 
-def _empty_reason(run: repo.RunRow, level: wire.Level, purpose: wire.Purpose) -> str:
+async def _without_vector(
+    opensearch: Any, session: AsyncSession, project: uuid.UUID, level: wire.Level
+) -> int:
+    """How many documents of the level's index hold no vector of the level's space: a run can
+    only compare the others."""
+    async with project_tx(session, project):
+        space = await embedding_space(_TARGETS[level])
+    index = current_project().record.resources.indexes[space.index_role]  # type: ignore[index]
+    body = {'query': {'bool': {'must_not': [{'exists': {'field': space.vector_field}}]}}}
+    return int((await opensearch.count(index=index, body=body))['count'])
+
+
+def empty_reason_text(
+    run: repo.RunRow, level: wire.Level, purpose: wire.Purpose, without_vector: int
+) -> str:
+    """Why a run's page is empty: the cut and how many members were compared, plus the members
+    that could not be (no vector), which is the usual reason a run compared fewer than exist."""
     cut = run.params.get('dedup_cosine' if purpose == 'dedup' else 'leak_cosine')
     noun = 'images' if level == 'image' else 'items'
-    return f'0 {purpose} groups at cosine {cut} among {run.members_scored} {noun}'
+    text = f'0 {purpose} groups at cosine {cut} among {run.members_scored} {noun}'
+    if without_vector:
+        text += (
+            f'; {without_vector} {noun} have no vector in this space and were not compared '
+            '(Reprocess with scope embed fills them)'
+        )
+    return text
 
 
 async def group(

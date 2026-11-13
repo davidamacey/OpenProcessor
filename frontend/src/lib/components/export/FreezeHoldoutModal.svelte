@@ -14,12 +14,23 @@
 <!-- Freeze test holdout modal -->
 {#if freeze.freezeOpen}
   <Modal label="Freeze test holdout" onclose={freeze.closeFreeze}>
-    <h3 class="mb-2 text-title font-semibold">Freeze test holdout</h3>
+    <h3 class="mb-2 text-title font-semibold">
+      {freeze.freezeForce ? 'Refreeze test holdout' : 'Freeze test holdout'}
+    </h3>
     <div
       class="mb-3 rounded border border-warn/40 bg-warn/10 px-3 py-2 text-meta text-warn-text"
+      data-testid="freeze-warning"
     >
-      One-shot per dataset version. Deterministic per-class selection (SHA1 of each crop
-      id) — the same cohort always freezes the same set, so there's no seed to pick.
+      {#if freeze.freezeForce}
+        A test set already exists. Refreezing adds a per-class sample of the crops
+        validated since the last freeze; crops already frozen stay in the test set. It is
+        recorded as a new freeze, and runs trained before it were scored on the smaller
+        set.
+      {:else}
+        Freezes a per-class sample of the validated crops as the test set, never trained
+        on. Selection is deterministic (SHA1 of each crop id), so there's no seed to pick.
+        It can be refreshed later with Refreeze.
+      {/if}
     </div>
     <NearDupStalePanel refresh={freeze.nearDup} />
     <label class="mb-3 block text-body">
@@ -47,7 +58,7 @@
         onclick={() => void freeze.submitFreeze()}
         disabled={freeze.freezeBusy}
       >
-        {freeze.freezeBusy ? 'Freezing…' : 'Freeze'}
+        {freeze.freezeBusy ? 'Freezing…' : freeze.freezeForce ? 'Refreeze' : 'Freeze'}
       </button>
     </div>
   </Modal>

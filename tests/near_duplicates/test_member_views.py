@@ -159,7 +159,7 @@ async def test_a_group_detail_serves_the_pin_to_the_representative(
     )
     async with async_session_factory()() as session:
         page = await service.groups(
-            session, project, level='image', purpose='dedup', min_size=2, has_holdout=None,
+            session, project, AsyncMock(), level='image', purpose='dedup', min_size=2, has_holdout=None,
             cursor=None, limit=10,
         )  # fmt: skip
     group = page.items[0]
@@ -198,7 +198,7 @@ async def test_an_empty_page_names_the_cut_and_the_scored_count(pg, project) -> 
     await full_build(env)
     async with async_session_factory()() as session:
         page = await service.groups(
-            session, project, level='image', purpose='dedup', min_size=2, has_holdout=None,
+            session, project, AsyncMock(), level='image', purpose='dedup', min_size=2, has_holdout=None,
             cursor=None, limit=10,
         )  # fmt: skip
     assert page.items == []
@@ -210,7 +210,7 @@ async def test_an_empty_page_names_the_cut_and_the_scored_count(pg, project) -> 
 async def test_a_level_with_no_run_says_to_build_it(project) -> None:
     async with async_session_factory()() as session:
         page = await service.groups(
-            session, project, level='item', purpose='dedup', min_size=2, has_holdout=None,
+            session, project, AsyncMock(), level='item', purpose='dedup', min_size=2, has_holdout=None,
             cursor=None, limit=10,
         )  # fmt: skip
     assert page.empty_reason == 'no item-level run yet: build it to find near-duplicates'

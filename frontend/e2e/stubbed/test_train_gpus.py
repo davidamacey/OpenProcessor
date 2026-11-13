@@ -60,6 +60,18 @@ def register_train_mount(stub):
         },
     )
     stub.on('GET', r'/export/datasets(\?|$)', {'datasets': []})
+    stub.on(
+        'POST',
+        r'/export/yolo/preview(\?|$)',
+        {
+            'image_count': 0,
+            'object_count': 0,
+            'images_dropped_not_fully_labeled': 0,
+            'images_with_unlabeled_items': 0,
+            'unlabeled_items_on_exported_images': 0,
+            'warning': None,
+        },
+    )
     stub.on('GET', r'/train/profiles(\?|$)', {'profiles': []})
     stub.on('GET', r'/train/presets(\?|$)', {'class_subset_presets': []})
     stub.on('GET', r'/train/runs(\?|$)', {'items': [], 'total': 0})

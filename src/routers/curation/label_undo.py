@@ -48,6 +48,10 @@ def _crop_errors(crop_id: str) -> Iterator[None]:
         raise HTTPException(status_code=409, detail=f'nothing to undo for crop {crop_id}') from exc
     except svc.NoVlmSuggestionError as exc:
         raise HTTPException(status_code=409, detail=f'no VLM suggestion on {crop_id}') from exc
+    except svc.NoProbeDisagreementError as exc:
+        raise HTTPException(
+            status_code=409, detail=f'the model does not disagree with {crop_id}'
+        ) from exc
     except OCCFinalConflictError:
         raise
     except Exception as exc:
@@ -187,6 +191,21 @@ async def dismiss_vlm_suggestion(crop_id: str, opensearch: OpenSearchDep) -> dic
     """
     with _crop_errors(crop_id):
         await svc.dismiss_vlm_suggestion(opensearch, crop_id)
+        return await svc.item_by_id(opensearch, crop_id)
+
+
+@router.post('/crops/{crop_id}/probe_dismiss')
+async def dismiss_probe_disagreement(crop_id: str, opensearch: OpenSearchDep) -> dict[str, Any]:
+    """Keep the label against the model's disagreement ("Keep my label").
+
+    Records ``probe_dismissed_at`` / ``probe_dismissed_class`` /
+    ``probe_dismissed_model_version`` and a ``probe_dismiss`` entry in the item's edit
+    history; the item leaves the Disagreements queue until a new probe run scores it
+    again. The class is untouched. ``POST /crops/{crop_id}/probe_dismiss/undo`` reverses it.
+    Returns the post-write item; ``409`` when the model does not disagree with the label.
+    """
+    with _crop_errors(crop_id):
+        await svc.dismiss_probe_disagreement(opensearch, crop_id)
         return await svc.item_by_id(opensearch, crop_id)
 
 

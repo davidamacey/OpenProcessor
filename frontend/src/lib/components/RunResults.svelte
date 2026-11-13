@@ -38,9 +38,11 @@
      *  the section open without a click. Defaults closed (past-runs
      *  table row). */
     startOpen?: boolean;
+    /** False when the run's row already shows the probe control above the panel. */
+    showProbe?: boolean;
   }
 
-  let { status, startOpen = false }: Props = $props();
+  let { status, startOpen = false, showProbe = true }: Props = $props();
 
   // Deliberately captures only the initial `startOpen` value — it sets
   // the starting open/closed state, not a live-tracked prop.
@@ -142,7 +144,9 @@
       <!-- #36 item 8: populates probe_pred_* from this run's checkpoint —
            the one prerequisite the Uncertainty/Model-disagreements review
            queues need (item 9's empty_state.has_probe_predictions). -->
-      <ProbeControl {status} />
+      {#if showProbe}
+        <ProbeControl {status} />
+      {/if}
 
       <!-- Training-time metrics. Neither of these is
            the run's headline number — that's eval.map50 below,

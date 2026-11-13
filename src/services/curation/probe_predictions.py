@@ -258,6 +258,10 @@ async def run_probe_inference(
                             'probe_disagreement': disagreement,
                             'probe_model_version': version_tag,
                             'probe_scored_at': datetime.now(UTC).isoformat(),
+                            # A new run is a new opinion: earlier "keep my label" dismissals lapse.
+                            'probe_dismissed_at': None,
+                            'probe_dismissed_class': None,
+                            'probe_dismissed_model_version': None,
                         }
                     }
                 )

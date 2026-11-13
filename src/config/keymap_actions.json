@@ -40,6 +40,7 @@
 
     {"id": "review.queue.confirm", "context": "review.queue", "group": "confirm", "label": "Confirm proposed & advance (or search classes if blank)", "description": "Confirm the proposed label and advance.", "default": ["enter"], "modifiable": true},
     {"id": "review.queue.discard", "context": "review.queue", "group": "discard", "label": "Discard", "description": "Dismiss this item from every review queue.", "default": ["d"], "modifiable": true},
+    {"id": "review.queue.keep_label", "context": "review.queue", "group": "keep", "label": "Keep my label", "description": "Keep the label against the model's disagreement and leave the Disagreements queue.", "default": ["shift+k"], "modifiable": true},
     {"id": "review.queue.class_picker", "context": "review.queue", "group": null, "label": "Search all classes...", "description": "Open the class-assignment picker.", "default": ["/"], "modifiable": true},
     {"id": "review.queue.prev", "context": "review.queue", "group": "prev", "label": "Previous item", "description": "Go to the previous item.", "default": ["arrowleft"], "modifiable": true},
     {"id": "review.queue.next", "context": "review.queue", "group": "next", "label": "Next item", "description": "Go to the next item.", "default": ["arrowright"], "modifiable": true},

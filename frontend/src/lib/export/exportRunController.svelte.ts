@@ -5,13 +5,13 @@
  * on teardown so no poll outlives the page.
  */
 import { apiErrorText } from '$lib/api_errors';
-import { exportStatus, exportYolo } from '$lib/api_export';
+import { exportStatus, exportYolo, previewExportYolo } from '$lib/api_export';
 import { splitExportClasses } from '$lib/export/exportDatasetRows';
 import { ItemFilterState } from '$lib/itemFilter/itemFilterState.svelte';
 import { nearDupStaleLevels } from '$lib/nearDup/staleRefusal';
 import { createNearDupRefreshController } from '$lib/nearDup/nearDupRefreshController.svelte';
 import { toastStore } from '$stores/toast.svelte';
-import type { ExportResult, ExportStatus } from '$lib/types_export';
+import type { ExportPreview, ExportResult, ExportStatus } from '$lib/types_export';
 
 export function downloadUrl(url: string, suggestedName: string): void {
   const a = document.createElement('a');
@@ -60,6 +60,8 @@ export function createExportRunController(loadAll: () => Promise<void>) {
   let exportState = $state<ExportStatus | null>(null);
   let pollHandle: ReturnType<typeof setInterval> | null = null;
   let exportModalOpen = $state<boolean>(false);
+  let preview = $state<ExportPreview | null>(null);
+  let previewSeq = 0;
   const nearDup = createNearDupRefreshController();
 
   const exportClassSplit = $derived(
@@ -153,6 +155,22 @@ export function createExportRunController(loadAll: () => Promise<void>) {
     }
   }
 
+  /** Re-reads the served counts for the current options; a stale answer is dropped. */
+  async function refreshPreview(): Promise<void> {
+    const seq = ++previewSeq;
+    try {
+      const res = await previewExportYolo({
+        require_fully_labeled_images: requireFullyLabeled,
+        collapse_near_duplicates: collapseNearDuplicates,
+        item_filter: exportFilter.toBody(),
+      });
+      if (seq === previewSeq) preview = res;
+    } catch {
+      // The preview is advice; the export reports its own refusals.
+      if (seq === previewSeq) preview = null;
+    }
+  }
+
   function closeExportModal(): void {
     if (exportRunning) return;
     exportModalOpen = false;
@@ -185,6 +203,10 @@ export function createExportRunController(loadAll: () => Promise<void>) {
     },
     exportFilter,
     nearDup,
+    get preview() {
+      return preview;
+    },
+    refreshPreview,
     get exportRunning() {
       return exportRunning;
     },

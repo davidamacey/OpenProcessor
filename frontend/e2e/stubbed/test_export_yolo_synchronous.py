@@ -127,6 +127,18 @@ def test_export_completes_without_polling_and_refreshes_registry_buttons(stub, p
 
     stub.on('GET', r'/export/status(\?|$)', status_handler)
     stub.on('GET', r'/export/datasets(\?|$)', datasets_handler)
+    stub.on(
+        'POST',
+        r'/export/yolo/preview(\?|$)',
+        {
+            'image_count': 0,
+            'object_count': 0,
+            'images_dropped_not_fully_labeled': 0,
+            'images_with_unlabeled_items': 0,
+            'unlabeled_items_on_exported_images': 0,
+            'warning': None,
+        },
+    )
 
     def export_yolo_handler(request, match):
         post_calls.append(request.post_data_json or {})
@@ -176,6 +188,18 @@ def test_export_is_blocked_by_the_served_can_export(stub, page, app_url):
     stub.on('GET', r'/stats/dataset(\?|$)', STATS_DATASET)
     stub.on('GET', r'/test_holdout/stats(\?|$)', HOLDOUT_STATS)
     stub.on('GET', r'/export/datasets(\?|$)', {'datasets': []})
+    stub.on(
+        'POST',
+        r'/export/yolo/preview(\?|$)',
+        {
+            'image_count': 0,
+            'object_count': 0,
+            'images_dropped_not_fully_labeled': 0,
+            'images_with_unlabeled_items': 0,
+            'unlabeled_items_on_exported_images': 0,
+            'warning': None,
+        },
+    )
     stub.on(
         'GET',
         r'/export/status(\?|$)',

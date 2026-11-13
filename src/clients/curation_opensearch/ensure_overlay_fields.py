@@ -196,6 +196,9 @@ async def ensure_items_probe_fields(
             'probe_pred_margin': {'type': 'float'},
             'probe_model_version': {'type': 'keyword'},
             'probe_scored_at': {'type': 'date'},
+            'probe_dismissed_at': {'type': 'date'},
+            'probe_dismissed_class': {'type': 'keyword'},
+            'probe_dismissed_model_version': {'type': 'keyword'},
         }
     }
     return await put_properties(client, index, body['properties'])

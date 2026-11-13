@@ -80,12 +80,19 @@ export function createReviewItemActions(loader: ReviewQueueLoader) {
   // F8 D1: the served probe opinion decides whether a prediction is
   // shown and whether "Accept model's class" is offered.
   const opinion = $derived(
-    current ? probeOpinion(current) : { kind: 'none' as const, showAccept: false },
+    current
+      ? probeOpinion(current)
+      : { kind: 'none' as const, showAccept: false, showKeepLabel: false },
   );
 
   async function acceptModelClass(): Promise<void> {
     if (!current || current.probe_pred_class_id == null || !opinion.showAccept) return;
     await assign(current.probe_pred_class_id);
+  }
+
+  async function keepLabel(): Promise<void> {
+    if (!current || !opinion.showKeepLabel) return;
+    await queueController.keepLabel(current);
   }
 
   function skip(): void {
@@ -129,6 +136,7 @@ export function createReviewItemActions(loader: ReviewQueueLoader) {
       return opinion;
     },
     acceptModelClass,
+    keepLabel,
     skip,
     discard,
     undoLast,

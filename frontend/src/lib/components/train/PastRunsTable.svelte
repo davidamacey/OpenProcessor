@@ -2,7 +2,9 @@
   import Icon from '$components/ui/Icon.svelte';
   /** /train's paginated past-runs table with per-run promote/reproduce. */
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
+  import ProbeControl from '$components/ProbeControl.svelte';
   import RunResults from '$components/RunResults.svelte';
+  import { canRunProbe } from '$lib/probe';
   import { formatTimestamp } from '$lib/format/date';
   import { bestMapDisplay } from '$lib/trainRunsTable';
   import { isTerminalTrainState } from '$lib/trainResults';
@@ -16,6 +18,10 @@
   }
 
   let { ctl, actions }: Props = $props();
+
+  // The newest run a probe can start from: the one just trained and promoted, so "find where
+  // it disagrees with my labels" is one click from the Promote button, not inside Results.
+  const probeRunId = $derived(ctl.runs.find((r) => canRunProbe(r))?.job_id ?? null);
 </script>
 
 <section class="rounded-md border border-line bg-surface-1">
@@ -137,7 +143,15 @@
             {#if isTerminalTrainState(r.state)}
               <tr class="border-t-0">
                 <td colspan="5" class="p-0">
-                  <RunResults status={r} />
+                  {#if r.job_id === probeRunId}
+                    <div
+                      class="border-b border-line px-3 py-2"
+                      data-testid="find-disagreements"
+                    >
+                      <ProbeControl status={r} />
+                    </div>
+                  {/if}
+                  <RunResults status={r} showProbe={r.job_id !== probeRunId} />
                 </td>
               </tr>
             {/if}

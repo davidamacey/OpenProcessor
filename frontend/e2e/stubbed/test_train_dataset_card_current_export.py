@@ -58,6 +58,18 @@ def test_card_shows_current_export_contents_for_explicit_pick(stub, page, app_ur
     register_train_mount(stub)
     stub.on('GET', r'/export/status(\?|$)', EXPORT_STATUS)
     stub.on('GET', r'/export/datasets(\?|$)', DATASETS)
+    stub.on(
+        'POST',
+        r'/export/yolo/preview(\?|$)',
+        {
+            'image_count': 0,
+            'object_count': 0,
+            'images_dropped_not_fully_labeled': 0,
+            'images_with_unlabeled_items': 0,
+            'unlabeled_items_on_exported_images': 0,
+            'warning': None,
+        },
+    )
 
     page.goto(f'{app_url}/p/default/train')
     select = page.locator("label:has-text('dataset version') select")

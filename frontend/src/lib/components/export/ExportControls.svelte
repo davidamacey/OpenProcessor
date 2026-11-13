@@ -22,6 +22,16 @@
   }
 
   let { run, hasMulticlassExport }: Props = $props();
+
+  // The served counts an export with these options would write, re-read (debounced) when an
+  // option or the filter changes.
+  $effect(() => {
+    void run.requireFullyLabeled;
+    void run.collapseNearDuplicates;
+    void JSON.stringify(run.exportFilter.toBody());
+    const t = setTimeout(() => void run.refreshPreview(), 400);
+    return () => clearTimeout(t);
+  });
 </script>
 
 <!-- Export controls + downloads + training command -->
@@ -115,6 +125,23 @@
       {/if}
     </div>
   </div>
+
+  {#if run.preview}
+    <p class="mt-2 text-meta text-fg-2" data-testid="export-preview">
+      This export would hold
+      <span class="text-fg-1 tabular-nums">{formatCount(run.preview.object_count)}</span>
+      objects in
+      <span class="text-fg-1 tabular-nums">{formatCount(run.preview.image_count)}</span>
+      images{run.preview.images_dropped_not_fully_labeled > 0
+        ? `, leaving out ${formatCount(run.preview.images_dropped_not_fully_labeled)} not fully labelled`
+        : ''}.
+    </p>
+    {#if run.preview.warning}
+      <p class="mt-1 text-meta text-warn-text" data-testid="export-preview-warning">
+        {run.preview.warning}
+      </p>
+    {/if}
+  {/if}
 
   {#if run.exportBlocked && run.blockingReasons.length > 0}
     <ul

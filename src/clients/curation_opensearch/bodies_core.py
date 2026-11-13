@@ -418,6 +418,10 @@ def _items_body() -> dict[str, Any]:
                 'probe_pred_margin': {'type': 'float'},
                 'probe_model_version': {'type': 'keyword'},
                 'probe_scored_at': {'type': 'date'},
+                # "Keep my label" against the model's disagreement (POST /crops/{id}/probe_dismiss).
+                'probe_dismissed_at': {'type': 'date'},
+                'probe_dismissed_class': {'type': 'keyword'},
+                'probe_dismissed_model_version': {'type': 'keyword'},
                 # Curation-scoring overlay fields. Written ONLY by the
                 # dedicated scoring job (src/services/curation/item_scores/);
                 # never by the production clustering pipeline. No overlay

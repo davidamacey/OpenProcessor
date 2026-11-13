@@ -526,3 +526,40 @@ async def test_status_counts_match_the_files_on_disk(
         'images_with_unlabeled_items',
     ):
         assert body[key] == manifest[key], key
+
+
+@pytest.mark.asyncio
+async def test_preview_counts_match_the_export_and_write_nothing(tmp_path: Path) -> None:
+    for strict in (False, True):
+        preview = await _service(tmp_path / f'p{strict}', _partial_frame_docs()).preview_dataset(
+            seed=1, require_fully_labeled_images=strict
+        )
+        result = await _service(tmp_path / f'e{strict}', _partial_frame_docs()).export_dataset(
+            seed=1, copy_images=False, require_fully_labeled_images=strict
+        )
+        assert preview.image_count == result.image_count
+        assert preview.object_count == result.object_count
+        assert preview.images_dropped_not_fully_labeled == result.images_dropped_not_fully_labeled
+        assert not (tmp_path / f'p{strict}' / 'exports').exists()
+
+
+@pytest.mark.asyncio
+async def test_preview_warns_when_most_images_would_be_left_out(tmp_path: Path) -> None:
+    strict = await _service(tmp_path / 'a', _partial_frame_docs()).preview_dataset(
+        seed=1, require_fully_labeled_images=True
+    )
+    assert strict.warning is not None
+    assert 'Only 1 image would be exported; 2 are left out' in strict.warning
+    default = await _service(tmp_path / 'b', _partial_frame_docs()).preview_dataset(seed=1)
+    assert default.warning is None
+
+
+@pytest.mark.asyncio
+async def test_preview_of_an_empty_export_is_a_warning_not_an_error(tmp_path: Path) -> None:
+    docs = [_doc('a-1', 'img-a', 1), _doc('a-2', 'img-a', 1, validated=False)]
+    preview = await _service(tmp_path, docs).preview_dataset(
+        seed=1, require_fully_labeled_images=True
+    )
+    assert preview.image_count == 0
+    assert preview.warning is not None
+    assert 'fully labeled' in preview.warning

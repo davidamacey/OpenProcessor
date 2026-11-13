@@ -394,6 +394,28 @@ describe("undoStore.undoLast — kind: 'vlm_dismiss' routes to vlm_dismiss/undo"
   });
 });
 
+describe("undoStore.undoLast — kind: 'probe_dismiss' routes to probe_dismiss/undo", () => {
+  beforeEach(() => {
+    undoStore.clear();
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('POSTs /crops/{id}/probe_dismiss/undo and returns the restored item', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { crop_id: 'c1' }));
+    vi.stubGlobal('fetch', fetchMock);
+    undoStore.recordProbeDismiss('c1');
+    expect(undoStore.stack[0]).toMatchObject({ crop_ids: ['c1'], kind: 'probe_dismiss' });
+
+    const crops = await undoStore.undoLast();
+
+    expect(fetchMock.mock.calls[0]![0]).toBe(`${API_PREFIX}/crops/c1/probe_dismiss/undo`);
+    expect(crops[0]?.id).toBe('c1');
+    expect(undoStore.stack).toHaveLength(0);
+  });
+});
+
 /**
  * M6: kind-tagged ordering — Z always pops the truly most recent action
  * across kinds, not "the most recent label write." This is the concrete

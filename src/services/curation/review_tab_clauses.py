@@ -339,6 +339,10 @@ def _model_disagreements_tab(include_test: bool) -> _TabQuery:
     # next training cycle.
     must: _Clauses = [
         {'term': {'class_validated': True}},
+        # ``probe_disagreement`` is null (not indexed) when the item's class is outside the
+        # probe's classes: the model has no opinion there, so it cannot disagree. A bare
+        # ``probe_pred_class`` hit listed every out-of-vocabulary item.
+        {'exists': {'field': 'probe_disagreement'}},
         {'exists': {'field': 'probe_pred_class'}},
         # Inequality requires a script — the index is small enough at
         # typical curation-deployment scale (~163K items) that script_query
@@ -356,7 +360,12 @@ def _model_disagreements_tab(include_test: bool) -> _TabQuery:
         {'script': {'script': {'source': MODEL_DISAGREES_SCRIPT, 'lang': 'painless'}}},
     ]
     # Override the default must_not — we WANT validated crops here.
-    must_not: _Clauses = [{'term': {'class_excluded': True}}, *_holdout_guard(include_test)]
+    must_not: _Clauses = [
+        {'term': {'class_excluded': True}},
+        *_holdout_guard(include_test),
+        # "Keep my label" (POST /crops/{id}/probe_dismiss); a new probe run clears it.
+        {'exists': {'field': 'probe_dismissed_at'}},
+    ]
     # Default sort: 'disagreement_entropy_asc' — most-confident
     # disagreements first, so the user can quickly distinguish "model is
     # right, human was wrong" cases — see review_sorts.py.
