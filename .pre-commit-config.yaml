@@ -199,9 +199,15 @@ repos:
         entry: bash -c 'cd frontend && exec node_modules/.bin/prettier --check --ignore-unknown "${@#frontend/}"' --
         language: system
         files: ^frontend/
+      # --cache with the content strategy (https://eslint.org/docs/latest/use/command-line-interface#--cache):
+      # an unchanged file under an unchanged config is not linted again. The cache sits in the
+      # checkout's own gitignored .cache/, in a directory named by the lockfile hash, so a
+      # dependency or plugin bump starts a fresh one and no worktree reads another's. The config
+      # is the base (not type-aware) one: ESLint's cache does not track dependencies between
+      # files, which only rules that read other files (type-aware, import resolution) need.
       - id: frontend-eslint
         name: frontend eslint (staged files)
-        entry: bash -c 'cd frontend && exec node_modules/.bin/eslint --no-warn-ignored "${@#frontend/}"' --
+        entry: bash -c 'cd frontend && h=$(sha256sum package-lock.json | cut -c1-16) && exec node_modules/.bin/eslint --no-warn-ignored --cache --cache-strategy content --cache-location ".cache/eslint/$h/" "${@#frontend/}"' --
         language: system
         files: ^frontend/.*\.(js|ts|svelte)$
       # knip is whole-project (a file is unused only relative to every entry point), so
