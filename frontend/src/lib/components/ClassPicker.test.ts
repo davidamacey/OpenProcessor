@@ -64,7 +64,7 @@ function key(input: HTMLElement, k: string): void {
 beforeEach(() => {
   api.addClass
     .mockReset()
-    .mockResolvedValue({ class_id: 9, class_name: 'traffic_light', group: 'g' });
+    .mockResolvedValue({ class_id: 9, class_name: 'school_bus', group: 'g' });
   onpick.mockReset();
   onclose.mockReset();
   classesStore.classes = [
@@ -72,9 +72,10 @@ beforeEach(() => {
     cls(2, 'gadget'),
     cls(3, 'old_truck', { deprecated: true }),
     cls(4, 'region_x', { kind: 'region' }),
+    cls(5, 'traffic_light'),
   ];
   vi.spyOn(classesStore, 'clearAndRefetch').mockImplementation(async () => {
-    classesStore.classes = [...classesStore.classes, cls(9, 'traffic_light')];
+    classesStore.classes = [...classesStore.classes, cls(9, 'school_bus')];
   });
 });
 
@@ -97,10 +98,10 @@ describe('ClassPicker', () => {
 
   it('offers create when nothing matches', () => {
     render();
-    type('traffic light');
+    type('school bus');
     expect(
       document.querySelector('[data-testid="class-picker-create"]')?.textContent,
-    ).toContain('Create "traffic light"');
+    ).toContain('Create new class "school bus"');
   });
 
   it('offers no create row for a name that exists', () => {
@@ -111,22 +112,37 @@ describe('ClassPicker', () => {
 
   it('picks the class under the slug the server answered for a typed name', async () => {
     render();
-    const input = type('Traffic light');
+    const input = type('School Bus');
     key(input, 'Enter');
     await vi.waitFor(() => expect(onpick).toHaveBeenCalledTimes(1));
-    expect(api.addClass).toHaveBeenCalledWith({ name: 'Traffic light' });
-    expect(onpick.mock.calls[0]![0].name).toBe('traffic_light');
+    expect(api.addClass).toHaveBeenCalledWith({ name: 'School Bus' });
+    expect(onpick.mock.calls[0]![0].name).toBe('school_bus');
   });
 
   it('assigns the created class in the same gesture', async () => {
     render();
-    const input = type('traffic_light');
+    const input = type('school_bus');
     key(input, 'Enter');
     await vi.waitFor(() => expect(onpick).toHaveBeenCalledTimes(1));
-    expect(api.addClass).toHaveBeenCalledWith({ name: 'traffic_light' });
-    expect(onpick.mock.calls[0]![0]).toMatchObject({ id: 9, name: 'traffic_light' });
+    expect(api.addClass).toHaveBeenCalledWith({ name: 'school_bus' });
+    expect(onpick.mock.calls[0]![0]).toMatchObject({ id: 9, name: 'school_bus' });
     expect(onclose).toHaveBeenCalled();
   });
+
+  it.each(['Traffic light', 'traffic-light', 'TRAFFIC  LIGHT', ' traffic_light '])(
+    'a natural spelling of an existing class (%s) selects it and offers no create',
+    (typed) => {
+      render();
+      const input = type(typed);
+      expect(document.querySelector('[data-testid="class-picker-create"]')).toBeNull();
+      expect(document.querySelector('[role="option"]')?.textContent).toContain(
+        'traffic_light',
+      );
+      key(input, 'Enter');
+      expect(onpick.mock.calls[0]![0]).toMatchObject({ id: 5, name: 'traffic_light' });
+      expect(api.addClass).not.toHaveBeenCalled();
+    },
+  );
 
   it('picks the highlighted class with Enter', () => {
     render();

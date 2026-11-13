@@ -9,6 +9,7 @@ Writes, under ``contracts/`` (or ``--out-dir``):
 * ``ts/itemWire.ts`` — the same as a TypeScript ``ItemWire`` interface
   plus ``ITEM_WIRE_KEYS`` / ``REGION_WIRE_KEYS`` const arrays.
 * ``ts/classSources.ts`` — the ``class_source`` role vocabulary.
+* ``ts/classNames.ts`` — the one class-name equality rule (``normalize_class_name``).
 * ``openapi/curation.json`` — ``app.openapi()`` filtered to paths under
   ``CurationConfig.api_prefix`` plus only the components they reference.
 
@@ -52,6 +53,7 @@ SCRIPT_REL = 'scripts/codegen/export_api_contracts.py'
 ITEM_WIRE_JSON = Path('json/item_wire.json')
 ITEM_WIRE_TS = Path('ts/itemWire.ts')
 CLASS_SOURCES_TS = Path('ts/classSources.ts')
+CLASS_NAMES_TS = Path('ts/classNames.ts')
 OPENAPI_JSON = Path('openapi/curation.json')
 KEYMAP_ACTIONS_JSON = Path('json/keymap_actions.json')
 
@@ -266,6 +268,29 @@ def render_class_sources_ts() -> str:
     return '\n'.join(lines)
 
 
+# --- class names -----------------------------------------------------------
+
+
+def render_class_names_ts() -> str:
+    from src.utils.class_names import NON_SLUG_RUN
+
+    lines = [
+        _ts_header('src/utils/class_names.py (normalize_class_name)'),
+        '/**',
+        ' * The one class-name equality rule: the registry slug of a typed name. The backend',
+        ' * stores a class under this slug and refuses a second class with the same slug, so a',
+        ' * picker that compares typed text through it finds the class `Traffic light` means.',
+        ' */',
+        f'export const NON_SLUG_RUN = /{NON_SLUG_RUN.pattern}/g;',
+        '',
+        'export function normalizeClassName(text: string): string {',
+        "  return text.trim().toLowerCase().replace(NON_SLUG_RUN, '_').replace(/^_+|_+$/g, '');",
+        '}',
+        '',
+    ]
+    return '\n'.join(lines)
+
+
 # --- OpenAPI ---------------------------------------------------------------
 
 
@@ -357,6 +382,7 @@ def render_keymap_actions_json() -> str:
 GENERATORS: dict[str, Callable[[], dict[Path, str]]] = {
     'item-wire': _render_item_wire,
     'class-sources': lambda: {CLASS_SOURCES_TS: render_class_sources_ts()},
+    'class-names': lambda: {CLASS_NAMES_TS: render_class_names_ts()},
     'openapi': lambda: {OPENAPI_JSON: render_openapi_json()},
     'keymap-actions': lambda: {KEYMAP_ACTIONS_JSON: render_keymap_actions_json()},
 }

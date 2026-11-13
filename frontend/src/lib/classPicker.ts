@@ -18,6 +18,7 @@
  * unit-testable with plain arrays.
  */
 
+import { normalizeClassName } from '$contracts/ts/classNames';
 import { isAssignableClass, isItemClassTarget } from '$lib/classVisibility';
 import type { RegistryClass } from '$lib/types_classes';
 
@@ -59,7 +60,9 @@ export function searchClasses(
   prefer: ReadonlyArray<number | null | undefined> = [],
 ): RegistryClass[] {
   const pool = classes.filter(isAssignableClass);
-  const q = query.trim().toLowerCase();
+  // The registry's own name rule, so "Traffic light" finds `traffic_light`.
+  const q = normalizeClassName(query);
+  if (!q && query.trim()) return [];
 
   let ranked: RegistryClass[];
   if (!q) {
@@ -73,7 +76,7 @@ export function searchClasses(
     );
   } else {
     ranked = pool
-      .map((cls) => ({ cls, rank: matchRank(cls.name.toLowerCase(), q) }))
+      .map((cls) => ({ cls, rank: matchRank(normalizeClassName(cls.name), q) }))
       .filter((s): s is { cls: RegistryClass; rank: number } => s.rank !== null)
       .sort(
         (a, b) =>

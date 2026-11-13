@@ -299,7 +299,7 @@ repos:
         entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/codegen/export_api_contracts.py --check'
         language: system
         pass_filenames: false
-        files: ^(src/.*\.py|contracts/json/item_wire\.json|contracts/openapi/curation\.json|contracts/ts/(itemWire|classSources)\.ts|scripts/codegen/(export_api_contracts|_contract_runtime)\.py)$
+        files: ^(src/.*\.py|contracts/json/item_wire\.json|contracts/openapi/curation\.json|contracts/ts/(itemWire|classSources|classNames)\.ts|scripts/codegen/(export_api_contracts|_contract_runtime)\.py)$
 
   # Commit message linting (conventional commits). Scope stays optional.
   - repo: https://github.com/compilerla/conventional-pre-commit

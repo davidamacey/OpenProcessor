@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * Assign or create a class. A combobox over the served class registry:
-   * typed text filters the list, the last row creates `Create "<typed>"`, and
+   * typed text filters the list, the last row, offered only when no class matches the typed name, reads `Create new class "<typed>"`, and
    * a refused name offers the server's suggestion. Deprecated classes are
    * never offered.
    */
@@ -122,7 +122,10 @@
             onmouseenter={() => (picker.index = i)}
             data-testid="class-picker-create"
           >
-            <span class="grow truncate">Create "{picker.createName}"</span>
+            <span class="shrink-0 rounded bg-surface-3 px-1.5 text-caption text-fg-2"
+              >New class</span
+            >
+            <span class="grow truncate">Create new class "{picker.createName}"</span>
           </button>
         </li>
       {/if}

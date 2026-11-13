@@ -151,7 +151,7 @@ def clear_class_name_cache() -> None:
         _class_name_cache.clear()
 
 
-_NON_SLUG_RUN = re.compile(r'[^a-z0-9]+')
+NON_SLUG_RUN = re.compile(r'[^a-z0-9]+')
 
 
 def normalize_class_name(text: str) -> str:
@@ -163,7 +163,7 @@ def normalize_class_name(text: str) -> str:
     nothing slug-safe remains. This is the one name-equality rule; class
     identity is by name, never by a model's class id.
     """
-    return _NON_SLUG_RUN.sub('_', text.strip().lower()).strip('_')
+    return NON_SLUG_RUN.sub('_', text.strip().lower()).strip('_')
 
 
 class _NamedClass(Protocol):
