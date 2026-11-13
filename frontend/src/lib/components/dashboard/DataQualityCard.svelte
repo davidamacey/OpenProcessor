@@ -1,42 +1,44 @@
 <script lang="ts">
   /**
-   * The dashboard's Data quality card: the served accuracy-audit counts and the image-level
-   * duplicate run, each linking to its tab. Counts are the server's; a run that never happened says
-   * so instead of showing a zero.
+   * The dashboard's Data quality card: the served "ready to train" verdict, the checks that
+   * still need work (served label and message), and the way into Data quality and into the
+   * Workspace Duplicates view. Everything is what `GET /quality/readiness` served.
    */
   import { resolve } from '$app/paths';
   import { onMount } from 'svelte';
   import Card from '$components/ui/Card.svelte';
+  import Chip from '$components/ui/Chip.svelte';
   import ErrorState from '$components/ui/ErrorState.svelte';
   import Skeleton from '$components/ui/Skeleton.svelte';
-  import { getAuditReport } from '$lib/api_labelConfirmation';
-  import { getNearDupStatus } from '$lib/api_nearDup';
-  import { formatCount } from '$lib/format/count';
+  import { getReadiness } from '$lib/api_quality';
+  import { plural } from '$lib/format/plural';
   import { projectHref } from '$lib/projectPaths';
-  import type { AuditReport } from '$lib/types_labelConfirmation';
-  import type { NearDupLevelStatus } from '$lib/types_nearDup';
+  import type { DatasetReadiness, ReadinessVerdict } from '$lib/types_quality';
 
-  let audit = $state<AuditReport | null>(null);
-  let image = $state<NearDupLevelStatus | null>(null);
+  const VERDICT: Record<
+    ReadinessVerdict,
+    { tone: 'success' | 'warn' | 'danger'; text: string }
+  > = {
+    ready: { tone: 'success', text: 'Ready to train' },
+    warn: { tone: 'warn', text: 'Ready, with warnings' },
+    blocked: { tone: 'danger', text: 'Not ready' },
+  };
+
+  let readiness = $state<DatasetReadiness | null>(null);
   let failure = $state<unknown>(null);
   let loading = $state(true);
 
   async function load(signal?: AbortSignal): Promise<void> {
     loading = true;
     failure = null;
-    const [a, n] = await Promise.allSettled([
-      getAuditReport(null, signal),
-      getNearDupStatus(signal),
-    ]);
-    if (signal?.aborted) return;
-    audit = a.status === 'fulfilled' ? a.value : null;
-    image =
-      n.status === 'fulfilled'
-        ? (n.value.levels.find((l) => l.level === 'image') ?? null)
-        : null;
-    const bad = [a, n].find((r) => r.status === 'rejected');
-    failure = bad && bad.status === 'rejected' ? bad.reason : null;
-    loading = false;
+    try {
+      readiness = await getReadiness(signal);
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      failure = e;
+    } finally {
+      loading = false;
+    }
   }
 
   onMount(() => {
@@ -45,11 +47,18 @@
     return () => ctl.abort();
   });
 
-  const run = $derived(image?.current_run ?? null);
+  const open = $derived(readiness?.checks.filter((c) => c.severity !== 'ok') ?? []);
 </script>
 
 <Card data-testid="data-quality-card">
-  <h2 class="mb-3 text-title font-semibold text-fg-1">Data quality</h2>
+  <div class="mb-3 flex flex-wrap items-center gap-2">
+    <h2 class="text-title font-semibold text-fg-1">Data quality</h2>
+    {#if readiness}
+      <Chip tone={VERDICT[readiness.verdict].tone}
+        ><span data-testid="dq-verdict">{VERDICT[readiness.verdict].text}</span></Chip
+      >
+    {/if}
+  </div>
   {#if failure}
     <ErrorState
       title="Data quality unavailable"
@@ -58,44 +67,35 @@
     />
   {:else if loading}
     <Skeleton lines={2} />
-  {:else}
-    <div class="grid gap-4 sm:grid-cols-2">
-      <div data-testid="dq-audit">
-        <p class="text-meta text-fg-3">Accuracy audit</p>
-        {#if audit && (audit.audited > 0 || audit.pending > 0)}
-          <p class="text-body text-fg-1">
-            <span class="tabular-nums">{formatCount(audit.audited)}</span> audited,
-            <span class="tabular-nums">{formatCount(audit.pending)}</span> waiting
-          </p>
-        {:else}
-          <p class="text-body text-fg-2">No audit yet</p>
-        {/if}
-        <a
-          class="text-meta text-accent-text hover:underline"
-          href={resolve(projectHref('/quality/audit'))}>Open the audit</a
-        >
-      </div>
-      <div data-testid="dq-duplicates">
-        <p class="text-meta text-fg-3">Near-duplicates (images)</p>
-        {#if run}
-          <p class="text-body text-fg-1">
-            <span class="tabular-nums">{formatCount(run.dedup_groups)}</span> duplicate
-            groups,
-            <span class="tabular-nums">{formatCount(run.leak_groups)}</span> leak groups
-          </p>
-          {#if image && image.pending_count > 0}
-            <p class="text-meta text-warn-text">
-              {formatCount(image.pending_count)} images added since the run
-            </p>
-          {/if}
-        {:else}
-          <p class="text-body text-fg-2">Never run</p>
-        {/if}
-        <a
-          class="text-meta text-accent-text hover:underline"
-          href={resolve(projectHref('/quality/near-duplicates'))}>Open near-duplicates</a
-        >
-      </div>
-    </div>
+  {:else if readiness}
+    {#if open.length > 0}
+      <ul class="mb-3 flex flex-col gap-1.5" data-testid="dq-open-checks">
+        {#each open.slice(0, 4) as check (check.id)}
+          <li class="text-body text-fg-2">
+            <span class="font-medium text-fg-1">{check.label}</span>: {check.message}
+          </li>
+        {/each}
+      </ul>
+      {#if open.length > 4}
+        <p class="mb-3 text-meta text-fg-3">
+          and {plural(open.length - 4, 'more check')}
+        </p>
+      {/if}
+    {:else}
+      <p class="mb-3 text-body text-fg-2">Every check passed.</p>
+    {/if}
   {/if}
+  <div class="flex flex-wrap gap-x-4 gap-y-1 text-meta">
+    <a
+      class="text-accent-text hover:underline"
+      data-testid="dq-open-ready"
+      href={resolve(projectHref('/quality/ready'))}>Open Data quality</a
+    >
+    <a
+      class="text-accent-text hover:underline"
+      data-testid="dq-open-duplicates"
+      href={resolve(projectHref('/workspace?view=gallery&near_dup=collapsed'))}
+      >Open duplicates in the Gallery</a
+    >
+  </div>
 </Card>

@@ -11,6 +11,9 @@
     unloadRefusal,
     unloadRefusalConfirmMessage,
   } from '$lib/modelUnload';
+  import Button from '$components/ui/Button.svelte';
+  import PageHeader from '$components/ui/PageHeader.svelte';
+  import PageShell from '$components/ui/PageShell.svelte';
   import { toastStore } from '$stores/toast.svelte';
   import { isInstalled, modelStatusPill } from '$lib/modelStatus';
   import { resolve } from '$app/paths';
@@ -156,38 +159,23 @@
   <title>Models · Cropwright</title>
 </svelte:head>
 
-<div class="mx-auto max-w-6xl px-4 py-6">
-  <!-- M1 (visual audit 2026-09-24): the status/refresh group is its own
-       shrink-0 slot (wrapping below on narrow widths) so "Updated …" never
-       runs into the description. -->
-  <header class="mb-6 flex flex-wrap items-end justify-between gap-3">
-    <div class="min-w-0 flex-1 basis-80">
-      <h1 class="text-h1 font-semibold tracking-tight">Models</h1>
-      <p class="mt-1 text-body text-fg-2">
-        Inference services that drive the labeling pipeline. Locally-hosted models run on
-        the GPU box; each registered VLM endpoint is listed as its own row, and which one
-        a project uses is chosen on Settings → Models. Models other projects shared with
-        this one are listed too, with how their classes map onto this project's classes.
-        Auto-refreshes every 15 seconds.
-      </p>
-    </div>
-    <div
-      class="flex shrink-0 items-center gap-3 text-meta text-fg-3"
-      data-testid="models-status"
-    >
-      {#if lastUpdated}
-        <span class="whitespace-nowrap">Updated {relTime(lastUpdated)}</span>
-      {/if}
-      <button
-        type="button"
-        class="rounded border border-line-strong bg-surface-1 px-2 py-1 text-fg-2 hover:bg-surface-2"
-        onclick={refresh}
-        disabled={loading}
+<PageShell>
+  <PageHeader
+    title="Models"
+    description="Inference services that drive the labeling pipeline. Locally-hosted models run on the GPU box; each registered VLM endpoint is listed as its own row, and which one a project uses is chosen on Settings → Models. Models other projects shared with this one are listed too, with how their classes map onto this project's classes. Auto-refreshes every 15 seconds."
+  >
+    {#snippet actions()}
+      <div
+        class="flex items-center gap-3 text-meta text-fg-3"
+        data-testid="models-status"
       >
-        Refresh
-      </button>
-    </div>
-  </header>
+        {#if lastUpdated}
+          <span class="whitespace-nowrap">Updated {relTime(lastUpdated)}</span>
+        {/if}
+        <Button icon="refresh-cw" onclick={refresh} disabled={loading}>Refresh</Button>
+      </div>
+    {/snippet}
+  </PageHeader>
 
   {#if error}
     <div
@@ -374,6 +362,6 @@
       {/each}
     </ul>
   {/if}
-</div>
+</PageShell>
 
 <ShareModelDialog model={sharingModel} {sharing} onclose={() => (sharingName = null)} />

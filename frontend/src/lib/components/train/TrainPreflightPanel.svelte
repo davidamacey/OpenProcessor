@@ -1,5 +1,7 @@
 <script lang="ts">
   /** The training form's inline preflight report. */
+  import Icon from '$components/ui/Icon.svelte';
+  import type { IconName } from '$components/ui/iconRegistry';
   import { checkSeverityClass } from '$lib/train/trainDisplay';
   import type { PreflightCheck, PreflightReport } from '$lib/types_train';
 
@@ -9,6 +11,18 @@
   }
 
   let { preflight, preflighting }: Props = $props();
+
+  // Severity is an icon and a word, never colour alone.
+  const SEVERITY_ICON: Record<PreflightCheck['severity'], IconName> = {
+    ok: 'circle-check',
+    warn: 'triangle-alert',
+    block: 'circle-x',
+  };
+  const SEVERITY_WORD: Record<PreflightCheck['severity'], string> = {
+    ok: 'OK',
+    warn: 'Warning',
+    block: 'Blocking',
+  };
 
   // The OK rows are one disclosure: a report of 17 passes buries the one warning.
   const attention = $derived(preflight?.checks.filter((c) => c.severity !== 'ok') ?? []);
@@ -70,11 +84,12 @@
       c.severity,
     )}"
   >
-    <span class="text-caption opacity-70 capitalize">
-      {c.severity}
+    <span class="inline-flex shrink-0 items-center gap-1 text-caption font-medium">
+      <Icon name={SEVERITY_ICON[c.severity]} size={14} />
+      <span data-testid="preflight-severity">{SEVERITY_WORD[c.severity]}</span>
     </span>
-    <code class="text-caption text-fg-2">{c.name}</code>
     <span class="grow">
+      <span class="font-medium text-fg-1" data-testid="preflight-label">{c.label}</span>:
       {c.message}
       {#if c.detail && Object.keys(c.detail).length > 0}
         <details class="mt-1">

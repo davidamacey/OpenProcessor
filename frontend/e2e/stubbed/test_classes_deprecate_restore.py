@@ -84,7 +84,8 @@ def test_deprecate_empty_class_succeeds_and_refreshes(stub, page, app_url):
         lambda r: r.method == 'POST' and r.url.endswith('/classes/10/deprecate'),
         timeout=ACTION_TIMEOUT_MS,
     ):
-        page.get_by_test_id('deprecate-10').click()
+        row.get_by_role('button', name='More').click()
+        page.get_by_role('menuitem', name='Deprecate').click()
 
     assert any(c[1].endswith('/classes/10/deprecate') for c in stub.calls)
     toast = page.get_by_text('Deprecated coupe.')
@@ -116,7 +117,8 @@ def test_deprecate_still_referenced_offers_merge_preselecting_source(stub, page,
     page.goto(f'{app_url}/p/default/classes')
     row = page.get_by_test_id('class-row-11')
     row.wait_for(timeout=ACTION_TIMEOUT_MS)
-    page.get_by_test_id('deprecate-11').click()
+    row.get_by_role('button', name='More').click()
+    page.get_by_role('menuitem', name='Deprecate').click()
 
     # Both confirm dialogs are auto-accepted above (deprecate confirm, then
     # the "merge instead?" confirm) — the merge dialog should now be open

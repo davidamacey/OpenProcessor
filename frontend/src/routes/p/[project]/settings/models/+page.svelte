@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PageHeader from '$components/ui/PageHeader.svelte';
   /**
    * `/settings/models`: which VLM this
    * project uses, the deployment-wide endpoint registry, the local-model
@@ -77,14 +78,14 @@
 </script>
 
 <div class="flex flex-col gap-4">
-  <header class="flex flex-wrap items-baseline gap-3">
-    <h1 class="text-h1 font-semibold text-fg-1">Models</h1>
-    <span class="grow"></span>
-    <a
-      class="text-meta text-accent-text hover:underline"
-      href={resolve(projectHref('/settings'))}>Back to settings</a
-    >
-  </header>
+  <PageHeader title="Models">
+    {#snippet actions()}
+      <a
+        class="text-meta text-accent-text hover:underline"
+        href={resolve(projectHref('/settings'))}>Back to settings</a
+      >
+    {/snippet}
+  </PageHeader>
   <p class="text-body text-fg-2">
     The VLM reads crops and proposes labels. Register the endpoints it can run on, test
     them, and choose which one this project uses.

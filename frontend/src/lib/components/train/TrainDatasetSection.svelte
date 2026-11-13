@@ -4,7 +4,7 @@
   import ClassSplitTable from '$components/export/ClassSplitTable.svelte';
   import { formatCount } from '$lib/format/count';
   import { classesStore } from '$stores/classes.svelte';
-  import { datasetLabel } from '$lib/train/trainDisplay';
+  import { datasetLabel, latestExportLabel } from '$lib/train/trainDisplay';
   import {
     MULTI_CLASS,
     type TrainDatasetController,
@@ -61,9 +61,7 @@
         class="w-full rounded-md border border-line-strong bg-surface-0 px-2 py-1.5 text-meta text-fg-1 focus:border-accent focus:outline-none"
       >
         <option value="">
-          current ({dataset.datasetKind === dataset.datasetExportSpec?.datasetKind
-            ? `${dataset.datasetExportSpec.profileName} current`
-            : 'current'} symlink — latest)
+          {latestExportLabel(dataset.kindDatasets.find((d) => d.is_current)?.exported_at)}
         </option>
         {#each dataset.kindDatasets as d (d.export_dir)}
           <option value={d.export_dir}>{datasetLabel(d)}</option>

@@ -59,5 +59,10 @@
   {#if note}
     <p class="text-caption text-fg-3">{note}</p>
   {/if}
-  <AutoLabelPanel {gate} />
+  <details class="surface p-3" data-testid="auto-label-advanced">
+    <summary class="cursor-pointer text-control text-fg-1"
+      >Advanced: auto-label run</summary
+    >
+    <div class="mt-3"><AutoLabelPanel {gate} /></div>
+  </details>
 </div>

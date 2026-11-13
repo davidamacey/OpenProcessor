@@ -384,11 +384,11 @@ class Stub:
         # mount and /audit its report and queue. Default 404s keep the zero-
         # unhandled guarantee; test_label_confirmation.py overrides them.
         self.on('GET', r'/vlm/policy(\?|$)', (404, {'detail': 'Not Found'}))
-        # Dashboard quick action reads the project's active VLM; a failed read
-        # keeps the button as before, so the default is a 404.
+        # Next steps and Settings read the project's active VLM; a failed read keeps the default.
         self.on('GET', r'/vlm/endpoints/active(\?|$)', (404, {'detail': 'Not Found'}))
         self.on('GET', r'/audit/(report|queue)(\?|$)', (404, {'detail': 'Not Found'}))
-        # The dashboard's Data quality card reads the duplicate run status; its error state shows.
+        # The dashboard's Data quality card reads the readiness checklist; its error state shows.
+        self.on('GET', r'/quality/readiness(\?|$)', (404, {'detail': 'Not Found'}))
         self.on('GET', r'/near_duplicates/status(\?|$)', (404, {'detail': 'Not Found'}))
         # The project layout reads `GET {prefix}/map` on every page to show the
         # Map link; a failed read hides it. test_map_page.py overrides it.

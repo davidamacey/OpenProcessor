@@ -9,7 +9,7 @@ from fixtures.contract import fill, job
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.screens import save_screens
 from playwright.sync_api import expect
-from test_dashboard_stats import serve_dashboard
+from test_dashboard_stats import open_pipeline_details, serve_dashboard
 from test_next_steps import _step, serve_next_steps
 
 
@@ -41,6 +41,11 @@ def _serve(stub, steps=STEPS):
     serve_next_steps(stub, steps)
     stub.on('GET', r'/detections/summary(\?|$)', SUMMARY)
     stub.on('GET', r'/vlm/endpoints/active(\?|$)', (404, {'detail': 'Not Found'}))
+    stub.on(
+        'GET',
+        r'/quality/readiness(\?|$)',
+        {'verdict': 'ready', 'checks': [], 'coverage': [], 'computed_at': '2026-11-12T18:20:00Z'},
+    )
 
 
 def test_one_primary_button_and_it_is_the_served_actions(stub, page, app_url):
@@ -49,7 +54,30 @@ def test_one_primary_button_and_it_is_the_served_actions(stub, page, app_url):
     expect(page.get_by_test_id('next-step-action')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id('next-step-action')).to_have_class(re.compile('btn-primary'))
     assert page.locator('.btn-primary').count() == 1
-    save_screens(page, 'workflow_ux-e', 'dashboard', desktop=1600)
+    save_screens(page, 'uxr-d', 'dashboard', desktop=1600)
+
+
+def test_pipeline_details_and_recent_labels_start_collapsed(stub, page, app_url):
+    _serve(stub)
+    page.goto(f'{app_url}/p/default/dashboard')
+    expect(page.get_by_test_id('next-steps')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    for testid in ('pipeline-details', 'recent-labels'):
+        expect(page.get_by_test_id(testid)).not_to_have_attribute('open', '')
+    # Refresh is the header action; no quick-actions row, no YOLO export button.
+    expect(page.locator('main header').get_by_role('button', name='Refresh')).to_be_visible()
+    expect(page.get_by_text('Quick actions')).to_have_count(0)
+    expect(page.get_by_role('button', name='Export Dataset (YOLO)')).to_have_count(0)
+
+
+def test_the_data_quality_card_opens_data_quality_and_the_duplicates(stub, page, app_url):
+    _serve(stub)
+    page.goto(f'{app_url}/p/default/dashboard')
+    expect(page.get_by_test_id('dq-open-ready')).to_have_attribute(
+        'href', '/p/default/quality/ready', timeout=ACTION_TIMEOUT_MS
+    )
+    expect(page.get_by_test_id('dq-open-duplicates')).to_have_attribute(
+        'href', '/p/default/workspace?view=gallery&near_dup=collapsed'
+    )
 
 
 def test_adopt_dialog_dry_run_then_confirm(stub, page, app_url):
@@ -72,7 +100,7 @@ def test_adopt_dialog_dry_run_then_confirm(stub, page, app_url):
     expect(page.get_by_test_id('adopt-items')).to_have_text('40', timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id('adopt-create')).to_contain_text('bus, car')
     assert calls == [True]
-    save_screens(page, 'workflow_ux-e', 'dashboard-adopt-dry-run', desktop=1600)
+    save_screens(page, 'uxr-d', 'dashboard-adopt-dry-run', desktop=1600)
     page.get_by_role('button', name='Adopt 40 items').click()
     expect(page.get_by_test_id('adopt-result')).to_contain_text(
         '5 more are left', timeout=ACTION_TIMEOUT_MS
@@ -87,6 +115,7 @@ def test_failed_detections_read_is_an_error_state_with_retry(stub, page, app_url
     serve_dashboard(stub)
     stub.on('GET', r'/detections/summary(\?|$)', (404, {'detail': 'Not Found'}))
     page.goto(f'{app_url}/p/default/dashboard')
+    open_pipeline_details(page)
     err = page.get_by_test_id('detections-error').get_by_test_id('error-state')
     expect(err).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     expect(err).to_contain_text('Not Found')

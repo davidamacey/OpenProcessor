@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushSync } from 'svelte';
 import { mountUi } from '$lib/test/mountUi';
+import { setCrumbName } from '$stores/crumbName.svelte';
 import { curationSettingsStore } from '$stores/curationSettings.svelte';
 
 const state = vi.hoisted(() => ({
@@ -29,14 +30,23 @@ describe('TopNav', () => {
     expect(header.className).toContain('backdrop-blur');
   });
 
-  it('groups the nav: Dashboard, Data and Model menus, Quality, Settings', () => {
+  it('orders the nav as the loop: Dashboard, Data, Workspace, Data quality, Model, Settings', () => {
     const nav = primary(render('/p/default/dashboard'));
     const links = [...nav.querySelectorAll('a')].map((a) => a.textContent!.trim());
-    expect(links).toEqual(['Dashboard', 'Data quality', 'Settings']);
+    expect(links).toEqual(['Dashboard', 'Workspace', 'Data quality', 'Settings']);
     const menus = [...nav.querySelectorAll('button[aria-haspopup]')].map((b) =>
       b.textContent!.trim(),
     );
     expect(menus).toEqual(['Data', 'Model']);
+    const order = [...nav.children].map((n) => n.textContent!.trim());
+    expect(order).toEqual([
+      'Dashboard',
+      'Data',
+      'Workspace',
+      'Data quality',
+      'Model',
+      'Settings',
+    ]);
   });
 
   it('a menu lists its pages as links to the project paths', () => {
@@ -49,9 +59,7 @@ describe('TopNav', () => {
     ]);
     expect(items).toEqual([
       ['Ingest', '/p/default/ingest'],
-      ['Workspace', '/p/default/workspace'],
       ['Classes', '/p/default/classes'],
-      ['Export', '/p/default/export'],
     ]);
   });
 
@@ -62,26 +70,32 @@ describe('TopNav', () => {
     );
 
     const ws = primary(render('/p/default/workspace'));
-    expect(ws.querySelector('a[aria-current="page"]')).toBeNull();
-    const data = ws.querySelectorAll('button[aria-haspopup]')[0] as HTMLButtonElement;
-    expect(data.className).toContain('after:bg-accent');
-    data.click();
+    expect(ws.querySelector('a[aria-current="page"]')!.textContent).toContain(
+      'Workspace',
+    );
+
+    const exp = primary(render('/p/default/export'));
+    const model = exp.querySelectorAll('button[aria-haspopup]')[1] as HTMLButtonElement;
+    expect(model.className).toContain('after:bg-accent');
+    model.click();
     flushSync();
     expect(
-      ws.querySelector('[role="menuitem"][aria-current="page"]')!.textContent,
-    ).toContain('Workspace');
+      exp.querySelector('[role="menuitem"][aria-current="page"]')!.textContent,
+    ).toContain('Export');
   });
 
-  it('shows the group and section as a breadcrumb, and none where the nav already says it', () => {
-    const el = render('/p/default/classes');
-    const crumb = el.querySelector('nav[aria-label="Breadcrumb"]')!;
-    expect(crumb.textContent!.replace(/\s+/g, ' ').trim()).toBe('Data Classes');
-    expect(crumb.querySelector('a[aria-current="page"]')!.getAttribute('href')).toBe(
-      '/p/default/classes',
+  it('shows a breadcrumb only on object pages, with the served name last', () => {
+    for (const path of ['/p/default/classes', '/p/default/quality/audit']) {
+      expect(render(path).querySelector('nav[aria-label="Breadcrumb"]')).toBeNull();
+    }
+    setCrumbName('/p/default/images/img_1', 'street.jpg');
+    const crumb = render('/p/default/images/img_1').querySelector(
+      'nav[aria-label="Breadcrumb"]',
+    )!;
+    expect(crumb.textContent!.replace(/\s+/g, ' ').trim()).toBe('Data Images street.jpg');
+    expect(crumb.querySelector('[aria-current="page"]')!.textContent).toContain(
+      'street.jpg',
     );
-    expect(
-      render('/p/default/dashboard').querySelector('nav[aria-label="Breadcrumb"]'),
-    ).toBeNull();
   });
 
   it('the hamburger opens a drawer with every page, grouped, and Escape closes it', () => {
@@ -94,13 +108,13 @@ describe('TopNav', () => {
     expect(links).toEqual([
       'Dashboard',
       'Ingest',
-      'Workspace',
       'Classes',
+      'Workspace',
+      'Data quality',
       'Export',
-      'Models',
       'Train',
       'Bake-off',
-      'Data quality',
+      'Models',
       'Settings',
     ]);
     expect(drawer.querySelector('a[aria-current="page"]')!.textContent).toContain(

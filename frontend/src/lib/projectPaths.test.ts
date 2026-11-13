@@ -122,13 +122,13 @@ describe('the primary navigation', () => {
     expect(sections).toEqual([
       'dashboard',
       'ingest',
-      'workspace',
       'classes',
+      'workspace',
+      'quality',
       'export',
-      'models',
       'train',
       'bakeoff',
-      'quality',
+      'models',
       'settings',
     ]);
     expect(PRIMARY_NAV.every((n) => n.label.length > 0)).toBe(true);
@@ -138,15 +138,15 @@ describe('the primary navigation', () => {
     expect(sectionLabel('bakeoff')).toBe('Bake-off');
     expect(sectionLabel('quality')).toBe('Data quality');
     expect(sectionLabel('images')).toBe('Images');
-    expect(sectionLabel('datasets')).toBe('Datasets');
   });
 
-  it('groups the links Dashboard | Data | Model | Quality | Settings, hidden sections in no menu', () => {
+  it('groups the links in the order of the loop, hidden sections in no menu', () => {
     expect(NAV_GROUPS.map((g) => [g.id, g.sections.map((s) => s.section)])).toEqual([
       ['home', ['dashboard']],
-      ['data', ['ingest', 'workspace', 'classes', 'export']],
-      ['model', ['models', 'train', 'bakeoff']],
+      ['data', ['ingest', 'classes']],
+      ['work', ['workspace']],
       ['quality', ['quality']],
+      ['model', ['export', 'train', 'bakeoff', 'models']],
       ['settings', ['settings']],
     ]);
     expect(navGroupOf('images')).toBe('data');
@@ -157,44 +157,39 @@ describe('the primary navigation', () => {
 });
 
 describe('breadcrumbOf', () => {
-  const trail = (path: string) =>
-    breadcrumbOf(path, 'alpha').map((c) => [c.label, c.href ?? null]);
+  const trail = (path: string, name?: string) =>
+    breadcrumbOf(path, 'alpha', name).map((c) => [c.label, c.href ?? null]);
 
-  it('has no trail on a page the nav already names', () => {
+  it('has no trail on a section or a tab page: the nav and the tab strip mark them', () => {
     expect(trail('/p/alpha/dashboard')).toEqual([]);
     expect(trail('/p/alpha/quality')).toEqual([]);
+    expect(trail('/p/alpha/quality/audit')).toEqual([]);
     expect(trail('/p/alpha/settings')).toEqual([]);
+    expect(trail('/p/alpha/settings/prompt-packs')).toEqual([]);
+    expect(trail('/p/alpha/classes')).toEqual([]);
+    expect(trail('/p/alpha/export')).toEqual([]);
     expect(trail('/projects')).toEqual([]);
   });
 
-  it('names the group of a multi-page group, with the section linked', () => {
-    expect(trail('/p/alpha/classes')).toEqual([
+  it('shows the trail of the import job page, back to the Import tab', () => {
+    expect(trail('/p/alpha/ingest/imports/imp_1', 'COCO val')).toEqual([
       ['Data', null],
-      ['Classes', '/p/alpha/classes'],
-    ]);
-    expect(trail('/p/alpha/bakeoff')).toEqual([
-      ['Model', null],
-      ['Bake-off', '/p/alpha/bakeoff'],
+      ['Ingest', '/p/alpha/ingest?tab=import'],
+      ['COCO val', null],
     ]);
   });
 
-  it('adds a human label for a known sub-page and the raw name for an object', () => {
-    expect(trail('/p/alpha/quality/near-duplicates')).toEqual([
-      ['Data quality', '/p/alpha/quality'],
-      ['Near-duplicates', null],
+  it('uses the served name of an object, falling back to the segment', () => {
+    expect(trail('/p/alpha/images/img_1', 'street.jpg')).toEqual([
+      ['Data', null],
+      ['Images', '/p/alpha/images'],
+      ['street.jpg', null],
     ]);
+    expect(trail('/p/alpha/images/img_1')[2]).toEqual(['img_1', null]);
     expect(trail('/p/alpha/settings/prompt-packs/my%20pack')).toEqual([
       ['Settings', '/p/alpha/settings'],
       ['Prompt packs', '/p/alpha/settings/prompt-packs'],
       ['my pack', null],
-    ]);
-    expect(trail('/p/alpha/images/img_1')[2]).toEqual(['img_1', null]);
-  });
-
-  it('labels the hidden sections in plain words, not the path segment', () => {
-    expect(trail('/p/alpha/datasets/import')[1]).toEqual([
-      'Datasets',
-      '/p/alpha/datasets',
     ]);
   });
 });

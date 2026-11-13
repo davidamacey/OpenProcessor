@@ -204,6 +204,16 @@ def serve_kind(stub: Any, slug: str, coll: str, kind: str, scope: str, state: di
         200,
         fill('ResearchConfigSchema', kind=kind, axes=axes, json_schema=JSON_SCHEMAS[kind]),
     )
+    if kind == 'near_dup_profile':
+        # The near-duplicate sections under the list read the near-duplicate service.
+        stub.on('GET', r'/near_duplicates/status$', {'profile': None, 'levels': []})
+        stub.on('GET', r'/near_duplicates/runs(\?|$)', {'items': []})
+        stub.on(
+            'GET',
+            r'/near_duplicates/groups(\?|$)',
+            {'items': [], 'next_cursor': None, 'empty_reason': 'No groups.'},
+        )
+        stub.on('GET', r'/near_duplicates/decisions(\?|$)', {'items': [], 'next_cursor': None})
     stub.on('GET', rf'/{coll}/schema$', schema_reply)
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': []})
     stub.on(

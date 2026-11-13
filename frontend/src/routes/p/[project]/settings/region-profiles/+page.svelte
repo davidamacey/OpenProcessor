@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PageHeader from '$components/ui/PageHeader.svelte';
   /**
    * `/settings/region-profiles` — the project's region profiles
    * Everything listed is served; `ProfileList` follows it. Absent (one line)
@@ -37,14 +38,14 @@
 </script>
 
 <div class="flex flex-col gap-4">
-  <header class="flex flex-wrap items-baseline gap-3">
-    <h1 class="text-h1 font-semibold text-fg-1">Region profiles</h1>
-    <span class="grow"></span>
-    <a
-      class="text-meta text-accent-text hover:underline"
-      href={resolve(projectHref('/settings'))}>Back to settings</a
-    >
-  </header>
+  <PageHeader title="Region profiles">
+    {#snippet actions()}
+      <a
+        class="text-meta text-accent-text hover:underline"
+        href={resolve(projectHref('/settings'))}>Back to settings</a
+      >
+    {/snippet}
+  </PageHeader>
   <p class="text-body text-fg-2">
     A region profile says which part of an item to find (and whether to read text on it):
     which item classes to search, the detector and segmenter that propose boxes, and how

@@ -164,7 +164,7 @@ key a registered region slot's own keymap declares.
 | `OP_CROPWRIGHT_PORT`                   | `5184`               | Docker        | Host port nginx is published on.                                                                                                                                            |
 | `OP_CROPWRIGHT_BIND_ADDRESS`           | `0.0.0.0`            | Docker        | Host address the port is published on: this machine and the local network. `127.0.0.1` limits it to this machine. Keep it on a trusted network.                             |
 | `OP_CROPWRIGHT_INGEST_MAX_REQUEST_MB`  | `256`                | Docker        | Upload cap for `/ingest` (nginx `client_max_body_size`); kept in lockstep with the client-side chunk planner.                                                               |
-| `OP_CROPWRIGHT_DATASET_UPLOAD_MAX_MB`  | `2048`               | Docker        | Upload cap for a dataset archive on `/datasets/import` (nginx `client_max_body_size`); the client refuses a larger file before sending.                                     |
+| `OP_CROPWRIGHT_DATASET_UPLOAD_MAX_MB`  | `2048`               | Docker        | Upload cap for a dataset archive in Ingest › Import dataset (nginx `client_max_body_size`); the client refuses a larger file before sending.                                |
 | `PUBLIC_APP_NAME` / `PUBLIC_APP_BADGE` | `Cropwright` / `CW`  | build time    | Top-bar wordmark/badge, for a white-labeled deployment.                                                                                                                     |
 
 The app is a pure SPA consumer of the OpenProcessor API — there is

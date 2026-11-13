@@ -61,9 +61,8 @@ def test_panel_only_with_a_region_profile(stub, page, app_url):
     stub.on('GET', r'/health$', {'status': 'ok', 'region_profile': None})
     page.goto(f'{app_url}/p/default/ingest?tab=activity')
     expect(page.get_by_text('Ingest').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_selector(
-        '[data-testid="ingest-status-table"], table, h2', timeout=ACTION_TIMEOUT_MS
-    )
+    expect(page.get_by_test_id('ingest-pipeline-rail')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_test_id('auto-label-advanced')).to_be_visible()
     expect(page.get_by_test_id('region-stage-panel')).to_have_count(0)
     assert not [p for _m, p in stub.handled if '/region_stage' in p]
 

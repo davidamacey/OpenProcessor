@@ -40,7 +40,8 @@ const STEPS = [
     label: 'Find near-duplicates',
     detail: 'Never run',
     done: false,
-    section: 'quality/near-duplicates',
+    section: 'workspace',
+    query: 'view=gallery&near_dup=collapsed',
   },
 ] satisfies WorkflowStep[];
 
@@ -73,7 +74,7 @@ describe('NextStepsCard', () => {
       '/p/demo/ingest',
       '/p/demo/classes',
       '/p/demo/workspace?view=clusters',
-      '/p/demo/quality/near-duplicates',
+      '/p/demo/workspace?view=gallery&near_dup=collapsed',
     ]);
   });
 
@@ -88,6 +89,17 @@ describe('NextStepsCard', () => {
     expect(
       root.querySelector('[data-testid="next-step-current"]')!.textContent,
     ).toContain('Create classes');
+  });
+
+  it('a done step is one muted line without its detail; the open step shows the one primary', () => {
+    const root = render();
+    const done = root.querySelector('[data-step-id="ingest"]')!;
+    expect(done.textContent).not.toContain('120 images');
+    const current = root.querySelector('[data-step-id="classes"]')!;
+    expect(current.textContent).toContain('No classes yet');
+    expect(current.querySelector('a.btn-primary')).not.toBeNull();
+    expect(root.querySelectorAll('.btn-primary')).toHaveLength(1);
+    expect(root.querySelector('[data-step-id="cluster"] .btn-primary')).toBeNull();
   });
 
   it('a served action is a button on the step that offers it, and nowhere else', () => {

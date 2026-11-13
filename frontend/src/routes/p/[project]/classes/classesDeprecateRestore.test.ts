@@ -60,11 +60,15 @@ describe('/classes: Restore is no longer permanently disabled', () => {
 });
 
 describe('/classes: Deprecate action per live class row', () => {
-  it('renders a Deprecate button next to Rename on each active row', () => {
-    const idx = registrySrc.indexOf('data-testid="deprecate-{cls.id}"');
+  it('puts Rename, Merge into and a danger Deprecate in one More menu on each active row', () => {
+    const idx = registrySrc.indexOf('<Menu');
     expect(idx).toBeGreaterThan(-1);
-    const block = registrySrc.slice(idx, idx + 200);
-    expect(block).toMatch(/onclick=\{\(\) => void deprecateClassAction\(cls\)\}/);
+    const block = registrySrc.slice(idx, idx + 1200);
+    expect(block).toMatch(/label: 'Rename'/);
+    expect(block).toMatch(/label: 'Merge into…'[\s\S]*mergeInto\(cls\.id\)/);
+    expect(block).toMatch(
+      /label: 'Deprecate',\s*tone: 'danger'[\s\S]*void deprecateClassAction\(cls\)/,
+    );
   });
 
   it('deprecateClassAction confirms naming the class before calling deprecateClass', () => {

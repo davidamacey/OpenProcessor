@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PageHeader from '$components/ui/PageHeader.svelte';
   /**
    * `/settings/presets/<kind>/<name>`: one preset document. The body is edited as JSON; Save sends
    * `expected_revision` and the server judges the body (a refusal lists each field), a stale save is
@@ -50,28 +51,30 @@
       href={resolve(projectHref('/settings'))}>Back to settings</a
     >
   {:else}
-    <header class="flex flex-wrap items-baseline gap-3">
-      <h1 class="text-h1 font-semibold text-fg-1">{name}</h1>
-      {#if ed.doc}
-        <span class="text-body text-fg-2" data-testid="config-meta">
-          {kind.noun} · revision {ed.doc.revision}
-        </span>
-        {#each ed.active.entries.filter((e) => e.state === 'active' && e.name === name) as e (e.axis ?? 'deployment')}
-          <span
-            class="rounded border border-success/40 bg-success/10 px-1.5 text-meta text-success-text"
-            data-testid="preset-active-chip"
-            >active{ed.active.axisLabel(e.axis)
-              ? ` · ${ed.active.axisLabel(e.axis)}`
-              : ''} r{e.revision}</span
-          >
-        {/each}
-      {/if}
-      <span class="grow"></span>
-      <a
-        class="text-meta text-accent-text hover:underline"
-        href={resolve(projectHref(presetPath(kind)))}>All {kind.title.toLowerCase()}</a
-      >
-    </header>
+    <PageHeader title={name}>
+      {#snippet meta()}
+        {#if ed.doc}
+          <span class="text-body text-fg-2" data-testid="config-meta">
+            {kind.noun} · revision {ed.doc.revision}
+          </span>
+          {#each ed.active.entries.filter((e) => e.state === 'active' && e.name === name) as e (e.axis ?? 'deployment')}
+            <span
+              class="rounded border border-success/40 bg-success/10 px-1.5 text-meta text-success-text"
+              data-testid="preset-active-chip"
+              >active{ed.active.axisLabel(e.axis)
+                ? ` · ${ed.active.axisLabel(e.axis)}`
+                : ''} r{e.revision}</span
+            >
+          {/each}
+        {/if}
+      {/snippet}
+      {#snippet actions()}
+        <a
+          class="text-meta text-accent-text hover:underline"
+          href={resolve(projectHref(presetPath(kind)))}>All {kind.title.toLowerCase()}</a
+        >
+      {/snippet}
+    </PageHeader>
 
     {#if ed.loadError && !ed.doc}
       <p class="text-body text-danger-text" data-testid="preset-load-error">

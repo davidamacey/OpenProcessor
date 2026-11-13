@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PageHeader from '$components/ui/PageHeader.svelte';
   /**
    * `/settings/presets/<kind>`: the documents of one research preset kind (serving profiles,
    * cluster profiles, assist-loop presets, near-duplicate profiles), the active ref, New, Clone and
@@ -9,6 +10,7 @@
   import { resolve } from '$app/paths';
   import ConfigListDialogs from '$components/config/ConfigListDialogs.svelte';
   import ConfigRowTail from '$components/config/ConfigRowTail.svelte';
+  import NearDupSettingsSections from '$lib/components/nearDup/NearDupSettingsSections.svelte';
   import PresetActiveSummary from '$components/presets/PresetActiveSummary.svelte';
   import PresetNewDialog from '$components/presets/PresetNewDialog.svelte';
   import { createCloneDeleteFlow } from '$lib/config/cloneDeleteFlow.svelte';
@@ -66,19 +68,21 @@
       href={resolve(projectHref('/settings'))}>Back to settings</a
     >
   {:else}
-    <header class="flex flex-wrap items-baseline gap-3">
-      <h1 class="text-h1 font-semibold text-fg-1">{kind.title}</h1>
-      <span
-        class="rounded border border-line-strong px-1.5 text-caption text-fg-2"
-        data-testid="preset-scope"
-        >{kind.scope === 'deployment' ? 'deployment-wide' : 'this project'}</span
-      >
-      <span class="grow"></span>
-      <a
-        class="text-meta text-accent-text hover:underline"
-        href={resolve(projectHref('/settings'))}>Back to settings</a
-      >
-    </header>
+    <PageHeader title={kind.title}>
+      {#snippet meta()}
+        <span
+          class="rounded border border-line-strong px-1.5 text-caption text-fg-2"
+          data-testid="preset-scope"
+          >{kind.scope === 'deployment' ? 'deployment-wide' : 'this project'}</span
+        >
+      {/snippet}
+      {#snippet actions()}
+        <a
+          class="text-meta text-accent-text hover:underline"
+          href={resolve(projectHref('/settings'))}>Back to settings</a
+        >
+      {/snippet}
+    </PageHeader>
     <p class="text-body text-fg-2">{kind.blurb} {activationReach(kind)}</p>
 
     <PresetActiveSummary active={list.active} />
@@ -175,6 +179,10 @@
         oncreate={(n, d, b) => void doCreate(n, d, b)}
         oncancel={() => (creating = false)}
       />
+    {/if}
+
+    {#if kind.id === 'near_dup_profile'}
+      <NearDupSettingsSections />
     {/if}
 
     <ConfigListDialogs {flow} {list} nameLabel="New name" offerProjects={false}>

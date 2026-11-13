@@ -120,3 +120,19 @@ def test_default_view_is_gallery_without_a_serving_partition() -> None:
 
 def test_default_view_is_clusters_with_one() -> None:
     assert build_steps(DONE).workspace_default_view == 'clusters'
+
+
+def test_every_served_step_link_is_a_page_the_app_has() -> None:
+    """The app has no near-duplicates page and no bare audit page: a step links to the Workspace
+    Duplicates view and to Data quality's accuracy audit."""
+    facts = dataclasses.replace(
+        DONE, image_near_dup_run=False, audit_pending=False, promoted_model=True
+    )
+    steps = {s.id: s for s in build_steps(facts).steps}
+    assert (steps['near_dups'].section, steps['near_dups'].query) == (
+        'workspace',
+        'view=gallery&near_dup=collapsed',
+    )
+    assert steps['audit'].section == 'quality/audit'
+    pages = {'ingest', 'classes', 'workspace', 'quality/audit', 'export', 'train'}
+    assert {s.section for s in steps.values()} <= pages

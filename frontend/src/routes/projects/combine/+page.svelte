@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PageHeader from '$components/ui/PageHeader.svelte';
   /**
    * `/projects/combine` — the combine-projects wizard (OpenProcessor P4;
    * projects_plan.md §8). Global, like `/projects`: the target project does
@@ -59,11 +60,10 @@
     <a href={resolve('/projects')} class="text-body text-fg-2 hover:text-white"
       >Projects</a
     >
-    <span class="text-fg-3">/</span>
-    <h1 class="text-body text-fg-1">Combine projects</h1>
   </header>
 
   <main class="mx-auto w-full max-w-5xl flex-1 space-y-6 p-4">
+    <PageHeader title="Combine projects" />
     <p class="text-meta text-fg-2">
       Merge several projects into a new one. The sources are left untouched; the target is
       created and filled by a background job.

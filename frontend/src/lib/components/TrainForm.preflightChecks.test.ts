@@ -62,6 +62,7 @@ describe('TrainForm — preflight panel renders new check ids generically', () =
         checks: [
           {
             name: 'export_class_split_coverage',
+            label: 'Class coverage per split',
             severity: 'block',
             message:
               '1 class(es) this run trains on are below the per-class minimum of 8 train / 2 val instance(s): widget_b (class 2): train=0, val=0.',
@@ -86,7 +87,7 @@ describe('TrainForm — preflight panel renders new check ids generically', () =
     } as never);
     flushSync();
 
-    expect(target.textContent).toContain('export_class_split_coverage');
+    expect(target.textContent).toContain('Class coverage per split');
     expect(target.textContent).toContain('widget_b (class 2): train=0, val=0');
     const detailsEl = target.querySelector('details');
     expect(detailsEl).toBeTruthy();
@@ -109,11 +110,13 @@ describe('TrainForm — preflight panel renders new check ids generically', () =
         checks: [
           {
             name: 'export_not_empty',
+            label: 'Export has objects',
             severity: 'block',
             message: 'export has 0 eligible items',
           },
           {
             name: 'export_generation',
+            label: 'Export is current',
             severity: 'block',
             message: 'export is stale against the current index',
           },
@@ -122,9 +125,9 @@ describe('TrainForm — preflight panel renders new check ids generically', () =
     } as never);
     flushSync();
 
-    expect(target.textContent).toContain('export_not_empty');
+    expect(target.textContent).toContain('Export has objects');
     expect(target.textContent).toContain('export has 0 eligible items');
-    expect(target.textContent).toContain('export_generation');
+    expect(target.textContent).toContain('Export is current');
     expect(target.textContent).toContain('export is stale against the current index');
   });
 });

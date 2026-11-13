@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PageHeader from '$components/ui/PageHeader.svelte';
   /**
    * `/settings/models/new-endpoint` — register a VLM endpoint
    * (any_domain_plan.md §7.8.5; w9/w10 UI plan
@@ -48,14 +49,14 @@
 </script>
 
 <div class="flex flex-col gap-4">
-  <header class="flex flex-wrap items-baseline gap-3">
-    <h1 class="text-h1 font-semibold text-fg-1">New VLM endpoint</h1>
-    <span class="grow"></span>
-    <a
-      class="text-meta text-accent-text hover:underline"
-      href={resolve(projectHref('/settings/models'))}>All models</a
-    >
-  </header>
+  <PageHeader title="New VLM endpoint">
+    {#snippet actions()}
+      <a
+        class="text-meta text-accent-text hover:underline"
+        href={resolve(projectHref('/settings/models'))}>All models</a
+      >
+    {/snippet}
+  </PageHeader>
 
   <ConfigGate
     store={vlmAvailability}

@@ -72,9 +72,9 @@
 
 {#snippet header(field: string, label: string, align: string, title?: string)}
   <th
-    class="px-3 py-2 font-medium {align} {sortable(field)
-      ? 'cursor-pointer hover:text-fg-1'
-      : ''}"
+    class="px-3 py-2 font-medium {align} {field === 'class_name'
+      ? 'max-md:sticky max-md:left-0 max-md:z-20 max-md:bg-surface-0'
+      : ''} {sortable(field) ? 'cursor-pointer hover:text-fg-1' : ''}"
     aria-sort={ariaSort(field)}
     {title}
     onclick={() => setSort(field)}
@@ -89,7 +89,9 @@
 
 {#snippet classRow(row: ExportRow)}
   <tr class="border-b border-line hover:bg-surface-1/40">
-    <td class="px-3 py-1.5 text-fg-1">{row.class_name}</td>
+    <td class="px-3 py-1.5 text-fg-1 max-md:sticky max-md:left-0 max-md:bg-surface-1"
+      >{row.class_name}</td
+    >
     <td class="px-3 py-1.5 text-meta text-fg-3"><code>{row.class_id}</code></td>
     <td class="px-3 py-1.5 text-right text-fg-2 tabular-nums">
       {row.total.toLocaleString()}

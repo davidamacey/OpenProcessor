@@ -22,7 +22,7 @@ export interface WorkflowStep {
   label: string;
   detail: string;
   done: boolean;
-  /** A project sub-path: `ingest`, `classes`, `workspace`, `quality/near-duplicates`, ... */
+  /** A project sub-path: `ingest`, `classes`, `workspace`, `quality/audit`, ... */
   section: string;
   /** Optional search string for the link, e.g. `view=clusters`. */
   query?: string | null;

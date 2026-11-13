@@ -33,6 +33,11 @@ CLASSES = [
 IDLE_JOB = auto_label_job()
 
 
+def open_pipeline_details(page) -> None:
+    """The stats panels sit in the collapsed 'Pipeline details' disclosure."""
+    page.get_by_test_id('pipeline-details').get_by_text('Pipeline details', exact=True).click()
+
+
 def serve_dashboard(stub):
     """Every read the dashboard makes, with empty data."""
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
@@ -53,18 +58,9 @@ def serve_dashboard(stub):
     # The Data quality card.
     stub.on(
         'GET',
-        r'/audit/report(\?|$)',
-        {
-            'audited': 0,
-            'pending': 0,
-            'min_per_class': 30,
-            'detector': [],
-            'vlm': [],
-            'confusion': {},
-            'outcomes': {},
-        },
+        r'/quality/readiness(\?|$)',
+        {'verdict': 'ready', 'checks': [], 'coverage': [], 'computed_at': '2026-11-12T18:20:00Z'},
     )
-    stub.on('GET', r'/near_duplicates/status(\?|$)', {'profile': None, 'levels': []})
     stub.on('GET', r'/crops(\?|$)', {'total': 0, 'next_cursor': None, 'limit': 30, 'crops': []})
 
 
@@ -76,6 +72,7 @@ def test_dashboard_stats_unavailable(stub, page, app_url):
     stub.on('GET', r'/pipeline/events', (200, sse_body, 'text/event-stream'))
 
     page.goto(f'{app_url}/p/default/dashboard')
+    open_pipeline_details(page)
     page.get_by_text('Stats unavailable:', exact=False).first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     expect(
@@ -124,11 +121,20 @@ def test_dashboard_labeled_breakdown_shows_the_served_rows_with_imports(stub, pa
     stub.on('GET', r'/stats/classes(\?|$)', {'classes': []})
     stub.on('GET', r'/test_holdout/stats(\?|$)', {'total': 0, 'by_class': []})
     stub.on('GET', r'/crops(\?|$)', {'total': 0, 'next_cursor': None, 'limit': 30, 'crops': []})
+    stub.on(
+        'GET',
+        r'/quality/readiness(\?|$)',
+        {'verdict': 'ready', 'checks': [], 'coverage': [], 'computed_at': '2026-11-12T18:20:00Z'},
+    )
     snapshot = {'state': {}, 'stats': stats}
     sse_body = f'event: snapshot\ndata: {json.dumps(snapshot)}\n\n'
     stub.on('GET', r'/pipeline/events', (200, sse_body, 'text/event-stream'))
 
     page.goto(f'{app_url}/p/default/dashboard')
+    kpis = page.get_by_test_id('dashboard-kpis')
+    expect(kpis.locator('[data-kpi="objects"] dd')).to_have_text('502', timeout=ACTION_TIMEOUT_MS)
+    expect(kpis.locator('[data-kpi="validated"] dd')).to_have_text('285')
+    open_pipeline_details(page)
     panel = page.get_by_role('heading', name='Labeled by source').locator('xpath=ancestor::div[1]')
     expect(panel).to_contain_text('285 total', timeout=ACTION_TIMEOUT_MS)
     expect(panel).to_contain_text('Imported')

@@ -44314,7 +44314,7 @@
             "title": "Query"
           },
           "section": {
-            "description": "The project page that does it: `ingest`, `classes`, `workspace`, `quality/near-duplicates`, `export`, `train` or `audit`.",
+            "description": "The project page that does it: `ingest`, `classes`, `workspace`, `quality/audit`, `export` or `train`.",
             "title": "Section",
             "type": "string"
           }

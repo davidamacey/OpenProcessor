@@ -279,6 +279,6 @@ def test_import_provenance_rows_in_details(stub, page, app_url):
     )
     expect(page.get_by_test_id('import-split')).to_have_text('train')
     link = page.get_by_test_id('import-ids').get_by_role('link', name=IMPORT_ID)
-    expect(link).to_have_attribute('href', f'/p/default/datasets/imports/{IMPORT_ID}')
+    expect(link).to_have_attribute('href', f'/p/default/ingest/imports/{IMPORT_ID}')
     expect(page.get_by_test_id('import-negative-frame')).to_be_visible()
     expect(page.get_by_test_id('import-proposal-chain')).to_contain_text('import:' + IMPORT_ID)

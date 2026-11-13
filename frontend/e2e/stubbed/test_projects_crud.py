@@ -18,6 +18,7 @@ from urllib.parse import parse_qs, urlparse
 from fixtures.contract import fill
 from fixtures.wire import project, projects_response
 from harness.constants import ACTION_TIMEOUT_MS
+from harness.projects import row_action, wait_row_action
 
 
 API_PREFIX = '/curation'
@@ -222,8 +223,8 @@ def test_create_sends_the_form_and_toasts_served_warnings(stub, page, app_url):
     assert (
         'Served capacity message (warn).' in page.get_by_test_id('projects-capacity').inner_text()
     )
-    assert page.get_by_test_id('project-delete-default').count() == 0
-    assert page.get_by_test_id('project-delete-alpha').count() == 1
+    assert row_action(page, 'delete', 'default').count() == 0
+    assert row_action(page, 'delete', 'alpha').count() == 1
 
     page.get_by_test_id('projects-create').click()
     page.get_by_test_id('create-project-slug').fill('gamma')
@@ -237,12 +238,12 @@ def test_create_sends_the_form_and_toasts_served_warnings(stub, page, app_url):
     )
     # 202: the project is listed as building, with no actions, until its job finishes.
     assert page.get_by_test_id('project-status-gamma').inner_text() == 'Building'
-    assert page.get_by_test_id('project-delete-gamma').count() == 0
+    assert row_action(page, 'delete', 'gamma').count() == 0
     reg.release_create_jobs = True
     page.get_by_test_id('project-status-gamma').filter(has_text='Active').wait_for(
         timeout=ACTION_TIMEOUT_MS
     )
-    assert page.get_by_test_id('project-delete-gamma').count() == 1
+    assert row_action(page, 'delete', 'gamma').count() == 1
     assert reg.writes == [
         (
             'POST',
@@ -278,7 +279,7 @@ def test_edit_revision_conflict_offers_a_reload_then_saves(stub, page, app_url):
     reg.install(stub)
     open_projects(page, app_url)
 
-    page.get_by_test_id('project-edit-alpha').click()
+    row_action(page, 'edit', 'alpha').click()
     page.get_by_test_id('edit-project-name').fill('Alpha renamed')
     page.get_by_test_id('edit-project-submit').click()
     err = page.get_by_test_id('edit-project-error')
@@ -302,17 +303,17 @@ def test_archive_then_show_archived_then_unarchive(stub, page, app_url):
     reg.install(stub)
     open_projects(page, app_url)
 
-    page.get_by_test_id('project-archive-alpha').click()
+    row_action(page, 'archive', 'alpha').click()
     # The served list hides archived projects unless asked.
     page.get_by_test_id('project-row-alpha').wait_for(state='detached', timeout=ACTION_TIMEOUT_MS)
     with page.expect_request(lambda r: 'include_archived=true' in r.url):
         page.get_by_test_id('projects-include-archived').check()
-    page.get_by_test_id('project-unarchive-alpha').wait_for(timeout=ACTION_TIMEOUT_MS)
+    wait_row_action(page, 'unarchive', 'alpha')
     assert page.get_by_test_id('project-status-alpha').inner_text() == 'Archived'
-    assert page.get_by_test_id('project-archive-alpha').count() == 0
+    assert row_action(page, 'archive', 'alpha').count() == 0
 
-    page.get_by_test_id('project-unarchive-alpha').click()
-    page.get_by_test_id('project-archive-alpha').wait_for(timeout=ACTION_TIMEOUT_MS)
+    row_action(page, 'unarchive', 'alpha').click()
+    wait_row_action(page, 'archive', 'alpha')
     assert reg.writes == [
         ('POST', 'alpha/archive', {'expected_revision': 4}),
         ('POST', 'alpha/unarchive', {'expected_revision': 5}),
@@ -325,7 +326,7 @@ def test_delete_blocked_by_the_dry_run_offers_no_confirm(stub, page, app_url):
     reg.install(stub)
     open_projects(page, app_url)
 
-    page.get_by_test_id('project-delete-alpha').click()
+    row_action(page, 'delete', 'alpha').click()
     blocking = page.get_by_test_id('delete-project-blocking')
     blocking.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert '1 job(s) still running' in blocking.inner_text()
@@ -351,7 +352,7 @@ def test_delete_lists_referenced_by_and_renders_a_served_in_use_409(stub, page, 
     reg.install(stub)
     open_projects(page, app_url)
 
-    page.get_by_test_id('project-delete-alpha').click()
+    row_action(page, 'delete', 'alpha').click()
     refs = page.get_by_test_id('delete-project-references')
     refs.wait_for(timeout=ACTION_TIMEOUT_MS)
     assert 'beta' in refs.inner_text()
@@ -381,7 +382,7 @@ def test_delete_confirms_with_the_typed_slug(stub, page, app_url):
     reg.install(stub)
     open_projects(page, app_url)
 
-    page.get_by_test_id('project-delete-alpha').click()
+    row_action(page, 'delete', 'alpha').click()
     page.get_by_test_id('delete-project-confirm').fill('alpah')
     page.get_by_test_id('delete-project-submit').click()
     err = page.get_by_test_id('delete-project-error')
@@ -411,7 +412,7 @@ def test_deleting_row_disappears_without_a_reload(stub, page, app_url):
     reg.install(stub)
     open_projects(page, app_url)
 
-    page.get_by_test_id('project-delete-alpha').click()
+    row_action(page, 'delete', 'alpha').click()
     page.get_by_test_id('delete-project-confirm').fill('alpha')
     page.get_by_test_id('delete-project-submit').click()
     page.get_by_test_id('project-status-alpha').filter(has_text='Deleting').wait_for(
@@ -421,3 +422,35 @@ def test_deleting_row_disappears_without_a_reload(stub, page, app_url):
     # The background delete finishes server-side; only a re-read can show it.
     reg.rows['alpha']['status'] = 'deleted'
     page.get_by_test_id('project-row-alpha').wait_for(state='detached', timeout=10_000)
+
+
+def test_the_more_menu_is_not_clipped_by_the_table(stub, page, app_url):
+    Projects().install(stub)
+    page.set_viewport_size({'width': 1600, 'height': 1000})
+    open_projects(page, app_url)
+    first = row_action(page, 'edit', 'alpha')
+    first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    box = first.bounding_box()
+    table = page.get_by_test_id('project-row-alpha').bounding_box()
+    # The first item sits fully on screen, and the whole row is still rendered under the menu.
+    assert box is not None and box['y'] >= 0 and table is not None
+    assert page.get_by_test_id('project-row-default').is_visible()
+    assert page.get_by_test_id('project-edit-alpha').is_visible()
+    # The menu hangs below the row it belongs to, not inside a scrolled box.
+    assert (
+        page.evaluate(
+            "() => { const t = document.querySelector('[data-testid=\"project-row-alpha\"]').closest('div.relative');"
+            ' return getComputedStyle(t).overflowY; }'
+        )
+        == 'visible'
+    )
+
+
+def test_the_more_menu_stays_on_screen_on_a_phone(stub, page, app_url):
+    Projects().install(stub)
+    page.set_viewport_size({'width': 430, 'height': 900})
+    open_projects(page, app_url)
+    item = row_action(page, 'edit', 'alpha')
+    item.wait_for(timeout=ACTION_TIMEOUT_MS)
+    box = item.bounding_box()
+    assert box is not None and box['x'] >= 0 and box['x'] + box['width'] <= 430, box

@@ -104,7 +104,7 @@ ROUTES: list[tuple[str, str]] = [
     ('/review?tab=classifier_blind_spots', '[data-testid="queue-counter"]'),
     ('/review?tab=new_class_proposals', '[data-testid="queue-counter"]'),
     (f'/review?tab={REGION_TAB_URL_ID}', '[data-testid="queue-counter"]'),
-    ('/classes', 'h1:has-text("Class management")'),
+    ('/classes', 'h1:has-text("Classes")'),
     ('/export', 'h1:has-text("Export dataset")'),
     ('/train', 'h1:has-text("Train model")'),
     ('/models', '[data-testid="models-status"] span:has-text("Updated")'),

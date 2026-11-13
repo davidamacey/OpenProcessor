@@ -1,5 +1,5 @@
-"""`/p/{project}/quality`: Accuracy audit, Near-duplicates and Label history as
-tabs of one page. Also saves full-page screenshots under artifacts_local/screens/workflow_3e/.
+"""`/p/{project}/quality`: Ready to train, Accuracy audit and Label history as tabs of one
+page. Also saves full-page screenshots under artifacts_local/screens/uxr-d/.
 """
 
 from __future__ import annotations
@@ -10,31 +10,33 @@ import pytest
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.screens import save_screens
 from playwright.sync_api import expect
+from test_audit_gallery import _serve as serve_audit
 from test_label_ops import serve as serve_label_ops
-from test_near_duplicates import _serve as serve_near_dups
+from test_quality_ready import _serve as serve_ready
 
 
 @pytest.fixture(autouse=True)
 def _classes(stub):
     serve_label_ops(stub)
-    serve_near_dups(stub)
+    serve_ready(stub)
+    serve_audit(stub)
 
 
 TABS = [
+    ('ready', 'Ready to train'),
     ('audit', 'Accuracy audit'),
-    ('near-duplicates', 'Near-duplicates'),
     ('history', 'Label history'),
 ]
 
 
-def test_bare_quality_lands_on_the_audit_tab(stub, page, app_url):
+def test_bare_quality_lands_on_ready_to_train(stub, page, app_url):
     page.goto(f'{app_url}/p/default/quality')
-    expect(page).to_have_url(re.compile(r'/p/default/quality/audit$'), timeout=ACTION_TIMEOUT_MS)
-    expect(page.locator('[data-tab="audit"]')).to_have_attribute('aria-current', 'page')
+    expect(page).to_have_url(re.compile(r'/p/default/quality/ready$'), timeout=ACTION_TIMEOUT_MS)
+    expect(page.locator('[data-tab="ready"]')).to_have_attribute('aria-current', 'page')
 
 
 def test_each_tab_opens_its_own_route(stub, page, app_url):
-    page.goto(f'{app_url}/p/default/quality/audit')
+    page.goto(f'{app_url}/p/default/quality/ready')
     for slug, label in TABS:
         tab = page.locator(f'[data-tab="{slug}"]')
         expect(tab).to_have_text(label, timeout=ACTION_TIMEOUT_MS)
@@ -59,7 +61,5 @@ def test_nav_has_one_quality_entry(stub, page, app_url):
 def test_screens(stub, page, app_url):
     for slug, _ in TABS:
         page.goto(f'{app_url}/p/default/quality/{slug}')
-        expect(page.get_by_role('navigation', name='Data quality')).to_be_visible(
-            timeout=ACTION_TIMEOUT_MS
-        )
-        save_screens(page, 'workflow_3e', f'quality-{slug}')
+        expect(page.get_by_test_id('tabs')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+        save_screens(page, 'uxr-d', f'quality-{slug}')

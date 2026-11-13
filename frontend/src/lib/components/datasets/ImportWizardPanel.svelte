@@ -1,19 +1,19 @@
 <script lang="ts">
-  import PageHeader from '$components/ui/PageHeader.svelte';
-  import PageShell from '$components/ui/PageShell.svelte';
   import { apiErrorText } from '$lib/api_errors';
   /**
-   * `/datasets/import` — import a labeled dataset into the current project
-   * (any_domain_plan.md §7.12 item 1; docs/design/
-   * w10-import-reprocess-ui-plan-2026-09-27.md §2). State lives in
-   * `ImportWizard`; every count, suggestion, issue and verdict shown here
-   * is the served preview's.
+   * The Import dataset tab of Ingest: import a labeled dataset into the current project in five
+   * steps (Source, Preview, Class mapping, Options, Start). State lives in `ImportWizard`; every
+   * count, suggestion, issue and verdict shown here is the served preview's.
    */
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
   import ConfirmDialog from '$components/ConfirmDialog.svelte';
+  import Button from '$components/ui/Button.svelte';
+  import Card from '$components/ui/Card.svelte';
+  import Section from '$components/ui/Section.svelte';
   import DatasetsGate from '$components/datasets/DatasetsGate.svelte';
   import DatasetIssueList from '$components/datasets/DatasetIssueList.svelte';
+  import ImportHistoryTable from '$components/datasets/ImportHistoryTable.svelte';
   import ImportOptions from '$components/datasets/ImportOptions.svelte';
   import MappingTable from '$components/datasets/MappingTable.svelte';
   import PreviewSummary from '$components/datasets/PreviewSummary.svelte';
@@ -75,7 +75,7 @@
     confirmOpen = false;
     if (job)
       await goto(
-        resolve(projectHref(`/datasets/imports/${encodeURIComponent(job.import_id)}`)),
+        resolve(projectHref(`/ingest/imports/${encodeURIComponent(job.import_id)}`)),
       );
   }
 
@@ -86,7 +86,7 @@
     const job = await wizard.resume(id);
     if (job)
       await goto(
-        resolve(projectHref(`/datasets/imports/${encodeURIComponent(job.import_id)}`)),
+        resolve(projectHref(`/ingest/imports/${encodeURIComponent(job.import_id)}`)),
       );
   }
 
@@ -104,19 +104,10 @@
   }
 </script>
 
-<PageShell class="space-y-6">
-  <PageHeader title="Import a labeled dataset">
-    {#snippet actions()}
-      <a
-        class="text-meta text-accent-text hover:underline"
-        href={resolve(projectHref('/datasets/imports'))}>All imports</a
-      >
-    {/snippet}
-  </PageHeader>
-
+<div class="mt-4">
   <DatasetsGate>
     {#snippet children(formats)}
-      <p class="text-meta text-fg-3">
+      <p class="mb-4 text-meta text-fg-3">
         The dataset is imported into this project. To import into a new project,
         <a class="text-accent-text hover:underline" href={resolve('/projects')}
           >create it</a
@@ -124,134 +115,134 @@
       </p>
 
       <!-- 1. Source -->
-      <section
-        class="space-y-3 rounded-lg border border-line p-4"
-        data-testid="import-source"
-      >
-        <h2 class="text-body font-semibold text-fg-1">Source</h2>
-        <div class="grid gap-3 sm:grid-cols-[1fr_auto]">
-          <label class="block text-meta">
-            <span class="mb-0.5 block text-fg-2">Server path</span>
-            <input
-              class="input w-full font-mono"
-              placeholder="/data/source/my_dataset"
-              data-testid="import-path"
-              value={wizard.sourcePath}
-              oninput={(e) =>
-                wizard.setSource((e.currentTarget as HTMLInputElement).value)}
-            />
-          </label>
-          <label class="block text-meta">
-            <span class="mb-0.5 block text-fg-2">Format</span>
-            <select
-              class="select"
-              value={wizard.format}
-              onchange={(e) =>
-                wizard.setFormat((e.currentTarget as HTMLSelectElement).value)}
-            >
-              {#each formats.formats as f (f.format)}
-                <option value={f.format}>{f.label}</option>
-              {/each}
-            </select>
-          </label>
-        </div>
-        {#if sourceRoots.length > 0}
-          <div class="text-meta text-fg-3" data-testid="source-roots">
-            Allowed roots:
-            {#each sourceRoots as r, i (r)}<code class="text-fg-2">{r}</code>{i <
-              sourceRoots.length - 1
-                ? ', '
-                : ''}{/each}
+      <Section title="1 Source">
+        <Card class="space-y-3" data-testid="import-source">
+          <div class="grid gap-3 sm:grid-cols-[1fr_auto]">
+            <label class="block text-meta">
+              <span class="mb-0.5 block text-fg-2">Server path</span>
+              <input
+                class="input w-full font-mono"
+                placeholder="/data/source/my_dataset"
+                data-testid="import-path"
+                value={wizard.sourcePath}
+                oninput={(e) =>
+                  wizard.setSource((e.currentTarget as HTMLInputElement).value)}
+              />
+            </label>
+            <label class="block text-meta">
+              <span class="mb-0.5 block text-fg-2">Format</span>
+              <select
+                class="select"
+                value={wizard.format}
+                onchange={(e) =>
+                  wizard.setFormat((e.currentTarget as HTMLSelectElement).value)}
+              >
+                {#each formats.formats as f (f.format)}
+                  <option value={f.format}>{f.label}</option>
+                {/each}
+              </select>
+            </label>
           </div>
-        {/if}
-        <div class="text-meta">
-          <label class="inline-flex items-center gap-2">
-            <span class="text-fg-2">Or upload an archive</span>
-            <input
-              type="file"
-              disabled={wizard.uploading}
-              onchange={(e) => onFile(e, formats)}
-            />
-          </label>
-          <span class="ml-2 text-fg-3">
-            Up to
-            {(datasetUploadMaxBytes(formats.upload_limits.max_bytes) / 1024 ** 3).toFixed(
-              1,
-            )} GiB and {formats.upload_limits.max_files.toLocaleString()} files. Large datasets
-            belong on a server path.
-          </span>
-          {#if wizard.uploading}<p class="mt-1 text-fg-2">Uploading…</p>{/if}
-          {#if wizard.uploadError}<p class="mt-1 text-danger-text">
-              {wizard.uploadError}
-            </p>{/if}
-        </div>
-      </section>
+          {#if sourceRoots.length > 0}
+            <div class="text-meta text-fg-3" data-testid="source-roots">
+              Allowed roots:
+              {#each sourceRoots as r, i (r)}<code class="text-fg-2">{r}</code>{i <
+                sourceRoots.length - 1
+                  ? ', '
+                  : ''}{/each}
+            </div>
+          {/if}
+          <div class="text-meta">
+            <label class="inline-flex items-center gap-2">
+              <span class="text-fg-2">Or upload an archive</span>
+              <input
+                type="file"
+                disabled={wizard.uploading}
+                onchange={(e) => onFile(e, formats)}
+              />
+            </label>
+            <span class="ml-2 text-fg-3">
+              Up to
+              {(
+                datasetUploadMaxBytes(formats.upload_limits.max_bytes) /
+                1024 ** 3
+              ).toFixed(1)} GiB and {formats.upload_limits.max_files.toLocaleString()} files.
+              Large datasets belong on a server path.
+            </span>
+            {#if wizard.uploading}<p class="mt-1 text-fg-2">Uploading…</p>{/if}
+            {#if wizard.uploadError}<p class="mt-1 text-danger-text">
+                {wizard.uploadError}
+              </p>{/if}
+          </div>
+        </Card>
+      </Section>
 
       <!-- 2. Preview -->
-      <section class="space-y-3 rounded-lg border border-line p-4">
-        <div class="flex items-baseline justify-between">
-          <h2 class="text-body font-semibold text-fg-1">Preview</h2>
+      <Section title="2 Preview">
+        {#snippet actions()}
           {#if wizard.previewing}
             <span class="text-meta text-fg-3" data-testid="previewing"
               >Checking the dataset…</span
             >
           {/if}
-        </div>
-        {#if wizard.previewError}
-          <p class="text-body text-danger-text" data-testid="preview-error">
-            {wizard.previewError}
-          </p>
-        {:else if wizard.preview}
-          <PreviewSummary preview={wizard.preview} {formats} />
-        {:else}
-          <p class="text-meta text-fg-3">Enter a server path or upload an archive.</p>
-        {/if}
-      </section>
+        {/snippet}
+        <Card class="space-y-3">
+          {#if wizard.previewError}
+            <p class="text-body text-danger-text" data-testid="preview-error">
+              {wizard.previewError}
+            </p>
+          {:else if wizard.preview}
+            <PreviewSummary preview={wizard.preview} {formats} />
+          {:else}
+            <p class="text-meta text-fg-3">Enter a server path or upload an archive.</p>
+          {/if}
+        </Card>
+      </Section>
 
       {#if wizard.preview}
         <!-- 3. Class mapping -->
-        <section class="space-y-3 rounded-lg border border-line p-4">
-          <h2 class="text-body font-semibold text-fg-1">Class mapping</h2>
-          <p class="text-meta text-fg-3">
-            Classes are matched by name. Pick the same class on two rows to merge them.
-          </p>
-          <div class="flex flex-wrap items-center gap-4 text-meta">
-            <label class="inline-flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={wizard.acceptSuggestions}
-                onchange={(e) =>
-                  wizard.setAcceptSuggestions(
-                    (e.currentTarget as HTMLInputElement).checked,
-                  )}
-              />
-              Accept suggestions
-            </label>
-            {#if previousImports.length > 0}
+        <Section
+          title="3 Class mapping (by name)"
+          description="Classes are matched by name. Pick the same class on two rows to merge them."
+        >
+          <Card class="space-y-3">
+            <div class="flex flex-wrap items-center gap-4 text-meta">
               <label class="inline-flex items-center gap-2">
-                <span class="text-fg-2">Use the mapping from</span>
-                <select
-                  class="select select-sm"
+                <input
+                  type="checkbox"
+                  checked={wizard.acceptSuggestions}
                   onchange={(e) =>
-                    void prefill((e.currentTarget as HTMLSelectElement).value)}
-                >
-                  <option value="">a previous import…</option>
-                  {#each previousImports as j (j.import_id)}
-                    <option value={j.import_id}>{j.name ?? j.import_id}</option>
-                  {/each}
-                </select>
+                    wizard.setAcceptSuggestions(
+                      (e.currentTarget as HTMLInputElement).checked,
+                    )}
+                />
+                Accept suggestions
               </label>
-            {/if}
-            {#if prefillError}<span class="text-danger-text">{prefillError}</span>{/if}
-          </div>
-          <MappingTable {wizard} {formats} classes={pickableClasses} />
-        </section>
+              {#if previousImports.length > 0}
+                <label class="inline-flex items-center gap-2">
+                  <span class="text-fg-2">Use the mapping from</span>
+                  <select
+                    class="select select-sm"
+                    onchange={(e) =>
+                      void prefill((e.currentTarget as HTMLSelectElement).value)}
+                  >
+                    <option value="">a previous import…</option>
+                    {#each previousImports as j (j.import_id)}
+                      <option value={j.import_id}>{j.name ?? j.import_id}</option>
+                    {/each}
+                  </select>
+                </label>
+              {/if}
+              {#if prefillError}<span class="text-danger-text">{prefillError}</span>{/if}
+            </div>
+            <MappingTable {wizard} {formats} classes={pickableClasses} />
+          </Card>
+        </Section>
 
         <!-- 4. Options -->
-        <section class="space-y-3 rounded-lg border border-line p-4">
-          <h2 class="text-body font-semibold text-fg-1">Options</h2>
-          <ImportOptions {wizard} {formats} />
-        </section>
+        <Section title="4 Options">
+          <Card><ImportOptions {wizard} {formats} /></Card>
+        </Section>
 
         <!-- 5. Start -->
         <section class="space-y-3" data-testid="import-start">
@@ -273,7 +264,7 @@
                   class="text-accent-text hover:underline"
                   href={resolve(
                     projectHref(
-                      `/datasets/imports/${encodeURIComponent(wizard.refusal.importId)}`,
+                      `/ingest/imports/${encodeURIComponent(wizard.refusal.importId)}`,
                     ),
                   )}>Open that import</a
                 >
@@ -293,20 +284,17 @@
                 class="text-accent-text hover:underline"
                 href={resolve(
                   projectHref(
-                    `/datasets/imports/${encodeURIComponent(wizard.reusedJob.import_id)}`,
+                    `/ingest/imports/${encodeURIComponent(wizard.reusedJob.import_id)}`,
                   ),
                 )}>Open the import</a
               >
             </p>
           {/if}
-          <button
-            type="button"
-            class="btn btn-primary"
+          <Button
+            variant="primary"
             disabled={!wizard.canStart}
-            onclick={() => (confirmOpen = true)}
+            onclick={() => (confirmOpen = true)}>Start import</Button
           >
-            Start import
-          </button>
           {#if wizard.unmappedRows.length > 0}
             <span class="ml-2 text-meta text-warn-text">
               {wizard.unmappedRows.length === 1
@@ -353,6 +341,8 @@
           </p>
         </ConfirmDialog>
       {/if}
+
+      <ImportHistoryTable {formats} />
     {/snippet}
   </DatasetsGate>
-</PageShell>
+</div>

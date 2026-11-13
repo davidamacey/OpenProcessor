@@ -20,7 +20,7 @@ vi.mock('$lib/api_ingest', async () => {
 });
 
 import { getIngestConfig, getRegionDrain } from '$lib/api_ingest';
-import IngestPage from './+page.svelte';
+import IngestPage from './IngestRouteHarness.test.svelte';
 
 const getConfig = vi.mocked(getIngestConfig);
 const getDrain = vi.mocked(getRegionDrain);
@@ -135,6 +135,22 @@ describe('/ingest — served config', () => {
     expect(
       target.querySelector('[data-tab="folder"]')?.getAttribute('aria-current'),
     ).toBe('page');
+  });
+
+  it('the Upload tab keeps the detector and the source tag behind disclosures', async () => {
+    getConfig.mockResolvedValue(servedIngestConfig());
+    await render();
+    await vi.waitFor(() =>
+      expect(target.querySelector('input[type=file]')).not.toBeNull(),
+    );
+    const detector = target.querySelector('[data-testid="ingest-detector-details"]')!;
+    expect(detector.tagName).toBe('DETAILS');
+    expect(detector.hasAttribute('open')).toBe(false);
+    expect(detector.querySelector('[data-testid="ingest-detector-card"]')).not.toBeNull();
+    const advanced = target.querySelector('[data-testid="ingest-advanced"]')!;
+    expect(advanced.textContent).toContain('Source tag');
+    expect(advanced.textContent).toContain('Skip the already-indexed check');
+    expect(advanced.hasAttribute('open')).toBe(false);
   });
 
   it('the Pipeline rail is on every tab', async () => {

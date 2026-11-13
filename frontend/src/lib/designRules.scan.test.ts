@@ -71,6 +71,11 @@ const RAW_KBD = /<kbd[\s>]/;
 const ALLOWED: { file: string; rule: 'glyph' | 'colour' | 'mono' | 'h1'; why: string }[] =
   [
     {
+      file: 'lib/components/datasets/ImportWizardPanel.svelte',
+      rule: 'mono',
+      why: 'a code editor: this file edits a server path',
+    },
+    {
       file: 'lib/components/ingest/SourceForm.svelte',
       rule: 'mono',
       why: 'a code editor: this file edits an S3 bucket, key prefix, folder path and cron expression',
@@ -171,94 +176,9 @@ const ALLOWED: { file: string; rule: 'glyph' | 'colour' | 'mono' | 'h1'; why: st
       why: 'a code editor: this file edits an open-vocabulary set name',
     },
     {
-      file: 'routes/p/[project]/datasets/import/+page.svelte',
-      rule: 'mono',
-      why: 'a code editor: this file edits a server path',
-    },
-    {
-      file: 'lib/components/config/ConfigDocHeader.svelte',
-      rule: 'h1',
-      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11); the title shows a config name, which section 5.3 rule 4 replaces with the served label',
-    },
-    {
       file: 'lib/components/shell/ErrorPage.svelte',
       rule: 'h1',
       why: 'a full-page error state, not a titled page; it has no PageHeader slots for an action row',
-    },
-    {
-      file: 'routes/p/[project]/export/+page.svelte',
-      rule: 'h1',
-      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
-    },
-    {
-      file: 'routes/p/[project]/models/+page.svelte',
-      rule: 'h1',
-      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
-    },
-    {
-      file: 'routes/p/[project]/settings/embedding-spaces/+page.svelte',
-      rule: 'h1',
-      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
-    },
-    {
-      file: 'routes/p/[project]/settings/ingest-policy/+page.svelte',
-      rule: 'h1',
-      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
-    },
-    {
-      file: 'routes/p/[project]/settings/models/+page.svelte',
-      rule: 'h1',
-      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
-    },
-    {
-      file: 'routes/p/[project]/settings/models/new-endpoint/+page.svelte',
-      rule: 'h1',
-      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
-    },
-    {
-      file: 'routes/p/[project]/settings/models/vlm/[name]/+page.svelte',
-      rule: 'h1',
-      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
-    },
-    {
-      file: 'routes/p/[project]/settings/open-vocab/+page.svelte',
-      rule: 'h1',
-      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
-    },
-    {
-      file: 'routes/p/[project]/settings/presets/[kind]/+page.svelte',
-      rule: 'h1',
-      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
-    },
-    {
-      file: 'routes/p/[project]/settings/presets/[kind]/[name]/+page.svelte',
-      rule: 'h1',
-      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
-    },
-    {
-      file: 'routes/p/[project]/settings/prompt-packs/+page.svelte',
-      rule: 'h1',
-      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
-    },
-    {
-      file: 'routes/p/[project]/settings/region-profiles/+page.svelte',
-      rule: 'h1',
-      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
-    },
-    {
-      file: 'routes/projects/+page.svelte',
-      rule: 'h1',
-      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
-    },
-    {
-      file: 'routes/projects/combine/+page.svelte',
-      rule: 'h1',
-      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
-    },
-    {
-      file: 'routes/projects/combine/[job_id]/+page.svelte',
-      rule: 'h1',
-      why: 'the page title moves to ui/PageHeader when lane D restructures this page (12f section 4.11)',
     },
     {
       file: 'lib/keyboardDisplay.ts',

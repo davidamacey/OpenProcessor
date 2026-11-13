@@ -5,10 +5,19 @@
   columns are the keys of the served object, only sorted for reading.
 -->
 <script lang="ts">
+  import { resolve } from '$app/paths';
+  import { projectHref, type ProjectSubPath } from '$lib/projectPaths';
+
   interface Props {
     confusion: Record<string, Record<string, number>>;
   }
   let { confusion }: Props = $props();
+
+  // An off-diagonal cell is crops the detector got wrong; it opens them in Detections.
+  const cellHref = (detector: string, human: string): string =>
+    projectHref(
+      `/workspace?view=detections&audit_outcome=detector_wrong&audit_outcome=both_wrong&detector_class_name=${encodeURIComponent(detector)}&class_name=${encodeURIComponent(human)}` as ProjectSubPath,
+    );
 
   const rows = $derived(Object.keys(confusion).sort((a, b) => a.localeCompare(b)));
   const cols = $derived(
@@ -54,8 +63,16 @@
                     : ''} {n === 0 ? 'text-fg-3' : 'text-fg-1'} tabular-nums"
                   data-testid="confusion-cell"
                   data-detector={r}
-                  data-human={c}>{n}</td
+                  data-human={c}
                 >
+                  {#if r !== c && n > 0}
+                    <a
+                      class="text-accent-text hover:underline"
+                      href={resolve(cellHref(r, c) as '/')}
+                      title="Open these crops in Detections">{n}</a
+                    >
+                  {:else}{n}{/if}
+                </td>
               {/each}
             </tr>
           {/each}

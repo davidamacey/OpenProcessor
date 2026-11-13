@@ -6,7 +6,6 @@
  */
 import { apiFetch, qs, scoped } from '$lib/api';
 import type {
-  NearDupActiveProfile,
   NearDupDecisionIn,
   NearDupDecisionPage,
   NearDupDecisionQuery,
@@ -15,8 +14,6 @@ import type {
   NearDupGroupPage,
   NearDupGroupQuery,
   NearDupLevel,
-  NearDupProfileBody,
-  NearDupProfileDoc,
   NearDupRunPage,
   NearDupRunRequest,
   NearDupRunStarted,
@@ -122,62 +119,6 @@ export async function undecideNearDup(
   await apiFetch<void>(
     `${scoped()}/near_duplicates/decisions/${encodeURIComponent(decisionId)}`,
     { method: 'DELETE' },
-    signal,
-  );
-}
-
-const PROFILES = 'near_dup_profiles';
-
-/** `GET /near_dup_profiles/active`: which profile (and revision) the project groups with. */
-export function getActiveNearDupProfile(
-  signal?: AbortSignal,
-): Promise<NearDupActiveProfile> {
-  return apiFetch<NearDupActiveProfile>(`${scoped()}/${PROFILES}/active`, {}, signal);
-}
-
-/** `GET /near_dup_profiles/{name}`: one revision (the current one when omitted). */
-export function getNearDupProfile(
-  name: string,
-  revision?: number,
-  signal?: AbortSignal,
-): Promise<NearDupProfileDoc> {
-  return apiFetch<NearDupProfileDoc>(
-    `${scoped()}/${PROFILES}/${encodeURIComponent(name)}${qs({ revision })}`,
-    {},
-    signal,
-  );
-}
-
-/** `PUT /near_dup_profiles/{name}`: save the next revision (OCC on `expected_revision`). */
-export function saveNearDupProfile(
-  name: string,
-  body: NearDupProfileBody,
-  expectedRevision: number,
-  signal?: AbortSignal,
-): Promise<NearDupProfileDoc> {
-  return apiFetch<NearDupProfileDoc>(
-    `${scoped()}/${PROFILES}/${encodeURIComponent(name)}`,
-    {
-      method: 'PUT',
-      body: JSON.stringify({ body, expected_revision: expectedRevision }),
-    },
-    signal,
-  );
-}
-
-/** `POST /near_dup_profiles/{name}/activate`: make a revision the project's profile (OCC on `expected_active`). */
-export function activateNearDupProfile(
-  name: string,
-  revision: number,
-  expectedActive: { name: string | null; revision: number | null } | null,
-  signal?: AbortSignal,
-): Promise<NearDupActiveProfile> {
-  return apiFetch<NearDupActiveProfile>(
-    `${scoped()}/${PROFILES}/${encodeURIComponent(name)}/activate`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ revision, expected_active: expectedActive }),
-    },
     signal,
   );
 }

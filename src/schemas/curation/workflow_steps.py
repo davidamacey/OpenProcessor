@@ -31,7 +31,7 @@ class WorkflowStep(BaseModel):
     done: bool
     section: str = Field(
         description='The project page that does it: `ingest`, `classes`, `workspace`, '
-        '`quality/near-duplicates`, `export`, `train` or `audit`.'
+        '`quality/audit`, `export` or `train`.'
     )
     query: str | None = Field(default=None, description='Optional search string for the link.')
     action: StepAction | None = Field(
