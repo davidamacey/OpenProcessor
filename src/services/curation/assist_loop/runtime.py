@@ -168,6 +168,9 @@ async def build(opensearch: AsyncOpenSearch, record: LoopRecord, budget: LoopBud
         images_per_call=primary.images_per_call,
         on_budget=request.on_budget,
     )
+    if request.scope.min_root_size is None:
+        msg = 'the stored loop has no resolved min_root_size'
+        raise ValueError(msg)
     scope = PartitionScope(
         cluster_uids=request.scope.cluster_uids, min_root_size=request.scope.min_root_size
     )

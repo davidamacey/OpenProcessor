@@ -21120,11 +21120,17 @@
             "title": "Cluster Uids"
           },
           "min_root_size": {
-            "default": 40,
-            "description": "Smaller clusters are left alone (no root).",
-            "minimum": 1.0,
-            "title": "Min Root Size",
-            "type": "integer"
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Smaller clusters are left alone (no root). Null: the server sizes it from the serving partition (40, or less when fewer than 10 clusters reach it) and the stored run carries the number it chose.",
+            "title": "Min Root Size"
           }
         },
         "title": "LoopScope",

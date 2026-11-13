@@ -53,6 +53,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Fixed
 
+- **Assist loop sizes its own scope.** `POST /assist/loops` without `scope.min_root_size` now chooses it from the serving partition (40, or the size of the tenth largest cluster when fewer reach 40) and the stored run records the number; it no longer refuses `no_roots` on a partition of small clusters. An explicit value is kept, and the start form leaves the field empty by default.
 - **Class counts agree with the class list.** A class name filter (`class_names`, `exclude_class_names`) matched an item's detector proposal name even after the item was labelled another class, so a class's list was longer than its `GET /classes` count (person 444 against 432). The proposal now names an item only while it has no class.
 - **Image editor: held arrow keys.** Moves queued before the first answer was back all sent the item's old geometry revision (a `409`) and moved from the old box; each move now takes the revision and box the commands ahead of it left.
 - **Class picker accepts a typed name.** `POST /classes` stores a display name such as "Traffic light" under its registry slug (`traffic_light`, the same rule ingest by name uses) and answers that `class_name`; a name with no letter or digit is still `422 invalid_class_name`. The `suggested_name` field of that error is removed.

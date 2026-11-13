@@ -71,7 +71,8 @@ export function isLiveLoop(status: AssistLoopStatus | undefined): boolean {
 
 export class AssistLoopController {
   // The form. Numbers the server bounds are sent as typed; its 422 is shown.
-  minRootSize = $state(40);
+  /** Null: the server sizes it from the serving partition. */
+  minRootSize = $state<number | null>(null);
   maxVlmCrops = $state<number | null>(2000);
   theta = $state(0.9);
   maxDepth = $state(3);

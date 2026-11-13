@@ -19,7 +19,7 @@ export type AssistLoopDecision =
   'pass' | 'split' | 'review_leaf' | 'review_small' | 'stale' | 'unvisited';
 
 export interface AssistLoopRequest {
-  scope: { cluster_uids: string[] | null; min_root_size: number };
+  scope: { cluster_uids: string[] | null; min_root_size: number | null };
   vlm: string | null;
   prompt_pack: string | null;
   acknowledge_external: boolean;

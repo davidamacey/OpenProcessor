@@ -57,8 +57,9 @@
         class="input"
         type="number"
         min="1"
-        value={ctl.minRootSize}
-        oninput={(e) => (ctl.minRootSize = num(e) ?? ctl.minRootSize)}
+        value={ctl.minRootSize ?? ''}
+        placeholder="chosen from the clusters"
+        oninput={(e) => (ctl.minRootSize = num(e))}
         data-testid="loop-min-root"
       />
     </label>
