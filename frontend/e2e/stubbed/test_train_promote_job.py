@@ -21,6 +21,7 @@ RUN = {
     'current_epoch': 20,
     'total_epochs': 20,
     'eval': None,
+    'suggested_triton_name': 'widgets',
 }
 RESULT = {
     'job_id': JOB_ID,
@@ -177,6 +178,21 @@ def test_promote_409_in_progress_attaches_to_active_job(stub, page, app_url):
     page.get_by_role('dialog', name='Promote to Triton').wait_for(
         state='hidden', timeout=ACTION_TIMEOUT_MS
     )
+
+
+def test_a_run_without_a_served_name_asks_for_one(stub, page, app_url):
+    register_train_mount(stub)
+    old_run = {k: v for k, v in RUN.items() if k != 'suggested_triton_name'}
+    stub.on('GET', r'/train/runs(\?|$)', {'items': [old_run], 'total': 1})
+    stub.on('GET', rf'/train/status/{JOB_ID}(\?|$)', {**old_run, 'promote': None})
+    page.goto(f'{app_url}/p/default/train')
+    page.get_by_role('button', name='Promote').first.click(timeout=ACTION_TIMEOUT_MS)
+    dialog = modal(page)
+    dialog.wait_for(timeout=ACTION_TIMEOUT_MS)
+    submit = dialog.get_by_role('button', name='Promote', exact=True)
+    assert submit.is_disabled()
+    dialog.get_by_label('Triton model name').fill('mine')
+    assert submit.is_enabled()
 
 
 def test_reload_resumes_an_active_promote(stub, page, app_url):
