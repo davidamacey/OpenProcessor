@@ -127,6 +127,21 @@ def test_an_undo_restores_an_item_that_still_carries_the_adopted_class() -> None
     )
 
 
+def test_the_undo_write_puts_an_adopted_item_back_unclassed_and_adoptable_again() -> None:
+    from src.services.curation.class_undo import restore_update
+
+    before = _item()
+    adopted = {**before, **adoption_merger(CLASSES, OP)(before)}
+    restored = {**adopted, **restore_update(adopted, adopted['class_id_history'][-1])}
+    # A merge cannot delete a key, so "no class" is a null class_id: the stored state every reader
+    # (the `exists` queries, `.get`) treats as unclassed.
+    assert (restored['class_id'], restored['class_name']) == (None, None)
+    assert restored['class_source'] == 'item_proposal'
+    assert restored['label_op_id'] is None
+    assert restored['class_validated'] is False
+    assert adoption_merger(CLASSES, OP)(restored)['class_id'] == 4  # adoptable again
+
+
 def test_the_current_count_looks_for_the_detector_source_unvalidated() -> None:
     fp = detector_fingerprint(op_id=OP, writer=ADOPT_WRITER, at='2026-11-12T00:00:00Z')
     filters = current_query(fp)['bool']['filter']

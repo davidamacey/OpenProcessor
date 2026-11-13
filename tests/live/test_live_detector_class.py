@@ -144,8 +144,10 @@ def test_adopt_gives_stored_items_their_detector_class_and_can_be_undone(
     assert wait_job(api, undone.json()['job_id'], prefix=project.prefix)['status'] == 'completed'
     assert wait_until(
         lambda: (
-            'class_id'
-            not in {i['crop_id']: i for i in _items(opensearch, project)}[undecided[1]['crop_id']]
+            {i['crop_id']: i for i in _items(opensearch, project)}[undecided[1]['crop_id']].get(
+                'class_id'
+            )
+            is None
         )
     )
     restored = {i['crop_id']: i for i in _items(opensearch, project)}
