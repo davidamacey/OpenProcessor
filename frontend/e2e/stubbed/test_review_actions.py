@@ -89,6 +89,8 @@ def test_review_assign_then_undo(stub, page, app_url):
     counter = page.get_by_test_id('queue-counter')
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
     before = counter.first.inner_text()
+    # The keys register with the item: wait for its Confirm button, not only the counter.
+    page.get_by_role('button', name='Confirm', exact=True).wait_for(timeout=ACTION_TIMEOUT_MS)
 
     with page.expect_response(
         lambda r: r.request.method == 'PUT' and r.url.endswith('/label'), timeout=ACTION_TIMEOUT_MS

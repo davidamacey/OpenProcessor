@@ -46,4 +46,4 @@ def test_the_outcome_filter_reaches_the_detections_list_and_clears_with_its_chip
     assert seen[-1]['audit_outcome'] == ['agree'], seen[-1]
     chip.click()
     expect(chip).to_have_count(0, timeout=ACTION_TIMEOUT_MS)
-    assert 'audit_outcome' not in page.url, page.url
+    page.wait_for_url(lambda url: 'audit_outcome' not in url, timeout=ACTION_TIMEOUT_MS)
