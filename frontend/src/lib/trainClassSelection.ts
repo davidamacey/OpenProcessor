@@ -59,3 +59,19 @@ export function selectedLackingData(
   const sel = new Set(selected);
   return lacking.filter((c) => sel.has(c.id));
 }
+
+/**
+ * Item classes the current selection leaves out because the server says they are short of data
+ * (served `trainable_gap` > 0), each with the served shortfall: the reason a project with many
+ * classes trains on fewer. Empty when the selection is "all".
+ */
+export function leftOutForLackOfData(
+  selected: number[] | null,
+  classes: RegistryClass[],
+): { name: string; trainable: number; gap: number }[] {
+  if (selected === null) return [];
+  const sel = new Set(selected);
+  return classesLackingData(classes)
+    .filter((c) => !sel.has(c.id))
+    .map((c) => ({ name: c.name, trainable: c.trainable, gap: c.trainable_gap }));
+}

@@ -10,6 +10,7 @@ import {
   classesLackingData,
   defaultTrainSelection,
   excludeLackingData,
+  leftOutForLackOfData,
 } from './trainClassSelection';
 import ClassSubsetPicker from '$lib/components/ClassSubsetPicker.svelte';
 
@@ -54,6 +55,42 @@ describe('trainClassSelection', () => {
   it('exclude drops the lacking classes from an explicit or "all" selection', () => {
     expect(excludeLackingData([0, 2], registry)).toEqual([0]);
     expect(excludeLackingData(null, registry)).toEqual([0, 1, 3]);
+  });
+});
+
+describe('leftOutForLackOfData', () => {
+  it('names the short classes the selection leaves out, with the served shortfall', () => {
+    expect(leftOutForLackOfData([0, 1], registry)).toEqual([
+      { name: 'widget_2', trainable: 0, gap: 20 },
+    ]);
+  });
+
+  it('is empty for "all" and when the short class is selected', () => {
+    expect(leftOutForLackOfData(null, registry)).toEqual([]);
+    expect(leftOutForLackOfData([0, 2], registry)).toEqual([]);
+  });
+});
+
+describe('ClassSubsetPicker left-out note', () => {
+  it('explains why the default selection holds fewer classes than the registry', () => {
+    const target = document.createElement('div');
+    document.body.appendChild(target);
+    const instance = mount(ClassSubsetPicker, {
+      target,
+      props: {
+        classes: registry,
+        selected: [0, 1],
+        setSelected: () => {},
+        singleCls: false,
+        setSingleCls: () => {},
+      },
+    });
+    flushSync();
+    expect(
+      target.querySelector('[data-testid="left-out-classes"]')?.textContent,
+    ).toContain('widget_2 (0, needs 20 more)');
+    unmount(instance);
+    target.remove();
   });
 });
 

@@ -9,7 +9,11 @@
   import type { RegistryClass } from '$lib/types_classes';
   import type { TestHoldoutStats } from '$lib/types_export';
   import type { ClassSubsetPreset } from '$lib/types_train';
-  import { excludeLackingData, selectedLackingData } from '$lib/trainClassSelection';
+  import {
+    excludeLackingData,
+    leftOutForLackOfData,
+    selectedLackingData,
+  } from '$lib/trainClassSelection';
 
   interface Props {
     classes: RegistryClass[];
@@ -45,6 +49,7 @@
   // V-4: selected classes the server reports as short of data (served
   // `trainable_gap` > 0) — they block preflight. One click drops them.
   const lackingSelected = $derived(selectedLackingData(selected, classes));
+  const leftOut = $derived(leftOutForLackOfData(selected, classes));
   function excludeLacking(): void {
     setSelected(excludeLackingData(selected, classes));
   }
@@ -204,6 +209,17 @@
         Exclude classes without enough data
       </button>
     </div>
+  {/if}
+
+  {#if leftOut.length > 0}
+    <p
+      class="border-t border-line px-3 py-2 text-meta text-fg-2"
+      data-testid="left-out-classes"
+    >
+      Left out for too few trainable crops: {leftOut
+        .map((c) => `${c.name} (${c.trainable}, needs ${c.gap} more)`)
+        .join(', ')}.
+    </p>
   {/if}
 
   {#if expanded}
