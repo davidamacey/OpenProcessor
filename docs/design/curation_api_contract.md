@@ -1010,7 +1010,7 @@ applies to automated writers.
 
 ### Annotation writes: draw, move, delete
 
-A person's drawn, moved or deleted box is locked: re-detect, open-vocabulary runs, dataset-import reconcile and re-ingest never move, delete or re-create it (`is_locked_geometry`). The item wire serves `geometry_revision`, `geometry_source` (`detector`, `human`, `import`), `geometry_locked` and `lock_label`; `thumbnail_url` ends `?v=<geometry_revision>`.
+A person's drawn, moved or deleted box is locked: re-detect, open-vocabulary runs, dataset-import reconcile and re-ingest never move, delete or re-create it (`is_locked_geometry`). The item wire serves `geometry_revision`, `geometry_source` (`detector`, `human`, `import`), `geometry_locked` (the editor's lock: an import's box, the test holdout or a person's deletion; a person's own box stays editable) and `lock_label`; `thumbnail_url` ends `?v=<geometry_revision>`.
 
 | Method | Path | Body | Response | Errors |
 |---|---|---|---|---|

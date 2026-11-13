@@ -237,7 +237,7 @@ class ItemDoc(BaseModel):
     updated_at: str = ''
     thumbnail_url: str = ''
     # The box: how many times a person has edited it (0 = never), who set it, and whether an
-    # automated writer may touch it, with the text to show for that.
+    # editor may move it (not for a person's own box), with the text to show for that.
     geometry_revision: int = 0
     geometry_source: Literal['detector', 'human', 'import'] = 'detector'
     geometry_locked: bool = False

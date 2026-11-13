@@ -26,7 +26,7 @@ CASES: list[tuple[str, dict[str, Any], str, bool, str | None]] = [
         'moved',
         {'geometry_source': 'human', 'geometry_revision': 2},
         'human',
-        True,
+        False,  # a person may always move their own box
         'Set by a person',
     ),
     (
@@ -55,7 +55,8 @@ def test_the_wire_serves_the_geometry_facts(
     assert wire['geometry_source'] == source, name
     assert wire['geometry_locked'] is locked
     assert wire['lock_label'] == label
-    assert wire['geometry_locked'] is is_locked_geometry(src)  # one predicate for wire and writers
+    if source == 'human' and not locked:
+        assert is_locked_geometry(src)  # automated writers still skip it; the editor does not
     assert wire['geometry_revision'] == src.get('geometry_revision', 0)
 
 
@@ -67,7 +68,7 @@ def test_thumbnail_url_carries_the_revision() -> None:
 def test_the_item_box_view_carries_the_lock_and_the_revision() -> None:
     moved = {'bbox_norm': [0.1, 0.1, 0.5, 0.5], 'geometry_source': 'human', 'geometry_revision': 3}
     (view,) = item_box_views(moved, 'c1')
-    assert (view.locked, view.lock_label, view.geometry_revision) == (True, 'Set by a person', 3)
+    assert (view.locked, view.lock_label, view.geometry_revision) == (False, 'Set by a person', 3)
     (plain,) = item_box_views({'bbox_norm': [0.1, 0.1, 0.5, 0.5]}, 'c2')
     assert (plain.locked, plain.lock_label, plain.geometry_revision) == (False, None, 0)
 
