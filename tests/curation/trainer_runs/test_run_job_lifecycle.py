@@ -83,7 +83,7 @@ def stub_ultralytics(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> type[_S
 
 
 def test_finalize_run_forces_the_end2end_head_for_yolo26_test_split_eval(
-    project_data_root: None, export_dir: Path, tmp_path: Path
+    export_dir: Path, tmp_path: Path
 ) -> None:
     """The trainer's own post-training test-split re-validation must score
     the served (NMS-free, one-to-one) head -- not whichever head
@@ -154,7 +154,7 @@ def test_finalize_run_forces_the_end2end_head_for_yolo26_test_split_eval(
 
 
 def test_finalize_run_does_not_force_end2end_on_a_non_dual_head_model(
-    project_data_root: None, export_dir: Path, tmp_path: Path
+    export_dir: Path, tmp_path: Path
 ) -> None:
     """A model with no one2one branch (not end2end-capable) must be left
     alone -- forcing end2end=True on it would break inference, since it
@@ -216,7 +216,7 @@ def _run(spec: Any) -> tuple[job_status.StatusState, dict[str, Any] | None]:
 
 @pytest.mark.integration
 def test_a_whole_export_run_reaches_finished(
-    project_data_root: None, export_dir: Path, stub_ultralytics: type[_StubYOLO], tmp_path: Path
+    export_dir: Path, stub_ultralytics: type[_StubYOLO], tmp_path: Path
 ) -> None:
     spec = make_spec(
         dataset_export_dir=str(export_dir),
@@ -281,7 +281,6 @@ def test_a_whole_export_run_reaches_finished(
 
 @pytest.mark.integration
 def test_a_normal_run_manifest_has_no_null_lineage(
-    project_data_root: None,
     export_dir: Path,
     stub_ultralytics: type[_StubYOLO],
     monkeypatch: pytest.MonkeyPatch,
@@ -327,7 +326,7 @@ def test_a_normal_run_manifest_has_no_null_lineage(
 
 @pytest.mark.integration
 def test_a_subset_run_records_its_class_remap_in_both_promote_sources(
-    project_data_root: None, export_dir: Path, stub_ultralytics: type[_StubYOLO]
+    export_dir: Path, stub_ultralytics: type[_StubYOLO]
 ) -> None:
     """Both promote-side sources must be populated by a finished subset run."""
     spec = make_spec(
@@ -361,7 +360,7 @@ def test_a_subset_run_records_its_class_remap_in_both_promote_sources(
 
 @pytest.mark.integration
 def test_a_cancel_raised_out_of_the_epoch_callback_ends_the_run_cancelled(
-    project_data_root: None, export_dir: Path, stub_ultralytics: type[_StubYOLO]
+    export_dir: Path, stub_ultralytics: type[_StubYOLO]
 ) -> None:
     spec = make_spec(
         dataset_export_dir=str(export_dir), hyperparameters={'epochs': 5, 'optimizer': 'MuSGD'}
@@ -377,9 +376,7 @@ def test_a_cancel_raised_out_of_the_epoch_callback_ends_the_run_cancelled(
 
 
 @pytest.mark.integration
-def test_the_epoch_callback_raises_once_a_cancel_is_requested(
-    project_data_root: None, export_dir: Path
-) -> None:
+def test_the_epoch_callback_raises_once_a_cancel_is_requested(export_dir: Path) -> None:
     spec = make_spec(dataset_export_dir=str(export_dir))
     state = job_status.StatusState(job_id=spec.job_id)
     _start, end_of_epoch, _fit = trainer_callbacks._make_ultralytics_callbacks(spec, state, 5)
@@ -392,7 +389,7 @@ def test_the_epoch_callback_raises_once_a_cancel_is_requested(
 
 @pytest.mark.integration
 def test_a_training_failure_propagates_and_its_manifest_says_failed(
-    project_data_root: None, export_dir: Path, stub_ultralytics: type[_StubYOLO]
+    export_dir: Path, stub_ultralytics: type[_StubYOLO]
 ) -> None:
     """A non-OOM error must surface to the handler (which fails the job), not retry-loop and
     not vanish."""
