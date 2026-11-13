@@ -38,7 +38,7 @@ def _docs(slug: str) -> dict[str, dict[str, dict[str, Any]]]:
 
     Beyond a validated item and an unlabeled proposal, it seeds the state
     each write route acts on (so every one of them really writes): a
-    human label to undo, a VLM suggestion to dismiss, region edits to
+    human label to undo, a VLM suggestion and a probe disagreement to dismiss, region edits to
     undo, a region to verify, a high-purity candidate cluster to promote,
     a pending new-class proposal, a residual pool to refit UMAP on, and
     an ingested image whose label file can be imported."""
@@ -102,6 +102,10 @@ def _docs(slug: str) -> dict[str, dict[str, dict[str, Any]]]:
             vlm_confidence='high',
             # the detector's own answer: an eligible accuracy-audit candidate
             detector_class_name=f'{slug}_detector_class',
+            # the probe disagrees with the label: probe_dismiss has something to dismiss
+            probe_disagreement=True,
+            probe_pred_class=f'{slug}_probe_class',
+            probe_model_version='probe-v1',
             **boxes('proposed'),
         ),
         *(

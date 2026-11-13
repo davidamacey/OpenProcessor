@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import subprocess
 from typing import TYPE_CHECKING, Any
 
@@ -54,7 +55,32 @@ def _wire(svc: Any, policy: str = 'store', *, meta: CaptureMetadata = META) -> l
 
 def _leaks(value: Any) -> bool:
     text = json.dumps(value, default=str)
-    return any(token in text for token in ('47.12', '8.98', '8.99'))
+    # the canary lat/lon at any precision, as a whole number: not the tail of an unrelated one
+    return re.search(r'(?<![\d.])(47\.12|8\.98|8\.99)', text) is not None
+
+
+@pytest.mark.parametrize(
+    'value',
+    [{'ms': 18.987}, {'score': 0.998}, {'t': 147.1234}, {'text': 'took 18.987 ms'}, {'n': 8}],
+)
+def test_the_leak_check_ignores_unrelated_numbers(value: Any) -> None:
+    assert not _leaks(value)
+
+
+@pytest.mark.parametrize(
+    'value',
+    [
+        {'lat': 47.123456},
+        {'a': {'b': [8.987654]}},
+        {'lat': 47.12},
+        {'lon': 8.99},
+        {'text': '47.123456,8.987654'},
+        {'text': 'at 47.12 / 8.99'},
+        {'lat': '47.1235'},
+    ],
+)
+def test_the_leak_check_catches_the_coordinates_in_any_field(value: Any) -> None:
+    assert _leaks(value)
 
 
 @pytest.mark.asyncio

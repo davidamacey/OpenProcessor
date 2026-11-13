@@ -95,9 +95,16 @@ def test_the_grid_fills_after_an_activation_without_a_reload(stub, page, app_url
     expect(page.get_by_test_id('clusters-empty')).to_have_count(0)
 
 
+def _serve_opened_cluster(stub) -> None:
+    # opening a cluster navigates to its scope, which lists the crops; the navigation can
+    # outrun the end of the test, so the stub must answer it
+    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'next_cursor': None, 'limit': 60, 'crops': []})
+
+
 def test_arrow_keys_move_between_cards_and_enter_opens_one(stub, page, app_url):
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
     stub.on('GET', r'/clusters(\?|$)', cluster_list(*_cards()))
+    _serve_opened_cluster(stub)
     page.goto(f'{app_url}/p/default/workspace?view=clusters')
     cards = page.locator('[data-grid-item]')
     expect(cards).to_have_count(3, timeout=ACTION_TIMEOUT_MS)
@@ -111,6 +118,7 @@ def test_arrow_keys_move_between_cards_and_enter_opens_one(stub, page, app_url):
 def test_dot_opens_the_first_cluster_from_the_list(stub, page, app_url):
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
     stub.on('GET', r'/clusters(\?|$)', cluster_list(*_cards()))
+    _serve_opened_cluster(stub)
     page.goto(f'{app_url}/p/default/workspace?view=clusters')
     expect(page.locator('[data-grid-item]')).to_have_count(3, timeout=ACTION_TIMEOUT_MS)
     page.keyboard.press('.')
@@ -120,6 +128,7 @@ def test_dot_opens_the_first_cluster_from_the_list(stub, page, app_url):
 def test_the_primary_button_opens_the_first_cluster(stub, page, app_url):
     stub.on('GET', r'(?<!/stats)/classes(\?|$)', {'classes': CLASSES})
     stub.on('GET', r'/clusters(\?|$)', cluster_list(*_cards()))
+    _serve_opened_cluster(stub)
     page.goto(f'{app_url}/p/default/workspace?view=clusters')
     primary = page.get_by_test_id('open-first-cluster')
     expect(primary).to_be_visible(timeout=ACTION_TIMEOUT_MS)

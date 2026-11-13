@@ -45,6 +45,7 @@ def shots(page: Any, name: str) -> None:
         wait_for_paint(page)
         page.screenshot(path=str(SCREENS / f'{name}-{label}.png'), full_page=True)
     page.set_viewport_size({'width': 1600, 'height': 1000})
+    wait_for_paint(page)  # the frame's bounds are read right after: let the layout settle
 
 
 def test_draw_pick_and_save_with_the_last_class_first(stub, page, app_url):

@@ -111,6 +111,7 @@ UNREACHED_OK: dict[tuple[str, str], str] = {
 # really write in the sweep.
 NO_WRITE: dict[tuple[str, str], str] = {
     ('POST', '/selection/summary'): 'counts a selection read-only; writes nothing',
+    ('POST', '/export/yolo/preview'): 'dry-run count of what an export would write; writes nothing',
     ('POST', '/datasets/preview'): 'scans a dataset read-only; writes nothing',
     ('POST', '/datasets/imports'): (
         'the sweep sends no mapping, so it is refused before anything is queued; the '
@@ -229,6 +230,8 @@ NO_WRITE: dict[tuple[str, str], str] = {
 CROP_FOR: dict[tuple[str, str], str] = {
     ('POST', '/crops/{crop_id}/vlm_dismiss'): 'item-0004',
     ('POST', '/crops/{crop_id}/vlm_dismiss/undo'): 'item-0004',
+    ('POST', '/crops/{crop_id}/probe_dismiss'): 'item-0004',
+    ('POST', '/crops/{crop_id}/probe_dismiss/undo'): 'item-0004',
     ('POST', '/crops/{crop_id}/region/undo'): 'item-0005',
     # an unlocked item: the default item-0001 is a validated set (locked)
     ('POST', '/crops/{crop_id}/reprocess'): 'item-0002',
