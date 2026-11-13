@@ -394,6 +394,13 @@ button {
     opacity: 0.6;
     cursor: not-allowed;
   }
+  /* An interactive chip is a 20px target, under WCAG 2.5.8's 24px: the margin keeps its
+     neighbours at least 4px away, which meets that criterion's spacing exception. */
+  button.chip,
+  a.chip,
+  summary.chip {
+    margin: 0.125rem;
+  }
   /* Chip tones (ui/Chip.svelte `tone`). */
   .chip-accent {
     background-color: var(--color-accent-soft);
