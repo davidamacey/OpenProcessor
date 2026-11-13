@@ -175,3 +175,21 @@ def test_load_hold_is_recorded(tree):
     summary = ''.join(p.read_text() for p in tree['out'].glob('summary_*.txt'))
     assert 'hold' in summary
     assert '99.0' in summary
+
+
+def test_load_hold_gives_up_after_the_bound(tree):
+    tree['load'].write_text('99.0 99.0 99.0 1/1 1\n')
+    env = {**tree['env'], 'GATE_NICE': '1', 'GATE_MAX_LOAD': '5', 'GATE_MAX_HOLD_SECS': '1'}
+    if shutil.which('ionice') is None or shutil.which('nice') is None:
+        pytest.skip('nice/ionice missing')
+    res = subprocess.run(
+        ['bash', str(SCRIPT), 'py', str(tree['out'])],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert res.returncode == 0, res.stdout + res.stderr
+    summary = ''.join(p.read_text() for p in tree['out'].glob('summary_*.txt'))
+    assert 'gave up after' in summary
