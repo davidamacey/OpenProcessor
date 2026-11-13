@@ -43,17 +43,19 @@ ENV PIP_BREAK_SYSTEM_PACKAGES=1
 RUN apt-get update && apt-get install -y --no-install-recommends gcc g++ \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=sam3-src /src/sam3 /opt/sam3
 COPY requirements.txt /tmp/requirements.txt
 
 # These four are deleted from the base's system site in the runtime stage, so they must exist in the
 # user site even when the base already ships the pinned version (pip would skip them as satisfied).
-RUN grep -E '^(pillow|certifi|filelock|dnspython)==' /tmp/requirements.txt > /tmp/shadow.txt \
-    && pip install --user --no-cache-dir --no-warn-script-location --no-deps --ignore-installed -r /tmp/shadow.txt
+RUN --mount=type=cache,target=/root/.cache/pip grep -E '^(pillow|certifi|filelock|dnspython)==' /tmp/requirements.txt > /tmp/shadow.txt \
+    && pip install --user --no-warn-script-location --no-deps --ignore-installed -r /tmp/shadow.txt
 
-# The exact set first, so SAM 3's own looser requirements find them already satisfied.
-RUN pip install --user --no-cache-dir --no-warn-script-location -r /tmp/requirements.txt \
-    && pip install --user --no-cache-dir --no-warn-script-location /opt/sam3 \
+# The exact set first, so SAM 3's own looser requirements find them already satisfied. Both come
+# before the SAM 3 source is copied: a new SAM3_SHA then reinstalls only SAM 3.
+RUN --mount=type=cache,target=/root/.cache/pip pip install --user --no-warn-script-location -r /tmp/requirements.txt
+
+COPY --from=sam3-src /src/sam3 /opt/sam3
+RUN --mount=type=cache,target=/root/.cache/pip pip install --user --no-warn-script-location /opt/sam3 \
     && rm -rf /root/.local/lib/python3.12/site-packages/pip \
         /root/.local/lib/python3.12/site-packages/pip-*.dist-info \
         /root/.local/bin/pip /root/.local/bin/pip3 /root/.local/bin/pip3.12

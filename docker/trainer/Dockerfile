@@ -61,10 +61,10 @@ ARG ULTRALYTICS_SHA=675c5569220bc7b6695ef552610882e6dca5e9a9
 COPY docker/trainer/requirements.txt requirements.txt
 
 # The base image's own pip does the install; no pip is copied into the runtime stage.
-RUN pip install --user --no-cache-dir --no-warn-script-location \
+RUN --mount=type=cache,target=/root/.cache/pip pip install --user --no-warn-script-location \
         --extra-index-url "${TORCH_CUDA_INDEX}" \
         -r requirements.txt \
-    && pip install --user --no-cache-dir --no-warn-script-location \
+    && pip install --user --no-warn-script-location \
         "ultralytics @ git+https://github.com/ultralytics/ultralytics.git@${ULTRALYTICS_SHA}" \
     && rm -rf /root/.local/lib/python3.14/site-packages/pip \
         /root/.local/lib/python3.14/site-packages/pip-*.dist-info \
