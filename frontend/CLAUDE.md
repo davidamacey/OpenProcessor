@@ -313,6 +313,8 @@ root layout shows a "new version available" banner, and `nginx.conf` serves
 
 ## Deployment
 
+The image needs the generated `contracts/ts` (outside the `frontend/` context), passed as the named build
+context `contracts` (`docker build --build-context contracts=contracts ...`, compose `additional_contexts`).
 The image is built from `frontend/Dockerfile` by the root compose `cropwright` profile
 (`docker-compose.dev.yml` builds from source) and published by the repository's
 `scripts/release/build_and_publish.sh`. nginx proxies `PUBLIC_API_PREFIX/*` to

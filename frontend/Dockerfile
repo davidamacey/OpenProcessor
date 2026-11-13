@@ -6,6 +6,13 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
+# $contracts (vite alias, tsconfig path) resolves to ../contracts, i.e. /contracts. The generated
+# TypeScript lives outside this build context, so it comes in as the named context "contracts"
+# (docker build --build-context contracts=<repo>/contracts; compose additional_contexts).
+# Only contracts/ts is read by the build.
+# "contracts" is a build-time named context, not a FROM stage, so hadolint cannot see it.
+# hadolint ignore=DL3022
+COPY --from=contracts ts /contracts/ts
 ENV PUBLIC_TRITON_API_URL=__RUNTIME__
 ENV PUBLIC_API_PREFIX=__API_PREFIX__
 RUN npm run build

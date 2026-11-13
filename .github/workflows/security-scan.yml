@@ -112,6 +112,8 @@ jobs:
               - 'frontend/Dockerfile'
               - 'frontend/package.json'
               - 'frontend/package-lock.json'
+              - 'frontend/src/**'
+              - 'contracts/ts/**'
             triton:
               - 'Dockerfile.triton'
               - 'docker/triton/**'
@@ -142,6 +144,7 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: >
           docker build ${TARGET:+--target "$TARGET"}
+          ${{ matrix.image == 'cropwright' && '--build-context contracts=contracts' || '' }}
           -t openprocessor-scan:${{ matrix.image }}
           -f ${{ matrix.file }} ${{ matrix.context }}
 

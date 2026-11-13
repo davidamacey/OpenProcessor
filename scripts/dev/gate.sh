@@ -16,6 +16,8 @@
 #                   and holds a new step while the 1-min load is above
 #                   GATE_MAX_LOAD (default 35); set 0 on a quiet host
 #   GATE_HOLD_SECS  seconds between load polls while holding (default 60)
+#   GATE_MAX_HOLD_SECS  longest a step is held for load (default 1800); after
+#                   that the step runs anyway and the summary says so
 #   GATE_ROOT, GATE_VENV, GATE_LOADAVG  override the repo root, the venv and
 #                   the load source (/proc/loadavg); for tests
 set -u
@@ -34,6 +36,7 @@ LOADAVG=${GATE_LOADAVG:-/proc/loadavg}
 NICE=${GATE_NICE:-1}
 MAX_LOAD=${GATE_MAX_LOAD:-35}
 HOLD_SECS=${GATE_HOLD_SECS:-60}
+MAX_HOLD_SECS=${GATE_MAX_HOLD_SECS:-1800}
 XDIST=${GATE_XDIST:-8}
 
 mkdir -p "$OUT"
@@ -49,9 +52,16 @@ step() {
   load=$(load1)
   if [[ "$NICE" == 1 ]]; then
     low=(nice -n 10 ionice -c3)
+    local held=0 began=$SECONDS
     while awk -v l="$load" -v m="$MAX_LOAD" 'BEGIN{exit !(l > m)}'; do
+      held=$((SECONDS - began))
+      if ((held >= MAX_HOLD_SECS)); then
+        echo "   hold $name gave up after ${held}s: load=$load still > $MAX_LOAD, running anyway" >>"$sum"
+        break
+      fi
       echo "   hold $name load=$load > $MAX_LOAD" >>"$sum"
       sleep "$HOLD_SECS"
+      held=$((SECONDS - began))
       load=$(load1)
     done
   fi
