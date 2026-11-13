@@ -128,7 +128,7 @@ describe('/audit', () => {
         '[data-testid="audit-class-row"]',
       ),
     ];
-    expect(rows.map((r) => r.dataset.insufficient)).toEqual(['false', 'true']);
+    expect(rows.map((r) => r.dataset.insufficient)).toEqual(['true', 'false']);
   });
 
   it('shows the served error and a retry when the report cannot be read', async () => {

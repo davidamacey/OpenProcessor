@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PageHeader from '$components/ui/PageHeader.svelte';
   /**
    * `/projects/combine/[job_id]` — one combine job (OpenProcessor P4).
    * Everything shown is the served job; `CombineJob` follows it (2 s poll
@@ -82,11 +83,10 @@
     <a href={resolve('/projects')} class="text-body text-fg-2 hover:text-white"
       >Projects</a
     >
-    <span class="text-fg-3">/</span>
-    <h1 class="text-body text-fg-1">Combine job</h1>
   </header>
 
   <main class="mx-auto w-full max-w-4xl flex-1 space-y-4 p-4">
+    <PageHeader title="Combine job" />
     {#if job.notFound}
       <p class="text-body text-danger-text" data-testid="combine-job-not-found">
         {job.notFound}

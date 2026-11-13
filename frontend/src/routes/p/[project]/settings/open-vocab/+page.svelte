@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PageHeader from '$components/ui/PageHeader.svelte';
   /**
    * `/settings/open-vocab`: the project's SAM 3 open-vocabulary sets
    * (OpenProcessor v0.4.0). Everything listed is served; `OpenVocabListState`
@@ -53,14 +54,14 @@
 </script>
 
 <div class="flex flex-col gap-4">
-  <header class="flex flex-wrap items-baseline gap-3">
-    <h1 class="text-h1 font-semibold text-fg-1">Open-vocabulary sets</h1>
-    <span class="grow"></span>
-    <a
-      class="text-meta text-accent-text hover:underline"
-      href={resolve(projectHref('/settings'))}>Back to settings</a
-    >
-  </header>
+  <PageHeader title="Open-vocabulary sets">
+    {#snippet actions()}
+      <a
+        class="text-meta text-accent-text hover:underline"
+        href={resolve(projectHref('/settings'))}>Back to settings</a
+      >
+    {/snippet}
+  </PageHeader>
   <p class="text-body text-fg-2">
     An open-vocabulary set lists things to find by describing them in words: each target
     has a prompt, and optionally the class its hits are stored as. One set is active per

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PageHeader from '$components/ui/PageHeader.svelte';
   /**
    * `/settings/embedding-spaces`: the project's embedding spaces per target, the encoders the
    * deployment can serve, and the writes that register, restart or backfill, promote, retire and
@@ -43,26 +44,26 @@
 </script>
 
 <div class="flex flex-col gap-4">
-  <header class="flex flex-wrap items-baseline gap-3">
-    <h1 class="text-h1 font-semibold text-fg-1">Embedding spaces</h1>
-    <span class="grow"></span>
-    <button type="button" class="btn btn-sm" onclick={() => void st.load()}
-      >Refresh</button
-    >
-    <button
-      type="button"
-      class="btn btn-sm btn-primary"
-      data-testid="space-register"
-      onclick={() => {
-        st.clearRefusal();
-        registering = true;
-      }}>Register a space</button
-    >
-    <a
-      class="text-meta text-accent-text hover:underline"
-      href={resolve(projectHref('/settings'))}>Back to settings</a
-    >
-  </header>
+  <PageHeader title="Embedding spaces">
+    {#snippet actions()}
+      <button type="button" class="btn btn-sm" onclick={() => void st.load()}
+        >Refresh</button
+      >
+      <button
+        type="button"
+        class="btn btn-sm btn-primary"
+        data-testid="space-register"
+        onclick={() => {
+          st.clearRefusal();
+          registering = true;
+        }}>Register a space</button
+      >
+      <a
+        class="text-meta text-accent-text hover:underline"
+        href={resolve(projectHref('/settings'))}>Back to settings</a
+      >
+    {/snippet}
+  </PageHeader>
   <p class="text-body text-fg-2">
     A space is one set of vectors for a target made by one encoder version. A project
     always has a primary space; register a candidate to build another, then promote it

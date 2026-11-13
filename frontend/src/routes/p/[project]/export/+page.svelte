@@ -20,6 +20,9 @@
   import ExportControls from '$components/export/ExportControls.svelte';
   import ExportRunModal from '$components/export/ExportRunModal.svelte';
   import FreezeHoldoutModal from '$components/export/FreezeHoldoutModal.svelte';
+  import Button from '$components/ui/Button.svelte';
+  import PageHeader from '$components/ui/PageHeader.svelte';
+  import PageShell from '$components/ui/PageShell.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
 
   $effect(() => {
@@ -91,14 +94,14 @@
   const hddSources = $derived(stats?.by_source ?? []);
 </script>
 
-<div class="mx-auto flex h-full max-w-7xl flex-col gap-4 p-6">
-  <header class="flex flex-wrap items-center gap-3">
-    <h1 class="text-h1 font-semibold tracking-tight">Export dataset</h1>
-    <span class="grow"></span>
-    <button class="btn" type="button" onclick={() => void loadAll()} disabled={loading}>
-      {loading ? 'Refreshing…' : 'Refresh'}
-    </button>
-  </header>
+<PageShell width="wide" class="flex flex-col gap-4">
+  <PageHeader title="Export dataset">
+    {#snippet actions()}
+      <Button icon="refresh-cw" onclick={() => void loadAll()} disabled={loading}
+        >{loading ? 'Refreshing…' : 'Refresh'}</Button
+      >
+    {/snippet}
+  </PageHeader>
 
   {#if stats && stats.dataset_error == null}
     <ValidatedRatioNotice validated={stats.validated_crops} total={stats.total_crops} />
@@ -136,7 +139,7 @@
   />
 
   <ExportControls {run} {hasMulticlassExport} />
-</div>
+</PageShell>
 
 <ExportRunModal {run} />
 

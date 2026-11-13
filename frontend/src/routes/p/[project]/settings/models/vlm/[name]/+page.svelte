@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PageHeader from '$components/ui/PageHeader.svelte';
   /**
    * `/settings/models/vlm/[name]` — one VLM endpoint's editor
    * (any_domain_plan.md §7.8.5; w9/w10 UI plan
@@ -81,36 +82,39 @@
 </script>
 
 <div class="flex flex-col gap-4">
-  <header class="flex flex-wrap items-baseline gap-3">
-    <h1 class="text-h1 font-semibold text-fg-1">{endpointName}</h1>
-    {#if ed.doc}
-      {@const d = ed.doc}
-      <span class="text-body text-fg-2" data-testid="config-meta">
-        {d.source}{d.revision != null ? ` · revision ${d.revision}` : ''}{d.read_only
-          ? ' · read-only'
-          : ''}
-      </span>
-      {#if activeHere}
-        <span
-          class="rounded border border-success/40 bg-success/10 px-1.5 text-meta text-success-text"
-          data-testid="vlm-active-here">active in this project</span
-        >
+  <PageHeader title={endpointName}>
+    {#snippet meta()}
+      {#if ed.doc}
+        {@const d = ed.doc}
+        <span class="text-body text-fg-2" data-testid="config-meta">
+          {d.source}{d.revision != null ? ` · revision ${d.revision}` : ''}{d.read_only
+            ? ' · read-only'
+            : ''}
+        </span>
+        {#if activeHere}
+          <span
+            class="rounded border border-success/40 bg-success/10 px-1.5 text-meta text-success-text"
+            data-testid="vlm-active-here">active in this project</span
+          >
+        {/if}
+        {#each d.active_in ?? [] as slug (slug)}
+          <code class="rounded border border-line-strong px-1.5 text-meta text-fg-2"
+            >{slug}</code
+          >
+        {/each}
+        {#if d.cloned_from}
+          <span class="text-meta text-fg-3">cloned from <code>{d.cloned_from}</code></span
+          >
+        {/if}
       {/if}
-      {#each d.active_in ?? [] as slug (slug)}
-        <code class="rounded border border-line-strong px-1.5 text-meta text-fg-2"
-          >{slug}</code
-        >
-      {/each}
-      {#if d.cloned_from}
-        <span class="text-meta text-fg-3">cloned from <code>{d.cloned_from}</code></span>
-      {/if}
-    {/if}
-    <span class="grow"></span>
-    <a
-      class="text-meta text-accent-text hover:underline"
-      href={resolve(projectHref('/settings/models'))}>All models</a
-    >
-  </header>
+    {/snippet}
+    {#snippet actions()}
+      <a
+        class="text-meta text-accent-text hover:underline"
+        href={resolve(projectHref('/settings/models'))}>All models</a
+      >
+    {/snippet}
+  </PageHeader>
 
   <ConfigGate
     store={vlmAvailability}

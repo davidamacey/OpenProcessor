@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PageHeader from '$components/ui/PageHeader.svelte';
   /**
    * `/projects` — the global project management page (not
    * project-scoped). Lists the served projects (the server decides which
@@ -98,8 +99,6 @@
 <div class="flex min-h-screen flex-col bg-surface-0 text-fg-1">
   <header class="flex h-12 shrink-0 items-center gap-4 border-b border-line px-4">
     <span class="shrink-0 text-body font-semibold tracking-tight">{appName}</span>
-    <span class="shrink-0 text-fg-3">/</span>
-    <h1 class="shrink-0 text-body text-fg-1">Projects</h1>
     <span class="grow"></span>
     {#if home}
       <a
@@ -113,6 +112,22 @@
   </header>
 
   <main class="mx-auto w-full max-w-5xl flex-1 p-4">
+    <PageHeader title="Projects">
+      {#snippet actions()}
+        <a href={resolve('/projects/combine')} class="btn" data-testid="projects-combine"
+          >Combine projects…</a
+        >
+        <button
+          type="button"
+          class="btn btn-primary"
+          data-testid="projects-create"
+          disabled={createBlocked}
+          title={createBlocked ? capacity?.message : undefined}
+          onclick={() => (createOpen = true)}>New project</button
+        >
+      {/snippet}
+    </PageHeader>
+
     {#if capacity}
       <section
         class="mb-4 rounded border px-3 py-2 text-body {capacity.status === 'blocked'
@@ -183,18 +198,6 @@
           <option value={o.id}>{o.label}</option>
         {/each}
       </select>
-      <span class="grow max-md:hidden"></span>
-      <a href={resolve('/projects/combine')} class="btn" data-testid="projects-combine"
-        >Combine projects…</a
-      >
-      <button
-        type="button"
-        class="btn btn-primary"
-        data-testid="projects-create"
-        disabled={createBlocked}
-        title={createBlocked ? capacity?.message : undefined}
-        onclick={() => (createOpen = true)}>New project</button
-      >
     </div>
 
     {#if admin.loadError}

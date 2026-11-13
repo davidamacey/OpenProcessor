@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PageHeader from '$components/ui/PageHeader.svelte';
   /**
    * `/settings/prompt-packs` — the project's VLM prompt packs.
    * Everything listed is served; `PackList` follows it. Absent (one line)
@@ -34,14 +35,14 @@
 </script>
 
 <div class="flex flex-col gap-4">
-  <header class="flex flex-wrap items-baseline gap-3">
-    <h1 class="text-h1 font-semibold text-fg-1">Prompt packs</h1>
-    <span class="grow"></span>
-    <a
-      class="text-meta text-accent-text hover:underline"
-      href={resolve(projectHref('/settings'))}>Back to settings</a
-    >
-  </header>
+  <PageHeader title="Prompt packs">
+    {#snippet actions()}
+      <a
+        class="text-meta text-accent-text hover:underline"
+        href={resolve(projectHref('/settings'))}>Back to settings</a
+      >
+    {/snippet}
+  </PageHeader>
   <p class="text-body text-fg-2">
     A prompt pack holds the instructions the VLM gets for classifying items and checking
     regions. Open a pack to edit it, test it on a crop and make it the active one.

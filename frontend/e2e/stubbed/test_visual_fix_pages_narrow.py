@@ -211,10 +211,14 @@ def test_models_updated_label_does_not_overlap_description(stub, page, app_url):
           const p = document.querySelector('header p');
           const s = document.querySelector('[data-testid="models-status"] span');
           const a = p.getBoundingClientRect(), b = s.getBoundingClientRect();
-          return {pRight: a.right, sLeft: b.left, sLines: Math.round(b.height / 16)};
+          return {
+            pRight: a.right, pBottom: a.bottom, sLeft: b.left, sTop: b.top,
+            sLines: Math.round(b.height / 16),
+          };
         }"""
     )
-    assert boxes['sLeft'] >= boxes['pRight'], boxes
+    # Beside the description or wrapped below it, never on top of it.
+    assert boxes['sLeft'] >= boxes['pRight'] or boxes['sTop'] >= boxes['pBottom'], boxes
     assert boxes['sLines'] <= 1, f"'Updated ...' wraps: {boxes}"
     _no_page_errors(stub)
 
