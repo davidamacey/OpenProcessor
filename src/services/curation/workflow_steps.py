@@ -164,7 +164,8 @@ def build_steps(f: WorkflowFacts) -> WorkflowSteps:
             if f.image_near_dup_run
             else 'Near-duplicates have not been run.',
             done=f.image_near_dup_run,
-            section='quality/near-duplicates',
+            section='workspace',
+            query='view=gallery&near_dup=collapsed',
         ),
         WorkflowStep(
             id='export',
@@ -203,7 +204,7 @@ def build_steps(f: WorkflowFacts) -> WorkflowSteps:
                 label='Draw an audit sample',
                 detail=NO_AUDIT_SAMPLE,
                 done=False,
-                section='audit',
+                section='quality/audit',
             )
         )
     view: Literal['gallery', 'clusters'] = 'clusters' if f.item_partition_serving else 'gallery'
