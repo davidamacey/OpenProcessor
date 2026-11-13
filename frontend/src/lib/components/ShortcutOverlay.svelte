@@ -1,10 +1,10 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import Modal from '$components/Modal.svelte';
+  import Kbd from '$components/ui/Kbd.svelte';
   import { projectHref } from '$lib/projectPaths';
   import { setClassHotkey } from '$lib/classHotkey';
   import { isAssignableClass } from '$lib/classVisibility';
-  import { formatShortcutKey } from '$lib/keyboardDisplay';
   import { classesStore } from '$stores/classes.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import { keymapAvailability, keymapStore } from '$stores/keymap.svelte';
@@ -94,7 +94,7 @@
               <span class="text-fg-2">{s.description}</span>
               <span class="flex gap-1">
                 {#each s.keys as k (k)}
-                  <kbd class="text-caption">{formatShortcutKey(k)}</kbd>
+                  <Kbd combo={k} class="text-caption" />
                 {/each}
               </span>
             </li>
@@ -159,11 +159,14 @@
       <ul class="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
         <li class="flex items-center justify-between gap-3 text-body">
           <span class="text-fg-2">{keymapStore.label('global.shortcuts_overlay')}</span>
-          <kbd class="text-caption">{keymapStore.glyph('global.shortcuts_overlay')}</kbd>
+          <Kbd
+            combo={keymapStore.combo('global.shortcuts_overlay')}
+            class="text-caption"
+          />
         </li>
         <li class="flex items-center justify-between gap-3 text-body">
           <span class="text-fg-2">{keymapStore.label('global.close_overlay')}</span>
-          <kbd class="text-caption">{keymapStore.glyph('global.close_overlay')}</kbd>
+          <Kbd combo={keymapStore.combo('global.close_overlay')} class="text-caption" />
         </li>
       </ul>
     </section>

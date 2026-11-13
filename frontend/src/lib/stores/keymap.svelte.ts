@@ -160,6 +160,11 @@ class KeymapStore {
     return k ? formatShortcutKey(k) : '';
   }
 
+  /** The first combo as the keymap serves it (`shift+space`), for `ui/Kbd`; `''` when unbound. */
+  combo(id: string): string {
+    return this.keysFor(id)[0] ?? '';
+  }
+
   /** Every combo, formatted. */
   glyphs(id: string): string[] {
     return this.keysFor(id).map(formatShortcutKey);

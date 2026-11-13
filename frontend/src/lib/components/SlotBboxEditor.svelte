@@ -28,6 +28,7 @@
   import { createMultiBoxRegionController } from '$lib/review/multiBoxRegionController.svelte';
   import { regionStatusesStore, toneRingRgb } from '$stores/regionStatuses.svelte';
   import Modal from '$components/Modal.svelte';
+  import Kbd from '$components/ui/Kbd.svelte';
 
   const kg = (id: string) => keymapStore.compactGlyph(id);
 
@@ -167,23 +168,17 @@
   <!-- Footer: hotkey reference. -->
   <footer class="flex flex-col gap-1 text-caption text-fg-2">
     <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
+      <span><Kbd>{kg('box_edit.next_box')}</Kbd> next box</span>
+      <span><Kbd>{kg('box_edit.delete_box')}</Kbd> delete selected</span>
       <span
-        ><kbd class="rounded bg-surface-2 px-1">{kg('box_edit.next_box')}</kbd> next box</span
-      >
-      <span
-        ><kbd class="rounded bg-surface-2 px-1">{kg('box_edit.delete_box')}</kbd> delete selected</span
-      >
-      <span
-        ><kbd class="rounded bg-surface-2 px-1"
+        ><Kbd
           >{kg('box_edit.nudge_left')}{kg('box_edit.nudge_up')}{kg(
             'box_edit.nudge_down',
-          )}{kg('box_edit.nudge_right')}</kbd
+          )}{kg('box_edit.nudge_right')}</Kbd
         > nudge selected</span
       >
-      <span><kbd class="rounded bg-surface-2 px-1">{kg('box_edit.save')}</kbd> save</span>
-      <span
-        ><kbd class="rounded bg-surface-2 px-1">{kg('box_edit.cancel')}</kbd> cancel</span
-      >
+      <span><Kbd>{kg('box_edit.save')}</Kbd> save</span>
+      <span><Kbd>{kg('box_edit.cancel')}</Kbd> cancel</span>
     </div>
   </footer>
   <div class="flex items-center justify-end gap-2">

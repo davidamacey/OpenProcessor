@@ -1,6 +1,7 @@
 <script lang="ts">
   import { dndzone } from 'svelte-dnd-action';
   import ClassPicker from '$components/ClassPicker.svelte';
+  import Kbd from '$components/ui/Kbd.svelte';
   import { adequacyChipClass } from '$lib/adequacy';
   import { isAssignableClass } from '$lib/classVisibility';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
@@ -208,12 +209,10 @@
                 >
                   <span class="flex grow items-center gap-1.5 truncate">
                     {#if cls.hotkey_letter}
-                      <kbd
-                        class="rounded bg-surface-2 px-1 py-0.5 text-caption text-accent-text"
-                        title="Press '{cls.hotkey_letter}' to assign selected crops to {cls.name}"
-                      >
-                        {cls.hotkey_letter}
-                      </kbd>
+                      <Kbd
+                        combo={cls.hotkey_letter}
+                        class="text-caption text-accent-text"
+                      />
                     {/if}
                     <span class="truncate">{cls.name}</span>
                   </span>
