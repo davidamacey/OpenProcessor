@@ -68,6 +68,14 @@ function typeConfirmAndSubmit(): void {
 }
 
 describe('DeleteProjectDialog', () => {
+  it('says the slug cannot be reused once the project is deleted', () => {
+    open(() => json(report()));
+    const note = q('delete-project-slug-note')!.textContent ?? '';
+    expect(note).toContain('alpha');
+    expect(note).toContain('retired for good');
+    expect(note).toContain('use a different slug');
+  });
+
   it('lists the dry run referenced_by rows with served project and profile', async () => {
     open((url) =>
       url.includes('dry_run=true')
