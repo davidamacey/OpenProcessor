@@ -2648,4 +2648,7 @@ aggregation on the items index; a selection above the bulk cap (20,000) is refus
 `GET /next_steps` serves the curation loop in order: `steps[]` (`id`, `label`, `detail`, `done`,
 `section`, `query`), `next` (the first step that is not done) and `workspace_default_view`
 (`clusters` when an item clustering serves, else `gallery`). The default view is decided only
-here. `review_disagreements` appears only after a model is promoted.
+here. After a model is promoted, `probe` (run the model over the items, from the Train page)
+comes first; once items are scored, `review_disagreements` carries the Disagreements queue count and is
+done when the queue is empty. `train` is done when a run finished and its latest finished run trained
+every class with enough trainable crops.

@@ -21,7 +21,9 @@ DONE = WorkflowFacts(
     image_near_dup_run=True,
     exports=1,
     training_runs=1,
+    training_finished=1,
     promoted_model=True,
+    probe_scored=True,
     audit_pending=True,
 )
 
@@ -52,10 +54,10 @@ def test_a_project_with_nothing_starts_at_ingest_and_defaults_to_the_gallery() -
             {'item_partitions': 1, 'item_partition_serving': True},
         ),
         ('label', {'classes_below_floor': 1}, {'active_classes': 2, 'classes_below_floor': 0}),
-        ('hotkeys', {'hotkeys_missing': 2}, {'hotkeys_missing': 0}),
+        ('hotkeys', {'hotkeys_missing': 2}, {'active_classes': 2, 'hotkeys_missing': 0}),
         ('near_dups', {'image_near_dup_run': False}, {'image_near_dup_run': True}),
         ('export', {'exports': 0}, {'exports': 1}),
-        ('train', {'training_runs': 0}, {'training_runs': 1}),
+        ('train', {'training_finished': 0}, {'training_runs': 1, 'training_finished': 1}),
     ],
 )
 def test_each_step_is_done_by_its_own_fact(
@@ -105,12 +107,50 @@ def test_review_disagreements_appears_only_after_a_model_is_promoted() -> None:
     assert 'review_disagreements' not in [
         s.id for s in build_steps(dataclasses.replace(DONE, promoted_model=False)).steps
     ]
-    assert _step(DONE, 'review_disagreements').done is False
+    assert _step(dataclasses.replace(DONE, disagreements=1), 'review_disagreements').done is False
+
+
+def test_hotkeys_step_is_not_done_on_a_project_with_no_classes() -> None:
+    step = _step(EMPTY, 'hotkeys')
+    assert step.done is False
+    assert step.detail == 'There are no classes to give a letter to.'
+
+
+def test_train_step_needs_a_finished_run_that_covers_the_trainable_classes() -> None:
+    started = dataclasses.replace(EMPTY, training_runs=2)
+    step = _step(started, 'train')
+    assert step.done is False
+    assert step.detail == '2 training runs started, none finished.'
+    partial = dataclasses.replace(DONE, training_classes_missing=3)
+    step = _step(partial, 'train')
+    assert step.done is False
+    assert 'left out 3 classes' in step.detail
+    assert _step(DONE, 'train').done is True
+
+
+def test_after_a_promote_the_probe_comes_before_the_disagreements_queue() -> None:
+    unscored = dataclasses.replace(DONE, probe_scored=False)
+    ids = [s.id for s in build_steps(unscored).steps]
+    assert 'probe' in ids
+    assert 'review_disagreements' not in ids
+    assert _step(unscored, 'probe').section == 'train'
+    following = build_steps(unscored).next
+    assert following is not None
+    assert following.id == 'probe'
+
+
+def test_disagreements_step_carries_the_queue_count_and_is_done_when_empty() -> None:
+    open_ = dataclasses.replace(DONE, disagreements=4)
+    step = _step(open_, 'review_disagreements')
+    assert (step.done, step.detail) == (False, '4 items in Disagreements.')
+    assert _step(DONE, 'review_disagreements').done is True
+    assert 'probe' not in [s.id for s in build_steps(DONE).steps]
 
 
 def test_everything_done_has_no_next_step() -> None:
     result = build_steps(dataclasses.replace(DONE, promoted_model=False))
     assert result.next is None
+    assert build_steps(DONE).next is None
 
 
 def test_default_view_is_gallery_without_a_serving_partition() -> None:

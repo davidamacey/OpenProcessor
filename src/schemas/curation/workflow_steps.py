@@ -19,6 +19,7 @@ StepId = Literal[
     'near_dups',
     'export',
     'train',
+    'probe',
     'review_disagreements',
     'audit',
 ]
