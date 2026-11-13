@@ -325,4 +325,15 @@ describe('PromoteModal background job (#87)', () => {
     expect(phaseOf('exporting')!.querySelector('svg[aria-label="done"]')).not.toBeNull();
     expect(target.querySelector('button[type="submit"]')).toBeNull();
   });
+
+  it("the Triton name pattern is valid under the browser's v flag and enforces the charset", () => {
+    mountOpen();
+    const input = target.querySelector<HTMLInputElement>('input[pattern]')!;
+    // Browsers compile `pattern` as ^(?:pattern)$ with the v flag, where an unescaped hyphen in
+    // a class is a syntax error and the pattern is silently not enforced.
+    const re = new RegExp(`^(?:${input.pattern})$`, 'v');
+    expect(re.test('my-model_1')).toBe(true);
+    expect(re.test('bad name')).toBe(false);
+    expect(re.test('bad/name')).toBe(false);
+  });
 });
