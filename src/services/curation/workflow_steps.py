@@ -20,23 +20,33 @@ from src.db.models.training import DatasetExport, Promotion, TrainingRun
 from src.db.repos import near_dup as near_dup_repo
 from src.db.session import project_tx
 from src.domain import job_states as js
+from src.domain.class_hotkeys import free_letters
 from src.schemas.curation.workflow_steps import WorkflowStep, WorkflowSteps
+from src.services.classes.registry import keymap_letters
 from src.services.clustering.assign import serving_partition_id
 from src.services.clustering.partitions import list_partitions
 from src.services.curation import review_queries, review_tabs
 from src.services.curation.audit import has_pending_sample
 from src.services.curation.dataset_thresholds import HARD_MIN_CROPS_PER_CLASS, adequacy
 from src.services.curation.detector_adoption import detector_census, plan_adoption
+from src.services.curation.detector_vocabulary import DETECTOR_CLASS_GROUP
+from src.services.curation.open_vocab_run import OPEN_VOCAB_CLASS_GROUP
+from src.services.curation.region_class import REGION_CLASS_GROUP
 from src.services.curation.review_tab_status import NO_AUDIT_SAMPLE
 
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from src.services.curation.class_counts import ClassCounts
 
 
 ITEM_LEVEL: Final = 'class'
+SEEDED_CLASS_GROUPS: Final = frozenset(
+    {DETECTOR_CLASS_GROUP, REGION_CLASS_GROUP, OPEN_VOCAB_CLASS_GROUP}
+)
 
 
 @dataclass(frozen=True)
@@ -44,6 +54,7 @@ class WorkflowFacts:
     images: int = 0
     active_classes: int = 0
     hotkeys_missing: int = 0
+    hotkeys_free: int = 0
     classes_below_floor: int = 0
     item_partitions: int = 0
     item_partition_serving: bool = False
@@ -124,9 +135,14 @@ def _label_step(f: WorkflowFacts) -> WorkflowStep:
 def _hotkeys_detail(f: WorkflowFacts) -> str:
     if not f.active_classes:
         return 'There are no classes to give a letter to.'
+    if f.hotkeys_missing and f.hotkeys_free:
+        return (
+            f'{_plural(f.hotkeys_missing, "class you created has", "classes you created have")} '
+            f'no hotkey letter; {_plural(f.hotkeys_free, "letter is", "letters are")} free.'
+        )
     if f.hotkeys_missing:
-        return f'{_plural(f.hotkeys_missing, "class has", "classes have")} no hotkey letter.'
-    return 'Every class has a hotkey letter.'
+        return 'Every free hotkey letter is in use.'
+    return 'Every class you created has a hotkey letter.'
 
 
 def _train_step(f: WorkflowFacts) -> WorkflowStep:
@@ -215,7 +231,7 @@ def build_steps(f: WorkflowFacts) -> WorkflowSteps:
             id='hotkeys',
             label='Give every class a hotkey letter',
             detail=_hotkeys_detail(f),
-            done=f.active_classes > 0 and f.hotkeys_missing == 0,
+            done=f.active_classes > 0 and (f.hotkeys_missing == 0 or f.hotkeys_free == 0),
             section='classes',
         ),
         WorkflowStep(
@@ -300,12 +316,21 @@ async def _count(session: AsyncSession, model: Any, project: uuid.UUID) -> int:
     return int((await session.execute(stmt)).scalar_one())
 
 
-def class_facts(classes: list[Any], counts: ClassCounts) -> tuple[int, int, int]:
-    """``(active classes, without a hotkey letter, below the validated floor)``."""
+def class_facts(
+    classes: list[Any], counts: ClassCounts, reserved: Collection[str] = ()
+) -> tuple[int, int, int, int]:
+    """``(active classes, user-created ones without a hotkey letter, below the validated floor,
+    free hotkey letters)``. A detector, region or open-vocabulary seed is given no letter on
+    purpose, so only the other classes count as missing one."""
     active = [c for c in classes if not c.deprecated and getattr(c, 'merged_into', None) is None]
-    missing = sum(1 for c in active if not getattr(c, 'hotkey_letter', None))
+    missing = sum(
+        1
+        for c in active
+        if not getattr(c, 'hotkey_letter', None) and c.group not in SEEDED_CLASS_GROUPS
+    )
     below = sum(1 for c in active if adequacy(counts.validated.get(c.class_id, 0)) == 'block')
-    return len(active), missing, below
+    taken = [c.hotkey_letter for c in classes if getattr(c, 'hotkey_letter', None)]
+    return len(active), missing, below, len(free_letters(taken, reserved))
 
 
 async def gather_facts(
@@ -318,7 +343,9 @@ async def gather_facts(
     images = int(
         (await opensearch.count(index=images_index(), body={'query': {'match_all': {}}}))['count']
     )
-    active, missing, below = class_facts(classes, counts)
+    active, missing, below, free = class_facts(
+        classes, counts, await keymap_letters(session, project)
+    )
     must, must_not, _reason = review_queries.build_tab_query(
         'check_machine', include_test=False, text=None, max_rank=None, vector_field=None
     )
@@ -362,6 +389,7 @@ async def gather_facts(
             images=images,
             active_classes=active,
             hotkeys_missing=missing,
+            hotkeys_free=free,
             classes_below_floor=below,
             item_partitions=len(partitions),
             item_partition_serving=serving is not None,

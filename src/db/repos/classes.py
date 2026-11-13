@@ -274,7 +274,6 @@ async def ensure_class(
     name: str,
     group: str = 'unknown',
     notes: str = '',
-    reserved_hotkeys: Collection[str] | None = None,
 ) -> tuple[ClassRow, bool]:
     """Idempotent by name: the active class called ``name``, created when absent.
 
@@ -288,7 +287,7 @@ async def ensure_class(
     found = await find_by_name(session, project_id, name)
     if found is not None and not found.deprecated:
         return found, False
-    return await _insert_class(session, reg, name, group, notes, None, reserved_hotkeys), True
+    return await _insert_class(session, reg, name, group, notes, None), True
 
 
 async def add_class(

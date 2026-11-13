@@ -35,3 +35,10 @@ def test_the_same_inputs_always_give_the_same_letter() -> None:
     first = [pick_hotkey(n, {'c'}, {'z'}) for n in ('car', 'cat', 'cup')]
     assert first == [pick_hotkey(n, {'c'}, {'z'}) for n in ('car', 'cat', 'cup')]
     assert first == ['a', 'a', 'u']
+
+
+def test_free_letters_leave_out_taken_and_reserved() -> None:
+    from src.domain.class_hotkeys import free_letters
+
+    assert free_letters({'a'}, {'b'})[:2] == ['c', 'd']
+    assert len(free_letters({'a'}, {'b', 'C'})) == 23

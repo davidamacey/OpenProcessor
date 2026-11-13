@@ -54,7 +54,11 @@ def test_a_project_with_nothing_starts_at_ingest_and_defaults_to_the_gallery() -
             {'item_partitions': 1, 'item_partition_serving': True},
         ),
         ('label', {'classes_below_floor': 1}, {'active_classes': 2, 'classes_below_floor': 0}),
-        ('hotkeys', {'hotkeys_missing': 2}, {'active_classes': 2, 'hotkeys_missing': 0}),
+        (
+            'hotkeys',
+            {'hotkeys_missing': 2, 'hotkeys_free': 3},
+            {'active_classes': 2, 'hotkeys_missing': 0},
+        ),
         ('near_dups', {'image_near_dup_run': False}, {'image_near_dup_run': True}),
         ('export', {'exports': 0}, {'exports': 1}),
         ('train', {'training_finished': 0}, {'training_runs': 1, 'training_finished': 1}),
@@ -97,9 +101,9 @@ def test_the_classes_step_is_done_and_offers_nothing_once_the_detector_is_adopte
 
 
 def test_a_step_says_what_is_missing_in_a_sentence() -> None:
-    assert _step(dataclasses.replace(DONE, hotkeys_missing=2), 'hotkeys').detail == (
-        '2 classes have no hotkey letter.'
-    )
+    assert _step(
+        dataclasses.replace(DONE, hotkeys_missing=2, hotkeys_free=3), 'hotkeys'
+    ).detail == ('2 classes you created have no hotkey letter; 3 letters are free.')
     assert _step(EMPTY, 'ingest').detail == 'No images yet.'
 
 
@@ -176,3 +180,26 @@ def test_every_served_step_link_is_a_page_the_app_has() -> None:
     assert steps['audit'].section == 'quality/audit'
     pages = {'ingest', 'classes', 'workspace', 'quality/audit', 'export', 'train'}
     assert {s.section for s in steps.values()} <= pages
+
+
+def test_the_hotkey_step_is_done_when_no_free_letter_remains() -> None:
+    stuck = dataclasses.replace(DONE, hotkeys_missing=4, hotkeys_free=0)
+    step = _step(stuck, 'hotkeys')
+    assert step.done is True
+    assert step.detail == 'Every free hotkey letter is in use.'
+
+
+def test_class_facts_count_only_user_created_classes_as_missing_a_letter() -> None:
+    from types import SimpleNamespace
+
+    from src.services.curation.class_counts import ClassCounts
+    from src.services.curation.workflow_steps import class_facts
+
+    def cls(i: int, group: str, letter: str | None = None) -> SimpleNamespace:
+        return SimpleNamespace(
+            class_id=i, group=group, hotkey_letter=letter, deprecated=False, merged_into=None
+        )
+
+    classes = [cls(0, 'detector'), cls(1, 'region'), cls(2, 'unknown'), cls(3, 'unknown', 'a')]
+    active, missing, _below, free = class_facts(classes, ClassCounts(), reserved=['b', 'c'])
+    assert (active, missing, free) == (4, 1, 23)
