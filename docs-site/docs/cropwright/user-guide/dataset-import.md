@@ -3,14 +3,16 @@ sidebar_position: 4
 title: Dataset import and Reprocess
 ---
 
-# Dataset import and Reprocess (`/p/<project>/datasets/import`)
+# Dataset import and Reprocess (`/p/<project>/ingest?tab=import`)
 
 Bring an already-labeled dataset into the current project and re-run the
 backend's machine proposals without overwriting human work. This page covers the
 screens; formats, class mapping rules and the API/CLI path are in the
 [Dataset import guide](../../guides/dataset-import.mdx) and the
-[Reprocess guide](../../guides/reprocess.mdx). The **Import a labeled dataset** link on the Ingest page appears only when
-the backend supports dataset import; otherwise nothing is requested.
+[Reprocess guide](../../guides/reprocess.mdx). The **Import dataset** tab of Ingest appears only when
+the backend supports dataset import; otherwise nothing is requested. Past
+imports are listed under the wizard; an import's job page is
+`/p/<project>/ingest/imports/<id>`.
 Compare with [Ingest](./ingest.md), which brings in unlabeled images.
 
 ## Formats
@@ -21,7 +23,7 @@ backend serves **Detect automatically**, **YOLO** (a `data.yaml` layout),
 [Export](./export.md) page writes). The wizard only offers what the backend
 serves.
 
-## The import wizard (`/p/<project>/datasets/import`)
+## The import wizard (Ingest › Import dataset)
 
 1. **Source.** Type a folder path the backend can read (the allowed roots
    are listed under the field, and the preview tells you if the path isn't
@@ -63,8 +65,8 @@ you're in.
 
 ## Imports and the job view
 
-`/p/<project>/datasets/imports` lists past imports with their status and a **New import**
-button. An import's page (`/p/<project>/datasets/imports/<id>`) shows:
+**Past imports** under the wizard list the imports with their status; a row opens
+the import's page (`/p/<project>/ingest/imports/<id>`), which shows:
 
 - the status, a progress bar with throughput and ETA, and whatever the job is
   waiting for;

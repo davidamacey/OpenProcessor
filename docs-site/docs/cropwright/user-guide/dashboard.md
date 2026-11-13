@@ -7,15 +7,15 @@ title: Dashboard
 
 Pipeline health at a glance.
 
-- **Live dataset stats**, polled every 10 seconds.
+- **Headline numbers**: objects, validated, detector labels not yet checked and
+  objects with no class, from the live dataset stats.
 - **Next steps**: the curation loop in the order the backend serves it (ingest,
   classes, cluster, activate, label, hotkeys, near-duplicates, export, train, review
   disagreements, audit).
-  A done step shows a check; the first undone step is the one to do next, and
-  each step links to the page that does it. The empty Workspace shows the same
+  A done step is one muted line; the first undone step is open with the one
+  primary button, and each step links to the page that does it. The empty Workspace shows the same
   list. The backend decides which steps exist and which are done.
-- **Quick actions**: the VLM assist link (below), **Export Dataset (YOLO)**
-  (behind a confirmation) and **Refresh**.
+- **Refresh** is in the page header. The YOLO export is on **Model › Export**.
 - **Clusters**: says which partition is serving (clusters, items, method, when it was
   fitted) and starts a clustering run with **Cluster items**. A finished partition that is
   not serving shows **Activate it**.

@@ -3,7 +3,7 @@ sidebar_position: 5
 title: Classes
 ---
 
-# Class management (`/p/<project>/classes`)
+# Classes (`/p/<project>/classes`)
 
 Add, rename, merge, deprecate and restore classes, and bind a per-class
 hotkey letter (reserved action keys are rejected server-side and
@@ -24,4 +24,4 @@ undoable with `Z`. Flagged terms (an existing class, a generic parent, or a
 non-object) get no create action, only a served reason and, for an
 existing-class match, a one-click map.
 
-<Screenshot name="cropwright/classes-1600.png" alt="Cropwright Class management" caption="Classes — registry, hotkeys and proposals" />
+<Screenshot name="cropwright/classes-1600.png" alt="Cropwright Classes" caption="Classes — registry, hotkeys and proposals" />
