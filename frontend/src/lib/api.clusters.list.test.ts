@@ -90,7 +90,7 @@ describe('getClusters query', () => {
 
   it('sends the review queue so the count matches the other views', async () => {
     const m = stubFetch();
-    await getClusters({ review_tab: 'check_machine', class_name: 'person' });
+    await getClusters({ review_tab: 'check_machine', class_name: ['person'] });
     const q = urlOf(m).searchParams;
     expect(q.get('review_tab')).toBe('check_machine');
     expect(q.get('class_name')).toBe('person');
