@@ -77,7 +77,11 @@ def _script(policy: str) -> dict[str, Any]:
 
 
 async def purge_pass(client: AsyncOpenSearch, policy: str) -> int:
-    """One bounded `update_by_query` pass; the number of documents it changed."""
+    """One bounded `update_by_query` pass; the number of documents it changed or skipped on a
+    version conflict. `conflicts=proceed` counts a document a concurrent writer touched as a
+    conflict instead of failing, so a pass that only skipped must not read as "nothing left": the
+    caller runs another pass until neither a change nor a conflict is reported (OpenSearch docs,
+    update-by-query API: `version_conflicts`)."""
     if policy == 'store':
         return 0
     resp = await client.update_by_query(
@@ -87,7 +91,7 @@ async def purge_pass(client: AsyncOpenSearch, policy: str) -> int:
         conflicts='proceed',
         refresh=True,
     )
-    return int(resp.get('updated', 0))
+    return int(resp.get('updated', 0)) + int(resp.get('version_conflicts', 0))
 
 
 async def settle() -> None:

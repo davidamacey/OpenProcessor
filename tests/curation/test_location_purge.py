@@ -139,3 +139,30 @@ async def test_an_unknown_step_is_refused(monkeypatch: pytest.MonkeyPatch) -> No
     bind_backfill(monkeypatch, 'drop')
     with pytest.raises(job.UnknownStepError):
         await job.run(BackfillCtx(FakeBackfillOpenSearch({}, {}), ['frobnicate']))
+
+
+class _ConflictOnceOpenSearch(FakeBackfillOpenSearch):
+    """The first pass skips every document on a version conflict, as `conflicts=proceed` does when
+    a concurrent writer touched them: nothing updated, the conflicts counted."""
+
+    async def update_by_query(
+        self, *, index: str, body: dict[str, Any], **kw: Any
+    ) -> dict[str, Any]:
+        if not self.by_query_calls:
+            self.by_query_calls.append({'index': index, 'body': body, **kw})
+            return {'updated': 0, 'version_conflicts': 1}
+        return await super().update_by_query(index=index, body=body, **kw)
+
+
+@pytest.mark.asyncio
+async def test_a_pass_that_only_hit_version_conflicts_is_retried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bind_backfill(monkeypatch, 'store_coarse')
+    images = {'a': _image(47.123456, 8.987654)}
+    client = _ConflictOnceOpenSearch(images, {})
+
+    result = await job.run(BackfillCtx(client, ['location_purge']))
+
+    assert isinstance(result, JobResult)
+    assert images['a']['capture']['location_precision'] == 'coarse'
