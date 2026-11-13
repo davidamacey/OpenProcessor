@@ -8,6 +8,7 @@
   import DataTable from '$components/table/DataTable.svelte';
   import ColumnPicker from '$components/table/ColumnPicker.svelte';
   import HiddenItemsNote from '$components/itemFilter/HiddenItemsNote.svelte';
+  import ViewMoreMenu from '$components/workspace/ViewMoreMenu.svelte';
   import BulkBar from '$components/workspace/BulkBar.svelte';
   import ViewState from '$components/state/ViewState.svelte';
   import { infiniteScroll } from '$lib/actions/infiniteScroll';
@@ -188,7 +189,17 @@
       <strong class="text-fg-1">{ctl.total.toLocaleString()}</strong> rows
       <HiddenItemsNote hidden={ctl.hidden} />
     </p>
-    <div class="ml-auto">
+    <div class="ml-auto flex items-center gap-2">
+      <button
+        type="button"
+        class="btn btn-primary"
+        data-testid="table-review"
+        title="Review these items one by one"
+        onclick={() => ws.setView('review')}
+      >
+        Review these
+      </button>
+      <ViewMoreMenu {ws} />
       {#if ctl.vocabulary}
         <ColumnPicker
           vocabulary={ctl.vocabulary.columns}

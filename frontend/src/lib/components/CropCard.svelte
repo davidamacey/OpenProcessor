@@ -324,7 +324,7 @@
     {#if rankClarityLabel}
       <span
         data-testid="rank-clarity-chip"
-        class="absolute bottom-1 left-1 rounded-sm bg-black/60 px-1.5 py-0.5 text-caption text-fg-1"
+        class="absolute bottom-1 left-1 rounded-sm bg-black/60 px-1.5 py-0.5 text-caption text-fg-1 opacity-0 transition group-focus-within:opacity-100 group-hover:opacity-100"
         title="Size rank among the objects in its photo, and how sharp it is"
       >
         {rankClarityLabel}

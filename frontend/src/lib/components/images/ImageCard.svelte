@@ -122,25 +122,32 @@
     {/if}
     {#if card.near_dup}
       <span
-        class="chip absolute top-1 right-1"
+        class="chip chip-info absolute top-1 right-1"
         data-testid="near-dup-badge"
         title="Near-duplicate group ({card.near_dup.purpose})"
       >
-        Near-dup{card.near_dup.size != null ? ` · ${card.near_dup.size}` : ''}
+        {card.near_dup.size != null
+          ? `In a group of ${card.near_dup.size}`
+          : 'In a group'}
       </span>
     {/if}
   </div>
   <div class="flex flex-wrap items-center gap-1 px-2 py-1.5 text-meta">
-    <span class="chip" data-testid="chip-items" title="Items on this image"
-      >{card.counts.items} items</span
-    >
-    <span class="chip" data-testid="chip-labeled" title="Items with a class"
-      >{card.counts.labeled} labelled</span
+    <span
+      class="chip tabular-nums"
+      data-testid="chip-items"
+      title="Detections on this image"
+      >{card.counts.items} detection{card.counts.items === 1 ? '' : 's'}</span
     >
     <span
-      class="chip {card.counts.unlabeled > 0 ? 'unlabeled-chip' : ''}"
+      class="chip tabular-nums"
+      data-testid="chip-labeled"
+      title="Detections with a class">{card.counts.labeled} labelled</span
+    >
+    <span
+      class="chip tabular-nums {card.counts.unlabeled > 0 ? 'unlabeled-chip' : ''}"
       data-testid="chip-unlabeled"
-      title="Items without a class">{card.counts.unlabeled} unlabelled</span
+      title="Detections without a class">{card.counts.unlabeled} unlabelled</span
     >
   </div>
   <div
