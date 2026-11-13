@@ -434,6 +434,7 @@ class AsyncTritonPool:
             yield {'model_name': model_name, 'inputs': inputs}
 
         with self.router.route(model_name) as route:
+            await ensure_loaded(self._channels(route.url)[0], model_name)
             async with self._semaphore:
                 client = self._channels(route.url)[await self._get_client_index(route.url)]
                 responses = client.stream_infer(_requests(), stream_timeout=timeout)

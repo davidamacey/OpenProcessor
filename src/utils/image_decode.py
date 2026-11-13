@@ -36,6 +36,9 @@ IMAGE_DECODE_ERRORS: tuple[type[Exception], ...] = (
 
 NOT_DECODABLE = 'not a decodable image'
 HEADER_REJECTED = 'Could not determine subsampling level'
+# libjpeg only warns (it ignores the out-of-range spectral parameters of a sequential scan) and
+# decodes the whole frame, as Pillow does; ``simplejpeg`` raises on every libjpeg warning.
+SOS_WARNING = 'Invalid SOS parameters for sequential JPEG'
 
 
 class ImageDecodeError(ValueError):
@@ -97,8 +100,9 @@ def _decode(data: bytes) -> DecodedImage:
         except ValueError as exc:
             # libjpeg-turbo's header read refuses some JPEGs Pillow reads fine (it cannot
             # determine the subsampling). That, and only that, takes the Pillow path; a
-            # damaged file (any other error) still fails.
-            if HEADER_REJECTED not in str(exc):
+            # damaged file (any other error) still fails. A decode warning that libjpeg
+            # documents as harmless (SOS_WARNING) takes the Pillow path too.
+            if HEADER_REJECTED not in str(exc) and SOS_WARNING not in str(exc):
                 raise
         else:
             rgb = orient_array(decoded, orientation)

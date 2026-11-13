@@ -380,6 +380,7 @@ class TritonPythonModel:
             reason, header = route(data, self.min_mp, self.max_mp)
         if reason != 'gpu':
             return self._status(reason)
+        data = data[: header.end]
         need = need_bytes(header)
         if need > self.budget.total:
             return self._status('over_budget')

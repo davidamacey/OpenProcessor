@@ -193,7 +193,7 @@ def test_unfillable_queue_is_absent_and_named_in_next_steps() -> None:
     assert 'audit' not in [s.id for s in build_steps(drawn).steps]
     step = next(s for s in build_steps(idle).steps if s.id == 'audit')
     assert step.done is False
-    assert step.section == 'audit'
+    assert step.section == 'quality/audit'
     assert 'audit sample' in step.detail.lower()
 
 

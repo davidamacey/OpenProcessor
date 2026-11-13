@@ -15,6 +15,7 @@ Here:
 
 from __future__ import annotations
 
+import re
 import struct
 from typing import NamedTuple
 
@@ -39,6 +40,7 @@ class JpegHeader(NamedTuple):
     progressive: bool
     orientation: int
     lossless: bool
+    end: int = 0  # bytes of the image proper, EOI included (set by route)
 
 
 def _exif_orientation(payload: bytes) -> int:
@@ -93,11 +95,50 @@ def jpeg_header(data: bytes) -> JpegHeader:
     return JpegHeader('corrupt', 0, 0, 0, 0, False, orientation, False)
 
 
+# Inside entropy-coded data 0xFF is stuffed (FF00) or an RSTn, so any other marker ends the scan.
+_SCAN_MARKER = re.compile(rb'\xff+([\x01-\xcf\xd8-\xfe])')
+
+
+def jpeg_end(data: bytes) -> int | None:
+    """Offset just past the end-of-image marker, or ``None`` when the file has none.
+
+    Walks the marker segments (so an EOI inside a header segment, such as the EXIF thumbnail's,
+    is skipped) and the entropy-coded scans, so bytes appended after the image (maker trailers, a
+    motion photo's video) are not part of it.
+    """
+    n, i, in_scan = len(data), 2, False
+    while True:
+        if in_scan:
+            m = _SCAN_MARKER.search(data, i)
+            if m is None:
+                return None
+            marker, i = data[m.end() - 1], m.end()
+        else:
+            if i >= n or data[i] != 0xFF:
+                return None
+            while i < n and data[i] == 0xFF:
+                i += 1
+            if i >= n:
+                return None
+            marker, i = data[i], i + 1
+        if marker == 0xD9:
+            return i
+        if marker in _STANDALONE:
+            continue
+        if i + 2 > n:
+            return None
+        (length,) = struct.unpack('>H', data[i : i + 2])
+        i += length
+        in_scan = marker == 0xDA
+
+
 def route(data: bytes, min_megapixels: float, max_megapixels: float) -> tuple[str, JpegHeader]:
     """``('gpu', header)`` or ``(reason, header)``: the reason the image stays on the CPU path.
 
     Fail closed: the GPU decoders return an image for a truncated file, so a JPEG without its
-    end-of-image marker is refused here and the CPU decoder rejects or accepts it as today.
+    end-of-image marker is refused here and the CPU decoder rejects or accepts it as today. A
+    complete JPEG with bytes after the marker goes to the GPU; ``header.end`` is where the
+    decoder's input stops.
     """
     h = jpeg_header(data)
     if h.kind != 'jpeg':
@@ -108,8 +149,10 @@ def route(data: bytes, min_megapixels: float, max_megapixels: float) -> tuple[st
         return 'components', h
     if h.progressive:
         return 'progressive', h
-    if not data.rstrip(b'\x00').endswith(b'\xff\xd9'):
+    end = jpeg_end(data)
+    if end is None:
         return 'truncated', h
+    h = h._replace(end=end)
     mp = h.width * h.height / 1e6
     if mp < min_megapixels:
         return 'small', h
