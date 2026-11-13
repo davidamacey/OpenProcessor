@@ -81,6 +81,15 @@ async def project_id_for(slug: str) -> uuid.UUID:
     return pid
 
 
+async def _keymap_letters(session: AsyncSession, project_id: uuid.UUID) -> list[str]:
+    """The letters a keymap action of the project owns, which a class hotkey may not take."""
+    from src.db.repos import settings as settings_repo
+    from src.services.curation.keymap import reserved_hotkeys
+
+    row = await settings_repo.get_keymap(session, project_id)
+    return reserved_hotkeys(row.overrides if row else {})
+
+
 class ClassRegistry:
     """One project's registry. Obtain the bound project's with :func:`get_class_registry`."""
 
@@ -135,10 +144,15 @@ class ClassRegistry:
         notes: str = '',
         hotkey_letter: str | None = None,
     ) -> int:
-        """Append a class; refuses a duplicate active name. Returns the new id."""
-        row = await self._write(
-            lambda s, p: repo.add_class(s, p, name, group, notes, hotkey_letter)
-        )
+        """Append a class; refuses a duplicate active name. Returns the new id. Without a
+        ``hotkey_letter`` the class gets the first free letter the keymap leaves."""
+
+        async def add(s: AsyncSession, p: uuid.UUID) -> repo.ClassRow:
+            return await repo.add_class(
+                s, p, name, group, notes, hotkey_letter, await _keymap_letters(s, p)
+            )
+
+        row = await self._write(add)
         return row.class_id
 
     async def ensure_class(
@@ -152,7 +166,11 @@ class ClassRegistry:
         self, name: str, group: str = 'unknown', notes: str = ''
     ) -> tuple[RegistryClassEntry, bool]:
         """:meth:`ensure_class` returning the whole entry (callers need its spelling)."""
-        row, created = await self._write(lambda s, p: repo.ensure_class(s, p, name, group, notes))
+
+        async def ensure(s: AsyncSession, p: uuid.UUID) -> tuple[repo.ClassRow, bool]:
+            return await repo.ensure_class(s, p, name, group, notes, await _keymap_letters(s, p))
+
+        row, created = await self._write(ensure)
         return entry_from_row(row), created
 
     async def update_class(

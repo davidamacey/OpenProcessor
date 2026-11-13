@@ -48,6 +48,10 @@ async def create_registry_class(
             keymap_overrides=keymap_overrides,
         )
     new_id = await reg.add_class(name, group=group, notes=notes, hotkey_letter=letter)
+    if letter is None:  # the registry gave it the first free letter
+        letter = next(
+            (c.hotkey_letter for c in (await reg.snapshot()).classes if c.class_id == new_id), None
+        )
     return {
         'class_id': new_id,
         'class_name': name,
