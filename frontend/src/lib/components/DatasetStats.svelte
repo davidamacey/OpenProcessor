@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   /*
    * Pipeline-stats dashboard panel.
    *
@@ -43,17 +44,15 @@
   // slot-less deployment.
   const statsSlot = $derived(registeredSlots.find((s) => s.stats));
 
-  // Polling interval prop preserved for back-compat with existing
-  // callers; ignored now that we're push-driven.
+  type StatsFeed = ReturnType<typeof createDatasetStatsFeed>;
   interface Props {
-    /** @deprecated polling removed 2026-05-21 — kept so callers don't break. */
-    pollMs?: number;
+    /** The page's feed, when other panels read the same stats; one SSE connection is enough. */
+    feed?: StatsFeed;
   }
-  // Destructured, not a bare `$props()` binding: Svelte can't infer the
-  // exposed property set from a non-destructured declaration.
-  let { pollMs: _pollMs }: Props = $props();
+  const { feed: shared }: Props = $props();
 
-  const feed = createDatasetStatsFeed();
+  // Created once at init: a prop that arrives later would not change which stream is live.
+  const feed = untrack(() => shared) ?? createDatasetStatsFeed();
   const stats = $derived(feed.stats);
   const error = $derived(feed.error);
   const lastUpdated = $derived(feed.lastUpdated);

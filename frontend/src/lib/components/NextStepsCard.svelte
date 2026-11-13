@@ -2,9 +2,10 @@
   import Button from '$components/ui/Button.svelte';
   import Icon from '$components/ui/Icon.svelte';
   /**
-   * The served loop: every step in the order the backend gives, the first
-   * undone one marked as the next. Label, detail, done flag and the page each
-   * link opens all come from `GET /next_steps`; nothing is derived here.
+   * The served loop as a stepper: every step in the order the backend gives. A done step is one
+   * muted line; the first undone step is the open one, with its detail and the page's one primary
+   * button (or the served action's button); the rest are one line each. Label, detail, done flag
+   * and the page each link opens all come from `GET /next_steps`; nothing is derived here.
    */
   import { resolve } from '$app/paths';
   import { projectHref, type ProjectSubPath } from '$lib/projectPaths';
@@ -35,8 +36,11 @@
   <h2 id="next-steps-title" class="mb-3 text-title font-semibold">Next steps</h2>
   <ol class="flex flex-col gap-2">
     {#each steps as step (step.id)}
+      {@const current = next?.id === step.id}
       <li
-        class="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-body"
+        class="flex flex-wrap items-center gap-x-3 gap-y-1 text-body {current
+          ? 'rounded-control border border-line-strong bg-surface-2 px-3 py-2'
+          : ''}"
         data-testid="next-step"
         data-step-id={step.id}
         data-done={step.done}
@@ -47,18 +51,28 @@
           class={step.done ? 'text-success-text' : 'text-fg-3'}
           label={step.done ? 'Done' : 'To do'}
         />
-        <a
-          href={resolve(projectHref(path(step), slug))}
-          class="font-medium {step.done ? 'text-fg-2' : 'text-fg-1'}"
-          aria-current={next?.id === step.id ? 'step' : undefined}
-          data-testid={next?.id === step.id ? 'next-step-current' : undefined}
-          >{step.label}</a
-        >
-        <span class="text-fg-2">{step.detail}</span>
+        {#if current && !step.action}
+          <a
+            href={resolve(projectHref(path(step), slug))}
+            class="btn btn-primary btn-sm"
+            aria-current="step"
+            data-testid="next-step-current">{step.label}</a
+          >
+        {:else}
+          <a
+            href={resolve(projectHref(path(step), slug))}
+            class="font-medium {step.done ? 'text-fg-3' : 'text-fg-1'}"
+            aria-current={current ? 'step' : undefined}
+            data-testid={current ? 'next-step-current' : undefined}>{step.label}</a
+          >
+        {/if}
+        {#if !step.done}
+          <span class="text-fg-2">{step.detail}</span>
+        {/if}
         {#if step.action && !step.done && onaction}
           <Button
             size="sm"
-            variant={next?.id === step.id ? 'primary' : 'secondary'}
+            variant={current ? 'primary' : 'secondary'}
             onclick={() => onaction(step)}
             data-testid="next-step-action">{actionLabel(step)}</Button
           >

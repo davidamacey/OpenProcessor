@@ -1,33 +1,13 @@
 <script lang="ts">
-  import { formatTimestamp } from '$lib/format/date';
-  import { apiErrorText } from '$lib/api_errors';
   /*
-   * Pipeline dashboard route — the app's single home page.
-   *
-   * Merged 2026-09 from the legacy `/` page (recent-crops + quick-actions
-   * + a per-class balance chart) into this one, since `/dashboard` was
-   * already the live/current pipeline view and having two overlapping
-   * "home" pages was confusing. Nothing from the legacy page was
-   * dropped — see below for where each piece landed:
-   *
-   *   1. `DatasetStats` — unchanged, already here. The Auto-label run lives in
-   *      the Workspace's AI menu.
-   *   2. Quick actions (VLM assist link / Export / Snapshot). A VLM run is an
-   *      assist run started from a cluster page, so the VLM action links to the Workspace AI menu.
-   *   3. Class balance bar chart — brought over verbatim; this is a
-   *      genuinely different view from DatasetStats' "Labeled by
-   *      source" breakdown (per-CLASS, not per-source), so it's kept
-   *      as its own section rather than folded into DatasetStats.
-   *   4. Recent labels grid — brought over verbatim.
-   *
-   * The legacy Ingestion panel (Total crops/Validated/Test holdout/
-   * Images processed/Pending/Last run) was NOT brought over — every one
-   * of those numbers is already shown live (SSE, not a 30s poll) in
-   * DatasetStats' "Pipeline stats" and "In-flight pipeline" sections.
-   * Duplicating it here would just be two numbers disagreeing during
-   * the gap between polls.
+   * Pipeline dashboard route: the app's single home page. Top to bottom: the Next steps
+   * stepper (served, in loop order), four headline numbers, the clustering card beside the
+   * Data quality card, the class balance, then "Pipeline details" and "Recent labels" as
+   * collapsed disclosures. Refresh is the header action; the YOLO export lives on Model >
+   * Export and VLM activation in Next steps and Settings.
    */
   import { apiBase } from '$lib/api';
+  import Button from '$components/ui/Button.svelte';
   import PageHeader from '$components/ui/PageHeader.svelte';
   import PageShell from '$components/ui/PageShell.svelte';
   import AdoptDetectorDialog from '$components/detector/AdoptDetectorDialog.svelte';
@@ -37,20 +17,18 @@
   import { healthStore } from '$stores/health.svelte';
   import { keyboardStore } from '$stores/keyboard.svelte';
   import ClusterRunPanel from '$components/clusters/ClusterRunPanel.svelte';
-  import VlmQuickAction from '$components/vlm/VlmQuickAction.svelte';
+  import DashboardKpis from '$components/dashboard/DashboardKpis.svelte';
   import DataQualityCard from '$components/dashboard/DataQualityCard.svelte';
   import DatasetStats from '$components/DatasetStats.svelte';
   import DetectionsSummaryPanel from '$lib/components/detector/DetectionsSummaryPanel.svelte';
   import ClassBalanceChart from '$components/ClassBalanceChart.svelte';
+  import { createDatasetStatsFeed } from '$lib/datasetStatsFeed.svelte';
   import { getCrops, getThumbUrl } from '$lib/api_cropRead';
-  import { exportYolo, getTestHoldoutStats } from '$lib/api_export';
-  import { nearDupStaleLevels } from '$lib/nearDup/staleRefusal';
+  import { getTestHoldoutStats } from '$lib/api_export';
   import { getStats } from '$lib/api_stats';
   import type { Crop } from '$lib/types';
-  import type { ExportResult, TestHoldoutStats } from '$lib/types_export';
+  import type { TestHoldoutStats } from '$lib/types_export';
   import type { StatsSummary } from '$lib/types_health';
-  import { toastStore } from '$stores/toast.svelte';
-  import Modal from '$components/Modal.svelte';
 
   $effect(() => {
     keyboardStore.setScope('dashboard');
@@ -60,44 +38,20 @@
     void nextStepsStore.init();
   });
 
-  // One primary button per view: the served next step says which action it is. A step that
-  // offers a write (the adopt button on the card) takes it over from the two below.
-  const nextId = $derived(nextStepsStore.next?.action ? null : nextStepsStore.next?.id);
+  // One live stats stream feeds the headline numbers and the pipeline details.
+  const feed = createDatasetStatsFeed();
+
   let adoptOpen = $state(false);
 
-  // ---- Class balance + recent labels (from the legacy `/` page) --------
-
   let legacyStats = $state<StatsSummary | null>(null);
-  // Served per-class test holdout, so the balance chart shows trainable
-  // counts (D2). null = unavailable; the chart says so rather than guessing.
+  // Served per-class test holdout, so the balance chart shows trainable counts.
+  // null = unavailable; the chart says so rather than guessing.
   let holdoutStats = $state<TestHoldoutStats | null>(null);
   let recent = $state<Crop[]>([]);
-  let legacyLoading = $state<boolean>(false);
+  let loading = $state<boolean>(false);
 
-  // M13 (2026-09-24 interactive pass): "Export Dataset (YOLO)" used to
-  // fire POST {API_PREFIX}/export/yolo with no confirmation and toast
-  // "job started" — but that endpoint is synchronous (verified live and
-  // against OpenProcessor's export_yolo handler: it `await`s the full
-  // 5-step export pipeline before returning), so the toast lied about
-  // what had actually happened by the time it appeared. A confirm step
-  // now gates the click (the export can take a while and touches the
-  // frozen dataset), and the modal renders the real returned fields
-  // once the request resolves rather than assuming a job id exists.
-  let exportConfirmOpen = $state<boolean>(false);
-  let exportRunning = $state<boolean>(false);
-  let exportResult = $state<ExportResult | null>(null);
-  let exportError = $state<string | null>(null);
-
-  // m12 (2026-09-24 interactive pass): Esc/backdrop-click dismiss the export
-  // confirm dialog too, guarded like its own Cancel button — never while the
-  // request is in flight.
-  function closeExportConfirm(): void {
-    if (exportRunning) return;
-    exportConfirmOpen = false;
-  }
-
-  async function refreshLegacy(): Promise<void> {
-    legacyLoading = true;
+  async function refresh(): Promise<void> {
+    loading = true;
     try {
       const [s, c, h] = await Promise.allSettled([
         getStats(),
@@ -112,49 +66,29 @@
       holdoutStats = h.status === 'fulfilled' ? h.value : null;
       recent = c.status === 'fulfilled' ? c.value.items : [];
     } finally {
-      legacyLoading = false;
+      loading = false;
     }
+    void nextStepsStore.refresh();
   }
 
   $effect(() => {
-    void refreshLegacy();
-    const id = setInterval(() => void refreshLegacy(), 30_000);
+    void refresh();
+    const id = setInterval(() => void refresh(), 30_000);
     return () => clearInterval(id);
   });
-
-  function openExportConfirm(): void {
-    exportResult = null;
-    exportError = null;
-    exportConfirmOpen = true;
-  }
-
-  async function runExport(): Promise<void> {
-    exportRunning = true;
-    exportResult = null;
-    exportError = null;
-    try {
-      // Synchronous — the response IS the finished export, not a
-      // queued-job acknowledgement. Render it directly.
-      exportResult = await exportYolo();
-      toastStore.success(
-        `Export complete: ${exportResult.export_dir ?? exportResult.status}`,
-      );
-    } catch (e) {
-      exportError = nearDupStaleLevels(e)
-        ? 'Near-duplicate groups are stale: update them on the Export page, then export again.'
-        : apiErrorText(e);
-      toastStore.error(`Export failed: ${exportError}`);
-    } finally {
-      exportRunning = false;
-    }
-  }
 </script>
 
 <PageShell width="wide" class="space-y-6">
   <PageHeader
     title="Dashboard"
-    description="Pipeline stats and manual clustering control. Stats refresh every 10s."
-  />
+    description="Where the dataset stands and what to do next."
+  >
+    {#snippet actions()}
+      <Button icon="refresh-cw" onclick={() => void refresh()} disabled={loading}
+        >{loading ? 'Refreshing…' : 'Refresh'}</Button
+      >
+    {/snippet}
+  </PageHeader>
 
   {#if !healthStore.ok}
     <div
@@ -177,33 +111,14 @@
     />
   {/if}
 
-  <!-- Quick actions -->
-  <section class="surface flex flex-wrap items-center gap-2 p-4">
-    <h2 class="mr-3 text-body font-semibold text-fg-2">Quick actions</h2>
-    <VlmQuickAction primary={nextId === 'label'} />
-    <button class="btn" type="button" onclick={openExportConfirm}>
-      Export Dataset (YOLO)
-    </button>
-    <span class="grow"></span>
-    <button
-      class="btn"
-      type="button"
-      onclick={() => void refreshLegacy()}
-      disabled={legacyLoading}
-    >
-      {legacyLoading ? 'Refreshing...' : 'Refresh'}
-    </button>
-  </section>
+  <DashboardKpis stats={feed.stats} />
 
-  <ClusterRunPanel primary={nextId === 'cluster'} />
+  <div class="grid gap-6 lg:grid-cols-2">
+    <ClusterRunPanel primary={false} />
+    <DataQualityCard />
+  </div>
 
-  <DataQualityCard />
-
-  <DatasetStats />
-
-  <DetectionsSummaryPanel />
-
-  <!-- Class balance (D2, visual audit 2026-09-24): ClassBalanceChart. -->
+  <!-- Class balance: ClassBalanceChart. -->
   <section class="surface p-4">
     {#if !legacyStats}
       <p class="text-body text-fg-3">Loading...</p>
@@ -216,13 +131,24 @@
     {/if}
   </section>
 
-  <!-- Recent activity -->
-  <section class="surface p-4">
-    <h2 class="mb-3 text-body font-semibold text-fg-2">Recent labels (last 20)</h2>
+  <details class="surface p-4" data-testid="pipeline-details">
+    <summary class="cursor-pointer text-title font-semibold text-fg-1"
+      >Pipeline details</summary
+    >
+    <div class="mt-4 space-y-6">
+      <DatasetStats {feed} />
+      <DetectionsSummaryPanel />
+    </div>
+  </details>
+
+  <details class="surface p-4" data-testid="recent-labels">
+    <summary class="cursor-pointer text-title font-semibold text-fg-1"
+      >Recent labels</summary
+    >
     {#if recent.length === 0}
-      <p class="text-body text-fg-3">No recent labels.</p>
+      <p class="mt-3 text-body text-fg-3">No recent labels.</p>
     {:else}
-      <ul class="grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-10">
+      <ul class="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-5 lg:grid-cols-10">
         {#each recent as crop (crop.id)}
           <li class="rounded-md border border-line bg-surface-1">
             <img
@@ -241,7 +167,7 @@
         {/each}
       </ul>
     {/if}
-  </section>
+  </details>
 </PageShell>
 
 {#if adoptOpen}
@@ -249,74 +175,4 @@
     onclose={() => (adoptOpen = false)}
     ondone={() => void nextStepsStore.refresh()}
   />
-{/if}
-
-{#if exportConfirmOpen}
-  <!-- M13 (2026-09-24 interactive pass): confirm before kicking off a
-       synchronous full-dataset YOLO export, and show the served result
-       (or error) once it resolves — no "job started" fiction. -->
-  <Modal label="Export dataset confirm" onclose={closeExportConfirm}>
-    <h3 class="mb-3 text-title font-semibold">Export dataset (YOLO)</h3>
-    {#if !exportResult && !exportError}
-      <p class="mb-4 text-meta text-fg-3">
-        Runs the full YOLO export pipeline synchronously (resize, stratified split
-        honoring the frozen test holdout, manifest write) — this can take a while and the
-        page will wait for it to finish.
-      </p>
-    {/if}
-    {#if exportRunning}
-      <p class="mb-4 text-meta text-fg-2">Exporting… this may take a few minutes.</p>
-    {/if}
-    {#if exportError}
-      <p class="mb-4 text-meta text-danger-text">Export failed: {exportError}</p>
-    {/if}
-    {#if exportResult}
-      <dl class="mb-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-meta">
-        <dt class="text-fg-3">Status</dt>
-        <dd class="text-fg-1">{exportResult.status}</dd>
-        {#if exportResult.export_dir}
-          <dt class="text-fg-3">Export dir</dt>
-          <dd class="break-all text-fg-1"><code>{exportResult.export_dir}</code></dd>
-        {/if}
-        {#if exportResult.dataset_sha}
-          <dt class="text-fg-3">Dataset SHA</dt>
-          <dd class="break-all text-fg-1"><code>{exportResult.dataset_sha}</code></dd>
-        {/if}
-        {#if exportResult.split_counts}
-          <dt class="text-fg-3">Split counts</dt>
-          <dd class="text-fg-1 tabular-nums">
-            {Object.entries(exportResult.split_counts)
-              .map(([k, v]) => `${k}: ${v}`)
-              .join(' · ')}
-          </dd>
-        {/if}
-        {#if exportResult.finished_at}
-          <dt class="text-fg-3">Finished</dt>
-          <dd class="text-fg-1 tabular-nums">
-            {formatTimestamp(exportResult.finished_at)}
-          </dd>
-        {/if}
-      </dl>
-    {/if}
-    <div class="flex justify-end gap-2">
-      <button
-        type="button"
-        class="btn"
-        onclick={closeExportConfirm}
-        disabled={exportRunning}
-      >
-        {exportResult || exportError ? 'Close' : 'Cancel'}
-      </button>
-      {#if !exportResult && !exportError}
-        <button
-          type="button"
-          class="btn btn-primary"
-          onclick={runExport}
-          disabled={exportRunning}
-        >
-          {exportRunning ? 'Exporting…' : 'Export'}
-        </button>
-      {/if}
-    </div>
-  </Modal>
 {/if}
