@@ -32,6 +32,16 @@ def test_image_details_render_a_preview_and_one_editor_link(stub, page, app_url)
     expect(details.get_by_role('button', name='View full size')).to_be_visible()
 
 
+def test_clicking_the_preview_opens_the_lightbox(stub, page, app_url):
+    serve_gallery(stub, [])
+    stub.on('GET', r'/images/img-\d+/file', (200, b'', 'image/jpeg'))
+    _open_details(page, app_url)
+    page.get_by_test_id('image-preview-open').click()
+    expect(page.get_by_test_id('lightbox')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    page.keyboard.press('Escape')
+    expect(page.get_by_test_id('lightbox')).to_have_count(0)
+
+
 def test_show_its_detections_switches_to_detections_with_the_image_scope(stub, page, app_url):
     serve_gallery(stub, [])
     stub.on('GET', r'/crops(\?|$)', {'total': 0, 'next_cursor': None, 'limit': 60, 'crops': []})
@@ -54,5 +64,6 @@ def test_back_to_the_cell_restores_the_cell_thumbnails(stub, page, app_url):
     page.get_by_test_id('cell-card').first.click()
     expect(page.get_by_test_id('image-details')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     expect(page.get_by_test_id('cell-cards')).to_have_count(0)
+    expect(page.get_by_test_id('back-to-cell')).to_contain_text(re.compile(r'\(\d[\d,]* photos?\)'))
     page.get_by_test_id('back-to-cell').click()
     expect(page.get_by_test_id('cell-card')).to_have_count(12, timeout=ACTION_TIMEOUT_MS)

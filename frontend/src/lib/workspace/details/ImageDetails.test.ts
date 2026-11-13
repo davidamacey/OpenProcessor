@@ -11,6 +11,7 @@ vi.mock('$lib/api_images', () => ({
 }));
 
 import { getImage } from '$lib/api_images';
+import { activeMap } from '$lib/map/activeMap.svelte';
 import ImageDetails from './ImageDetails.svelte';
 
 describe('ImageDetails', () => {
@@ -105,5 +106,48 @@ describe('ImageDetails', () => {
     await tick();
     flushSync();
     expect(plain.querySelector('[data-testid="back-to-cell"]')).toBeNull();
+  });
+
+  it('names the photos of the cell it came from in Back to the cell', async () => {
+    vi.mocked(getImage).mockResolvedValue(imageDetail());
+    activeMap.ctl = { summary: { images: 14 } } as never;
+    const mounted = mountUi(ImageDetails, {
+      ws: {
+        url: { scope: null },
+        previousFocus: { kind: 'cell', id: '3:4' },
+        setFocus: vi.fn(),
+      },
+      id: 'img-1',
+    });
+    await tick();
+    await tick();
+    flushSync();
+    expect(mounted.querySelector('[data-testid="back-to-cell"]')!.textContent).toContain(
+      'Back to the cell (14 photos)',
+    );
+    activeMap.ctl = { summary: { images: 1 } } as never;
+    flushSync();
+    expect(mounted.querySelector('[data-testid="back-to-cell"]')!.textContent).toContain(
+      'Back to the cell (1 photo)',
+    );
+    activeMap.ctl = null;
+    flushSync();
+    expect(
+      mounted.querySelector('[data-testid="back-to-cell"]')!.textContent?.trim(),
+    ).toBe('Back to the cell');
+  });
+
+  it('opens the lightbox when the preview is clicked', async () => {
+    vi.mocked(getImage).mockResolvedValue(imageDetail());
+    const ws = { openLightbox: vi.fn(), setScope: vi.fn(), url: { scope: null } };
+    const el = mountUi(ImageDetails, { ws, id: 'img-1' });
+    await tick();
+    await tick();
+    flushSync();
+    (el.querySelector('[data-testid="image-preview-open"]') as HTMLElement).click();
+    expect(ws.openLightbox).toHaveBeenCalledWith(
+      'img-1',
+      el.querySelector('h2')!.textContent?.trim(),
+    );
   });
 });
