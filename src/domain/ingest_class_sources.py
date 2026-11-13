@@ -47,6 +47,10 @@ PROPAGATED_CLASS_SOURCE = 'assist_propagated'
 DETECTOR_CLASS_SOURCE = 'detector'
 # Label import's default (callers may pass their own).
 LABEL_IMPORT_CLASS_SOURCE = 'external_label'
+# ``label_source`` of a machine label a person bulk-accepted (``POST /label_ops/accept_machine``):
+# the class_source is ``human``, so the lock rule protects it like any human label, and the source
+# says it was accepted in bulk rather than looked at one by one.
+HUMAN_BULK_ACCEPT_LABEL_SOURCE = 'human_bulk_accept'
 # ``label_source`` (not ``class_source``) value stamped by dataset import.
 # A distinct namespace from LABEL_IMPORT_CLASS_SOURCE above, which
 # is the class_source value. Both feed the lock rule (src/clients/occ.py).
@@ -101,6 +105,7 @@ __all__ = [
     'CLUSTER_MAJORITY_CLASS_SOURCE',
     'DEFAULT_PROPOSAL_CLASS_SOURCE',
     'DETECTOR_CLASS_SOURCE',
+    'HUMAN_BULK_ACCEPT_LABEL_SOURCE',
     'HUMAN_CLASS_SOURCE',
     'LABEL_IMPORT_CLASS_SOURCE',
     'LABEL_SOURCE_IMPORT',

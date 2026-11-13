@@ -1,6 +1,172 @@
 {
   "components": {
     "schemas": {
+      "AcceptHeldBack": {
+        "description": "Items the bar matches that the operation will not write, each counted once under the first\nreason that applies, in the order of the fields.",
+        "properties": {
+          "audit_sample": {
+            "description": "Drawn into an open accuracy audit.",
+            "title": "Audit Sample",
+            "type": "integer"
+          },
+          "deprecated_class": {
+            "description": "Carrying a deprecated class or the region class.",
+            "title": "Deprecated Class",
+            "type": "integer"
+          },
+          "excluded": {
+            "description": "Excluded, or dismissed from review.",
+            "title": "Excluded",
+            "type": "integer"
+          },
+          "holdout": {
+            "description": "In the frozen test holdout.",
+            "title": "Holdout",
+            "type": "integer"
+          },
+          "locked": {
+            "description": "Already validated (by a person or an import).",
+            "title": "Locked",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "excluded",
+          "holdout",
+          "audit_sample",
+          "locked",
+          "deprecated_class"
+        ],
+        "title": "AcceptHeldBack",
+        "type": "object"
+      },
+      "AcceptMachineRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "default": true,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "filter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemFilter"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only items this filter matches; none for every item."
+          },
+          "min_confidence": {
+            "description": "The bar. The detector's own score, or the VLM's confidence category (high 0.92, medium 0.70, low 0.40).",
+            "maximum": 1.0,
+            "minimum": 0.5,
+            "title": "Min Confidence",
+            "type": "number"
+          },
+          "sources": {
+            "description": "Whose machine labels to accept.",
+            "items": {
+              "enum": [
+                "detector",
+                "vlm"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "min_confidence"
+        ],
+        "title": "AcceptMachineRequest",
+        "type": "object"
+      },
+      "AcceptMachineResponse": {
+        "description": "``POST /label_ops/accept_machine``: what accepting would do (a dry run) or did.\n\n``items`` and ``by_class`` count the labels the operation writes. A real run queues the\nrecorded operation (``op_id`` and ``job_id``, both null when nothing qualified).",
+        "properties": {
+          "by_class": {
+            "description": "The items by class, most first.",
+            "items": {
+              "$ref": "#/components/schemas/AcceptedClassCount"
+            },
+            "title": "By Class",
+            "type": "array"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "held_back": {
+            "$ref": "#/components/schemas/AcceptHeldBack"
+          },
+          "items": {
+            "description": "Machine labels the operation accepts.",
+            "title": "Items",
+            "type": "integer"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The queued job; poll GET /jobs/{job_id}.",
+            "title": "Job Id"
+          },
+          "op_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The recorded operation (undo it by id).",
+            "title": "Op Id"
+          },
+          "remaining": {
+            "description": "Items beyond this operation (one writes at most 20,000): accept again.",
+            "title": "Remaining",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dry_run",
+          "items",
+          "by_class",
+          "held_back",
+          "remaining"
+        ],
+        "title": "AcceptMachineResponse",
+        "type": "object"
+      },
+      "AcceptedClassCount": {
+        "properties": {
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "class_name",
+          "count"
+        ],
+        "title": "AcceptedClassCount",
+        "type": "object"
+      },
       "AcceptedDataset": {
         "properties": {
           "frozen_test_sha": {
@@ -19689,7 +19855,8 @@
               "move",
               "assist_loop_propagate",
               "assist_loop_review",
-              "adopt_detector"
+              "adopt_detector",
+              "accept_machine"
             ],
             "title": "Kind",
             "type": "string"
@@ -60131,6 +60298,65 @@
           }
         },
         "summary": "Get Label Ops",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/label_ops/accept_machine": {
+      "post": {
+        "description": "Validate the machine's class on every item whose label clears a bar, as an undoable operation.\n\nThe detector's and the VLM's labels that reach `min_confidence` (and the chosen `sources`,\ninside the optional `filter`) become validated labels, `label_source` `human_bulk_accept`:\na person's decision, so the lock rule protects them from then on. Never written: an item a\nperson or an import validated, one in the test holdout, an excluded or review-dismissed one,\none drawn into an open accuracy audit, and one whose class is deprecated or the region class;\n`held_back` counts each. The operation shows in `GET /label_ops` and is undone like a bulk\nlabel (the machine class returns). `dry_run` (the default) counts and writes nothing; send\n`{\"dry_run\": false}` to run it (202 with the operation and its job). One operation writes at\nmost 20,000 items: `remaining` says how many are left, accept again for them.",
+        "operationId": "accept_machine_curation_projects__project__label_ops_accept_machine_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptMachineRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptMachineResponse"
+                }
+              }
+            },
+            "description": "A dry run, or nothing qualified."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptMachineResponse"
+                }
+              }
+            },
+            "description": "The operation is queued as a job."
+          },
+          "409": {
+            "description": "project_read_only."
+          },
+          "422": {
+            "description": "A malformed bar or filter."
+          }
+        },
+        "summary": "Accept Machine",
         "tags": [
           "Curation"
         ]

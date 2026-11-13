@@ -376,6 +376,7 @@ exempt-modules = [
     "src.routers.curation._image_query_params",  # ImageViewQuery
     "src.routers.curation._common_models",       # route request/response models
     "src.routers.curation._crop_write_models",
+    "src.routers.curation._accept_machine_models",
     "src.routers.curation._export_models",
     "src.routers.curation._health_models",
     "src.routers.curation._holdout_models",

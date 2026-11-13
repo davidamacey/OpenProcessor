@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from src.services.curation.class_label import ItemLabel, class_label_update
-from src.services.curation.class_write_guard import class_write_locked
+from src.services.curation.label_ops.machine_merge import machine_write_blocked
 from src.utils.class_names import normalize_class_name
 
 
@@ -30,11 +30,7 @@ def adoption_merger(
 
     def merge(current: dict[str, Any]) -> dict[str, Any]:
         # class_excluded is re-checked here: a person may exclude an item after the id snapshot.
-        if (
-            class_write_locked(current)
-            or current.get('class_excluded')
-            or current.get('class_id') is not None
-        ):
+        if machine_write_blocked(current) or current.get('class_id') is not None:
             return {}
         found = classes.get(normalize_class_name(str(current.get('detector_class_name') or '')))
         if found is None:

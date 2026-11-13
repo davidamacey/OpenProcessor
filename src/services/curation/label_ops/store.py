@@ -37,6 +37,7 @@ from src.domain.label_ops import (
     LABEL_OP_ID_RE,
     LabelOpKind,
     OpFingerprint,
+    accept_fingerprint,
     detector_fingerprint,
     label_fingerprint,
     move_fingerprint,
@@ -142,6 +143,8 @@ async def create_op_in(
     at = now_iso()
     if new.kind == 'adopt_detector':
         fingerprint = detector_fingerprint(op_id=str(op_id), writer=new.writer, at=at)
+    elif new.kind == 'accept_machine':
+        fingerprint = accept_fingerprint(op_id=str(op_id), writer=new.writer, at=at)
     elif new.kind in ('label', 'assist_loop_propagate'):
         assert new.class_name is not None
         make = label_fingerprint if new.kind == 'label' else propagated_fingerprint

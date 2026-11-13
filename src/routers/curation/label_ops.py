@@ -9,15 +9,20 @@ from fastapi.responses import JSONResponse
 
 from src.config.project_context import current_project_id
 from src.core.db_session import DbSessionDep
+from src.routers.curation._accept_machine_models import AcceptMachineRequest
 from src.routers.curation._common import OpenSearchDep, RegistryDep, router
 from src.routers.curation._selection_write_models import LabelOpAccepted
 from src.schemas.curation.label_ops import (
+    AcceptedClassCount,
+    AcceptHeldBack,
+    AcceptMachineResponse,
     AdoptDetectorRequest,
     AdoptDetectorResponse,
     LabelOpList,
     LabelOpUndoRequest,
     LabelOpUndoResponse,
 )
+from src.services.curation.accept_machine import AcceptPlan, plan_accept, start_accept
 from src.services.curation.detector_adoption import detector_census, plan_adoption, start_adoption
 from src.services.curation.label_ops.undo import start as undo_start, undo_dry_run
 from src.services.curation.label_ops.views import list_label_ops
@@ -124,6 +129,74 @@ async def adopt_detector(
         classes_to_create=list(started.created),
         blocked=list(started.plan.blocked),
         blocked_items=started.plan.blocked_items,
+        remaining=started.remaining,
+        op_id=None if started.op_id is None else str(started.op_id),
+        job_id=None if started.job_id is None else str(started.job_id),
+    )
+    return JSONResponse(
+        status_code=200 if started.op_id is None else 202, content=body.model_dump()
+    )
+
+
+def _accept_body(plan: AcceptPlan, **extra: Any) -> AcceptMachineResponse:
+    return AcceptMachineResponse(
+        items=plan.items,
+        by_class=[AcceptedClassCount(class_name=n, count=c) for n, c in plan.by_class],
+        held_back=AcceptHeldBack(**vars(plan.held_back)),
+        **extra,
+    )
+
+
+@router.post(
+    '/label_ops/accept_machine',
+    response_model=None,
+    responses={
+        200: {'model': AcceptMachineResponse, 'description': 'A dry run, or nothing qualified.'},
+        202: {'model': AcceptMachineResponse, 'description': 'The operation is queued as a job.'},
+        409: {'description': 'project_read_only.'},
+        422: {'description': 'A malformed bar or filter.'},
+    },
+)
+async def accept_machine(
+    payload: AcceptMachineRequest,
+    opensearch: OpenSearchDep,
+    registry: RegistryDep,
+    session: DbSessionDep,
+) -> Any:
+    """Validate the machine's class on every item whose label clears a bar, as an undoable operation.
+
+    The detector's and the VLM's labels that reach `min_confidence` (and the chosen `sources`,
+    inside the optional `filter`) become validated labels, `label_source` `human_bulk_accept`:
+    a person's decision, so the lock rule protects them from then on. Never written: an item a
+    person or an import validated, one in the test holdout, an excluded or review-dismissed one,
+    one drawn into an open accuracy audit, and one whose class is deprecated or the region class;
+    `held_back` counts each. The operation shows in `GET /label_ops` and is undone like a bulk
+    label (the machine class returns). `dry_run` (the default) counts and writes nothing; send
+    `{"dry_run": false}` to run it (202 with the operation and its job). One operation writes at
+    most 20,000 items: `remaining` says how many are left, accept again for them.
+    """
+    doc = await registry.snapshot()
+    if payload.dry_run:
+        plan = await plan_accept(
+            opensearch,
+            doc.classes,
+            min_confidence=payload.min_confidence,
+            sources=payload.sources,
+            item_filter=payload.filter,
+        )
+        return _accept_body(plan, dry_run=True, remaining=0)
+    started = await start_accept(
+        session,
+        current_project_id(),
+        opensearch,
+        doc.classes,
+        min_confidence=payload.min_confidence,
+        sources=payload.sources,
+        item_filter=payload.filter,
+    )
+    body = _accept_body(
+        started.plan,
+        dry_run=False,
         remaining=started.remaining,
         op_id=None if started.op_id is None else str(started.op_id),
         job_id=None if started.job_id is None else str(started.job_id),
