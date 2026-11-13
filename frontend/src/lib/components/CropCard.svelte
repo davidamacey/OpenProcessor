@@ -80,6 +80,24 @@
   let expanded = $state<boolean>(false);
   let sourceMissing = $state<SourceMissing | null>(null);
   let editorOpen = $state<boolean>(false);
+  // A thumbnail that fails is asked for once more (a worker may have been busy); a second
+  // failure leaves a neutral "No preview" tile instead of a black square.
+  let thumbTries = $state(0);
+  const thumbSrc = $derived(
+    thumbTries === 0
+      ? getThumbUrl(crop.id)
+      : `${getThumbUrl(crop.id)}&retry=${thumbTries}`,
+  );
+  function onThumbError(e: Event): void {
+    if (thumbTries === 0) {
+      thumbTries = 1;
+      return;
+    }
+    thumbTries = 2;
+    void fetchSourceMissing((e.currentTarget as HTMLImageElement).src).then(
+      (m) => (sourceMissing = m),
+    );
+  }
 
   // Track the natural pixel size of the rendered thumbnail so we can
   // letterbox-compensate the region-ring overlay. The thumbnail is
@@ -245,22 +263,25 @@
       class="block h-full w-full focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
       aria-pressed={selected}
       data-crop-id={crop.id}
-      aria-label="Select crop {crop.id}"
+      aria-label={thumbTries >= 2
+        ? `Select crop ${crop.id}, no preview`
+        : `Select crop ${crop.id}`}
       onclick={(e) => onclick?.(crop, e)}
     >
-      {#if !sourceMissing}
+      {#if thumbTries >= 2}
+        <span
+          class="flex h-full w-full items-center justify-center text-meta text-fg-3"
+          data-testid="no-preview">No preview</span
+        >
+      {:else if !sourceMissing}
         <img
-          src={getThumbUrl(crop.id)}
+          src={thumbSrc}
           alt=""
           loading="lazy"
           draggable="false"
           class="h-full w-full object-contain [-webkit-user-drag:none]"
           onload={onImgLoad}
-          onerror={(e) => {
-            const t = e.currentTarget as HTMLImageElement;
-            t.style.opacity = '0.2';
-            void fetchSourceMissing(t.src).then((m) => (sourceMissing = m));
-          }}
+          onerror={onThumbError}
         />
       {/if}
     </button>

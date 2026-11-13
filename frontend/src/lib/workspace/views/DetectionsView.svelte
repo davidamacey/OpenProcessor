@@ -138,6 +138,7 @@
         items={pager.items}
         {sel}
         ondetail={(c) => ws.setFocus({ kind: 'item', id: c.id })}
+        onfocuscrop={(c) => ws.setFocus({ kind: 'item', id: c.id })}
       />
       <div
         use:infiniteScroll={{
