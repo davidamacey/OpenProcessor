@@ -23,6 +23,8 @@
 
   // A queue that cannot fill is not served, so there is no row for it.
   const queues = $derived(reviewTabsVocabularyStore.list);
+  // The served first queue with work: where Review opens with no queue chosen.
+  const defaultQueue = $derived(reviewTabsVocabularyStore.defaultTab);
 </script>
 
 <aside
@@ -45,7 +47,8 @@
             class="flex min-h-9 w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-body hover:bg-surface-1 {ws
               .url.queue === q.id
               ? 'bg-surface-2 text-white'
-              : 'text-fg-2'}"
+              : 'text-fg-2'} {q.id === defaultQueue ? 'font-semibold' : ''}"
+            data-default-queue={q.id === defaultQueue ? 'true' : undefined}
             aria-current={ws.url.queue === q.id ? 'true' : undefined}
             title={q.description}
             data-testid="queue-{q.id}"
