@@ -6,6 +6,7 @@
    * panel); Shift+drag or the lasso turns an area into a filter chip for every view.
    */
   import { untrack } from 'svelte';
+  import Icon from '$components/ui/Icon.svelte';
   import MapCanvas from '$components/map/MapView.svelte';
   import { activeMap } from '$lib/map/activeMap.svelte';
   import { AreaTools } from '$lib/map/areaTools.svelte';
@@ -74,6 +75,21 @@
     if (!ws.detailsOpen) ws.toggleDetails();
   }
 
+  // The counts under the filter are the server's; before a cell answer the totals stand.
+  const matching = $derived(ctl.cells?.n_located_matching ?? null);
+  const locatedText = $derived.by(() => {
+    const total = ctl.meta?.n_located ?? 0;
+    return matching != null && matching < total
+      ? `${matching.toLocaleString()} of ${total.toLocaleString()} located photos match`
+      : `${total.toLocaleString()} located`;
+  });
+  const withoutLocation = $derived(
+    ctl.cells?.n_unlocated_matching ?? ctl.meta?.n_without_location ?? 0,
+  );
+  const noneMatch = $derived(
+    matching === 0 && (ctl.meta?.n_located ?? 0) > 0 && !ctl.loadingCells,
+  );
+
   function onview(view: MapViewQuery): void {
     void ctl.loadCells(view);
   }
@@ -82,16 +98,18 @@
 <div class="flex h-full min-h-0 flex-1 flex-col" data-testid="map-view">
   <h1 class="sr-only">Map</h1>
   {#if ctl.meta?.available}
-    <p class="flex flex-wrap items-center gap-x-3 px-4 py-2 text-meta text-fg-2">
-      <span data-testid="map-located">{ctl.meta.n_located.toLocaleString()} located</span>
+    <div
+      class="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-meta text-fg-2"
+    >
+      <span class="tabular-nums" data-testid="map-located">{locatedText}</span>
       <span aria-hidden="true">·</span>
-      {#if ctl.meta.n_without_location > 0}
+      {#if withoutLocation > 0}
         <button
           type="button"
           class="underline decoration-dotted underline-offset-2 hover:text-white"
           data-testid="map-without-location"
           onclick={() => ctl.showWithoutLocation()}
-          >{ctl.meta.n_without_location.toLocaleString()} without location</button
+          >{withoutLocation.toLocaleString()} without location</button
         >
       {:else}
         <span data-testid="map-without-location">0 without location</span>
@@ -101,15 +119,26 @@
           ? 'coarse (about 1 km)'
           : 'exact'}</span
       >
-      <span class="text-fg-3">Shift+drag selects an area, or</span>
+      <span class="grow"></span>
       <button
         type="button"
-        class="btn-sm"
+        class="btn btn-ghost btn-sm"
         aria-pressed={area.armed}
+        title="Shift+drag on the map draws an area"
         data-testid="map-lasso"
-        onclick={() => area.toggleLasso()}>draw a lasso</button
+        onclick={() => area.toggleLasso()}
       >
-    </p>
+        <Icon name="square-dashed" size={14} />Draw an area
+      </button>
+      <button
+        type="button"
+        class="btn btn-primary"
+        data-testid="map-show-gallery"
+        onclick={() => ws.setView('gallery')}
+      >
+        Show in Gallery
+      </button>
+    </div>
   {/if}
   {#if ctl.loadingMeta}
     <p class="p-4 text-body text-fg-3" role="status">Loading…</p>
@@ -192,6 +221,31 @@
           ctl.focusPin(id);
         }}
       />
+      {#if noneMatch && ctl.meta}
+        <div
+          class="absolute inset-x-6 top-6 z-10 flex flex-wrap items-center gap-3 rounded-card border border-line-strong bg-surface-2/95 px-4 py-3 text-body text-fg-1 shadow-e3"
+          role="status"
+          data-testid="map-none-match"
+        >
+          <span
+            >None of the {ctl.meta.n_located.toLocaleString()} located photo{ctl.meta
+              .n_located === 1
+              ? ''
+              : 's'} match the filter.</span
+          >
+          <button
+            type="button"
+            class="btn"
+            data-testid="map-clear-filters"
+            onclick={() => {
+              ws.filter.clear();
+              ws.applyFilter();
+            }}
+          >
+            Clear filters
+          </button>
+        </div>
+      {/if}
       {#if ctl.loadingCells}
         <span class="chip absolute left-6 top-4 bg-surface-1/90 text-fg-2">Loading…</span>
       {/if}

@@ -53,7 +53,8 @@
             class="block w-full overflow-hidden rounded border border-line"
             title={card.file_name}
             data-testid="cell-card"
-            onclick={() => ws.setFocus({ kind: 'image', id: card.image_id })}
+            onclick={() =>
+              ws.setFocus({ kind: 'image', id: card.image_id }, { push: true })}
           >
             <img
               src={card.thumbnail_url}

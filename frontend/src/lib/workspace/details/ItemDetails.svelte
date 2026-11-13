@@ -7,6 +7,7 @@
   import type { Crop } from '$lib/types';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
+  import { keymapStore } from '$stores/keymap.svelte';
   import { editorHref } from '$lib/editor/editorUrl';
   import type { WorkspaceController } from '$lib/workspace/workspaceController.svelte';
 
@@ -40,10 +41,11 @@
     {#if crop.image_id}
       <a
         class="btn mb-3 inline-block"
+        title="Edit boxes ({keymapStore.glyph('workspace.open_editor')})"
         href={resolve(editorHref(crop.image_id, page.url.search))}
         data-testid="open-editor"
       >
-        Open in the image editor
+        Edit boxes
       </a>
     {/if}
     <CropMetaPanel
