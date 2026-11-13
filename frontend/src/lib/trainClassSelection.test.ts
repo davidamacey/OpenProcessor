@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * V-4: default/exclude selection keyed only off the served
  * `trainable_gap` (and served `kind`), never a client threshold.

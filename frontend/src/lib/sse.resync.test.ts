@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 /**
  * Event frames carry an opaque `id`. A browser-side reconnect (readyState
  * CONNECTING) sends `Last-Event-ID` itself and the server replays, so the
