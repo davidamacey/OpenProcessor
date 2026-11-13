@@ -345,9 +345,6 @@ async def gather_facts(
     images = int(
         (await opensearch.count(index=images_index(), body={'query': {'match_all': {}}}))['count']
     )
-    active, missing, below, free = class_facts(
-        classes, counts, await keymap_letters(session, project)
-    )
     must, must_not, _reason = review_queries.build_tab_query(
         'check_machine', include_test=False, text=None, max_rank=None, vector_field=None
     )
@@ -382,6 +379,9 @@ async def gather_facts(
     )
     plan = plan_adoption(await detector_census(opensearch), classes)
     async with project_tx(session, project):
+        active, missing, below, free = class_facts(
+            classes, counts, await keymap_letters(session, project)
+        )
         finished = await _finished_run_classes(session, project)
         partitions = await list_partitions(session, target='item', limit=1)
         serving = await serving_partition_id(

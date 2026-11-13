@@ -6,6 +6,7 @@
    */
   import Modal from '$components/Modal.svelte';
   import ProbeControl from '$components/ProbeControl.svelte';
+  import { apiErrorText } from '$lib/api_errors';
   import { getTrainRuns } from '$lib/api_train';
   import { canRunProbe, FIND_DISAGREEMENTS } from '$lib/probe';
   import type { TrainJobStatus } from '$lib/types_train';
@@ -25,7 +26,7 @@
       })
       .catch((e: unknown) => {
         if (ctl.signal.aborted) return;
-        error = e instanceof Error ? e.message : String(e);
+        error = apiErrorText(e);
         loading = false;
       });
     return () => ctl.abort();

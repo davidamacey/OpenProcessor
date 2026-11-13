@@ -68,8 +68,8 @@ async def test_an_export_on_disk_and_a_finished_run_mark_both_steps_done(
     project = make_project(conn, f'p{uuid.uuid4().hex[:12]}')
     job = uuid.uuid4()
     conn.execute(
-        'INSERT INTO jobs (id, project_id, kind, queue, status, max_queue_wait, requested_by) '
-        "VALUES (%s, %s, 'train', 'gpu_train', 'completed', interval '1 hour', 'test')",
+        'INSERT INTO jobs (id, project_id, kind, queue, status, max_queue_wait, requested_by, finished_at) '
+        "VALUES (%s, %s, 'train', 'gpu_train', 'completed', interval '1 hour', 'test', now())",
         (job, project),
     )
     conn.execute(
