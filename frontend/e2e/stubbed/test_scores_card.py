@@ -132,7 +132,7 @@ def test_scores_card_shows_error_with_retry_on_404(stub, page, app_url):
     register(stub, coverage_status=404)
 
     page.goto(f'{app_url}/p/default/settings/scores')
-    page.get_by_text('Curation scores').first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.get_by_role('heading', name='Curation scores').wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_load_state('networkidle', timeout=ACTION_TIMEOUT_MS)
 
     assert not [c for c in stub.console_errors if c.startswith('pageerror')]
@@ -145,7 +145,7 @@ def test_scores_card_compute_all_flow(stub, page, app_url):
     compute_calls = register(stub)
 
     page.goto(f'{app_url}/p/default/settings/scores')
-    page.get_by_text('Curation scores').first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.get_by_role('heading', name='Curation scores').wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_load_state('networkidle', timeout=ACTION_TIMEOUT_MS)
 
     assert not [c for c in stub.console_errors if c.startswith('pageerror')]
@@ -183,7 +183,7 @@ def test_scores_card_compute_selected_and_cancel(stub, page, app_url):
     compute_calls = register(stub)
 
     page.goto(f'{app_url}/p/default/settings/scores')
-    page.get_by_text('Curation scores').first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.get_by_role('heading', name='Curation scores').wait_for(timeout=ACTION_TIMEOUT_MS)
     page.wait_for_load_state('networkidle', timeout=ACTION_TIMEOUT_MS)
 
     page.get_by_label('Select near_dup').check()

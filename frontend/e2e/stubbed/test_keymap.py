@@ -54,6 +54,7 @@ def review_item(i: int) -> dict:
         proposed_class_id=1,
         proposed_class_name='widget',
         label_validated=False,
+        class_validated=False,
         label_source='model_suggestion',
         thumbnail_url=f'/curation/crops/crop-{i}/thumbnail',
     )
@@ -332,7 +333,9 @@ def test_keymap_rebind_persists_and_applies_live(stub, page, app_url):
     stub.on('PUT', r'/keymap(\?|$)', keymap_put)
 
     page.goto(f'{app_url}/p/default/settings/keyboard', wait_until='domcontentloaded')
-    page.wait_for_selector('text=Keyboard shortcuts', timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_role('heading', name='Keyboard shortcuts')).to_be_visible(
+        timeout=ACTION_TIMEOUT_MS
+    )
 
     # Find the Discard row, remove the default 'd' key, add 'x' instead.
     discard_row = page.locator('tr', has_text='Discard').first
@@ -453,7 +456,9 @@ def test_keymap_per_context_override(stub, page, app_url):
     stub.on('PUT', r'/keymap(\?|$)', keymap_put)
 
     page.goto(f'{app_url}/p/default/settings/keyboard', wait_until='domcontentloaded')
-    page.wait_for_selector('text=Keyboard shortcuts', timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_role('heading', name='Keyboard shortcuts')).to_be_visible(
+        timeout=ACTION_TIMEOUT_MS
+    )
 
     # Expand the 'discard' verb group's "Customize per page" disclosure
     # and rebind only the cluster.discard member row.
