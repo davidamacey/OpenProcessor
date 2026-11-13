@@ -103,11 +103,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -403,11 +409,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -703,11 +715,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -1004,11 +1022,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -1309,11 +1333,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -1621,11 +1651,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -1909,11 +1945,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -2209,11 +2251,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -2509,11 +2557,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -2813,11 +2867,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -3113,11 +3173,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -3420,11 +3486,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -3709,11 +3781,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -4030,11 +4108,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -4415,11 +4499,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -4710,11 +4800,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -5010,11 +5106,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -5306,11 +5408,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -5629,11 +5737,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -5956,11 +6070,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -6244,11 +6364,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -6540,11 +6666,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -6848,11 +6980,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -7175,11 +7313,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -7483,11 +7627,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"
@@ -7771,11 +7921,17 @@
    "workspace.scope_next": [
     "."
    ],
+   "workspace.label_cluster": [
+    "l"
+   ],
    "workspace.toggle_details": [
     "\\"
    ],
    "workspace.open_editor": [
     "shift+o"
+   ],
+   "workspace.lightbox": [
+    "shift+space"
    ],
    "workspace.class_picker": [
     "/"

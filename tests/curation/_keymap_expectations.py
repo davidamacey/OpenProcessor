@@ -12,5 +12,5 @@ LEGACY_RESERVED_HOTKEY_LETTERS = frozenset('gndzxuam/feb')
 # Per-box accept and reject, the overlay's backtick, the Workspace's view, scope and details
 # keys, and the image editor's tool, zoom and image-walking keys.
 DEFAULT_RESERVED_HOTKEYS = LEGACY_RESERVED_HOTKEY_LETTERS | frozenset(
-    {'y', 'r', '`', '[', ']', ',', '.', '\\', 'v', 'h', '=', '-', '0', '1'}
+    {'y', 'r', '`', '[', ']', ',', '.', '\\', 'v', 'h', 'l', '=', '-', '0', '1'}
 )
