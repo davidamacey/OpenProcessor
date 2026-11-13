@@ -1,0 +1,857 @@
+{
+ "hits": [
+  {
+   "dist": 2.3,
+   "lat": 52.5219184,
+   "lon": 13.4132147,
+   "ns": 6,
+   "pageid": 76083946,
+   "primary": "",
+   "title": "File:In The Rain (168199077).jpeg"
+  },
+  {
+   "dist": 5.1,
+   "lat": 52.521902,
+   "lon": 13.413125,
+   "ns": 6,
+   "pageid": 129875184,
+   "primary": "",
+   "title": "File:24 Hours of Truth Berlin (41179239410).jpg"
+  },
+  {
+   "dist": 5.8,
+   "lat": 52.521888,
+   "lon": 13.413284,
+   "ns": 6,
+   "pageid": 108323388,
+   "primary": "",
+   "title": "File:2021-07-19 Polizeiwagen am Alexanderplatz Berlin 01.jpg"
+  },
+  {
+   "dist": 6.8,
+   "lat": 52.521867,
+   "lon": 13.413284,
+   "ns": 6,
+   "pageid": 108323387,
+   "primary": "",
+   "title": "File:2021-07-19 Polizeiwagen am Alexanderplatz Berlin 02.jpg"
+  },
+  {
+   "dist": 7.7,
+   "lat": 52.521882,
+   "lon": 13.41331,
+   "ns": 6,
+   "pageid": 152272131,
+   "primary": "",
+   "title": "File:(20240831) Berlin Alexanderplatz 03.jpg"
+  },
+  {
+   "dist": 8.1,
+   "lat": 52.52185,
+   "lon": 13.413288,
+   "ns": 6,
+   "pageid": 129875176,
+   "primary": "",
+   "title": "File:24 Hours of Truth Berlin (42087851315).jpg"
+  },
+  {
+   "dist": 15.1,
+   "lat": 52.521833,
+   "lon": 13.413394,
+   "ns": 6,
+   "pageid": 76083425,
+   "primary": "",
+   "title": "File:The Temple (96806701).jpeg"
+  },
+  {
+   "dist": 17.5,
+   "lat": 52.522,
+   "lon": 13.413,
+   "ns": 6,
+   "pageid": 152272135,
+   "primary": "",
+   "title": "File:(20240831) Berlin Alexanderplatz 04.jpg"
+  },
+  {
+   "dist": 18.6,
+   "lat": 52.521806,
+   "lon": 13.412972,
+   "ns": 6,
+   "pageid": 85745082,
+   "primary": "",
+   "title": "File:Stra\u00dfenbahn Berlin M4 9063 Alexanderplatz 1912091102.jpg"
+  },
+  {
+   "dist": 23.7,
+   "lat": 52.52169,
+   "lon": 13.413136,
+   "ns": 6,
+   "pageid": 108323399,
+   "primary": "",
+   "title": "File:2021-07-19 Polizeiwagen am Alexanderplatz Berlin 04.jpg"
+  },
+  {
+   "dist": 24.2,
+   "lat": 52.522117,
+   "lon": 13.413175,
+   "ns": 6,
+   "pageid": 76084024,
+   "primary": "",
+   "title": "File:Ritual (203119661).jpeg"
+  },
+  {
+   "dist": 26.8,
+   "lat": 52.522108,
+   "lon": 13.413,
+   "ns": 6,
+   "pageid": 72833695,
+   "primary": "",
+   "title": "File:Running In Rain (139579335).jpeg"
+  },
+  {
+   "dist": 27.5,
+   "lat": 52.521666666667,
+   "lon": 13.413333333333,
+   "ns": 6,
+   "pageid": 81457159,
+   "primary": "",
+   "title": "File:20190330 142732 Berlin Alexanderplatz anagoria.jpg"
+  }
+ ],
+ "pages": [
+  {
+   "imageinfo": [
+    {
+     "descriptionshorturl": "https://commons.wikimedia.org/w/index.php?curid=152272131",
+     "descriptionurl": "https://commons.wikimedia.org/wiki/File:(20240831)_Berlin_Alexanderplatz_03.jpg",
+     "extmetadata": {
+      "Artist": {
+       "source": "commons-desc-page",
+       "value": "<a href=\"//commons.wikimedia.org/wiki/User:RoyZuoMedia\" title=\"User:RoyZuoMedia\">Roy Zuo</a>"
+      },
+      "Credit": {
+       "source": "commons-desc-page",
+       "value": "<span class=\"int-own-work\" lang=\"en\">Own work</span>"
+      },
+      "DateTimeOriginal": {
+       "source": "commons-desc-page",
+       "value": "2024-08-31 13:38:32"
+      },
+      "ImageDescription": {
+       "source": "commons-desc-page",
+       "value": "African festival and market at Alexanderplatz, Berlin, Germany\nkeywords: stock photography, crowd, passer-by, shoppers, customers"
+      },
+      "LicenseShortName": {
+       "hidden": "",
+       "source": "commons-desc-page",
+       "value": "CC BY-SA 4.0"
+      },
+      "LicenseUrl": {
+       "source": "commons-desc-page",
+       "value": "https://creativecommons.org/licenses/by-sa/4.0"
+      }
+     },
+     "height": 4160,
+     "metadata": [
+      {
+       "name": "DateTimeOriginal",
+       "value": "2024:08:31 13:38:32"
+      },
+      {
+       "name": "GPSLatitude",
+       "value": 52.521881666666665
+      },
+      {
+       "name": "GPSLongitude",
+       "value": 13.41331
+      }
+     ],
+     "mime": "image/jpeg",
+     "sha1": "25042a1738298394dd8b5447588b887801a81964",
+     "size": 8909616,
+     "url": "https://upload.wikimedia.org/wikipedia/commons/7/7f/%2820240831%29_Berlin_Alexanderplatz_03.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+     "width": 6240
+    }
+   ],
+   "pageid": 152272131,
+   "title": "File:(20240831) Berlin Alexanderplatz 03.jpg"
+  },
+  {
+   "imageinfo": [
+    {
+     "descriptionshorturl": "https://commons.wikimedia.org/w/index.php?curid=152272135",
+     "descriptionurl": "https://commons.wikimedia.org/wiki/File:(20240831)_Berlin_Alexanderplatz_04.jpg",
+     "extmetadata": {
+      "Artist": {
+       "source": "commons-desc-page",
+       "value": "<a href=\"//commons.wikimedia.org/wiki/User:RoyZuoMedia\" title=\"User:RoyZuoMedia\">Roy Zuo</a>"
+      },
+      "Credit": {
+       "source": "commons-desc-page",
+       "value": "<span class=\"int-own-work\" lang=\"en\">Own work</span>"
+      },
+      "DateTimeOriginal": {
+       "source": "commons-desc-page",
+       "value": "2024-08-31 13:50:08"
+      },
+      "ImageDescription": {
+       "source": "commons-desc-page",
+       "value": "Man setting up umbrella against strong wind at African festival and market at Alexanderplatz, Berlin, Germany"
+      },
+      "LicenseShortName": {
+       "hidden": "",
+       "source": "commons-desc-page",
+       "value": "CC BY-SA 4.0"
+      },
+      "LicenseUrl": {
+       "source": "commons-desc-page",
+       "value": "https://creativecommons.org/licenses/by-sa/4.0"
+      }
+     },
+     "height": 4160,
+     "metadata": [
+      {
+       "name": "DateTimeOriginal",
+       "value": "2024:08:31 13:50:08"
+      }
+     ],
+     "mime": "image/jpeg",
+     "sha1": "a2a39eb90a1ca15975f943a8db0e361af73a05f7",
+     "size": 8299198,
+     "url": "https://upload.wikimedia.org/wikipedia/commons/7/76/%2820240831%29_Berlin_Alexanderplatz_04.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+     "width": 6240
+    }
+   ],
+   "pageid": 152272135,
+   "title": "File:(20240831) Berlin Alexanderplatz 04.jpg"
+  },
+  {
+   "imageinfo": [
+    {
+     "descriptionshorturl": "https://commons.wikimedia.org/w/index.php?curid=108323388",
+     "descriptionurl": "https://commons.wikimedia.org/wiki/File:2021-07-19_Polizeiwagen_am_Alexanderplatz_Berlin_01.jpg",
+     "extmetadata": {
+      "Artist": {
+       "source": "commons-desc-page",
+       "value": "<a href=\"//commons.wikimedia.org/wiki/User:Geoprofi_Lars\" class=\"mw-redirect\" title=\"User:Geoprofi Lars\">Geoprofi Lars</a>"
+      },
+      "Credit": {
+       "source": "commons-desc-page",
+       "value": "<span class=\"int-own-work\" lang=\"en\">Own work</span>"
+      },
+      "DateTimeOriginal": {
+       "source": "commons-desc-page",
+       "value": "2021-07-19 18:37:33"
+      },
+      "ImageDescription": {
+       "source": "commons-desc-page",
+       "value": "Polizeiwagen der Berliner Polizei (Opel) am Alexanderplatz in Berlin-Mitte"
+      },
+      "LicenseShortName": {
+       "hidden": "",
+       "source": "commons-desc-page",
+       "value": "CC BY-SA 4.0"
+      },
+      "LicenseUrl": {
+       "source": "commons-desc-page",
+       "value": "https://creativecommons.org/licenses/by-sa/4.0"
+      }
+     },
+     "height": 3000,
+     "metadata": [
+      {
+       "name": "DateTimeOriginal",
+       "value": "2021:07:19 18:37:33"
+      },
+      {
+       "name": "GPSLatitude",
+       "value": 52.52188816666666
+      },
+      {
+       "name": "GPSLongitude",
+       "value": 13.413284444444445
+      }
+     ],
+     "mime": "image/jpeg",
+     "sha1": "58122762ce79f80c86087c8cc8c0ee4e9b1487cd",
+     "size": 5033639,
+     "url": "https://upload.wikimedia.org/wikipedia/commons/e/ed/2021-07-19_Polizeiwagen_am_Alexanderplatz_Berlin_01.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+     "width": 4000
+    }
+   ],
+   "pageid": 108323388,
+   "title": "File:2021-07-19 Polizeiwagen am Alexanderplatz Berlin 01.jpg"
+  },
+  {
+   "imageinfo": [
+    {
+     "descriptionshorturl": "https://commons.wikimedia.org/w/index.php?curid=108323387",
+     "descriptionurl": "https://commons.wikimedia.org/wiki/File:2021-07-19_Polizeiwagen_am_Alexanderplatz_Berlin_02.jpg",
+     "extmetadata": {
+      "Artist": {
+       "source": "commons-desc-page",
+       "value": "<a href=\"//commons.wikimedia.org/wiki/User:Geoprofi_Lars\" class=\"mw-redirect\" title=\"User:Geoprofi Lars\">Geoprofi Lars</a>"
+      },
+      "Credit": {
+       "source": "commons-desc-page",
+       "value": "<span class=\"int-own-work\" lang=\"en\">Own work</span>"
+      },
+      "DateTimeOriginal": {
+       "source": "commons-desc-page",
+       "value": "2021-07-19 18:37:35"
+      },
+      "ImageDescription": {
+       "source": "commons-desc-page",
+       "value": "Polizeiwagen der Berliner Polizei (Opel) am Alexanderplatz in Berlin-Mitte"
+      },
+      "LicenseShortName": {
+       "hidden": "",
+       "source": "commons-desc-page",
+       "value": "CC BY-SA 4.0"
+      },
+      "LicenseUrl": {
+       "source": "commons-desc-page",
+       "value": "https://creativecommons.org/licenses/by-sa/4.0"
+      }
+     },
+     "height": 3000,
+     "metadata": [
+      {
+       "name": "DateTimeOriginal",
+       "value": "2021:07:19 18:37:35"
+      },
+      {
+       "name": "GPSLatitude",
+       "value": 52.52186663888889
+      },
+      {
+       "name": "GPSLongitude",
+       "value": 13.413283694444445
+      }
+     ],
+     "mime": "image/jpeg",
+     "sha1": "6d2599abb7e9456a2141f2f0c3c92662c5cc1780",
+     "size": 5199525,
+     "url": "https://upload.wikimedia.org/wikipedia/commons/c/c5/2021-07-19_Polizeiwagen_am_Alexanderplatz_Berlin_02.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+     "width": 4000
+    }
+   ],
+   "pageid": 108323387,
+   "title": "File:2021-07-19 Polizeiwagen am Alexanderplatz Berlin 02.jpg"
+  },
+  {
+   "imageinfo": [
+    {
+     "descriptionshorturl": "https://commons.wikimedia.org/w/index.php?curid=129875184",
+     "descriptionurl": "https://commons.wikimedia.org/wiki/File:24_Hours_of_Truth_Berlin_(41179239410).jpg",
+     "extmetadata": {
+      "Artist": {
+       "source": "commons-desc-page",
+       "value": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/people/138319187@N06\">Denis Mau</a> from Wernigerode, Germany"
+      },
+      "Credit": {
+       "source": "commons-desc-page",
+       "value": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/photos/138319187@N06/41179239410/\">IMG_20180623_221112</a>"
+      },
+      "DateTimeOriginal": {
+       "source": "commons-desc-page",
+       "value": "2018-06-23 22:11"
+      },
+      "ImageDescription": {
+       "source": "commons-desc-page",
+       "value": "AMFCV (Anonymous for the Voicless) 24 hours of Tits event in Berlin"
+      },
+      "LicenseShortName": {
+       "hidden": "",
+       "source": "commons-desc-page",
+       "value": "CC BY 2.0"
+      },
+      "LicenseUrl": {
+       "source": "commons-desc-page",
+       "value": "https://creativecommons.org/licenses/by/2.0"
+      }
+     },
+     "height": 3008,
+     "metadata": [
+      {
+       "name": "DateTimeOriginal",
+       "value": "2018:06:23 22:11:13"
+      },
+      {
+       "name": "GPSLatitude",
+       "value": 52.52190397222222
+      },
+      {
+       "name": "GPSLongitude",
+       "value": 13.413125027777777
+      }
+     ],
+     "mime": "image/jpeg",
+     "sha1": "e24f8bd550cbc69eef4aff59e50ba287557b33db",
+     "size": 6169243,
+     "url": "https://upload.wikimedia.org/wikipedia/commons/e/ec/24_Hours_of_Truth_Berlin_%2841179239410%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+     "width": 5344
+    }
+   ],
+   "pageid": 129875184,
+   "title": "File:24 Hours of Truth Berlin (41179239410).jpg"
+  },
+  {
+   "imageinfo": [
+    {
+     "descriptionshorturl": "https://commons.wikimedia.org/w/index.php?curid=129875176",
+     "descriptionurl": "https://commons.wikimedia.org/wiki/File:24_Hours_of_Truth_Berlin_(42087851315).jpg",
+     "extmetadata": {
+      "Artist": {
+       "source": "commons-desc-page",
+       "value": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/people/138319187@N06\">Denis Mau</a> from Wernigerode, Germany"
+      },
+      "Credit": {
+       "source": "commons-desc-page",
+       "value": "<a rel=\"nofollow\" class=\"external text\" href=\"https://www.flickr.com/photos/138319187@N06/42087851315/\">DSC_0423</a>"
+      },
+      "DateTimeOriginal": {
+       "source": "commons-desc-page",
+       "value": "2018-06-23 21:32"
+      },
+      "ImageDescription": {
+       "source": "commons-desc-page",
+       "value": "AMFCV (Anonymous for the Voicless) 24 hours of Polly Pockets event in Berlin"
+      },
+      "LicenseShortName": {
+       "hidden": "",
+       "source": "commons-desc-page",
+       "value": "CC BY 2.0"
+      },
+      "LicenseUrl": {
+       "source": "commons-desc-page",
+       "value": "https://creativecommons.org/licenses/by/2.0"
+      }
+     },
+     "height": 1333,
+     "metadata": [
+      {
+       "name": "DateTimeOriginal",
+       "value": "2018:06:23 21:32:15"
+      },
+      {
+       "name": "GPSLatitude",
+       "value": 52.52185
+      },
+      {
+       "name": "GPSLongitude",
+       "value": 13.41329
+      }
+     ],
+     "mime": "image/jpeg",
+     "sha1": "96d2c3bc7dc3e00b187108752d2d35b5e655683d",
+     "size": 1679822,
+     "url": "https://upload.wikimedia.org/wikipedia/commons/1/10/24_Hours_of_Truth_Berlin_%2842087851315%29.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+     "width": 2000
+    }
+   ],
+   "pageid": 129875176,
+   "title": "File:24 Hours of Truth Berlin (42087851315).jpg"
+  },
+  {
+   "imageinfo": [
+    {
+     "descriptionshorturl": "https://commons.wikimedia.org/w/index.php?curid=76083946",
+     "descriptionurl": "https://commons.wikimedia.org/wiki/File:In_The_Rain_(168199077).jpeg",
+     "extmetadata": {
+      "Artist": {
+       "source": "commons-desc-page",
+       "value": "<div class=\"fn value\">\n<a rel=\"nofollow\" class=\"external text\" href=\"https://500px.com/Quiescent\">Fleeting Pix</a></div>"
+      },
+      "Credit": {
+       "source": "commons-desc-page",
+       "value": "Imported from <a rel=\"nofollow\" class=\"external text\" href=\"https://500px.com/photo/168199077/in-the-rain-by-fleeting-pix\">500px</a> (<a rel=\"nofollow\" class=\"external text\" href=\"https://web.archive.org/web/201807id_/https://drscdn.500px.org/photo/168199077/m%3D2048/v2?webp=true&amp;sig=a24a400d7b27b74c2875d93f799bcc04a60a4c56c75036a4c50e24df3f9bca5b\">archived version</a>) by <a rel=\"nofollow\" class=\"external text\" href=\"https://www.archiveteam.org/index.php?title=500px\">the Archive Team</a>. (<a href=\"https://iw.toolforge.org/import-500px/photo/168199077\" class=\"extiw\" title=\"toolforge:import-500px/photo/168199077\">detail page</a>)"
+      },
+      "DateTimeOriginal": {
+       "source": "commons-desc-page",
+       "value": "14 June 2016, 21:48:47 (UTC)"
+      },
+      "ImageDescription": {
+       "source": "commons-desc-page",
+       "value": "<div class=\"description\">\n500px provided description: BERLIN  2016 [#bw ,#black and white ,#street photography ,#iphoneography ,#Berlin ,#Alexanderplatz]</div>"
+      },
+      "LicenseShortName": {
+       "hidden": "",
+       "source": "commons-desc-page",
+       "value": "CC BY-SA 3.0"
+      },
+      "LicenseUrl": {
+       "source": "commons-desc-page",
+       "value": "https://creativecommons.org/licenses/by-sa/3.0"
+      }
+     },
+     "height": 1364,
+     "metadata": [
+      {
+       "name": "DateTimeOriginal",
+       "value": "2016:06:14 17:48:47"
+      },
+      {
+       "name": "GPSLatitude",
+       "value": 52.521074999999996
+      },
+      {
+       "name": "GPSLongitude",
+       "value": 13.412775
+      }
+     ],
+     "mime": "image/jpeg",
+     "sha1": "917dd7d0fea01b7a2d1fd2780366141f51a3b0cb",
+     "size": 1036918,
+     "url": "https://upload.wikimedia.org/wikipedia/commons/4/40/In_The_Rain_%28168199077%29.jpeg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+     "width": 2048
+    }
+   ],
+   "pageid": 76083946,
+   "title": "File:In The Rain (168199077).jpeg"
+  },
+  {
+   "imageinfo": [
+    {
+     "descriptionshorturl": "https://commons.wikimedia.org/w/index.php?curid=85745082",
+     "descriptionurl": "https://commons.wikimedia.org/wiki/File:Stra%C3%9Fenbahn_Berlin_M4_9063_Alexanderplatz_1912091102.jpg",
+     "extmetadata": {
+      "Artist": {
+       "source": "commons-desc-page",
+       "value": "<a href=\"//commons.wikimedia.org/wiki/User:Clic\" title=\"User:Clic\">Clic</a>"
+      },
+      "Credit": {
+       "source": "commons-desc-page",
+       "value": "<span class=\"int-own-work\" lang=\"en\">Own work</span>"
+      },
+      "DateTimeOriginal": {
+       "source": "commons-desc-page",
+       "value": "2019-12-09 11:02:43"
+      },
+      "ImageDescription": {
+       "source": "commons-desc-page",
+       "value": "<a href=\"https://de.wikipedia.org/wiki/Stra%C3%9Fenbahn_Berlin\" class=\"extiw\" title=\"de:Stra\u00dfenbahn Berlin\">Stra\u00dfenbahn Berlin</a>, Zug:9063, Typ: <a href=\"https://de.wikipedia.org/wiki/Bombardier_Flexity_Berlin\" class=\"extiw\" title=\"de:Bombardier Flexity Berlin\">Flexity Berlin</a> (langes Zweirichtungsfahrzeug Typ:F8Z), \n<p>Linie M4 -&gt; Falkenberg, \nHaltestelle Alexanderplatz, \n</p>\nTaken on\u00a09 December 2019"
+      },
+      "LicenseShortName": {
+       "hidden": "",
+       "source": "commons-desc-page",
+       "value": "CC BY-SA 4.0"
+      },
+      "LicenseUrl": {
+       "source": "commons-desc-page",
+       "value": "https://creativecommons.org/licenses/by-sa/4.0"
+      }
+     },
+     "height": 2160,
+     "metadata": [
+      {
+       "name": "DateTimeOriginal",
+       "value": "2019:12:09 11:02:43"
+      },
+      {
+       "name": "GPSLatitude",
+       "value": 52.52180555555555
+      },
+      {
+       "name": "GPSLongitude",
+       "value": 13.412972222222223
+      }
+     ],
+     "mime": "image/jpeg",
+     "sha1": "f2942d0c18a2cea78e52bb3545876158c7880b13",
+     "size": 2928111,
+     "url": "https://upload.wikimedia.org/wikipedia/commons/3/3d/Stra%C3%9Fenbahn_Berlin_M4_9063_Alexanderplatz_1912091102.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+     "width": 3840
+    }
+   ],
+   "pageid": 85745082,
+   "title": "File:Stra\u00dfenbahn Berlin M4 9063 Alexanderplatz 1912091102.jpg"
+  },
+  {
+   "imageinfo": [
+    {
+     "descriptionshorturl": "https://commons.wikimedia.org/w/index.php?curid=76083425",
+     "descriptionurl": "https://commons.wikimedia.org/wiki/File:The_Temple_(96806701).jpeg",
+     "extmetadata": {
+      "Artist": {
+       "source": "commons-desc-page",
+       "value": "<div class=\"fn value\">\n<a rel=\"nofollow\" class=\"external text\" href=\"https://500px.com/Quiescent\">Fleeting Pix</a></div>"
+      },
+      "Credit": {
+       "source": "commons-desc-page",
+       "value": "Imported from <a rel=\"nofollow\" class=\"external text\" href=\"https://500px.com/photo/96806701/the-temple-by-fleeting-pix\">500px</a> (<a rel=\"nofollow\" class=\"external text\" href=\"https://web.archive.org/web/201807id_/https://drscdn.500px.org/photo/96806701/m%3D2048/v2?webp=true&amp;sig=e1fa3552625e1e6f0f072985690ce8cb1fb3feedcee6da20e4a98116fa8e9a9a\">archived version</a>) by <a rel=\"nofollow\" class=\"external text\" href=\"https://www.archiveteam.org/index.php?title=500px\">the Archive Team</a>. (<a href=\"https://iw.toolforge.org/import-500px/photo/96806701\" class=\"extiw\" title=\"toolforge:import-500px/photo/96806701\">detail page</a>)"
+      },
+      "DateTimeOriginal": {
+       "source": "commons-desc-page",
+       "value": "24 January 2015, 19:35:39 (UTC)"
+      },
+      "ImageDescription": {
+       "source": "commons-desc-page",
+       "value": "<div class=\"description\">\n500px provided description: The Temple [#b/w ,#store ,#iphone ,#iphoneography ,#Berlin ,#Alexanderplatz]</div>"
+      },
+      "LicenseShortName": {
+       "hidden": "",
+       "source": "commons-desc-page",
+       "value": "CC BY-SA 3.0"
+      },
+      "LicenseUrl": {
+       "source": "commons-desc-page",
+       "value": "https://creativecommons.org/licenses/by-sa/3.0"
+      }
+     },
+     "height": 2021,
+     "metadata": [
+      {
+       "name": "DateTimeOriginal",
+       "value": "2015:01:24 14:35:39"
+      },
+      {
+       "name": "GPSLatitude",
+       "value": 52.52183333333333
+      },
+      {
+       "name": "GPSLongitude",
+       "value": 13.413394444444444
+      }
+     ],
+     "mime": "image/jpeg",
+     "sha1": "664e5d3e87f8e98031023fb833058af000e44a4e",
+     "size": 825865,
+     "url": "https://upload.wikimedia.org/wikipedia/commons/e/e8/The_Temple_%2896806701%29.jpeg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+     "width": 2021
+    }
+   ],
+   "pageid": 76083425,
+   "title": "File:The Temple (96806701).jpeg"
+  },
+  {
+   "imageinfo": [
+    {
+     "descriptionshorturl": "https://commons.wikimedia.org/w/index.php?curid=108323399",
+     "descriptionurl": "https://commons.wikimedia.org/wiki/File:2021-07-19_Polizeiwagen_am_Alexanderplatz_Berlin_04.jpg",
+     "extmetadata": {
+      "Artist": {
+       "source": "commons-desc-page",
+       "value": "<a href=\"//commons.wikimedia.org/wiki/User:Geoprofi_Lars\" class=\"mw-redirect\" title=\"User:Geoprofi Lars\">Geoprofi Lars</a>"
+      },
+      "Credit": {
+       "source": "commons-desc-page",
+       "value": "<span class=\"int-own-work\" lang=\"en\">Own work</span>"
+      },
+      "DateTimeOriginal": {
+       "source": "commons-desc-page",
+       "value": "2021-07-19 18:37:38"
+      },
+      "ImageDescription": {
+       "source": "commons-desc-page",
+       "value": "Polizeiwagen der Berliner Polizei (Opel) am Alexanderplatz in Berlin-Mitte"
+      },
+      "LicenseShortName": {
+       "hidden": "",
+       "source": "commons-desc-page",
+       "value": "CC BY-SA 4.0"
+      },
+      "LicenseUrl": {
+       "source": "commons-desc-page",
+       "value": "https://creativecommons.org/licenses/by-sa/4.0"
+      }
+     },
+     "height": 3000,
+     "metadata": [
+      {
+       "name": "DateTimeOriginal",
+       "value": "2021:07:19 18:37:38"
+      },
+      {
+       "name": "GPSLatitude",
+       "value": 52.52169027777778
+      },
+      {
+       "name": "GPSLongitude",
+       "value": 13.413135722222222
+      }
+     ],
+     "mime": "image/jpeg",
+     "sha1": "6bf8781b767b29af95ef0b8af0918994f01a2326",
+     "size": 5089015,
+     "url": "https://upload.wikimedia.org/wikipedia/commons/d/d8/2021-07-19_Polizeiwagen_am_Alexanderplatz_Berlin_04.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+     "width": 4000
+    }
+   ],
+   "pageid": 108323399,
+   "title": "File:2021-07-19 Polizeiwagen am Alexanderplatz Berlin 04.jpg"
+  },
+  {
+   "imageinfo": [
+    {
+     "descriptionshorturl": "https://commons.wikimedia.org/w/index.php?curid=76084024",
+     "descriptionurl": "https://commons.wikimedia.org/wiki/File:Ritual_(203119661).jpeg",
+     "extmetadata": {
+      "Artist": {
+       "source": "commons-desc-page",
+       "value": "<div class=\"fn value\">\n<a rel=\"nofollow\" class=\"external text\" href=\"https://500px.com/Quiescent\">Fleeting Pix</a></div>"
+      },
+      "Credit": {
+       "source": "commons-desc-page",
+       "value": "Imported from <a rel=\"nofollow\" class=\"external text\" href=\"https://500px.com/photo/203119661/ritual-by-fleeting-pix\">500px</a> (<a rel=\"nofollow\" class=\"external text\" href=\"https://web.archive.org/web/201807id_/https://drscdn.500px.org/photo/203119661/m%3D2048/v2?webp=true&amp;sig=b1b198e131f9189b23c7a076b3d4218a94ba90100be33c3c7988024098850483\">archived version</a>) by <a rel=\"nofollow\" class=\"external text\" href=\"https://www.archiveteam.org/index.php?title=500px\">the Archive Team</a>. (<a href=\"https://iw.toolforge.org/import-500px/photo/203119661\" class=\"extiw\" title=\"toolforge:import-500px/photo/203119661\">detail page</a>)"
+      },
+      "DateTimeOriginal": {
+       "source": "commons-desc-page",
+       "value": "7 January 2017, 19:05:26 (UTC)"
+      },
+      "ImageDescription": {
+       "source": "commons-desc-page",
+       "value": "<div class=\"description\">\n500px provided description: BERLIN  2017 [#black and white ,#bnw ,#street photography ,#iphoneography ,#Berlin ,#Alexanderplatz]</div>"
+      },
+      "LicenseShortName": {
+       "hidden": "",
+       "source": "commons-desc-page",
+       "value": "CC BY-SA 3.0"
+      },
+      "LicenseUrl": {
+       "source": "commons-desc-page",
+       "value": "https://creativecommons.org/licenses/by-sa/3.0"
+      }
+     },
+     "height": 1280,
+     "metadata": [
+      {
+       "name": "DateTimeOriginal",
+       "value": "2017:01:07 14:05:26"
+      },
+      {
+       "name": "GPSLatitude",
+       "value": 52.52211666666667
+      },
+      {
+       "name": "GPSLongitude",
+       "value": 13.413175
+      }
+     ],
+     "mime": "image/jpeg",
+     "sha1": "48d13d7091edb2247bd5c1950f916a8acfd44952",
+     "size": 705815,
+     "url": "https://upload.wikimedia.org/wikipedia/commons/9/9a/Ritual_%28203119661%29.jpeg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+     "width": 1920
+    }
+   ],
+   "pageid": 76084024,
+   "title": "File:Ritual (203119661).jpeg"
+  },
+  {
+   "imageinfo": [
+    {
+     "descriptionshorturl": "https://commons.wikimedia.org/w/index.php?curid=81457159",
+     "descriptionurl": "https://commons.wikimedia.org/wiki/File:20190330_142732_Berlin_Alexanderplatz_anagoria.jpg",
+     "extmetadata": {
+      "Artist": {
+       "source": "commons-desc-page",
+       "value": "<a href=\"//commons.wikimedia.org/wiki/User:Anagoria\" title=\"User:Anagoria\">Anagoria</a>"
+      },
+      "Credit": {
+       "source": "commons-desc-page",
+       "value": "<span class=\"int-own-work\" lang=\"en\">Own work</span>"
+      },
+      "DateTimeOriginal": {
+       "source": "commons-desc-page",
+       "value": "2019-03-30"
+      },
+      "ImageDescription": {
+       "source": "commons-desc-page",
+       "value": "Alexanderplatz, Berlin, Germany"
+      },
+      "LicenseShortName": {
+       "hidden": "",
+       "source": "commons-desc-page",
+       "value": "CC BY 3.0"
+      },
+      "LicenseUrl": {
+       "source": "commons-desc-page",
+       "value": "https://creativecommons.org/licenses/by/3.0"
+      }
+     },
+     "height": 2188,
+     "metadata": [
+      {
+       "name": "DateTimeOriginal",
+       "value": "2019:03:30 14:27:32"
+      },
+      {
+       "name": "GPSLatitude",
+       "value": 52.52166666666667
+      },
+      {
+       "name": "GPSLongitude",
+       "value": 13.413333333333334
+      }
+     ],
+     "mime": "image/jpeg",
+     "sha1": "0005bacb958dd5e105fefb9a4d81210ea509e4c4",
+     "size": 4988265,
+     "url": "https://upload.wikimedia.org/wikipedia/commons/b/b1/20190330_142732_Berlin_Alexanderplatz_anagoria.jpg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+     "width": 4500
+    }
+   ],
+   "pageid": 81457159,
+   "title": "File:20190330 142732 Berlin Alexanderplatz anagoria.jpg"
+  },
+  {
+   "imageinfo": [
+    {
+     "descriptionshorturl": "https://commons.wikimedia.org/w/index.php?curid=72833695",
+     "descriptionurl": "https://commons.wikimedia.org/wiki/File:Running_In_Rain_(139579335).jpeg",
+     "extmetadata": {
+      "Artist": {
+       "source": "commons-desc-page",
+       "value": "<div class=\"fn value\">\n<a rel=\"nofollow\" class=\"external text\" href=\"https://500px.com/sascha\">Sascha Kohlmann</a></div>"
+      },
+      "Credit": {
+       "source": "commons-desc-page",
+       "value": "Imported from <a rel=\"nofollow\" class=\"external text\" href=\"https://500px.com/photo/139579335/running-in-rain-by-sascha-kohlmann\">500px</a> (<a rel=\"nofollow\" class=\"external text\" href=\"https://web.archive.org/web/201807id_/https://drscdn.500px.org/photo/139579335/m%3D2048/v2?webp=true&amp;sig=1869895b39a37faded0e15ed3e455119eeea2df578f7fc5648520dc5f3f6b34f\">archived version</a>) by <a rel=\"nofollow\" class=\"external text\" href=\"https://www.archiveteam.org/index.php?title=500px\">the Archive Team</a>. (<a href=\"https://iw.toolforge.org/import-500px/photo/139579335\" class=\"extiw\" title=\"toolforge:import-500px/photo/139579335\">detail page</a>)"
+      },
+      "DateTimeOriginal": {
+       "source": "commons-desc-page",
+       "value": "8 July 2014, 20:17:30 (UTC)"
+      },
+      "ImageDescription": {
+       "source": "commons-desc-page",
+       "value": "<div class=\"description\">\n500px provided description: Running In Rain [#running ,#rennen ,#Wolkenbruch ,#Platzregen ,#Street Photography ,#Street ,#Noir et Blanc ,#Black and White ,#Rain ,#Berlin ,#Monochrome ,#Alexanderplatz ,#Regen ,#Monochrom ,#Mitte ,#Blanco y Negro ,#Weather ,#Schwarzwei? ,#Schwarz Weiss ,#Schwarzweiss ,#Streetfotografie ,#Ort ,#Shower ,#Place ,#Wetter ,#Chuva ,#Pioggia ,#Raindrop ,#Regentropfen ,#Pluie ,#Bianco e Nero ,#Rainfall ,#Stra?enfotografie ,#Berlin Mitte ,#Downpour ,#Cloudburst ,#Averse ,#Handlung ,#Thema ,#??????? ,#?? ,#????? ,#?????? ,#??? ,#B&amp;W ,#???????\u00a0????? ,#??????????\u00a0????? ,#Brunnen der V?lkerfreundschaft ,#Menschen im Regen ,#People in the Rain ,#Acquazzone ,#Aguaceiro ,#El Aguacero ,#El Chubasco ,#Heavy Shower ,#La Lluvia ,#Pioggia Torrenziale ,#Pluie D'Abat ,#Sturzregen ,#El Chaparr?n]</div>"
+      },
+      "LicenseShortName": {
+       "hidden": "",
+       "source": "commons-desc-page",
+       "value": "CC BY-SA 3.0"
+      },
+      "LicenseUrl": {
+       "source": "commons-desc-page",
+       "value": "https://creativecommons.org/licenses/by-sa/3.0"
+      }
+     },
+     "height": 1536,
+     "metadata": [
+      {
+       "name": "DateTimeOriginal",
+       "value": "2014:07:08 16:17:30"
+      },
+      {
+       "name": "GPSLatitude",
+       "value": 52.522108333333335
+      },
+      {
+       "name": "GPSLongitude",
+       "value": 13.413
+      }
+     ],
+     "mime": "image/jpeg",
+     "sha1": "d446af07e8c9458e981e91f20c390367bd48cb9d",
+     "size": 675835,
+     "url": "https://upload.wikimedia.org/wikipedia/commons/e/e6/Running_In_Rain_%28139579335%29.jpeg?utm_source=commons.wikimedia.org&utm_campaign=imageinfo&utm_content=original",
+     "width": 2048
+    }
+   ],
+   "pageid": 72833695,
+   "title": "File:Running In Rain (139579335).jpeg"
+  }
+ ],
+ "recorded": "Wikimedia Commons API, list=geosearch around 52.5219|13.4132 r=1000 and prop=imageinfo, 2026-11-12, metadata trimmed to GPS and DateTimeOriginal"
+}
