@@ -323,3 +323,57 @@ class TestOneFaceFilter:
         kept, report = f1.filter_rows([{'path': 'p'}], boom)
         assert kept == []
         assert report['error'] == 1
+
+
+class TestIndexPartialVehicles:
+    def _setup(
+        self, tmp_path: Path
+    ) -> tuple[list[dict[str, str]], dict[str, list[dict[str, Any]]]]:
+        from scripts.datasets import fetch_vehicle_proxy as fv
+
+        rows = [
+            {'make': 'A', 'model': 'One', 'generation': 'I', 'category': 'A One I'},
+            {'make': 'B', 'model': 'Two', 'generation': 'II', 'category': 'B Two II'},
+            {'make': 'C', 'model': 'Three', 'generation': 'III', 'category': 'C Three III'},
+        ]
+
+        def cand(pid: int) -> dict[str, Any]:
+            return {
+                'page_id': pid, 'title': f'{pid}.jpg', 'url': f'https://x.test/{pid}', 'author': 'Z',
+                'description_url': f'https://c.test/{pid}', 'license': 'CC BY 4.0',
+                'license_url': 'https://creativecommons.org/licenses/by/4.0',
+            }  # fmt: skip
+
+        per = {
+            'A/One/I': [cand(1), cand(2), cand(3), cand(99)],
+            'B/Two/II': [cand(4), cand(99)],
+            'C/Three/III': [cand(5)],
+        }
+        for slug, ids in {'A_One_I': (1, 2, 3), 'B_Two_II': (4,)}.items():
+            d = tmp_path / 'images' / slug
+            d.mkdir(parents=True)
+            for i in ids:
+                (d / f'{i}.jpg').write_bytes(_jpeg())
+        assert fv.commons.slug(rows[0]) == 'A_One_I'
+        return rows, per
+
+    def test_lists_disk_files_drops_small_classes_and_removes_their_files(
+        self, tmp_path: Path
+    ) -> None:
+        from scripts.datasets import fetch_vehicle_proxy as fv
+
+        rows, per = self._setup(tmp_path)
+        files, dropped = fv.index_partial(rows, per, tmp_path, min_per_model=3)
+        assert [f['page_id'] for f in files] == [1, 2, 3]
+        assert files[0]['license_url'].startswith('https://creativecommons.org')
+        assert files[0]['make'] == 'A'
+        assert dropped == ['B/Two/II (1)']
+        assert not (tmp_path / 'images' / 'B_Two_II').exists()
+
+    def test_unknown_file_on_disk_fails_closed(self, tmp_path: Path) -> None:
+        from scripts.datasets import fetch_vehicle_proxy as fv
+
+        rows, per = self._setup(tmp_path)
+        (tmp_path / 'images' / 'A_One_I' / '777.jpg').write_bytes(_jpeg())
+        with pytest.raises(_common.FetchError, match='777'):
+            fv.index_partial(rows, per, tmp_path, min_per_model=3)

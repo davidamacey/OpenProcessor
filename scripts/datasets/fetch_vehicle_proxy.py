@@ -5,8 +5,11 @@
     fetch_vehicle_proxy.py openimages --out <dir> --cache-dir <dir> [--per-class 200] [--dry-run]
     fetch_vehicle_proxy.py stanford --root <dir>
     fetch_vehicle_proxy.py compcars --root <dir> --make-names <txt> --model-names <txt>
+    fetch_vehicle_proxy.py commons-index --out <dir> --categories <json> --cache <json> [--pin <json>]
     fetch_vehicle_proxy.py verify <dir>
 
+``commons-index``: manifest, labels and review sample for a ``commons`` download that stopped early,
+built from the files on disk and the cached listing; classes below the minimum are removed.
 ``commons``: set C, per-model Wikimedia Commons categories, licence recorded per file; the
 only vehicle set whose images may appear in committed docs. The full manifest (with author and
 licence per file) is committed; a re-run with an existing ``--manifest`` downloads exactly the
@@ -24,6 +27,7 @@ line N for id N.
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 from collections import Counter
@@ -90,14 +94,12 @@ COMMONS_IMAGE_THREADS = 2
 REVIEW_FRACTION = 0.10
 
 
-def _fetch_commons_file(cand: dict[str, Any], out: Path) -> dict[str, Any]:
+def _commons_entry(cand: dict[str, Any], out: Path, rel: str) -> dict[str, Any]:
     from PIL import Image
 
-    rel = f'images/{cand["slug"]}/{cand["page_id"]}.jpg'
-    dest = out / rel
-    download(cand['url'], dest, expected_sha256=cand.get('sha256'), retries=4)
-    with Image.open(dest) as im:
+    with Image.open(out / rel) as im:
         im.verify()
+    extra = {'license_url': cand['license_url']} if cand.get('license_url') else {}
     return file_entry(
         out,
         rel,
@@ -111,7 +113,55 @@ def _fetch_commons_file(cand: dict[str, Any], out: Path) -> dict[str, Any]:
         make=cand['make'],
         model=cand['model'],
         generation=cand['generation'],
+        **extra,
     )
+
+
+def _fetch_commons_file(cand: dict[str, Any], out: Path) -> dict[str, Any]:
+    rel = f'images/{cand["slug"]}/{cand["page_id"]}.jpg'
+    download(cand['url'], out / rel, expected_sha256=cand.get('sha256'), retries=4)
+    return _commons_entry(cand, out, rel)
+
+
+def index_partial(
+    rows: list[dict[str, str]],
+    per_model: dict[str, list[dict[str, Any]]],
+    out: Path,
+    min_per_model: int,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Manifest rows for the files already on disk, matched to the cached listing.
+
+    Classes with fewer than ``min_per_model`` files on disk are dropped and their files removed
+    (they hold only the tail of an interrupted download). A file the listing does not know is an
+    error, never a silent skip.
+    """
+    unambiguous = commons.drop_ambiguous(per_model)
+    files: list[dict[str, Any]] = []
+    dropped: list[str] = []
+    for row in rows:
+        key = f'{row["make"]}/{row["model"]}/{row["generation"]}'
+        directory = out / 'images' / commons.slug(row)
+        if not directory.is_dir():
+            continue
+        known = {c['page_id']: c for c in unambiguous.get(key, [])}
+        found = []
+        for path in sorted(directory.glob('*.jpg')):
+            cand = known.get(int(path.stem)) if path.stem.isdigit() else None
+            if cand is None:
+                raise FetchError(f'{path}: not a listed, unambiguous file of {key}')
+            found.append(cand)
+        if len(found) < min_per_model:
+            dropped.append(f'{key} ({len(found)})')
+            for path in directory.glob('*.jpg'):
+                path.unlink()
+            directory.rmdir()
+            continue
+        meta = {**row, 'slug': commons.slug(row)}
+        files += [
+            _commons_entry({**c, **meta}, out, f'images/{meta["slug"]}/{c["page_id"]}.jpg')
+            for c in found
+        ]
+    return files, dropped
 
 
 def _commons_labels(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -198,6 +248,37 @@ def cmd_commons(args: argparse.Namespace) -> int:
         ['path', 'label_correct'],
     )
     logger.info('commons: %d images, %d models, %d to review', len(files), len(chosen), len(sample))
+    return 0
+
+
+def cmd_commons_index(args: argparse.Namespace) -> int:
+    """Write manifest, labels and review sample for a download that stopped early."""
+    rows = commons.load_categories(args.categories)
+    cached = json.loads(args.cache.read_text(encoding='utf-8'))
+    per_model: dict[str, list[dict[str, Any]]] = cached
+    files, dropped = index_partial(rows, per_model, args.out, args.min_per_model)
+    ambiguous = sum(map(len, per_model.values())) - sum(
+        map(len, commons.drop_ambiguous(per_model).values())
+    )
+    manifest = build_manifest(
+        args.dataset_name,
+        commons.API_URL,
+        COMMONS_LICENCE,
+        files,
+        dropped_models=dropped,
+        dropped_ambiguous=ambiguous,
+        partial=True,
+        categories_listed=len(rows),
+        classes=len({f['category'] for f in files}),
+    )
+    write_dataset(args.out, manifest, _commons_labels(files), args.pin)
+    sample = commons.review_sample([f['path'] for f in files], REVIEW_FRACTION, args.seed)
+    write_csv(
+        args.out / 'review_sample.csv',
+        [{'path': p, 'label_correct': ''} for p in sample],
+        ['path', 'label_correct'],
+    )
+    print({'classes': manifest['classes'], 'images': manifest['count'], 'dropped': dropped})
     return 0
 
 
@@ -307,6 +388,15 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument('--pin', type=Path, help='small pin (digest, counts) to commit')
     c.add_argument('--dry-run', action='store_true')
     c.set_defaults(func=cmd_commons)
+    ci = sub.add_parser('commons-index')
+    ci.add_argument('--out', type=Path, required=True)
+    ci.add_argument('--categories', type=Path, required=True)
+    ci.add_argument('--cache', type=Path, required=True)
+    ci.add_argument('--pin', type=Path)
+    ci.add_argument('--dataset-name', default='commons_vehicles')
+    ci.add_argument('--min-per-model', type=int, default=15)
+    ci.add_argument('--seed', type=int, default=20261029)
+    ci.set_defaults(func=cmd_commons_index)
     o = sub.add_parser('openimages')
     o.add_argument('--out', type=Path, required=True)
     o.add_argument('--cache-dir', type=Path, required=True)
