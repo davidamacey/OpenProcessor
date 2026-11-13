@@ -1,11 +1,24 @@
 # Photo library: owner questions
 
-Status: 2026-11-13, revised after the owner's decisions of the same day. Section 1 holds the open
-decisions, grouped so they can be answered quickly. Section 2 records what the owner has decided. Section 3
+Status: 2026-11-13, revised after the owner's decisions of the same day. Section 1 holds the decisions
+(all answered). Section 2 records what the owner has decided. Section 3
 lists what the plan settled from the docs (the owner may overrule any of it). Section 4 holds two questions
 for the engine (P1) owner, not for this list.
 
-## 1. Open decisions (8)
+## 1. Decisions (all 8 answered by the owner on 2026-11-13)
+
+| # | Owner's answer |
+|---|---|
+| D1 | **A for storage with D's workflow**: a project with `kind = 'library'`; training in workspace projects via "Send to project" |
+| Q2 | **(a)** one shared view per library |
+| Q3 | **(a)** ship People on the current face models, stated in the docs; research a permissive replacement; swap by re-embedding |
+| Q4 | **`block` by default, `hide` one click away**; under `hide`, unprocessed photos stay hidden until processed |
+| Q5 | **(a) local by default, (b) text-only hosted titles as a per-library opt-in** |
+| Q6 | **(a) mirror folder by default, (b) next to the originals as a per-library opt-in** |
+| Q7 | **Own tracks added in the UI, plus a public-domain/CC0 starter set like Apple Photos' memory music**; a licensed music-service API (e.g. Epidemic Sound, Artlist) or AI music is a later advanced feature (30 section 5.4) |
+| Q8 | **(a)** the operator's own Desktop-app client, published "In production"; ICS URL as the documented fallback |
+
+The tables below keep each question's context and options.
 
 ### Library shape
 

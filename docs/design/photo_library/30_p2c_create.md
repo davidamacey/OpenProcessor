@@ -22,7 +22,7 @@ timeline previewed in the browser and rendered to MP4 on the host.
 
 **Non-goals.** Video clips in memories (P4); push notifications from Google (they need a public HTTPS
 endpoint); mapping calendar attendees to People (01 section 4.1 says never automatic; a manual mapping is a
-later item); sharing renders; a bundled music catalogue (Q7).
+later item); sharing renders; a licensed music-service connection (later, Q7).
 
 **Needs from P1.** N3 previews (render input), N5 OCR (theme and utility checks), N6 signals (aesthetic,
 sharpness, exposure, utility class), N7 face signals (eyes open, quality). P2c does not start without N6.
@@ -281,11 +281,24 @@ added only where boxes are absent.
 
 ### 5.4 Music
 
-User-supplied tracks only (Q7): upload with `title`, `artist`, `licence` (`own`, `cc0`, `cc_by`, `pixabay`,
-`other`), `licence_url`, `attribution`; `cc_by` requires attribution and puts it on the end card. Files
-under `OP_DERIVATIVES_ROOT/music/<project>/`, never redistributed outside a render. Tempo from the beat
-grid; energy from RMS on decoded PCM (numpy); a memory's default track matches its mood tag (the VLM title
+Two sources (Q7, owner 2026-11-13):
+- **The owner's own tracks:** upload in the UI (a Music page and the `MusicPicker` in the memory editor) with
+  `title`, `artist`, `licence` (`own`, `public_domain`, `cc0`, `cc_by`, `other`), `licence_url`, `attribution`.
+- **A starter set like Apple Photos' memory soundtracks:** a small, mood-tagged set of public-domain and CC0
+  tracks (a few each for calm, warm, upbeat) that the library offers out of the box. Only tracks whose licence
+  allows redistribution are eligible (public domain recordings, CC0); each track's source page and licence are
+  recorded in a manifest and `ATTRIBUTION.md`. Lane L-C4 picks the tracks from documented sources (for example
+  Musopen public-domain recordings or the Free Music Archive's CC0 tracks; verify each licence on its page) and
+  ships them as an optional fetch on first use, so the image stays small. CC BY tracks are allowed only with
+  attribution on the end card. Licences such as Pixabay's that forbid standalone redistribution are never bundled.
+`cc_by` requires attribution and puts it on the end card. Files under `OP_DERIVATIVES_ROOT/music/<project>/`
+(the starter set under a shared read-only `music/starter/`), never redistributed outside a render. Tempo from the
+beat grid; energy from RMS on decoded PCM (numpy); a memory's default track matches its mood tag (the VLM title
 call also returns `mood: calm|warm|upbeat`) and length.
+
+Later, advanced (not P2c): a connection to a licensed music service with an API (for example Epidemic Sound or
+Artlist, if their terms allow it for personal renders), or AI-generated music. Research the APIs and terms when
+that work starts.
 
 ---
 
