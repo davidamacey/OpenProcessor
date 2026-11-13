@@ -159,6 +159,25 @@ def test_the_tab_shows_only_where_the_projection_is_served(stub, page, app_url):
     expect(page.get_by_test_id('view-tab-embedding')).to_have_count(0)
 
 
+def test_the_tab_appears_after_a_failed_first_read_of_methods(stub, page, app_url):
+    """A failed first `GET /methods` used to be kept for the whole session: no Embedding tab until
+    a reload. The next caller of `init()` (a view mounting, a view switch) reads it again."""
+    serve(stub, [])
+    reads: list[int] = []
+
+    def methods(_request, _match):
+        reads.append(1)
+        if len(reads) == 1:
+            return (404, {'detail': 'not found'})
+        return (200, {'strategies': [OVERLAY], 'flags': {}})
+
+    stub.on('GET', r'/methods(\?|$)', methods)
+    stub.on('GET', r'/crops(\?|$)', {'total': 0, 'next_cursor': None, 'limit': 60, 'crops': []})
+    page.goto(f'{app_url}/p/default/workspace?view=gallery')
+    expect(page.get_by_test_id('view-tab-embedding')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    assert len(reads) >= 2, reads
+
+
 def test_the_scatter_follows_the_filter_and_dims_the_rest(stub, page, app_url):
     queries: list[dict] = []
     serve(stub, queries)

@@ -23,7 +23,7 @@
   import CropCard from '$components/CropCard.svelte';
   import ScoreChip from '$components/ScoreChip.svelte';
   import { captureDragSelection } from '$lib/dragSelection';
-  import type { Selection } from '$lib/selection.svelte';
+  import { isPlainClick, type Selection } from '$lib/selection.svelte';
   import type { Crop } from '$lib/types';
 
   interface Props {
@@ -36,6 +36,8 @@
      *  badge) — a snippet so the caller controls its own data lookups. */
     cornerBadge?: import('svelte').Snippet<[Crop]>;
     ondetail?: (crop: Crop) => void;
+    /** A plain click (no Ctrl, Cmd or Shift) on a card: it is the card the details follow. */
+    onfocuscrop?: (crop: Crop) => void;
     onsimilar?: (crop: Crop) => void;
     onacceptVlm?: (crop: Crop) => void;
     onrejectVlm?: (crop: Crop) => void;
@@ -50,6 +52,7 @@
     scoreOf,
     cornerBadge,
     ondetail,
+    onfocuscrop,
     onsimilar,
     onacceptVlm,
     onrejectVlm,
@@ -64,12 +67,13 @@
 
   let dragIds = $state<string[]>([]);
 
-  function clickSelect(id: string, e?: MouseEvent): void {
+  function clickSelect(crop: Crop, e?: MouseEvent): void {
     sel.click(
-      id,
+      crop.id,
       e,
       items.map((c) => c.id),
     );
+    if (isPlainClick(e)) onfocuscrop?.(crop);
   }
 
   function onConsider(
@@ -120,7 +124,7 @@
       <CropCard
         {crop}
         selected={sel.has(crop.id)}
-        onclick={(c, e) => clickSelect(c.id, e)}
+        onclick={(c, e) => clickSelect(c, e)}
         onacceptVlm={(c) => onacceptVlm?.(c)}
         onrejectVlm={(c) => onrejectVlm?.(c)}
         ondetail={(c) => ondetail?.(c)}

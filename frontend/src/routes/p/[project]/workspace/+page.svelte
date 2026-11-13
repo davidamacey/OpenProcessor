@@ -124,7 +124,12 @@
   <ViewBar {ws} />
   <div class="flex min-h-0 flex-1">
     <WorkspaceRail {ws} />
-    <div class="min-w-0 flex-1 overflow-auto" data-testid="workspace-view">
+    <div
+      class="min-w-0 flex-1 overflow-auto {ws.selection.kind !== 'none'
+        ? 'max-md:pb-28'
+        : ''}"
+      data-testid="workspace-view"
+    >
       {#if !ws.viewPending}
         {#if ['clusters', 'gallery', 'detections'].includes(ws.view)}
           <AdoptBanner />

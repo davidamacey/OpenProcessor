@@ -1,8 +1,6 @@
 """Workspace and Review fixes of UX wave 2 in a real browser (stubbed API).
 
 - details follow the view: a focus the next view cannot show is parked, Back restores it
-- the lightbox opens from a card's hover control and Shift+Space, steps with the arrows, closes on Esc
-- the map fills the Workspace height
 - Review asks the preview route and the Tight/Context toggle changes `pad`
 - cluster cards show the served display name, a detector name marked as the detector's
 - the Gallery's Duplicates control sends the served `near_dup` filter
@@ -16,9 +14,10 @@ import pytest
 from fixtures.contract import cluster_card, cluster_list
 from harness.constants import ACTION_TIMEOUT_MS, review_url
 from harness.screens import shot
+from harness.waits import expect_handled, wait_for_url_state
 from playwright.sync_api import expect
 from test_gallery_view import serve as serve_gallery
-from test_map_view import CANVAS, _meta, _open, _serve_map
+from test_map_view import _meta, _serve_map
 from test_review_view import item as review_item, serve as serve_review
 from test_table_view import serve as serve_table
 
@@ -86,12 +85,13 @@ def test_an_item_focus_follows_the_view_it_fits(stub, page, app_url, start, targ
     expect(page.get_by_test_id('details-panel')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id(f'view-tab-{target}').click()
     page.wait_for_url(f'**view={target}**')
-    survives = 'focus=item' in page.url.replace('%3A', ':')
-    assert survives == item_survives, page.url
-    if not item_survives:
+    if item_survives:
+        wait_for_url_state(page, has=('focus=item',))
+    else:
+        wait_for_url_state(page, lacks=('focus=item',))
         page.go_back()
         page.wait_for_url(f'**view={start}**')
-        assert 'focus=item' in page.url.replace('%3A', ':'), page.url
+        wait_for_url_state(page, has=('focus=item',))
 
 
 def test_an_image_focus_is_parked_when_clusters_open_and_comes_back(stub, page, app_url):
@@ -101,48 +101,11 @@ def test_an_image_focus_is_parked_when_clusters_open_and_comes_back(stub, page, 
     expect(page.get_by_test_id('image-details')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id('view-tab-clusters').click()
     page.wait_for_url('**view=clusters**')
-    assert 'focus=image' not in page.url.replace('%3A', ':'), page.url
+    wait_for_url_state(page, lacks=('focus=image',))
     expect(page.get_by_test_id('image-details')).to_have_count(0)
     page.get_by_test_id('view-tab-gallery').click()
     page.wait_for_url('**view=gallery**')
-    assert 'focus=image:img-1' in page.url.replace('%3A', ':'), page.url
-
-
-def test_lightbox_opens_steps_and_closes(stub, page, app_url):
-    serve_gallery(stub, [])
-    stub.on('GET', r'/images/img-\d+/file', (200, b'', 'image/jpeg'))
-    page.goto(f'{app_url}/p/default/workspace?view=gallery')
-    card = page.get_by_test_id('image-card').nth(0)
-    card.hover()
-    card.get_by_test_id('image-card-lightbox').click()
-    box = page.get_by_test_id('lightbox')
-    expect(box).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    expect(box.locator('img')).to_have_attribute('src', re.compile('max_dim=2048'))
-    shot(page, 'lightbox', widths=(1600, 430))
-    page.keyboard.press('+')
-    expect(page.get_by_test_id('lightbox-zoom')).to_have_text('150%')
-    page.keyboard.press('Escape')
-    expect(box).to_have_count(0)
-    page.get_by_test_id('image-card-select').nth(1).focus()
-    page.keyboard.press('Shift+Space')
-    expect(page.get_by_test_id('lightbox')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    page.keyboard.press('ArrowRight')
-    expect(page.get_by_test_id('lightbox').locator('img')).to_have_attribute(
-        'src', re.compile('img-2')
-    )
-
-
-def test_the_map_fills_the_workspace_height(stub, page, app_url):
-    _serve_map(stub, page, app_url, _meta(app_url))
-    page.set_viewport_size({'width': 1600, 'height': 1000})
-    _open(page, app_url)
-    canvas = page.locator('[data-testid="map-canvas"]').bounding_box()
-    view = page.get_by_test_id('workspace-view').bounding_box()
-    assert canvas and view
-    assert canvas['height'] >= 0.8 * view['height'], (canvas, view)
-    expect(page.get_by_test_id('map-cell-list')).to_be_visible()
-    shot(page, 'map', widths=(1600, 430))
-    assert page.locator(CANVAS).count() == 1
+    wait_for_url_state(page, has=('focus=image:img-1',))
 
 
 def test_review_asks_the_preview_route_and_the_toggle_changes_pad(stub, page, app_url):
@@ -154,13 +117,13 @@ def test_review_asks_the_preview_route_and_the_toggle_changes_pad(stub, page, ap
         r'/crops/[^/]+/preview',
         lambda r, m: (urls.append(r.url), (200, b'', 'image/jpeg'))[1],
     )
-    page.goto(review_url(app_url, 'to_label', 'crop-1'))
+    with expect_handled(page, lambda r: '/preview' in r.url and 'pad=0.6' in r.url):
+        page.goto(review_url(app_url, 'to_label', 'crop-1'))
     expect(page.get_by_test_id('review-crop-panel')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    page.wait_for_timeout(300)
     assert urls and 'pad=0.6' in urls[-1] and 'outline=true' in urls[-1], urls
     shot(page, 'review-context', widths=(1600, 430))
-    page.get_by_role('radio', name='Tight').click()
-    page.wait_for_timeout(300)
+    with expect_handled(page, lambda r: '/preview' in r.url and 'pad=0.6' not in r.url):
+        page.get_by_role('radio', name='Tight').click()
     assert 'pad=0' in urls[-1] and 'pad=0.6' not in urls[-1], urls
     shot(page, 'review-tight', widths=(1600, 430))
 

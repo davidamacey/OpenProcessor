@@ -5,6 +5,7 @@ import {
   createTableController,
   type TableUrlState,
 } from '$lib/table/tableController.svelte';
+import type { NearDupFilter } from '$lib/types_images';
 import type { TableColumns, TablePage, TableRow } from '$lib/types_table';
 
 const fetchMock = vi.fn();
@@ -63,11 +64,15 @@ function page(
   };
 }
 
-function make(initial: Partial<TableUrlState> = {}) {
+function make(
+  initial: Partial<TableUrlState> = {},
+  nearDup: () => NearDupFilter | null = () => null,
+) {
   const writeUrl = vi.fn();
   const c = createTableController({
     initial: { rows: 'detections', columns: [], sort: null, ...initial },
     itemFilter: () => ({}),
+    nearDup,
     writeUrl,
   });
   return { c, writeUrl };
@@ -107,6 +112,20 @@ describe('table controller', () => {
     expect(writeUrl).toHaveBeenLastCalledWith(
       expect.objectContaining({ sort: 'detector_confidence:asc' }),
     );
+  });
+
+  it('sends the near-duplicate role of the URL, and none when it is off', async () => {
+    fetchMock
+      .mockResolvedValueOnce(ok(VOCAB))
+      .mockResolvedValueOnce(ok(page([], null)))
+      .mockResolvedValueOnce(ok(page([], null)));
+    let role: NearDupFilter | null = 'collapsed';
+    const { c } = make({}, () => role);
+    await c.load();
+    expect(urlOf(1).searchParams.get('near_dup')).toBe('collapsed');
+    role = null;
+    await c.reload();
+    expect(urlOf(2).searchParams.has('near_dup')).toBe(false);
   });
 
   it('appends by cursor', async () => {

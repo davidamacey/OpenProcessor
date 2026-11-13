@@ -2,6 +2,7 @@
 // `contract/tableContract.test.ts`.
 import type { HiddenCounts } from '$lib/types';
 import type { SortOption } from '$lib/types_cursor';
+import type { NearDupFilter } from '$lib/types_images';
 
 export type TableRows = 'detections' | 'images';
 export type CellTone =
@@ -63,4 +64,6 @@ export interface TableQuery {
   sort: string | null;
   cursor: string | null;
   limit?: number;
+  /** The near-duplicate role of the rows; null lists every row. */
+  near_dup?: NearDupFilter | null;
 }

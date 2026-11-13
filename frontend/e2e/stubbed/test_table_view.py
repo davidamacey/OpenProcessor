@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, urlparse
 
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.screens import SCREENS
+from harness.waits import expect_handled, wait_for_url_state
 from playwright.sync_api import expect
 
 
@@ -117,6 +118,18 @@ def serve(stub) -> list[dict]:
     return seen
 
 
+def test_the_table_honours_near_dup_and_the_duplicates_control(stub, page, app_url):
+    seen = serve(stub)
+    page.goto(f'{app_url}/p/default/workspace?view=table&near_dup=collapsed')
+    expect(page.get_by_test_id('data-table-row')).to_have_count(4, timeout=ACTION_TIMEOUT_MS)
+    assert seen[-1]['near_dup'] == 'collapsed', seen[-1]
+    page.get_by_role('button', name='Duplicates: One per group').click()
+    with expect_handled(page, lambda r: '/table?' in r.url and 'near_dup' not in r.url):
+        page.get_by_role('radio', name='All photos').click()
+    assert 'near_dup' not in seen[-1], seen[-1]
+    wait_for_url_state(page, lacks=('near_dup',))
+
+
 def test_header_click_asks_for_the_served_sort(stub, page, app_url):
     seen = serve(stub)
     page.goto(f'{app_url}/p/default/workspace?view=table')
@@ -124,9 +137,7 @@ def test_header_click_asks_for_the_served_sort(stub, page, app_url):
     page.get_by_test_id('data-table-sort-detector_confidence').click()
     expect(page.locator('th[aria-sort="ascending"], th[aria-sort="descending"]')).to_have_count(1)
     assert seen[-1]['sort'] == 'detector_confidence:asc'
-    assert 'sort_table=detector_confidence%3Aasc' in page.url or (
-        'sort_table=detector_confidence:asc' in page.url
-    )
+    wait_for_url_state(page, has=('sort_table=detector_confidence:asc',))
 
 
 def test_column_choice_is_in_the_url_and_the_request(stub, page, app_url):

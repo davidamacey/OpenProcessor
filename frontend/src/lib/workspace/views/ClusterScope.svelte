@@ -97,6 +97,12 @@
   let reprocess = $state<ReturnType<typeof ReprocessControl> | null>(null);
   const scopeMore = $derived<MenuItem[]>([
     {
+      id: 'assist',
+      label: 'Assist…',
+      testid: 'assist-open',
+      onselect: clusterAssist.openAssist,
+    },
+    {
       id: 'flag',
       label: 'Flag selected as a new class',
       disabled: view.sel.size === 0,
@@ -107,6 +113,7 @@
           {
             id: 'reprocess',
             label: 'Reprocess…',
+            testid: 'reprocess-open',
             disabled: view.sel.size === 0,
             onselect: () => void reprocess?.openFlow(),
           },

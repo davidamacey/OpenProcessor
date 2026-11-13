@@ -32,6 +32,32 @@ def expect_handled(page, predicate, timeout=None):
     return _Handled(page.expect_response(lambda resp: predicate(resp.request), timeout=timeout))
 
 
+def wait_for_url_state(page, has=(), lacks=(), timeout=None) -> None:
+    """Wait until the URL (colons decoded: the app writes `%3A`, a test reads `:`) holds every
+    part of `has` and none of `lacks`. The URL is written by an effect after the click, so a bare
+    `assert ... in page.url` can read the old one."""
+    from harness.constants import ACTION_TIMEOUT_MS
+
+    def settled(url: str) -> bool:
+        url = url.replace('%3A', ':')
+        return all(p in url for p in has) and not any(p in url for p in lacks)
+
+    page.wait_for_url(settled, timeout=timeout or ACTION_TIMEOUT_MS)
+
+
+def settled_box(page, locator, frames=3):
+    """The locator's bounding box once it has not moved for `frames` painted frames (a zoom or a
+    pan animates); the paint pipeline is the clock, not a sleep."""
+    last = None
+    still = 0
+    while still < frames:
+        wait_for_paint(page)
+        box = locator.bounding_box()
+        still = still + 1 if box == last else 0
+        last = box
+    return last
+
+
 def wait_for_paint(page: Any) -> None:
     """Wait for two real animation frames instead of an arbitrary sleep.
 

@@ -43,6 +43,8 @@ def _item(crop_id: str, in_scope, disagreement, actionable=None) -> dict:
         image_id=f'img-{crop_id}',
         class_id=1,
         class_name='widget_a',
+        class_validated=False,
+        label_validated=False,
         thumbnail_url=f'/curation/crops/{crop_id}/thumbnail',
     )
     item.update(

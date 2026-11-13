@@ -105,7 +105,7 @@ def test_empty_clusters_page_says_a_built_partition_waits_and_activates_it(stub,
     expect(pending).to_contain_text('9 clusters', timeout=ACTION_TIMEOUT_MS)
     page.get_by_test_id('cluster-run-activate').click()
     expect(page.get_by_test_id('clusters-empty')).to_have_count(0, timeout=ACTION_TIMEOUT_MS)
-    expect(page.get_by_test_id('cluster-uid')).to_have_count(1, timeout=ACTION_TIMEOUT_MS)
+    expect(page.get_by_test_id('cluster-meta')).to_have_count(1, timeout=ACTION_TIMEOUT_MS)
 
 
 def test_empty_clusters_page_with_no_partition_points_at_clustering(stub, page, app_url):

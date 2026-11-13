@@ -16,6 +16,7 @@ from fixtures.contract import cluster_card, cluster_list, label_op_accepted
 from fixtures.wire import make_item
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.label_ops import stub_label_op
+from harness.waits import wait_for_url_state
 from playwright.sync_api import expect
 
 
@@ -93,9 +94,7 @@ def test_cluster_opens_in_place_and_assigns_through_a_dry_run(stub, page, app_ur
     page.get_by_text('Cluster', exact=False).first.wait_for(timeout=ACTION_TIMEOUT_MS)
     page.locator('[data-testid=workspace-view] li button').first.click()
     expect(page.get_by_test_id('scope-chip')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    assert (
-        f'scope=cluster%3A{CLUSTER_UID}' in page.url or f'scope=cluster:{CLUSTER_UID}' in page.url
-    )
+    wait_for_url_state(page, has=(f'scope=cluster:{CLUSTER_UID}',))
 
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
     page.locator('img').nth(0).click()
@@ -175,7 +174,7 @@ def test_filter_survives_a_view_switch_and_a_selection_of_another_kind_clears(st
 
     page.get_by_test_id('view-tab-clusters').click()
     expect(page).to_have_url(re.compile('view=clusters'))
-    assert 'class_name=widget' in page.url
+    wait_for_url_state(page, has=('class_name=widget',))
     expect(page.get_by_test_id('item-filter-chip').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     # Clusters select clusters, not detections: the selection does not follow the view.
     page.get_by_test_id('view-tab-detections').click()
@@ -244,6 +243,28 @@ def test_back_restores_the_previous_view(stub, page, app_url):
     page.go_back()
     expect(page).to_have_url(re.compile('view=clusters'))
     expect(page.get_by_test_id('detections-view')).to_have_count(0)
+
+
+def test_the_chrome_at_430_is_one_row_of_view_filters_queues_ai_and_details(stub, page, app_url):
+    serve(stub)
+    page.set_viewport_size({'width': 430, 'height': 900})
+    page.goto(f'{app_url}/p/default/workspace?view=detections')
+    bar = page.get_by_test_id('view-bar')
+    bar.wait_for(timeout=ACTION_TIMEOUT_MS)
+    box = bar.bounding_box()
+    assert box and box['height'] < 60, box
+    controls = ['view-select', 'filters-toggle', 'rail-toggle', 'vlm-menu-toggle', 'details-toggle']
+    tops = []
+    for tid in controls:
+        inside = bar.get_by_test_id(tid)
+        expect(inside).to_be_visible()
+        tops.append(round(inside.bounding_box()['y']))
+    assert max(tops) - min(tops) < 12, dict(zip(controls, tops, strict=True))
+    # Nothing is filtering and nothing is open: no second filter row above the bar.
+    expect(page.get_by_test_id('workspace-filter-bar')).to_be_hidden()
+    bar.get_by_test_id('filters-toggle').click()
+    expect(page.get_by_test_id('workspace-filter-bar')).to_be_visible()
+    assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
 
 
 def test_rail_and_details_are_drawers_at_430(stub, page, app_url):

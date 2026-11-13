@@ -6,6 +6,7 @@
 - two selected images are acted on through `selection.filter.image_ids`, with the server's dry-run count
 - Details opens the image details panel with an Open image link
 - at 430 px the page does not scroll sideways
+- the lightbox opens from a card's hover control and Shift+Space, steps with the arrows, closes on Esc
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from fixtures.contract import fill, image_card, image_page, label_op_accepted
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.label_ops import stub_label_op
 from harness.screens import shot
+from harness.waits import wait_for_url_state
 from playwright.sync_api import expect
 
 
@@ -144,7 +146,7 @@ def test_details_opens_the_image_with_an_open_image_link(stub, page, app_url):
     # The link reaches the image editor, still carrying the Workspace query.
     page.get_by_test_id('open-image').click()
     expect(page.get_by_test_id('editor-canvas')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
-    assert '/images/img-1' in page.url
+    wait_for_url_state(page, has=('/images/img-1',))
     expect(page.get_by_test_id('editor-back')).to_have_attribute(
         'href', re.compile(r'/workspace\?.*view=gallery')
     )
@@ -156,3 +158,27 @@ def test_no_sideways_scroll_at_430(stub, page, app_url):
     page.goto(f'{app_url}/p/default/workspace?view=gallery')
     expect(page.get_by_test_id('image-card').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
+
+
+def test_lightbox_opens_steps_and_closes(stub, page, app_url):
+    serve(stub, [])
+    stub.on('GET', r'/images/img-\d+/file', (200, b'', 'image/jpeg'))
+    page.goto(f'{app_url}/p/default/workspace?view=gallery')
+    card = page.get_by_test_id('image-card').nth(0)
+    card.hover()
+    card.get_by_test_id('image-card-lightbox').click()
+    box = page.get_by_test_id('lightbox')
+    expect(box).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    expect(box.locator('img')).to_have_attribute('src', re.compile('max_dim=2048'))
+    shot(page, 'lightbox', widths=(1600, 430))
+    page.keyboard.press('+')
+    expect(page.get_by_test_id('lightbox-zoom')).to_have_text('150%')
+    page.keyboard.press('Escape')
+    expect(box).to_have_count(0)
+    page.get_by_test_id('image-card-select').nth(1).focus()
+    page.keyboard.press('Shift+Space')
+    expect(page.get_by_test_id('lightbox')).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    page.keyboard.press('ArrowRight')
+    expect(page.get_by_test_id('lightbox').locator('img')).to_have_attribute(
+        'src', re.compile('img-2')
+    )

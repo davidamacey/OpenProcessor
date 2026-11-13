@@ -48,6 +48,7 @@ def review_item(i: int) -> dict:
         proposed_class_id=1,
         proposed_class_name='widget',
         label_validated=False,
+        class_validated=False,
         label_source='model_suggestion',
     )
     item['reason'] = 'uncertainty'
@@ -105,6 +106,8 @@ def test_switching_moves_requests_to_the_other_prefix_and_resets_undo(stub, page
     with expect_handled(page, lambda r: _path(r.url) == f'{DEFAULT_PREFIX}/events'):
         page.goto(review_url(app_url, 'to_label'))
     page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    # The keys register with the item: wait for its Confirm button before pressing Enter.
+    page.get_by_role('button', name='Confirm', exact=True).wait_for(timeout=ACTION_TIMEOUT_MS)
     assert page.get_by_test_id('project-switcher-current').inner_text() == 'Default'
 
     # One labelled write on `default` → one undo entry. Enter advances the

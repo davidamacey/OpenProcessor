@@ -91,4 +91,28 @@ describe('BulkBar', () => {
     ].map((b) => b.textContent?.trim());
     expect(labels).toEqual(['Ignore (generic)', 'Blurry']);
   });
+
+  it('offers Label whole group with nothing selected inside an open duplicate group', () => {
+    const ws = {
+      ...fakeWs(null),
+      selection: { kind: 'none' },
+      inNearDupGroup: true,
+      itemBody: () => ({ near_dup_group: 'g1' }),
+    };
+    render(ws as never);
+    expect(q('[data-testid="bulk-bar"]')).toBeNull();
+    expect(
+      q('[data-testid="group-bar"] [data-testid="label-whole-group"]'),
+    ).not.toBeNull();
+  });
+
+  it('shows no bar with nothing selected outside a duplicate group', () => {
+    render({
+      ...fakeWs(null),
+      selection: { kind: 'none' },
+      inNearDupGroup: false,
+    } as never);
+    expect(q('[data-testid="bulk-bar"]')).toBeNull();
+    expect(q('[data-testid="group-bar"]')).toBeNull();
+  });
 });

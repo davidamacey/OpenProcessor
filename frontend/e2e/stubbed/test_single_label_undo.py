@@ -73,6 +73,8 @@ def test_single_label_undo_survives_a_reload(stub, page, app_url):
 
     page.goto(review_url(app_url, 'to_label'))
     page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    # The keys register with the item: wait for its Confirm button before pressing Enter.
+    page.get_by_role('button', name='Confirm', exact=True).wait_for(timeout=ACTION_TIMEOUT_MS)
     with page.expect_response(
         lambda r: r.request.method == 'PUT' and r.url.endswith('/label'), timeout=ACTION_TIMEOUT_MS
     ):
@@ -82,6 +84,7 @@ def test_single_label_undo_survives_a_reload(stub, page, app_url):
 
     page.reload()
     page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
+    page.get_by_role('button', name='Confirm', exact=True).wait_for(timeout=ACTION_TIMEOUT_MS)
     wait_for_paint(page)
     page.keyboard.press('z')
     expect(page.get_by_text('Nothing to undo.').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)

@@ -14,11 +14,13 @@ writes the full-page screenshots of each page at 1600 and 430 px.
 from __future__ import annotations
 
 import pytest
-from harness.constants import ACTION_TIMEOUT_MS
+from harness.constants import ACTION_TIMEOUT_MS, review_url
 from harness.screens import shot
 from harness.waits import wait_for_paint
 from playwright.sync_api import expect
 from test_narrow_viewport_430 import LONG_SLUG, _stub_common
+from test_review_default_queue import item as review_item, queue_body
+from test_review_view import serve as serve_review
 
 
 GALLERY = ('gallery', '/workspace?view=gallery', "[data-testid='gallery-view']")
@@ -84,8 +86,11 @@ def test_body_text_is_inter_and_the_browser_loaded_it(stub, page, app_url):
 
 
 def test_code_is_jetbrains_mono_and_the_browser_loaded_it(stub, page, app_url):
-    _open(stub, page, app_url, *REVIEW[1:])
-    code = page.locator('code').first
+    # The crop id of the Review pane is the one `<code>` a served item brings to the page.
+    serve_review(stub)
+    stub.on('GET', r'/review/to_label(\?|$)', queue_body([review_item(0)]))
+    page.goto(review_url(app_url, 'to_label'))
+    code = page.get_by_test_id('review-crop-panel').locator('code').first
     expect(code).to_be_visible(timeout=ACTION_TIMEOUT_MS)
     assert page.evaluate(FAMILY, 'code').startswith('"JetBrains Mono Variable"')
     page.evaluate('document.fonts.ready.then(() => true)')

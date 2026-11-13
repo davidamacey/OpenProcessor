@@ -29,6 +29,11 @@ export interface Selection {
   clear(): void;
 }
 
+/** A click that does not extend the selection: no Ctrl, Cmd or Shift. */
+export function isPlainClick(e: MouseEvent | undefined): boolean {
+  return !e?.ctrlKey && !e?.metaKey && !e?.shiftKey;
+}
+
 export function createSelection(
   opts: { plainClick: PlainClickMode } = { plainClick: 'replace' },
 ): Selection {

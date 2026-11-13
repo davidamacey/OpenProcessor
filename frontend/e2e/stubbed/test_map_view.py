@@ -269,3 +269,16 @@ def test_without_webgl2_the_card_says_so_and_the_page_keeps_working(stub, page, 
     errors = [c for c in stub.console_errors if c.startswith('pageerror')]
     assert not errors, errors[:3]
     shot(page, 'map_no_webgl', env_var='MAP_SHOTS')
+
+
+def test_the_map_fills_the_workspace_height(stub, page, app_url):
+    _serve_map(stub, page, app_url, _meta(app_url))
+    page.set_viewport_size({'width': 1600, 'height': 1000})
+    _open(page, app_url)
+    canvas = page.locator('[data-testid="map-canvas"]').bounding_box()
+    view = page.get_by_test_id('workspace-view').bounding_box()
+    assert canvas and view
+    assert canvas['height'] >= 0.8 * view['height'], (canvas, view)
+    expect(page.get_by_test_id('map-cell-list')).to_be_visible()
+    shot(page, 'map', widths=(1600, 430))
+    assert page.locator(CANVAS).count() == 1

@@ -82,7 +82,7 @@ def test_region_reject_then_z_calls_region_undo(stub, page, app_url):
     page.goto(review_url(app_url, REGION_TAB_URL_ID))
     counter = page.get_by_test_id('queue-counter')
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    expect(counter.first).to_contain_text('1 total', timeout=ACTION_TIMEOUT_MS)
+    expect(counter.first).to_contain_text('of 1', timeout=ACTION_TIMEOUT_MS)
 
     # D = reject on the region tab -> the no_region_visible reject status
     # wants a reason (DQ-m6: now an in-app modal, not window.prompt()), so
@@ -144,7 +144,7 @@ def test_region_reject_z_before_any_write_does_not_call_region_undo(stub, page, 
     page.goto(review_url(app_url, REGION_TAB_URL_ID))
     counter = page.get_by_test_id('queue-counter')
     counter.first.wait_for(timeout=ACTION_TIMEOUT_MS)
-    expect(counter.first).to_contain_text('1 total', timeout=ACTION_TIMEOUT_MS)
+    expect(counter.first).to_contain_text('of 1', timeout=ACTION_TIMEOUT_MS)
 
     # Nothing to undo means no request is ever fired — there's no positive
     # signal to wait on, so settle via a real paint tick (the store's

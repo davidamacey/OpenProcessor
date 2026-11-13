@@ -9,7 +9,9 @@
   import OpenVocabProvenanceRows from './provenance/OpenVocabProvenanceRows.svelte';
   import EmbeddingRows from './provenance/EmbeddingRows.svelte';
   import ReprocessControl from './datasets/ReprocessControl.svelte';
-  import AssistButton from './assistRun/AssistButton.svelte';
+  import AssistRunDialog from './assistRun/AssistRunDialog.svelte';
+  import Menu, { type MenuItem } from '$components/ui/Menu.svelte';
+  import { AssistRunController } from '$lib/assistRun/assistRunController.svelte';
   import AssistSuggestions from './assistRun/AssistSuggestions.svelte';
   import CropMetaSlots from '$components/cropMeta/CropMetaSlots.svelte';
   import CropItemText from '$components/cropMeta/CropItemText.svelte';
@@ -65,6 +67,30 @@
         ? 'Model'
         : '',
   );
+
+  // Assist and Reprocess are rare: one More menu holds them, each with its own dialog.
+  const assist = new AssistRunController();
+  let reprocess = $state<ReturnType<typeof ReprocessControl> | null>(null);
+  const moreItems = $derived<MenuItem[]>([
+    {
+      id: 'assist',
+      label: 'Assist…',
+      onselect: () =>
+        assist.open({
+          title: 'This crop',
+          selected: { kind: 'crops', crop_ids: [crop.id] },
+        }),
+    },
+    ...(reprocess?.isAvailable() === true
+      ? [
+          {
+            id: 'reprocess',
+            label: 'Reprocess…',
+            onselect: () => void reprocess?.openFlow(),
+          },
+        ]
+      : []),
+  ]);
 
   // History and source image context: lazy, fetched once per crop.id,
   // never blocking the rest of the panel from rendering.
@@ -246,23 +272,19 @@
   {/if}
 </dl>
 
-<!-- Reprocess: absent unless the backend serves it. -->
-<div class="mt-2 flex flex-wrap items-center gap-2">
-  <AssistButton
-    opener={{
-      title: 'This crop',
-      selected: { kind: 'crops', crop_ids: [crop.id] },
-    }}
-    onclosed={() => void adoptAfterAssist()}
-  />
-  <ReprocessControl
-    target={{ kind: 'crop', cropId: crop.id }}
-    onadopt={(crops) => {
-      const updated = crops.find((c) => c.id === crop.id);
-      if (updated) onreprocessed?.(updated);
-    }}
-  />
+<div class="mt-2 flex items-center gap-2">
+  <Menu label="More" items={moreItems} triggerTestid="crop-meta-more" />
 </div>
+<AssistRunDialog ctl={assist} onclosed={() => void adoptAfterAssist()} />
+<ReprocessControl
+  bind:this={reprocess}
+  hideButton
+  target={{ kind: 'crop', cropId: crop.id }}
+  onadopt={(crops) => {
+    const updated = crops.find((c) => c.id === crop.id);
+    if (updated) onreprocessed?.(updated);
+  }}
+/>
 
 <CropMetaSlots {crop} />
 

@@ -8,6 +8,7 @@
   import DataTable from '$components/table/DataTable.svelte';
   import ColumnPicker from '$components/table/ColumnPicker.svelte';
   import HiddenItemsNote from '$components/itemFilter/HiddenItemsNote.svelte';
+  import DuplicatesControl from '$components/workspace/DuplicatesControl.svelte';
   import ViewMoreMenu from '$components/workspace/ViewMoreMenu.svelte';
   import BulkBar from '$components/workspace/BulkBar.svelte';
   import ViewState from '$components/state/ViewState.svelte';
@@ -34,6 +35,7 @@
       sort: ws.url.sort.table ?? null,
     },
     itemFilter: () => ws.itemQuery(),
+    nearDup: () => ws.url.nearDup,
     writeUrl: (s: TableUrlState) =>
       ws.patchUrl((params) =>
         writeWorkspaceUrl(params, {
@@ -46,7 +48,7 @@
 
   let anchor: string | null = null;
 
-  const queryKey = $derived(JSON.stringify(ws.itemQuery()));
+  const queryKey = $derived(JSON.stringify([ws.itemQuery(), ws.url.nearDup]));
   $effect(() => {
     void queryKey;
     untrack(() => void ctl.load());
@@ -170,7 +172,7 @@
 <div class="flex min-h-0 flex-1 flex-col" data-testid="table-view">
   <h1 class="sr-only">Table</h1>
   <BulkBar {ws} onapplied={() => void ctl.reload()} />
-  <div class="flex items-center gap-3 px-4 pt-3 text-meta text-fg-2">
+  <div class="flex flex-wrap items-center gap-3 px-4 pt-3 text-meta text-fg-2">
     <div role="group" aria-label="Rows" class="flex gap-1">
       {#each ['detections', 'images'] as const as kind (kind)}
         <button
@@ -189,6 +191,7 @@
       <strong class="text-fg-1">{ctl.total.toLocaleString()}</strong> rows
       <HiddenItemsNote hidden={ctl.hidden} />
     </p>
+    <DuplicatesControl value={ws.url.nearDup} onchange={(v) => ws.setNearDup(v)} />
     <div class="ml-auto flex items-center gap-2">
       <button
         type="button"

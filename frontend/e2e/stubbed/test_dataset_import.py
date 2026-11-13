@@ -573,6 +573,7 @@ def test_reprocess_confirm_on_cluster_selection(stub, page, app_url):
     page.locator('img').nth(1).click()
     expect(page.get_by_text('1 selected').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
 
+    page.get_by_test_id('bulk-more').click()
     page.get_by_test_id('reprocess-open').click()
     dialog = page.get_by_role('dialog', name='Reprocess')
     # Scope labels are the served reprocess vocabulary's.
@@ -619,6 +620,8 @@ def test_feature_absent_when_formats_404(stub, page, app_url):
     page.wait_for_selector('img', timeout=ACTION_TIMEOUT_MS)
     page.locator('img').nth(1).click()
     expect(page.get_by_text('1 selected').first).to_be_visible(timeout=ACTION_TIMEOUT_MS)
+    page.get_by_test_id('bulk-more').click()
+    expect(page.get_by_test_id('assist-open')).to_be_visible()
     expect(page.get_by_test_id('reprocess-open')).to_have_count(0)
 
     seen = stub.handled + stub.unhandled

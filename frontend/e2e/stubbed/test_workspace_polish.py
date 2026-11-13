@@ -15,6 +15,7 @@ from fixtures.image_editor import Editor
 from fixtures.wire import make_item
 from harness.constants import ACTION_TIMEOUT_MS
 from harness.screens import shot
+from harness.waits import settled_box, wait_for_paint
 from playwright.sync_api import expect
 
 
@@ -158,14 +159,16 @@ def test_editor_minimap_pans_a_zoomed_large_photo(stub, page, app_url):
     page.get_by_test_id('editor-canvas').hover()
     for _ in range(6):
         page.mouse.wheel(0, -400)
-    page.wait_for_timeout(300)
-    before = frame.bounding_box()
+    before = settled_box(page, frame)
     view = page.get_by_test_id('minimap-view')
     assert view.bounding_box()['width'] < minimap.bounding_box()['width']
     shot(page, 'editor-minimap', widths=(1600, 430))
     page.set_viewport_size({'width': 1600, 'height': 1000})
-    page.wait_for_timeout(300)
+    wait_for_paint(page)
     box = minimap.bounding_box()
     page.mouse.click(box['x'] + box['width'] * 0.9, box['y'] + box['height'] * 0.9)
-    page.wait_for_timeout(300)
-    assert frame.bounding_box()['x'] < before['x']
+    page.wait_for_function(
+        "x => document.querySelector('[data-testid=editor-frame]').getBoundingClientRect().x < x",
+        arg=before['x'],
+        timeout=ACTION_TIMEOUT_MS,
+    )

@@ -18,10 +18,9 @@ served `rejection_reasons` vocabulary, never the generic per-item
 
 from __future__ import annotations
 
-import time
-
 from fixtures.wire import REGION_CLASS, REGION_TAB_LABEL, REGION_TAB_URL_ID, make_item
 from harness.constants import ACTION_TIMEOUT_MS, review_url
+from harness.waits import expect_handled
 from playwright.sync_api import expect
 
 
@@ -253,18 +252,15 @@ def test_region_status_from_the_url_reaches_the_queue_request(stub, page, app_ur
 
     stub.on('GET', r'/review/regions(\?|$)', review_handler)
 
-    page.goto(review_url(app_url, REGION_TAB_URL_ID, region_status='verify_rejected'))
-    page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
-
-    # The URL-seeded filter reaches the queue only once /review/tabs lands
-    # and the refetch effect re-runs — poll the stub's own call log (real
-    # network fact) for the refetch actually carrying the param, instead
-    # of a fixed sleep.
-    deadline = time.monotonic() + ACTION_TIMEOUT_MS / 1000
-    while time.monotonic() < deadline and not (
-        region_calls and 'region_status=verify_rejected' in region_calls[-1]
+    # The URL-seeded filter reaches the queue only once /review/tabs lands and the refetch effect
+    # re-runs: wait for the stub to answer the refetch that carries the param.
+    with expect_handled(
+        page,
+        lambda r: '/review/regions' in r.url and 'region_status=verify_rejected' in r.url,
+        timeout=ACTION_TIMEOUT_MS,
     ):
-        page.wait_for_timeout(50)
+        page.goto(review_url(app_url, REGION_TAB_URL_ID, region_status='verify_rejected'))
+    page.get_by_test_id('queue-counter').first.wait_for(timeout=ACTION_TIMEOUT_MS)
 
     assert region_calls, 'the region queue must be fetched'
     assert 'region_status=verify_rejected' in region_calls[-1], region_calls

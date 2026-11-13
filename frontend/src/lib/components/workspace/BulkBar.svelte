@@ -124,9 +124,27 @@
   }
 </script>
 
-{#if hasSelection || ws.pendingSelectAll}
+{#if !hasSelection && !ws.pendingSelectAll && ws.inNearDupGroup}
+  <!-- An open duplicate group is labelled whole, with nothing selected. -->
   <div
-    class="relative flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line bg-surface-1/60 px-4 py-2 text-meta"
+    class="flex flex-wrap items-center gap-2 border-b border-line bg-surface-1/60 px-4 py-2 text-meta"
+    role="toolbar"
+    aria-label="Duplicate group"
+    data-testid="group-bar"
+  >
+    <span class="text-fg-1">This duplicate group</span>
+    <button
+      type="button"
+      class="btn"
+      data-testid="label-whole-group"
+      onclick={() => (groupPickerOpen = true)}
+    >
+      Label whole group…
+    </button>
+  </div>
+{:else if hasSelection || ws.pendingSelectAll}
+  <div
+    class="relative flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line bg-surface-1/60 px-4 py-2 text-meta max-md:fixed max-md:inset-x-0 max-md:bottom-0 max-md:z-40 max-md:border-t max-md:border-b-0 max-md:bg-surface-1 max-md:shadow-e3"
     role="toolbar"
     aria-label="Bulk actions"
     data-testid="bulk-bar"

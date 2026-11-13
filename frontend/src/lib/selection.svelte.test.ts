@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createSelection } from './selection.svelte';
+import { createSelection, isPlainClick } from './selection.svelte';
 
 const ORDER = ['a', 'b', 'c', 'd', 'e'];
 
@@ -77,5 +77,15 @@ describe('createSelection', () => {
     sel.anchorId = 'b';
     expect([...sel.ids]).toEqual(['b']);
     expect(sel.anchorId).toBe('b');
+  });
+});
+
+describe('isPlainClick', () => {
+  it('is false for a Ctrl, Cmd or Shift click and true otherwise', () => {
+    expect(isPlainClick(undefined)).toBe(true);
+    expect(isPlainClick({} as MouseEvent)).toBe(true);
+    expect(isPlainClick({ ctrlKey: true } as MouseEvent)).toBe(false);
+    expect(isPlainClick({ metaKey: true } as MouseEvent)).toBe(false);
+    expect(isPlainClick({ shiftKey: true } as MouseEvent)).toBe(false);
   });
 });

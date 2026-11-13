@@ -8,6 +8,7 @@
   import { getImage } from '$lib/api_images';
   import { apiErrorText } from '$lib/api_errors';
   import { formatTimestamp } from '$lib/format/date';
+  import { activeMap } from '$lib/map/activeMap.svelte';
   import { editorHref } from '$lib/editor/editorUrl';
   import NearDupGroupModal from '$components/nearDup/NearDupGroupModal.svelte';
   import type { ImageDetailResponse } from '$lib/types_images';
@@ -34,6 +35,8 @@
       });
     return () => ctrl.abort();
   });
+  // The photos of the cell the user stepped out of, as the cell's served summary counts them.
+  const cellPhotos = $derived(activeMap.ctl?.summary?.images ?? null);
   const status = $derived(error ? 'error' : detail ? 'ready' : id ? 'loading' : 'empty');
 </script>
 
@@ -49,13 +52,26 @@
           data-testid="back-to-cell"
           onclick={() => ws.setFocus(ws.previousFocus)}
         >
-          <Icon name="arrow-left" size={14} />Back to the cell
+          <Icon name="arrow-left" size={14} />Back to the cell{cellPhotos != null
+            ? ` (${cellPhotos.toLocaleString()} photo${cellPhotos === 1 ? '' : 's'})`
+            : ''}
         </button>
       {/if}
       <div
         class="relative overflow-hidden rounded border border-line bg-surface-0"
         data-testid="image-preview"
       >
+        <!-- A mouse shortcut for the View full size button below, which is the keyboard and
+             screen-reader path; a sibling of the image, so no control nests in another. -->
+        <button
+          type="button"
+          tabindex="-1"
+          aria-hidden="true"
+          class="absolute inset-0 z-10 cursor-zoom-in"
+          title="View full size"
+          data-testid="image-preview-open"
+          onclick={() => void ws.openLightbox(image.image_id, image.file_name)}
+        ></button>
         <SourceImageOverlay imageId={image.image_id} context={detail} maxDim={640} />
       </div>
       <h2 class="truncate text-title font-semibold text-fg-1" title={image.file_name}>
