@@ -156,3 +156,19 @@ def test_review_source_image_top_aligned(stub, page, app_url):
     )
     assert aligns, 'no tall box inside the source panel'
     assert 'center' not in aligns, aligns
+
+
+def test_review_source_panel_ends_under_its_image(stub, page, app_url):
+    """P3-E: the source pane is not stretched to the taller crop pane, so no empty block
+    is left under the picture."""
+    page.set_viewport_size({'width': 1600, 'height': 2400})
+    _stub_review(stub)
+    page.goto(review_url(app_url, 'to_label'))
+    page.get_by_role('button', name='Confirm', exact=True).wait_for(timeout=ACTION_TIMEOUT_MS)
+    panel = page.get_by_test_id('review-source-panel')
+    gap = panel.evaluate(
+        'el => { const img = el.querySelector("img"); if (!img) return null;'
+        ' return el.getBoundingClientRect().bottom - img.getBoundingClientRect().bottom; }'
+    )
+    assert gap is not None, 'no image in the source panel'
+    assert gap < 80, f'empty block under the source image: {gap}px'
