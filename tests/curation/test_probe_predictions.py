@@ -94,12 +94,12 @@ def _install_canned_predictor(
 
 
 # =============================================================================
-# test_probe_writes_all_seven_fields
+# test_probe_writes_its_fields_and_clears_the_dismissal
 # =============================================================================
 
 
 @pytest.mark.asyncio
-async def test_probe_writes_all_seven_fields(
+async def test_probe_writes_its_fields_and_clears_the_dismissal(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, tiny_image: Path
 ) -> None:
     from src.services.curation import probe_predictions as pp
@@ -140,7 +140,14 @@ async def test_probe_writes_all_seven_fields(
         'probe_disagreement',
         'probe_model_version',
         'probe_scored_at',
+        # a new run is a new opinion: the dismissal lapses (set to None, not left stale)
+        'probe_dismissed_at',
+        'probe_dismissed_class',
+        'probe_dismissed_model_version',
     }
+    assert doc['probe_dismissed_at'] is None
+    assert doc['probe_dismissed_class'] is None
+    assert doc['probe_dismissed_model_version'] is None
     assert doc['probe_pred_class'] == 'sedan'
     assert doc['probe_pred_confidence'] == pytest.approx(0.81)
     assert doc['probe_pred_entropy'] == pytest.approx(1.23)
