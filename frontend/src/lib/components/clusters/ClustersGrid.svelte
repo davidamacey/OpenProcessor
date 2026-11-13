@@ -269,7 +269,7 @@
             .join(' ')}
         >
           {#snippet action()}
-            <ClusterRunPanel primary={false} onserving={() => void list.loadFirst()} />
+            <ClusterRunPanel compact onserving={() => void list.loadFirst()} />
           {/snippet}
         </EmptyState>
       </div>

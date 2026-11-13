@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { nextStepsStore } from '$stores/nextSteps.svelte';
 import { ApiError } from '$lib/api_errors';
 import {
   ClusterRunController,
@@ -49,6 +50,15 @@ function make(over: Partial<ClusterRunDeps> = {}) {
 }
 
 describe('ClusterRunController', () => {
+  it('re-reads the next steps after an activation, so the header chip does not go stale', async () => {
+    const refresh = vi.spyOn(nextStepsStore, 'refresh').mockResolvedValue();
+    const { ctl } = make();
+    await ctl.load();
+    await ctl.activate(partition({ id: 'new' }));
+    expect(refresh).toHaveBeenCalled();
+    refresh.mockRestore();
+  });
+
   it('shows the serving partition and the ready one that is not serving', async () => {
     const { ctl } = make({
       list: vi.fn(async () => ({
