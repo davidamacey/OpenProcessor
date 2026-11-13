@@ -2,7 +2,7 @@
   /**
    * The app's top bar: 48px, on the nav surface with elevation e2 and a backdrop blur. Left to
    * right: the menu button (below 768px), the logo, the project switcher, the breadcrumb, the
-   * grouped nav (Dashboard | Data | Model | Quality | Settings; a group with several pages is a
+   * grouped nav in the order of the loop (Dashboard | Data | Workspace | Data quality | Model | Settings; a group with several pages is a
    * menu), Resources and the API chip. Below 768px the nav moves into a left Drawer. Every
    * label, group and path comes from the one table in `$lib/projectPaths`.
    */
@@ -24,6 +24,7 @@
     projectHref,
     sectionOf,
   } from '$lib/projectPaths';
+  import { crumbName } from '$stores/crumbName.svelte';
   import { HEALTH_CHIP_TEXT, healthChip, healthStore } from '$stores/health.svelte';
 
   interface Props {
@@ -44,7 +45,13 @@
 
   const section = $derived(sectionOf(page.url.pathname));
   const activeGroup = $derived(section ? navGroupOf(section) : null);
-  const crumbs = $derived(breadcrumbOf(page.url.pathname));
+  const crumbs = $derived(
+    breadcrumbOf(
+      page.url.pathname,
+      undefined,
+      crumbName.path === page.url.pathname ? crumbName.label : undefined,
+    ),
+  );
 
   const ITEM =
     'relative inline-flex h-12 items-center gap-1 px-3 text-control whitespace-nowrap hover:text-fg-1 after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full';

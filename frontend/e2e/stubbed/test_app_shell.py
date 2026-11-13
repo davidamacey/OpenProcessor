@@ -41,17 +41,15 @@ def test_the_bar_is_48px_on_the_nav_surface_with_a_shadow(stub, page, app_url):
     assert 'blur' in style['blur'], style
 
 
-def test_a_group_opens_its_pages_and_the_breadcrumb_names_where_you_are(stub, page, app_url):
+def test_a_group_opens_its_pages(stub, page, app_url):
     _stub_classes(stub)
     page.set_viewport_size(DESKTOP)
     page.goto(f'{app_url}/p/default/classes')
     nav = page.get_by_test_id('primary-nav')
     nav.wait_for(timeout=ACTION_TIMEOUT_MS)
-    expect(page.get_by_test_id('breadcrumb')).to_contain_text('Data')
-    expect(page.get_by_test_id('breadcrumb')).to_contain_text('Classes')
     nav.get_by_role('button', name='Data').click()
     items = nav.get_by_role('menuitem')
-    expect(items).to_have_text(['Ingest', 'Workspace', 'Classes', 'Export'])
+    expect(items).to_have_text(['Ingest', 'Classes'])
     expect(nav.get_by_role('menuitem', name='Classes')).to_have_attribute('aria-current', 'page')
     page.keyboard.press('Escape')
     expect(nav.get_by_role('menuitem')).to_have_count(0)

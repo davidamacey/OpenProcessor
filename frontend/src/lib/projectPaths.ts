@@ -16,8 +16,9 @@ import { projectsStore } from '$stores/projects.svelte';
 const NAV_GROUP_LABELS = {
   home: 'Dashboard',
   data: 'Data',
-  model: 'Model',
+  work: 'Workspace',
   quality: 'Data quality',
+  model: 'Model',
   settings: 'Settings',
 } as const;
 export type NavGroupId = keyof typeof NAV_GROUP_LABELS;
@@ -31,15 +32,15 @@ export type NavGroupId = keyof typeof NAV_GROUP_LABELS;
 const SECTION_TABLE = [
   { section: 'dashboard', label: 'Dashboard', group: 'home' },
   { section: 'ingest', label: 'Ingest', group: 'data' },
-  { section: 'workspace', label: 'Workspace', group: 'data' },
   { section: 'classes', label: 'Classes', group: 'data' },
-  { section: 'export', label: 'Export', group: 'data' },
   { section: 'datasets', label: 'Datasets', group: 'data', hidden: true },
   { section: 'images', label: 'Images', group: 'data', hidden: true },
-  { section: 'models', label: 'Models', group: 'model' },
+  { section: 'workspace', label: 'Workspace', group: 'work' },
+  { section: 'quality', label: 'Data quality', group: 'quality' },
+  { section: 'export', label: 'Export', group: 'model' },
   { section: 'train', label: 'Train', group: 'model' },
   { section: 'bakeoff', label: 'Bake-off', group: 'model' },
-  { section: 'quality', label: 'Data quality', group: 'quality' },
+  { section: 'models', label: 'Models', group: 'model' },
   { section: 'settings', label: 'Settings', group: 'settings' },
 ] as const;
 
@@ -83,11 +84,10 @@ export function navGroupOf(section: ProjectSection): NavGroupId {
 /** Labels of the known sub-pages (the path segment after the section). A segment not listed
  *  here is an object's name or id and is shown as it is. */
 const SUBPAGE_LABELS: Partial<Record<ProjectSection, Record<string, string>>> = {
-  datasets: { import: 'Import', imports: 'Import history' },
   quality: {
+    ready: 'Ready to train',
     audit: 'Accuracy audit',
     history: 'Label history',
-    'near-duplicates': 'Near-duplicates',
   },
   settings: {
     'embedding-spaces': 'Embedding spaces',
@@ -112,31 +112,53 @@ export interface Crumb {
   href?: string;
 }
 
+/** Whether `rest` (the path after the section) is an object page, the only pages that show a
+ *  breadcrumb: the import job, the image editor, a settings item editor. A section or a tab
+ *  page is marked by the nav and the tab strip. */
+function isObjectPage(section: ProjectSection, rest: string[]): boolean {
+  if (section === 'ingest') return rest[0] === 'imports' && rest.length === 2;
+  if (section === 'images') return rest.length === 1;
+  if (section === 'settings') return rest.length >= 2;
+  return false;
+}
+
 /**
- * The breadcrumb of `pathname`: the nav group (when it has several sections), the section, then
- * each sub-page or object name. A top-level page of a one-section group (Dashboard, Quality,
- * Settings) has no trail: the nav already marks it. Empty outside `/p/<slug>/<section>`.
+ * The breadcrumb of an object page: the nav group (when it has several sections), the section,
+ * then each sub-page and the object. `objectName` is the object's served name (a file name, an
+ * import name); without it the path segment is shown. Empty on every other page and outside
+ * `/p/<slug>/<section>`.
  */
-export function breadcrumbOf(pathname: string, slug?: string): Crumb[] {
+export function breadcrumbOf(
+  pathname: string,
+  slug?: string,
+  objectName?: string,
+): Crumb[] {
   const parts = pathname.split('/').filter(Boolean);
   const section = parts[0] === 'p' && parts[2] && isSection(parts[2]) ? parts[2] : null;
   if (!section) return [];
   const rest = parts.slice(3);
+  if (!isObjectPage(section, rest)) return [];
   const group = NAV_GROUPS.find((g) => g.id === navGroupOf(section))!;
   const crumbs: Crumb[] = [];
   if (group.sections.length > 1) crumbs.push({ label: group.label });
-  crumbs.push({ label: sectionLabel(section), href: projectHref(`/${section}`, slug) });
+  // The import job belongs to the Import tab of Ingest, so its trail goes back to that tab.
+  const sectionPath = section === 'ingest' ? '/ingest?tab=import' : `/${section}`;
+  crumbs.push({
+    label: sectionLabel(section),
+    href: projectHref(sectionPath as ProjectSubPath, slug),
+  });
   const labels = SUBPAGE_LABELS[section] ?? {};
-  let path = `/${section}`;
-  rest.forEach((seg, i) => {
+  const segments = section === 'ingest' ? rest.slice(1) : rest;
+  let path = `/${section}${section === 'ingest' ? '/imports' : ''}`;
+  segments.forEach((seg, i) => {
     path += `/${seg}`;
-    const last = i === rest.length - 1;
+    const last = i === segments.length - 1;
     crumbs.push({
-      label: labels[seg] ?? decodeURIComponent(seg),
+      label: last && objectName ? objectName : (labels[seg] ?? decodeURIComponent(seg)),
       ...(last ? {} : { href: projectHref(path as ProjectSubPath, slug) }),
     });
   });
-  return crumbs.length > 1 ? crumbs : [];
+  return crumbs;
 }
 
 /** A path inside a project: a known section, plus any sub-path, query

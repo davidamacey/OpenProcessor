@@ -7,6 +7,7 @@
    */
   import { onDestroy, untrack } from 'svelte';
   import { goto } from '$app/navigation';
+  import { page } from '$app/state';
   import { resolve } from '$app/paths';
   import ClassPicker from '$components/ClassPicker.svelte';
   import EditorCanvas from '$components/editor/EditorCanvas.svelte';
@@ -27,6 +28,7 @@
   import { createEditorController } from '$lib/editor/editorController.svelte';
   import { registerEditorKeys } from '$lib/editor/editorKeys.svelte';
   import { editorHref, editorListQuery, workspaceBackHref } from '$lib/editor/editorUrl';
+  import { setCrumbName } from '$stores/crumbName.svelte';
 
   interface Props {
     imageId: string;
@@ -62,6 +64,10 @@
 
   let objectsOpen = $state(false);
   const fileName = $derived(c.image?.image.file_name ?? id);
+  // The breadcrumb's last crumb is the file name, not the id.
+  $effect(() => {
+    if (c.image) setCrumbName(page.url.pathname, fileName);
+  });
   const status = $derived(c.loadError ? 'error' : c.image ? 'ready' : 'loading');
   const dropCount = $derived(c.drop?.regionBoxIds.length ?? 0);
 </script>
