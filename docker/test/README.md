@@ -151,6 +151,17 @@ containers. If the host ports are remapped too (`VERIFY_API_PORT`,
 `VERIFY_OPENSEARCH_PORT`, `VERIFY_FAKE_VLM_PORT`), set the matching `VERIFY_API_URL`,
 `VERIFY_OPENSEARCH_URL` and `VERIFY_FAKE_VLM_URL` for the test process.
 
+## Running the live tier as parallel shards
+
+`scripts/dev/live_shards.sh N` (N from 1 to 9) starts N independent stacks (compose projects
+`op-live-s0` to `op-live-s<N-1>`, host ports 14700 + 10 x shard + 1, 2, 4, 5, 6, and a data directory each
+through `VERIFY_DATA_DIR`), gives each a share of `tests/live` by `pytest-split` (durations in
+`tests/live/.live_durations`; refresh with `--store-durations --durations-path` on a full run), and
+tears every stack down on exit. Logs are `artifacts_local/live_shards/<i>.log`. The images must
+exist under the shared `VERIFY_CONTAINER_PREFIX` first. A test that changes the stack for a whole
+module (`test_one_vs_n.py`, `test_sse_across_replicas.py`) repeats that setup on each shard holding
+one of its tests.
+
 ## Testing the built images (`compose.built.yml`)
 
 `compose.built.yml` runs the harness on the release images with no `src/`, `scripts/` or
