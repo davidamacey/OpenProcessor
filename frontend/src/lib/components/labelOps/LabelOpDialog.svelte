@@ -128,11 +128,9 @@
         <div class="mt-2 text-meta" data-testid="label-op-conflict-ids">
           <p class="text-warn-text">Conflicting items:</p>
           <ul class="max-h-24 overflow-y-auto break-all text-fg-2">
-            <code
-              >{#each r.conflict_ids as id (id)}
-                <li>{id}</li>
-              {/each}</code
-            >
+            {#each r.conflict_ids as id (id)}
+              <li><code>{id}</code></li>
+            {/each}
           </ul>
         </div>
       {/if}

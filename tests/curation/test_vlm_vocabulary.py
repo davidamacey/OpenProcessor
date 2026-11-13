@@ -56,6 +56,7 @@ def test_class_source_rollup_buckets(monkeypatch: pytest.MonkeyPatch) -> None:
         {'key': 'proposer_proposal', 'doc_count': 5},
         {'key': 'proposer_low_conf', 'doc_count': 10},
         {'key': 'unlabeled_proposal', 'doc_count': 8},
+        {'key': 'detector', 'doc_count': 11},
         {'key': 'something_else', 'doc_count': 9},
     ]
     # proposal sources never carry a class_id (they're the
@@ -68,6 +69,7 @@ def test_class_source_rollup_buckets(monkeypatch: pytest.MonkeyPatch) -> None:
         'by_vlm': 5,
         'by_classifier': 17,
         'by_import': 0,
+        'by_detector': 11,
         'other': 32,
     }
 

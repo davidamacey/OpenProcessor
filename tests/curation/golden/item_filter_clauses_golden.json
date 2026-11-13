@@ -37,35 +37,87 @@
       }
      },
      {
-      "term": {
-       "proposal_name": {
-        "value": "hot dog",
-        "case_insensitive": true
-       }
+      "bool": {
+       "filter": [
+        {
+         "term": {
+          "proposal_name": {
+           "value": "hot dog",
+           "case_insensitive": true
+          }
+         }
+        }
+       ],
+       "must_not": [
+        {
+         "exists": {
+          "field": "class_name"
+         }
+        }
+       ]
       }
      },
      {
-      "term": {
-       "proposal_name": {
-        "value": "hot-dog",
-        "case_insensitive": true
-       }
+      "bool": {
+       "filter": [
+        {
+         "term": {
+          "proposal_name": {
+           "value": "hot-dog",
+           "case_insensitive": true
+          }
+         }
+        }
+       ],
+       "must_not": [
+        {
+         "exists": {
+          "field": "class_name"
+         }
+        }
+       ]
       }
      },
      {
-      "term": {
-       "proposal_name": {
-        "value": "hot_dog",
-        "case_insensitive": true
-       }
+      "bool": {
+       "filter": [
+        {
+         "term": {
+          "proposal_name": {
+           "value": "hot_dog",
+           "case_insensitive": true
+          }
+         }
+        }
+       ],
+       "must_not": [
+        {
+         "exists": {
+          "field": "class_name"
+         }
+        }
+       ]
       }
      },
      {
-      "term": {
-       "proposal_name": {
-        "value": "person",
-        "case_insensitive": true
-       }
+      "bool": {
+       "filter": [
+        {
+         "term": {
+          "proposal_name": {
+           "value": "person",
+           "case_insensitive": true
+          }
+         }
+        }
+       ],
+       "must_not": [
+        {
+         "exists": {
+          "field": "class_name"
+         }
+        }
+       ]
       }
      }
     ],
@@ -89,11 +141,24 @@
          }
         },
         {
-         "term": {
-          "proposal_name": {
-           "value": "car",
-           "case_insensitive": true
-          }
+         "bool": {
+          "filter": [
+           {
+            "term": {
+             "proposal_name": {
+              "value": "car",
+              "case_insensitive": true
+             }
+            }
+           }
+          ],
+          "must_not": [
+           {
+            "exists": {
+             "field": "class_name"
+            }
+           }
+          ]
          }
         }
        ],
@@ -985,11 +1050,24 @@
       }
      },
      {
-      "term": {
-       "proposal_name": {
-        "value": "person",
-        "case_insensitive": true
-       }
+      "bool": {
+       "filter": [
+        {
+         "term": {
+          "proposal_name": {
+           "value": "person",
+           "case_insensitive": true
+          }
+         }
+        }
+       ],
+       "must_not": [
+        {
+         "exists": {
+          "field": "class_name"
+         }
+        }
+       ]
       }
      }
     ],
@@ -1011,11 +1089,24 @@
          }
         },
         {
-         "term": {
-          "proposal_name": {
-           "value": "car",
-           "case_insensitive": true
-          }
+         "bool": {
+          "filter": [
+           {
+            "term": {
+             "proposal_name": {
+              "value": "car",
+              "case_insensitive": true
+             }
+            }
+           }
+          ],
+          "must_not": [
+           {
+            "exists": {
+             "field": "class_name"
+            }
+           }
+          ]
          }
         }
        ],

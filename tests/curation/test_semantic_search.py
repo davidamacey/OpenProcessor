@@ -462,8 +462,17 @@ async def test_semantic_text_search_class_filter_is_the_knn_filter_and_the_count
     knn = fake_os.search.await_args.kwargs['body']['query']['knn']['pe_embedding']
     clauses = knn['filter']['bool']['filter']
     name_should = clauses[0]['bool']['should']
-    assert {tuple(c['term']) for c in name_should} == {('class_name',), ('proposal_name',)}
-    assert all(next(iter(c['term'].values()))['value'] == 'car' for c in name_should)
+    # A proposal name counts only while the item has no class (c61c597ba), so that branch is a bool.
+    class_terms = [c['term'] for c in name_should if 'term' in c]
+    proposal_terms = [c['bool']['filter'][0]['term'] for c in name_should if 'bool' in c]
+    assert {tuple(t) for t in class_terms} == {('class_name',)}
+    assert {tuple(t) for t in proposal_terms} == {('proposal_name',)}
+    assert all(next(iter(t.values()))['value'] == 'car' for t in class_terms + proposal_terms)
+    assert all(
+        c['bool']['must_not'] == [{'exists': {'field': 'class_name'}}]
+        for c in name_should
+        if 'bool' in c
+    )
     count_body = fake_os.count.await_args.kwargs['body']
     assert count_body == {
         'query': {'bool': {'filter': [*clauses, not_embedded_clause('pe_embedding')]}}

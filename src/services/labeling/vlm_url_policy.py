@@ -71,6 +71,7 @@ DENIED_INTERNAL_SERVICES: frozenset[str] = frozenset(
         'curation-trainer',
         'model-export',
         'model-export-worker',
+        'interactive-worker',
         'mlflow',
         'prometheus',
         'grafana',
