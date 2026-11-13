@@ -46,6 +46,10 @@ export interface MapCellCollection {
   precision: number;
   truncated: boolean;
   join_truncated: boolean;
+  /** Photos with a position that match the filter, across the whole map. */
+  n_located_matching: number;
+  /** Photos without a position that match the filter. */
+  n_unlocated_matching: number;
 }
 
 /** The filter the map shares with the lists: the shared item filter plus the capture days. */

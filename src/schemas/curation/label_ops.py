@@ -117,7 +117,43 @@ class AdoptDetectorResponse(BaseModel):
     job_id: str | None = Field(default=None, description='The queued job; poll GET /jobs/{job_id}.')
 
 
+class AcceptedClassCount(BaseModel):
+    class_name: str
+    count: int
+
+
+class AcceptHeldBack(BaseModel):
+    """Items the bar matches that the operation will not write, each counted once under the first
+    reason that applies, in the order of the fields."""
+
+    excluded: int = Field(description='Excluded, or dismissed from review.')
+    holdout: int = Field(description='In the frozen test holdout.')
+    audit_sample: int = Field(description='Drawn into an open accuracy audit.')
+    locked: int = Field(description='Already validated (by a person or an import).')
+    deprecated_class: int = Field(description='Carrying a deprecated class or the region class.')
+
+
+class AcceptMachineResponse(BaseModel):
+    """``POST /label_ops/accept_machine``: what accepting would do (a dry run) or did.
+
+    ``items`` and ``by_class`` count the labels the operation writes. A real run queues the
+    recorded operation (``op_id`` and ``job_id``, both null when nothing qualified)."""
+
+    dry_run: bool
+    items: int = Field(description='Machine labels the operation accepts.')
+    by_class: list[AcceptedClassCount] = Field(description='The items by class, most first.')
+    held_back: AcceptHeldBack
+    remaining: int = Field(
+        description='Items beyond this operation (one writes at most 20,000): accept again.'
+    )
+    op_id: str | None = Field(default=None, description='The recorded operation (undo it by id).')
+    job_id: str | None = Field(default=None, description='The queued job; poll GET /jobs/{job_id}.')
+
+
 __all__ = [
+    'AcceptHeldBack',
+    'AcceptMachineResponse',
+    'AcceptedClassCount',
     'AdoptDetectorRequest',
     'AdoptDetectorResponse',
     'CropUndoBatchResponse',

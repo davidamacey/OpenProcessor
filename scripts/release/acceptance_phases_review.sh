@@ -85,8 +85,8 @@ check_cluster_facets() {
         t="$(crops_total "cluster_uid=${cid}&class_source=$(jq -rn --arg v "$v" '$v|@uri')")"
         [[ "$want" == "$t" ]] || fail "facets class source '${v}' ${want} != /crops total ${t}"
     fi
-    for tab in $(fct '.review_tabs | keys[]'); do
-        want="$(jq -r --arg t "$tab" '.review_tabs[$t]' <<< "$facets")"
+    for tab in $(fct '.review_tabs[].value'); do
+        want="$(jq -r --arg t "$tab" '.review_tabs[] | select(.value == $t) | .count' <<< "$facets")"
         t="$(crops_total "cluster_uid=${cid}&review_tab=${tab}")"
         [[ "$want" == "$t" ]] || fail "facets review tab '${tab}' ${want} != /crops total ${t}"
     done

@@ -382,6 +382,7 @@ const CASES: [string, string[]][] = [
     'ReprocessFilter',
     keys({
       all_images: true,
+      audit_outcome: true,
       class_id: true,
       class_names: true,
       class_source: true,

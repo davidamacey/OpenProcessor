@@ -145,10 +145,10 @@ describe('getClusterFacets', () => {
     const facets = {
       cluster_uid: UID,
       total: 3,
-      detector_classes: [{ value: 'widget_x', count: 2 }],
+      detector_classes: [{ value: 'widget_x', count: 2, label: null }],
       class_sources: [],
       validation: { validated: 1, unvalidated: 2 },
-      review_tabs: { outliers: 1 },
+      review_tabs: [{ value: 'outliers', count: 1, label: 'Outliers' }],
       detector_confidence: [{ min: 0.9, max: null, count: 3 }],
       detector_confidence_missing: 0,
     };

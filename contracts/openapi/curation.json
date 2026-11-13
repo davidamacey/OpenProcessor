@@ -1,6 +1,172 @@
 {
   "components": {
     "schemas": {
+      "AcceptHeldBack": {
+        "description": "Items the bar matches that the operation will not write, each counted once under the first\nreason that applies, in the order of the fields.",
+        "properties": {
+          "audit_sample": {
+            "description": "Drawn into an open accuracy audit.",
+            "title": "Audit Sample",
+            "type": "integer"
+          },
+          "deprecated_class": {
+            "description": "Carrying a deprecated class or the region class.",
+            "title": "Deprecated Class",
+            "type": "integer"
+          },
+          "excluded": {
+            "description": "Excluded, or dismissed from review.",
+            "title": "Excluded",
+            "type": "integer"
+          },
+          "holdout": {
+            "description": "In the frozen test holdout.",
+            "title": "Holdout",
+            "type": "integer"
+          },
+          "locked": {
+            "description": "Already validated (by a person or an import).",
+            "title": "Locked",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "excluded",
+          "holdout",
+          "audit_sample",
+          "locked",
+          "deprecated_class"
+        ],
+        "title": "AcceptHeldBack",
+        "type": "object"
+      },
+      "AcceptMachineRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "dry_run": {
+            "default": true,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "filter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemFilter"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only items this filter matches; none for every item."
+          },
+          "min_confidence": {
+            "description": "The bar. The detector's own score, or the VLM's confidence category (high 0.92, medium 0.70, low 0.40).",
+            "maximum": 1.0,
+            "minimum": 0.5,
+            "title": "Min Confidence",
+            "type": "number"
+          },
+          "sources": {
+            "description": "Whose machine labels to accept.",
+            "items": {
+              "enum": [
+                "detector",
+                "vlm"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "min_confidence"
+        ],
+        "title": "AcceptMachineRequest",
+        "type": "object"
+      },
+      "AcceptMachineResponse": {
+        "description": "``POST /label_ops/accept_machine``: what accepting would do (a dry run) or did.\n\n``items`` and ``by_class`` count the labels the operation writes. A real run queues the\nrecorded operation (``op_id`` and ``job_id``, both null when nothing qualified).",
+        "properties": {
+          "by_class": {
+            "description": "The items by class, most first.",
+            "items": {
+              "$ref": "#/components/schemas/AcceptedClassCount"
+            },
+            "title": "By Class",
+            "type": "array"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "held_back": {
+            "$ref": "#/components/schemas/AcceptHeldBack"
+          },
+          "items": {
+            "description": "Machine labels the operation accepts.",
+            "title": "Items",
+            "type": "integer"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The queued job; poll GET /jobs/{job_id}.",
+            "title": "Job Id"
+          },
+          "op_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The recorded operation (undo it by id).",
+            "title": "Op Id"
+          },
+          "remaining": {
+            "description": "Items beyond this operation (one writes at most 20,000): accept again.",
+            "title": "Remaining",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dry_run",
+          "items",
+          "by_class",
+          "held_back",
+          "remaining"
+        ],
+        "title": "AcceptMachineResponse",
+        "type": "object"
+      },
+      "AcceptedClassCount": {
+        "properties": {
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "class_name",
+          "count"
+        ],
+        "title": "AcceptedClassCount",
+        "type": "object"
+      },
       "AcceptedDataset": {
         "properties": {
           "frozen_test_sha": {
@@ -4832,6 +4998,44 @@
         "title": "ClassCount",
         "type": "object"
       },
+      "ClassCoverage": {
+        "description": "Items of one active class by how far a person has checked them.",
+        "properties": {
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "detector_only": {
+            "description": "Only the detector named the class, unchecked.",
+            "title": "Detector Only",
+            "type": "integer"
+          },
+          "machine_only": {
+            "description": "A machine set the class (VLM, classifier), unchecked.",
+            "title": "Machine Only",
+            "type": "integer"
+          },
+          "test": {
+            "description": "In the frozen test holdout.",
+            "title": "Test",
+            "type": "integer"
+          },
+          "validated": {
+            "description": "Checked by a person or an import.",
+            "title": "Validated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "class_name",
+          "validated",
+          "machine_only",
+          "detector_only",
+          "test"
+        ],
+        "title": "ClassCoverage",
+        "type": "object"
+      },
       "ClassCreateRequest": {
         "properties": {
           "group": {
@@ -5862,11 +6066,12 @@
             "type": "integer"
           },
           "review_tabs": {
-            "additionalProperties": {
-              "type": "integer"
+            "description": "One entry per review filter: `value` is the `review_tab` id, `label` its name.",
+            "items": {
+              "$ref": "#/components/schemas/FacetCount"
             },
             "title": "Review Tabs",
-            "type": "object"
+            "type": "array"
           },
           "total": {
             "description": "Members, without the test holdout and excluded items.",
@@ -10467,6 +10672,46 @@
         "title": "DatasetPreviewRequest",
         "type": "object"
       },
+      "DatasetReadiness": {
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/ReadinessCheck"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "computed_at": {
+            "description": "When the checks were computed (UTC, ISO 8601).",
+            "title": "Computed At",
+            "type": "string"
+          },
+          "coverage": {
+            "items": {
+              "$ref": "#/components/schemas/ClassCoverage"
+            },
+            "title": "Coverage",
+            "type": "array"
+          },
+          "verdict": {
+            "enum": [
+              "ready",
+              "warn",
+              "blocked"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "verdict",
+          "checks",
+          "coverage",
+          "computed_at"
+        ],
+        "title": "DatasetReadiness",
+        "type": "object"
+      },
       "DatasetRef": {
         "additionalProperties": false,
         "properties": {
@@ -13508,6 +13753,18 @@
             "title": "Count",
             "type": "integer"
           },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The served name to show for `value`; null when the value is its own name.",
+            "title": "Label"
+          },
           "value": {
             "title": "Value",
             "type": "string"
@@ -13515,7 +13772,8 @@
         },
         "required": [
           "value",
-          "count"
+          "count",
+          "label"
         ],
         "title": "FacetCount",
         "type": "object"
@@ -18061,6 +18319,19 @@
         "additionalProperties": false,
         "description": "Predicates over stored items. Every field unset = no constraint.",
         "properties": {
+          "audit_outcome": {
+            "items": {
+              "enum": [
+                "agree",
+                "detector_wrong",
+                "vlm_wrong",
+                "both_wrong"
+              ],
+              "type": "string"
+            },
+            "title": "Audit Outcome",
+            "type": "array"
+          },
           "class_id": {
             "anyOf": [
               {
@@ -19690,7 +19961,8 @@
               "move",
               "assist_loop_propagate",
               "assist_loop_review",
-              "adopt_detector"
+              "adopt_detector",
+              "accept_machine"
             ],
             "title": "Kind",
             "type": "string"
@@ -20061,6 +20333,11 @@
             "title": "By Classifier",
             "type": "integer"
           },
+          "by_detector": {
+            "description": "Classes the detector named and nobody has checked (`class_source` detector).",
+            "title": "By Detector",
+            "type": "integer"
+          },
           "by_human": {
             "title": "By Human",
             "type": "integer"
@@ -20094,6 +20371,7 @@
           "by_human",
           "by_vlm",
           "by_classifier",
+          "by_detector",
           "by_import",
           "other",
           "total",
@@ -21683,6 +21961,18 @@
             "default": false,
             "title": "Join Truncated",
             "type": "boolean"
+          },
+          "n_located_matching": {
+            "default": 0,
+            "description": "Photos with a served position that match the request filter, across the whole map (the viewport box does not narrow it).",
+            "title": "N Located Matching",
+            "type": "integer"
+          },
+          "n_unlocated_matching": {
+            "default": 0,
+            "description": "Photos without a position that match the request filter: they are not on the map.",
+            "title": "N Unlocated Matching",
+            "type": "integer"
           },
           "precision": {
             "description": "The grid precision (tile zoom) the cells are at.",
@@ -25745,6 +26035,12 @@
             ],
             "title": "Detail"
           },
+          "label": {
+            "description": "What the form shows for ``name``; a ``KeyError`` for a row nobody named.",
+            "readOnly": true,
+            "title": "Label",
+            "type": "string"
+          },
           "message": {
             "title": "Message",
             "type": "string"
@@ -25767,7 +26063,8 @@
         "required": [
           "name",
           "severity",
-          "message"
+          "message",
+          "label"
         ],
         "title": "PreflightCheck",
         "type": "object"
@@ -28708,6 +29005,157 @@
           "run_id"
         ],
         "title": "QuantizeRequest",
+        "type": "object"
+      },
+      "ReadinessCheck": {
+        "properties": {
+          "classes": {
+            "description": "The classes the message names (worst first); empty when none.",
+            "items": {
+              "$ref": "#/components/schemas/ReadinessClassRow"
+            },
+            "title": "Classes",
+            "type": "array"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The number the message is about; null when none.",
+            "title": "Count"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "description": "The served name of the check.",
+            "title": "Label",
+            "type": "string"
+          },
+          "link": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReadinessLink"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "ok",
+              "warn",
+              "block"
+            ],
+            "title": "Severity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "severity",
+          "message",
+          "count",
+          "link",
+          "classes"
+        ],
+        "title": "ReadinessCheck",
+        "type": "object"
+      },
+      "ReadinessClassRow": {
+        "description": "One class a check names: how many of what, and for the audit its precision.",
+        "properties": {
+          "ci_high": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Wilson 95% interval, upper bound.",
+            "title": "Ci High"
+          },
+          "ci_low": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Wilson 95% interval, lower bound.",
+            "title": "Ci Low"
+          },
+          "class_name": {
+            "title": "Class Name",
+            "type": "string"
+          },
+          "count": {
+            "description": "What the check counts for this class.",
+            "title": "Count",
+            "type": "integer"
+          },
+          "precision": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Audited precision of the detector for this class, if audited.",
+            "title": "Precision"
+          }
+        },
+        "required": [
+          "class_name",
+          "count"
+        ],
+        "title": "ReadinessClassRow",
+        "type": "object"
+      },
+      "ReadinessLink": {
+        "description": "Where the check's work is: a project page and, for the Workspace, its address query.",
+        "properties": {
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The search string of the page address (for the Workspace: `view`, `queue`, and the item filter keys it understands); null for none.",
+            "title": "Query"
+          },
+          "section": {
+            "description": "The project page: `workspace`, `export`, `quality/audit` or `classes`.",
+            "title": "Section",
+            "type": "string"
+          }
+        },
+        "required": [
+          "section",
+          "query"
+        ],
+        "title": "ReadinessLink",
         "type": "object"
       },
       "RegionBatchWriteResponse": {
@@ -33006,6 +33454,19 @@
             "title": "All Images",
             "type": "boolean"
           },
+          "audit_outcome": {
+            "items": {
+              "enum": [
+                "agree",
+                "detector_wrong",
+                "vlm_wrong",
+                "both_wrong"
+              ],
+              "type": "string"
+            },
+            "title": "Audit Outcome",
+            "type": "array"
+          },
           "class_id": {
             "anyOf": [
               {
@@ -36251,6 +36712,18 @@
       },
       "ReviewTabsResponse": {
         "properties": {
+          "default_tab": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The first queue in `tabs` order with `count` above zero, null when every queue is empty: the queue Review opens on when none is named.",
+            "title": "Default Tab"
+          },
           "empty_state": {
             "$ref": "#/components/schemas/ReviewEmptyState"
           },
@@ -36264,6 +36737,7 @@
         },
         "required": [
           "tabs",
+          "default_tab",
           "empty_state"
         ],
         "title": "ReviewTabsResponse",
@@ -48853,6 +49327,33 @@
             }
           },
           {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
+            }
+          },
+          {
             "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
             "in": "query",
             "name": "taken_from",
@@ -49937,6 +50438,33 @@
               ],
               "description": "Items a dataset import labeled (`import_ids`) or proposed.",
               "title": "Import Id"
+            }
+          },
+          {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
             }
           },
           {
@@ -51264,6 +51792,33 @@
               ],
               "description": "Items a dataset import labeled (`import_ids`) or proposed.",
               "title": "Import Id"
+            }
+          },
+          {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
             }
           },
           {
@@ -54355,6 +54910,33 @@
             }
           },
           {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
+            }
+          },
+          {
             "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
             "in": "query",
             "name": "taken_from",
@@ -56134,6 +56716,33 @@
             }
           },
           {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
+            }
+          },
+          {
             "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
             "in": "query",
             "name": "taken_from",
@@ -56840,6 +57449,33 @@
               ],
               "description": "Items a dataset import labeled (`import_ids`) or proposed.",
               "title": "Import Id"
+            }
+          },
+          {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
             }
           },
           {
@@ -60143,6 +60779,65 @@
         ]
       }
     },
+    "/curation/projects/{project}/label_ops/accept_machine": {
+      "post": {
+        "description": "Validate the machine's class on every item whose label clears a bar, as an undoable operation.\n\nThe detector's and the VLM's labels that reach `min_confidence` (and the chosen `sources`,\ninside the optional `filter`) become validated labels, `label_source` `human_bulk_accept`:\na person's decision, so the lock rule protects them from then on. Never written: an item a\nperson or an import validated, one in the test holdout, an excluded or review-dismissed one,\none drawn into an open accuracy audit, and one whose class is deprecated or the region class;\n`held_back` counts each. The operation shows in `GET /label_ops` and is undone like a bulk\nlabel (the machine class returns). `dry_run` (the default) counts and writes nothing; send\n`{\"dry_run\": false}` to run it (202 with the operation and its job). One operation writes at\nmost 20,000 items: `remaining` says how many are left, accept again for them.",
+        "operationId": "accept_machine_curation_projects__project__label_ops_accept_machine_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptMachineRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptMachineResponse"
+                }
+              }
+            },
+            "description": "A dry run, or nothing qualified."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptMachineResponse"
+                }
+              }
+            },
+            "description": "The operation is queued as a job."
+          },
+          "409": {
+            "description": "project_read_only."
+          },
+          "422": {
+            "description": "A malformed bar or filter."
+          }
+        },
+        "summary": "Accept Machine",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
     "/curation/projects/{project}/label_ops/adopt_detector": {
       "post": {
         "description": "Give the items the detector named but nobody classed that class, as an undoable operation.\n\nEach item with a detector label and no class gets the registry class of that name as a\nmachine label (`class_source` `detector`, never validated); the registry classes the\ndetector's labels need are added first, so every label the detector produced is in the\nregistry. A person's, an import's or a validated class, a test-holdout item and an excluded\none are never written, and a detector name that matches a deprecated class or the region class\nis skipped and reported. The operation shows in `GET /label_ops` and is undone like a bulk\nlabel. `dry_run` (the default) counts and writes nothing; send `{\"dry_run\": false}` to run it\n(202 with the operation and its job). One operation writes at most 20,000 items: `remaining`\nsays how many are left, adopt again for them.",
@@ -60790,6 +61485,33 @@
               ],
               "description": "Items a dataset import labeled (`import_ids`) or proposed.",
               "title": "Import Id"
+            }
+          },
+          {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
             }
           },
           {
@@ -64134,6 +64856,33 @@
             }
           },
           {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
+            }
+          },
+          {
             "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
             "in": "query",
             "name": "taken_from",
@@ -65343,6 +66092,49 @@
           }
         },
         "summary": "Get Prompt Pack Revision",
+        "tags": [
+          "Curation"
+        ]
+      }
+    },
+    "/curation/projects/{project}/quality/readiness": {
+      "get": {
+        "description": "Is the dataset ready to train on? A `verdict` (`ready`, `warn`, `blocked`), one entry in\n`checks` per question (class minimums, the frozen test set, machine labels nobody has\nchecked, the accuracy audit, near-duplicate groups, unlabelled objects on exportable photos,\nthe newest export), each with its `label`, `severity`, `message`, the `count` it is about, the\nworst `classes` and a `link` to the items that need work, and `coverage` per class: validated,\nmachine-set, detector-only and test items. The class and test-set rows are Train preflight's\nown checks (`POST /train/preflight`), so the two never disagree.",
+        "operationId": "quality_readiness_curation_projects__project__quality_readiness_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "title": "Project",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetReadiness"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Quality Readiness",
         "tags": [
           "Curation"
         ]
@@ -66946,6 +67738,33 @@
               ],
               "description": "Items a dataset import labeled (`import_ids`) or proposed.",
               "title": "Import Id"
+            }
+          },
+          {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
             }
           },
           {
@@ -68632,6 +69451,33 @@
             }
           },
           {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
+            }
+          },
+          {
             "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
             "in": "query",
             "name": "taken_from",
@@ -69453,6 +70299,33 @@
             }
           },
           {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
+            }
+          },
+          {
             "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
             "in": "query",
             "name": "taken_from",
@@ -70205,6 +71078,33 @@
               ],
               "description": "Items a dataset import labeled (`import_ids`) or proposed.",
               "title": "Import Id"
+            }
+          },
+          {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
             }
           },
           {
@@ -70983,6 +71883,33 @@
               ],
               "description": "Items a dataset import labeled (`import_ids`) or proposed.",
               "title": "Import Id"
+            }
+          },
+          {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
             }
           },
           {
@@ -71797,6 +72724,33 @@
             }
           },
           {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
+            }
+          },
+          {
             "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
             "in": "query",
             "name": "taken_from",
@@ -72547,6 +73501,33 @@
               ],
               "description": "Items a dataset import labeled (`import_ids`) or proposed.",
               "title": "Import Id"
+            }
+          },
+          {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
             }
           },
           {
@@ -73733,6 +74714,33 @@
             }
           },
           {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
+            }
+          },
+          {
             "description": "Capture date (ISO 8601 day), inclusive. Items are matched on the UTC capture time when the offset was known and on the wall-clock capture time (read as UTC) when it was not; items with no capture time never match.",
             "in": "query",
             "name": "taken_from",
@@ -74267,6 +75275,33 @@
               ],
               "description": "Items a dataset import labeled (`import_ids`) or proposed.",
               "title": "Import Id"
+            }
+          },
+          {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
             }
           },
           {
@@ -74868,6 +75903,33 @@
               ],
               "description": "Items a dataset import labeled (`import_ids`) or proposed.",
               "title": "Import Id"
+            }
+          },
+          {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
             }
           },
           {
@@ -76875,6 +77937,33 @@
               ],
               "description": "Items a dataset import labeled (`import_ids`) or proposed.",
               "title": "Import Id"
+            }
+          },
+          {
+            "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+            "in": "query",
+            "name": "audit_outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "agree",
+                      "detector_wrong",
+                      "vlm_wrong",
+                      "both_wrong"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Audited crops a person labelled, by who was right (agree, detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit report's counts, listed.",
+              "title": "Audit Outcome"
             }
           },
           {

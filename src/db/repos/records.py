@@ -45,6 +45,7 @@ LABEL_OPERATION_KINDS = (
     'assist_loop_propagate',
     'assist_loop_review',
     'adopt_detector',
+    'accept_machine',
 )
 """The kinds of ``label_operations.kind`` (a free-text column; this tuple is the one vocabulary)."""
 

@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from src.config.curation_accessors import items_index
 from src.core.exceptions import RequestRejectedError
 from src.services.curation.cluster_cards import CLUSTER_REVIEW_TABS, review_aggs
+from src.services.curation.review_tabs import review_tab_label
 from src.services.embedding_spaces.readers import item_vector_field
 
 
@@ -66,7 +67,10 @@ def facets_body(cluster_uid: str, vector_field: str) -> dict[str, Any]:
 
 
 def _counts(agg: dict[str, Any]) -> list[FacetCount]:
-    return [{'value': str(b['key']), 'count': int(b['doc_count'])} for b in agg.get('buckets', [])]
+    return [
+        {'value': str(b['key']), 'count': int(b['doc_count']), 'label': None}
+        for b in agg.get('buckets', [])
+    ]
 
 
 def facets_from_response(cluster_uid: str, resp: dict[str, Any]) -> ClusterFacets:
@@ -90,9 +94,14 @@ def facets_from_response(cluster_uid: str, resp: dict[str, Any]) -> ClusterFacet
             'validated': int(aggs.get('validated', {}).get('doc_count') or 0),
             'unvalidated': int(aggs.get('unvalidated', {}).get('doc_count') or 0),
         },
-        'review_tabs': {
-            tab: int(review.get(tab, {}).get('doc_count') or 0) for tab in CLUSTER_REVIEW_TABS
-        },
+        'review_tabs': [
+            {
+                'value': tab,
+                'count': int(review.get(tab, {}).get('doc_count') or 0),
+                'label': review_tab_label(tab),
+            }
+            for tab in CLUSTER_REVIEW_TABS
+        ],
         'detector_confidence': bins,
         'detector_confidence_missing': int(
             aggs.get('detector_confidence_missing', {}).get('doc_count') or 0

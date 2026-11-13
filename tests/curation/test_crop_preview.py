@@ -44,10 +44,29 @@ def _size(jpeg: bytes) -> tuple[int, int]:
         return img.size
 
 
-def test_the_thumbnail_of_a_tiny_box_stays_tiny(photo: Path) -> None:
-    """The behaviour the preview exists to fix."""
+def test_the_thumbnail_of_a_tiny_box_is_the_padded_context_at_the_thumbnail_size(
+    photo: Path,
+) -> None:
+    """A 7 px cut shown as a 7 px image is a black tile in a 128 px card; below 32 px the
+    server serves the box with its surroundings at the requested size instead."""
     thumb = ThumbnailCache._render_thumbnail(photo, TINY, 384)
-    assert max(_size(thumb)) <= 8
+    assert max(_size(thumb)) == 384
+
+
+def test_a_box_of_32_px_or_more_keeps_the_plain_thumbnail(photo: Path) -> None:
+    box = (0.5, 0.5, 0.5 + 32 / 400 + 1e-6, 0.5 + 20 / 300 + 1e-6)
+    assert _size(ThumbnailCache._render_thumbnail(photo, box, 384)) == (32, 20)
+    just_under = (0.5, 0.5, 0.5 + 31 / 400 + 1e-6, 0.5 + 20 / 300 + 1e-6)
+    assert max(_size(ThumbnailCache._render_thumbnail(photo, just_under, 384))) == 384
+
+
+def test_a_box_under_one_pixel_wide_still_renders_instead_of_a_400(photo: Path) -> None:
+    """int() truncation collapsed a sub-pixel box to no area: the route answered 400 and the
+    card showed a broken image."""
+    sliver = (0.5004, 0.5, 0.5009, 0.52)  # both x edges map to pixel 200
+    assert max(_size(ThumbnailCache._render_thumbnail(photo, sliver, 128))) == 128
+    jpeg = render_preview(photo, sliver, pad=0.6, min_side=128, max_side=128, outline=False)
+    assert max(_size(jpeg)) == 128
 
 
 def test_a_tiny_box_is_enlarged_to_the_minimum_side(photo: Path) -> None:

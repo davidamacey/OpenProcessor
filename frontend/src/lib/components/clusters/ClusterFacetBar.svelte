@@ -97,10 +97,10 @@
         </button>
       </div>
 
-      {#if Object.keys(facets.review_tabs).length > 0}
+      {#if facets.review_tabs.length > 0}
         <div class="flex flex-wrap items-center gap-1.5">
           <span class="w-28 shrink-0 text-fg-3">Review</span>
-          {#each Object.entries(facets.review_tabs) as [tab, count] (tab)}
+          {#each facets.review_tabs as { value: tab, count, label } (tab)}
             <button
               type="button"
               class={chip(view.facetReviewTab === tab)}
@@ -109,7 +109,7 @@
               data-testid="facet-review-tab"
               onclick={() => view.toggleReviewTab(tab)}
             >
-              {reviewTabsVocabularyStore.labelFor(tab, tab)}
+              {label ?? tab}
               <span class="ml-1 font-mono text-fg-2">{count.toLocaleString()}</span>
             </button>
           {/each}

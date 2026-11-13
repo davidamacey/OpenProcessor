@@ -26,7 +26,12 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 LabelOpKind = Literal[
-    'label', 'move', 'assist_loop_propagate', 'assist_loop_review', 'adopt_detector'
+    'label',
+    'move',
+    'assist_loop_propagate',
+    'assist_loop_review',
+    'adopt_detector',
+    'accept_machine',
 ]
 
 LABEL_OP_ID_RE = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
@@ -68,6 +73,12 @@ def detector_fingerprint(*, op_id: str, writer: str, at: str) -> OpFingerprint:
     """The detector's own class adopted for items that had none: a machine label, never
     validated, and a different class on every item, so no class name is compared."""
     return OpFingerprint(op_id, writer, at, None, DETECTOR_CLASS_SOURCE, False, None)
+
+
+def accept_fingerprint(*, op_id: str, writer: str, at: str) -> OpFingerprint:
+    """A machine label a person bulk-accepted: validated and human-sourced, on a different class
+    for every item, so no class name is compared."""
+    return OpFingerprint(op_id, writer, at, None, HUMAN_CLASS_SOURCE, True, None)
 
 
 def move_fingerprint(*, op_id: str, writer: str, at: str, cluster_uid: str) -> OpFingerprint:
@@ -166,6 +177,7 @@ __all__ = [
     'LabelOpKind',
     'OpFingerprint',
     'UndoOutcome',
+    'accept_fingerprint',
     'current_query',
     'detector_fingerprint',
     'label_fingerprint',

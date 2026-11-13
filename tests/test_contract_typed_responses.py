@@ -20,6 +20,7 @@ PROJECT_PREFIX = '/curation/projects/{project}'
 STREAM_OR_FILE = frozenset(
     {
         'GET /curation/events',
+        'GET /crops/{crop_id}/preview',
         'GET /crops/{crop_id}/region_thumbnail',
         'GET /crops/{crop_id}/thumbnail',
         'GET /events',

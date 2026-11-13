@@ -17,6 +17,8 @@ const CELLS: MapCellCollection = {
   precision: 9,
   truncated: false,
   join_truncated: false,
+  n_located_matching: 0,
+  n_unlocated_matching: 0,
 };
 const BOUNDS = { west: 8.4375, south: 47.5, east: 8.4551, north: 47.51 };
 const CELL = { tile: '9/267/179', count: 7, bounds: BOUNDS };

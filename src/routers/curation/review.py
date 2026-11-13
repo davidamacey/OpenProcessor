@@ -45,7 +45,7 @@ from src.services.curation.list_locate import UnlocatableSortError, locate_item
 from src.services.curation.review_filters import REGION_STATUS_DEFAULT, ReviewFilters
 from src.services.curation.review_request import build_review_request
 from src.services.curation.review_tab_status import absent_queues, tab_counts
-from src.services.curation.review_tabs import QUEUES, review_tab_catalog
+from src.services.curation.review_tabs import QUEUES, default_tab, review_tab_catalog
 from src.services.curation.wire import item_list_source_excludes, serialize_item
 from src.services.embedding_spaces.readers import (
     item_state_fields,
@@ -154,8 +154,10 @@ async def review_tabs(opensearch: OpenSearchDep, filters: ReviewFiltersDep) -> d
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise server_error(503, 'opensearch unavailable', exc) from exc
+    tabs = [{**t, 'count': counts[t['id']]} for t in queues]
     return {
-        'tabs': [{**t, 'count': counts[t['id']]} for t in queues],
+        'tabs': tabs,
+        'default_tab': default_tab(tabs),
         'empty_state': empty_state,
     }
 

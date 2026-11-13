@@ -90,17 +90,15 @@ def _date_clauses(f: ItemFilter) -> list[dict[str, Any]]:
     ]
 
 
-async def image_query(
-    opensearch: Any, f: ItemFilter, embedding: WriteFields, box: GeoBox | None, policy: str
-) -> tuple[dict[str, Any], bool]:
-    """The images-index query for a map request and whether the item join was truncated.
+async def _matching_clauses(
+    opensearch: Any, f: ItemFilter, embedding: WriteFields, policy: str
+) -> tuple[list[dict[str, Any]], bool]:
+    """The images-index clauses of the request's filter, with no position or box condition, and
+    whether the item join was truncated.
 
     A filter that only names capture dates is answered on the images index directly; any other
     predicate goes through the items that match it."""
-    filters: list[dict[str, Any]] = [{'exists': {'field': LOCATION_FIELD}}]
-    if box is not None:
-        filters.append(geo_box_query(box))
-    filters.extend(image_predicate_clauses(f, policy=policy))
+    filters = list(image_predicate_clauses(f, policy=policy))
     rest = without_image_predicates(f)
     joined = rest.model_copy(update={'taken_from': None, 'taken_to': None})
     truncated = False
@@ -111,7 +109,15 @@ async def image_query(
             opensearch, item_filter_query(rest, embedding=embedding)
         )
         filters.append({'terms': {'image_id': ids}})
-    return {'bool': {'filter': filters}}, truncated
+    return filters, truncated
+
+
+def located_query(matching: list[dict[str, Any]], box: GeoBox | None) -> dict[str, Any]:
+    """The matching photos that have a position, inside ``box`` when one is given."""
+    filters: list[dict[str, Any]] = [{'exists': {'field': LOCATION_FIELD}}]
+    if box is not None:
+        filters.append(geo_box_query(box))
+    return {'bool': {'filter': [*filters, *matching]}}
 
 
 def _round_coarse(value: float) -> float:
@@ -201,7 +207,8 @@ async def map_cells(
     precision = min(zoom + CELL_ZOOM_OFFSET, max_precision(policy))
     if policy == 'drop':
         return MapCellCollection(features=[], precision=precision)
-    query, join_truncated = await image_query(opensearch, f, embedding, box, policy)
+    matching, join_truncated = await _matching_clauses(opensearch, f, embedding, policy)
+    query = located_query(matching, box)
     grid: dict[str, Any] = {'field': LOCATION_FIELD, 'precision': precision, 'size': MAX_CELLS + 1}
     if box is not None:
         grid['bounds'] = {
@@ -248,6 +255,16 @@ async def map_cells(
         precision=precision,
         truncated=len(buckets) > MAX_CELLS,
         join_truncated=join_truncated,
+        n_located_matching=await _count_images(opensearch, located_query(matching, None)),
+        n_unlocated_matching=await _count_images(
+            opensearch,
+            {
+                'bool': {
+                    'filter': matching,
+                    'must_not': [{'exists': {'field': LOCATION_FIELD}}],
+                }
+            },
+        ),
     )
 
 

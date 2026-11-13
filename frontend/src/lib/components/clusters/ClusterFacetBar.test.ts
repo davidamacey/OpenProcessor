@@ -14,12 +14,15 @@ const FACETS: ClusterFacets = {
   cluster_uid: 'uid-7',
   total: 30,
   detector_classes: [
-    { value: 'widget_x', count: 20 },
-    { value: 'widget_y', count: 0 },
+    { value: 'widget_x', count: 20, label: null },
+    { value: 'widget_y', count: 0, label: null },
   ],
   class_sources: [],
   validation: { validated: 4, unvalidated: 26 },
-  review_tabs: { outliers: 3, detector_disagreements: 0 },
+  review_tabs: [
+    { value: 'outliers', count: 3, label: 'Outliers' },
+    { value: 'detector_disagreements', count: 0, label: 'Detector disagrees' },
+  ],
   detector_confidence: [
     { min: 0, max: 0.1, count: 0 },
     { min: 0.9, max: null, count: 12 },
@@ -69,9 +72,9 @@ describe('ClusterFacetBar', () => {
     expect(texts(root, 'facet-detector-class')).toEqual(['widget_x 20', 'widget_y 0']);
     expect(texts(root, 'facet-validated')).toEqual(['validated 4']);
     expect(texts(root, 'facet-unvalidated')).toEqual(['not validated 26']);
-    expect(texts(root, 'facet-review-tab').map((t) => t.split(' ').at(-1))).toEqual([
-      '3',
-      '0',
+    expect(texts(root, 'facet-review-tab')).toEqual([
+      'Outliers 3',
+      'Detector disagrees 0',
     ]);
     expect(texts(root, 'facet-confidence-bin')).toEqual(['0.0–0.1 0', '0.9+ 12']);
     expect(texts(root, 'facet-confidence-missing')).toEqual(['none: 2']);

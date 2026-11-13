@@ -86,6 +86,8 @@ export interface ItemFilter {
   has_location?: boolean | null;
   viz_box?: [number, number, number, number] | null;
   near_dup_group?: string | null;
+  /** Audited crops by who was right, repeatable (OR). */
+  audit_outcome?: ('agree' | 'detector_wrong' | 'vlm_wrong' | 'both_wrong')[];
   conf_max?: number | null;
   conf_min?: number | null;
   dataset_split?: string | null;

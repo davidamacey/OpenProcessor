@@ -16,6 +16,7 @@ from src.domain.ingest_class_sources import (
     CLASSIFIER_VLM_AGREEMENT_CLASS_SOURCE,
     CLUSTER_MAJORITY_CLASS_SOURCE,
     DEFAULT_PROPOSAL_CLASS_SOURCE,
+    DETECTOR_CLASS_SOURCE,
     LABEL_IMPORT_CLASS_SOURCE,
     VLM_CLASS_SOURCE,
     classifier_class_sources,
@@ -86,6 +87,7 @@ def rollup_class_sources(buckets: list[dict[str, Any]]) -> dict[str, int]:
     by_human = 0
     by_vlm = 0
     by_classifier = 0
+    by_detector = 0
     by_other = 0
     by_import = 0
     for b in buckets:
@@ -97,6 +99,8 @@ def rollup_class_sources(buckets: list[dict[str, Any]]) -> dict[str, int]:
             by_human += cnt
         elif key.startswith(VLM_CLASS_SOURCE):
             by_vlm += cnt
+        elif key == DETECTOR_CLASS_SOURCE:
+            by_detector += cnt
         elif key in classifier_sources:
             by_classifier += cnt
         else:
@@ -107,6 +111,7 @@ def rollup_class_sources(buckets: list[dict[str, Any]]) -> dict[str, int]:
         'by_human': by_human,
         'by_vlm': by_vlm,
         'by_classifier': by_classifier,
+        'by_detector': by_detector,
         'by_import': by_import,
         'other': by_other,
     }
@@ -117,6 +122,7 @@ _LABELED_ROW_LABELS = (
     ('by_import', 'Imported'),
     ('by_vlm', 'VLM suggestions'),
     ('by_classifier', 'Classifier'),
+    ('by_detector', 'Detector, unchecked'),
     ('other', 'Other'),
 )
 

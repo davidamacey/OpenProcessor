@@ -44,6 +44,7 @@ from PIL import Image, ImageOps
 
 from src.config import CurationConfig, get_curation_config
 from src.core.exceptions import RequestRejectedError
+from src.services.curation.crop_preview import pixel_box, render_preview
 from src.utils.cpu_pool import run_cpu
 
 
@@ -365,14 +366,17 @@ class ThumbnailCache:
             img = ImageOps.exif_transpose(src)
             if img.mode != 'RGB':
                 img = img.convert('RGB')
-            w, h = img.size
-            x1 = max(0, int(bbox_norm[0] * w))
-            y1 = max(0, int(bbox_norm[1] * h))
-            x2 = min(w, int(bbox_norm[2] * w))
-            y2 = min(h, int(bbox_norm[3] * h))
-            if x2 <= x1 or y2 <= y1:
-                raise ValueError(
-                    f'invalid bbox after pixel mapping: ({x1},{y1},{x2},{y2}) for {image_path}'
+            x1, y1, x2, y2 = pixel_box(bbox_norm, *img.size)
+            if max(x2 - x1, y2 - y1) < SMALL_CROP_PX:
+                # A cut this small is a few pixels that Image.thumbnail never enlarges: the
+                # card would show a black tile. Serve the box with its surroundings instead.
+                return render_preview(
+                    image_path,
+                    bbox_norm,
+                    pad=SMALL_CROP_PAD,
+                    min_side=size,
+                    max_side=size,
+                    outline=False,
                 )
             # PIL.Image.thumbnail() preserves aspect ratio — fits the largest
             # dimension to ``size`` and scales the other proportionally. The
@@ -402,6 +406,11 @@ class ThumbnailCache:
             self._hits = 0
             self._misses = 0
 
+
+SMALL_CROP_PX = 32
+"""A crop whose longest side is under this many source pixels is served with context."""
+SMALL_CROP_PAD = 0.6
+"""Context added on every side of a small crop, as a share of the box (the preview default)."""
 
 # Module-level singleton used by the router. The router imports this
 # directly so the cache survives across requests.

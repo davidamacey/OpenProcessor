@@ -425,6 +425,31 @@ request tells the tile server which area is on screen**: use a self-hosted tile 
 locations on your network. The OpenStreetMap server's
 [tile usage policy](https://operations.osmfoundation.org/policies/tiles/) applies to the default.
 
+### Test data for the map
+
+COCO images carry no GPS, so a COCO project has an empty map. For a map worth judging, fetch real
+geotagged street photos from Wikimedia Commons:
+
+```bash
+.venv/bin/python scripts/datasets/fetch_geotagged_commons.py \
+  --out data/samples/commons_geotagged_60 \
+  --manifest scripts/datasets/manifests/commons_geotagged_60.json
+```
+
+The committed manifest pins 52 photos at twelve sites (two of them in Berlin, about six kilometres
+apart, so the map merges cells at city zoom). Each entry records the title, the author, the licence
+(`LicenseShortName` and its URL), the Commons description page, the file's SHA-256, the camera's own
+GPS position and the capture time from its EXIF. A photo is kept only when it is a JPEG, its
+licence is CC0, public domain, CC BY or CC BY-SA, its EXIF carries `GPSLatitude` and `GPSLongitude`
+within 0.02 degrees of the position Commons lists, and its title names a street scene, so the
+detector finds objects in it. With a manifest present the script downloads exactly the pinned files
+and checks every hash. The images go to the gitignored `data/samples/` directory with a
+`CREDITS.csv`; never commit them. The photos keep their authors' licences: show the credits where
+you show the photos. The fetch needs the network; a recorded Commons answer drives its offline
+tests. Ingest the folder like any other (`POST /ingest/upload` or a bulk ingest), and the Map view
+(`GET /map/cells`, which also serves `n_located_matching` and `n_unlocated_matching` for the
+current filter) shows the real positions.
+
 ## Export and training
 
 Freeze a holdout, export, run preflight, train, promote, compare in the bake-off.

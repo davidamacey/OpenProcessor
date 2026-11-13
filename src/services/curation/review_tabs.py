@@ -7,10 +7,14 @@ Owns *which queues exist and what each one advertises* (``GET {prefix}/review/ta
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.services.curation import review_filter_specs
 from src.services.curation.review_filters import REGION_STATUS_DEFAULT
+
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
 
 
 # The queues, in the order the rail shows them. Every other id in
@@ -45,6 +49,24 @@ QUEUE_LABELS: dict[str, tuple[str, str]] = {
     'audit': ('Audit sample', 'Crops drawn for the accuracy audit that still need a human label'),
     'regions': ('Regions', 'Region detected, needs human confirmation'),
 }
+
+
+# The review filters a cluster card and the cluster facets count that are not queues.
+PRESET_LABELS: dict[str, str] = {
+    'all': 'Needs review',
+    'detector_disagreements': 'Detector disagrees',
+    'outliers': 'Outliers',
+    'vlm_low_conf': 'VLM unsure',
+    'mismatches': 'VLM matched no class',
+}
+
+
+def review_tab_label(tab: str) -> str:
+    """The served name of a ``review_tab`` filter value: a queue's own label, else its preset's.
+    ``KeyError`` for a value with neither, so a new facet cannot ship without a name."""
+    if tab in QUEUE_LABELS:
+        return QUEUE_LABELS[tab][0]
+    return PRESET_LABELS[tab]
 
 
 # Query filters every tab honours (``GET /review/{tab}`` and its locate
@@ -83,6 +105,12 @@ TAB_FILTER_DEFAULTS: dict[str, dict[str, Any]] = {
     'classifier_blind_spots': {'max_rank': PRIMARY_SUBJECT_MAX_RANK},
     'regions': {'region_status': REGION_STATUS_DEFAULT},
 }
+
+
+def default_tab(tabs: Iterable[Mapping[str, Any]]) -> str | None:
+    """The first queue in served order that holds work (``count`` above zero), else ``None``:
+    the queue Review opens on when the address names none."""
+    return next((str(t['id']) for t in tabs if t['count'] > 0), None)
 
 
 def tab_filters(tab: str) -> tuple[str, ...]:

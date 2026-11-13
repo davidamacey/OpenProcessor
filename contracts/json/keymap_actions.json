@@ -1009,6 +1009,105 @@
       "id": "editor.cancel",
       "label": "Cancel / deselect / back",
       "modifiable": false
+    },
+    {
+      "context": "class_picker",
+      "default": [
+        "1"
+      ],
+      "description": "Pick the 1st most recently used class in the open picker.",
+      "group": null,
+      "id": "class_picker.recent_1",
+      "label": "Pick recent class 1",
+      "modifiable": true
+    },
+    {
+      "context": "class_picker",
+      "default": [
+        "2"
+      ],
+      "description": "Pick the 2nd most recently used class in the open picker.",
+      "group": null,
+      "id": "class_picker.recent_2",
+      "label": "Pick recent class 2",
+      "modifiable": true
+    },
+    {
+      "context": "class_picker",
+      "default": [
+        "3"
+      ],
+      "description": "Pick the 3rd most recently used class in the open picker.",
+      "group": null,
+      "id": "class_picker.recent_3",
+      "label": "Pick recent class 3",
+      "modifiable": true
+    },
+    {
+      "context": "class_picker",
+      "default": [
+        "4"
+      ],
+      "description": "Pick the 4th most recently used class in the open picker.",
+      "group": null,
+      "id": "class_picker.recent_4",
+      "label": "Pick recent class 4",
+      "modifiable": true
+    },
+    {
+      "context": "class_picker",
+      "default": [
+        "5"
+      ],
+      "description": "Pick the 5th most recently used class in the open picker.",
+      "group": null,
+      "id": "class_picker.recent_5",
+      "label": "Pick recent class 5",
+      "modifiable": true
+    },
+    {
+      "context": "class_picker",
+      "default": [
+        "6"
+      ],
+      "description": "Pick the 6th most recently used class in the open picker.",
+      "group": null,
+      "id": "class_picker.recent_6",
+      "label": "Pick recent class 6",
+      "modifiable": true
+    },
+    {
+      "context": "class_picker",
+      "default": [
+        "7"
+      ],
+      "description": "Pick the 7th most recently used class in the open picker.",
+      "group": null,
+      "id": "class_picker.recent_7",
+      "label": "Pick recent class 7",
+      "modifiable": true
+    },
+    {
+      "context": "class_picker",
+      "default": [
+        "8"
+      ],
+      "description": "Pick the 8th most recently used class in the open picker.",
+      "group": null,
+      "id": "class_picker.recent_8",
+      "label": "Pick recent class 8",
+      "modifiable": true
+    },
+    {
+      "context": "class_picker",
+      "default": [
+        "9"
+      ],
+      "description": "Pick the 9th most recently used class in the open picker.",
+      "group": null,
+      "id": "class_picker.recent_9",
+      "label": "Pick recent class 9",
+      "modifiable": true
     }
   ],
   "contexts": [
@@ -1127,6 +1226,15 @@
         "global"
       ],
       "label": "Image editor"
+    },
+    {
+      "class_hotkeys_live": false,
+      "description": "The open class picker: a digit picks one of the recently used classes.",
+      "id": "class_picker",
+      "includes": [
+        "global"
+      ],
+      "label": "Class picker"
     }
   ],
   "generated_by": "scripts/codegen/export_api_contracts.py",

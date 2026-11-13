@@ -369,6 +369,15 @@ const SEEDS: ActionSeed[] = [
     ['escape'],
     { modifiable: false },
   ],
+  ['class_picker.recent_1', 'class_picker', null, 'Pick recent class 1', ['1']],
+  ['class_picker.recent_2', 'class_picker', null, 'Pick recent class 2', ['2']],
+  ['class_picker.recent_3', 'class_picker', null, 'Pick recent class 3', ['3']],
+  ['class_picker.recent_4', 'class_picker', null, 'Pick recent class 4', ['4']],
+  ['class_picker.recent_5', 'class_picker', null, 'Pick recent class 5', ['5']],
+  ['class_picker.recent_6', 'class_picker', null, 'Pick recent class 6', ['6']],
+  ['class_picker.recent_7', 'class_picker', null, 'Pick recent class 7', ['7']],
+  ['class_picker.recent_8', 'class_picker', null, 'Pick recent class 8', ['8']],
+  ['class_picker.recent_9', 'class_picker', null, 'Pick recent class 9', ['9']],
 ];
 
 function seedToAction([
@@ -490,6 +499,14 @@ export const FALLBACK_KEYMAP: KeymapDocument = {
       description: 'The image editor: draw, move and label the boxes of one image.',
       includes: ['global'],
       class_hotkeys_live: true,
+    },
+    {
+      id: 'class_picker',
+      label: 'Class picker',
+      description:
+        'The open class picker: a digit picks one of the recently used classes.',
+      includes: ['global'],
+      class_hotkeys_live: false,
     },
   ],
   actions: SEEDS.map(seedToAction),

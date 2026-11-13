@@ -36,6 +36,8 @@ const CASES: [string, string[]][] = [
       precision: true,
       truncated: true,
       join_truncated: true,
+      n_located_matching: true,
+      n_unlocated_matching: true,
     }),
   ],
   [

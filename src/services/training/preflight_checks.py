@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from opensearchpy.exceptions import OpenSearchException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 from src.config import get_curation_config, get_region_fields
 from src.config.curation_accessors import items_index
@@ -40,6 +40,33 @@ F = get_region_fields()
 PreflightSeverity = Literal['ok', 'warn', 'block', 'unknown']
 
 
+CHECK_LABELS: dict[str, str] = {
+    'active_run': 'Another run',
+    'augmentation_preset': 'Augmentation preset',
+    'class_balance': 'Class balance',
+    'dataset_export_dir': 'Dataset export',
+    'empty_labels': 'Empty labels',
+    'export_class_split_coverage': 'Class coverage in the splits',
+    'export_generation': 'Export is current',
+    'export_manifest': 'Export manifest',
+    'export_not_empty': 'Export has images',
+    'export_splits_nonempty': 'Train, validation and test splits',
+    'export_unlabeled_objects': 'Unlabelled objects',
+    'free_disk': 'Free disk space',
+    'gpu_arbiter': 'GPU hand-over',
+    'include_classes_resolvable': 'Chosen classes',
+    'ingest_idle': 'Ingest backlog',
+    'optimizer_not_auto': 'Optimizer',
+    'region_pairing': 'Region pairing',
+    'test_holdout': 'Test set',
+    'trainer_gpus': 'Trainer GPUs',
+    'trainer_reachable': 'Trainer service',
+    'unregistered_class_ids': 'Classes in the export',
+}
+"""The served name of each preflight row, keyed by the row's ``name``. Every row the code can
+emit is here (``tests/curation/test_preflight_check_labels.py`` reads the sources for them)."""
+
+
 class PreflightCheck(BaseModel):
     """Single row in the preflight report."""
 
@@ -47,6 +74,12 @@ class PreflightCheck(BaseModel):
     severity: PreflightSeverity
     message: str
     detail: dict[str, Any] | None = None
+
+    @computed_field  # type: ignore[prop-decorator]  # pydantic documents decorating a property
+    @property
+    def label(self) -> str:
+        """What the form shows for ``name``; a ``KeyError`` for a row nobody named."""
+        return CHECK_LABELS[self.name]
 
 
 class PreflightReport(BaseModel):
@@ -212,6 +245,84 @@ def augmentation_preset_error(augmentation: AugmentationSpec | None) -> str | No
     if augmentation is None or not augmentation.enabled:
         return None
     return unknown_preset_error(augmentation.preset)
+
+
+def _class_name(registry: Any, class_id: int) -> str:
+    entry = registry.get(class_id)
+    return entry.class_name if entry else f'class_{class_id}'
+
+
+def class_balance_check(
+    target_classes: list[int], counts: dict[int, int], registry: Any
+) -> PreflightCheck:
+    """The ``class_balance`` row: validated crops per class against the hard and recommended
+    floors. ``registry`` is anything with ``get(class_id)`` returning an entry with ``class_name``;
+    the dataset readiness checklist runs this same function."""
+    below_hard: list[dict[str, Any]] = []
+    below_recommended: list[dict[str, Any]] = []
+    for cid in target_classes:
+        n = counts.get(cid, 0)
+        row = {'class_id': cid, 'name': _class_name(registry, cid), 'validated': n}
+        if n < HARD_MIN_CROPS_PER_CLASS:
+            below_hard.append(row)
+        elif n < WARN_MIN_CROPS_PER_CLASS:
+            below_recommended.append(row)
+    if below_hard:
+        names = ', '.join(f'{r["name"]} ({r["validated"]})' for r in below_hard)
+        return PreflightCheck(
+            name='class_balance',
+            severity='block',
+            message=(
+                f'{len(below_hard)} class(es) below hard floor of '
+                f'{HARD_MIN_CROPS_PER_CLASS} validated crops: {names}'
+            ),
+            detail={'classes': below_hard},
+        )
+    if below_recommended:
+        names = ', '.join(f'{r["name"]} ({r["validated"]})' for r in below_recommended)
+        return PreflightCheck(
+            name='class_balance',
+            severity='warn',
+            message=(
+                f'{len(below_recommended)} class(es) below recommended '
+                f'{WARN_MIN_CROPS_PER_CLASS}: {names}'
+            ),
+            detail={'classes': below_recommended},
+        )
+    return PreflightCheck(
+        name='class_balance',
+        severity='ok',
+        message=(
+            f'All {len(target_classes)} classes have ≥{WARN_MIN_CROPS_PER_CLASS} validated crops'
+        ),
+    )
+
+
+def test_holdout_check(
+    target_classes: list[int], test_counts: dict[int, int], registry: Any
+) -> PreflightCheck:
+    """The ``test_holdout`` row: test-holdout crops per class against the per-class floor."""
+    thin: list[dict[str, Any]] = []
+    for cid in target_classes:
+        n = test_counts.get(cid, 0)
+        if n < MIN_TEST_CROPS_PER_CLASS:
+            thin.append({'class_id': cid, 'name': _class_name(registry, cid), 'test_crops': n})
+    if thin:
+        names = ', '.join(f'{r["name"]} ({r["test_crops"]})' for r in thin)
+        return PreflightCheck(
+            name='test_holdout',
+            severity='block' if any(r['test_crops'] == 0 for r in thin) else 'warn',
+            message=(
+                f'{len(thin)} class(es) below {MIN_TEST_CROPS_PER_CLASS} '
+                f'test crops: {names}. Refreeze the test holdout.'
+            ),
+            detail={'classes': thin},
+        )
+    return PreflightCheck(
+        name='test_holdout',
+        severity='ok',
+        message=f'All classes have ≥{MIN_TEST_CROPS_PER_CLASS} test crops',
+    )
 
 
 def free_gb(path: str) -> float | None:

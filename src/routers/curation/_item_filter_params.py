@@ -18,6 +18,7 @@ from typing import Annotated
 from fastapi import Depends, Query
 from fastapi.exceptions import RequestValidationError
 
+from src.domain.audit_math import AuditOutcome
 from src.domain.embedding_state import EmbeddingState
 from src.domain.geo_box import BOX_MESSAGE, POLYGON_MESSAGE, parse_geo_box, parse_geo_polygon
 from src.domain.viz_box import VIZ_BOX_MESSAGE, parse_viz_box
@@ -134,6 +135,14 @@ def item_filter_query(
         str | None,
         Query(description='Items a dataset import labeled (`import_ids`) or proposed.'),
     ] = None,
+    audit_outcome: Annotated[
+        list[AuditOutcome] | None,
+        Query(
+            description='Audited crops a person labelled, by who was right (agree, '
+            'detector_wrong, vlm_wrong, both_wrong), repeatable (OR): the accuracy audit '
+            "report's counts, listed."
+        ),
+    ] = None,
     taken_from: TakenDate = None,
     taken_to: TakenDate = None,
     cluster_uid: Annotated[
@@ -199,6 +208,7 @@ def item_filter_query(
         origin=origin or [],
         embedding_state=embedding_state or [],
         review_status=review_status or [],
+        audit_outcome=audit_outcome or [],
         import_id=import_id,
         taken_from=taken_from,
         taken_to=taken_to,

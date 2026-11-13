@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.config import get_region_fields
+from src.domain.audit_math import AUDIT_OUTCOME, AUDIT_SAMPLE, AuditOutcome
 from src.domain.embedding_state import EMBEDDED, EmbeddingState, embedded_clause, state_clause
 from src.domain.geo_box import GeoBox, check_polygon
 from src.domain.item_text import item_text_query
@@ -83,6 +84,9 @@ class ItemFilter(BaseModel):
     on_negative_frame: bool | None = None
     needs_new_class: bool | None = None
     review_dismissed: bool | None = None
+    # Audited crops whose human verdict is one of these (the accuracy audit's report counts,
+    # listed): a drawn crop a person labelled and whose label still stands.
+    audit_outcome: list[AuditOutcome] = Field(default_factory=list)
     min_blur_ratio: float | None = Field(default=None, ge=0.0)
     classifier_conf_lt: float | None = Field(default=None, ge=0.0, le=1.0)
     item_text: str | None = Field(default=None, max_length=200)
@@ -314,6 +318,18 @@ def _flag_clauses(f: ItemFilter) -> list[dict[str, Any]]:
         out.append(_flag('needs_new_class', f.needs_new_class))
     if f.review_dismissed is not None:
         out.append(_present('review_dismissed_at', f.review_dismissed))
+    if f.audit_outcome:
+        out.append(
+            {
+                'bool': {
+                    'filter': [
+                        {'term': {AUDIT_SAMPLE: True}},
+                        {'term': {'class_validated': True}},
+                        {'terms': {AUDIT_OUTCOME: list(f.audit_outcome)}},
+                    ]
+                }
+            }
+        )
     return out
 
 

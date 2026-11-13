@@ -130,3 +130,42 @@ def test_the_card_fetches_every_field_the_box_serializer_reads() -> None:
         read |= src.read
     fetched = set(box_source_fields())
     assert read <= fetched, sorted(read - fetched)
+
+
+def test_the_card_draws_the_region_boxes_the_detail_draws(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The card's top_hits fetches the region box list (the lock fields carry it), so a card draws
+    every region box the detail draws."""
+    fake = _fake()
+    fake.docs(ITEMS)['cls']['region_boxes'] = [
+        {'box_id': 'r1', 'bbox_norm': [0.2, 0.2, 0.3, 0.3], 'state': 'accepted'},
+        {'box_id': 'r2', 'bbox_norm': [0.6, 0.6, 0.7, 0.7], 'state': 'rejected'},
+    ]
+    client = _client(fake, monkeypatch)
+    card = client.get(f'{BASE}/images').json()['items'][0]
+    detail = client.get(f'{BASE}/images/img-a').json()
+
+    def keyed(boxes: list[dict[str, Any]]) -> list[tuple[Any, ...]]:
+        return sorted(
+            (b['crop_id'], b.get('box_id') or '', b['kind'], b['tone'], b['label']) for b in boxes
+        )
+
+    assert [b['box_id'] for b in detail['boxes'] if b['kind'] == 'region'] == ['r1', 'r2']
+    assert keyed(card['boxes']) == keyed(detail['boxes'])
+
+
+def test_a_held_out_item_is_counted_not_listed_and_only_the_detail_draws_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The one difference between a card and the detail (walk "15 of 30 images draw fewer boxes"):
+    the test holdout is not listed on a card, and the card says how many it left out."""
+    fake = _fake()
+    fake.docs(ITEMS)['det'].update(
+        test_holdout=True,
+        region_boxes=[{'box_id': 'h1', 'bbox_norm': [0.2, 0.2, 0.3, 0.3], 'state': 'accepted'}],
+    )
+    client = _client(fake, monkeypatch)
+    card = client.get(f'{BASE}/images').json()['items'][0]
+    detail = client.get(f'{BASE}/images/img-a').json()
+    assert 'det' not in {b['crop_id'] for b in card['boxes']}
+    assert 'det' in {b['crop_id'] for b in detail['boxes']}
+    assert card['counts']['in_holdout'] == detail['counts']['in_holdout'] == 1
