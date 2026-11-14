@@ -1,0 +1,6 @@
+#!/bin/bash
+# Test double for findmnt: answers every `findmnt -n -o SOURCE --target <path>` with the line in
+# $SHIM_STATE/findmnt_source (no file: no answer and a failing exit, like an unmounted path).
+f="${SHIM_STATE:-/nonexistent}/findmnt_source"
+[[ -f "$f" ]] || exit 1
+cat "$f"
