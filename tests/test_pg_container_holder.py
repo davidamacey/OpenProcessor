@@ -82,3 +82,16 @@ def test_a_worker_without_the_controllers_server_does_not_start_its_own(
         pg_server.__wrapped__(request)
 
     assert started == []
+
+
+def test_the_expressions_the_repo_uses_still_evaluate_through_pytests_matcher() -> None:
+    # `_selects_db` relies on `_pytest.mark.expression.Expression`, which pytest does not
+    # document as public (read from pytest 9.2.0). If an upgrade moves it, this test fails first.
+    used = {
+        'db': True,
+        'not live and not families': True,
+        'not db': False,
+        '': True,
+        'db and not live': True,
+    }
+    assert {expr: _selects_db(expr) for expr in used} == used
