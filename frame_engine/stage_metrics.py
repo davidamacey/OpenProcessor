@@ -39,7 +39,8 @@ attribution runs, not for throughput numbers.
 
 Besides the stages: requests in flight, the shared-memory slab (bytes in use, peak, waits), the
 frame budget (bytes in use, waits), region registrations, failed model calls by gRPC code and
-reason, overloads, requests answered at their deadline (by stage) and image outcomes.
+reason, overloads, requests answered at their deadline (by stage), image outcomes, lost CUDA
+contexts (by cudaError code) and the process series (``process_start_time_seconds``).
 """
 
 from __future__ import annotations
@@ -48,7 +49,7 @@ import time
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
-from prometheus_client import CollectorRegistry, Counter, Gauge
+from prometheus_client import CollectorRegistry, Counter, Gauge, ProcessCollector
 
 
 if TYPE_CHECKING:
@@ -197,6 +198,16 @@ class EngineMetrics:
             ['status', 'decode_route'],
             registry=r,
         )
+        self.context_lost = Counter(
+            'op_frame_engine_context_lost',
+            'CUDA contexts lost to a sticky CUDA error, by cudaError code; the process then exits '
+            'for a restart (a dying process may not be scraped: changes() over '
+            'process_start_time_seconds counts the restarts).',
+            ['code'],
+            registry=r,
+        )
+        # process_start_time_seconds and the other process series (prometheus_client)
+        ProcessCollector(registry=r)
         self.overloads = Counter(
             'op_frame_engine_overloads',
             'Requests answered with the overload status, by cause.',

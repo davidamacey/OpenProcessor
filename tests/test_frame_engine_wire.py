@@ -80,7 +80,6 @@ def test_the_engine_branches_are_the_plan_vocabulary_minus_api_branches() -> Non
         (_plan(if_detected={'embed_crops': [2]}), 'condition_on_unconditional'),
         (_plan(if_detected={'ocr': [2]}), 'condition_on_unconditional'),
         (_plan(branches=['ocr'], crops='none', if_detected={'ocr': [2]}), 'missing_field'),
-        (_plan(branches=['detect', 'ocr'], ocr=OCR, if_detected={'ocr': [2]}), 'bad_field'),
         (_plan(derivatives={'thumb': 256}), 'bad_field'),
     ],
 )
@@ -110,6 +109,14 @@ def test_stored_boxes_stand_in_for_the_detector() -> None:
             has_boxes=True,
         )  # fmt: skip
     assert err.value.fault == 'bad_field'
+
+
+def test_a_built_branch_may_carry_a_detector_condition() -> None:
+    """The engine runs a conditional branch after the detector (``engine._Rounds``)."""
+    plan = wire.parse_plan(
+        _plan(branches=['detect', 'ocr'], ocr=OCR, if_detected={'ocr': [2, 7]}), has_boxes=False
+    )
+    assert plan.if_detected == {'ocr': (2, 7)}
 
 
 def test_every_branch_is_built_and_renditions_are_reported() -> None:
@@ -174,13 +181,16 @@ def test_a_bad_faces_object_is_refused(faces: Any, branches: list[str], fault: s
     assert err.value.fault == fault
 
 
-def test_a_condition_on_a_built_branch_is_refused_until_the_engine_runs_conditions() -> None:
-    """The orchestrator has no conditional path yet: a plan asking for faces only when a class
-    is detected would get faces on every photo. Refused (fail closed), never silently run."""
+def test_faces_on_a_person_condition_round_trips_and_needs_the_detector() -> None:
+    plan = wire.parse_plan(_plan(branches=['detect', 'faces', 'face_embed'], embed=None,
+                                 crops='none', faces=FACES, if_detected={'faces': [0]}),
+                           has_boxes=False)  # fmt: skip
+    assert plan.if_detected == {'faces': (0,)}
+    assert wire.parse_plan(plan.to_json(), has_boxes=False) == plan
     with pytest.raises(wire.EnginePlanError) as err:
-        wire.parse_plan(_plan(branches=['detect', 'faces'], embed=None, crops='none', faces=FACES,
-                              if_detected={'faces': [0]}), has_boxes=False)  # fmt: skip
-    assert (err.value.fault, err.value.detail) == ('bad_field', 'if_detected.faces')
+        wire.parse_plan(_plan(branches=['faces'], detector=None, embed=None, crops='none',
+                              faces=FACES, if_detected={'faces': [0]}), has_boxes=False)  # fmt: skip
+    assert (err.value.fault, err.value.detail) == ('missing_dependency', 'detect')
 
 
 def test_branch_status_round_trips_one_entry_per_name() -> None:

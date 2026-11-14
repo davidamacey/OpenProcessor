@@ -14,6 +14,7 @@ squares (int64 atomics): what ``crop_quality.laplacian_var`` reduces, bit for bi
 
 from __future__ import annotations
 
+import threading
 from typing import Any
 
 import cupy as cp
@@ -119,19 +120,33 @@ extern "C" __global__ void lap_sums(
 """
 
 
+#: Filter-weight sets one worker keeps on the device (most are a few KB; a full-frame downscale a
+#: few tens of KB), so all workers together hold tens of MB at most.
+CACHE_KEYS = 1024
+
+
 class PrepKernels:
+    """One instance serves every worker thread. The filter weights are uploaded per worker: an
+    array uploaded on one worker's stream (an asynchronous copy) is read only by kernels queued on
+    that stream, and the worker's cache is emptied only after its stream was waited for, so no
+    kernel reads weights that are not there yet or were already freed."""
+
     def __init__(self) -> None:
         mod = cp.RawModule(code=_SRC)
         self.k_h = mod.get_function('resample_h')
         self.k_v = mod.get_function('resample_v')
         self.k_lap = mod.get_function('lap_sums')
-        self._cache: dict[tuple[int, int, int, int, bool, bool], tuple[Any, ...]] = {}
+        self._local = threading.local()
 
     def _weights(
         self, n_in: int, n_out: int, left: int, take: int, antialias: bool, lanczos: bool
     ) -> tuple[Any, ...]:
         key = (n_in, n_out, left, take, antialias, lanczos)
-        hit = self._cache.get(key)
+        cache: dict[tuple[int, int, int, int, bool, bool], tuple[Any, ...]] | None
+        cache = getattr(self._local, 'cache', None)
+        if cache is None:
+            cache = self._local.cache = {}
+        hit = cache.get(key)
         if hit is None:
             f, c, w = filter_weights(n_in, n_out, antialias=antialias, lanczos=lanczos)
             f, c, w = f[left : left + take], c[left : left + take], w[left : left + take]
@@ -143,9 +158,10 @@ class PrepKernels:
                 int(f[0]),
                 int((f + c).max()),
             )
-            if len(self._cache) > 4096:
-                self._cache.clear()
-            self._cache[key] = hit
+            if len(cache) >= CACHE_KEYS:
+                cp.cuda.get_current_stream().synchronize()  # queued kernels may still read them
+                cache.clear()
+            cache[key] = hit
         return hit
 
     def resample_into(

@@ -124,6 +124,7 @@ def _blur_sums(photo: Photo, boxes: np.ndarray) -> np.ndarray:
 
 class FaceEmbed(Branch):
     status = 'face_embed'
+    needs = ('faces',)
 
     def __init__(self, spec: wire.FaceSpec, warp: WarpKernel) -> None:
         self.spec = spec

@@ -79,7 +79,11 @@ class WarpKernel:
 
     def warp_into(self, frame: Any, inv: np.ndarray, taps: np.ndarray, dst: Any) -> None:
         """Write one aligned crop per row of ``inv`` (``[m, 6]`` float32 output-to-source maps,
-        ``taps`` ``[m]`` int32) into ``dst``, a contiguous ``[m, 3, S, S]`` uint8 device view."""
+        ``taps`` ``[m]`` int32) into ``dst``, a contiguous ``[m, 3, S, S]`` uint8 device view.
+
+        The maps are uploaded per call on the caller's current stream and read only by this
+        launch on it; nothing on the device is cached across workers (CuPy's pool reuses a freed
+        block only on the stream it was allocated on)."""
         m = len(inv)
         if m == 0:
             return
