@@ -92,6 +92,7 @@ dependencies = [
 export = [
     "tensorrt-cu13==11.4.0.106",
     "nvidia-modelopt[onnx]==0.48.0",
+    "polygraphy==0.53.6",
     "onnx-graphsurgeon==0.6.1",
     "onnxsim==0.8.1",
     "onnxslim==0.1.99",

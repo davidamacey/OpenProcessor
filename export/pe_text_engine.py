@@ -5,8 +5,9 @@ The plan is built the way every other FP16 engine here is: FP16 is baked into th
 and built with the TensorRT Python API, and the result is validated and written atomically
 (``trt_utils.atomic_write_plan``). Token ids stay INT64 in the graph interface; TensorRT casts them itself.
 
-Reference docs: TensorRT 11.4 developer guide, "Working with Dynamic Shapes" (optimization profiles);
-Triton model configuration (``tensorrt_plan``, ``max_batch_size``, dynamic batching).
+Reference docs: TensorRT 11.4 Python API reference, ``IOptimizationProfile.set_shape`` (0 <= min <= opt <= max
+per axis, one profile covers a dynamic input; profile 0 is the default one); Polygraphy 0.53 ``TrtRunner`` /
+``EngineFromBytes``; Triton model configuration (``tensorrt_plan``, ``max_batch_size``).
 """
 
 from __future__ import annotations
