@@ -197,6 +197,8 @@ FROM runtime-base AS export
 COPY --from=builder-export --chown=appuser:appuser /delta/export/ /home/appuser/.local/
 
 COPY --chown=appuser:appuser src/ ./src/
+# The compose healthcheck of model-export-worker: a task-less probe that imports no export code.
+COPY --chown=appuser:appuser scripts/healthcheck/ ./scripts/healthcheck/
 # What `openprocessor models install` and `sample coco` run in this image: the export scripts,
 # the public COCO sample fetcher and the shell libraries model_setup.sh sources (config.sh and
 # what it sources, download.sh). tests/test_dockerfile_hygiene.py checks this set against the

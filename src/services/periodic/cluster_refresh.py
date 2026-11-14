@@ -38,7 +38,6 @@ from src.services.clustering.refresh_schedule import (
 from src.services.curation.assist_loop import service as assist_loop
 from src.services.curation.clustering.pool_snapshot import item_pool_query
 from src.services.curation.ingest_policy_store import get_ingest_policy
-from src.services.curation.job_binding import opensearch_client
 from src.services.curation.policy_doc_store import PolicyConflictError
 from src.services.embedding_spaces.resolve import embedding_space
 from src.services.jobs import status as job_status
@@ -47,7 +46,13 @@ from src.services.periodic.cluster_refresh_clock import (
     load_refresh_state,
     save_refresh_state,
 )
-from src.services.periodic.runner import TickProject, TickReport, for_each_project
+from src.services.periodic.runner import (
+    TickOpenSearch,
+    TickProject,
+    TickReport,
+    for_each_project,
+    tick_opensearch,
+)
 
 
 logger = get_logger(__name__)
@@ -69,33 +74,30 @@ async def _consumer_live() -> bool:
         return await worker_liveness.live_consumers(session, TaskQueues.CLUSTER) > 0
 
 
-async def _pool_facts(vector_field: str, settle_s: int) -> tuple[int, int, bool]:
+async def _pool_facts(
+    shared: TickOpenSearch, vector_field: str, settle_s: int
+) -> tuple[int, int, bool]:
     """``(pool size, items waiting for the region stage, any image ingested within settle_s)``."""
     from src.config import get_region_fields
 
-    client = await opensearch_client()
-    try:
-        pool = await client.count(
-            index=items_index(), body={'query': item_pool_query(vector_field)}
-        )
-        waiting = await client.count(
-            index=items_index(),
-            body={'query': {'terms': {get_region_fields().status: list(_UNFINISHED)}}},
-        )
-        # Only "any" matters: no documents, stop at the first match. ``indexed_at`` is written
-        # by the ingest host and ``now-`` read on the OpenSearch node; a clock skew shifts the
-        # window by the skew, and the deferral bound keeps a fast clock from starving the run.
-        recent = await client.search(
-            index=images_index(),
-            body={
-                'size': 0,
-                'terminate_after': 1,
-                'track_total_hits': 1,
-                'query': {'range': {'indexed_at': {'gte': f'now-{settle_s}s'}}},
-            },
-        )
-    finally:
-        await client.close()
+    client = await shared.get()
+    pool = await client.count(index=items_index(), body={'query': item_pool_query(vector_field)})
+    waiting = await client.count(
+        index=items_index(),
+        body={'query': {'terms': {get_region_fields().status: list(_UNFINISHED)}}},
+    )
+    # Only "any" matters: no documents, stop at the first match. ``indexed_at`` is written
+    # by the ingest host and ``now-`` read on the OpenSearch node; a clock skew shifts the
+    # window by the skew, and the deferral bound keeps a fast clock from starving the run.
+    recent = await client.search(
+        index=images_index(),
+        body={
+            'size': 0,
+            'terminate_after': 1,
+            'track_total_hits': 1,
+            'query': {'range': {'indexed_at': {'gte': f'now-{settle_s}s'}}},
+        },
+    )
     return int(pool['count']), int(waiting['count']), int(recent['hits']['total']['value']) > 0
 
 
@@ -186,7 +188,7 @@ async def _start(project: uuid.UUID, level: str, vector_field: str) -> str | Non
     return str(started.job.id)
 
 
-async def _refresh(project: TickProject, now: float, settle_s: int) -> None:
+async def _refresh(project: TickProject, shared: TickOpenSearch, now: float, settle_s: int) -> None:
     if not (await get_ingest_policy()).clustering.automatic:
         return
     if not await _consumer_live():
@@ -197,7 +199,7 @@ async def _refresh(project: TickProject, now: float, settle_s: int) -> None:
         profile, _pin = await load_profile(session, project.id, TARGET, space.vector_field)
     state = await load_refresh_state()
     sched = _clock(state)
-    count, unfinished, recent = await _pool_facts(space.vector_field, settle_s)
+    count, unfinished, recent = await _pool_facts(shared, space.vector_field, settle_s)
     action = step(
         sched,
         Observation(
@@ -243,7 +245,9 @@ async def tick(*, now: float | None = None) -> TickReport:
     clock = time.time() if now is None else now
     settle_s = 2 * refresh_interval_s()
 
-    async def one(project: TickProject) -> None:
-        await _refresh(project, clock, settle_s)
+    async with tick_opensearch() as shared:
 
-    return await for_each_project(CLUSTER_REFRESH, one, task='op.periodic.cluster_refresh')
+        async def one(project: TickProject) -> None:
+            await _refresh(project, shared, clock, settle_s)
+
+        return await for_each_project(CLUSTER_REFRESH, one, task='op.periodic.cluster_refresh')

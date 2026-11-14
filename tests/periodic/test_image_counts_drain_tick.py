@@ -15,7 +15,7 @@ from fixtures.fake_valkey import FakeValkeySets
 
 from src.config import IndexRole, index_name
 from src.config.curation_accessors import base_curation_config
-from src.services.periodic import image_counts_drain
+from src.services.periodic import image_counts_drain, runner
 
 
 if TYPE_CHECKING:
@@ -43,41 +43,68 @@ def _world() -> _Closing:
     )
 
 
-def test_a_bound_project_pass_recounts_the_marked_and_the_uncounted_and_closes_its_client(
-    monkeypatch: pytest.MonkeyPatch, image_counts_dirty: dict[str, set[str]]
+def test_a_bound_project_pass_recounts_the_marked_and_the_uncounted(
+    image_counts_dirty: dict[str, set[str]],
 ) -> None:
     fake = _world()
     image_counts_dirty['op:image_counts:dirty:default'] = {'img-a'}
-
-    async def client() -> Any:
-        return fake
-
-    monkeypatch.setattr(image_counts_drain, 'opensearch_client', client)
-    monkeypatch.setattr(
-        image_counts_drain, 'valkey_client', lambda: FakeValkeySets(image_counts_dirty)
-    )
-    asyncio.run(image_counts_drain.drain_bound_project())
+    asyncio.run(image_counts_drain.drain_bound_project(fake, FakeValkeySets(image_counts_dirty)))
     docs = fake.docs(IMAGES)
     assert docs['img-a']['counts']['items'] == 1
     assert docs['img-b']['counts']['items'] == 0
     assert image_counts_dirty == {}
-    assert fake.closed
 
 
-def test_the_drain_opens_its_valkey_client_once_per_pass(monkeypatch: pytest.MonkeyPatch) -> None:
-    seen: list[FakeValkeySets] = []
+def test_a_tick_builds_one_client_of_each_kind_however_many_projects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Clients built per tick must not grow with the project count (it was one pair per project)."""
+    opened: list[str] = []
+    fakes = _Closing({})
 
-    def factory() -> FakeValkeySets:
-        seen.append(FakeValkeySets())
-        return seen[-1]
+    async def opensearch(_timeout: float | None = None) -> Any:
+        opened.append('opensearch')
+        return fakes
 
-    async def client() -> Any:
-        return _world()
+    def valkey() -> FakeValkeySets:
+        opened.append('valkey')
+        return FakeValkeySets()
 
-    monkeypatch.setattr(image_counts_drain, 'valkey_client', factory)
-    monkeypatch.setattr(image_counts_drain, 'opensearch_client', client)
-    asyncio.run(image_counts_drain.drain_bound_project())
-    assert len(seen) == 1
+    async def each(_lock: int, body: Any, *, task: str) -> None:
+        for slug in ('a', 'b', 'c', 'd', 'e'):
+            await body(SimpleNamespace(slug=slug))
+
+    async def drain_one(opensearch: Any, valkey: Any, budget_s: float) -> None:
+        assert opensearch is fakes
+
+    monkeypatch.setattr(runner, 'opensearch_client', opensearch)
+    monkeypatch.setattr(image_counts_drain, 'valkey_client', valkey)
+    monkeypatch.setattr(image_counts_drain, 'drain_bound_project', drain_one)
+    monkeypatch.setattr(image_counts_drain, 'for_each_project', each)
+    monkeypatch.setattr(image_counts_drain, 'read_tick_projects', lambda: [1] * 5)
+    asyncio.run(image_counts_drain.tick())
+    assert opened == ['valkey', 'opensearch']
+    assert fakes.closed
+
+
+def test_a_tick_with_no_project_builds_no_opensearch_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    built: list[int] = []
+
+    async def opensearch(_timeout: float | None = None) -> Any:
+        built.append(1)
+        return _Closing({})
+
+    async def each(_lock: int, body: Any, *, task: str) -> None:
+        return None
+
+    monkeypatch.setattr(runner, 'opensearch_client', opensearch)
+    monkeypatch.setattr(image_counts_drain, 'valkey_client', FakeValkeySets)
+    monkeypatch.setattr(image_counts_drain, 'for_each_project', each)
+    monkeypatch.setattr(image_counts_drain, 'read_tick_projects', list)
+    asyncio.run(image_counts_drain.tick())
+    assert built == []
 
 
 class _Clock:
@@ -96,7 +123,7 @@ def test_the_tick_budget_is_shared_so_every_project_gets_a_fair_share(
     clock = _Clock()
     seen: list[float | None] = []
 
-    async def drain_one(budget_s: float | None = None) -> None:
+    async def drain_one(_os: Any, _vk: Any, budget_s: float | None = None) -> None:
         seen.append(budget_s)
         # The first project uses its whole share and a little more (a batch in flight).
         clock.now += (budget_s or 0) + 1 if len(seen) == 1 else 0
@@ -108,6 +135,7 @@ def test_the_tick_budget_is_shared_so_every_project_gets_a_fair_share(
     monkeypatch.setattr(image_counts_drain, 'drain_bound_project', drain_one)
     monkeypatch.setattr(image_counts_drain, 'for_each_project', each)
     monkeypatch.setattr(image_counts_drain, 'read_tick_projects', lambda: projects)
+    monkeypatch.setattr(image_counts_drain, 'valkey_client', FakeValkeySets)
     monkeypatch.setattr(image_counts_drain.time, 'monotonic', clock)
     asyncio.run(image_counts_drain.tick())
     total = image_counts_drain.TICK_BUDGET_S

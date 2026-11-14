@@ -42,5 +42,4 @@ def test_the_ping_names_the_worker_node(rel: str, name: str, command: str, pinge
 
 def test_the_known_pinging_workers_are_covered() -> None:
     names = {(rel, name) for rel, name, *_ in _pinging_workers()}
-    assert ('docker-compose.yml', 'model-export-worker') in names
     assert ('docker/test/compose.yml', 'trainer') in names

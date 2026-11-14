@@ -16,7 +16,7 @@ from fixtures.job_rows import make_project, sql
 from src.core.exceptions import RequestRejectedError
 from src.domain.embedding_spaces import Target
 from src.services.curation.assist_loop import service as assist_service
-from src.services.periodic import cluster_refresh
+from src.services.periodic import cluster_refresh, runner
 from src.services.periodic.runner import run_periodic
 
 
@@ -59,14 +59,14 @@ def world(monkeypatch: pytest.MonkeyPatch, pg) -> FakeOpenSearch:
     sql(pg, 'DELETE FROM worker_capabilities')
     client = FakeOpenSearch()
 
-    async def opensearch() -> FakeOpenSearch:
+    async def opensearch(_timeout: float | None = None) -> FakeOpenSearch:
         return client
 
     async def space(target: Target) -> FakeSpace:
         assert target is Target.ITEM
         return FakeSpace()
 
-    monkeypatch.setattr(cluster_refresh, 'opensearch_client', opensearch)
+    monkeypatch.setattr(runner, 'opensearch_client', opensearch)
     monkeypatch.setattr(cluster_refresh, 'embedding_space', space)
     monkeypatch.setattr(cluster_refresh, 'items_index', lambda: 'items')
     monkeypatch.setattr(cluster_refresh, 'images_index', lambda: 'images')

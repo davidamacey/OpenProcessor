@@ -20,17 +20,17 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Final
+from typing import Any, Final
 
 from src.clients.image_counts_dirty import DirtyImages, valkey_client
 from src.config.advisory_locks import IMAGE_COUNTS_DRAIN
 from src.services.curation.image_counts_refresh import DRAIN_BUDGET_S, drain
-from src.services.curation.job_binding import opensearch_client
 from src.services.periodic.runner import (
     TickProject,
     TickReport,
     for_each_project,
     read_tick_projects,
+    tick_opensearch,
 )
 
 
@@ -39,15 +39,11 @@ from src.services.periodic.runner import (
 TICK_BUDGET_S: Final = 60.0
 
 
-async def drain_bound_project(budget_s: float = DRAIN_BUDGET_S) -> None:
-    """Drain the bound project (its OpenSearch client and its dirty set open for the call)."""
-    opensearch = await opensearch_client()
-    valkey = valkey_client()
-    try:
-        await drain(opensearch, DirtyImages(valkey), budget_s=budget_s)
-    finally:
-        await valkey.aclose()
-        await opensearch.close()
+async def drain_bound_project(
+    opensearch: Any, valkey: Any, budget_s: float = DRAIN_BUDGET_S
+) -> None:
+    """Drain the bound project through the tick's clients (both keyed by the bound project)."""
+    await drain(opensearch, DirtyImages(valkey), budget_s=budget_s)
 
 
 async def tick() -> TickReport:
@@ -55,10 +51,18 @@ async def tick() -> TickReport:
     deadline = time.monotonic() + TICK_BUDGET_S
     left = len(projects)
 
-    async def one(_project: TickProject) -> None:
-        nonlocal left
-        share = max(deadline - time.monotonic(), 0.0) / max(left, 1)
-        left -= 1
-        await drain_bound_project(share)
+    async with tick_opensearch(60) as shared:
+        valkey = valkey_client()
+        try:
 
-    return await for_each_project(IMAGE_COUNTS_DRAIN, one, task='op.periodic.image_counts_drain')
+            async def one(_project: TickProject) -> None:
+                nonlocal left
+                share = max(deadline - time.monotonic(), 0.0) / max(left, 1)
+                left -= 1
+                await drain_bound_project(await shared.get(), valkey, share)
+
+            return await for_each_project(
+                IMAGE_COUNTS_DRAIN, one, task='op.periodic.image_counts_drain'
+            )
+        finally:
+            await valkey.aclose()

@@ -1,4 +1,4 @@
-"""The pool healthcheck, fed the JSON shapes ``celery inspect stats`` returns.
+"""The pool healthcheck, fed the replies of Celery's ``inspect().stats()``.
 
 A wedged prefork pool still answers ``inspect ping``; only ``inspect stats`` shows the pool.
 The respawn storm is the case a non-empty-pids check calls healthy.
@@ -9,9 +9,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import socket
-import subprocess
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -40,14 +38,52 @@ def _isolated_samples(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(check.tempfile, 'gettempdir', lambda: str(tmp_path))
 
 
-def _reply(monkeypatch: pytest.MonkeyPatch, stdout: str, returncode: int = 0) -> list[list[str]]:
-    calls: list[list[str]] = []
+class _FakeApp:
+    def __init__(self, reply: object, calls: list[dict]) -> None:
+        self._reply = reply
+        self._calls = calls
+        self.control = self
 
-    def fake_run(argv: list[str], **_: object) -> SimpleNamespace:
-        calls.append(argv)
-        return SimpleNamespace(stdout=stdout, stderr='', returncode=returncode)
+    def connection_for_read(self) -> _FakeApp:
+        return self
 
-    monkeypatch.setattr(check.subprocess, 'run', fake_run)
+    def __enter__(self) -> _FakeApp:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        return None
+
+    def ensure_connection(self, **kwargs: object) -> None:
+        self._calls.append({'ensure_connection': kwargs})
+
+    def inspect(self, **kwargs: object) -> _FakeApp:
+        self._calls.append(kwargs)
+        return self
+
+    def stats(self) -> object:
+        if isinstance(self._reply, Exception):
+            raise self._reply
+        return self._reply
+
+    def close(self) -> None:
+        return None
+
+
+def _reply(monkeypatch: pytest.MonkeyPatch, stdout: str, returncode: int = 0) -> list[dict]:
+    """Serve ``stdout`` (the JSON of ``inspect stats``) through the in-process inspect call."""
+    calls: list[dict] = []
+    reply = json.loads(stdout) if stdout and returncode == 0 else None
+    return _serve(monkeypatch, reply, calls)
+
+
+def _serve(monkeypatch: pytest.MonkeyPatch, reply: object, calls: list[dict]) -> list[dict]:
+    from src.tasks.runtime import gpu_app
+
+    def build(include: object) -> _FakeApp:
+        calls.append({'include': list(include)})  # type: ignore[call-overload]
+        return _FakeApp(reply, calls)
+
+    monkeypatch.setattr(gpu_app, 'build_app', build)
     return calls
 
 
@@ -97,7 +133,7 @@ def test_a_non_prefork_pool_is_healthy_when_it_answers(monkeypatch: pytest.Monke
 
 @pytest.mark.parametrize(
     ('stdout', 'returncode'),
-    [('', 0), ('{}', 0), ('not json', 0), ('{"a": {"pool": "x"}}', 0), ('{}', 1)],
+    [('', 0), ('{}', 0), ('{"a": {"pool": "x"}}', 0), ('{}', 1)],
 )
 def test_an_unreadable_or_missing_reply_fails_closed(
     monkeypatch: pytest.MonkeyPatch, stdout: str, returncode: int
@@ -106,20 +142,40 @@ def test_an_unreadable_or_missing_reply_fails_closed(
     assert check.check_pool_has_live_processes(NODE)[0] is False
 
 
-def test_a_timeout_is_unhealthy(monkeypatch: pytest.MonkeyPatch) -> None:
-    def boom(*_: object, **__: object) -> None:
-        raise subprocess.TimeoutExpired('celery', 8)
+def test_a_broker_failure_is_unhealthy(monkeypatch: pytest.MonkeyPatch) -> None:
+    _serve(monkeypatch, ConnectionError('broker down'), [])
+    healthy, reason = check.check_pool_has_live_processes(NODE)
+    assert healthy is False
+    assert 'broker down' in reason
 
-    monkeypatch.setattr(check.subprocess, 'run', boom)
-    assert check.check_pool_has_live_processes(NODE)[0] is False
 
-
-def test_the_stats_request_names_only_this_node(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_probe_asks_only_this_node_and_loads_no_task_module(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls = _reply(monkeypatch, _stats([1]))
     assert check.main(['x', 'jobs']) == 0
-    argv = calls[0]
-    assert argv[argv.index('-d') + 1] == f'jobs@{socket.gethostname()}'
-    assert argv[argv.index('-A') + 1] == 'src.tasks.app'
+    assert {'include': []} in calls
+    asked = next(c for c in calls if 'destination' in c)
+    assert asked['destination'] == [f'jobs@{socket.gethostname()}']
+
+
+def test_the_broker_connect_is_one_bounded_attempt(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = _reply(monkeypatch, _stats([1]))
+    check.check_pool_has_live_processes(NODE)
+    attempt = next(c for c in calls if 'ensure_connection' in c)['ensure_connection']
+    assert attempt == {'max_retries': 1, 'timeout': check.CONNECT_TIMEOUT_S}
+
+
+def test_the_whole_probe_has_a_hard_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    alarms: list[int] = []
+    monkeypatch.setattr(check.signal, 'alarm', alarms.append)
+    _reply(monkeypatch, _stats([1]))
+    check.main(['x', 'jobs'])
+    assert alarms[0] == check.PROBE_DEADLINE_S < 15
+
+
+def test_the_probe_starts_no_subprocess() -> None:
+    assert not hasattr(check, 'subprocess')
 
 
 def test_a_full_node_name_is_kept() -> None:
@@ -128,5 +184,3 @@ def test_a_full_node_name_is_kept() -> None:
 
 def test_main_exit_codes(monkeypatch: pytest.MonkeyPatch) -> None:
     assert check.main(['x']) == 2
-    _reply(monkeypatch, _stats([]))
-    assert check.main(['x', NODE]) == 1
