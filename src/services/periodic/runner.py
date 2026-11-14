@@ -1,8 +1,9 @@
 """The frame every periodic task body runs in (02b section 4.1).
 
 A tick is a plain Celery task that starts a short asyncio program on the child's own event loop
-(``run_with_engine``: a one-connection ``NullPool`` engine bound for the program, disposed
-after it). Bodies that must not overlap themselves take a transaction-level advisory lock,
+(``run_with_tick_engine``: a small pooled engine bound for the program, disposed after it, so
+the tick's projects reuse connections instead of opening one per checkout). Bodies that must not overlap themselves take a
+transaction-level advisory lock,
 ``pg_try_advisory_xact_lock(class, obj)``: false means another tick holds it and this one skips.
 The lock transaction stays open while the body runs and ends (releasing the lock) when the body
 returns, and it works behind a transaction pooler
@@ -27,7 +28,7 @@ from sqlalchemy.orm import Session
 from src.config.project_context import bind_project
 from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
-from src.db.engine import current_async_engine, get_sync_engine, run_with_engine
+from src.db.engine import current_async_engine, get_sync_engine, run_with_tick_engine
 from src.db.repos import projects as projects_repo
 from src.db.session import sync_deployment_tx
 from src.services.curation.job_binding import opensearch_client
@@ -149,7 +150,7 @@ async def tick_opensearch(timeout: float | None = None) -> AsyncIterator[TickOpe
 
 def run_periodic[T](name: str, body: Awaitable[T]) -> T:
     """Run one tick's coroutine on a new event loop with its own engine bound."""
-    return asyncio.run(run_with_engine(body, f'op-periodic-{name}', one_shot=True))
+    return asyncio.run(run_with_tick_engine(body, f'op-periodic-{name}'))
 
 
 __all__ = [

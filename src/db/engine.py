@@ -53,6 +53,12 @@ JOB_LOCK_TIMEOUT = '30s'
 CHILD_POOL_SIZE = 2
 # A worker that shares its two connections among concurrent coroutines waits longer than a request.
 WORKER_POOL_TIMEOUT_S = 30
+# A periodic tick holds one connection for its advisory-lock transaction and opens its body's
+# sessions inside it; the deepest body nests a session and a job start (two sessions), so three
+# connections are in use at once. One spare; a mistake that needs more fails after
+# TICK_POOL_TIMEOUT_S with a pool timeout instead of hanging the tick.
+TICK_POOL_SIZE = 4
+TICK_POOL_TIMEOUT_S = 5
 
 _lock = threading.Lock()
 _engines: dict[tuple[str, int], Any] = {}
@@ -202,6 +208,31 @@ def new_worker_async_engine(application_name: str) -> AsyncEngine:
     )
 
 
+def new_tick_async_engine(application_name: str) -> AsyncEngine:
+    """A bounded pooled async engine for ONE periodic tick, on that tick's event loop.
+
+    Connections are reused across the tick's projects and statements instead of one new session
+    (fork plus password handshake) per checkout. It must be disposed before its loop ends; see
+    :func:`run_with_tick_engine`. https://docs.sqlalchemy.org/en/21/orm/extensions/asyncio.html
+    """
+    settings = DatabaseSettings.from_env()
+    return create_async_engine(
+        database_url(settings, application_name=f'{application_name}-{os.getpid()}'),
+        connect_args=_connect_args(settings, job_limits=True),
+        **_pool_options(TICK_POOL_SIZE, timeout=TICK_POOL_TIMEOUT_S),
+    )
+
+
+async def run_with_tick_engine[T](awaitable: Awaitable[T], application_name: str) -> T:
+    """Await a tick's body with its own pooled engine bound; dispose it on every exit path."""
+    engine = new_tick_async_engine(application_name)
+    try:
+        with bind_async_engine(engine):
+            return await awaitable
+    finally:
+        await engine.dispose()
+
+
 async def run_with_engine[T](
     awaitable: Awaitable[T], application_name: str, *, one_shot: bool = False
 ) -> T:
@@ -284,4 +315,5 @@ __all__ = [
     'new_worker_async_engine',
     'one_off_connection',
     'run_with_engine',
+    'run_with_tick_engine',
 ]
