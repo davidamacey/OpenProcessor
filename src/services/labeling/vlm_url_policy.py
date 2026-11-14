@@ -56,6 +56,7 @@ DENIED_INTERNAL_SERVICES: frozenset[str] = frozenset(
         'opensearch',
         'opensearch-dashboards',
         'triton-server',
+        'frame-engine',
         'triton-sdk',
         'api',
         'op-api',
