@@ -25,6 +25,59 @@ Everything below is judged by measured photos per second, p50 and p99 latency, G
 on the running stack, with output parity against the stored references and no loss of cluster
 quality.
 
+## 1a. Focus and order (owner direction, 2026-11-14)
+
+The goal, in one sentence: **one photo goes in, is decoded once on the GPU, every model result is
+produced on the GPU from that one frame in one pass, the results are stored once and compactly, and
+they come back to a search or a grid page at once.** Model speed in isolation is not the goal; the
+time from "photo in" to "everything stored and findable" is. Nothing in today's stack is fixed:
+the model server, the vector store and the engine language are choices to be made by measurement.
+
+What the code does today, read from the source (not from its tests):
+
+| Path | What happens to one photo | Source |
+|---|---|---|
+| `/analyze`, all branches | The encoded file is handed to four separate paths on a thread pool: detector + whole-image embedding (CPU decode and CPU preprocessing), faces (CPU decode, CPU box decoding and alignment, two model-server hops), OCR (its own decode, one recogniser call per text crop), crop embeddings (decoded again, cropped on the CPU). Four decodes of the same file | `src/services/analyze_pipeline.py` |
+| Curation ingest | One GPU decode serves the detector and the PE frame and crop vectors; every crop's pixels then return to the host to be JPEG-encoded on CPU threads. Faces are not on this path. A different embedding family from the core routes | `models/gpu_image_prep/`, `src/services/curation/ingest_gpu_decode.py` |
+| Region embedding | The source is decoded again on the CPU for every item | `src/services/curation/region_embed_stage.py` |
+| Thumbnails | Re-decoded from the original | `src/services/curation/image_serving.py` |
+| Storage | Several PostgreSQL transactions per photo; an update of any machine result re-indexes the document's vectors | section 2, D5 |
+
+Order of work from here. Each phase ends in the same headline row: **one 20 MP photo with every
+branch on, photos per second per card and milliseconds per stage**, with accuracy checked against
+ground truth (detection AP, face verification, text accuracy, retrieval recall), never only
+against the previous output.
+
+1. **The frame engine with every branch** (E1, then F1, O1b's rule, classification on crops, T0):
+   decode once; detect, frame and crop embeddings, faces with alignment cut on the GPU from the
+   full-resolution frame, OCR with batched recognition, stored thumbnail and crops; one request,
+   one plan. The Triton model server stays behind it for now.
+2. **One write per batch** (P1 and task 7): results leave the engine once and are written as a
+   coalesced batch; no per-photo transactions, no barrier between a batch's GPU calls and its
+   writes.
+3. **Storage layout and the vector store** (D5, V0, V1, T8): machine results that change live
+   apart from vectors; vector width and precision chosen by measurement (half floats, 8-bit,
+   1-bit with rescoring, a learned projection to fewer dimensions) on at least one million real
+   vectors; tuned OpenSearch against Milvus, Qdrant, PostgreSQL vector extensions and a
+   Faiss or cuVS index with PostgreSQL bookkeeping; a flat vector file written at ingest so
+   clustering never reads through the search engine.
+4. **Grouping** (F3, L2, T7): faces, objects and whole images, each a rebuildable index apart
+   from detections and from human decisions.
+5. **Recall and display** (L3, L6, T0): search and grid pages with stated latency bars at one
+   million photos.
+6. **The engine we own** (T1, raised from a measured track to a build): a Rust engine behind
+   protocol version 1 with decode, GPU kernels and TensorRT execution in one process and no model
+   server between prep and inference, built on the owner's existing Rust serving code. It
+   replaces the Python engine when it holds parity and wins the headline row; the protocol, the
+   parity harness and the branch designs carry over unchanged.
+
+Open questions this order has to answer early, by measurement: what share of a photo's time is
+decode at full resolution and whether a reduced decode can serve the fixed-size model inputs
+while full resolution is kept only for face, text and small-object crops; how many crop
+embeddings a photo really needs and whether one encoder family can serve both the core routes
+and curation; whether crop vectors can be pooled from one pass over the frame instead of one
+pass per crop.
+
 ## 2. What binds today (evidence)
 
 Baseline rows are in section 10. The findings that shape the design:
