@@ -22,7 +22,7 @@ from src.utils.task_group import run_all
 
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncGenerator
 
     from opensearchpy import AsyncOpenSearch
 
@@ -36,7 +36,7 @@ DEFAULT_PAGE_SIZE = 2000
 
 async def _scroll_pages(
     client: AsyncOpenSearch, index: str, query: dict[str, Any], source: list[str], page_size: int
-) -> AsyncIterator[list[dict[str, Any]]]:
+) -> AsyncGenerator[list[dict[str, Any]], None]:
     body: dict[str, Any] = {'size': page_size, '_source': source, 'query': query}
     resp = await client.search(index=index, body=body, scroll='2m')
     scroll_id = resp.get('_scroll_id')
@@ -66,7 +66,7 @@ async def iter_pages(
     source: list[str],
     n_slices: int = DEFAULT_SLICES,
     page_size: int = DEFAULT_PAGE_SIZE,
-) -> AsyncIterator[list[dict[str, Any]]]:
+) -> AsyncGenerator[list[dict[str, Any]], None]:
     """Yield each page of hits of ``query`` (``_source`` limited to ``source``)."""
     try:
         pit_resp = await client.create_pit(index=index, keep_alive=KEEP_ALIVE)
@@ -107,8 +107,12 @@ async def iter_pages(
     async def run() -> None:
         try:
             await run_all([produce(i) for i in range(n_slices)])
-        finally:
+        except Exception:
+            # wake the consumer, which re-raises through ``await task``; a cancel (the consumer
+            # left) must not wait on a full queue, so it is not caught here
             await queue.put(None)
+            raise
+        await queue.put(None)
 
     task = asyncio.create_task(run())
     try:
