@@ -966,3 +966,161 @@ def test_an_unknown_stage_is_refused() -> None:
 
     with pytest.raises(ValueError, match='unknown frame engine stage'):
         StageClock().add('typo', 1.0)
+
+
+# ------------------------------------------------------------------ conditional branches
+
+
+def _face_branches(eng: Any, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    """Stand-ins for the faces lane's branches: ``faces`` (a frame-only call, ``scrfd``) and
+    ``face_embed`` (a call per photo cut from the faces' answer, ``arc``), wired in as built."""
+    from frame_engine.branches.base import Branch, DependencyFailedError
+    from frame_engine.transport import ModelInput
+
+    seen: dict[str, Any] = {'faces': None}
+    x = ModelInput('input.1', 'UINT8', (1, 3, 16, 16))
+
+    class Faces(Branch):
+        status = 'faces'
+
+        def round1(self, photo: Any) -> None:
+            staged = photo.calls.stage(x.nbytes, 'letterbox')
+            self.call = photo.calls.submit(self, 'detect', staged, 'scrfd', x, ('score_8',))
+
+        def settle(self, photo: Any) -> None:
+            seen['faces'] = photo.calls.result(self.call)['score_8']
+
+    class FaceEmbed(Branch):
+        status = 'face_embed'
+        needs = ('faces',)
+
+        def round2(self, photo: Any) -> None:
+            if seen['faces'] is None:
+                raise DependencyFailedError('no faces')
+            staged = photo.calls.stage(x.nbytes, 'embed_crops')
+            self.call = photo.calls.submit(self, 'embed_pe', staged, 'arc', x, ('output',))
+
+        def finish(self, photo: Any) -> None:
+            photo.calls.result(self.call)
+
+    monkeypatch.setattr(wire, 'BUILT_BRANCHES', wire.BUILT_BRANCHES | {'faces', 'face_embed'})
+    real = eng.module.FrameEngine._plan_branches
+
+    def plan_branches(self: Any, plan: Any) -> list[Any]:
+        out = real(self, plan)
+        seen['faces'] = None
+        if plan.runs('faces'):
+            out.append(Faces())
+        if plan.runs('face_embed'):
+            out.append(FaceEmbed())
+        return out
+
+    monkeypatch.setattr(eng.module.FrameEngine, '_plan_branches', plan_branches)
+    return seen
+
+
+def _faces_plan(classes: list[int] | None, branches: list[str] | None = None) -> Any:
+    cond = None if classes is None else {'faces': classes}
+    return _plan(branches or ['detect', 'faces', 'face_embed'], embed=None, crops='none',
+                 if_detected=cond)  # fmt: skip
+
+
+def test_an_unconditional_faces_branch_goes_out_in_round_one(
+    eng: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _face_branches(eng, monkeypatch)
+    engine = eng()
+    r = _run(engine, _faces_plan(None))
+    assert engine.transport.events[:3] == [('commit', 2), ('submit', 'det'), ('submit', 'scrfd')]
+    assert r.branches == dict.fromkeys(('detect', 'faces', 'face_embed'), ('ok', ''))
+
+
+def test_a_condition_that_holds_runs_the_branch_after_the_detector(
+    eng: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _face_branches(eng, monkeypatch)
+    engine = eng()
+    r = _run(engine, _faces_plan([2, 9]))  # the detector finds classes 1 and 2
+    assert r.branches == dict.fromkeys(('detect', 'faces', 'face_embed'), ('ok', ''))
+    events = engine.transport.events
+    assert events[:3] == [('commit', 1), ('submit', 'det'), ('collect', 'det')]
+    assert events.index(('submit', 'scrfd')) > events.index(('collect', 'det'))
+    assert events.index(('submit', 'arc')) > events.index(('collect', 'scrfd'))
+    assert engine.transport.staged == 0
+
+
+def test_a_conditional_branch_goes_out_before_the_round_two_calls(
+    eng: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The face call and the crop squares are in flight together: the condition costs one
+    detector round, not a third round after the encoder."""
+    _face_branches(eng, monkeypatch)
+    engine = eng()
+    plan = _plan(['detect', 'embed_crops', 'faces', 'face_embed'], crops='none',
+                 if_detected={'faces': [1]})  # fmt: skip
+    r = _run(engine, plan)
+    assert set(r.branches.values()) == {('ok', '')}
+    events = engine.transport.events
+    assert events.index(('submit', 'scrfd')) < events.index(('submit', 'pe'))
+    assert events.index(('submit', 'pe')) < events.index(('collect', 'scrfd'))
+
+
+def test_a_condition_that_does_not_hold_is_not_run_with_its_dependents(
+    eng: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _face_branches(eng, monkeypatch)
+    engine = eng()
+    r = _run(engine, _faces_plan([7]))
+    assert r.status == 'ok'
+    assert r.branches == {
+        'detect': ('ok', ''),
+        'faces': ('not_run', ''),
+        'face_embed': ('not_run', ''),
+    }
+    assert engine.transport.models() == ['det']
+    assert engine.transport.staged == 0
+
+
+def test_a_photo_without_detections_does_not_run_a_conditional_branch(
+    eng: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _face_branches(eng, monkeypatch)
+    engine = eng()
+    real = engine.transport.collect
+    engine.transport.collect = lambda p: (
+        {k: np.zeros_like(v) for k, v in real(p).items()} if p.model == 'det' else real(p)
+    )
+    r = _run(engine, _faces_plan([1]))
+    assert r.branches['faces'] == ('not_run', '')
+    assert engine.transport.models() == ['det']
+
+
+def test_a_failed_detector_fails_the_conditional_branch_and_its_dependents(
+    eng: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from frame_engine.transport import ModelCallError
+
+    _face_branches(eng, monkeypatch)
+    engine = eng()
+    engine.transport.fail['det'] = ModelCallError('det', 'StatusCode.INTERNAL', 'boom')
+    r = _run(engine, _faces_plan([1]))
+    assert r.branches == {
+        'detect': ('error', 'model_error'),
+        'faces': ('error', 'dependency_failed'),
+        'face_embed': ('error', 'dependency_failed'),
+    }
+    assert engine.transport.models() == ['det']
+
+
+def test_a_failed_branch_fails_what_needs_it_without_running_it(
+    eng: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from frame_engine.transport import ModelCallError
+
+    _face_branches(eng, monkeypatch)
+    engine = eng()
+    engine.transport.fail['scrfd'] = ModelCallError('scrfd', 'StatusCode.INTERNAL', 'boom')
+    r = _run(engine, _faces_plan(None))
+    assert r.branches['faces'] == ('error', 'model_error')
+    assert r.branches['face_embed'] == ('error', 'dependency_failed')
+    assert 'arc' not in engine.transport.models()

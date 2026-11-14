@@ -58,6 +58,9 @@ class Branch:
 
     #: Its ``branch_status`` entry; ``None`` for an output with no entry (the crop JPEGs).
     status: str | None = None
+    #: The ``branch_status`` names whose round-1 answers it reads: when one of them fails or does
+    #: not run, this branch ends the same way without running (``face_embed``: ``('faces',)``).
+    needs: tuple[str, ...] = ()
 
     def round1(self, photo: Photo) -> None:
         """Stage and submit the calls that need only the frame."""
