@@ -40,11 +40,19 @@ def test_lfw_pairs_are_expanded_to_file_names_and_ten_contiguous_folds():
     ]
 
 
-def test_cross_pairs_take_two_lines_per_pair_and_folds_are_blocks_of_600():
-    text = 'A_1.jpg 1\nA_2.jpg 1\nA_3.jpg 0\nB_1.jpg 0\n'
+def test_cross_pairs_take_two_lines_per_pair_and_a_nonzero_column_means_same():
+    text = 'A_1.jpg 7\nA_2.jpg 7\nA_3.jpg 0\nB_1.jpg 0\n'
     assert ft.parse_cross_pairs(text) == [('A_1.jpg', 'A_2.jpg', 1), ('A_3.jpg', 'B_1.jpg', 0)]
-    assert ft.fold_ids(6000).tolist()[:601:600] == [0, 1]
-    assert ft.fold_ids(6000).max() == 9
+
+
+def test_folds_rank_each_class_in_blocks_so_every_fold_is_balanced():
+    labels = np.array(
+        [1] * 20 + [0] * 20
+    )  # positives block then negatives block, as CALFW and CPLFW ship
+    folds = ft.fold_ids(labels, folds=10)
+    assert folds[:4].tolist() == [0, 0, 1, 1]
+    assert folds[20:24].tolist() == [0, 0, 1, 1]
+    assert np.bincount(folds).tolist() == [4] * 10
 
 
 # ------------------------------------------------------------------ verification

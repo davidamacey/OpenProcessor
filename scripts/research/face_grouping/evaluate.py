@@ -39,7 +39,7 @@ def pair_table(s: ds.FaceSet, pairs: list[tuple[str, str, int]]) -> dict[str, An
 
 
 def verification_report(t: dict[str, Any]) -> dict[str, Any]:
-    folds = ft.fold_ids(len(t['label']))
+    folds = ft.fold_ids(t['label'])
     acc = ver.fold_accuracy(t['score'], t['label'], folds)
     return {
         'pairs': len(t['label']),

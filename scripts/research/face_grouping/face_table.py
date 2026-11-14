@@ -36,11 +36,23 @@ def parse_lfw_pairs(text: str) -> list[tuple[str, str, int]]:
 
 
 def parse_cross_pairs(text: str) -> list[tuple[str, str, int]]:
-    """CALFW and CPLFW pairs files: two ``<file> <label>`` lines make one pair."""
+    """CALFW and CPLFW pairs files: two ``<file> <n>`` lines make one pair.
+
+    ``n`` is 0 for a different-person pair; CALFW writes the fold number (1-10) for same-person pairs
+    and CPLFW writes 1.
+    """
     rows = [line.split() for line in text.splitlines() if line.strip()]
-    return [(a[0], b[0], int(a[1])) for a, b in zip(rows[0::2], rows[1::2], strict=True)]
+    return [(a[0], b[0], int(int(a[1]) != 0)) for a, b in zip(rows[0::2], rows[1::2], strict=True)]
 
 
-def fold_ids(n_pairs: int, folds: int = 10) -> np.ndarray:
-    """The standard protocol's ten contiguous folds (600 pairs each for the 6,000-pair files)."""
-    return np.arange(n_pairs) // (n_pairs // folds)
+def fold_ids(labels: np.ndarray, folds: int = 10) -> np.ndarray:
+    """Protocol folds: each class (same, different) is cut into ``folds`` blocks in file order.
+
+    The files list all same-person pairs and then all different-person pairs (CALFW, CPLFW), or 300 of
+    each per fold (LFW); ranking inside the class gives the same ten balanced folds for all three.
+    """
+    out = np.zeros(len(labels), dtype=np.int64)
+    for cls in np.unique(labels):
+        idx = np.flatnonzero(labels == cls)
+        out[idx] = np.arange(len(idx)) // (len(idx) // folds)
+    return out
