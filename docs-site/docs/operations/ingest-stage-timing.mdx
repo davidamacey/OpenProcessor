@@ -5,35 +5,33 @@ title: Ingest stage timing
 
 # Ingest stage timing
 
-`gpu_image_prep` is the Triton model that decodes a photo on the GPU, runs the
-detector, builds the crop and frame squares for the embedding model, and
-encodes the crop JPEGs. Stage timing says where the time of one image goes
-inside it, so a throughput change can be attributed to a stage rather than
-guessed.
-
-The counters follow three rules that Triton 2.70 (26.06) needs (issue
-[#390](https://github.com/davidamacey/OpenProcessor/issues/390)): keep the metric families alive,
-drop series before families, increment from one thread. Follow the same rules if you add custom
-metrics to another Python-backend model.
+The frame engine (the `frame-engine` service, `frame_engine/`) decodes a photo on
+the GPU, runs the detector, builds the crop and frame squares for the embedding
+model, and encodes the crop JPEGs, calling the models in Triton as a client.
+Stage timing says where the time of one image goes inside it, so a throughput
+change can be attributed to a stage rather than guessed.
 
 ## The counters
 
-Two Triton counters, both labelled `stage`, on Triton's metrics port (4602 in
-the default compose file, the `triton` job in Prometheus):
+Two counters, both labelled `stage`, on the engine's metrics port (4613 on the
+host in the default compose file, the `frame-engine` job in Prometheus):
 
 | Series | Meaning |
 |---|---|
-| `op_gpu_prep_stage_seconds{stage}` | Summed host wall seconds spent in the stage |
-| `op_gpu_prep_stage_observations{stage}` | Images that ran the stage |
+| `op_frame_engine_stage_seconds_total{stage}` | Summed host wall seconds spent in the stage |
+| `op_frame_engine_stage_observations_total{stage}` | Images that ran the stage |
 
 Seconds divided by observations is the mean per image. Stage seconds are sums
 over concurrent requests: compare them across runs and shares, never add them
-up to wall time. The model is loaded on first use, so the series appear after
-the first image.
+up to wall time. The series appear after the first image. The same port also
+serves the requests in flight, the shared-memory region in use, budget waits,
+overloads, region registrations, failed model calls and image outcomes
+(`op_frame_engine_*`).
 
 | Stage | What it covers |
 |---|---|
-| `queue` | Wait for a free slot and a worker thread |
+| `queue` | Wait for a worker thread |
+| `budget` | Wait for device memory for the frame (photos the GPU route takes) |
 | `decode` | Header routing, nvJPEG decode, EXIF orientation |
 | `letterbox` | Detector letterbox canvas |
 | `detect` | Detector call and box decoding |
@@ -44,39 +42,38 @@ the first image.
 | `crop_jpeg` | JPEG encode, summed over the image's crops (host threads) |
 | `blur` | Laplacian sums of the frame and every detection |
 
-Stored-box mode (the embed reprocess pass) and the CPU-decode fallback publish
-only the stages they ran.
+A request runs only the branches its plan names (stored boxes for the embed
+reprocess pass, no detector), and publishes only the stages it ran.
 
-### Asynchronous kernels and `STAGE_SYNC`
+### Asynchronous kernels and `OP_FRAME_ENGINE_STAGE_SYNC`
 
 CUDA launches return early, so by default a kernel stage (`letterbox`,
 `embed_frame`, `embed_crops`, `blur`) ends when its launches are queued, and
 its GPU time lands in the next stage that waits (usually `detect` or
-`embed_pe`). The model parameter `STAGE_SYNC` (default `"0"` in
-`models/gpu_image_prep/config.pbtxt`) set to `"1"` waits for the stream at the
-end of those four stages so the time is attributed where the work ran. That
-removes the overlap inside one image, so a `STAGE_SYNC=1` run is attribution
-only, never a throughput number. Keep such runs in separate rows.
+`embed_pe`). The engine setting `OP_FRAME_ENGINE_STAGE_SYNC` (default `0`) set
+to `1` waits for the stream at the end of those four stages so the time is
+attributed where the work ran. That removes the overlap inside one image, so a
+`STAGE_SYNC=1` run is attribution only, never a throughput number. Keep such
+runs in separate rows.
 
 ## Reading them in Prometheus and Grafana
 
-Prometheus already scrapes Triton's metrics port when the `monitoring` profile
-is up (see [Monitoring](./monitoring.mdx)). Mean milliseconds per image by
+Prometheus already scrapes the engine's metrics port when the `monitoring`
+profile is up (see [Monitoring](./monitoring.mdx)). Mean milliseconds per image by
 stage over five minutes:
 
 ```promql
-1000 * rate(op_gpu_prep_stage_seconds[5m]) / rate(op_gpu_prep_stage_observations[5m])
+1000 * rate(op_frame_engine_stage_seconds_total[5m]) / rate(op_frame_engine_stage_observations_total[5m])
 ```
 
-Depending on the exporter version the series may carry a `_total` suffix; the
-profile tooling accepts both. The shipped Grafana dashboards do not have a
-`gpu_image_prep` panel yet, so use the Explore view or add one. The existing
+The shipped Grafana dashboards do not have a frame engine panel yet, so use the Explore view or add one. The existing
 `op_pipeline_stage_seconds_*` series (Ingest pipeline dashboard) are the API
 side of the same ingest; read both together.
 
 How to read the result: the stage with the largest share of summed seconds is
 where an image spends its time, not necessarily what limits throughput. A
-large `queue` share means requests wait for the model's worker slots. If
+large `queue` share means requests wait for the engine's worker threads; a
+large `budget` share means they wait for device memory. If
 `decode` or `crop_jpeg` dominate, the work is host CPU. If the launch stages
 (`letterbox`, `embed_crops`, `crop_copy`) grow with the number of batches in
 flight for the same work, suspect host-side launch and thread contention
@@ -92,9 +89,9 @@ stack:
   each time, `--drop-cache` drops the manifest files from the page cache
   before each repetition, and the report records the host load average
   (`noisy` when the 1-minute load at the start is above 16), a GPU
-  utilisation median and a `gpu_prep_stages` block (seconds, images, mean and
-  share per stage, from the Triton counter delta; needs
-  `--triton-metrics-url`). `--clients N` posts N batches at once (one batch at a time leaves
+  utilisation median and a `frame_engine_stages` block (seconds, images, mean
+  and share per stage, from the engine's counter delta; needs
+  `--frame-engine-metrics-url`). `--clients N` posts N batches at once (one batch at a time leaves
   the API under-driven; use 4 for throughput).
 - `ingest_profile.py` wraps it with the fixed measurement protocol (3
   repetitions, cache dropped, GPU sampled every 0.5 s, policy `all`, stage
@@ -105,6 +102,7 @@ stack:
 .venv/bin/python scripts/bench/ingest_profile.py run setB MANIFEST \
   --api-url http://127.0.0.1:4603 \
   --triton-metrics-url http://127.0.0.1:4602/metrics \
+  --frame-engine-metrics-url http://127.0.0.1:4613/metrics \
   --path-map HOST_DIR=CONTAINER_DIR \
   --api-container NAME --triton-container NAME \
   --out-root artifacts_local/bench/v070/sp0
@@ -115,7 +113,7 @@ stack:
 
 `table` prints one block per row: median images per second (with range), GPU
 and CPU use, the API's pipeline stages, Triton queue and compute times, and
-the `gpu_image_prep` stages with mean milliseconds per image and share. It
+the frame engine stages with mean milliseconds per image and share. It
 holds aggregates only. A row that was `noisy` is an upper bound on time and a
 lower bound on throughput; repeat it on a quiet host before quoting it.
 `scripts/bench/sample_copy.py` makes a seeded, checksummed NVMe copy of a
@@ -126,6 +124,8 @@ Run with the stack's real GPU, and never on a card another job is using.
 
 ## What was measured, and what it meant
 
+These rows were measured on the Triton Python-backend model the frame engine replaced
+(`gpu_image_prep`, 0.6.0 and the 0.7.0 branch before the engine); they are kept as the record.
 Throughput on one RTX A6000 with a private set of 3,000 photos of about 21 MP (ratios, not public
 data), 3 repetitions, host load 13 to 35. Raw rows are in `docs/benchmarks/v070/spf/`; the table and
 method are in the SPF section of

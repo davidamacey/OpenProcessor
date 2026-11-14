@@ -15,8 +15,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal, get_args
 
-from src.utils.class_names import normalize_class_name
-
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -171,6 +169,10 @@ def _check_branches(
 def _check_conditions(
     branches: tuple[Branch, ...], when: Mapping[str, Sequence[str]]
 ) -> dict[Branch, tuple[str, ...]]:
+    # Imported here, not at module level: the frame engine image reads this vocabulary through
+    # src.domain.frame_engine_wire and carries no src.config (class_names reads its env).
+    from src.utils.class_names import normalize_class_name
+
     out: dict[Branch, tuple[str, ...]] = {}
     for name, classes in when.items():
         if name not in CONDITIONAL or name not in branches:

@@ -138,7 +138,12 @@ def test_committed_locks_are_fully_pinned(repo_root: Path) -> None:
 def _local_images(shimmed: Shimmed, repo: str, tag: str) -> None:
     images = shimmed.state / 'images'
     images.mkdir(exist_ok=True)
-    for name in ('openprocessor', 'openprocessor-export', 'openprocessor-triton'):
+    for name in (
+        'openprocessor',
+        'openprocessor-export',
+        'openprocessor-triton',
+        'openprocessor-frame-engine',
+    ):
         (images / f'{repo}_{name}_{tag}').write_text(f'{repo}/{name}@sha256:{"0" * 64}\n')
 
 

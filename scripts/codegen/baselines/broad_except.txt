@@ -15,7 +15,6 @@ export/export_paddleocr_det.py	2	CLI boundary: ONNX/TensorRT errors are printed 
 export/pe_text_validate.py	2	validation boundary: ONNX Runtime raises its own error types; recorded in the report
 export/scrfd_onnx.py	1	CLI boundary: inference-test error is logged and returns False
 export/scrfd_triton.py	1	CLI boundary: TensorRT build errors are logged and return False
-models/gpu_image_prep/1/model.py	2	Triton Python-backend boundary: one failed image becomes an error response or a decoder/gpu_memory reason and the model stays up
 models/ocr_pipeline/1/model.py	1	Triton Python-backend boundary: a failed request becomes an error response and the rest of the batch is served
 scripts/bench/gpu_decode_bench.py	2	bench boundary: a failed decoder is recorded as an error string in its row and the sweep continues
 scripts/bench/gpu_decode_parity.py	1	bench boundary: a failed GPU decode is recorded in the fallbacks list and the CPU array is used

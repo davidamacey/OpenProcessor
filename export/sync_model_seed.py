@@ -10,6 +10,9 @@ serve) is replaced file by file when the seed's version is newer than the instal
 without the file counts as version 0. Built engines and other files the seed does not ship are never
 touched. Profile-managed config values (instance count, GPU id) are rewritten right afterwards by
 the installer's profile step, so a replaced ``config.pbtxt`` does not keep the seed's defaults.
+
+A model the product no longer ships (:data:`RETIRED_MODELS`) is removed from the install with its
+built files; any other directory the seed does not ship is left alone.
 """
 
 from __future__ import annotations
@@ -20,6 +23,9 @@ from pathlib import Path
 
 
 VERSION_FILE = 'MODEL_VERSION'
+#: Models a release removed: gpu_image_prep (0.6.0's GPU decode, replaced in 0.7.0 by the frame
+#: engine service, frame_engine/).
+RETIRED_MODELS = ('gpu_image_prep',)
 
 
 def _version(model_dir: Path) -> int:
@@ -37,6 +43,17 @@ def _copy_tree(src: Path, dst: Path, *, overwrite: bool) -> None:
         elif overwrite or not target.exists():
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, target)
+
+
+def remove_retired(dest: Path) -> list[str]:
+    """Delete the retired models' directories from dest and return their names."""
+    removed = []
+    for name in RETIRED_MODELS:
+        target = dest / name
+        if target.is_dir():
+            shutil.rmtree(target)
+            removed.append(name)
+    return removed
 
 
 def sync(seed: Path, dest: Path) -> list[str]:
@@ -62,6 +79,9 @@ def main(argv: list[str]) -> int:
     updated = sync(Path(argv[1]), Path(argv[2]))
     if updated:
         print(f'updated model files: {", ".join(updated)}')
+    removed = remove_retired(Path(argv[2]))
+    if removed:
+        print(f'removed retired models: {", ".join(removed)}')
     return 0
 
 

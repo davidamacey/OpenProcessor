@@ -1,0 +1,21 @@
+# The frame engine's whole Python environment, every package pinned (installed with --no-deps and
+# checked with pip check, so a missing or drifting dependency fails the build).
+# The CUDA libraries are the exact builds the Triton prep model loaded inside
+# openprocessor-triton (see the table in ./Dockerfile).
+cupy-cuda13x==14.2.0
+cuda-bindings==13.4.4
+cuda-pathfinder==1.8.4
+nvidia-cuda-nvrtc==13.2.86
+nvidia-cuda-runtime==13.2.86
+nvidia-nvjpeg==13.2.3.58
+opencv-python-headless==5.0.0.93
+numpy==2.5.4
+tritonclient[grpc]==2.74.0
+grpcio==1.84.0
+protobuf==6.33.6
+python-rapidjson==1.25
+packaging==26.3
+urllib3==2.8.0
+ml-dtypes==0.5.4
+typing-extensions==4.16.0
+prometheus-client==0.26.0

@@ -4,9 +4,10 @@ Needs an isolated stack (project ``op-nd-t2``: Triton, API, OpenSearch; see the 
 
 * ``core``: ``POST /ingest/batch`` (the route of ``dedupe_r1.json``) in family order, originals of a chunk
   first, then read ``global_embedding`` and ``duplicate_group_id`` back from OpenSearch;
-* ``pe``: the live GPU-decode model ``gpu_image_prep`` through Triton gRPC (``whole_embedding``, the vector
-  the curation ingest stores as ``pe_embedding``), same order; files the model declines (status not ``ok``,
-  for example PNG) are recorded with their status and left without a vector.
+* ``pe``: the live GPU decode, the frame engine, over gRPC (``--grpc``, its address; a plan of
+  ``embed_frame`` only gives ``whole_embedding``, the vector the curation ingest stores as
+  ``pe_embedding``), same order; files the engine declines (status not ``ok``, for example PNG) are
+  recorded with their status and left without a vector.
 
 Both stop at ``--deadline-s`` after finishing the chunk in hand, so only complete families are kept.
 """
@@ -15,7 +16,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import queue
 import sys
 import time
 from pathlib import Path
@@ -112,41 +112,38 @@ def ingest_pe(
 ) -> tuple[np.ndarray, np.ndarray, dict[str, int]]:
     import tritonclient.grpc as grpcclient
 
+    from src.domain import frame_engine_wire as wire
+
     client = grpcclient.InferenceServerClient(grpc_url)
-    client.load_model('gpu_image_prep')
-    results: queue.Queue = queue.Queue()
-    client.start_stream(callback=lambda result, error: results.put((result, error)))
+    plan = wire.EnginePlan(
+        branches=('embed_frame',), embed=wire.EmbedSpec('pe_image_encoder', 336, 32)
+    ).to_json()
     vec = np.zeros((len(rows), 1024), dtype=np.float32)
     have = np.zeros(len(rows), dtype=bool)
     statuses: dict[str, int] = {}
     for chunk in chunk_order(rows):
         if time.time() > deadline:
             break
-        for s in range(0, len(chunk), 16):
-            part = chunk[s : s + 16]
-            for i in part:
-                data = np.frombuffer(Path(rows[i]['path']).read_bytes(), dtype=np.uint8)
-                inputs = [
-                    grpcclient.InferInput('jpeg', list(data.shape), 'UINT8'),
-                    grpcclient.InferInput('embed_crops', [1], 'BOOL'),
-                ]
-                inputs[0].set_data_from_numpy(data)
-                inputs[1].set_data_from_numpy(np.array([False]))
-                client.async_stream_infer('gpu_image_prep', inputs, request_id=str(i))
-            for _ in part:
-                res, err = results.get(timeout=300)
-                if err is not None:
-                    statuses['error'] = statuses.get('error', 0) + 1
-                    continue
-                i = int(res.get_response().id)
-                st = res.as_numpy('status')[0]
-                st = st.decode() if isinstance(st, bytes) else str(st)
-                statuses[st] = statuses.get(st, 0) + 1
-                if st == 'ok':
-                    v = res.as_numpy('whole_embedding').astype(np.float32)
-                    vec[i] = v / np.linalg.norm(v)
-                    have[i] = True
-    client.stop_stream()
+        for i in chunk:
+            inputs = []
+            for name, value in (
+                (wire.IMAGE, Path(rows[i]['path']).read_bytes()),
+                (wire.PLAN, plan.encode()),
+            ):
+                inp = grpcclient.InferInput(name, [1], 'BYTES')
+                inp.set_data_from_numpy(np.array([value], dtype=np.object_))
+                inputs.append(inp)
+            try:
+                res = client.infer(wire.MODEL_NAME, inputs, client_timeout=300)
+            except grpcclient.InferenceServerException:
+                statuses['error'] = statuses.get('error', 0) + 1
+                continue
+            st = res.as_numpy(wire.STATUS)[0].decode()
+            statuses[st] = statuses.get(st, 0) + 1
+            if st == 'ok':
+                v = res.as_numpy(wire.WHOLE_EMBEDDING).astype(np.float32)
+                vec[i] = v / np.linalg.norm(v)
+                have[i] = True
     return vec, have, statuses
 
 
@@ -158,7 +155,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument('--api', default='http://127.0.0.1:14603')
     ap.add_argument('--opensearch', default='http://127.0.0.1:14607')
     ap.add_argument('--index', default='visual_search_global')
-    ap.add_argument('--grpc', default='127.0.0.1:14601')
+    ap.add_argument('--grpc', default='127.0.0.1:14613', help='the frame engine gRPC address')
     ap.add_argument(
         '--deadline-s',
         type=float,

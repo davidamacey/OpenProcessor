@@ -7,9 +7,9 @@ files get the arm as a suffix), for the GPU-6 recall question.
 Input for ``detector_quality.py``. The preprocessing is the product's own
 (``letterbox_to_square``, fill 114, 640 px), so the boxes are what ingest sees
 before the confidence floor. Each model is ``NAME:uint8`` (engine scales in the
-graph), ``NAME:fp32`` (this script divides by 255) or ``NAME:gpu_decode`` (the GPU ingest
-GPU decode, ``gpu_image_prep``: it takes the encoded file, decodes and letterboxes on the GPU and
-returns the detector rows with its letterbox). Needs ``tritonclient``,
+graph), ``NAME:fp32`` (this script divides by 255) or ``NAME:gpu_decode`` (detector NAME run by
+the ingest GPU decode, the frame engine at ``--engine-url``: it takes the encoded file, decodes and
+letterboxes on the GPU and returns the detector rows with its letterbox). Needs ``tritonclient``,
 ``pillow`` and ``numpy`` (the API image has them); read-only against Triton.
 
     python scripts/bench/detector_capture.py --url 127.0.0.1:4961 \\
@@ -94,30 +94,33 @@ def decode_row(
 
 
 def gpu_decode_row(client: Any, model: str, data: bytes) -> list[list[float]]:
-    """One image through the decoupled GPU decode. An image it declines (it would take the CPU
-    path in ingest) stops the capture: the comparison needs every image from the GPU decode."""
-    import queue
-
+    """One image through the frame engine with detector ``model`` (a detect-only plan at the
+    ingest letterbox). An image it declines (it would take the CPU path in ingest) stops the
+    capture: the comparison needs every image from the GPU decode."""
     import tritonclient.grpc as grpcclient
 
-    answers: queue.Queue[Any] = queue.Queue()
-    client.start_stream(callback=lambda result, error: answers.put((result, error)))
-    try:
-        inp = grpcclient.InferInput('jpeg', [len(data)], 'UINT8')
-        inp.set_data_from_numpy(np.frombuffer(data, np.uint8))
-        client.async_stream_infer(model, [inp])
-        result, error = answers.get(timeout=120)
-    finally:
-        client.stop_stream()
-    if error is not None:
-        raise error
-    status = result.as_numpy('status')[0]
+    from src.domain import frame_engine_wire as wire
+
+    plan = wire.EnginePlan(
+        branches=('detect',), detector=wire.DetectorSpec(model, NET, 114)
+    ).to_json()
+    inputs = []
+    for name, value in ((wire.IMAGE, data), (wire.PLAN, plan.encode())):
+        inp = grpcclient.InferInput(name, [1], 'BYTES')
+        inp.set_data_from_numpy(np.array([value], dtype=np.object_))
+        inputs.append(inp)
+    result = client.infer(wire.MODEL_NAME, inputs, client_timeout=120)
+    status = result.as_numpy(wire.STATUS)[0]
     if status not in (b'ok', 'ok'):
-        raise SystemExit(f'{model} declined an image: {status!r}')
-    scale, pad_w, pad_h = (float(v) for v in result.as_numpy('letterbox'))
-    boxes = result.as_numpy('det_boxes').reshape(-1, 4)
+        raise SystemExit(f'the frame engine declined an image: {status!r}')
+    scale, pad_w, pad_h = (float(v) for v in result.as_numpy(wire.LETTERBOX))
+    boxes = result.as_numpy(wire.DET_BOXES).reshape(-1, 4)
     return decode_row(
-        boxes, result.as_numpy('det_scores'), result.as_numpy('det_classes'), scale, (pad_w, pad_h)
+        boxes,
+        result.as_numpy(wire.DET_SCORES),
+        result.as_numpy(wire.DET_CLASSES),
+        scale,
+        (pad_w, pad_h),
     )
 
 
@@ -126,11 +129,14 @@ def run(args: argparse.Namespace) -> int:
 
     rows = bench_set.manifest_rows(Path(args.manifest))
     client = grpcclient.InferenceServerClient(args.url)
+    engine = grpcclient.InferenceServerClient(args.engine_url) if args.engine_url else None
     specs: list[tuple[str, str]] = []
     for m in args.model:
         name, _, dtype = m.partition(':')
         if dtype not in ('uint8', 'fp32', 'gpu_decode'):
             raise SystemExit(f'--model {m!r}: dtype must be uint8, fp32 or gpu_decode')
+        if dtype == 'gpu_decode' and engine is None:
+            raise SystemExit('--model NAME:gpu_decode needs --engine-url (the frame engine)')
         if dtype == 'gpu_decode' and args.arm != 'ingest':
             raise SystemExit(
                 '--arm detect* applies to uint8/fp32 only; gpu_decode is the ingest path'
@@ -149,7 +155,7 @@ def run(args: argparse.Namespace) -> int:
             if dtype == 'gpu_decode':
                 for r in chunk:
                     data = (Path(args.images) / r['file_name']).read_bytes()
-                    results[name][str(r['image_id'])] = gpu_decode_row(client, name, data)
+                    results[name][str(r['image_id'])] = gpu_decode_row(engine, name, data)
                 continue
             data = batch if dtype == 'uint8' else batch.astype(np.float32) / np.float32(255.0)
             inp = grpcclient.InferInput('images', list(data.shape), dtype.upper())
@@ -175,6 +181,7 @@ def run(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     p.add_argument('--url', required=True, help='Triton gRPC host:port')
+    p.add_argument('--engine-url', help='frame engine gRPC host:port (the gpu_decode models)')
     p.add_argument('--manifest', required=True)
     p.add_argument('--images', required=True)
     p.add_argument('--model', action='append', required=True, metavar='NAME:uint8|fp32|gpu_decode')

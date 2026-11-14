@@ -189,6 +189,16 @@ services:
       context: docker/segmenter
       dockerfile: Dockerfile
 
+  frame-engine:
+    build:
+      context: .
+      dockerfile: docker/frame-engine/Dockerfile
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
+    volumes:
+      - ./frame_engine:/app/frame_engine:ro
+      - ./src/domain:/app/src/domain:ro
+
   curation-trainer:
     build:
       context: .

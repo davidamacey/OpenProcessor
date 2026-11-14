@@ -172,7 +172,12 @@ def test_no_start_starts_nothing(shimmed: Shimmed) -> None:
 def test_image_tag_mode_runs_local_images_without_pulling(shimmed: Shimmed) -> None:
     images = shimmed.state / 'images'
     images.mkdir()
-    for name in ('openprocessor', 'openprocessor-export', 'openprocessor-triton'):
+    for name in (
+        'openprocessor',
+        'openprocessor-export',
+        'openprocessor-triton',
+        'openprocessor-frame-engine',
+    ):
         (images / f'opinst_{name}_localtest').write_text(f'opinst/{name}@sha256:{"0" * 64}\n')
     result = install(shimmed, '--image-tag', 'localtest', OP_IMAGE_REPO='opinst')
     assert result.returncode == 0, result.stderr[-2000:]
@@ -459,7 +464,12 @@ def test_local_release_dir_and_local_image_tags_install_end_to_end(shimmed: Shim
     # local-only tags. Nothing is fetched from GitHub or Docker Hub.
     images = shimmed.state / 'images'
     images.mkdir()
-    for name in ('openprocessor', 'openprocessor-export', 'openprocessor-triton'):
+    for name in (
+        'openprocessor',
+        'openprocessor-export',
+        'openprocessor-triton',
+        'openprocessor-frame-engine',
+    ):
         (images / f'opinst_{name}_localtest').write_text(f'opinst/{name}@sha256:{"0" * 64}\n')
     pinned = f'opensearchproject/opensearch:3.9.0@{fake_digest("opensearch")}'
     (images / pinned.replace('/', '_').replace(':', '_').replace('@', '_')).write_text(
@@ -579,6 +589,7 @@ def test_third_party_images_are_pinned_and_verified(shimmed: Shimmed) -> None:
         ('api', 'openprocessor'),
         ('export', 'openprocessor-export'),
         ('triton', 'openprocessor-triton'),
+        ('frame_engine', 'openprocessor-frame-engine'),
     ):
         ref = f'davidamacey/{name}@{fake_digest(key)}'
         (images / ref.replace('/', '_').replace(':', '_').replace('@', '_')).write_text(

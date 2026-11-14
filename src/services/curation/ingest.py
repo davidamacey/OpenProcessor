@@ -139,10 +139,13 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
         capture_reader: Callable[[bytes], Awaitable[CaptureMetadata]] | None = None,
         location_policy: Callable[[], Awaitable[str]] | None = None,
         class_ensurer: ClassEnsurer | None = None,
+        frame_engine: AsyncTritonPool | Any | None = None,
     ) -> None:
         # Accept either a wrapper exposing `.client` or a raw AsyncOpenSearch.
         self.opensearch = getattr(opensearch, 'client', opensearch)
         self.triton_pool = triton_pool
+        # A pool on the frame engine's address (src/clients/frame_engine.py); None: no GPU decode.
+        self.frame_engine = frame_engine
         self.registry = registry
         self.profile = profile
         self.secondary_profile = secondary_profile

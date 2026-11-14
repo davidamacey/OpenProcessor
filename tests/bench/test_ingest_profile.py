@@ -19,7 +19,8 @@ def _ns(tmp_path: Path, manifest: Path, **over: object):
     argv = [
         'run', 'setB', str(manifest), '--api-url', 'http://api.test',
         '--api-container', 'a', '--triton-container', 't', '--out-root', str(tmp_path),
-        '--triton-metrics-url', 'http://tr.test/metrics', '--path-map', '/h=/c',
+        '--triton-metrics-url', 'http://tr.test/metrics',
+        '--frame-engine-metrics-url', 'http://fe.test/metrics', '--path-map', '/h=/c',
     ]  # fmt: skip
     return ip._parser().parse_args(argv)
 
@@ -34,6 +35,7 @@ def test_the_protocol_values_are_fixed(manifest: Path, tmp_path: Path) -> None:
     assert args.slug_prefix == 'sp0-setb'  # project slugs are lower case
     assert args.path_map == ['/h=/c']
     assert args.triton_metrics_url == 'http://tr.test/metrics'
+    assert args.frame_engine_metrics_url == 'http://fe.test/metrics'
 
 
 def test_observer_reports_api_cpu_delta_and_mean_triton_cpu() -> None:

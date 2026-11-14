@@ -24,7 +24,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-SCOPE = ('src/', 'scripts/', 'export/', 'docker/')
+SCOPE = ('src/', 'scripts/', 'export/', 'docker/', 'frame_engine/')
 LOCK_HELPERS = frozenset({'exclusive_start_lock', 'exclusive_file_lock'})
 FCNTL_CALLS = frozenset({'flock', 'lockf'})
 LOCK_PACKAGES = frozenset({'filelock', 'portalocker'})

@@ -1,4 +1,4 @@
-"""Repetitions, page-cache drop, load average and the ``gpu_image_prep`` stage block (SP0)."""
+"""Repetitions, page-cache drop, load average and the frame engine stage block (SP0)."""
 
 from __future__ import annotations
 
@@ -17,24 +17,24 @@ from tests.bench.test_run_baseline import FakeStack, _args
 if TYPE_CHECKING:
     from pathlib import Path
 
-TRITON = """\
-# HELP op_gpu_prep_stage_seconds gpu_image_prep stage wall seconds
-# TYPE op_gpu_prep_stage_seconds counter
-op_gpu_prep_stage_seconds{{stage="decode"}} {decode}
-op_gpu_prep_stage_seconds{{stage="crop_jpeg"}} {jpeg}
-# HELP op_gpu_prep_stage_observations images that ran a gpu_image_prep stage
-# TYPE op_gpu_prep_stage_observations counter
-op_gpu_prep_stage_observations{{stage="decode"}} {n}
-op_gpu_prep_stage_observations{{stage="crop_jpeg"}} {n}
+ENGINE = """\
+# HELP op_frame_engine_stage_seconds_total Frame engine stage wall seconds.
+# TYPE op_frame_engine_stage_seconds_total counter
+op_frame_engine_stage_seconds_total{{stage="decode"}} {decode}
+op_frame_engine_stage_seconds_total{{stage="crop_jpeg"}} {jpeg}
+# HELP op_frame_engine_stage_observations_total Images that ran a frame engine stage.
+# TYPE op_frame_engine_stage_observations_total counter
+op_frame_engine_stage_observations_total{{stage="decode"}} {n}
+op_frame_engine_stage_observations_total{{stage="crop_jpeg"}} {n}
 """
 
 
-class TritonStack(FakeStack):
+class EngineStack(FakeStack):
     def handler(self, request: httpx.Request) -> httpx.Response:
-        if request.url.path == '/triton-metrics':
-            self.triton_reads = getattr(self, 'triton_reads', 0) + 1
-            k = 0 if self.triton_reads % 2 == 1 else 1  # odd read = before, even = after
-            return httpx.Response(200, text=TRITON.format(decode=3.0 * k, jpeg=1.0 * k, n=6 * k))
+        if request.url.path == '/engine-metrics':
+            self.engine_reads = getattr(self, 'engine_reads', 0) + 1
+            k = 0 if self.engine_reads % 2 == 1 else 1  # odd read = before, even = after
+            return httpx.Response(200, text=ENGINE.format(decode=3.0 * k, jpeg=1.0 * k, n=6 * k))
         return super().handler(request)
 
 
@@ -120,22 +120,24 @@ def test_the_summary_has_the_median_and_range(manifest: Path, tmp_path: Path) ->
     assert summary['noisy_reps'] == []
 
 
-def test_gpu_prep_stage_block_from_the_triton_metrics_delta(manifest: Path, tmp_path: Path) -> None:
+def test_the_stage_block_comes_from_the_frame_engine_metrics_delta(
+    manifest: Path, tmp_path: Path
+) -> None:
     args = _args(
         manifest,
         tmp_path,
-        ['--triton-metrics-url', 'http://api.test/triton-metrics', '--reps', '1'],
+        ['--frame-engine-metrics-url', 'http://api.test/engine-metrics', '--reps', '1'],
     )
-    (report,) = _reps(args, TritonStack(), drops=[], loads=[(1.0, 1.0, 1.0)] * 2)
-    stages = report['gpu_prep_stages']
+    (report,) = _reps(args, EngineStack(), drops=[], loads=[(1.0, 1.0, 1.0)] * 2)
+    stages = report['frame_engine_stages']
     assert stages['decode'] == {'seconds': 3.0, 'observations': 6.0, 'mean_s': 0.5, 'share': 0.75}
     assert stages['crop_jpeg']['share'] == 0.25
-    assert 'gpu_prep_stages' in (tmp_path / 'report.json').read_text()
-    assert '### gpu_image_prep stages' in (tmp_path / 'report.md').read_text()
+    assert 'frame_engine_stages' in (tmp_path / 'report.json').read_text()
+    assert '### Frame engine stages' in (tmp_path / 'report.md').read_text()
 
 
-def test_gpu_prep_stages_is_empty_without_the_series() -> None:
-    assert rep.gpu_prep_stages({'nv_inference_count{model=x}': 5.0}) == {}
+def test_the_stage_block_is_empty_without_the_series() -> None:
+    assert rep.frame_engine_stages({'nv_inference_count{model=x}': 5.0}) == {}
 
 
 def test_gpu_util_summary_has_the_median(manifest: Path) -> None:

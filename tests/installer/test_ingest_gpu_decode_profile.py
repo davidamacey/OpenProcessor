@@ -1,6 +1,7 @@
 """The GPU decode follows the hardware: each installer profile says whether its card has
-room for the gpu_image_prep model (about 8.5 GB on top of the profile's Triton models), the
-installer writes OP_INGEST_GPU_DECODE from it, and ``openprocessor gpu plan`` says what is on."""
+room for the frame engine at its working sizes (on top of the profile's Triton models), the
+installer writes OP_INGEST_GPU_DECODE and the engine's sizes from it, and ``openprocessor gpu
+plan`` says what is on."""
 
 from __future__ import annotations
 
@@ -25,12 +26,25 @@ if TYPE_CHECKING:
 inst = test_cli_project.inst
 
 PROFILES = REPO_ROOT / 'config_templates' / 'profiles'
-GPU_IMAGE_PREP_MIB = int(
-    re.search(
-        r'GPU_MIB_PER_INSTANCE"\s*value:\s*{\s*string_value:\s*"(\d+)"',
-        (REPO_ROOT / 'models' / 'gpu_image_prep' / 'config.pbtxt').read_text(),
-    ).group(1)  # type: ignore[union-attr]
-)
+
+
+def _cli_gpu_mib(name: str) -> int:
+    text = (REPO_ROOT / 'scripts' / 'lib' / 'cli_gpu.sh').read_text()
+    return int(re.search(rf'^{name}=(\d+)$', text, re.M).group(1))  # type: ignore[union-attr]
+
+
+CONTEXT_MIB = _cli_gpu_mib('FRAME_ENGINE_CONTEXT_MIB')
+IDLE_CONTEXT_MIB = _cli_gpu_mib('FRAME_ENGINE_IDLE_CONTEXT_MIB')
+#: Each engine size in the profile file and the .env key the installer writes it to.
+ENGINE_KEYS = {
+    'frame_engine_region_mib': 'OP_FRAME_ENGINE_REGION_MIB',
+    'frame_engine_pool_mib': 'OP_FRAME_ENGINE_POOL_MIB',
+    'frame_engine_budget_mib': 'OP_FRAME_ENGINE_BUDGET_MIB',
+    'frame_engine_lanes': 'OP_FRAME_ENGINE_LANES',
+    'frame_engine_workers': 'OP_FRAME_ENGINE_WORKERS',
+}
+#: The engine at its working sizes (region 1024 MiB, pool cap 4096 MiB) and its context.
+ENGINE_MIB = CONTEXT_MIB + 1024 + 4096
 # The free memory each profile's own models need
 # (setup-openprocessor.sh _triton_need_gb, the same figures `gpu plan` checks the primary against).
 MODELS_MIB = {'minimal': 8192, 'standard': 12288, 'full': 17408}
@@ -63,9 +77,8 @@ def _profile(name: str) -> dict:
 def test_profile_turns_the_gpu_decode_on_only_where_the_card_has_room(name: str) -> None:
     flag = _profile(name)['ingest_gpu_decode']
     assert flag is EXPECTED[name]
-    instances = _profile(name)['gpu_image_prep_instances']
     floor = _installer_floor_mib(name)
-    fits = MODELS_MIB[name] + instances * GPU_IMAGE_PREP_MIB <= floor
+    fits = MODELS_MIB[name] + ENGINE_MIB <= floor
     # The GPU decode is on only when the profile's smallest card holds it beside the models.
     assert flag == fits
 
@@ -107,6 +120,9 @@ def _generate_env(tmp_path: Path, name: str, existing: str | None = None) -> str
 def test_setup_writes_the_flag_for_the_profile(name: str, tmp_path: Path) -> None:
     text = _generate_env(tmp_path, name)
     assert f'\nOP_INGEST_GPU_DECODE={int(EXPECTED[name])}\n' in text
+    p = _profile(name)
+    for key, env in ENGINE_KEYS.items():
+        assert f'\n{env}={p[key]}\n' in text
 
 
 def test_a_forced_regeneration_keeps_an_explicit_choice(tmp_path: Path) -> None:
@@ -132,6 +148,8 @@ def test_installer_plan_matches_the_profile_file(
     assert rc == 0
     assert kv['GPU_PROFILE'] == profile
     assert kv['OP_INGEST_GPU_DECODE'] == str(int(_profile(profile)['ingest_gpu_decode']))
+    for key, env in ENGINE_KEYS.items():
+        assert kv[env] == str(_profile(profile)[key])
 
 
 def test_gpu_plan_says_the_gpu_decode_is_on_by_default(shimmed: Shimmed, inst: Path) -> None:
@@ -162,40 +180,53 @@ def test_gpu_plan_warns_but_does_not_refuse_a_forced_on_card_without_room(
     shimmed: Shimmed, inst: Path
 ) -> None:
     shimmed.gpus('0, NVIDIA RTX A6000, 24576, 100, 8.6\n')
-    set_env(inst, GPU_PROFILE='standard', TRITON_GPU_ID='0', OP_INGEST_GPU_DECODE='1')
+    set_env(
+        inst,
+        GPU_PROFILE='standard',
+        TRITON_GPU_ID='0',
+        OP_INGEST_GPU_DECODE='1',
+        OP_FRAME_ENGINE_REGION_MIB='1024',
+        OP_FRAME_ENGINE_POOL_MIB='4096',
+    )
     done = cli(shimmed, inst, 'gpu', 'plan')
     assert 'GPU decode (ingest): on (OP_INGEST_GPU_DECODE=1 in .env)' in done.stdout
-    assert 'need about 20992 MiB' not in done.stdout  # 24 GB holds 12288 + 8704
+    need = f'need about {12288 + ENGINE_MIB} MiB'
+    assert need not in done.stdout  # 24 GB holds the standard models and the engine
     shimmed.gpus(TI_12GB)
     done = cli(shimmed, inst, 'gpu', 'plan')
-    assert 'need about 20992 MiB' in done.stdout + done.stderr
+    assert need in done.stdout + done.stderr
     assert 'ingest stays on the CPU path' in done.stdout + done.stderr
 
 
-def test_gpu_plan_sizes_the_gpu_decode_by_the_installed_instance_count(
-    shimmed: Shimmed, inst: Path
-) -> None:
+def test_gpu_plan_sizes_the_engine_from_its_settings(shimmed: Shimmed, inst: Path) -> None:
     shimmed.gpus(A6000)
-    set_env(inst, GPU_PROFILE='full', TRITON_GPU_ID='0', OP_INGEST_GPU_DECODE='1')
-    cfg = inst / 'models' / 'gpu_image_prep' / 'config.pbtxt'
-    cfg.parent.mkdir(parents=True, exist_ok=True)
-    cfg.write_text(
-        (REPO_ROOT / 'models' / 'gpu_image_prep' / 'config.pbtxt')
-        .read_text()
-        .replace('count: 1', 'count: 3')
+    set_env(
+        inst,
+        GPU_PROFILE='full',
+        TRITON_GPU_ID='0',
+        OP_INGEST_GPU_DECODE='1',
+        OP_FRAME_ENGINE_REGION_MIB='1024',
+        OP_FRAME_ENGINE_POOL_MIB='4096',
     )
     done = cli(shimmed, inst, 'gpu', 'plan')
-    assert f'about {3 * GPU_IMAGE_PREP_MIB} MiB more on the primary card' in done.stdout
+    assert f'the frame engine holds about {ENGINE_MIB} MiB more on the primary card' in done.stdout
+    set_env(inst, OP_FRAME_ENGINE_REGION_MIB='512', OP_FRAME_ENGINE_POOL_MIB='2048')
+    done = cli(shimmed, inst, 'gpu', 'plan')
+    assert f'about {CONTEXT_MIB + 512 + 2048} MiB more on the primary card' in done.stdout
 
 
-def test_gpu_plan_prefers_the_registrys_measured_figure(shimmed: Shimmed, inst: Path) -> None:
-    shimmed.gpus(A6000)
-    set_env(inst, GPU_PROFILE='full', TRITON_GPU_ID='0', OP_INGEST_GPU_DECODE='1')
-    shimmed.flag('postgres_container')
-    shimmed.flag('device_mib', '9000\n')
+def test_gpu_plan_off_states_the_small_engine(shimmed: Shimmed, inst: Path) -> None:
+    shimmed.gpus(TI_12GB)
+    set_env(
+        inst,
+        GPU_PROFILE='small',
+        TRITON_GPU_ID='0',
+        OP_INGEST_GPU_DECODE='0',
+        OP_FRAME_ENGINE_REGION_MIB='16',
+        OP_FRAME_ENGINE_POOL_MIB='64',
+        OP_FRAME_ENGINE_BUDGET_MIB='64',
+    )
     done = cli(shimmed, inst, 'gpu', 'plan')
-    assert 'about 9000 MiB more on the primary card' in done.stdout
-    shimmed.flag('postgres_container', '')
-    (shimmed.state / 'device_mib').unlink()
-    done = cli(shimmed, inst, 'gpu', 'plan')
-    assert f'about {GPU_IMAGE_PREP_MIB} MiB more on the primary card' in done.stdout
+    # never called: its idle size (region and the frame budget it reserves), 342 MiB measured
+    assert f'holds about {IDLE_CONTEXT_MIB + 16 + 64} MiB on the primary card' in done.stdout
+    assert IDLE_CONTEXT_MIB + 16 + 64 == 342

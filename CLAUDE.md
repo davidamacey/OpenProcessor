@@ -89,6 +89,7 @@ connection pooler for PostgreSQL.
 | Service | Profile | Port | Role |
 |---|---|---|---|
 | `triton-server` | none | 4600 HTTP, 4601 gRPC, 4602 metrics | TensorRT models, explicit model control |
+| `frame-engine` | none | 4613 metrics (gRPC internal) | GPU decode and prep: decodes each photo once, calls the Triton models as a client (`frame_engine/`) |
 | `api` | none | 4603 | FastAPI, all routes |
 | `opensearch` | none | 4607 | k-NN store for items, images and vectors (control data is in PostgreSQL) |
 | `postgres`, `valkey` | none | | PostgreSQL 18 (projects, classes, configs, jobs, events, spaces, partitions) and the Valkey 9 task broker; internal only, passwords from `secrets/` |
@@ -268,7 +269,7 @@ Settings live in `.env` (template `env.template`). The "Curation quick-config"
 block lists the keys the curation tiers need. Index names are not
 configurable: they come from the project. Ports: API 4603, Triton 4600-4602,
 Prometheus 4604, Grafana 4605, Loki 4606, OpenSearch 4607, Dashboards 4608,
-MLflow 4609, DCGM 4610, segmenter 4611, VLM 4612, Cropwright 5184. Set `OP_BIND_ADDRESS` to
+MLflow 4609, DCGM 4610, segmenter 4611, VLM 4612, frame engine metrics 4613, Cropwright 5184. Set `OP_BIND_ADDRESS` to
 publish beyond loopback (the installer asks for consent).
 
 The API has no authentication. Do not expose it. See [SECURITY.md](SECURITY.md).

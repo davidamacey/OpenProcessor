@@ -1,15 +1,20 @@
 """The embed pass on the GPU decode (#259): a photo at or above the ingest size gate is sent to
-``gpu_image_prep`` with its stored boxes and never decoded in the API; everything else, and every
-photo the model declines, takes the CPU path as before. No GPU here: a fake pool answers."""
+the frame engine with its stored boxes (protocol version 1, the ``boxes`` input) and never
+decoded in the API; everything else, and every photo the engine declines, takes the CPU path as
+before. No GPU here: a fake pool on the engine's address answers through the real client."""
 
 from __future__ import annotations
 
 import dataclasses
+import json
+import struct
 from typing import TYPE_CHECKING, Any
 
+import grpc
 import numpy as np
 import pytest
 from prometheus_client import REGISTRY
+from tritonclient.utils import InferenceServerException
 
 from curation.reprocess_fixtures import (
     F,
@@ -25,10 +30,11 @@ from curation.reprocess_fixtures import (
     servable_root,
 )
 from src.config.curation import CurationConfig
+from src.domain import frame_engine_wire as wire
 from src.services.curation import ingest_gpu_decode, reprocess_embed
 from src.services.curation.reprocess_embed import EmbedTarget, reembed_items
 from src.services.curation.reprocess_embed_spec import EmbedSpec
-from src.services.curation.reprocess_gpu_embed import BOXES_INPUT, gpu_embed_route
+from src.services.curation.reprocess_gpu_embed import gpu_embed_route
 from src.services.curation.reprocess_images import process_images
 
 
@@ -37,65 +43,83 @@ if TYPE_CHECKING:
 
 CROP_BOX = (0.1, 0.1, 0.6, 0.6)
 REGION_BOX = (0.2, 0.2, 0.4, 0.3)
-PARAMS = {'DETECTOR_MODEL': 'primary_end2end', 'NET_SIZE': '320', 'LETTERBOX_FILL': '114'}
 
 
 class _Result:
     def __init__(self, outputs: dict[str, np.ndarray]) -> None:
         self.outputs = outputs
 
-    def as_numpy(self, name: str) -> np.ndarray:
-        return self.outputs[name]
+    def as_numpy(self, name: str) -> np.ndarray | None:
+        return self.outputs.get(name)
+
+
+def _text(value: str) -> np.ndarray:
+    return np.array([value.encode()], dtype=np.object_)
 
 
 class GpuTriton(FakeTriton):
-    """``gpu_image_prep`` in stored-box mode: one row per box sent, row ``k`` is ``[1, k, 0]``."""
+    """Triton with the PE encoder and the detector loaded (the models the engine calls)."""
 
-    def __init__(
-        self, *, status: str = 'ok', inputs: tuple[str, ...] = ('jpeg', 'embed_crops', 'boxes')
-    ) -> None:
+    def __init__(self) -> None:
         super().__init__([])
-        self.status = status
-        self.model_inputs = list(inputs)
-        self.streams: list[dict[str, Any]] = []
-        self.fail: Exception | None = None
-        self.rows_short = False
 
     async def is_model_ready(self, _model: str) -> bool:
         return True
 
-    async def get_model_parameters(self, model: str) -> dict[str, str]:
-        assert model == ingest_gpu_decode.GPU_IMAGE_PREP_MODEL
-        return PARAMS
 
-    async def get_model_input_names(self, model: str) -> list[str]:
-        assert model == ingest_gpu_decode.GPU_IMAGE_PREP_MODEL
-        return self.model_inputs
+class Engine:
+    """The frame engine in stored-box mode: one row per box sent, row ``k`` is ``[1, k, 0]``."""
 
-    async def stream_one(self, model: str, inputs: list) -> _Result:
-        assert model == ingest_gpu_decode.GPU_IMAGE_PREP_MODEL
+    def __init__(self, *, status: str = 'ok') -> None:
+        self.status = status
+        self.streams: list[dict[str, Any]] = []
+        self.fail: Exception | None = None
+        self.rows_short = False
+        self.ready = True
+
+    async def is_model_ready(self, model: str) -> bool:
+        return model == wire.MODEL_NAME and self.ready
+
+    async def infer(self, model: str, inputs: list, outputs: list, **_k: Any) -> _Result:
+        assert model == wire.MODEL_NAME
         by_name = {i.name(): i for i in inputs}
-        boxes = np.frombuffer(by_name[BOXES_INPUT]._raw_content, np.float64).reshape(-1, 4)
+        raw = by_name['image']._raw_content
+        (n_bytes,) = struct.unpack_from('<I', raw)
+        plan_raw = by_name['plan']._raw_content
+        (n_plan,) = struct.unpack_from('<I', plan_raw)
+        boxes = np.frombuffer(by_name['boxes']._raw_content, np.float64).reshape(-1, 4)
+        plan = wire.parse_plan(plan_raw[4 : 4 + n_plan], has_boxes=True)
         self.streams.append(
             {
-                'jpeg': bytes(by_name['jpeg']._raw_content),
+                'jpeg': bytes(raw[4 : 4 + n_bytes]),
                 'boxes': boxes,
-                'dtype': by_name[BOXES_INPUT].datatype(),
+                'dtype': by_name['boxes'].datatype(),
                 'names': sorted(by_name),
+                'plan': plan,
             }
         )
         if self.fail is not None:
             raise self.fail
         if self.status != 'ok':
-            return _Result({'status': np.array([self.status.encode()], np.object_)})
+            failed = {b: {'status': 'error', 'reason': 'image_failed'} for b in plan.branches}
+            return _Result(
+                {
+                    'status': _text(self.status),
+                    'decode_route': _text('none'),
+                    'branch_status': _text(json.dumps(failed)),
+                }
+            )
         n = boxes.shape[0] - (1 if self.rows_short else 0)
         rows = np.array([[1.0, float(k), 0.0] for k in range(n)], np.float32).reshape(-1, 3)
         return _Result(
             {
-                'status': np.array([b'ok'], np.object_),
+                'status': _text('ok'),
+                'decode_route': _text('gpu'),
+                'branch_status': _text(json.dumps({b: {'status': 'ok'} for b in plan.branches})),
                 'size': np.array([400, 300], np.int32),
                 'whole_embedding': np.array([0.0, 0.0, 2.0], np.float32),
                 'crop_embeddings': rows,
+                'crop_embedded': np.ones(n, np.bool_),
             }
         )
 
@@ -122,7 +146,7 @@ def _sample(route: str) -> float:
 def _world(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    triton: GpuTriton,
+    engine: Engine,
     *,
     gate: float = 0.1,
     gpu_decode: bool = True,
@@ -143,7 +167,8 @@ def _world(
     )
     fake = make_fake([doc], [{'image_id': 'img-1', 'image_path': str(path)}])
     pe = FakePE()
-    service = make_service(fake, triton, pe)
+    service = make_service(fake, GpuTriton(), pe)
+    service.frame_engine = engine
     service.config = dataclasses.replace(
         CurationConfig(), ingest_gpu_decode=gpu_decode, ingest_gpu_min_megapixels=gate
     )
@@ -155,7 +180,7 @@ def _world(
 async def test_a_photo_above_the_gate_is_embedded_from_the_gpu_decode_with_its_stored_boxes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    triton = GpuTriton()
+    triton = Engine()
     fake, pe, service, data, target = _world(tmp_path, monkeypatch, triton)
 
     def no_cpu_decode(*_a: Any, **_kw: Any) -> Any:
@@ -170,7 +195,10 @@ async def test_a_photo_above_the_gate_is_embedded_from_the_gpu_decode_with_its_s
     [call] = triton.streams
     assert call['jpeg'] == data  # the stored file as it is, decoded once on the GPU
     assert call['dtype'] == 'FP64'  # the stored floats exactly, so the rectangle is the CPU's
-    assert call['names'] == ['boxes', 'jpeg']
+    assert call['names'] == ['boxes', 'image', 'plan']
+    assert call['plan'].branches == ('embed_frame', 'embed_crops')
+    assert call['plan'].crops == 'none'
+    assert call['plan'].embed == wire.EmbedSpec('pe_image_encoder', 336, 32)
     # The crop box, then the embeddable region boxes; a region box equal to the crop box is
     # sent once and the rejected box not at all.
     np.testing.assert_array_equal(call['boxes'], np.array([CROP_BOX, REGION_BOX], np.float64))
@@ -194,7 +222,7 @@ async def test_a_photo_above_the_gate_is_embedded_from_the_gpu_decode_with_its_s
 async def test_a_photo_below_the_gate_keeps_the_cpu_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    triton = GpuTriton()
+    triton = Engine()
     fake, pe, service, _data, target = _world(tmp_path, monkeypatch, triton, gate=3.0)
     before = _sample('cpu_small')
     route = await gpu_embed_route(service)
@@ -213,6 +241,14 @@ async def test_a_photo_below_the_gate_keeps_the_cpu_path(
         ('gpu_memory', None, False, 'cpu_gpu_memory'),
         ('over_budget', None, False, 'cpu_over_budget'),
         ('ok', RuntimeError('stream closed'), False, 'cpu_call_failed'),
+        (
+            'ok',
+            InferenceServerException(
+                msg='overload', status=str(grpc.StatusCode.RESOURCE_EXHAUSTED)
+            ),
+            False,
+            'cpu_gpu_memory',
+        ),
         ('ok', None, True, 'cpu_box_count'),
     ],
 )
@@ -225,7 +261,7 @@ async def test_a_photo_the_gpu_decode_declines_falls_back_to_the_cpu(
     short: bool,
     route: str,
 ) -> None:
-    triton = GpuTriton(status=status)
+    triton = Engine(status=status)
     triton.fail = fail
     triton.rows_short = short
     fake, pe, service, _data, target = _world(tmp_path, monkeypatch, triton)
@@ -240,13 +276,12 @@ async def test_a_photo_the_gpu_decode_declines_falls_back_to_the_cpu(
 
 
 @pytest.mark.asyncio
-async def test_a_model_without_the_boxes_input_is_never_called(
+async def test_an_engine_that_is_not_ready_gives_no_route(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Model files older than the API (not re-copied): fail closed to the CPU path once, not one
-    refused call per photo."""
-    triton = GpuTriton(inputs=('jpeg', 'embed_crops'))
+    triton = Engine()
     _fake, _pe, service, _data, _target = _world(tmp_path, monkeypatch, triton)
+    triton.ready = False
     assert await gpu_embed_route(service) is None
 
 
@@ -254,7 +289,7 @@ async def test_a_model_without_the_boxes_input_is_never_called(
 async def test_gpu_decode_off_gives_no_route(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    triton = GpuTriton()
+    triton = Engine()
     _fake, _pe, service, _data, _target = _world(tmp_path, monkeypatch, triton, gpu_decode=False)
     assert await gpu_embed_route(service) is None
 
@@ -263,7 +298,7 @@ async def test_gpu_decode_off_gives_no_route(
 async def test_the_reprocess_embed_scope_takes_the_gpu_route(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    triton = GpuTriton()
+    triton = Engine()
     fake, pe, service, _data, _target = _world(tmp_path, monkeypatch, triton)
     [res], cancelled = await process_images(
         fake,
@@ -283,7 +318,7 @@ async def test_the_reprocess_embed_scope_takes_the_gpu_route(
 async def test_only_the_parts_asked_for_are_sent_and_written(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    triton = GpuTriton()
+    triton = Engine()
     fake, pe, service, _data, target = _world(tmp_path, monkeypatch, triton)
     counts = await reembed_items(
         fake, pe, [target], parts=frozenset({'region'}), gpu=await gpu_embed_route(service)

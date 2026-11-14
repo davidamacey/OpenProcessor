@@ -361,12 +361,20 @@ def test_one_gpu_stays_a_plain_id() -> None:
     assert kv['TRITON_GPU_ID'] == kv['API_GPU_ID'] == '2'
 
 
-def _decode_mib() -> int:
-    """Per-instance footprint of gpu_image_prep, read from its Triton config."""
-    text = (REPO_ROOT / 'models' / 'gpu_image_prep' / 'config.pbtxt').read_text()
-    return int(
-        re.search(r'GPU_MIB_PER_INSTANCE"\s*value:\s*{\s*string_value:\s*"(\d+)"', text).group(1)  # type: ignore[union-attr]
-    )
+def _cli_gpu_mib(name: str) -> int:
+    text = (REPO_ROOT / 'scripts' / 'lib' / 'cli_gpu.sh').read_text()
+    return int(re.search(rf'^{name}=(\d+)$', text, re.M).group(1))  # type: ignore[union-attr]
+
+
+def _engine_mib(region: int, pool: int) -> int:
+    """The working frame engine on the Triton card: its context (scripts/lib/cli_gpu.sh), region
+    and pool cap."""
+    return _cli_gpu_mib('FRAME_ENGINE_CONTEXT_MIB') + region + pool
+
+
+def _idle_engine_mib(region: int, budget: int) -> int:
+    """The never-called frame engine (decode off): its idle context, region and frame budget."""
+    return _cli_gpu_mib('FRAME_ENGINE_IDLE_CONTEXT_MIB') + region + budget
 
 
 def _profile_json(name: str) -> dict:
@@ -374,14 +382,13 @@ def _profile_json(name: str) -> dict:
 
 
 def _planned_triton_mib(kv: dict[str, str]) -> int:
-    """Models plus the GPU decode the plan turns on, on the Triton card (#373)."""
+    """Models plus the frame engine at the sizes the plan writes, on the Triton card (#373)."""
     profile = kv['GPU_PROFILE']
     models = {'minimal': 8192, 'small': 10240, 'standard': 12288, 'full': 17408}[profile]
-    data = _profile_json(profile)
-    decode = (
-        _decode_mib() * data['gpu_image_prep_instances'] if kv['OP_INGEST_GPU_DECODE'] == '1' else 0
-    )
-    return models + decode
+    region = int(kv['OP_FRAME_ENGINE_REGION_MIB'])
+    if kv['OP_INGEST_GPU_DECODE'] == '1':
+        return models + _engine_mib(region, int(kv['OP_FRAME_ENGINE_POOL_MIB']))
+    return models + _idle_engine_mib(region, int(kv['OP_FRAME_ENGINE_BUDGET_MIB']))
 
 
 HOSTS = {
@@ -422,7 +429,7 @@ def test_the_planned_triton_footprint_fits_the_triton_card(host: str) -> None:
         ('3x24', 'standard', '0'),
     ],
 )
-def test_full_needs_the_card_that_holds_two_decode_instances(
+def test_full_needs_the_card_that_holds_the_gpu_decode(
     host: str, profile: str, decode: str
 ) -> None:
     rc, kv, _ = plan(HOSTS[host])
@@ -430,7 +437,7 @@ def test_full_needs_the_card_that_holds_two_decode_instances(
     assert (kv['GPU_PROFILE'], kv['OP_INGEST_GPU_DECODE']) == (profile, decode)
 
 
-def test_the_full_threshold_is_the_models_plus_two_decode_instances() -> None:
+def test_the_full_threshold_is_the_models_plus_the_working_engine() -> None:
     done = subprocess.run(
         ['bash', '-c', f'OP_SOURCE_ONLY=1 source "{SCRIPT}"; _profile_min_free_gb full'],
         check=False,
@@ -439,5 +446,6 @@ def test_the_full_threshold_is_the_models_plus_two_decode_instances() -> None:
         timeout=30,
     )
     floor_mib = int(done.stdout.strip()) * 1024
-    need = 17408 + _profile_json('full')['gpu_image_prep_instances'] * _decode_mib()
+    full = _profile_json('full')
+    need = 17408 + _engine_mib(full['frame_engine_region_mib'], full['frame_engine_pool_mib'])
     assert need <= floor_mib

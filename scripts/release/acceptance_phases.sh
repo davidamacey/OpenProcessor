@@ -409,7 +409,7 @@ ph_metrics() {
 # and the CPU fallbacks stay under the bound. Absent counters skip this part only.
 # cpu_gpu_off and cpu_small are policy (GPU decode off or not ready, image under the size gate), not fallbacks.
 check_gpu_route() {
-    local gpu fb tot pct tm="$TRITON_METRICS_URL"
+    local gpu fb tot pct tm="$FRAME_ENGINE_METRICS_URL"
     if ! grep -q '^op_decode_route_total{.*path="ingest"' "$BODY"; then
         ev "SKIP-PART: op_decode_route_total absent (build without the decode counter); GPU route checks not run"
         return 0
@@ -428,16 +428,16 @@ check_gpu_route() {
     awk -v p="$pct" -v m="$DECODE_FALLBACK_MAX_PCT" 'BEGIN { exit !(p + 0 <= m + 0) }' \
         || fail "GPU decode fallbacks ${pct}% exceed ${DECODE_FALLBACK_MAX_PCT}%"
     if [[ -z "$tm" ]]; then
-        ev "SKIP-PART: no --triton-metrics-url; op_gpu_prep_stage_* counters not checked"
+        ev "SKIP-PART: no --frame-engine-metrics-url; op_frame_engine_stage_* counters not checked"
         return 0
     fi
-    local out="$WORKDIR/triton.metrics" c
+    local out="$WORKDIR/frame_engine.metrics" c
     curl -sS --max-time "$HTTP_TIMEOUT" -o "$out" "$tm" 2>>"$WORKDIR/curl.err" \
-        || fail "cannot read Triton metrics at ${tm}"
-    for c in op_gpu_prep_stage_seconds op_gpu_prep_stage_observations; do
-        grep -q "^${c}" "$out" || fail "${c} missing on Triton's metrics port (${tm}) although the GPU route is active"
+        || fail "cannot read the frame engine metrics at ${tm}"
+    for c in op_frame_engine_stage_seconds_total op_frame_engine_stage_observations_total; do
+        grep -q "^${c}" "$out" || fail "${c} missing on the frame engine's metrics port (${tm}) although the GPU route is active"
     done
-    ev "Triton metrics carry op_gpu_prep_stage_seconds and _observations"
+    ev "Frame engine metrics carry op_frame_engine_stage_seconds_total and _observations_total"
 }
 
 ph_log_noise() {

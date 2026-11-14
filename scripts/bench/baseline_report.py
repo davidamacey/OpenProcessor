@@ -106,19 +106,21 @@ def percentile(values: list[float], pct: float) -> float:
     return ordered[low] + (ordered[high] - ordered[low]) * (rank - low)
 
 
-GPU_PREP_SERIES = re.compile(r'op_gpu_prep_stage_(seconds|observations)(?:_total)?\{stage=(\w+)\}')
+FRAME_ENGINE_SERIES = re.compile(
+    r'op_frame_engine_stage_(seconds|observations)(?:_total)?\{stage=(\w+)\}'
+)
 
 
-def gpu_prep_stages(counters: dict[str, float]) -> dict[str, dict[str, float]]:
+def frame_engine_stages(counters: dict[str, float]) -> dict[str, dict[str, float]]:
     """Per-stage seconds, images, mean seconds per image and share of the stage seconds.
 
-    Input is the Triton metrics counter delta of a run (the Prometheus parser appends ``_total``
-    to counter names, Triton does not). Stage seconds are sums over concurrent requests, so the
+    Input is the frame engine's metrics counter delta of a run (``--frame-engine-metrics-url``;
+    the series may carry the ``_total`` suffix or not). Stage seconds are sums over concurrent requests, so the
     share compares stages with each other and says nothing about wall time.
     """
     by_kind: dict[str, dict[str, float]] = {'seconds': {}, 'observations': {}}
     for key, value in counters.items():
-        if m := GPU_PREP_SERIES.fullmatch(key):
+        if m := FRAME_ENGINE_SERIES.fullmatch(key):
             by_kind[m.group(1)][m.group(2)] = value
     seconds, seen = by_kind['seconds'], by_kind['observations']
     total = sum(seconds.values())
@@ -249,9 +251,9 @@ def to_markdown(report: dict[str, Any]) -> str:
     storage = report.get('storage', {})
     lines += ['### Storage after settle', '']
     lines += _table(('measure', 'value'), [(k, _fmt(float(v))) for k, v in storage.items()])
-    prep = report.get('gpu_prep_stages', {})
+    prep = report.get('frame_engine_stages', {})
     if prep:
-        lines += ['### gpu_image_prep stages', '']
+        lines += ['### Frame engine stages', '']
         lines += _table(
             ('stage', 'images', 'sum s', 'mean ms / image', 'share'),
             [

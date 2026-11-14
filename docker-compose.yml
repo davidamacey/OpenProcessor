@@ -112,14 +112,17 @@ services:
       # over the in-process path whenever Triton reports it ready.
       - --load-model=pe_text_encoder
       # ===================================================================
+      # The frame engine registers one CUDA shared-memory region and sends the
+      # model inputs as slices of it (frame_engine/transport.py).
+      - --allow-client-shm=true
       - --log-verbose=0
       - --log-info=true
     environment:
       # TRITON_GPU_ID may list several cards. CUDA's default order is fastest
       # first; PCI order makes "gpus: [ 0 ]" mean the lowest listed id.
       - CUDA_DEVICE_ORDER=PCI_BUS_ID
-      # gpu_image_prep (GPU decode) compiles its CUDA kernels with CuPy; the
-      # server user's home is read-only.
+      # ocr_pipeline imports CuPy, which creates its kernel cache directory on
+      # import; the server user's home is read-only.
       - CUPY_CACHE_DIR=/tmp/cupy_cache
     shm_size: 8g
     ulimits:
@@ -134,6 +137,66 @@ services:
               device_ids: [ '${TRITON_GPU_ID:-0}' ]
               capabilities:
                 - gpu
+    networks:
+      - triton_net
+
+  # The frame engine (frame_engine/, docker/frame-engine/): decodes each photo
+  # once on the GPU, cuts every model input from that frame and calls the
+  # TensorRT models above as a Triton client, so a fault in decode or prep
+  # never reaches the model server. The API reaches it at
+  # OP_FRAME_ENGINE_URL (KServe v2 gRPC, model frame_engine). Same card as
+  # Triton by default: the inputs travel as slices of a CUDA shared-memory
+  # region registered with this card's Triton.
+  frame-engine:
+    image: ${OP_FRAME_ENGINE_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-frame-engine:${OP_IMAGE_TAG:-0.6.0}}
+    logging: *default-logging
+    restart: always
+    # Registering a CUDA shared-memory region fails when the registering
+    # process has the model server's process id (both are 1 without an init).
+    init: true
+    ports:
+      # Prometheus metrics (stage timing, overloads, region registrations); the gRPC
+      # front (8001) stays on the internal network.
+      - "${OP_BIND_ADDRESS:-127.0.0.1}:${FRAME_ENGINE_METRICS_PORT:-4613}:8002"
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      - CUDA_DEVICE_ORDER=PCI_BUS_ID
+      - OP_FRAME_ENGINE_TRITON_URL=${OP_FRAME_ENGINE_TRITON_URL:-triton-server:8001}
+      - OP_FRAME_ENGINE_TRANSPORT=${OP_FRAME_ENGINE_TRANSPORT:-cuda}
+      - OP_FRAME_ENGINE_REGION_MIB=${OP_FRAME_ENGINE_REGION_MIB:-1024}
+      - OP_FRAME_ENGINE_WORKERS=${OP_FRAME_ENGINE_WORKERS:-16}
+      - OP_FRAME_ENGINE_BUDGET_MIB=${OP_FRAME_ENGINE_BUDGET_MIB:-2048}
+      - OP_FRAME_ENGINE_MAX_IN_FLIGHT=${OP_FRAME_ENGINE_MAX_IN_FLIGHT:-128}
+      - OP_FRAME_ENGINE_CROP_MAX_SIDE=${OP_CROP_MAX_SIDE:-0}
+    ulimits:
+      memlock: -1
+    healthcheck:
+      # Ready means Triton answers and the region is registered (KServe ServerReady).
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import sys, tritonclient.grpc as g; sys.exit(0 if g.InferenceServerClient('127.0.0.1:8001').is_server_ready(client_timeout=4) else 1)",
+        ]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    deploy:
+      resources:
+        reservations:
+          memory: 2g
+          devices:
+            - driver: nvidia
+              device_ids: [ '${FRAME_ENGINE_GPU_ID:-${TRITON_GPU_ID:-0}}' ]
+              capabilities:
+                - gpu
+    depends_on:
+      triton-server:
+        condition: service_started
     networks:
       - triton_net
 

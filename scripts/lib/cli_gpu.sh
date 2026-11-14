@@ -8,7 +8,12 @@
 [[ -n "${_CLI_GPU_SH_LOADED:-}" ]] && return 0
 _CLI_GPU_SH_LOADED=1
 
-GPU_IMAGE_PREP_FALLBACK_MIB=8704
+# The frame engine's GPU memory besides its region (measured on an A6000, frame engine image,
+# 2026-11-14). Working: the CUDA context, CuPy, NVRTC and the nvJPEG lane buffers it grows once it
+# decodes, on top of its CuPy pool cap. Idle (never called, OP_INGEST_GPU_DECODE=0): the context
+# on top of the frame budget it reserves at start; 342 MiB at 16/64/64 MiB, 1 lane, 1 worker.
+FRAME_ENGINE_CONTEXT_MIB=1024
+FRAME_ENGINE_IDLE_CONTEXT_MIB=262
 
 # MiB one instance of MODEL takes on its card: the registry's measured value when the database
 # is up (model_engines.device_mib_measured), else the GPU_MIB_PER_INSTANCE the model ships in
@@ -75,22 +80,22 @@ _gpu_plan_placement() {
     return "$rc"
 }
 
-# Say whether the GPU decode is on and why. Refuses nothing: the GPU decode loads on first
-# use and falls back to the CPU path per image, so a forced-on card without room only warns.
+# Say whether the GPU decode is on and why. Refuses nothing: the frame engine runs on Triton's
+# card in every profile and ingest falls back to the CPU path per image, so a forced-on card
+# without room only warns. Its size (.env, else the engine's defaults): working, the context plus
+# its region plus its pool cap; idle (decode off, never called), the idle context plus its region
+# plus its frame budget.
 _gpu_plan_decode() {
     local ids="$1" table="$2" running="$3" primary_mib="$4" setting profile source primary
-    local decode_mib per_instance instances
+    local decode_mib idle_mib region pool budget
     setting="$(_env_value OP_INGEST_GPU_DECODE)"
     profile="$(_env_value GPU_PROFILE)"
     profile="${profile:-standard}"
-    # Last resort only: an installed directory with the database down has neither the registry
-    # value nor the model's config.pbtxt, and the plan still has to size the decode.
-    per_instance="$(_gpu_model_mib gpu_image_prep)"
-    per_instance="${per_instance:-$GPU_IMAGE_PREP_FALLBACK_MIB}"
-    # One copy of the model per instance; the installed config holds the profile's count (#268).
-    instances="$(sed -n -E 's/^[[:space:]]*count:[[:space:]]*([0-9]+).*/\1/p' \
-        "${PROJECT_DIR}/models/gpu_image_prep/config.pbtxt" 2>/dev/null | head -1)" || true
-    decode_mib=$(( per_instance * ${instances:-1} ))
+    region="$(_env_value OP_FRAME_ENGINE_REGION_MIB)"
+    pool="$(_env_value OP_FRAME_ENGINE_POOL_MIB)"
+    budget="$(_env_value OP_FRAME_ENGINE_BUDGET_MIB)"
+    decode_mib=$(( FRAME_ENGINE_CONTEXT_MIB + ${region:-1024} + ${pool:-4096} ))
+    idle_mib=$(( FRAME_ENGINE_IDLE_CONTEXT_MIB + ${region:-1024} + ${budget:-2048} ))
     if [[ -n "$setting" ]]; then
         source="OP_INGEST_GPU_DECODE=${setting} in .env"
     else
@@ -102,10 +107,10 @@ _gpu_plan_decode() {
         *) setting=0 ;;
     esac
     if (( setting == 0 )); then
-        echo "  GPU decode (ingest): off (${source}); photos decode on the CPU. Needs about ${decode_mib} MiB more on the primary card"
+        echo "  GPU decode (ingest): off (${source}); photos decode on the CPU. The frame engine holds about ${idle_mib} MiB on the primary card at its current sizes"
         return 0
     fi
-    echo "  GPU decode (ingest): on (${source}); about ${decode_mib} MiB more on the primary card, loaded on first use"
+    echo "  GPU decode (ingest): on (${source}); the frame engine holds about ${decode_mib} MiB more on the primary card"
     primary="$(tr ',' '\n' <<< "$ids" | sort -n | head -1)"
     local idx name total used cc need=$(( primary_mib + decode_mib )) have
     # shellcheck disable=SC2034  # name and cc are positional fields of the nvidia-smi row
@@ -114,7 +119,7 @@ _gpu_plan_decode() {
         # A running Triton already holds its models, so only the card's total can be judged then.
         if [[ "$running" == 1 ]]; then have=$total; else have=$(( total - used )); fi
         if (( have < need )); then
-            log_warn "GPU ${idx} has ${have} MiB $([[ "$running" == 1 ]] && echo total || echo free); the ${profile} profile's models (${primary_mib} MiB) plus the GPU decode (${decode_mib} MiB) need about ${need} MiB. Without room the GPU decode fails to load and ingest stays on the CPU path; set OP_INGEST_GPU_DECODE=0 to silence this"
+            log_warn "GPU ${idx} has ${have} MiB $([[ "$running" == 1 ]] && echo total || echo free); the ${profile} profile's models (${primary_mib} MiB) plus the frame engine (${decode_mib} MiB) need about ${need} MiB. Without room the engine cannot hold its frames and ingest stays on the CPU path; set OP_INGEST_GPU_DECODE=0 and the profile's small engine sizes (openprocessor profile) to silence this"
         fi
     done <<< "$table"
 }
@@ -124,7 +129,7 @@ cmd_gpu() {
     case "$sub" in
         plan)
             log_step "GPU plan (from .env)"
-            for key in TRITON_GPU_ID API_GPU_ID SEGMENTER_GPU_ID VLM_GPU_ID EVALUATOR_GPU_ID GPU_PROFILE; do
+            for key in TRITON_GPU_ID FRAME_ENGINE_GPU_ID API_GPU_ID SEGMENTER_GPU_ID VLM_GPU_ID EVALUATOR_GPU_ID GPU_PROFILE; do
                 local value
                 value="$(_env_value "$key")"
                 echo "  ${key}=${value:-<unset>}"

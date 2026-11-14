@@ -18,7 +18,7 @@ from src.services.curation.location_policy_store import get_location_policy
 
 async def get_ingest_service(opensearch: Any, registry: Any) -> CurationIngestService:
     """Refuses with 503 until the app has started and a detector is configured."""
-    from src.app.resources import get_async_triton_pool
+    from src.app.resources import get_async_triton_pool, get_frame_engine_pool
     from src.main import app
 
     pe_encoder = getattr(app.state, 'pe_encoder', None)
@@ -54,4 +54,5 @@ async def get_ingest_service(opensearch: Any, registry: Any) -> CurationIngestSe
         capture_reader=read_capture,
         location_policy=get_location_policy,
         class_ensurer=ensure_detector_classes,
+        frame_engine=get_frame_engine_pool(),
     )

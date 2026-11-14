@@ -1,32 +1,24 @@
-"""The device-memory budget of ``gpu_image_prep`` (``models/gpu_image_prep/1/prep_budget.py``)."""
+"""The device-memory budget of the frame engine (``frame_engine/prep_budget.py``)."""
 
 from __future__ import annotations
 
-import importlib
 import random
-import sys
 import threading
 import time
-from pathlib import Path
 from typing import Any
 
 import pytest
 
-
-MODEL_DIR = Path(__file__).resolve().parents[2] / 'models' / 'gpu_image_prep' / '1'
+from frame_engine import prep_budget, prep_geometry
 
 
 @pytest.fixture
-def pb(monkeypatch: pytest.MonkeyPatch) -> Any:
-    monkeypatch.syspath_prepend(str(MODEL_DIR))
-    for name in ('prep_budget', 'prep_geometry'):
-        monkeypatch.delitem(sys.modules, name, raising=False)
-    return importlib.import_module('prep_budget')
+def pb() -> Any:
+    return prep_budget
 
 
 def _header(w: int, h: int, orientation: int = 1) -> Any:
-    geo = importlib.import_module('prep_geometry')
-    return geo.JpegHeader('jpeg', w, h, 3, 8, False, orientation, False)
+    return prep_geometry.JpegHeader('jpeg', w, h, 3, 8, False, orientation, False)
 
 
 def test_need_bytes_is_the_frame_for_an_upright_photo(pb: Any) -> None:
@@ -41,8 +33,7 @@ def test_need_bytes_adds_the_oriented_copy_when_the_tag_is_not_one(
 
 
 def test_a_grey_photo_is_still_charged_the_three_channel_output(pb: Any) -> None:
-    geo = importlib.import_module('prep_geometry')
-    grey = geo.JpegHeader('jpeg', 100, 50, 1, 8, False, 1, False)
+    grey = prep_geometry.JpegHeader('jpeg', 100, 50, 1, 8, False, 1, False)
     assert pb.need_bytes(grey) == 100 * 50 * 3
 
 

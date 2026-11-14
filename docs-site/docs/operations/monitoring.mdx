@@ -40,6 +40,7 @@ and OpenSearch Dashboards run without authentication, like the API.
 | Job | Target | Metrics |
 | --- | --- | --- |
 | `triton` | `triton-server:8002` | Triton's `nv_*` series: per-model request, queue and compute time, batch execution, pending requests, GPU utilization and memory. |
+| `frame-engine` | `frame-engine:8002` | The frame engine's `op_frame_engine_*` series: stage timing, requests in flight, shared-memory region use, budget waits, overloads, region registrations, failed model calls and image outcomes ([Ingest stage timing](./ingest-stage-timing.mdx)). |
 | `api` | `api:8000` | The API's own `/metrics`. |
 | `node` | `node-exporter:9100` | Host CPU, memory, load. |
 | `dcgm` | `dcgm-exporter:9400` | Per-GPU `DCGM_FI_DEV_*` series. |
@@ -175,7 +176,7 @@ previous value in place.
 | --- | --- | --- | --- |
 | `op_ingest_images_total` | counter | `project`, `outcome` (`ok`, `failed`, `skipped`) | Images that finished ingest; `skipped` is a duplicate of an existing image. |
 | `op_ingest_items_total` | counter | `project` | Items (crops) indexed by ingest. |
-| `op_decode_route_total` | counter | `route` (`gpu`, `cpu_<reason>`), `path` (`ingest`, `reprocess`) | Photos decoded by ingest, and by the `embed` reprocess pass while the GPU decode is usable (`path="reprocess"`): `gpu` = decoded and embedded by `gpu_image_prep`, `cpu_small` = below `OP_INGEST_GPU_MIN_MEGAPIXELS`, any other `cpu_*` = declined or failed and decoded in the API. |
+| `op_decode_route_total` | counter | `route` (`gpu`, `cpu_<reason>`), `path` (`ingest`, `reprocess`) | Photos decoded by ingest, and by the `embed` reprocess pass while the GPU decode is usable (`path="reprocess"`): `gpu` = decoded and embedded by the frame engine, `cpu_small` = below `OP_INGEST_GPU_MIN_MEGAPIXELS`, any other `cpu_*` = declined or failed and decoded in the API. |
 | `op_ingest_batch_fallback_total` | counter | `stage` (`claim`, `class_create`), `reason` (the error class) | Ingest batches whose one-transaction database step failed as a whole and ran photo by photo. Every photo still gets its own answer; a count that keeps rising means the batch path is failing, look at the API log (`ingest_batch_claim_fell_back`, `ingest_batch_class_create_fell_back`). |
 | `op_queue_depth` | gauge | `queue` (`segment`, `label`, `embed`), `project` | Items waiting: `segment` = `pending_detection`, `label` = `pending_verification`, `embed` = vector deferred. |
 | `op_queue_oldest_item_age_seconds` | gauge | `queue` | Age of the longest-waiting item in that queue, worst project. |

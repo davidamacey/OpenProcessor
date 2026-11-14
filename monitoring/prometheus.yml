@@ -22,6 +22,17 @@ scrape_configs:
       - source_labels: [__meta_dns_name]
         target_label: service
 
+  # The frame engine (GPU decode and prep): op_frame_engine_stage_* and its overload,
+  # region and outcome counters. One target per engine replica.
+  - job_name: 'frame-engine'
+    dns_sd_configs:
+      - names: ['frame-engine']
+        type: A
+        port: 8002
+    relabel_configs:
+      - source_labels: [__meta_dns_name]
+        target_label: service
+
   - job_name: 'api'
     metrics_path: /metrics
     dns_sd_configs:

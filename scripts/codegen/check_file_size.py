@@ -36,7 +36,7 @@ import _baseline
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BASELINE_PATH = REPO_ROOT / 'scripts' / 'codegen' / 'baselines' / 'file_size.txt'
 
-APP_DIRS = ('src/', 'models/', 'docker/', 'export/')
+APP_DIRS = ('src/', 'models/', 'docker/', 'export/', 'frame_engine/')
 APP_SUFFIXES = ('.py',)
 FRONTEND_APP_DIR = 'frontend/src/'
 FRONTEND_APP_SUFFIXES = ('.ts', '.svelte', '.js')

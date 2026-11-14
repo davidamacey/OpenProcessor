@@ -1,23 +1,25 @@
-"""GPU decode and prep parity: ``gpu_image_prep`` on a running Triton against the CPU ingest path.
+"""GPU decode and prep parity: the frame engine against the CPU ingest path.
 
 This is the guard the nvImageCodec + CV-CUDA rewrite (#40) must keep green. Every test drives the
-real model over gRPC from the host venv (``tritonclient``) and compares what it answers with what
-the CPU path computes on the same bytes: the oriented size, the detector letterbox, the frame's
-Laplacian variance (a decode check), the whole-frame PE embedding, and the detections.
+real frame engine over gRPC from the host venv (``tritonclient``, protocol version 1) and compares
+what it answers with what the CPU path computes on the same bytes, through the same Triton: the
+oriented size, the detector letterbox, the frame's Laplacian variance (a decode check), the
+whole-frame PE embedding, and the detections.
 
-Run (GPU tier; needs a Triton with ``gpu_image_prep``, ``pe_image_encoder`` and the detector,
+Run (GPU tier; needs a frame engine and its Triton with ``pe_image_encoder`` and the detector,
 see docker/test/README.md "GPU tier"):
 
-    OP_TEST_TRITON_GRPC=127.0.0.1:4601 .venv/bin/python -m pytest tests/gpu -q --no-cov -m gpu
+    OP_TEST_TRITON_GRPC=127.0.0.1:4601 OP_TEST_FRAME_ENGINE_GRPC=<engine host:port> \\
+        .venv/bin/python -m pytest tests/gpu -q --no-cov -m gpu
 
-An unreachable Triton FAILS these tests; they are never skipped. The tolerances below are the
-contract; tighten them as the first GPU runs show the real spread.
+An unreachable Triton or engine FAILS these tests; they are never skipped. The tolerances below
+are the contract; tighten them as the first GPU runs show the real spread.
 """
 
 from __future__ import annotations
 
-import asyncio
 import io
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -27,6 +29,7 @@ import numpy as np
 import pytest
 from PIL import Image, ImageOps
 
+from src.domain import frame_engine_wire as wire
 from src.domain.image_geometry import letterbox_geometry
 from src.services.detection.crop_quality import variance_from_sums
 from src.services.detection.geometry import letterbox_to_square
@@ -72,11 +75,27 @@ def client(url: str) -> Any:
     except Exception as exc:
         pytest.fail(f'GPU tier needs a Triton gRPC endpoint at {url} (OP_TEST_TRITON_GRPC): {exc}')
     assert ready, f'Triton at {url} is not ready'
-    for model in ('gpu_image_prep', PE_MODEL, DETECTOR):
+    for model in (PE_MODEL, DETECTOR):
         if not c.is_model_ready(model):
-            c.load_model(model)  # explicit model control: gpu_image_prep loads on first use
+            c.load_model(model)  # explicit model control
         assert c.is_model_ready(model), f'{model} is not ready on {url}'
     return c
+
+
+@pytest.fixture(scope='module')
+def engine(client: Any) -> Any:
+    from tritonclient.grpc import InferenceServerClient
+
+    url = os.environ.get('OP_TEST_FRAME_ENGINE_GRPC')
+    if not url:
+        pytest.fail('GPU tier needs the frame engine gRPC address in OP_TEST_FRAME_ENGINE_GRPC')
+    e = InferenceServerClient(url=url)
+    try:
+        ready = e.is_model_ready(wire.MODEL_NAME)
+    except Exception as exc:
+        pytest.fail(f'GPU tier needs a frame engine at {url}: {exc}')
+    assert ready, f'the frame engine at {url} is not ready'
+    return e
 
 
 @pytest.fixture(scope='module', params=['upright', 'rot6', 'rot3'])
@@ -85,38 +104,30 @@ def photo(request: pytest.FixtureRequest) -> bytes:
     return data if request.param == 'upright' else _with_orientation(data, int(request.param[3:]))
 
 
-def _gpu(url: str, data: bytes) -> dict[str, np.ndarray]:
+PLAN = wire.EnginePlan(
+    branches=('detect', 'embed_frame'),
+    detector=wire.DetectorSpec(DETECTOR, NET_SIZE, 114),
+    embed=wire.EmbedSpec(PE_MODEL, 336, 32),
+)
+
+
+def _gpu(engine: Any, data: bytes) -> dict[str, Any]:
     from tritonclient.grpc import InferInput
-    from tritonclient.grpc.aio import InferenceServerClient
 
-    async def run() -> dict[str, np.ndarray]:
-        inp = InferInput('jpeg', [len(data)], 'UINT8')
-        inp.set_data_from_numpy(np.frombuffer(data, np.uint8))
-
-        async def requests() -> Any:
-            yield {'model_name': 'gpu_image_prep', 'inputs': [inp]}
-
-        aio = InferenceServerClient(url=url)
-        try:
-            async for result, error in aio.stream_infer(requests(), stream_timeout=120.0):
-                if error is not None:
-                    raise error
-                names = [
-                    'status',
-                    'size',
-                    'letterbox',
-                    'det_boxes',
-                    'det_scores',
-                    'det_classes',
-                    'whole_embedding',
-                    'blur_sums',
-                ]
-                return {n: result.as_numpy(n) for n in names}
-        finally:
-            await aio.close()
-        raise RuntimeError('stream closed without a response')
-
-    return asyncio.run(run())
+    inputs = []
+    for name, value in ((wire.IMAGE, data), (wire.PLAN, PLAN.to_json().encode())):
+        inp = InferInput(name, [1], 'BYTES')
+        inp.set_data_from_numpy(np.array([value], dtype=np.object_))
+        inputs.append(inp)
+    result = engine.infer(wire.MODEL_NAME, inputs, client_timeout=120)
+    out: dict[str, Any] = {
+        n: result.as_numpy(n)
+        for n in ('size', 'letterbox', 'det_boxes', 'det_scores', 'det_classes', 'whole_embedding')
+    }
+    out['blur_sums'] = result.as_numpy('blur_sums')
+    out['status'] = result.as_numpy('status')
+    out['branch_status'] = json.loads(result.as_numpy('branch_status')[0])
+    return out
 
 
 def _infer(client: Any, model: str, chw: np.ndarray, output: str) -> np.ndarray:
@@ -128,8 +139,8 @@ def _infer(client: Any, model: str, chw: np.ndarray, output: str) -> np.ndarray:
 
 
 @pytest.fixture
-def pair(client: Any, url: str, photo: bytes) -> tuple[dict, Image.Image]:
-    gpu = _gpu(url, photo)
+def pair(engine: Any, photo: bytes) -> tuple[dict, Image.Image]:
+    gpu = _gpu(engine, photo)
     cpu = ImageOps.exif_transpose(Image.open(io.BytesIO(photo))).convert('RGB')
     return gpu, cpu
 
@@ -137,6 +148,7 @@ def pair(client: Any, url: str, photo: bytes) -> tuple[dict, Image.Image]:
 def test_the_gpu_path_answers_ok_with_the_oriented_size(pair: tuple[dict, Image.Image]) -> None:
     gpu, cpu = pair
     assert gpu['status'][0].decode() == 'ok'
+    assert gpu['branch_status'] == {b: {'status': 'ok'} for b in PLAN.branches}
     assert tuple(int(v) for v in gpu['size']) == cpu.size
 
 

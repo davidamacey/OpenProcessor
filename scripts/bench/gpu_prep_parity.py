@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
-"""Does a change to the ``gpu_image_prep`` model alter what it answers?
+"""Does a change to the frame engine (``frame_engine/``) alter what it answers?
 
-``capture`` streams each JPEG straight to the model (so only the model is measured, not the API)
-and keeps every output tensor; ``compare`` sets two captures side by side. Run it against the
-model before and after a change, on the same images and the same Triton engines:
+``capture`` sends each photo straight to the engine (protocol version 1, the ingest plan: detect,
+whole-frame and crop vectors, inline crop JPEGs; so only the engine is measured, not the API) and
+keeps every output tensor; ``compare`` sets two captures side by side. Run it against the engine
+before and after a change, on the same images and the same Triton engines:
 
-    python scripts/bench/gpu_prep_parity.py capture --url 127.0.0.1:4601 --images list.txt \\
+    python scripts/bench/gpu_prep_parity.py capture --url <engine host:port> --images list.txt \\
         --concurrency 1 --out before.npz
     python scripts/bench/gpu_prep_parity.py capture ... --out after.npz
     python scripts/bench/gpu_prep_parity.py compare before.npz after.npz
 
 At concurrency 1 a change that does not touch arithmetic must give identical bytes for
-everything but the PE vectors, which may differ by the model's own run-to-run floor (compare two
-captures of the same model to measure it). At higher concurrency detections are paired by score
+everything but the PE vectors, which may differ by the encoder's own run-to-run floor (compare two
+captures of the same engine to measure it). At higher concurrency detections are paired by score
 and the table reports the spread against that floor.
 """
 
@@ -47,30 +48,44 @@ def read_list(path: Path) -> list[Path]:
     return [Path(r) for r in rows if r and not r.startswith('#')]
 
 
-async def _one(client: Any, data: bytes, sem: asyncio.Semaphore) -> dict[str, np.ndarray]:
+def ingest_plan(detector: str, net_size: int, fill: int) -> str:
+    """The plan photo ingest sends (``src/services/curation/ingest_gpu_decode.py``)."""
+    from src.domain import frame_engine_wire as wire
+
+    return wire.EnginePlan(
+        branches=('detect', 'embed_frame', 'embed_crops'),
+        detector=wire.DetectorSpec(detector, net_size, fill),
+        embed=wire.EmbedSpec('pe_image_encoder', 336, 32),
+        crops='inline',
+    ).to_json()
+
+
+async def _one(
+    client: Any, data: bytes, plan: str, sem: asyncio.Semaphore
+) -> dict[str, np.ndarray]:
     from tritonclient.grpc import InferInput
 
-    inp = InferInput('jpeg', [len(data)], 'UINT8')
-    inp.set_data_from_numpy(np.frombuffer(data, np.uint8))
-
-    async def requests() -> Any:
-        yield {'model_name': 'gpu_image_prep', 'inputs': [inp]}
-
+    inputs = []
+    for name, value in (('image', data), ('plan', plan.encode())):
+        inp = InferInput(name, [1], 'BYTES')
+        inp.set_data_from_numpy(np.array([value], dtype=np.object_))
+        inputs.append(inp)
     async with sem:
-        async for result, error in client.stream_infer(requests(), stream_timeout=120.0):
-            if error is not None:
-                raise error
-            return {n: result.as_numpy(n) for n in OUTPUTS if result.as_numpy(n) is not None}
-    raise RuntimeError('stream closed without a response')
+        result = await client.infer('frame_engine', inputs, client_timeout=120.0)
+    return {n: result.as_numpy(n) for n in OUTPUTS if result.as_numpy(n) is not None}
 
 
-async def capture(url: str, images: list[Path], concurrency: int) -> list[dict[str, np.ndarray]]:
+async def capture(
+    url: str, images: list[Path], concurrency: int, plan: str
+) -> list[dict[str, np.ndarray]]:
     from tritonclient.grpc.aio import InferenceServerClient
 
     client = InferenceServerClient(url=url)
     sem = asyncio.Semaphore(concurrency)
     try:
-        return list(await asyncio.gather(*(_one(client, p.read_bytes(), sem) for p in images)))
+        return list(
+            await asyncio.gather(*(_one(client, p.read_bytes(), plan, sem) for p in images))
+        )
     finally:
         await client.close()
 
@@ -163,7 +178,10 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
     sub = ap.add_subparsers(dest='cmd', required=True)
     cap = sub.add_parser('capture')
-    cap.add_argument('--url', required=True, help='Triton gRPC host:port')
+    cap.add_argument('--url', required=True, help='frame engine gRPC host:port')
+    cap.add_argument('--detector', default='yolov11_small_trt_end2end')
+    cap.add_argument('--net-size', type=int, default=640)
+    cap.add_argument('--letterbox-fill', type=int, default=114)
     cap.add_argument('--images', type=Path, required=True, help='file with one image path per line')
     cap.add_argument('--limit', type=int, default=0)
     cap.add_argument('--concurrency', type=int, default=1)
@@ -174,7 +192,8 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
     if args.cmd == 'capture':
         images = read_list(args.images)[: args.limit or None]
-        save(args.out, images, asyncio.run(capture(args.url, images, args.concurrency)))
+        plan = ingest_plan(args.detector, args.net_size, args.letterbox_fill)
+        save(args.out, images, asyncio.run(capture(args.url, images, args.concurrency, plan)))
         print(f'{len(images)} images captured to {args.out}')
         return 0
     ra, rb = load(args.a), load(args.b)

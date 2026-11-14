@@ -7,12 +7,13 @@ commit. Nothing here is automated by CI (images are built locally).
 
 `images.lock` pins every image an install can pull, one `key=repo:tag@sha256:digest`
 line per key. The keys come from `scripts/lib/image_keys.sh`, the one table the release
-script and the installer share. After `make release` there are 17 lines:
+script and the installer share. After `make release` there are 19 lines:
 
-- Six images built from this repository and pushed by step 4
-  (`davidamacey/...:0.6.0`, plus `latest`): `api` (`openprocessor`), `triton`
-  (`openprocessor-triton`), `evaluator` (`openprocessor-evaluator`), `segmenter`
-  (`openprocessor-segmenter`), `trainer` (`openprocessor-trainer`) and `cropwright`
+- Eight images built from this repository and pushed by step 4
+  (`davidamacey/...:0.6.0`, plus `latest`): `api` (`openprocessor`), `export`
+  (`openprocessor-export`), `triton` (`openprocessor-triton`), `evaluator`
+  (`openprocessor-evaluator`), `segmenter` (`openprocessor-segmenter`), `frame_engine`
+  (`openprocessor-frame-engine`), `trainer` (`openprocessor-trainer`) and `cropwright`
   (`cropwright`, built from `frontend/Dockerfile` with `frontend/` as its build context plus the named context `contracts`=`contracts/`).
 - Eleven third-party images, resolved from upstream tags by step 4: the two `vlm_*` keys,
   `opensearch`, `opensearch_dashboards`, `mlflow`, `prometheus`, `grafana`, `loki`,
@@ -113,7 +114,8 @@ second undo refused; holdout and validated items unchanged), an auto-label loop 
 (optional, skipped without a VLM), export, a 2-epoch probe train, bake-off, promote
 (forced when the gate rejects the undertrained model), inference via `/detect?model_name=`,
 model delete, metrics (GPU decode fallbacks within `--decode-fallback-max`, default 0.5 %, and
-`op_gpu_prep_stage_*` on Triton's metrics port when `--triton-metrics-url` is given) and
+`op_frame_engine_stage_*` on the frame engine's metrics port when `--frame-engine-metrics-url`
+is given) and
 log-noise checks, and the installer lifecycle (`--only
 installer_uninstall` and `--upgrade-version vX` are opt-in). A cleanup trap always deletes
 the throwaway project and promoted models. Exit status is non-zero if any required phase
@@ -144,15 +146,15 @@ ingest preview, and note the results in the verification summary of `docs/releas
    builds the assets to a temp dir, dry-runs the installer against them, checks that a
    tampered tarball and installer are refused).
 3. Build, Trivy-scan and dry-run the images, nothing pushed: `make release-dry-run`. It
-   builds all six images, including Cropwright from `frontend/`. The Trivy CRITICAL gate must
+   builds all eight images, including Cropwright from `frontend/`. The Trivy CRITICAL gate must
    pass: no fixable CRITICAL outside the allowlist (`scripts/release/trivy-allowlist.txt`).
    Findings with no upstream fix do not gate; `--report-dir DIR` writes them per image.
 4. Push images and pin them: `docker login`, pull the 11 third-party images, then
    `make release`. It pushes
-   `davidamacey/{openprocessor,openprocessor-triton,openprocessor-evaluator,openprocessor-segmenter,openprocessor-trainer,cropwright}:0.6.0`
-   (plus `latest`), resolves the third-party digests, and writes `images.lock` (17 lines) and
+   `davidamacey/{openprocessor,openprocessor-export,openprocessor-triton,openprocessor-evaluator,openprocessor-segmenter,openprocessor-frame-engine,openprocessor-trainer,cropwright}:0.6.0`
+   (plus `latest`), resolves the third-party digests, and writes `images.lock` (19 lines) and
    `images.lock.sha256`. Check `rg 'dev[0-9a-f]$' images.lock` finds nothing and that
-   `rg -c . images.lock` is 17 with a `cropwright=` line.
+   `rg -c . images.lock` is 19 with a `cropwright=` line.
 5. Commit the lock: `git add images.lock` then
    `git commit -m "chore(release): pin v0.6.0 image digests"`. (`images.lock.sha256` is a
    local artifact, not committed.)
@@ -185,7 +187,7 @@ ingest preview, and note the results in the verification summary of `docs/releas
     - Docker Hub: the images are named `davidamacey/<name>` (`OP_IMAGE_NAMESPACE` in
       `scripts/release/build_and_publish.sh`, the `OP_IMAGE_REPO` defaults in the compose
       files, `scripts/lib/image_keys.sh` consumers, `scripts/docker-build-push.sh`). A new
-      namespace needs the six repositories created, the images re-pushed by a new `make
+      namespace needs the eight repositories created, the images re-pushed by a new `make
       release`, and a fresh `images.lock` (the installer checks each lock entry's repo against
       the table). Old tags stay pullable under the old name.
     - `CODEOWNERS` (a user handle becomes an organisation team) and `.github/dependabot.yml`
@@ -208,6 +210,6 @@ ingest preview, and note the results in the verification summary of `docs/releas
   (this is the clean-host test of #44; close it when it passes).
 - `docker pull davidamacey/openprocessor:0.6.0` digest equals the `api` line in
   `images.lock`, and `docker pull davidamacey/cropwright:0.6.0` equals the `cropwright` line.
-- Docker Hub shows the six repositories at `0.6.0` and `latest`.
+- Docker Hub shows the eight repositories at `0.6.0` and `latest`.
 - Upgrade check on a 0.5.0 install: `./openprocessor upgrade` keeps the stack healthy,
   rebuilds the uint8 engines (`models repair`) and `./openprocessor status` is healthy.

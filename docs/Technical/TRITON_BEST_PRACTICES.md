@@ -427,8 +427,8 @@ container ([export/README.md](../../export/README.md)); precision follows the ON
 Models Triton serves: `yolov11_small_trt_end2end` (YOLO11, GPU NMS), `yolo26_small_trt` (YOLO26,
 NMS-free), `scrfd_10g_bnkps`, `arcface_w600k_r50`, `mobileclip2_s2_image_encoder`,
 `mobileclip2_s2_text_encoder`, `paddleocr_det_trt`, `paddleocr_rec_trt`, `ocr_pipeline` (a Python
-BLS), `pe_image_encoder`, `pe_text_encoder` and `gpu_image_prep` (decode-once ingest, a Python
-backend).
+BLS), `pe_image_encoder` and `pe_text_encoder`. Decode and prep for photo ingest run outside
+Triton, in the frame engine (`frame_engine/`), which calls these models as a client.
 
 Tuning for latency or throughput is done per model with the method below, and recorded in
 [PERFORMANCE.md](../PERFORMANCE.md).

@@ -1,7 +1,7 @@
 # Opt-in overlay: the ingest load profile. Triton preloads only the models photo ingest calls
-# (the detector, the PE image encoder and the PE text tower) instead of every model; `gpu_image_prep`
-# loads on first use as before. That leaves the GPU memory of the face, MobileCLIP and OCR models
-# (see docs-site/docs/operations/ingest-load-profile.mdx for the measured amounts) to the GPU decode.
+# (the detector, the PE image encoder and the PE text tower) instead of every model. That leaves the
+# GPU memory of the face, MobileCLIP and OCR models (see
+# docs-site/docs/operations/ingest-load-profile.mdx for the measured amounts) to the frame engine.
 #
 # The endpoints that need a model this profile does not preload (/faces, /embed, /ocr, /search,
 # /analyze, the core /ingest and /detect with another detector) still answer: the API loads the model
@@ -48,6 +48,9 @@ services:
       # over the in-process path whenever Triton reports it ready.
       - --load-model=pe_text_encoder
       # ===================================================================
+      # The frame engine registers one CUDA shared-memory region and sends the
+      # model inputs as slices of it (frame_engine/transport.py).
+      - --allow-client-shm=true
       - --log-verbose=0
       - --log-info=true
   api: &profile_env
