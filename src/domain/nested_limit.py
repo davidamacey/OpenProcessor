@@ -153,9 +153,10 @@ def guard_write(
       partial update rewrites the whole document, and the vectors read back from such an item
       are another document's.
     * The one exception, the repair write: a write that sets the box list and brings the item
-      under the limit (counting one vector per box, as for any write) also empties every box-vector list, so no untrustworthy vector is written
-      again. The box vectors are then missing and the box embed stage and backfill
-      (``missing_boxes``) re-create them. The returned update carries that clearing.
+      under the limit (counting one vector per box, as for any write) also empties every
+      box-vector list, so no untrustworthy vector is written again. The box vectors are then
+      missing and the box embed stage and backfill (``missing_boxes``) re-create them. The
+      returned update carries that clearing.
 
     ``excludes`` is the ``_source`` exclude list the item was read with.
     """
