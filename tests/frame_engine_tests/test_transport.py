@@ -264,9 +264,13 @@ def test_an_unreachable_server_is_unavailable_and_the_health_check_recovers(
     t = _cuda(server, log)
     t.start()
     staged = t.stage(48)
+    probes: list[int] = []
+    t.on_suspect = lambda: probes.append(1)
     server.up = False
     with pytest.raises(TritonUnavailableError):
         _infer(t, staged)
+    assert probes == [1]  # the failed call asks for a probe at once
+    assert not t.check()  # and the probe says the server is gone: not ready
     assert not t.ready()
     server.up = True
     server.restart()
@@ -500,9 +504,25 @@ def test_a_call_that_is_never_answered_is_unavailable_within_its_deadline(log: l
     assert server.timeouts == [0.3]
     assert server.cancelled == 1  # the call is cancelled, not left running
     assert _errors(t) == {('pe', 'StatusCode.DEADLINE_EXCEEDED', 'deadline'): 1.0}
-    assert not t.ready()  # the health check decides when the server is back
     t.release(staged, lambda: None)
     assert t.slab.in_use == 0
+
+
+def test_one_slow_call_does_not_take_the_engine_out_of_service(log: list) -> None:
+    """A deadline is evidence about that call, not about the server: readiness stays with the
+    health probe the failure asks for (one slow call used to refuse every request until the next
+    health tick, 2026-11-14: 24 slow photos became 729 refused ones)."""
+    server = Unanswered(log)
+    t = _cuda(server, log, timeout=0.3)
+    t.start()
+    probes: list[int] = []
+    t.on_suspect = lambda: probes.append(1)
+    with pytest.raises(TritonUnavailableError, match='no answer'):
+        _infer(t, t.stage(48))
+    assert t.ready()
+    assert probes == [1]
+    assert t.check()  # the server answers its readiness probe: still in service
+    assert t.ready()
 
 
 def test_a_call_never_takes_longer_than_what_is_left_of_its_request(log: list) -> None:
