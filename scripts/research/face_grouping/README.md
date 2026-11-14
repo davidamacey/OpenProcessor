@@ -27,3 +27,7 @@ Immich rule (`handleRecognizeFaces`): a face with at least `min_faces` hits (its
 `max_distance` may found a group; it joins the group of its first hit that has one, else its nearest grouped
 neighbour within `max_distance`; a face with no group is deferred once; only a core face creates a group.
 The "nearest grouped neighbour" search is limited to the 30 exact neighbours the graph stores.
+
+`python -I` ignores `PYTHONPATH`: if `finch` or `chinese_whispers` live outside the venv, append their directory
+with `sys.path.append(...)` and `runpy.run_path('scripts/research/face_grouping/run_eval.py', run_name='__main__')`.
+The scoring takes about an hour on 8 niced threads (pooled average and complete linkage dominate).
