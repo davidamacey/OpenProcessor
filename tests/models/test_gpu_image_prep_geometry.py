@@ -6,6 +6,8 @@ from __future__ import annotations
 import importlib.util
 import io
 import sys
+import time
+from collections.abc import Callable
 from pathlib import Path
 
 import cv2
@@ -45,6 +47,58 @@ def _jpeg(w: int, h: int, *, progressive: bool = False, orientation: int | None 
         kw['exif'] = exif.tobytes()
     img.save(buf, 'JPEG', **kw)
     return buf.getvalue()
+
+
+def _stream(rng: np.random.Generator, *, scans: int, scan_bytes: int) -> bytes:
+    """A JPEG-shaped byte stream: header segments, then ``scans`` entropy-coded scans whose
+    bytes hold stuffed ``FF00`` pairs, restart markers and ``FF`` fill runs, then the end marker."""
+    out = bytearray(b'\xff\xd8')
+    out += b'\xff\xe1' + (12).to_bytes(2, 'big') + b'Exif\xff\xd9tail'  # an EOI inside a header
+    for _ in range(scans):
+        out += b'\xff\xc4' + (5).to_bytes(2, 'big') + b'\x00\x01\x02'
+        out += b'\xff\xda' + (8).to_bytes(2, 'big') + bytes(6)
+        body = rng.integers(0, 256, scan_bytes, dtype=np.uint8).tobytes()
+        body = body.replace(b'\xff', b'\xff\x00')
+        if scan_bytes > 64:
+            mid = len(body) // 2
+            body = body[:mid] + b'\xff\xd3' + b'\xff\xff\x00' + body[mid:]
+        out += body
+    out += b'\xff\xff\xd9' if scans % 2 else b'\xff\xd9'
+    return bytes(out)
+
+
+def _walk_end(data: bytes) -> int | None:
+    """The end-of-image offset by a plain marker-by-marker walk (the reference for the scan)."""
+    n, i, in_scan = len(data), 2, False
+    while True:
+        if in_scan:
+            while True:
+                i = data.find(b'\xff', i)
+                if i < 0:
+                    return None
+                while i < n and data[i] == 0xFF:
+                    i += 1
+                if i >= n:
+                    return None
+                if data[i] != 0 and not 0xD0 <= data[i] <= 0xD7:
+                    break
+            marker, i = data[i], i + 1
+        else:
+            if i >= n or data[i] != 0xFF:
+                return None
+            while i < n and data[i] == 0xFF:
+                i += 1
+            if i >= n:
+                return None
+            marker, i = data[i], i + 1
+        if marker == 0xD9:
+            return i
+        if marker == 0x01 or 0xD0 <= marker <= 0xD7:
+            continue
+        if i + 2 > n:
+            return None
+        i += int.from_bytes(data[i : i + 2], 'big')
+        in_scan = marker == 0xDA
 
 
 def _resample(img: np.ndarray, out_w: int, out_h: int, *, antialias: bool) -> np.ndarray:
@@ -102,6 +156,37 @@ class TestRoute:
 
     def test_a_missing_end_marker_with_a_trailer_is_still_truncated(self) -> None:
         assert fg.route(_jpeg(400, 300)[:-2] + b'\x00' * 50, 0.1, 100)[0] == 'truncated'
+
+    def test_the_end_scan_agrees_with_a_marker_by_marker_walk(self) -> None:
+        rng = np.random.default_rng(7)
+        for case in range(60):
+            scans = int(rng.integers(1, 4))
+            data = _stream(rng, scans=scans, scan_bytes=int(rng.integers(0, 4000)))
+            cut = int(rng.integers(0, 3))
+            if cut == 1:
+                data = data[: int(rng.integers(2, len(data)))]  # truncated anywhere
+            elif cut == 2:
+                data += bytes(rng.integers(0, 256, 300, dtype=np.uint8))  # a trailer
+            assert fg.jpeg_end(data) == _walk_end(data), case
+
+    def test_the_end_scan_of_a_large_photo_is_a_vectorised_pass(self) -> None:
+        """The scan runs in every worker thread of the prep model: a per-byte interpreter loop
+        over a 7 MB photo held the interpreter lock for about 80 ms and capped one prep process
+        at about 7 photos per second."""
+        data = _stream(np.random.default_rng(1), scans=1, scan_bytes=7_000_000)
+        assert fg.jpeg_end(data) == len(data)
+
+        def best(fn: Callable[[], object]) -> float:
+            times = []
+            for _ in range(5):
+                start = time.perf_counter()
+                fn()
+                times.append(time.perf_counter() - start)
+            return min(times)
+
+        # The scan may cost a few C-speed passes over the bytes (a pass is ``bytes.count``); the
+        # interpreter loop cost about 17 of them.
+        assert best(lambda: fg.jpeg_end(data)) < 4 * best(lambda: data.count(b'\xff'))
 
     def test_the_upper_gate(self) -> None:
         assert fg.route(_jpeg(400, 300), 0.0, 0.1)[0] == 'huge'

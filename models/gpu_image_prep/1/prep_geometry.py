@@ -15,7 +15,6 @@ Here:
 
 from __future__ import annotations
 
-import re
 import struct
 from typing import NamedTuple
 
@@ -95,8 +94,19 @@ def jpeg_header(data: bytes) -> JpegHeader:
     return JpegHeader('corrupt', 0, 0, 0, 0, False, orientation, False)
 
 
-# Inside entropy-coded data 0xFF is stuffed (FF00) or an RSTn, so any other marker ends the scan.
-_SCAN_MARKER = re.compile(rb'\xff+([\x01-\xcf\xd8-\xfe])')
+def _scan_markers(data: bytes) -> np.ndarray:
+    """Offsets of the marker bytes that can end an entropy-coded scan, ascending.
+
+    Inside a scan ``0xFF`` is stuffed (``FF00``), starts a restart marker (``FFD0``..``FFD7``) or
+    is a fill byte before another ``0xFF``; an ``0xFF`` followed by any other byte is a marker
+    that ends the scan. One vectorised pass (numpy releases the interpreter lock in it): the prep
+    model calls this from every worker thread, and a per-byte interpreter loop over a 7 MB photo
+    held the lock for about 80 ms, which capped one process at about 7 photos per second.
+    """
+    a = np.frombuffer(data, np.uint8)
+    ff = np.flatnonzero(a[:-1] == 0xFF)
+    nxt = a[ff + 1]
+    return ff[(nxt != 0x00) & (nxt != 0xFF) & ((nxt < 0xD0) | (nxt > 0xD7))] + 1
 
 
 def jpeg_end(data: bytes) -> int | None:
@@ -107,12 +117,17 @@ def jpeg_end(data: bytes) -> int | None:
     motion photo's video) are not part of it.
     """
     n, i, in_scan = len(data), 2, False
+    markers: np.ndarray | None = None
     while True:
         if in_scan:
-            m = _SCAN_MARKER.search(data, i)
-            if m is None:
+            if markers is None:
+                markers = _scan_markers(data)
+            # The scan's first byte is at ``i``, so its ending marker byte is past ``i``.
+            k = int(np.searchsorted(markers, i + 1))
+            if k >= len(markers):
                 return None
-            marker, i = data[m.end() - 1], m.end()
+            i = int(markers[k])
+            marker, i = data[i], i + 1
         else:
             if i >= n or data[i] != 0xFF:
                 return None
