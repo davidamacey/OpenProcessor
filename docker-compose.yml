@@ -1867,7 +1867,7 @@ services:
   # OpenSearch 3.x with k-NN plugin for vector similarity search
   # ===================================================================
   opensearch:
-    image: ${OPENSEARCH_IMAGE:-opensearchproject/opensearch:3.7.0}
+    image: ${OPENSEARCH_IMAGE:-opensearchproject/opensearch:3.9.0}
     logging: *default-logging
     mem_reservation: ${OPENSEARCH_HEAP:-2g}
     restart: always
@@ -1897,7 +1897,7 @@ services:
       - triton_net
 
   opensearch-dashboards:
-    image: ${OPENSEARCH_DASHBOARDS_IMAGE:-opensearchproject/opensearch-dashboards:3.7.0}
+    image: ${OPENSEARCH_DASHBOARDS_IMAGE:-opensearchproject/opensearch-dashboards:3.9.0}
     logging: *default-logging
     mem_reservation: 512m
     restart: always
