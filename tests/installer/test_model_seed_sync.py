@@ -1,7 +1,7 @@
 """The upgrade copies changed model files into an installed model repository (#377).
 
-``cp -rn`` kept the old ``gpu_image_prep`` files, so the GPU embed route stayed off after an
-upgrade. A model directory that carries a ``MODEL_VERSION`` file is replaced when the seed's version
+``cp -rn`` kept the old files of a Python-backend model (the GPU decode model of 0.6.0), so a
+fixed model stayed broken after an upgrade. A model directory that carries a ``MODEL_VERSION`` file is replaced when the seed's version
 is newer; everything else is still only added when missing.
 """
 
@@ -46,16 +46,16 @@ def repos(tmp_path: Path) -> tuple[Path, Path]:
 
 def test_a_newer_seed_version_replaces_the_model_files(repos: tuple[Path, Path]) -> None:
     seed, dest = repos
-    _write(seed, 'gpu_image_prep/MODEL_VERSION', '2\n')
-    _write(seed, 'gpu_image_prep/1/model.py', 'new')
-    _write(seed, 'gpu_image_prep/config.pbtxt', 'new config')
-    _write(dest, 'gpu_image_prep/1/model.py', 'old')
-    _write(dest, 'gpu_image_prep/config.pbtxt', 'old config')
+    _write(seed, 'ocr_pipeline/MODEL_VERSION', '2\n')
+    _write(seed, 'ocr_pipeline/1/model.py', 'new')
+    _write(seed, 'ocr_pipeline/config.pbtxt', 'new config')
+    _write(dest, 'ocr_pipeline/1/model.py', 'old')
+    _write(dest, 'ocr_pipeline/config.pbtxt', 'old config')
     updated = _load().sync(seed, dest)
-    assert updated == ['gpu_image_prep']
-    assert (dest / 'gpu_image_prep/1/model.py').read_text() == 'new'
-    assert (dest / 'gpu_image_prep/config.pbtxt').read_text() == 'new config'
-    assert (dest / 'gpu_image_prep/MODEL_VERSION').read_text().strip() == '2'
+    assert updated == ['ocr_pipeline']
+    assert (dest / 'ocr_pipeline/1/model.py').read_text() == 'new'
+    assert (dest / 'ocr_pipeline/config.pbtxt').read_text() == 'new config'
+    assert (dest / 'ocr_pipeline/MODEL_VERSION').read_text().strip() == '2'
 
 
 def test_an_install_without_a_version_file_is_version_zero(repos: tuple[Path, Path]) -> None:
@@ -97,8 +97,8 @@ def test_built_engines_beside_replaced_files_survive(repos: tuple[Path, Path]) -
     assert (dest / 'm/1/model.plan').read_text() == 'engine'
 
 
-def test_the_shipped_gpu_image_prep_carries_a_version() -> None:
-    text = (REPO_ROOT / 'models' / 'gpu_image_prep' / 'MODEL_VERSION').read_text()
+def test_the_shipped_ocr_pipeline_carries_a_version() -> None:
+    text = (REPO_ROOT / 'models' / 'ocr_pipeline' / 'MODEL_VERSION').read_text()
     assert int(text.strip()) >= 1
 
 
@@ -145,3 +145,35 @@ def test_the_shipped_ocr_pipeline_replaces_an_unversioned_install(tmp_path: Path
     assert 'TYPE_UINT8' in (dest / 'ocr_pipeline/config.pbtxt').read_text()
     assert (dest / 'ocr_pipeline/1/model.py').read_text() != 'old'
     assert (dest / 'paddleocr_rec_trt/1/model.plan').read_text() == 'engine'
+
+
+def test_a_retired_model_directory_is_removed_from_the_install(repos: tuple[Path, Path]) -> None:
+    """0.7.0 replaced the gpu_image_prep Triton model with the frame engine service; an upgraded
+    install must not keep its directory (Triton would list it, and its built files are dead)."""
+    seed, dest = repos
+    _write(seed, 'kept/config.pbtxt', 'seed')
+    _write(dest, 'gpu_image_prep/1/model.py', 'old')
+    _write(dest, 'gpu_image_prep/config.pbtxt', 'old')
+    _write(dest, 'my_custom_model/config.pbtxt', 'mine')  # not in the seed, not retired: kept
+    sync = _load()
+    sync.sync(seed, dest)
+    assert sync.remove_retired(dest) == ['gpu_image_prep']
+    assert not (dest / 'gpu_image_prep').exists()
+    assert (dest / 'my_custom_model' / 'config.pbtxt').read_text() == 'mine'
+    assert (dest / 'kept' / 'config.pbtxt').exists()
+    assert 'gpu_image_prep' in sync.RETIRED_MODELS
+
+
+def test_the_command_line_entry_point_reports_removed_models(repos: tuple[Path, Path]) -> None:
+    seed, dest = repos
+    seed.mkdir()
+    _write(dest, 'gpu_image_prep/config.pbtxt', 'old')
+    done = subprocess.run(
+        ['python3', str(SCRIPT), str(seed), str(dest)],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert done.returncode == 0, done.stderr
+    assert 'removed retired models: gpu_image_prep' in done.stdout

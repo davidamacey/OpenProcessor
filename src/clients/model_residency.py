@@ -3,7 +3,7 @@
 By default Triton preloads every model the API can call (``docker-compose.yml``). With
 ``OP_LOAD_PROFILE=ingest`` (and the overlay ``docker-compose.ingest-focus.yml``) it preloads only
 what photo ingest calls (the detector and the PE image and text encoders, see `docker-compose.ingest-focus.yml`), which frees the GPU memory of the face,
-MobileCLIP and OCR models for ``gpu_image_prep``. Every other endpoint still answers: the client
+MobileCLIP and OCR models for ingest. Every other endpoint still answers: the client
 that is about to call a model first makes sure it is READY and asks Triton (explicit model
 control) to load it when it is not. A load that fails fails the call; nothing is skipped silently.
 

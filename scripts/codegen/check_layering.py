@@ -20,6 +20,10 @@ function bodies). Contracts:
    ``src/tasks/runtime/`` itself imports only ``src.db``, ``src.config``, ``src.domain``,
    ``src.utils`` and itself, so the trainer, export and evaluator images can carry it without
    FastAPI, OpenSearch or torch.
+8. ``frame_engine/`` (its own image) imports from ``src`` only ``src.domain`` and ``src.utils``,
+   the two packages its image carries; nothing in ``src``, ``scripts``, ``docker`` or ``export``
+   imports ``frame_engine`` (the API reaches it over gRPC, through the shared wire module
+   ``src/domain/frame_engine_wire.py``).
 
 There is no baseline: a violation fails. The one permanent exception is
 :data:`PERMANENT_EXCEPTIONS`, with its reason; an exception whose import is gone
@@ -89,13 +93,19 @@ CONTRACTS: tuple[tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]], ...] 
 
 # The only ``src`` packages ``src/tasks/runtime/`` may import.
 _RUNTIME_MAY_IMPORT = ('src.db', 'src.config', 'src.domain', 'src.utils', 'src.tasks.runtime')
+# The only ``src`` packages ``frame_engine/`` may import (what its image copies).
+_ENGINE_MAY_IMPORT = ('src.domain', 'src.utils')
 
 
 def tracked_python(repo_root: Path) -> list[str]:
     out = subprocess.run(  # nosec B603 B607  fixed argv, git from PATH
         ['git', 'ls-files', '-z', '*.py'], cwd=repo_root, capture_output=True, text=True, check=True
     ).stdout
-    return [p for p in out.split('\0') if p.startswith(('src/', 'scripts/', 'docker/', 'export/'))]
+    return [
+        p
+        for p in out.split('\0')
+        if p.startswith(('src/', 'scripts/', 'docker/', 'export/', 'frame_engine/'))
+    ]
 
 
 def _matches(module: str, prefix: str) -> bool:
@@ -126,8 +136,16 @@ def _breaks_task_layers(rel: str, module: str) -> bool:
     return False
 
 
+def _breaks_engine_boundary(rel: str, module: str) -> bool:
+    if rel.startswith('frame_engine/'):
+        return _matches(module, 'src') and not any(
+            _matches(module, ok) for ok in _ENGINE_MAY_IMPORT
+        )
+    return _matches(module, 'frame_engine')
+
+
 def violated(rel: str, module: str) -> bool:
-    if _breaks_task_layers(rel, module):
+    if _breaks_task_layers(rel, module) or _breaks_engine_boundary(rel, module):
         return True
     for applies, forbidden, exempt in CONTRACTS:
         if rel.startswith(applies) and not rel.startswith(exempt):
@@ -176,7 +194,8 @@ def main(argv: list[str] | None = None) -> int:
             'ERROR: layering contract failed. Routers may import services and clients; '
             'services and clients never import routers; clients never import services; '
             'only routers import fastapi; src/db imports no service, client or router; '
-            'src/tasks/runtime is a leaf that only db, config, domain and utils may feed.\n'
+            'src/tasks/runtime is a leaf that only db, config, domain and utils may feed; '
+            'frame_engine imports only src.domain and src.utils, and nothing imports it.\n'
         )
         for e in errors:
             sys.stderr.write(f'  {e}\n')

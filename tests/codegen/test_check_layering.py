@@ -121,6 +121,11 @@ def test_allowed_directions_pass(scratch_repo: ScratchRepo, path: str, source: s
         # handlers go through services, not repositories
         ('src/routers/a.py', 'from src.db.repos import jobs\n'),
         ('src/routers/a.py', 'import src.db.repos.jobs\n'),
+        # the frame engine's image carries src.domain and src.utils only; nothing imports it
+        ('frame_engine/a.py', 'from src.config.settings import Settings\n'),
+        ('frame_engine/a.py', 'from src.services.curation import wire\n'),
+        ('src/services/curation/a.py', 'from frame_engine.engine import FrameEngine\n'),
+        ('scripts/bench/a.py', 'import frame_engine.front\n'),
     ],
 )
 def test_the_control_plane_contracts_are_enforced(
@@ -152,6 +157,11 @@ def test_the_control_plane_contracts_are_enforced(
         ('scripts/curation/bakeoff/a.py', 'from src.tasks.runtime import gpu_app\n'),
         ('scripts/db/a.py', 'from src.db import roles\n'),
         ('src/tasks/families_a.py', 'from src.tasks.runtime import x\nfrom src.tasks import app\n'),
+        (
+            'frame_engine/a.py',
+            'from src.domain import frame_engine_wire\nfrom src.utils import q\n',
+        ),
+        ('frame_engine/a.py', 'from frame_engine.slab import SlabAllocator\nimport cupy\n'),
     ],
 )
 def test_the_allowed_control_plane_directions_pass(

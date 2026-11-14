@@ -74,6 +74,10 @@ jobs:
             file: docker/segmenter/Dockerfile
             context: docker/segmenter
             target: ''
+          - image: frame_engine
+            file: docker/frame-engine/Dockerfile
+            context: .
+            target: ''
           - image: cropwright
             file: frontend/Dockerfile
             context: frontend
@@ -108,6 +112,9 @@ jobs:
             segmenter:
               - 'docker/segmenter/Dockerfile'
               - 'docker/segmenter/requirements.txt'
+            frame_engine:
+              - 'docker/frame-engine/Dockerfile'
+              - 'docker/frame-engine/requirements.txt'
             cropwright:
               - 'frontend/Dockerfile'
               - 'frontend/package.json'

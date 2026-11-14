@@ -50,7 +50,7 @@ _ENV_CONSTANT_RE = re.compile(
 # importable from ``src/`` but they read ``OP_*`` vars a deployment has to set,
 # so leaving them unscanned would let the trainer's whole env surface drift out
 # of env.template unnoticed.
-_SCANNED_ROOTS = ('src', 'scripts', 'docker', 'export')
+_SCANNED_ROOTS = ('src', 'frame_engine', 'scripts', 'docker', 'export')
 
 # Prefixes documented via a "2-3 examples + see the dataclass" convention
 # rather than one env.template line per field (RegionFields has ~30
@@ -102,6 +102,7 @@ _TEMPLATE_SIDE_ALLOWLIST = {
     'OP_EVALUATOR_IMAGE',
     'OP_EXPORT_IMAGE',
     'OP_SEGMENTER_IMAGE',
+    'OP_FRAME_ENGINE_IMAGE',
     'OP_TRAINER_IMAGE',
     'OP_BIND_ADDRESS',
     'OP_UI_BIND_ADDRESS',
@@ -269,7 +270,7 @@ def test_no_env_var_names_a_project_resource() -> None:
     assert not (retired & _env_template_tokens())
     offenders = sorted(
         f'{path.relative_to(REPO_ROOT)}: {var}'
-        for root in ('src', 'scripts', 'docker')
+        for root in ('src', 'frame_engine', 'scripts', 'docker')
         for path in (REPO_ROOT / root).rglob('*')
         if path.is_file() and path.suffix in {'.py', '.yml', '.yaml', '.sh'}
         for var in retired

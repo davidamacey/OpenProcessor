@@ -158,12 +158,17 @@ load_profile() {
     PROFILE_MAX_BATCH=$(grep -o '"max_batch_size"[[:space:]]*:[[:space:]]*[0-9]*' "$profile_file" | grep -o '[0-9]*$')
     PROFILE_OCR_PIPELINE_INSTANCES=$(grep -o '"ocr_pipeline_instances"[[:space:]]*:[[:space:]]*[0-9]*' "$profile_file" | grep -o '[0-9]*$')
 
-    PROFILE_GPU_IMAGE_PREP_INSTANCES=$(grep -o '"gpu_image_prep_instances"[[:space:]]*:[[:space:]]*[0-9]*' "$profile_file" | grep -o '[0-9]*$')
-    PROFILE_GPU_IMAGE_PREP_INSTANCES="${PROFILE_GPU_IMAGE_PREP_INSTANCES:-1}"
+    PROFILE_FRAME_ENGINE_REGION_MIB=$(grep -o '"frame_engine_region_mib"[[:space:]]*:[[:space:]]*[0-9]*' "$profile_file" | grep -o '[0-9]*$')
+    PROFILE_FRAME_ENGINE_POOL_MIB=$(grep -o '"frame_engine_pool_mib"[[:space:]]*:[[:space:]]*[0-9]*' "$profile_file" | grep -o '[0-9]*$')
+    PROFILE_FRAME_ENGINE_BUDGET_MIB=$(grep -o '"frame_engine_budget_mib"[[:space:]]*:[[:space:]]*[0-9]*' "$profile_file" | grep -o '[0-9]*$')
+    PROFILE_FRAME_ENGINE_LANES=$(grep -o '"frame_engine_lanes"[[:space:]]*:[[:space:]]*[0-9]*' "$profile_file" | grep -o '[0-9]*$')
+    PROFILE_FRAME_ENGINE_WORKERS=$(grep -o '"frame_engine_workers"[[:space:]]*:[[:space:]]*[0-9]*' "$profile_file" | grep -o '[0-9]*$')
 
     PROFILE_INGEST_GPU_DECODE=$(profile_ingest_gpu_decode "$profile_file")
 
-    export PROFILE_NAME PROFILE_INSTANCE_COUNT PROFILE_MAX_BATCH PROFILE_OCR_PIPELINE_INSTANCES PROFILE_GPU_IMAGE_PREP_INSTANCES PROFILE_INGEST_GPU_DECODE
+    export PROFILE_NAME PROFILE_INSTANCE_COUNT PROFILE_MAX_BATCH PROFILE_OCR_PIPELINE_INSTANCES PROFILE_INGEST_GPU_DECODE \
+        PROFILE_FRAME_ENGINE_REGION_MIB PROFILE_FRAME_ENGINE_POOL_MIB PROFILE_FRAME_ENGINE_BUDGET_MIB \
+        PROFILE_FRAME_ENGINE_LANES PROFILE_FRAME_ENGINE_WORKERS
 
     log_debug "Loaded profile: $PROFILE_NAME (instances=$PROFILE_INSTANCE_COUNT, batch=$PROFILE_MAX_BATCH)"
     return 0

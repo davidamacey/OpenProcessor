@@ -1,10 +1,10 @@
 """The closed vocabulary of decode routes: how one photo's pixels were decoded.
 
-``gpu`` is the ``gpu_image_prep`` Triton model's decode. Every other name starts with ``cpu_`` and
+``gpu`` is the frame engine's decode (``frame_engine/``). Every other name starts with ``cpu_`` and
 says why the photo took the CPU path: the gate in the API (``small``, ``not_image``), the GPU
 decode being off or not ready for the profile (``gpu_off``), a call that raised
 (``call_failed``), or one of the statuses the model itself answers (:data:`PREP_STATUSES`,
-from ``models/gpu_image_prep/1/prep_geometry.py`` ``route`` and ``model.py``). ``cpu_single`` is
+from ``frame_engine/prep_geometry.py`` ``route`` and ``frame_engine/engine.py``). ``cpu_single`` is
 the one-image ingest, which never asks the GPU decode.
 
 The Prometheus counter ``op_decode_route_total``, the images document's ``decode_route`` and the

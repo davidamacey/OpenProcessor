@@ -7,7 +7,7 @@ engine takes and returns from the registry instead of from its name. The semanti
 the code that produces those inputs, and ``tests/promote/test_builtin_engine_contracts.py`` checks
 dtype, dimensions, batch size and outputs against the shipped ``config.pbtxt`` so the two cannot
 drift apart. Only engines get a row (``platform:`` models); the python-backend models
-(``gpu_image_prep``, ``ocr_pipeline``) run no engine of their own.
+(``ocr_pipeline``) run no engine of their own.
 
 Output shapes exclude the batch dimension, as in ``config.pbtxt``. A row seeded here records
 ``trt_version`` and ``gpu_arch`` as ``unrecorded`` and a null ``built_at``: it states the shipped

@@ -17,6 +17,7 @@ BUILD_ENVS = (
     'OP_EVALUATOR_IMAGE',
     'OP_TRITON_IMAGE',
     'OP_SEGMENTER_IMAGE',
+    'OP_FRAME_ENGINE_IMAGE',
     'OP_TRAINER_IMAGE',
     'OP_CROPWRIGHT_IMAGE',
 )
@@ -25,7 +26,12 @@ BUILD_ENVS = (
 def _local_images(shimmed: Shimmed, repo: str, tag: str) -> None:
     images = shimmed.state / 'images'
     images.mkdir(exist_ok=True)
-    for name in ('openprocessor', 'openprocessor-export', 'openprocessor-triton'):
+    for name in (
+        'openprocessor',
+        'openprocessor-export',
+        'openprocessor-triton',
+        'openprocessor-frame-engine',
+    ):
         (images / f'{repo}_{name}_{tag}').write_text(f'{repo}/{name}@sha256:{"0" * 64}\n')
 
 

@@ -16,13 +16,16 @@ from typing import Any, NamedTuple
 
 import numpy as np
 
+from src.domain.jpeg_markers import (
+    LOSSLESS,
+    PROGRESSIVE,
+    SOF_MARKERS,
+    exif_orientation,
+    header_segments,
+)
+
 
 # ------------------------------------------------------------------------------ JPEG header
-
-_SOF_MARKERS = {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF}
-_PROGRESSIVE = {0xC2, 0xC6, 0xCA, 0xCE}
-_LOSSLESS = {0xC3, 0xC7, 0xCB, 0xCF}
-_STANDALONE = {0x01, *range(0xD0, 0xD8)}
 
 
 class JpegHeader(NamedTuple):
@@ -43,27 +46,6 @@ class JpegHeader(NamedTuple):
     lossless: bool = False
 
 
-def _exif_orientation(payload: bytes) -> int:
-    """Orientation tag (0x0112) of IFD0 of an APP1 ``Exif`` payload; 1 when absent."""
-    tiff = payload[6:]
-    if len(tiff) < 8 or tiff[:2] not in (b'II', b'MM'):
-        return 1
-    end = '<' if tiff[:2] == b'II' else '>'
-    (ifd,) = struct.unpack(end + 'I', tiff[4:8])
-    if ifd + 2 > len(tiff):
-        return 1
-    (count,) = struct.unpack(end + 'H', tiff[ifd : ifd + 2])
-    for k in range(count):
-        entry = tiff[ifd + 2 + 12 * k : ifd + 14 + 12 * k]
-        if len(entry) < 12:
-            break
-        tag, _typ, _n = struct.unpack(end + 'HHI', entry[:8])
-        if tag == 0x0112:
-            (value,) = struct.unpack(end + 'H', entry[8:10])
-            return value if 1 <= value <= 8 else 1
-    return 1
-
-
 def _non_jpeg_kind(data: bytes) -> str:
     if data[:8] == b'\x89PNG\r\n\x1a\n':
         return 'png'
@@ -80,24 +62,13 @@ def jpeg_header(data: bytes) -> JpegHeader:
     """Parse the markers of ``data`` up to the first frame header (and its APP segments)."""
     if data[:2] != b'\xff\xd8':
         return JpegHeader(_non_jpeg_kind(data), 0, 0, 0, 0, False, 1, False)
-    orientation, has_icc, i = 1, False, 2
-    while i + 4 <= len(data):
-        if data[i] != 0xFF:
-            break
-        marker = data[i + 1]
-        if marker == 0xFF:
-            i += 1
-            continue
-        if marker in _STANDALONE:
-            i += 2
-            continue
-        (length,) = struct.unpack('>H', data[i + 2 : i + 4])
-        payload = data[i + 4 : i + 2 + length]
+    orientation, has_icc = 1, False
+    for marker, payload in header_segments(data):
         if marker == 0xE1 and payload[:6] == b'Exif\x00\x00':
-            orientation = _exif_orientation(payload)
+            orientation = exif_orientation(payload)
         elif marker == 0xE2 and payload[:12] == b'ICC_PROFILE\x00':
             has_icc = True
-        elif marker in _SOF_MARKERS and len(payload) >= 6:
+        elif marker in SOF_MARKERS and len(payload) >= 6:
             precision, height, width, comps = struct.unpack('>BHHB', payload[:6])
             return JpegHeader(
                 'jpeg',
@@ -105,14 +76,11 @@ def jpeg_header(data: bytes) -> JpegHeader:
                 height,
                 comps,
                 precision,
-                marker in _PROGRESSIVE,
+                marker in PROGRESSIVE,
                 orientation,
                 has_icc,
-                marker in _LOSSLESS,
+                marker in LOSSLESS,
             )
-        elif marker == 0xDA:
-            break
-        i += 2 + length
     return JpegHeader('corrupt', 0, 0, 0, 0, False, orientation, has_icc)
 
 

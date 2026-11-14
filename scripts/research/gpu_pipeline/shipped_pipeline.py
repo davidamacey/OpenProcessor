@@ -1,7 +1,7 @@
-"""The shipped ``gpu_image_prep`` algorithm outside Triton, stage by stage.
+"""The shipped decode and prep algorithm (the frame engine's) outside any server, stage by stage.
 
-Same decode lanes, kernels and geometry as ``models/gpu_image_prep/1`` (imported by path, not
-copied); the two BLS calls become direct TensorRT calls (``trt_runner``). Every stage is wrapped in
+Same decode lanes, kernels and geometry as ``frame_engine/`` (imported by path, not copied); the
+two model calls become direct TensorRT calls (``trt_runner``). Every stage is wrapped in
 an NVTX range so an ``nsys`` trace attributes GPU kernel time to it, and timed on the wall clock.
 """
 

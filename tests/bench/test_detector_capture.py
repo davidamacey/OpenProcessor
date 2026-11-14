@@ -1,4 +1,4 @@
-"""``detector_capture.gpu_decode_row``: the GPU decode's rows mapped like the CPU capture's."""
+"""``detector_capture.gpu_decode_row``: the frame engine's rows mapped like the CPU capture's."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 from scripts.bench import detector_capture as dc
+from src.domain import frame_engine_wire as wire
 
 
 class _Result:
@@ -19,21 +20,18 @@ class _Result:
 
 
 class _Client:
+    """The frame engine: one unary call per image."""
+
     def __init__(self, outputs: dict[str, np.ndarray]) -> None:
         self.outputs = outputs
-        self.callback: Any = None
-        self.stopped = False
+        self.plans: list[wire.EnginePlan] = []
 
-    def start_stream(self, callback: Any) -> None:
-        self.callback = callback
-
-    def async_stream_infer(self, model: str, inputs: list) -> None:
-        assert model == 'gpu_image_prep'
-        assert inputs[0].shape() == [4]
-        self.callback(result=_Result(self.outputs), error=None)
-
-    def stop_stream(self) -> None:
-        self.stopped = True
+    def infer(self, model: str, inputs: list, **_k: Any) -> _Result:
+        assert model == wire.MODEL_NAME
+        assert [i.name() for i in inputs] == ['image', 'plan']
+        raw = inputs[1]._raw_content
+        self.plans.append(wire.parse_plan(raw[4:], has_boxes=False))
+        return _Result(self.outputs)
 
 
 def test_rows_are_undone_with_the_returned_letterbox() -> None:
@@ -47,19 +45,21 @@ def test_rows_are_undone_with_the_returned_letterbox() -> None:
             'det_classes': np.array([3], np.int32),
         }
     )
-    rows = dc.gpu_decode_row(client, 'gpu_image_prep', b'\xff\xd8\xff\xd9')
+    rows = dc.gpu_decode_row(client, 'det_u8', b'\xff\xd8\xff\xd9')
     expected = dc.decode_row(
         client.outputs['det_boxes'], client.outputs['det_scores'], np.array([3]), scale, pad
     )
     assert rows == expected
     assert rows[0][:4] == [320.0, 160.0, 640.0, 480.0]
-    assert client.stopped
+    [plan] = client.plans
+    assert plan.branches == ('detect',)
+    assert plan.detector == wire.DetectorSpec('det_u8', 640, 114)
 
 
 def test_a_declined_image_stops_the_capture() -> None:
     client = _Client({'status': np.array([b'progressive'], dtype=np.object_)})
     with pytest.raises(SystemExit, match='progressive'):
-        dc.gpu_decode_row(client, 'gpu_image_prep', b'\xff\xd8\xff\xd9')
+        dc.gpu_decode_row(client, 'det_u8', b'\xff\xd8\xff\xd9')
 
 
 def test_fused_rows_drop_the_zero_score_padding() -> None:

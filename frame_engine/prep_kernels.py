@@ -18,7 +18,8 @@ from typing import Any
 
 import cupy as cp
 import numpy as np
-from prep_geometry import filter_weights
+
+from frame_engine.prep_geometry import filter_weights
 
 
 _SRC = r"""

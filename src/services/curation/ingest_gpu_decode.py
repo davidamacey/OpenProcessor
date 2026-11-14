@@ -1,20 +1,22 @@
 """GPU decode for photos (#217): decode once on the GPU, derive every input there.
 
 With ``OP_INGEST_GPU_DECODE`` on, a batch ingest sends each image at or above
-``OP_INGEST_GPU_MIN_MEGAPIXELS`` to the ``gpu_image_prep`` Triton model instead of decoding it in
-the API. That model decodes the photo once (nvJPEG), runs the detector on its letterbox, embeds
-the whole-frame square and every detection's square with PE, computes the blur sums and encodes
-the crop JPEGs; only boxes, vectors, sums and JPEGs come back. The API turns the detector rows
-into items with the same :meth:`WholeImageDetector.decode_primary_row` the CPU path uses and
-reads every other per-image product from the returned :class:`GpuDecodeFrame`.
+``OP_INGEST_GPU_MIN_MEGAPIXELS`` to the frame engine (``frame_engine/``, the ``frame-engine``
+service) instead of decoding it in the API. The engine decodes the photo once (nvJPEG), runs the
+detector on its letterbox, embeds the whole-frame square and every detection's square with PE,
+computes the blur sums and encodes the crop JPEGs; only boxes, vectors, sums and JPEGs come back
+(:mod:`src.clients.frame_engine`, one request per image with a plan naming the profile's detector
+and the PE encoder). The API turns the detector rows into items with the same
+:meth:`WholeImageDetector.decode_primary_row` the CPU path uses and reads every other per-image
+product from the returned :class:`GpuDecodeFrame`.
 
 Fail closed, image by image: an image the GPU decode does not take (not a baseline 8-bit JPEG,
-no end-of-image marker, below the gate, a decoder error) or a GPU decode call that fails is
-decoded on the CPU path as before, and counted in ``op_decode_route_total``; each photo's route
-(:mod:`src.domain.decode_route`) is stored on its images document as ``decode_route``. The GPU decode is
-used only while its detector, network size and letterbox fill match the ingest profile and no
-secondary detector is configured (that one needs the CPU frame); otherwise every image takes the
-CPU path.
+no end-of-image marker, below the gate, a decoder error), an engine still overloaded after the
+client's retries (``gpu_memory``), and a call that fails or a branch that errors (``call_failed``)
+are decoded on the CPU path as before, and counted in ``op_decode_route_total``; each photo's
+route (:mod:`src.domain.decode_route`) is stored on its images document as ``decode_route``. The
+GPU decode is used only while no secondary detector is configured (that one needs the CPU frame)
+and the profile's letterbox fill is one grey; otherwise every image takes the CPU path.
 
 Images below the gate stay on the CPU because they are faster there: a COCO frame decodes in
 5 ms on one core, and the GPU it would use is what binds frame ingest (PE).
@@ -29,11 +31,13 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from PIL import Image
 
-from src.clients.pe_encoder import _l2_normalize
-from src.config.settings import TritonModelConfig
+from src.clients import frame_engine
+from src.clients.pe_encoder import PE_IMAGE_MODEL, _l2_normalize
 from src.core.logging import get_logger
+from src.domain import frame_engine_wire as wire
 from src.services.curation.ops_metrics import count_decode_route
 from src.services.detection.crop_quality import variance_from_sums
+from src.utils.pe_preprocess import PE_SIZE
 from src.utils.retry import TRITON_CALL_ERRORS
 
 
@@ -44,7 +48,12 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-GPU_IMAGE_PREP_MODEL = TritonModelConfig.GPU_IMAGE_PREP_MODEL
+#: Squares per encoder call inside the engine (the PE engine's max batch, as the prep model used).
+PE_BATCH = 32
+#: The answer when the engine stayed overloaded through the client's retries: the status the prep
+#: model gave when its device-memory wait ran out.
+OVERLOADED = 'gpu_memory'
+CALL_FAILED = 'call_failed'
 
 
 @dataclass
@@ -91,45 +100,55 @@ def megapixels(data: bytes) -> float | None:
     return w * h / 1e6
 
 
-#: The pool also raises RuntimeError: not initialized, or a stream closed without a response.
-_GPU_CALL_ERRORS: tuple[type[Exception], ...] = (*TRITON_CALL_ERRORS, RuntimeError)
+#: What a readiness probe can raise besides the Triton client errors: a pool not initialized.
+_PROBE_ERRORS: tuple[type[Exception], ...] = (*TRITON_CALL_ERRORS, RuntimeError)
+_READY: set[tuple[str, int, int]] = set()
 
-_READY: dict[tuple[str, int, tuple[int, int, int]], bool] = {}
+
+def embed_spec() -> wire.EmbedSpec:
+    return wire.EmbedSpec(model=PE_IMAGE_MODEL, size=PE_SIZE, batch=PE_BATCH)
+
+
+def detector_spec(service: CurationIngestService) -> wire.DetectorSpec | None:
+    """The profile's detector as the engine runs it; ``None`` when the letterbox fill is not one
+    grey (the engine fills the canvas with one value)."""
+    p = service.profile
+    if len(set(p.letterbox_fill)) != 1:
+        return None
+    return wire.DetectorSpec(p.detector_model, p.input_size, p.letterbox_fill[0])
 
 
 async def gpu_decode_ready(service: CurationIngestService) -> bool:
-    """Whether photos go to the GPU decode: enabled, no secondary detector, and the loaded model
-    built for the ingest profile's detector input. The model check runs once per profile
-    shape per process; a failed probe is retried; a mismatch or a missing model is logged and keeps the CPU path."""
-    if not service.config.ingest_gpu_decode or service.detector.secondary_profile is not None:
+    """Whether photos go to the GPU decode: enabled, an engine client, no secondary detector, a
+    one-grey letterbox fill, the engine ready and the detector and PE encoder loaded in Triton
+    (explicit model control: they are loaded here when they are not). A ready verdict is kept per
+    detector shape per process; a failed probe is not, so the next batch asks again."""
+    if (
+        not service.config.ingest_gpu_decode
+        or service.frame_engine is None
+        or service.detector.secondary_profile is not None
+    ):
         return False
-    profile = service.profile
-    key = (profile.detector_model, profile.input_size, profile.letterbox_fill)
-    cached = _READY.get(key)
-    if cached is not None:
-        return cached
+    det = detector_spec(service)
+    if det is None:
+        logger.warning('ingest_gpu_decode_fill_not_uniform', fill=service.profile.letterbox_fill)
+        return False
+    key = (det.model, det.input_size, det.letterbox_fill)
+    if key in _READY:
+        return True
     try:
-        if not await service.triton_pool.is_model_ready(GPU_IMAGE_PREP_MODEL):
-            # Not in Triton's default load list: it holds GPU memory only where it is used.
-            await service.triton_pool.load_model(GPU_IMAGE_PREP_MODEL)
-        params = await service.triton_pool.get_model_parameters(GPU_IMAGE_PREP_MODEL)
-        expected = {
-            'DETECTOR_MODEL': profile.detector_model,
-            'NET_SIZE': str(profile.input_size),
-            'LETTERBOX_FILL': str(profile.letterbox_fill[0]),
-        }
-        mismatch = {k: (params.get(k), v) for k, v in expected.items() if params.get(k) != v}
-        ready = not mismatch and len(set(profile.letterbox_fill)) == 1
-        if not ready:
-            logger.warning(
-                'ingest_gpu_decode_profile_mismatch', mismatch=mismatch, fill=profile.letterbox_fill
-            )
-    except _GPU_CALL_ERRORS as exc:
-        # A failed call is not a verdict on the model: do not pin the worker to the CPU path.
+        if not await service.frame_engine.is_model_ready(wire.MODEL_NAME):
+            logger.warning('ingest_gpu_decode_engine_not_ready')
+            return False
+        for model in (det.model, PE_IMAGE_MODEL):
+            if not await service.triton_pool.is_model_ready(model):
+                await service.triton_pool.load_model(model)
+    except _PROBE_ERRORS as exc:
+        # A failed call is not a verdict: do not pin the worker to the CPU path.
         logger.warning('ingest_gpu_decode_unavailable', error=str(exc))
         return False
-    _READY[key] = ready
-    return ready
+    _READY.add(key)
+    return True
 
 
 @dataclass(frozen=True)
@@ -162,30 +181,27 @@ async def gpu_route(
     return GpuRoute(ready=True, chosen=tuple(chosen), unreadable=tuple(unreadable))
 
 
-def _input(name: str, arr: np.ndarray, dtype: str) -> Any:
-    from tritonclient.grpc import InferInput
-
-    inp = InferInput(name, list(arr.shape), dtype)
-    inp.set_data_from_numpy(arr)
-    return inp
-
-
-async def call_gpu_image_prep(
-    triton_pool: Any, data: bytes, extra: list[tuple[str, np.ndarray, str]], *, caller: str
-) -> Any:
-    """One ``gpu_image_prep`` request for the encoded image ``data`` plus the ``extra`` inputs
-    (name, array, Triton dtype): the result when its status is ``ok``, else the reason the image
-    takes the CPU path as a string (``call_failed`` when the call itself raised)."""
-    inputs = [_input('jpeg', np.frombuffer(data, dtype=np.uint8), 'UINT8')]
-    inputs.extend(_input(name, arr, dtype) for name, arr, dtype in extra)
+async def call_frame_engine(
+    pool: Any, data: bytes, plan: wire.EnginePlan, boxes: np.ndarray | None = None, *, caller: str
+) -> frame_engine.EngineAnswer | str:
+    """One frame-engine request for the encoded image ``data``: the answer when the image was
+    decoded and every branch ran, else the reason the image takes the CPU path as a string (a
+    status from :data:`src.domain.decode_route.PREP_STATUSES`, :data:`OVERLOADED` when the engine
+    stayed full through the retries, :data:`CALL_FAILED` when the call failed or a branch
+    errored)."""
     try:
-        result = await triton_pool.stream_one(GPU_IMAGE_PREP_MODEL, inputs)
-    except _GPU_CALL_ERRORS as exc:
-        logger.warning('gpu_image_prep_call_failed', caller=caller, error=str(exc))
-        return 'call_failed'
-    status = result.as_numpy('status')[0]
-    status = status.decode() if isinstance(status, bytes) else str(status)
-    return result if status == 'ok' else status
+        answer = await frame_engine.process(pool, data, plan, boxes)
+    except frame_engine.EngineCallError as exc:
+        logger.warning(
+            'frame_engine_call_failed', caller=caller, overloaded=exc.overloaded, error=str(exc)
+        )
+        return OVERLOADED if exc.overloaded else CALL_FAILED
+    if answer.status != wire.STATUS_OK:
+        return answer.status
+    if not answer.ok:
+        logger.warning('frame_engine_branch_failed', caller=caller, branches=answer.branches)
+        return CALL_FAILED
+    return answer
 
 
 async def run_gpu_decode(
@@ -193,31 +209,37 @@ async def run_gpu_decode(
 ) -> tuple[GpuDecodeFrame, list[DetectedItem]] | str:
     """The GPU decode's products and the detected items for one image, or the reason the image
     takes the CPU path."""
-    result = await call_gpu_image_prep(
-        service.triton_pool,
-        data,
-        [('embed_crops', np.array([embed_crops]), 'BOOL')],
-        caller='ingest',
+    det = detector_spec(service)
+    if det is None:
+        raise RuntimeError('run_gpu_decode without a ready GPU decode (gpu_decode_ready)')
+    branches: list[wire.EngineBranch] = ['detect', 'embed_frame']
+    if embed_crops:
+        branches.append('embed_crops')
+    plan = wire.EnginePlan(
+        branches=tuple(branches), detector=det, embed=embed_spec(), crops='inline'
     )
-    if isinstance(result, str):
-        return result
-    width, height = (int(v) for v in result.as_numpy('size'))
-    scale, pad_w, pad_h = (float(v) for v in result.as_numpy('letterbox'))
-    boxes = result.as_numpy('det_boxes').reshape(-1, 4)
+    answer = await call_frame_engine(service.frame_engine, data, plan, caller='ingest')
+    if isinstance(answer, str):
+        return answer
+    out = answer.outputs
+    width, height = (int(v) for v in out[wire.SIZE])
+    scale, pad_w, pad_h = (float(v) for v in out[wire.LETTERBOX])
+    boxes = out[wire.DET_BOXES].reshape(-1, 4)
     n = boxes.shape[0]
     items = service.detector.decode_primary_row(
-        boxes, result.as_numpy('det_scores'), result.as_numpy('det_classes'), scale, (pad_w, pad_h)
+        boxes, out[wire.DET_SCORES], out[wire.DET_CLASSES], scale, (pad_w, pad_h)
     )
-    crops = result.as_numpy('crop_embeddings').reshape(
-        -1, result.as_numpy('whole_embedding').shape[0]
-    )
+    whole = out[wire.WHOLE_EMBEDDING].astype(np.float32)
+    crops = out[wire.CROP_EMBEDDINGS].reshape(-1, whole.shape[0]) if embed_crops else None
     frame = GpuDecodeFrame(
         width=width,
         height=height,
-        whole_embedding=_l2_normalize(result.as_numpy('whole_embedding').astype(np.float32)),
-        crop_embeddings=_l2_normalize(crops.astype(np.float32)) if embed_crops and n else None,
-        blur_sums=result.as_numpy('blur_sums').reshape(-1, 3),
-        crop_jpegs=[bytes(b) for b in result.as_numpy('crop_jpegs').reshape(-1)],
+        whole_embedding=_l2_normalize(whole),
+        crop_embeddings=_l2_normalize(crops.astype(np.float32))
+        if crops is not None and n
+        else None,
+        blur_sums=out[wire.BLUR_SUMS].reshape(-1, 3),
+        crop_jpegs=list(out[wire.CROP_JPEGS]),
         det_of={id(item): i for i, item in enumerate(items)},
     )
     return frame, items

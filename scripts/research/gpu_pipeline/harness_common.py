@@ -25,12 +25,12 @@ if TYPE_CHECKING:
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-PREP_DIR = REPO_ROOT / 'models' / 'gpu_image_prep' / '1'
+PREP_DIR = REPO_ROOT / 'frame_engine'
 DEFAULT_SEED = 20261104
 
 
 def use_shipped_prep_modules() -> None:
-    """Make the shipped ``gpu_image_prep`` modules importable by their flat names."""
+    """Make the shipped decode and prep modules (``frame_engine/``) importable by their flat names."""
     for path in (str(REPO_ROOT), str(PREP_DIR)):
         if path not in sys.path:
             sys.path.insert(0, path)

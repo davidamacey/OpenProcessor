@@ -33,12 +33,14 @@ def sandbox(tmp_path: Path) -> Path:
     """A minimal repo: VERSION, one Dockerfile per image spec, git-initted."""
     repo = tmp_path / 'repo'
     (repo / 'docker' / 'segmenter').mkdir(parents=True)
+    (repo / 'docker' / 'frame-engine').mkdir(parents=True)
     (repo / 'docker' / 'trainer').mkdir(parents=True)
     (repo / 'frontend').mkdir()
     for df in [
         'Dockerfile',
         'Dockerfile.triton',
         'docker/segmenter/Dockerfile',
+        'docker/frame-engine/Dockerfile',
         'docker/trainer/Dockerfile',
         'frontend/Dockerfile',
     ]:
@@ -254,7 +256,7 @@ def test_failed_docker_build_is_reported_not_logged_as_built(sandbox: Path, fake
 def test_segmenter_builds_with_its_own_directory_as_context(
     sandbox: Path, fake_bin: Path, tmp_path: Path
 ) -> None:
-    result = _run(sandbox, fake_bin, ['--dry-run', '--only', 'segmenter,api'])
+    result = _run(sandbox, fake_bin, ['--dry-run', '--only', 'segmenter,frame_engine,api'])
     assert result.returncode == 0, result.stderr
     builds = [
         ln
@@ -262,8 +264,11 @@ def test_segmenter_builds_with_its_own_directory_as_context(
         if ln.startswith('build ')
     ]
     seg = next(ln for ln in builds if 'docker/segmenter/Dockerfile' in ln)
+    engine = next(ln for ln in builds if 'docker/frame-engine/Dockerfile' in ln)
     api = next(ln for ln in builds if '/Dockerfile ' in ln and 'docker/' not in ln)
     assert seg.endswith('/docker/segmenter')
+    # the engine image copies frame_engine/ and src/domain/ from the repository root
+    assert engine.endswith('/.')
     assert api.endswith('/.')
 
 
@@ -532,9 +537,10 @@ def test_one_dockerfile_builds_three_targets_in_cache_friendly_order(
         'openprocessor-export:1.2.3',
         'openprocessor-evaluator:1.2.3',
     ]
-    # single-stage Dockerfiles are built without --target
+    # single-stage Dockerfiles are built without --target: triton, segmenter, frame engine,
+    # trainer and cropwright
     others = [b for b in _builds(fake_bin) if '--target' not in b]
-    assert len(others) == 4
+    assert len(others) == 5
 
 
 def test_only_accepts_export_and_lock_records_it(sandbox: Path, fake_bin: Path) -> None:

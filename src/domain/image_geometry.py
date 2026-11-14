@@ -1,8 +1,7 @@
-"""Pixel geometry shared by the CPU paths and the GPU image-prep model.
+"""Pixel geometry shared by the CPU paths and the frame engine (``frame_engine/``).
 
-Pure arithmetic on sizes and boxes, standard library only, so ``export/sync_model_seed.py`` can
-copy this file unchanged into ``models/gpu_image_prep/1/`` (a Triton model cannot import ``src``)
-and ``tests/test_geometry_copy_identical.py`` holds the two byte-identical.
+Pure arithmetic on sizes and boxes, standard library only: the frame engine's image carries
+``src/domain`` and nothing else of ``src``.
 
 A letterbox pastes the resized frame at an integer offset, so the pad every caller un-maps with
 is that same integer: ``(target - new) // 2``. An odd margin puts the extra pixel on the right

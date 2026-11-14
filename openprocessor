@@ -311,12 +311,13 @@ status_probe() {
     fi
 }
 
-# status_control_plane ACTIVE_SERVICES -- one line per control-plane service, from compose's own
-# state and health (db-migrate is a one-shot: exit code 0 is its healthy end state).
-status_control_plane() {
+# status_internal_services ACTIVE_SERVICES -- one line per service without a host port (the frame
+# engine and the control plane), from compose's own state and health (db-migrate is a one-shot:
+# exit code 0 is its healthy end state).
+status_internal_services() {
     local active="$1" ps svc line state health code
     ps="$(dc ps --all --format '{{.Service}}|{{.State}}|{{.Health}}|{{.ExitCode}}' 2>/dev/null || true)"
-    for svc in postgres valkey db-migrate jobs-worker interactive-worker periodic-worker open-vocab-worker jobs-beat flower; do
+    for svc in frame-engine postgres valkey db-migrate jobs-worker interactive-worker periodic-worker open-vocab-worker jobs-beat flower; do
         if [[ -n "$active" ]] && ! grep -qx -- "$svc" <<<"$active"; then
             printf '  %-20snot part of this install\n' "${svc}:"
             continue
@@ -362,7 +363,7 @@ cmd_status() {
         "localhost:${TRITON_HTTP_PORT}/v2/health/ready" "$RED"
     status_probe "OpenSearch (${OPENSEARCH_PORT}): " "$active" opensearch "localhost:${OPENSEARCH_PORT}" "$RED"
     status_probe "Grafana (${GRAFANA_PORT}):   " "$active" grafana "localhost:${GRAFANA_PORT}/api/health" "$YELLOW"
-    status_control_plane "$active"
+    status_internal_services "$active"
 
     echo ""
 

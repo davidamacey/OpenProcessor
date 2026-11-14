@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """gpu:PR-0: the harness and the honest GPU number.
 
-Runs the shipped ``gpu_image_prep`` algorithm directly (no Triton) on one image set and writes, per
+Runs the shipped decode and prep algorithm (``frame_engine/``) directly (no Triton) on one image set and writes, per
 repetition, throughput, per-stage wall time, NVML samples and, with ``--check``, the parity of the
 GPU letterbox, whole-frame square and crop squares against the Pillow/OpenCV references.
 

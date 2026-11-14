@@ -24,6 +24,7 @@ IMAGE_KEYS_TABLE=(
     "evaluator|OP_EVALUATOR_IMAGE|build|Dockerfile|openprocessor-evaluator|evaluator"
     "triton|OP_TRITON_IMAGE|build|Dockerfile.triton|openprocessor-triton|"
     "segmenter|OP_SEGMENTER_IMAGE|build|docker/segmenter/Dockerfile|openprocessor-segmenter|"
+    "frame_engine|OP_FRAME_ENGINE_IMAGE|build|docker/frame-engine/Dockerfile|openprocessor-frame-engine|"
     "trainer|OP_TRAINER_IMAGE|build|docker/trainer/Dockerfile|openprocessor-trainer|"
     "cropwright|OP_CROPWRIGHT_IMAGE|build|frontend/Dockerfile|cropwright|"
     "vlm_gemma4|VLM_IMAGE|third|vllm/vllm-openai:gemma4-cu130"

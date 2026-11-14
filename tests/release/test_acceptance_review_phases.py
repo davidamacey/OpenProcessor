@@ -266,19 +266,22 @@ def _metrics(decode: str) -> str:
     return base + decode
 
 
-def _metrics_run(fake, tmp_path, decode, triton_body=None, *extra):
+def _metrics_run(fake, tmp_path, decode, engine_body=None, *extra):
     routes = _happy_routes()
     routes[('GET', '/metrics')] = (200, _metrics(decode))
     f = fake(routes)
     args = ['--only', 'metrics']
-    if triton_body is not None:
-        f.routes[('GET', '/triton')] = (200, triton_body)
-        args += ['--triton-metrics-url', f.url + '/triton']
+    if engine_body is not None:
+        f.routes[('GET', '/engine')] = (200, engine_body)
+        args += ['--frame-engine-metrics-url', f.url + '/engine']
     _proc, data = run(f, tmp_path, *args, *extra)
     return by_name(data)['metrics']
 
 
-STAGE = 'op_gpu_prep_stage_seconds{stage="decode"} 1\nop_gpu_prep_stage_observations{stage="decode"} 9\n'
+STAGE = (
+    'op_frame_engine_stage_seconds_total{stage="decode"} 1\n'
+    'op_frame_engine_stage_observations_total{stage="decode"} 9\n'
+)
 
 
 def test_metrics_pass_when_decode_counters_absent_with_note(fake, tmp_path):
@@ -293,7 +296,7 @@ def test_metrics_gpu_route_within_fallback_bound(fake, tmp_path):
     assert ph['status'] == 'pass', ph
     ev = json.dumps(ph['evidence'])
     assert 'gpu=996 fallbacks=4' in ev  # cpu_small is policy, not a fallback
-    assert 'Triton metrics carry' in ev
+    assert 'Frame engine metrics carry' in ev
 
 
 def test_metrics_fail_when_fallbacks_exceed_bound(fake, tmp_path):
@@ -313,7 +316,7 @@ def test_metrics_fail_when_stage_counters_missing_on_active_gpu_route(fake, tmp_
     decode = 'op_decode_route_total{route="gpu",path="ingest"} 100\n'
     ph = _metrics_run(fake, tmp_path, decode, 'nv_inference_count 1\n')
     assert ph['status'] == 'fail'
-    assert 'op_gpu_prep_stage_seconds' in json.dumps(ph['evidence'])
+    assert 'op_frame_engine_stage_seconds_total' in json.dumps(ph['evidence'])
 
 
 def test_metrics_cpu_only_decode_skips_gpu_checks(fake, tmp_path):

@@ -67,7 +67,7 @@ acts on). The API runs 32 uvicorn workers and every service that sets
 |---|---|---|
 | `GPU_PROFILE` | `standard` | `minimal` (under 12 GB), `small` (12-15 GB), `standard` (16-39 GB), `full` (40 GB+). Read by `./openprocessor gpu plan` and the model setup, not by compose |
 | `GPU_ID` | `0` | GPU the setup scripts measure for the profile |
-| `OP_INGEST_GPU_DECODE` | `1` for `full`, `0` for `minimal` and `standard` | Decode large photos on the GPU; costs about 8.5 GB more VRAM on the Triton card per `gpu_image_prep` instance (every profile runs one) |
+| `OP_INGEST_GPU_DECODE` | `1` for `full`, `0` for `minimal`, `small` and `standard` | Decode large photos on the GPU (the frame engine, on the Triton card; about 6 GB at its working sizes, which the installer writes for the profile) |
 | `OP_TRT_BUILD_TARGET` / `OP_TRT_WORKSPACE_GB` | unset (`small` is implied by `GPU_PROFILE=small`) | TensorRT engine build target and workspace; see [12 GB cards](../deployment/gpu-sizing.mdx#12-gb-cards) |
 | `OPENSEARCH_HEAP` | `2g` in `env.template` | OpenSearch JVM heap. The installer sets it to half of host RAM, between 2 and 30 GB, and never overwrites a value you set. Raise it for more projects: about 1 GB per 20 shards |
 
@@ -86,6 +86,7 @@ variable; see [GPU sizing](../deployment/gpu-sizing.mdx#gpu-ids).
 | Variable | Default | Service |
 |---|---|---|
 | `TRITON_GPU_ID` | `0` (a comma list such as `0,2` also runs the PE image encoder on the other cards) | `triton-server` |
+| `FRAME_ENGINE_GPU_ID` | `TRITON_GPU_ID` | `frame-engine` (GPU decode and prep; keep it on Triton's card) |
 | `API_GPU_ID` | `0` | `api` (torch fallbacks, CUDA-side preprocessing) |
 | `EVALUATOR_GPU_ID` | `0` | `curation-evaluator` |
 | `SEGMENTER_GPU_ID` | `0` | `segmenter` |
@@ -105,6 +106,7 @@ variable; see [GPU sizing](../deployment/gpu-sizing.mdx#gpu-ids).
 | `MLFLOW_PORT` | `4609` | MLflow (training profile) |
 | `SEGMENTER_PORT` | `4611` | Segmenter (segmenter profile) |
 | `VLM_PORT` | `4612` | In-compose VLM (vlm profile) |
+| `FRAME_ENGINE_METRICS_PORT` | `4613` | The frame engine's Prometheus metrics (its gRPC front is internal) |
 | `OP_BIND_ADDRESS` | `127.0.0.1` | Address every published port binds to. The API has no authentication, so set `0.0.0.0` (or a non-loopback address) only behind a reverse proxy that does; see [Security](../deployment/security.mdx) |
 | `OP_UI_BIND_ADDRESS` | value of `OP_BIND_ADDRESS` | Publish address for only Grafana, Prometheus, OpenSearch Dashboards and MLflow, so LAN browsers can follow the resource links without exposing OpenSearch, Triton, the VLM or segmenter APIs. Grafana's default login is `admin`/`admin` (set `GF_SECURITY_ADMIN_PASSWORD` first); MLflow and Prometheus have no auth |
 
