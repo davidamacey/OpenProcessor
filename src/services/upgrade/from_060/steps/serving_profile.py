@@ -63,8 +63,9 @@ def build_body(profile: dict[str, Any], counts: dict[str, int]) -> dict[str, Any
         'load_list': {SERVER_NAME: load_list},
         'instances': {m: counts[m] for m in load_list},
         'image_prep': {
-            'instances': profile.get('gpu_image_prep_instances', 1),
-            'device_budget_mib': profile.get('python_backend_budget_mib'),
+            # one frame engine process per card (plan 13, D7); its frame budget from the profile
+            'instances': 1,
+            'device_budget_mib': profile.get('frame_engine_budget_mib'),
         },
         'priorities': {'interactive': 'high', 'bulk': 'low'},
         'ingest_gpu_decode': bool(profile.get('ingest_gpu_decode', False)),

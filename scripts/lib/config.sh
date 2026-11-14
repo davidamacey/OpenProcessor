@@ -81,12 +81,6 @@ generate_model_config() {
             update_config_instance_settings "$config_file" "$profile" "$gpu_id" \
                 "$PROFILE_OCR_PIPELINE_INSTANCES"
             ;;
-        gpu_image_prep)
-            # Python model, one CUDA context and CuPy pool per instance (GPU_MIB_PER_INSTANCE
-            # each): the profile decides how many copies the card holds (#268).
-            update_config_instance_settings "$config_file" "$profile" "$gpu_id" \
-                "$PROFILE_GPU_IMAGE_PREP_INSTANCES"
-            ;;
         *)
             log_warn "No config template for: $model_name"
             return 1
@@ -223,7 +217,6 @@ generate_all_configs() {
         "paddleocr_det_trt"
         "paddleocr_rec_trt"
         "ocr_pipeline"
-        "gpu_image_prep"
     )
 
     local failed=0
@@ -294,6 +287,11 @@ generate_env_file() {
     env_set_key "$env_file" GPU_PROFILE "$profile" \
         && env_set_key "$env_file" GPU_ID "$gpu_id" \
         && env_set_key "$env_file" OP_INGEST_GPU_DECODE "$gpu_decode" \
+        && env_set_key "$env_file" OP_FRAME_ENGINE_REGION_MIB "$PROFILE_FRAME_ENGINE_REGION_MIB" \
+        && env_set_key "$env_file" OP_FRAME_ENGINE_POOL_MIB "$PROFILE_FRAME_ENGINE_POOL_MIB" \
+        && env_set_key "$env_file" OP_FRAME_ENGINE_BUDGET_MIB "$PROFILE_FRAME_ENGINE_BUDGET_MIB" \
+        && env_set_key "$env_file" OP_FRAME_ENGINE_LANES "$PROFILE_FRAME_ENGINE_LANES" \
+        && env_set_key "$env_file" OP_FRAME_ENGINE_WORKERS "$PROFILE_FRAME_ENGINE_WORKERS" \
         && env_set_key "$env_file" OPENSEARCH_HEAP "$heap" \
         && env_set_key "$env_file" API_WORKERS "$workers" || return 1
 
@@ -305,8 +303,8 @@ generate_env_file() {
 # Switching the profile of an existing .env
 # =============================================================================
 
-# apply_profile_to_env PROFILE -- set the two profile keys something reads
-# (GPU_PROFILE, OP_INGEST_GPU_DECODE) in the existing .env, leaving every other
+# apply_profile_to_env PROFILE -- set the profile keys something reads (GPU_PROFILE,
+# OP_INGEST_GPU_DECODE, the frame engine's sizes) in the existing .env, leaving every other
 # line alone. generate_env_file never rewrites an existing .env.
 apply_profile_to_env() {
     local profile="${1:-standard}"
@@ -316,10 +314,16 @@ apply_profile_to_env() {
     [[ -f "$env_file" ]] || { log_error "no .env at $env_file to update"; return 1; }
 
     local key value
-    for key in GPU_PROFILE OP_INGEST_GPU_DECODE; do
+    for key in GPU_PROFILE OP_INGEST_GPU_DECODE OP_FRAME_ENGINE_REGION_MIB OP_FRAME_ENGINE_POOL_MIB \
+            OP_FRAME_ENGINE_BUDGET_MIB OP_FRAME_ENGINE_LANES OP_FRAME_ENGINE_WORKERS; do
         case "$key" in
             GPU_PROFILE) value="$profile" ;;
-            *) value="$PROFILE_INGEST_GPU_DECODE" ;;
+            OP_INGEST_GPU_DECODE) value="$PROFILE_INGEST_GPU_DECODE" ;;
+            OP_FRAME_ENGINE_REGION_MIB) value="$PROFILE_FRAME_ENGINE_REGION_MIB" ;;
+            OP_FRAME_ENGINE_POOL_MIB) value="$PROFILE_FRAME_ENGINE_POOL_MIB" ;;
+            OP_FRAME_ENGINE_BUDGET_MIB) value="$PROFILE_FRAME_ENGINE_BUDGET_MIB" ;;
+            OP_FRAME_ENGINE_LANES) value="$PROFILE_FRAME_ENGINE_LANES" ;;
+            *) value="$PROFILE_FRAME_ENGINE_WORKERS" ;;
         esac
         if grep -q "^${key}=" "$env_file"; then
             sed -i "s|^${key}=.*|${key}=${value}|" "$env_file"

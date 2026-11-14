@@ -728,8 +728,8 @@ _triton_need_gb() {
     esac
 }
 
-# Least free VRAM on the Triton card for the full profile: its models (17,408 MiB) plus the 2
-# gpu_image_prep instances it turns on (2 x 8,704 MiB) is 34,816 MiB, so 32 GB cards get standard (#373).
+# Least free VRAM on the Triton card for the full profile: its models (17,408 MiB) plus the frame
+# engine at its working sizes; 32 GB cards get standard (#373).
 _profile_min_free_gb() { case "$1" in full) echo 40 ;; *) echo 12 ;; esac; }
 _profile_for_free_gb() { if (( $1 >= $(_profile_min_free_gb full) )); then echo full; elif (( $1 >= 16 )); then echo standard; elif (( $1 >= 12 )); then echo small; else echo minimal; fi; }
 
@@ -738,6 +738,17 @@ _ingest_gpu_decode_for_profile() {
     case "$1" in
         full) echo 1 ;;
         *) echo 0 ;;
+    esac
+}
+
+# Frame engine sizes per profile, "REGION POOL BUDGET" in MiB then "LANES WORKERS"; mirrors
+# "frame_engine_*" in config_templates/profiles/*.json. A profile without room for the GPU decode
+# runs the engine at its smallest sizes with one decode lane and one worker (it is never called
+# there; OP_INGEST_GPU_DECODE=0): 342 MiB measured idle.
+_frame_engine_sizes_for_profile() {
+    case "$1" in
+        full) echo "1024 4096 2048 16 16" ;;
+        *) echo "16 64 64 1 1" ;;
     esac
 }
 
@@ -1064,6 +1075,13 @@ recommend_plan() {
     echo "OP_GPU_ALLOWED_IDS=${allowed_ids}"
     echo "GPU_PROFILE=${profile}"
     echo "OP_INGEST_GPU_DECODE=$(_ingest_gpu_decode_for_profile "$profile")"
+    local fe_region fe_pool fe_budget fe_lanes fe_workers
+    read -r fe_region fe_pool fe_budget fe_lanes fe_workers <<< "$(_frame_engine_sizes_for_profile "$profile")"
+    echo "OP_FRAME_ENGINE_REGION_MIB=${fe_region}"
+    echo "OP_FRAME_ENGINE_POOL_MIB=${fe_pool}"
+    echo "OP_FRAME_ENGINE_BUDGET_MIB=${fe_budget}"
+    echo "OP_FRAME_ENGINE_LANES=${fe_lanes}"
+    echo "OP_FRAME_ENGINE_WORKERS=${fe_workers}"
     echo "SEGMENTER_INSTANCES=${inst}"
     echo "vlm_available_gb=${vlm_avail}"
     echo "VLM_GPU_TOTAL_MIB=${total_mib}"
@@ -2724,7 +2742,9 @@ do_install() {
     VLM_PICK="$(plan_get "$plan" VLM_CATALOG_ID)"
     local key val
     for key in TRITON_GPU_ID API_GPU_ID SEGMENTER_GPU_ID VLM_GPU_ID EVALUATOR_GPU_ID \
-            OP_TRAIN_GPU_ORDER OP_TRAIN_DEFAULT_GPUS OP_GPU_ALLOWED_IDS GPU_PROFILE OP_INGEST_GPU_DECODE SEGMENTER_INSTANCES; do
+            OP_TRAIN_GPU_ORDER OP_TRAIN_DEFAULT_GPUS OP_GPU_ALLOWED_IDS GPU_PROFILE OP_INGEST_GPU_DECODE \
+            OP_FRAME_ENGINE_REGION_MIB OP_FRAME_ENGINE_POOL_MIB OP_FRAME_ENGINE_BUDGET_MIB \
+            OP_FRAME_ENGINE_LANES OP_FRAME_ENGINE_WORKERS SEGMENTER_INSTANCES; do
         val="$(plan_get "$plan" "$key")"
         # a re-run keeps installed values: free VRAM now includes this install's own services (#411)
         if [[ -n "$(read_env_var "$ENV_FILE" "$key" || true)" ]] && { [[ "$KEPT_GPU_PLAN" == 1 && -z "$GPU_PROFILE_FLAG" ]] \
