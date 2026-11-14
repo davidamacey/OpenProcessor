@@ -28,22 +28,24 @@ from __future__ import annotations
 import contextlib
 import json
 import re
-import shutil
+import signal
 import socket
-import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
 
+from kombu.exceptions import KombuError
+
 
 # Celery's own reply window is 1 s, which ``inspect stats`` routinely misses on a busy worker.
 INSPECT_REPLY_TIMEOUT_S = 5.0
-# Must stay below the compose ``healthcheck.timeout`` or Docker kills the probe first.
-INSPECT_TIMEOUT_S = 8
+CONNECT_TIMEOUT_S = 3.0
+# Hard stop for the whole probe (SIGALRM ends the process non-zero, which Docker reads as
+# unhealthy). Must stay below the compose ``healthcheck.timeout`` (15 s).
+PROBE_DEADLINE_S = 12
 # The probe interval is 30 s, so a sample survives four missed probes.
 SAMPLE_STALE_AFTER_S = 150.0
-DEFAULT_APP = 'src.tasks.app'
 
 
 def node_name(argument: str) -> str:
@@ -84,47 +86,35 @@ def _accepted_task_count(stats: dict) -> int:
     return 0
 
 
-def _fetch_stats(worker_name: str, app: str) -> tuple[dict | None, str]:
+def _fetch_stats(worker_name: str) -> tuple[dict | None, str]:
     """The worker's ``inspect stats`` reply, or ``(None, why it could not be read)``."""
-    # The entry point sits beside the interpreter (container image or venv), whether or not that bin dir is on PATH.
-    celery = shutil.which('celery', path=str(Path(sys.executable).parent)) or shutil.which('celery')
-    if celery is None:
-        return None, 'the celery executable is not on PATH'
+    # A task-less app: the inspect call needs the broker, not the task modules, so the probe does
+    # not import the worker's handlers (the app's own import costs seconds of CPU per probe).
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from src.tasks.runtime.gpu_app import build_app
+
+    app = build_app(())
     try:
-        proc = subprocess.run(  # nosec B603  fixed argv, no shell; the node name is the container's own
-            [
-                celery,
-                '-A',
-                app,
-                'inspect',
-                '--timeout',
-                str(INSPECT_REPLY_TIMEOUT_S),
-                'stats',
-                '-d',
-                worker_name,
-                '--json',
-            ],
-            capture_output=True,
-            text=True,
-            timeout=INSPECT_TIMEOUT_S,
-            check=False,
-        )
-    except subprocess.TimeoutExpired:
-        return None, 'celery inspect stats timed out'
-    if proc.returncode != 0 or not proc.stdout.strip():
-        return None, f'celery inspect stats failed (rc={proc.returncode}): {proc.stderr.strip()}'
-    try:
-        payload = json.loads(proc.stdout)
-    except json.JSONDecodeError as exc:
-        return None, f'could not parse inspect stats output: {exc}'
-    if not payload:
+        # One bounded connect attempt: the app's broker retry settings are for workers and would
+        # retry for ever. https://docs.celeryq.dev/en/stable/reference/celery.app.control.html
+        with app.connection_for_read() as connection:
+            connection.ensure_connection(max_retries=1, timeout=CONNECT_TIMEOUT_S)
+            inspector = app.control.inspect(
+                destination=[worker_name], timeout=INSPECT_REPLY_TIMEOUT_S, connection=connection
+            )
+            reply = inspector.stats()
+    except (OSError, KombuError) as exc:
+        return None, f'celery inspect stats failed: {type(exc).__name__}: {exc}'
+    finally:
+        app.close()
+    if not reply:
         return None, 'no worker replied to inspect stats'
-    return next(iter(payload.values())), ''
+    return next(iter(reply.values())), ''
 
 
-def check_pool_has_live_processes(worker_name: str, app: str = DEFAULT_APP) -> tuple[bool, str]:
+def check_pool_has_live_processes(worker_name: str) -> tuple[bool, str]:
     """``(healthy, reason)`` for the named worker's pool."""
-    stats, problem = _fetch_stats(worker_name, app)
+    stats, problem = _fetch_stats(worker_name)
     if stats is None:
         return False, problem
     pool = stats.get('pool')
@@ -164,11 +154,12 @@ def _classify_pool_progress(worker_name: str, processes: list, accepted: int) ->
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) not in (2, 3):
-        sys.stderr.write('usage: celery_pool_healthcheck.py <node-or-prefix> [celery-app]\n')
+    if len(argv) != 2:
+        sys.stderr.write('usage: celery_pool_healthcheck.py <node-or-prefix>\n')
         return 2
-    app = argv[2] if len(argv) == 3 else DEFAULT_APP
-    healthy, reason = check_pool_has_live_processes(node_name(argv[1]), app)
+    signal.alarm(PROBE_DEADLINE_S)
+    healthy, reason = check_pool_has_live_processes(node_name(argv[1]))
+    signal.alarm(0)
     (sys.stdout if healthy else sys.stderr).write(reason + '\n')
     return 0 if healthy else 1
 
