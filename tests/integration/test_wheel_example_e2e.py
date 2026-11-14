@@ -76,6 +76,7 @@ def _worker_side(monkeypatch: pytest.MonkeyPatch, cluster: RoutedOpenSearch) -> 
 
     class Runtime:
         pool = FakeTritonPool()
+        engine = FakeTritonPool()
         pe_encoder = FakePEEncoder()
 
         async def close(self) -> None:
