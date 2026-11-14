@@ -67,6 +67,10 @@ PLAN_OUTPUT = MODELS_DIR / 'paddleocr_rec_trt/1/model.plan'
 # ``[B, T, 18710]`` tensor leaves the card.
 UINT8_MODEL_NAME = 'paddleocr_rec_trt_uint8'
 UINT8_PLAN_OUTPUT = MODELS_DIR / UINT8_MODEL_NAME / '1/model.plan'
+# PaddleOCR's recogniser batches the text lines of one photo by width, and the branch calls it with 16
+# lines at most (on the COCO-Text images a cap of 8, 16 and 64 scores the same end to end). The profile's
+# activation memory scales with the batch: 734 MiB at 16 x 2048 against 2937 MiB at 64 x 2048.
+UINT8_MAX_BATCH = 16
 UINT8_MEAN = (0.5, 0.5, 0.5)
 UINT8_STD = (0.5, 0.5, 0.5)
 
@@ -240,8 +244,9 @@ def convert_to_tensorrt_via_python_api(
     # into place atomically (see trt_utils.atomic_write_plan); the old
     # plan is only ever replaced by a plan that's confirmed to work.
     min_shape = (MIN_BATCH, 3, REC_HEIGHT, MIN_WIDTH)
-    opt_shape = (OPT_BATCH, 3, REC_HEIGHT, OPT_WIDTH)
-    max_shape = (MAX_BATCH, 3, REC_HEIGHT, MAX_WIDTH)
+    max_batch_size = UINT8_MAX_BATCH if uint8 else MAX_BATCH
+    opt_shape = (min(OPT_BATCH, max_batch_size), 3, REC_HEIGHT, OPT_WIDTH)
+    max_shape = (max_batch_size, 3, REC_HEIGHT, MAX_WIDTH)
     print('Building with dynamic shapes:')
     print(f'  Min: {INPUT_NAME}:{min_shape}')
     print(f'  Opt: {INPUT_NAME}:{opt_shape}')
@@ -334,7 +339,7 @@ def create_triton_config(plan_path: Path, *, uint8: bool = False) -> None:
 
 name: "{UINT8_MODEL_NAME}"
 platform: "tensorrt_plan"
-max_batch_size: {MAX_BATCH}
+max_batch_size: {UINT8_MAX_BATCH}
 
 input [
   {{
@@ -425,7 +430,7 @@ dynamic_batching {{
 
     print(f'  Config: {config_path}')
     print(f'  Dynamic width: {MIN_WIDTH}-{MAX_WIDTH}')
-    print(f'  Max batch: {MAX_BATCH}')
+    print(f'  Max batch: {UINT8_MAX_BATCH if uint8 else MAX_BATCH}')
 
 
 def parse_args() -> argparse.Namespace:
@@ -503,7 +508,7 @@ def main() -> int:
     print(f'  - Input: x [B, 3, 48, W] FP32 (W: {MIN_WIDTH}-{MAX_WIDTH})')
     print(f'  - Output: fetch_name_0 [B, T, {NUM_CHARS}] FP32')
     print('  - Preprocessing: (x / 127.5) - 1, BGR format')
-    print(f'  - Max batch size: {MAX_BATCH}')
+    print(f'  - Max batch size: {UINT8_MAX_BATCH if args.uint8 else MAX_BATCH}')
 
     if plan_path:
         print('\nNext steps:')

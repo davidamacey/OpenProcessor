@@ -35,6 +35,9 @@ OPTIMAL_RESOLUTION = 736
 # profile's max here is what the high-resolution measurement of the ``ocr`` branch settled on.
 UINT8_MODEL_NAME = 'paddleocr_det_trt_uint8'
 UINT8_MAX_RESOLUTION = 1920
+# One detector call per photo, each at its own size: nothing to batch, and the profile's activation memory
+# scales with the batch (measured 1541 MiB at 4 x 1920 against 385 MiB at 1 x 1920).
+UINT8_MAX_BATCH = 1
 UINT8_MEAN = (0.485, 0.456, 0.406)  # PP-OCRv6 det inference.yml NormalizeImage, BGR array order
 UINT8_STD = (0.229, 0.224, 0.225)
 
@@ -327,8 +330,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--max-batch-size',
         type=int,
-        default=max_batch('paddleocr_det_trt', 4),
-        help='Maximum batch size for TensorRT engine',
+        default=None,
+        help=(
+            f'Maximum batch size for TensorRT engine (default {UINT8_MAX_BATCH} with --uint8, '
+            "else the build target's)"
+        ),
     )
     parser.add_argument('--skip-tensorrt', action='store_true', help='Skip TensorRT conversion')
     parser.add_argument(
@@ -339,6 +345,8 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.uint8 and args.output == PLAN_OUTPUT:
         args.output = UINT8_PLAN_OUTPUT
+    if args.max_batch_size is None:
+        args.max_batch_size = UINT8_MAX_BATCH if args.uint8 else max_batch('paddleocr_det_trt', 4)
     return args
 
 

@@ -10,7 +10,7 @@
 
 name: "paddleocr_rec_trt_uint8"
 platform: "tensorrt_plan"
-max_batch_size: 64
+max_batch_size: 16
 
 input [
   {

@@ -406,6 +406,10 @@ _OCR_FIELDS = frozenset(
      'det_antialias', 'thresh', 'box_thresh', 'unclip_ratio', 'taps'}
 )  # fmt: skip
 DET_LIMITS = ('min', 'max')
+# The limits of the two engines' optimisation profiles (export_paddleocr_rec.py, export_paddleocr_det.py;
+# a test pins them): a plan the wire accepts is a call the engines accept.
+OCR_MAX_BATCH = 16
+OCR_MAX_DET_SIDE = 1920
 
 
 def _ocr(raw: Any) -> OcrSpec:
@@ -416,11 +420,13 @@ def _ocr(raw: Any) -> OcrSpec:
     return OcrSpec(
         detector=_str(_need(o, 'detector', 'ocr.detector'), 'ocr.detector'),
         recogniser=_str(_need(o, 'recogniser', 'ocr.recogniser'), 'ocr.recogniser'),
-        batch=_int(_need(o, 'batch', 'ocr.batch'), 'ocr.batch', 1, 64),
+        batch=_int(_need(o, 'batch', 'ocr.batch'), 'ocr.batch', 1, OCR_MAX_BATCH),
         max_lines=_int(_need(o, 'max_lines', 'ocr.max_lines'), 'ocr.max_lines', 1, 10_000),
         det_side=_int(_need(o, 'det_side', 'ocr.det_side'), 'ocr.det_side', 32, 4096),
         det_limit=_str(o.get('det_limit', 'max'), 'ocr.det_limit', DET_LIMITS),
-        det_max_side=_int(o.get('det_max_side', 1920), 'ocr.det_max_side', 32, 4096),
+        det_max_side=_int(
+            o.get('det_max_side', OCR_MAX_DET_SIDE), 'ocr.det_max_side', 32, OCR_MAX_DET_SIDE
+        ),
         det_antialias=antialias,
         thresh=_float(o.get('thresh', 0.2), 'ocr.thresh', 0.0, 1.0),
         box_thresh=_float(o.get('box_thresh', 0.45), 'ocr.box_thresh', 0.0, 1.0),

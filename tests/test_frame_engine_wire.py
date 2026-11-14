@@ -186,7 +186,8 @@ def test_ocr_needs_its_spec_and_the_spec_needs_the_branch() -> None:
     ('change', 'fault'),
     [
         ({'batch': 0}, 'bad_field'),
-        ({'batch': 65}, 'bad_field'),
+        ({'batch': 17}, 'bad_field'),  # the recogniser profile's maximum
+        ({'det_max_side': 1921}, 'bad_field'),  # the detector profile's maximum
         ({'det_limit': 'long'}, 'bad_field'),
         ({'det_antialias': 1}, 'bad_field'),
         ({'thresh': 1.5}, 'bad_field'),

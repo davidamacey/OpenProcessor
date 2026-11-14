@@ -25,7 +25,7 @@ def _shipped(model: str) -> str:
 
 
 def test_the_detector_config_is_what_the_exporter_writes(tmp_path: Path) -> None:
-    det.create_triton_config(tmp_path, 4, uint8=True)
+    det.create_triton_config(tmp_path, det.UINT8_MAX_BATCH, uint8=True)
     assert _shipped(det.UINT8_MODEL_NAME) == (tmp_path / 'config.pbtxt').read_text()
 
 
@@ -64,3 +64,16 @@ def test_the_detector_profile_reaches_the_plan_default_cap() -> None:
     ).ocr
     assert spec is not None
     assert spec.det_max_side <= det.UINT8_MAX_RESOLUTION
+
+
+def test_the_wire_limits_are_the_engine_profiles() -> None:
+    """A plan the wire accepts must be a call the engines' optimisation profiles accept."""
+    from src.domain import frame_engine_wire as wire
+
+    assert wire.OCR_MAX_BATCH == rec.UINT8_MAX_BATCH
+    assert wire.OCR_MAX_DET_SIDE == det.UINT8_MAX_RESOLUTION
+
+
+def test_the_shipped_configs_carry_the_profile_batches() -> None:
+    assert f'max_batch_size: {det.UINT8_MAX_BATCH}\n' in _shipped(det.UINT8_MODEL_NAME)
+    assert f'max_batch_size: {rec.UINT8_MAX_BATCH}\n' in _shipped(rec.UINT8_MODEL_NAME)

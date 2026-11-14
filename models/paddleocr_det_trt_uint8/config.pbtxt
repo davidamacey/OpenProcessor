@@ -11,7 +11,7 @@
 
 name: "paddleocr_det_trt_uint8"
 platform: "tensorrt_plan"
-max_batch_size: 4
+max_batch_size: 1
 
 input [
   {
