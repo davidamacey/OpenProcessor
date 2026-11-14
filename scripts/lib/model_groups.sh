@@ -66,7 +66,8 @@ model_setup_group_outputs() {
 # separated: model, the ONNX (relative to OP_DIR) it is built from, the precision the
 # build is designed for. These are the engines that carry a build stamp
 # (.install/precision.tsv, see model_setup.sh); ocr_pipeline is a Python backend and
-# the PE text tower plan is parity-gated at build (export/pe_text_engine.py) and has no stamp.
+# the PE text tower plan is parity-gated at build (export/pe_text_engine.py) but has no stamp: a changed
+# text-engine recipe is NOT detected by the stamp check; only the output-file check above rebuilds a missing plan.
 model_setup_group_engines() {
     local t=$'\t'
     case "$1" in
