@@ -28,26 +28,35 @@ SRGB = ImageCms.ImageCmsProfile(ImageCms.createProfile('sRGB'))
 
 
 class _Stream:
-    def __init__(self, *_a: Any, **_k: Any) -> None:
-        pass
+    """A stand-in stream: ``alloc`` is the engine's arena stream, ``worker`` a photo's stream."""
+
+    current: dict[int, str] = {}
+
+    def __init__(self, name: str = 'worker') -> None:
+        self.name = name
 
     def __enter__(self) -> _Stream:
+        _Stream.current[threading.get_ident()] = self.name
         return self
 
     def __exit__(self, *_a: Any) -> None:
-        return None
+        _Stream.current.pop(threading.get_ident(), None)
 
     def synchronize(self) -> None:
         _Cp.syncs += 1
+        _Cp.events.append(('sync', self.name, threading.get_ident()))
 
 
 class _Cp:
     syncs = 0
     uploads = 0
+    events: list[tuple[str, str, int]] = []
 
     @staticmethod
     def asarray(a: Any) -> np.ndarray:
         _Cp.uploads += 1
+        stream = _Stream.current.get(threading.get_ident(), 'worker')
+        _Cp.events.append(('upload', stream, threading.get_ident()))
         return np.asarray(a).copy()
 
     class RawKernel:
@@ -55,6 +64,7 @@ class _Cp:
             pass
 
         def __call__(self, _grid: Any, _block: Any, args: tuple[Any, ...]) -> None:
+            _Cp.events.append(('gather', 'worker', threading.get_ident()))
             frame, n, table = args
             px = frame.reshape(int(n), 3)
             idx = px[:, 0].astype(np.int64) * 65536 + px[:, 1].astype(np.int64) * 256 + px[:, 2]
@@ -70,7 +80,8 @@ def step(monkeypatch: pytest.MonkeyPatch) -> Any:
     from frame_engine import colour
 
     _Cp.syncs = _Cp.uploads = 0
-    return lambda capacity=2: colour.ColourStep(capacity, _Stream())
+    _Cp.events = []
+    return lambda capacity=2: colour.ColourStep(capacity, _Stream('alloc'))
 
 
 def _frame() -> np.ndarray:
@@ -157,3 +168,45 @@ class TestColourStep:
             s.apply(_frame(), ADOBE)
         gate.set()
         builder.join(10)
+
+    def test_a_table_is_uploaded_on_the_arena_stream_and_waited_for_before_any_gather(
+        self, step: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Another worker's stream must never read a table whose upload may still be queued on a
+        different stream (the filter-weight cache crash of 2026-11-14)."""
+        from frame_engine import colour
+
+        s = step()
+        gate = threading.Event()
+        real = colour.classify
+
+        def slow(icc: bytes) -> Any:
+            gate.wait(10)
+            return real(icc)
+
+        monkeypatch.setattr(colour, 'classify', slow)
+        threads = [threading.Thread(target=s.apply, args=(_frame(), P3)) for _ in range(3)]
+        for t in threads:
+            t.start()
+        gate.set()
+        for t in threads:
+            t.join(20)
+        kinds = [(e[0], e[1]) for e in _Cp.events]
+        assert kinds.count(('upload', 'alloc')) == 1
+        assert ('upload', 'worker') not in kinds
+        waited = kinds.index(('sync', 'alloc'))
+        assert kinds.index(('upload', 'alloc')) < waited
+        assert all(i > waited for i, k in enumerate(kinds) if k[0] == 'gather')
+
+    def test_every_reader_waits_for_its_stream_before_it_lets_the_table_go(self, step: Any) -> None:
+        """An evicted table is freed only when its last holder drops it; each holder must have
+        waited for its own stream (the gather queued there) before ``apply`` returns."""
+        s = step(capacity=1)
+        for icc in (P3, ADOBE, P3):  # every apply evicts the other profile's table
+            before = len(_Cp.events)
+            assert s.apply(_frame(), icc) == 'converted'
+            mine = [e for e in _Cp.events[before:] if e[2] == threading.get_ident()]
+            gathers = [i for i, e in enumerate(mine) if e[0] == 'gather']
+            assert gathers
+            assert mine[-1][:2] == ('sync', 'worker')
+            assert all(i < len(mine) - 1 for i in gathers)
