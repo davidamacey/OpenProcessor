@@ -37,19 +37,32 @@ ENGINES: dict[str, dict[str, tuple[str, str]]] = {
     'ocr': {
         'paddleocr_det_trt': ('pytorch_models/paddleocr/ppocrv6_det_small.onnx', 'fp32'),
         'paddleocr_rec_trt': ('pytorch_models/paddleocr/ppocrv6_rec_small.onnx', 'fp32'),
+        'paddleocr_det_trt_uint8': ('pytorch_models/paddleocr/ppocrv6_det_small.onnx', 'fp32'),
+        'paddleocr_rec_trt_uint8': ('pytorch_models/paddleocr/ppocrv6_rec_small.onnx', 'fp32'),
     },
 }
 GROUP_MODELS = {
     'yolo': ['yolov11_small_trt_end2end'],
     'mobileclip': ['mobileclip2_s2_image_encoder', 'mobileclip2_s2_text_encoder'],
     'faces': ['scrfd_10g_bnkps', 'arcface_w600k_r50'],
-    'ocr': ['paddleocr_det_trt', 'paddleocr_rec_trt', 'ocr_pipeline'],
+    'ocr': [
+        'paddleocr_det_trt',
+        'paddleocr_rec_trt',
+        'ocr_pipeline',
+        'paddleocr_det_trt_uint8',
+        'paddleocr_rec_trt_uint8',
+    ],
 }
 PLANS = {
     'yolo': ['yolov11_small_trt_end2end'],
     'mobileclip': ['mobileclip2_s2_image_encoder', 'mobileclip2_s2_text_encoder'],
     'faces': ['scrfd_10g_bnkps', 'arcface_w600k_r50'],
-    'ocr': ['paddleocr_det_trt', 'paddleocr_rec_trt'],
+    'ocr': [
+        'paddleocr_det_trt',
+        'paddleocr_rec_trt',
+        'paddleocr_det_trt_uint8',
+        'paddleocr_rec_trt_uint8',
+    ],
 }
 GROUPS = list(ENGINES)
 # Groups whose unstamped engines can be adopted: the detector's cannot (no recipe is provable).
@@ -60,7 +73,8 @@ RECIPE = 'recipe=fused-v1'
 
 
 def _onnx_bytes(model: str) -> bytes:
-    return f'onnx-of-{model}'.encode()
+    # a uint8 build is made from the same ONNX as its FP32 model
+    return f'onnx-of-{model.removesuffix("_uint8")}'.encode()
 
 
 def _sha(model: str) -> str:
@@ -445,7 +459,7 @@ def test_engines_triton_cannot_load_are_rebuilt_and_say_why(
 @pytest.mark.parametrize('group', GROUPS)
 def test_a_stamped_engine_whose_onnx_is_absent_is_kept(tmp_path: Path, bash, group: str) -> None:
     prelude = _installed(tmp_path, group, _good_stamps(group))
-    for rel, _ in ENGINES[group].values():
+    for rel in {rel for rel, _ in ENGINES[group].values()}:  # the uint8 builds share the FP32 ONNX
         (tmp_path / rel).unlink()
     assert 'up to date, skipped' in bash(prelude + f'model_setup_run_group {group}').stdout
 
@@ -453,7 +467,7 @@ def test_a_stamped_engine_whose_onnx_is_absent_is_kept(tmp_path: Path, bash, gro
 @pytest.mark.parametrize('group', ADOPTABLE)
 def test_an_unstamped_engine_without_its_onnx_is_adopted(tmp_path: Path, bash, group: str) -> None:
     prelude = _unstamped(tmp_path, group)
-    for rel, _ in ENGINES[group].values():
+    for rel in {rel for rel, _ in ENGINES[group].values()}:  # the uint8 builds share the FP32 ONNX
         (tmp_path / rel).unlink()
     out = bash(prelude + f'model_setup_run_group {group}').stdout
     assert 'up to date, skipped' in out
@@ -473,7 +487,7 @@ def test_an_unstamped_engine_without_its_onnx_is_adopted(tmp_path: Path, bash, g
 def test_a_pinned_stamp_catches_a_later_onnx_change(tmp_path: Path, bash, group: str) -> None:
     prelude = _unstamped(tmp_path, group)
     onnx = {model: tmp_path / rel for model, (rel, _) in ENGINES[group].items()}
-    for path in onnx.values():
+    for path in set(onnx.values()):
         path.unlink()
     bash(prelude + f'model_setup_run_group {group}')  # adopted with "-"
     _put_onnx(tmp_path, group)

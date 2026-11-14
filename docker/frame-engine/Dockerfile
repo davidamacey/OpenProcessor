@@ -16,6 +16,7 @@
 #   nvJPEG           cuda-13.4/.../libnvjpeg.so.13.2.3.58            nvidia-nvjpeg 13.2.3.58 (same version)
 #   CUDA runtime     13.2 (cupy runtimeGetVersion 13020)             nvidia-cuda-runtime 13.2.86
 #   CuPy / cuda-bindings / OpenCV (JPEG encode) / NumPy              14.2.0 / 13.4.4 / 5.0.0.93 / 2.5.4
+#   pyclipper (the ocr branch's box unclip, as PaddleOCR's DB post-process)   1.4.0 (as the Triton image)
 #
 # The driver (libcuda) is mounted by the NVIDIA container toolkit. The Python minor version is the
 # API image's (python:3.13-slim-trixie, same digest), because the engine imports src/domain.
@@ -47,6 +48,8 @@ COPY --from=builder --chown=engine:engine /root/.local /home/engine/.local
 # vocabulary and the geometry the CPU paths share).
 COPY src/domain /app/src/domain
 COPY frame_engine /app/frame_engine
+# The recogniser's character dictionary, the one copy the Triton pipeline model also reads.
+COPY models/paddleocr_rec_trt/ppocrv6_dict.txt /app/ocr/ppocrv6_dict.txt
 
 # nvJPEG is opened by name (ctypes); CuPy finds NVRTC and the runtime in the same wheel directory.
 ENV PATH=/home/engine/.local/bin:$PATH \

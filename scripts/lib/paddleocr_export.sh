@@ -69,6 +69,8 @@ unload_models_for_memory() {
         "ocr_pipeline"
         "paddleocr_det_trt"
         "paddleocr_rec_trt"
+        "paddleocr_det_trt_uint8"
+        "paddleocr_rec_trt_uint8"
         "yolov11_small_trt_end2end"
         "scrfd_10g_bnkps"
         "arcface_w600k_r50"

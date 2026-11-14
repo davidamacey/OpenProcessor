@@ -1,0 +1,47 @@
+# PP-OCRv6 Multilingual Text Recognition Model (TensorRT), the frame engine's build
+#
+# Input:
+#   - x: [B, 3, 48, W] uint8 BGR text crops, (v / 127.5) - 1 in the graph
+#        width=48-2048; padding is written as 128 (0.0039 after the graph)
+#
+# Output (the arg-max of the 18710 character probabilities runs in the graph):
+#   - indices: [B, T] INT32, best class per time step (0 is the CTC blank)
+#   - scores:  [B, T] FP32, its probability
+
+name: "paddleocr_rec_trt_uint8"
+platform: "tensorrt_plan"
+max_batch_size: 16
+
+input [
+  {
+    name: "x"
+    data_type: TYPE_UINT8
+    dims: [ 3, 48, -1 ]
+  }
+]
+
+output [
+  {
+    name: "indices"
+    data_type: TYPE_INT32
+    dims: [ -1 ]
+  },
+  {
+    name: "scores"
+    data_type: TYPE_FP32
+    dims: [ -1 ]
+  }
+]
+
+instance_group [
+  {
+    count: 2
+    kind: KIND_GPU
+    gpus: [0]
+  }
+]
+
+# The engine sends one batch per call, already sorted and padded: nothing to wait for.
+dynamic_batching {
+  max_queue_delay_microseconds: 0
+}
