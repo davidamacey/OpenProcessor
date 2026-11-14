@@ -7,6 +7,12 @@ title: Memory, disk and storage
 
 What the installer sizes for you, what it only checks, and what stays your call.
 
+## Database storage must be solid-state
+
+PostgreSQL, OpenSearch and Valkey data belong on SSD or NVMe. Set `OP_DATA_DIR` in `.env` to a
+directory there; the installer and `./openprocessor status` warn when the data sits on a rotating
+disk. Details and the move procedure: [Storage and sizing](../operations/storage.mdx#put-the-databases-on-ssd-or-nvme-op_data_dir).
+
 ## OpenSearch heap and shards
 
 The installer sets `OPENSEARCH_HEAP` to half of host RAM, never below 2 GB and
