@@ -988,18 +988,3 @@ def test_a_plan_without_renditions_pays_nothing_for_them(eng: Any) -> None:
     assert 'derivative_jpegs' not in r.outputs
     assert 'derivatives' not in r.branches
     assert not {'derivative_render', 'derivative_jpeg'} & {s for s, n in _seen(engine).items() if n}
-
-
-@pytest.mark.parametrize('side', [32, 128, 256, 511, 512, 1024])
-def test_fit_size_is_pillow_thumbnail_for_every_shape(eng: Any, side: int) -> None:
-    from PIL import Image
-
-    eng()
-    fit_size = importlib.import_module('frame_engine.branches.derivatives').fit_size
-    rng = np.random.default_rng(side)
-    shapes = [(int(w), int(h)) for w, h in rng.integers(1, 6000, (60, 2))]
-    shapes += [(5000, 4000), (4000, 5000), (3, 9000), (9000, 3), (side, side), (side + 1, 7)]
-    for w, h in shapes:
-        im = Image.new('L', (w, h))
-        im.thumbnail((side, side))
-        assert fit_size(w, h, side) == im.size, (w, h)

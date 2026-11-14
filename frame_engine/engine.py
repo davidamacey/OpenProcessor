@@ -221,7 +221,7 @@ class FrameEngine:
         if reason != 'gpu':
             return self._failed(plan, reason)
         data = request.data[: header.end]
-        need = need_bytes(header)
+        need = need_bytes(header, tuple(r.side for r in plan.derivatives))
         if need > self.budget.total:
             return self._failed(plan, 'over_budget')
         with clock.stage('budget'):

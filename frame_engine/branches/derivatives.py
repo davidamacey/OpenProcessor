@@ -12,15 +12,15 @@ started after the round-2 model calls are submitted so the copy and the encode o
 
 from __future__ import annotations
 
-import math
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import cupy as cp
 import cv2
 import numpy as np
 
 from frame_engine.branches.base import Branch, Photo
+from frame_engine.prep_geometry import fit_size
 from src.domain import frame_engine_wire as wire
 
 
@@ -28,20 +28,6 @@ if TYPE_CHECKING:
     from concurrent.futures import Future, ThreadPoolExecutor
 
     from src.domain.frame_engine_wire import RenditionSpec
-
-
-def _round_aspect(number: float, key: Any) -> int:
-    return max(min(math.floor(number), math.ceil(number), key=key), 1)
-
-
-def fit_size(width: int, height: int, side: int) -> tuple[int, int]:
-    """``Image.thumbnail((side, side))``'s output size for a ``width`` x ``height`` image."""
-    if width <= side and height <= side:
-        return width, height
-    aspect = width / height
-    if aspect >= 1:
-        return side, _round_aspect(side / aspect, lambda n: 0 if n == 0 else abs(aspect - side / n))
-    return _round_aspect(side * aspect, lambda n: abs(aspect - n / side)), side
 
 
 class Derivatives(Branch):

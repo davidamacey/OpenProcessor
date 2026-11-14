@@ -14,8 +14,9 @@ the module the CPU paths use. Here:
 
 from __future__ import annotations
 
+import math
 import struct
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 import numpy as np
 
@@ -196,6 +197,20 @@ def filter_weights(
     total = w.sum(axis=1, keepdims=True)
     w = np.divide(w, total, out=np.zeros_like(w), where=total != 0)
     return first.astype(np.int32), count.astype(np.int32), w.astype(np.float32)
+
+
+def _round_aspect(number: float, key: Any) -> int:
+    return max(min(math.floor(number), math.ceil(number), key=key), 1)
+
+
+def fit_size(width: int, height: int, side: int) -> tuple[int, int]:
+    """``Image.thumbnail((side, side))``'s output size for a ``width`` x ``height`` image."""
+    if width <= side and height <= side:
+        return width, height
+    aspect = width / height
+    if aspect >= 1:
+        return side, _round_aspect(side / aspect, lambda n: 0 if n == 0 else abs(aspect - side / n))
+    return _round_aspect(side * aspect, lambda n: abs(aspect - n / side)), side
 
 
 def lap_var(n: int, total: int, squares: int) -> float | None:

@@ -335,3 +335,15 @@ class TestLanczosWeights:
         a = fg.filter_weights(300, 50)[2]
         b = fg.filter_weights(300, 50, lanczos=True)[2]
         assert a.shape != b.shape or not np.allclose(a, b)
+
+
+class TestFitSize:
+    @pytest.mark.parametrize('side', [32, 128, 256, 511, 512, 1024])
+    def test_fit_size_is_pillow_thumbnail_for_every_shape(self, side: int) -> None:
+        rng = np.random.default_rng(side)
+        shapes = [(int(w), int(h)) for w, h in rng.integers(1, 6000, (60, 2))]
+        shapes += [(5000, 4000), (4000, 5000), (3, 9000), (9000, 3), (side, side), (side + 1, 7)]
+        for w, h in shapes:
+            im = Image.new('L', (w, h))
+            im.thumbnail((side, side))
+            assert fg.fit_size(w, h, side) == im.size, (w, h)
