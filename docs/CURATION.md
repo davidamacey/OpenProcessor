@@ -361,9 +361,11 @@ stale, so run `near_duplicates/runs` first. An export can keep one representativ
 ## Capture time and location
 
 Ingest reads each new photo's capture metadata with [ExifTool](https://exiftool.org/) (the
-`libimage-exiftool-perl` package in the API image), through one long-lived `exiftool -stay_open`
-process per worker process ([PyExifTool](https://sylikc.github.io/pyexiftool/)); it is never started
-per image, every read has a timeout, and the process is restarted after a failure. What is kept:
+`libimage-exiftool-perl` package in the API image), through a few long-lived `exiftool -stay_open`
+processes per worker process (2 to 4, one per 8 cores; [PyExifTool](https://sylikc.github.io/pyexiftool/)),
+which read a batch's photos side by side; none is started per image, the file's bytes reach a process
+through a named pipe (no temporary copy), every read has a timeout, and a process is restarted after
+a failure. What is kept:
 
 - the capture time: `DateTimeOriginal` (else `CreateDate`) with `SubSecTimeOriginal`, as a wall-clock
   time without a zone (`capture.taken_local`), and as UTC (`capture.taken_utc`) when the offset is

@@ -7,7 +7,7 @@ title: Capture metadata, location and privacy
 
 ## What ingest reads
 
-ExifTool (one long-lived process per worker) reads the capture time (local and
+ExifTool (a few long-lived processes per worker) reads the capture time (local and
 UTC), camera make, model and lens, orientation and the GPS fix. A missing tag
 leaves the field empty; if ExifTool is down the image is stored with
 `exif_status: unknown` and no coordinates. Fill images ingested before 0.7.0 with

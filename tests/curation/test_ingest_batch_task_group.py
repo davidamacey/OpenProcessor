@@ -36,11 +36,11 @@ async def test_a_failing_representative_leaves_no_pending_follower(
     svc, _os, _ = _make_service()
 
     async def boom(*_args: Any, **_kwargs: Any) -> Any:
-        raise RuntimeError('ingest_one failed')
+        raise RuntimeError('ingest failed')
 
-    monkeypatch.setattr(svc, 'ingest_one', boom)
+    monkeypatch.setattr(svc, 'ingest_photos', boom)
 
-    with pytest.raises(RuntimeError, match='ingest_one failed'):
+    with pytest.raises(RuntimeError, match='ingest failed'):
         await svc.ingest_batch([first, first], ['/a.jpg', '/a-copy.jpg'])
 
     assert await _pending_tasks('run_ingest_batch') == []

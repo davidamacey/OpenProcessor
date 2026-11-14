@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from src.services.near_duplicates.content_key import (
+    ClaimOutcome,
     ContentKeyChangedError,
     CoreClaims,
     Verdict,
@@ -17,6 +18,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from src.services.near_duplicates.content_key import CoreEntry
+    from src.services.near_duplicates.ingest_claim import PhotoWrite
 
 
 class ContentRows:
@@ -59,6 +61,31 @@ class ContentRows:
         self.rows[verdict.key] = image_id
         self.files[image_id] = data
         return None
+
+    async def claim_and_mark_bound(self, photos: Sequence[PhotoWrite]) -> list[ClaimOutcome]:
+        """The batch step: each photo claims, then its pending rows are recorded (the per-photo
+        calls the pending fake counts)."""
+        from src.services.near_duplicates import pending
+
+        outcomes: list[ClaimOutcome] = []
+        for photo in photos:
+            outcome = ClaimOutcome()
+            if photo.claim is not None:
+                claim = photo.claim
+                try:
+                    holder = await self.claim_bound(
+                        claim.imohash, claim.image_id, claim.image_path, claim.data
+                    )
+                except ValueError as exc:
+                    outcome = ClaimOutcome(error=exc)
+                else:
+                    outcome = ClaimOutcome(holder=holder)
+            outcomes.append(outcome)
+            if outcome.holder is None and outcome.error is None:
+                await pending.enqueue_pending_bound('item', photo.item_ids, 'added')
+                if photo.claim is not None:
+                    await pending.enqueue_pending_bound('image', [photo.claim.image_id], 'added')
+        return outcomes
 
     async def record_copy_bound(
         self, imohash: str, image_id: str, _image_path: str, _size: int

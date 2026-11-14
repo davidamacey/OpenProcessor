@@ -17,13 +17,14 @@ del MAX_INGEST_CONCURRENCY  # imported only to confirm the module exports it
 
 class TestDuplicateDetection:
     @pytest.mark.asyncio
-    async def test_check_duplicates_names_the_holder_of_each_content(
+    async def test_resolve_contents_names_the_holder_of_each_content(
         self, content_rows: Any
     ) -> None:
         os_fake = FakeIngestOpenSearch(images={'img1': {'image_id': 'img1'}})
         content_rows.rows['H1'] = 'img1'
         svc, _, _ = _make_service(opensearch=os_fake)
-        assert await svc._check_duplicates([('H1', b'a'), ('H2', b'b')]) == ['img1', None]
+        resolved = await svc.resolve_contents([('H1', b'a'), ('H2', b'b')])
+        assert [r.existing['image_id'] if r.existing else None for r in resolved] == ['img1', None]
 
     @pytest.mark.asyncio
     async def test_a_content_row_without_its_images_doc_is_released(
@@ -33,7 +34,7 @@ class TestDuplicateDetection:
         undeliverable: the lookup drops the row and answers as if it were new."""
         content_rows.rows['H1'] = 'img1'
         svc, _, _ = _make_service(opensearch=FakeIngestOpenSearch())
-        assert await svc._check_duplicates([('H1', b'a')]) == [None]
+        assert [r.existing for r in await svc.resolve_contents([('H1', b'a')])] == [None]
         assert content_rows.rows == {}
 
     @pytest.mark.asyncio

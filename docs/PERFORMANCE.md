@@ -432,7 +432,10 @@ The per-stage timers are the `op_pipeline_stage_seconds` histogram and the
 (the detector letterbox and tensor), `triton_request` (building the Triton input),
 `whole_frame_preprocess` (the whole-frame vector's decode and normalize), `blur` (the
 Laplacian scores), `doc_build` (the images and items documents) and `bulk_serialize` (encoding
-request bodies for OpenSearch). All but `embed` and `opensearch_write` time a synchronous
+request bodies for OpenSearch). The finish phase of a batch adds `capture` (a photo's EXIF read,
+the wait for an ExifTool process included) and the per-batch database steps `class_create`,
+`placement`, `claim` (content claims and pending rows), `release` and `publish`, each once per
+batch. All but `embed` and `opensearch_write` time a synchronous
 block, so on the event-loop thread their seconds are API CPU seconds. The compose file sets
 `PROMETHEUS_MULTIPROC_DIR` on the API, so a scrape aggregates all workers.
 

@@ -24,7 +24,7 @@ from src.db.models.near_dup import ImageContent
 
 if TYPE_CHECKING:
     import uuid
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Sequence
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -55,12 +55,37 @@ class ContentRow:
     content_sha256: str | None
 
 
+def _lock_key(project_id: uuid.UUID | None, imohash: str) -> str:
+    return f'image_contents:{project_id}:{imohash}'
+
+
 async def lock_imohash(session: AsyncSession, project_id: uuid.UUID | None, imohash: str) -> None:
     """``pg_advisory_xact_lock`` on a 64-bit key of (project, imohash), held to the end of the
     transaction. Two imohashes that share a hashed key only wait for each other."""
     await session.execute(
         text('SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))'),
-        {'key': f'image_contents:{project_id}:{imohash}'},
+        {'key': _lock_key(project_id, imohash)},
+    )
+
+
+async def lock_imohashes(
+    session: AsyncSession, project_id: uuid.UUID | None, imohashes: Sequence[str]
+) -> None:
+    """:func:`lock_imohash` for every ``imohash``, taken one after the other in the order given
+    (callers pass them sorted, so two transactions that take several locks never wait on each
+    other in a cycle: https://www.postgresql.org/docs/18/explicit-locking.html, "Deadlocks").
+
+    One statement: the ordered subquery with ``OFFSET 0`` is the documented shape for a locking
+    function over a derived row set (same page, "Advisory Locks")."""
+    if not imohashes:
+        return
+    await session.execute(
+        text(
+            'SELECT pg_advisory_xact_lock(hashtextextended(q.k, 0)) FROM '
+            '(SELECT k FROM unnest(CAST(:keys AS text[])) WITH ORDINALITY AS t(k, n) '
+            'ORDER BY n OFFSET 0) AS q'
+        ),
+        {'keys': [_lock_key(project_id, h) for h in imohashes]},
     )
 
 
@@ -82,6 +107,34 @@ async def rows_for_imohash(
     return [
         ContentRow(r.id, r.image_id, r.image_path, r.size_bytes, r.content_sha256) for r in rows
     ]
+
+
+async def rows_for_imohashes(
+    session: AsyncSession, project_id: uuid.UUID | None, imohashes: Iterable[str]
+) -> dict[str, list[ContentRow]]:
+    """:func:`rows_for_imohash` for several ``imohash`` values in one query; every wanted value is
+    a key (an empty list when no row has it)."""
+    wanted = sorted(set(imohashes))
+    found: dict[str, list[ContentRow]] = {h: [] for h in wanted}
+    if not wanted:
+        return found
+    rows = await session.execute(
+        select(
+            ImageContent.imohash,
+            ImageContent.id,
+            ImageContent.image_id,
+            ImageContent.image_path,
+            ImageContent.size_bytes,
+            ImageContent.content_sha256,
+        )
+        .where(_owner(project_id), ImageContent.imohash.in_(wanted))
+        .order_by(ImageContent.id)
+    )
+    for r in rows:
+        found[r.imohash].append(
+            ContentRow(r.id, r.image_id, r.image_path, r.size_bytes, r.content_sha256)
+        )
+    return found
 
 
 async def imohashes_with_rows(
@@ -149,6 +202,48 @@ async def insert_content(
         msg = f'image {image_id} already holds other content'
         raise ContentKeyConflictError(msg)
     return image_id
+
+
+@dataclass(frozen=True)
+class NewContent:
+    """One content row to insert."""
+
+    imohash: str
+    sha256: str | None
+    image_id: str
+    image_path: str
+    size_bytes: int
+
+
+async def insert_contents(
+    session: AsyncSession, project_id: uuid.UUID | None, rows: Sequence[NewContent]
+) -> set[str]:
+    """Insert the rows in one statement; the image ids that were inserted. A row that conflicts
+    (the image already has one, or its SHA-256 is taken) is skipped: answer it with
+    :func:`insert_content`."""
+    inserted: set[str] = set()
+    for start in range(0, len(rows), CHUNK):
+        chunk = rows[start : start + CHUNK]
+        stored = await session.execute(
+            pg_insert(ImageContent)
+            .values(
+                [
+                    {
+                        'project_id': project_id,
+                        'imohash': r.imohash,
+                        'content_sha256': r.sha256,
+                        'image_id': r.image_id,
+                        'image_path': r.image_path,
+                        'size_bytes': r.size_bytes,
+                    }
+                    for r in chunk
+                ]
+            )
+            .on_conflict_do_nothing()
+            .returning(ImageContent.image_id)
+        )
+        inserted.update(r.image_id for r in stored)
+    return inserted
 
 
 async def recorded_images(

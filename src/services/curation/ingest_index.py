@@ -37,8 +37,9 @@ from src.services.curation.item_doc import (
 from src.services.curation.source_image_cache import project_crop_cache_dir, write_crop_cache
 from src.services.detection.crop_quality import blur_ratio, crop_lap_var, image_lap_var
 from src.services.detection.geometry import bbox_norm as _bbox_norm_fn, crop_id as _crop_id
-from src.services.embedding_spaces.readers import frame_vector_field, item_write_fields
-from src.services.near_duplicates import content_key, pending as near_dup_pending
+from src.services.embedding_spaces.readers import WriteFields, frame_vector_field, item_write_fields
+from src.services.near_duplicates import content_key, ingest_claim
+from src.services.near_duplicates.content_key import ClaimOutcome, ContentClaim
 from src.utils.cpu_pool import run_cpu
 from src.utils.retry import TRITON_CALL_ERRORS
 from src.utils.stage_timing import stage_timer
@@ -155,35 +156,43 @@ async def place_vectors(item_ids: Sequence[str], vectors: np.ndarray) -> list[Pl
     """Place new items by the serving partition's prototypes (4F ``assign.place_new``); empty when
     the project has no serving partition for the item target. A failure of the read refuses the
     call: a placement that silently vanished would leave an item looking unclustered."""
-    from src.db.checkout_budget import db_slot
     from src.db.session import async_session_factory, project_tx
     from src.services.clustering.assign import place_new
     from src.services.config_store.bound_project import bound_project_id
 
     project = await bound_project_id()
-    async with db_slot(), async_session_factory()() as session, project_tx(session, project):
+    async with async_session_factory()() as session, project_tx(session, project):
         return await place_new(
             session, project=project, target='item', item_ids=item_ids, vectors=vectors
         )
 
 
-async def place_in_serving_partition(items: list[DetectedItem], item_ids: list[str]) -> None:
-    """Stamp each embedded item with its place in the serving partition.
+async def place_prepared(service: CurationIngestService, prepared: Sequence[PreparedImage]) -> None:
+    """Stamp every embedded item of the batch with its place in the serving partition, all in one
+    read (:func:`place_vectors`): the prototypes are read once, not once per photo.
 
     Nothing is written for an item without a vector, and for all of them when the project has no
     serving partition for the item target (an unclustered project behaves as before).
     """
-    embedded = [i for i, it in enumerate(items) if it.pe_embedding is not None]
-    if not embedded:
+    if not service.policy.clustering.automatic:
         return
-    placements = await place_vectors(
-        [item_ids[i] for i in embedded],
-        np.asarray([items[i].pe_embedding for i in embedded], dtype=np.float32),
-    )
+    owners = [
+        (p.cids[i], item)
+        for p in prepared
+        for i, item in enumerate(p.items)
+        if item.pe_embedding is not None
+    ]
+    if not owners:
+        return
+    with stage_timer('placement'):
+        placements = await place_vectors(
+            [item_id for item_id, _ in owners],
+            np.asarray([item.pe_embedding for _, item in owners], dtype=np.float32),
+        )
     if not placements:
         return
-    for i, placement in zip(embedded, placements, strict=True):
-        items[i].placement = placement
+    for (_, item), placement in zip(owners, placements, strict=True):
+        item.placement = placement
 
 
 async def embed_items(
@@ -260,14 +269,6 @@ async def _whole_frame_vector(service: CurationIngestService, ctx: ImageContext)
         return None
 
 
-async def _mark_added(ctx: ImageContext, crop_ids: list[str], *, new_image: bool) -> None:
-    """Pending near-duplicate rows, written before the documents they describe (an extra row
-    costs one idempotent rescore; a missing one would be a silent stale group)."""
-    await near_dup_pending.enqueue_pending_bound('item', crop_ids, 'added')
-    if new_image:
-        await near_dup_pending.enqueue_pending_bound('image', [ctx.image_id], 'added')
-
-
 def _held_elsewhere(ctx: ImageContext, holder: str) -> IngestResult:
     """Another copy stored this content first: nothing of this one is written."""
     return IngestResult(
@@ -279,59 +280,34 @@ def _held_elsewhere(ctx: ImageContext, holder: str) -> IngestResult:
     )
 
 
-async def _write_documents(
-    service: CurationIngestService,
-    ctx: ImageContext,
-    crop_ids: list[str],
-    image_doc: dict[str, Any] | None,
-    crop_docs: list[dict[str, Any]],
-    created_ids: list[str],
-    *,
-    seed_region: bool,
-) -> dict[str, Any] | IngestResult:
-    """Claim the content, mark the members pending, then bulk-write; the bulk result, or the
-    terminal result when another copy holds the content or a step failed. A claim taken here is
-    released when the write fails, so a later attempt can store the content."""
-    claimed = False
-    try:
-        if image_doc is not None:
-            holder = await content_key.claim_bound(
-                ctx.imohash, ctx.image_id, ctx.image_path, ctx.content
-            )
-            if holder is not None:
-                return _held_elsewhere(ctx, holder)
-            claimed = True
-        await _mark_added(ctx, crop_ids, new_image=image_doc is not None)
-        return await service._bulk_index(image_doc, crop_docs, created_ids, seed_region=seed_region)
-    except Exception as exc:
-        logger.error('ingest_bulk_index_failed', path=ctx.image_path, error=str(exc))
-        if claimed:
-            await content_key.release_bound([ctx.image_id])
-        return IngestResult(
-            status='failed',
-            image_path=ctx.image_path,
-            source_identifier=ctx.source_identifier,
-            imohash=ctx.imohash,
-            error=str(exc),
-            error_kind=ERROR_KIND_BULK_INDEX,
-        )
+@dataclass
+class PreparedImage:
+    """One image with everything computed before its documents are built: embeddings, blur, ids."""
+
+    ctx: ImageContext
+    items: list[DetectedItem]
+    crops: Sequence[Image.Image | bytes]
+    cids: list[str]
+    bnorms: list[list[float]]
+    areas: list[float]
+    rank_by_idx: dict[int, int]
+    full_var: float
+    box_vars: list[float | None]
+    whole_frame_embedding: Any
+    seed_region: bool
+    secondary_detector_error: str | None
 
 
-async def index_items(
+async def prepare_image(
     service: CurationIngestService,
     ctx: ImageContext,
     items: list[DetectedItem],
     *,
     seed_region: bool = True,
     secondary_detector_error: str | None = None,
-) -> IndexOutcome:
-    """Embed, score, place and bulk-index ``items`` (plus the images doc
-    when ``ctx.created``) for one decoded image.
-
-    ``seed_region`` False writes no ``pending_detection`` seed even under an
-    active region profile (a ``processing: none`` import: the items are
-    validated labels the region worker must never see).
-    """
+) -> PreparedImage | IndexOutcome:
+    """Embed, score and name the items of one decoded image; a failed result when the blur
+    cannot be computed."""
     img, frame = ctx.pil, ctx.gpu_frame
     full_w, full_h = ctx.width, ctx.height
     image_path = ctx.image_path
@@ -344,31 +320,7 @@ async def index_items(
         crops = await run_cpu(_crop_all, img, items, nbytes=_box_bytes(items))
         await embed_items(service, items, crops, full_w, full_h, image_path)
 
-    crop_items: Sequence[Image.Image | bytes] = crops
-    now = datetime.now(UTC).isoformat()
-    image_doc: dict[str, Any] | None = None
-    if ctx.created:
-        whole_frame_embedding = await _whole_frame_vector(service, ctx)
-        with stage_timer('doc_build'):
-            image_doc = build_image_doc(
-                vector_field=await frame_vector_field(),
-                image_id=ctx.image_id,
-                image_path=image_path,
-                source=ctx.source,
-                width=full_w,
-                height=full_h,
-                imohash=ctx.imohash,
-                now=now,
-                whole_frame_embedding=whole_frame_embedding,
-                source_identifier=ctx.source_identifier,
-                ingest_run_id=ctx.ingest_run_id,
-                decode_route=ctx.decode_route,
-            )
-            image_doc.update(ctx.image_extra)
-            if ctx.capture is not None:
-                stored = apply_location_policy(ctx.capture, await service.location_policy())
-                image_doc['capture'] = capture_image_block(stored)
-
+    whole_frame_embedding = await _whole_frame_vector(service, ctx) if ctx.created else None
     rgb_frame = None
     full_var = 0.0
     try:
@@ -401,10 +353,6 @@ async def index_items(
             sorted(range(len(items)), key=lambda i: (-areas[i], cids[i])), start=1
         )
     }
-
-    if service.policy.clustering.automatic:
-        await place_in_serving_partition(items, cids)
-
     box_vars: list[float | None]
     if frame is not None:
         box_vars = [frame.box_var(item) for item in items]
@@ -414,34 +362,92 @@ async def index_items(
         )
     else:
         box_vars = [None] * len(items)
-    crop_docs: list[dict[str, Any]] = []
-    write_fields = await item_write_fields()
-    for idx, item in enumerate(items):
-        bn = bnorms[idx]
-        cid = cids[idx]
-        box_var = box_vars[idx]
-        ratio = blur_ratio(box_var, full_var)
+    return PreparedImage(
+        ctx, items, crops, cids, bnorms, areas, rank_by_idx, full_var, box_vars,
+        whole_frame_embedding, seed_region, secondary_detector_error,
+    )  # fmt: skip
 
+
+@dataclass(frozen=True)
+class DocContext:
+    """What a batch's documents share, read once per batch: the vector fields and the location
+    policy of the bound project."""
+
+    frame_vector_field: str | None
+    write_fields: WriteFields
+    location_policy: str | None
+
+
+async def doc_context(
+    service: CurationIngestService, prepared: Sequence[PreparedImage]
+) -> DocContext:
+    created = any(p.ctx.created for p in prepared)
+    located = any(p.ctx.created and p.ctx.capture is not None for p in prepared)
+    return DocContext(
+        frame_vector_field=await frame_vector_field() if created else None,
+        write_fields=await item_write_fields(),
+        location_policy=await service.location_policy() if located else None,
+    )
+
+
+@dataclass
+class BuiltDocuments:
+    image_doc: dict[str, Any] | None
+    crop_docs: list[dict[str, Any]]
+
+
+def build_documents(
+    service: CurationIngestService, p: PreparedImage, shared: DocContext
+) -> BuiltDocuments:
+    """The images document (a new image only) and the item documents of one prepared image."""
+    ctx, items = p.ctx, p.items
+    now = datetime.now(UTC).isoformat()
+    image_doc: dict[str, Any] | None = None
+    if ctx.created:
+        assert shared.frame_vector_field is not None
+        with stage_timer('doc_build'):
+            image_doc = build_image_doc(
+                vector_field=shared.frame_vector_field,
+                image_id=ctx.image_id,
+                image_path=ctx.image_path,
+                source=ctx.source,
+                width=ctx.width,
+                height=ctx.height,
+                imohash=ctx.imohash,
+                now=now,
+                whole_frame_embedding=p.whole_frame_embedding,
+                source_identifier=ctx.source_identifier,
+                ingest_run_id=ctx.ingest_run_id,
+                decode_route=ctx.decode_route,
+            )
+            image_doc.update(ctx.image_extra)
+            if ctx.capture is not None:
+                assert shared.location_policy is not None
+                stored = apply_location_policy(ctx.capture, shared.location_policy)
+                image_doc['capture'] = capture_image_block(stored)
+    crop_docs: list[dict[str, Any]] = []
+    for idx, item in enumerate(items):
+        box_var = p.box_vars[idx]
         with stage_timer('doc_build'):
             doc = build_item_doc(
-                vector_field=write_fields.vector_field,
-                state_field=write_fields.state_field,
-                crop_id=cid,
+                vector_field=shared.write_fields.vector_field,
+                state_field=shared.write_fields.state_field,
+                crop_id=p.cids[idx],
                 image_id=ctx.image_id,
-                image_path=image_path,
+                image_path=ctx.image_path,
                 source=ctx.source,
                 request_id=get_request_id(),
-                bbox_norm=bn,
+                bbox_norm=p.bnorms[idx],
                 item=item,
                 now=now,
-                crop_area_norm=areas[idx],
-                crop_rank_in_image=rank_by_idx[idx],
-                blur_full_var=full_var,
+                crop_area_norm=p.areas[idx],
+                crop_rank_in_image=p.rank_by_idx[idx],
+                blur_full_var=p.full_var,
                 blur_lap_var=box_var,
-                blur_lap_ratio=ratio,
+                blur_lap_ratio=blur_ratio(box_var, p.full_var),
                 region_status=(
                     region_seed_status(item)
-                    if seed_region and service.region_seed_status is not None
+                    if p.seed_region and service.region_seed_status is not None
                     else None
                 ),
             )
@@ -450,14 +456,45 @@ async def index_items(
             if ctx.capture is not None:
                 doc.update(capture_item_fields(ctx.capture))
         crop_docs.append(doc)
+    return BuiltDocuments(image_doc, crop_docs)
 
+
+async def write_prepared(
+    service: CurationIngestService,
+    p: PreparedImage,
+    docs: BuiltDocuments,
+    claim: ClaimOutcome,
+    unclaimed: list[str],
+) -> IndexOutcome:
+    """Write one photo's documents after its claim, the crop cache after them.
+
+    The terminal result when another copy holds the content, the claim was refused or the bulk
+    write fails. A claim this photo took is appended to ``unclaimed`` when the write fails, so the
+    batch releases it and a later attempt can store the content."""
+    ctx = p.ctx
+    if claim.holder is not None:
+        return IndexOutcome(result=_held_elsewhere(ctx, claim.holder))
     created_ids: list[str] = []
-    written = await _write_documents(
-        service, ctx, cids, image_doc, crop_docs, created_ids, seed_region=seed_region
-    )
-    if isinstance(written, IngestResult):
-        return IndexOutcome(result=written)
-    bulk_result = written
+    try:
+        if claim.error is not None:
+            raise claim.error
+        bulk_result = await service._bulk_index(
+            docs.image_doc, docs.crop_docs, created_ids, seed_region=p.seed_region
+        )
+    except Exception as exc:
+        logger.error('ingest_bulk_index_failed', path=ctx.image_path, error=str(exc))
+        if docs.image_doc is not None and claim.error is None:
+            unclaimed.append(ctx.image_id)
+        return IndexOutcome(
+            result=IngestResult(
+                status='failed',
+                image_path=ctx.image_path,
+                source_identifier=ctx.source_identifier,
+                imohash=ctx.imohash,
+                error=str(exc),
+                error_kind=ERROR_KIND_BULK_INDEX,
+            )
+        )
     if bulk_result.get('duplicate'):
         # Another copy of this content created the images doc first (#358): this copy
         # wrote nothing, so it answers as the dedup lookup would have.
@@ -465,22 +502,21 @@ async def index_items(
             result=IngestResult(
                 status='duplicate',
                 image_id=ctx.image_id,
-                image_path=image_path,
+                image_path=ctx.image_path,
                 source_identifier=ctx.source_identifier,
                 imohash=ctx.imohash,
             )
         )
-    await _cache_crops(service, cids, crop_items)
-    await service._publish_created(created_ids, image_path)
-
+    await _cache_crops(service, p.cids, p.crops)
+    items = p.items
     return IndexOutcome(
         result=IngestResult(
             status='success',
             image_id=ctx.image_id,
-            image_path=image_path,
+            image_path=ctx.image_path,
             source_identifier=ctx.source_identifier,
             imohash=ctx.imohash,
-            n_crops=len(crop_docs),
+            n_crops=len(docs.crop_docs),
             n_embedded=sum(it.embedding_state == EMBEDDED for it in items),
             n_not_embedded=sum(it.embedding_state != EMBEDDED for it in items),
             n_embed_failed=sum(it.embedding_state == FAILED for it in items),
@@ -489,17 +525,102 @@ async def index_items(
             crops_preserved_human=bulk_result.get('crops_preserved_human', 0),
             crops_final_conflicts=bulk_result.get('crops_final_conflicts', 0),
             n_region_queued=bulk_result.get('region_queued', 0),
-            secondary_detector_error=secondary_detector_error,
+            secondary_detector_error=p.secondary_detector_error,
         ),
-        crop_ids=cids,
+        crop_ids=p.cids,
         created_ids=created_ids,
     )
+
+
+async def commit_prepared(
+    service: CurationIngestService, prepared: Sequence[PreparedImage]
+) -> list[IndexOutcome]:
+    """Place, claim, write and announce a batch of prepared images: the per-batch database steps
+    run once for the batch (placement, the claim with the pending rows, the release of failed
+    claims, the ``crop.created`` events), and the documents go through the coalescing writer
+    photo by photo.
+
+    What a photo ends with at each failure point is the table in
+    :mod:`~src.services.curation.ingest_finish`. The batch's claim transaction, if it fails as a
+    whole, runs photo by photo (:mod:`~src.services.near_duplicates.ingest_claim`).
+    """
+    if not prepared:
+        return []
+    await place_prepared(service, prepared)
+    shared = await doc_context(service, prepared)
+    built = [build_documents(service, p, shared) for p in prepared]
+    claims = await ingest_claim.claim_and_mark(
+        [
+            ingest_claim.PhotoWrite(
+                item_ids=p.cids,
+                claim=ContentClaim(p.ctx.imohash, p.ctx.image_id, p.ctx.image_path, p.ctx.content)
+                if docs.image_doc is not None
+                else None,
+            )
+            for p, docs in zip(prepared, built, strict=True)
+        ]
+    )
+    unclaimed: list[str] = []
+    written: dict[int, IndexOutcome] = {}
+
+    async def write(i: int) -> IndexOutcome:
+        written[i] = await write_prepared(service, prepared[i], built[i], claims[i], unclaimed)
+        return written[i]
+
+    try:
+        outcomes = await run_all([write(i) for i in range(len(prepared))])
+    finally:
+        if unclaimed:
+            with stage_timer('release'):
+                await content_key.release_bound(unclaimed)
+        # Photos stored before a failure are announced too, as when each ran alone.
+        announced = [
+            (crop_id, prepared[i].ctx.image_path)
+            for i, outcome in sorted(written.items())
+            for crop_id in outcome.created_ids
+        ]
+        if announced:
+            with stage_timer('publish'):
+                await service._publish_created(announced)
+    return outcomes
+
+
+async def index_items(
+    service: CurationIngestService,
+    ctx: ImageContext,
+    items: list[DetectedItem],
+    *,
+    seed_region: bool = True,
+    secondary_detector_error: str | None = None,
+) -> IndexOutcome:
+    """Embed, score, place and bulk-index ``items`` (plus the images doc
+    when ``ctx.created``) for one decoded image.
+
+    ``seed_region`` False writes no ``pending_detection`` seed even under an
+    active region profile (a ``processing: none`` import: the items are
+    validated labels the region worker must never see). A batch of one through the same steps
+    :func:`commit_prepared` runs for a whole batch.
+    """
+    prepared = await prepare_image(
+        service,
+        ctx,
+        items,
+        seed_region=seed_region,
+        secondary_detector_error=secondary_detector_error,
+    )
+    if isinstance(prepared, IndexOutcome):
+        return prepared
+    [outcome] = await commit_prepared(service, [prepared])
+    return outcome
 
 
 __all__ = [
     'ImageContext',
     'IndexOutcome',
+    'PreparedImage',
+    'commit_prepared',
     'crop_pil',
     'index_items',
     'place_vectors',
+    'prepare_image',
 ]
