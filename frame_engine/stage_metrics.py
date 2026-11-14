@@ -61,8 +61,15 @@ STAGES = (
     'crop_copy',
     'crop_jpeg',
     'blur',
+    'face_letterbox',
+    'face_detect',
+    'face_align',
+    'face_embed',
+    'face_blur',
 )
-ASYNC_STAGES = frozenset({'letterbox', 'embed_frame', 'embed_crops', 'blur'})
+ASYNC_STAGES = frozenset(
+    {'letterbox', 'embed_frame', 'embed_crops', 'blur', 'face_letterbox', 'face_align', 'face_blur'}
+)
 SECONDS_NAME = 'op_frame_engine_stage_seconds'
 OBSERVATIONS_NAME = 'op_frame_engine_stage_observations'
 

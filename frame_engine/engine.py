@@ -53,6 +53,8 @@ from frame_engine.branches.base import Branch, DependencyFailedError, Photo, Pho
 from frame_engine.branches.crops import CropJpegs
 from frame_engine.branches.detect import Detect
 from frame_engine.branches.embed import EmbedCrops, EmbedFrame
+from frame_engine.branches.faces import FaceEmbed, Faces
+from frame_engine.faces.kernels import WarpKernel
 from frame_engine.messages import EngineRequest, EngineResult
 from frame_engine.nvjpeg_lanes import NvJpegError, NvJpegLanes
 from frame_engine.prep_budget import ByteBudget, is_memory_error, need_bytes
@@ -141,6 +143,7 @@ class FrameEngine:
         self.budget = self._reserve_budget(settings.budget_mib)
         metrics.watch_budget(self.budget)
         self.kernels = PrepKernels()
+        self.warp = WarpKernel()
         self.encode_pool = ThreadPoolExecutor(settings.encode_threads, thread_name_prefix='fe-jpeg')
         self.workers = ThreadPoolExecutor(settings.workers, thread_name_prefix='fe-image')
         #: Region bytes one photo may hold with calls in flight: its worker's fair share.
@@ -285,6 +288,10 @@ class FrameEngine:
             out.append(EmbedFrame(plan.embed))
         if plan.embed is not None and plan.runs('embed_crops'):
             out.append(EmbedCrops(plan.embed, plan.embed_classes))
+        if plan.faces is not None and plan.runs('faces'):
+            out.append(Faces(plan.faces))
+        if plan.faces is not None and plan.runs('face_embed'):
+            out.append(FaceEmbed(plan.faces, self.warp))
         if plan.crops == 'inline':
             out.append(CropJpegs(self.encode_pool, self.s.jpeg_quality, self.s.crop_max_side))
         return out

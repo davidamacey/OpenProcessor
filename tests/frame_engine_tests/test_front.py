@@ -189,10 +189,10 @@ async def test_stored_boxes_reach_the_engine_as_fp64_rows() -> None:
 
 async def test_unsupported_branches_are_reported_per_branch() -> None:
     async with Harness(FakeEngine()) as h:
-        result = await h.infer(_plan(['detect', 'faces']))
+        result = await h.infer(_plan(['detect', 'ocr']))
     assert wire.decode_branch_status(result.as_numpy('branch_status')[0]) == {
         'detect': ('ok', ''),
-        'faces': ('error', 'unsupported_branch'),
+        'ocr': ('error', 'unsupported_branch'),
     }
 
 

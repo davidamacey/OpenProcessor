@@ -32,6 +32,8 @@ FULL_STAGES = {
 }  # fmt: skip
 DETECTOR = {'model': 'det', 'input_size': 640, 'letterbox_fill': 114}
 EMBED = {'model': 'pe', 'size': 16, 'batch': 32}
+FACES = {'detector': 'scrfd', 'input_size': 640, 'recogniser': 'arc', 'batch': 32,
+         'score_min': 0.5, 'nms': 0.4, 'max_faces': 128}  # fmt: skip
 
 
 class _Dev(np.ndarray):
@@ -122,6 +124,30 @@ class _Kernels:
         return np.arange(2 * len(rects), dtype=np.int64).reshape(-1, 2)
 
 
+class _Warp:
+    """Stands in for the face warp kernel: each aligned crop holds its face's row number."""
+
+    def warp_into(self, _frame: Any, inv: np.ndarray, _taps: np.ndarray, dst: Any) -> None:
+        for k in range(len(inv)):
+            dst[k] = k + 1
+
+
+def _scrfd_answer(n: int, outputs: Any) -> dict[str, Any]:
+    """Nine stride outputs for ``n`` 640 inputs, each holding two faces at stride 32: centres
+    (160, 160) score 0.9 and (384, 320) score 0.8, 128 pixels wide, landmarks in face shape."""
+    out = {}
+    for kind, d in (('score', 1), ('bbox', 4), ('kps', 10)):
+        for st in (8, 16, 32):
+            out[f'{kind}_{st}'] = np.zeros((n, (640 // st) ** 2 * 2, d), np.float32)
+    kps = [-0.7, -0.5, 0.7, -0.5, 0.0, 0.0, -0.5, 0.7, 0.5, 0.7]
+    for (row, col), score in (((5, 5), 0.9), ((10, 12), 0.8)):
+        a = 2 * (row * 20 + col)
+        out['score_32'][:, a, 0] = score
+        out['bbox_32'][:, a] = 2.0
+        out['kps_32'][:, a] = kps
+    return {name: out[name] for name in outputs}
+
+
 class _Transport:
     """Records every model call and the order of commits, sends, collections and cancels; the
     detector finds two objects of classes 1 and 2. Every call is answered when it is sent."""
@@ -166,6 +192,8 @@ class _Transport:
             raise self.fail[p.model]
         if p.index in self.fail_call:
             raise self.fail_call[p.index]
+        if p.model == 'scrfd':
+            return _scrfd_answer(p.shape[0], p.outputs)
         if p.model == 'det':
             fused = np.zeros((1, 300, 6), np.float32)
             fused[0, :2] = [[100, 120, 300, 400, 0.9, 1], [320, 320, 600, 600, 0.8, 2]]
@@ -188,8 +216,8 @@ class _Transport:
 
 def m_needs_cupy(name: str) -> bool:
     """The engine modules that import CuPy at load (re-imported against the stand-in)."""
-    return name in ('frame_engine.engine', 'frame_engine.nvjpeg_lanes',
-                    'frame_engine.prep_kernels') or name.startswith('frame_engine.branches')  # fmt: skip
+    return name in ('frame_engine.engine', 'frame_engine.nvjpeg_lanes', 'frame_engine.prep_kernels',
+                    'frame_engine.faces.kernels') or name.startswith('frame_engine.branches')  # fmt: skip
 
 
 @pytest.fixture
@@ -202,6 +230,7 @@ def eng(monkeypatch: pytest.MonkeyPatch) -> Any:
     mod = importlib.import_module('frame_engine.engine')
     monkeypatch.setattr(mod, 'NvJpegLanes', _Lanes)
     monkeypatch.setattr(mod, 'PrepKernels', _Kernels)
+    monkeypatch.setattr(mod, 'WarpKernel', _Warp)
     _Lanes.fail_with = None
     _Lanes.seen_streams = []
     _Kernels.fail_on_call = None
@@ -387,18 +416,17 @@ def test_stored_boxes_replace_the_detector(eng: Any) -> None:
 
 def test_unbuilt_branches_answer_unsupported_and_the_rest_runs(eng: Any) -> None:
     engine = eng()
-    plan = _plan(['detect', 'faces', 'ocr'], embed=None, crops='none',
+    plan = _plan(['detect', 'ocr'], embed=None, crops='none',
                  derivatives=[{'name': 'thumb'}])  # fmt: skip
     r = _run(engine, plan)
     assert r.status == 'ok'
     assert r.branches == {
         'detect': ('ok', ''),
-        'faces': ('error', 'unsupported_branch'),
         'ocr': ('error', 'unsupported_branch'),
         'derivatives': ('error', 'unsupported_branch'),
     }
     assert engine.transport.models() == ['det']
-    assert not {'face_boxes', 'ocr_texts', 'derivative_jpegs'} & set(r.outputs)
+    assert not {'ocr_texts', 'derivative_jpegs'} & set(r.outputs)
 
 
 def test_every_reported_name_has_exactly_one_branch_status_entry(eng: Any) -> None:
@@ -406,7 +434,7 @@ def test_every_reported_name_has_exactly_one_branch_status_entry(eng: Any) -> No
     for plan in (
         _plan(),
         _plan(['embed_frame'], detector=None, crops='none'),
-        _plan(['detect', 'faces', 'face_embed'], embed=None, crops='none'),
+        _plan(['detect', 'faces', 'face_embed'], embed=None, crops='none', faces=FACES),
     ):
         r = _run(engine, plan)
         assert list(r.branches) == sorted(r.branches, key=list(plan.reported()).index)

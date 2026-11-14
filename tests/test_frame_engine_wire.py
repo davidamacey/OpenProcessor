@@ -116,7 +116,7 @@ def test_unbuilt_branches_and_derivatives_are_reported_unsupported() -> None:
         ),
         has_boxes=False,
     )
-    assert plan.unsupported() == ('faces', 'face_embed', 'ocr', 'derivatives')
+    assert plan.unsupported() == ('ocr', 'derivatives')
     assert plan.reported() == ('detect', 'faces', 'face_embed', 'ocr', 'derivatives')
     assert plan.if_detected == {'ocr': (0,)}
 
