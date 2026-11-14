@@ -62,4 +62,7 @@ def test_every_triton_caller_of_the_base_file_is_covered() -> None:
         if any('TRITON_URL' in str(e) for e in svc.get('environment', []))
     }
     covered = set(_load_yaml(OVERLAY)['services']) - {'triton-server'}
+    # The frame engine never loads a model: it calls only the models its request's plan names,
+    # and the API loads those (src/clients/model_residency.py) before it sends the plan.
+    covered |= {'frame-engine'}
     assert calls_triton - covered == set(), 'add these services to docker-compose.ingest-focus.yml'

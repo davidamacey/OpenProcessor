@@ -48,6 +48,9 @@ services:
       # over the in-process path whenever Triton reports it ready.
       - --load-model=pe_text_encoder
       # ===================================================================
+      # The frame engine registers one CUDA shared-memory region and sends the
+      # model inputs as slices of it (frame_engine/transport.py).
+      - --allow-client-shm=true
       - --log-verbose=0
       - --log-info=true
   api: &profile_env

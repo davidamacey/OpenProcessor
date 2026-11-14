@@ -1719,11 +1719,11 @@ verify_image_digests() {
     else
         local img
         TRITON_DIGEST=""
-        for img in openprocessor openprocessor-export openprocessor-triton; do
+        for img in openprocessor openprocessor-export openprocessor-triton openprocessor-frame-engine; do
             ref="${OP_IMAGE_REPO}/${img}:${OP_IMAGE_TAG}"
             digest="$(docker image inspect --format '{{.Id}}' "$ref" 2>/dev/null || true)"
             [[ -n "$digest" ]] && IMAGE_DIGESTS+=("${ref}=${digest}")
-            [[ "$img" == openprocessor-triton ]] && TRITON_DIGEST="$digest"
+            if [[ "$img" == openprocessor-triton ]]; then TRITON_DIGEST="$digest"; fi
         done
     fi
 }

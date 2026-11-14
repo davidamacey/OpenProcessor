@@ -95,6 +95,7 @@ _CUSTOM_IMAGE_OVERRIDE_VARS = {
     'model-export-worker': 'OP_EXPORT_IMAGE',
     'curation-evaluator': 'OP_EVALUATOR_IMAGE',
     'segmenter': 'OP_SEGMENTER_IMAGE',
+    'frame-engine': 'OP_FRAME_ENGINE_IMAGE',
     'curation-trainer': 'OP_TRAINER_IMAGE',
 }
 

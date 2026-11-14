@@ -124,7 +124,7 @@ cmd_gpu() {
     case "$sub" in
         plan)
             log_step "GPU plan (from .env)"
-            for key in TRITON_GPU_ID API_GPU_ID SEGMENTER_GPU_ID VLM_GPU_ID EVALUATOR_GPU_ID GPU_PROFILE; do
+            for key in TRITON_GPU_ID FRAME_ENGINE_GPU_ID API_GPU_ID SEGMENTER_GPU_ID VLM_GPU_ID EVALUATOR_GPU_ID GPU_PROFILE; do
                 local value
                 value="$(_env_value "$key")"
                 echo "  ${key}=${value:-<unset>}"

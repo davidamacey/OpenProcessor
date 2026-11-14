@@ -173,13 +173,14 @@ spread the load:
 | Variable | Service |
 |---|---|
 | `TRITON_GPU_ID` | `triton-server` |
+| `FRAME_ENGINE_GPU_ID` | `frame-engine` (unset: Triton's card; it must share Triton's card, its inputs reach Triton through CUDA shared memory) |
 | `API_GPU_ID` | `api` |
 | `EVALUATOR_GPU_ID` | `curation-evaluator` |
 | `SEGMENTER_GPU_ID` | `segmenter` |
 | `VLM_GPU_ID` | `vlm` |
 | `OP_TRAIN_GPU_ORDER` | `curation-trainer` |
 
-All default to `0`. Set each explicitly: `.env` values are not
+All default to `0` except `FRAME_ENGINE_GPU_ID`, which follows `TRITON_GPU_ID`. Set each explicitly: `.env` values are not
 shell-expanded, so one can't reference another. The trainer accepts a
 single id from the variable; a multi-GPU trainer (`OP_TRAIN_GPU_ORDER=0,2`)
 also needs a `docker-compose.local.yml` listing the same `device_ids` in the

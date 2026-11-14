@@ -140,7 +140,7 @@ cmd_compose() {
                 tag="$(env_val "$envfile" OP_IMAGE_TAG)"; tag="${tag:-0.6.0}"
                 local profiles wanted
                 profiles=",$(env_val "$envfile" COMPOSE_PROFILES),"
-                wanted="OP_API_IMAGE:openprocessor OP_TRITON_IMAGE:openprocessor-triton"
+                wanted="OP_API_IMAGE:openprocessor OP_TRITON_IMAGE:openprocessor-triton OP_FRAME_ENGINE_IMAGE:openprocessor-frame-engine"
                 [[ "$cli_profiles" == *,setup,* ]] && wanted+=" OP_EXPORT_IMAGE:openprocessor-export"
                 [[ "$profiles" == *,curation,* ]] && wanted+=" OP_EVALUATOR_IMAGE:openprocessor-evaluator"
                 [[ "$profiles" == *,segmenter,* ]] && wanted+=" OP_SEGMENTER_IMAGE:openprocessor-segmenter"

@@ -79,6 +79,7 @@ _ROUTE_PREFIXES = ('', '/curation', '/curation/projects/{project}')
 
 _CODE_ENV_ROOTS = (
     'src',
+    'frame_engine',
     'scripts',
     'docker',
     'openprocessor',

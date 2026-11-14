@@ -89,6 +89,7 @@ connection pooler for PostgreSQL.
 | Service | Profile | Port | Role |
 |---|---|---|---|
 | `triton-server` | none | 4600 HTTP, 4601 gRPC, 4602 metrics | TensorRT models, explicit model control |
+| `frame-engine` | none | internal | GPU decode and prep: decodes each photo once, calls the Triton models as a client (`frame_engine/`) |
 | `api` | none | 4603 | FastAPI, all routes |
 | `opensearch` | none | 4607 | k-NN store for items, images and vectors (control data is in PostgreSQL) |
 | `postgres`, `valkey` | none | | PostgreSQL 18 (projects, classes, configs, jobs, events, spaces, partitions) and the Valkey 9 task broker; internal only, passwords from `secrets/` |

@@ -131,6 +131,7 @@ updates:
     directories:
       - "/"
       - "/docker/segmenter"
+      - "/docker/frame-engine"
       - "/docker/trainer"
       - "/docker/hardened/triton"
       - "/docker/test"

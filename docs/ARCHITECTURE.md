@@ -89,6 +89,7 @@ checkout. GPU placement comes from `.env` keys, not from the compose files.
 | Service | Profile | Port | Role |
 |---|---|---|---|
 | `triton-server` | none | 4600 HTTP, 4601 gRPC, 4602 metrics | Serves the TensorRT models. Explicit model control; loads the list in the compose command; a missing engine leaves that model unloaded instead of killing the server |
+| `frame-engine` | none | none (internal gRPC 8001, metrics 8002) | Decodes each photo once on the GPU, cuts every model input from that frame and calls the TensorRT models in `triton-server` as a client; inputs travel as slices of one CUDA shared-memory region registered with Triton. `frame_engine/`, `docker/frame-engine/` |
 | `api` | none | 4603 | FastAPI, uvicorn with `API_WORKERS` worker processes (the installer writes `min(nproc, 32)`), each recycled after about 10,000 requests (limit 10,000 with 1,000 jitter) |
 | `opensearch` | none | 4607 | k-NN indexes for items, images and vectors; the control data is not here |
 | `postgres` | none | | PostgreSQL 18: projects, classes, config documents, settings, jobs, events, embedding spaces, cluster partitions, near-duplicate groups, the auto-label loop record. Row-level security scopes every project query. Internal only |
