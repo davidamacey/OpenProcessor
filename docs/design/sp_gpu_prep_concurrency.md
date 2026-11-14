@@ -9,10 +9,10 @@ Inputs read: [`../reviews/sp0_review.md`](../reviews/sp0_review.md) "Measurement
 tables and the 36 per-repetition JSON files in [`../benchmarks/v070/sp0/`](../benchmarks/v070/sp0/sp0_tables_clients.md),
 [`../research/v070_measurement_log.md`](../research/v070_measurement_log.md) sections B, E4, F1, G3, G5 and
 "SP0: stage profile", [`../PERFORMANCE.md`](../PERFORMANCE.md) "0.7.0 stage profile", the ship-track plan
-section 5 (the retired ship-track plan, in git history), the model
-([`model.py`](../../models/gpu_image_prep/1/model.py), [`prep_kernels.py`](../../models/gpu_image_prep/1/prep_kernels.py),
-[`prep_geometry.py`](../../models/gpu_image_prep/1/prep_geometry.py), [`nvjpeg_lanes.py`](../../models/gpu_image_prep/1/nvjpeg_lanes.py),
-[`stage_metrics.py`](../../models/gpu_image_prep/1/stage_metrics.py), [`config.pbtxt`](../../models/gpu_image_prep/config.pbtxt)),
+section 5 (the retired ship-track plan, in git history), the model (`model.py`, `prep_kernels.py`,
+`prep_geometry.py`, `nvjpeg_lanes.py`, `stage_metrics.py`, `config.pbtxt` under
+`models/gpu_image_prep/`, removed since: the code moved to the frame engine, see
+[`frame_engine/engine.py`](../../frame_engine/engine.py) and its neighbours),
 and the callers ([`ingest_batch.py`](../../src/services/curation/ingest_batch.py),
 [`ingest_gpu_decode.py`](../../src/services/curation/ingest_gpu_decode.py),
 [`reprocess_gpu_embed.py`](../../src/services/curation/reprocess_gpu_embed.py)). Set P appears as numbers only.
