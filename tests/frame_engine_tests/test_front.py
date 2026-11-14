@@ -16,6 +16,7 @@ from prometheus_client import CollectorRegistry
 from tritonclient.grpc import InferInput, aio
 from tritonclient.utils import InferenceServerException
 
+from frame_engine.cuda_fault import ContextLostError
 from frame_engine.front import FrontService, make_server, pack_bytes, unpack_bytes
 from frame_engine.messages import EngineRequest, EngineResult
 from frame_engine.stage_metrics import EngineMetrics
@@ -270,6 +271,7 @@ async def test_metadata_names_the_protocol_tensors() -> None:
         (OverloadError('budget', 'full'), 'StatusCode.RESOURCE_EXHAUSTED'),
         (OverloadError('slab', 'full'), 'StatusCode.RESOURCE_EXHAUSTED'),
         (TritonUnavailableError('det: down'), 'StatusCode.UNAVAILABLE'),
+        (ContextLostError('cudaErrorIllegalAddress'), 'StatusCode.UNAVAILABLE'),
         (ValueError('kernel bug'), 'StatusCode.INTERNAL'),
     ],
 )
