@@ -15,8 +15,8 @@ In the `model-export` image (the `export` target of the root `Dockerfile`), neve
 | Script | Purpose | Output |
 |--------|---------|--------|
 | `ultralytics_export.py` | Every Ultralytics detection family (YOLOv5u, v8, v9, v10, 11, 12, 26): the documented `nms` export argument gives one `[batch, 300, 6]` output tensor (`x1, y1, x2, y2, score, class`, letterboxed input pixels); anything else is refused | fused ONNX + TensorRT engine, `config.pbtxt`, `labels.txt` |
-| `export_scrfd.py` | SCRFD-10G face detection + landmarks | TensorRT engine |
-| `export_face_recognition.py` | ArcFace face embeddings | TensorRT engine |
+| `export_scrfd.py` | SCRFD-10G face detection + landmarks; `--uint8` builds `scrfd_10g_bnkps_uint8` for the frame engine | TensorRT engine |
+| `export_face_recognition.py` | ArcFace face embeddings; `--uint8` builds `arcface_w600k_r50_uint8` for the frame engine | TensorRT engine |
 | `export_mobileclip_image_encoder.py` | MobileCLIP image encoder | TensorRT engine |
 | `export_mobileclip_text_encoder.py` | MobileCLIP text encoder | TensorRT engine |
 | `download_pe_weights.py` | Pinned, SHA-256-verified PE-Core-L14-336 checkpoint (both PE exporters) | HF cache |
@@ -60,6 +60,8 @@ models/
 ├── arcface_w600k_r50/                  # ArcFace TensorRT
 │   ├── 1/model.plan
 │   └── config.pbtxt
+├── scrfd_10g_bnkps_uint8/              # frame engine's SCRFD (uint8 `images`, `--uint8`)
+├── arcface_w600k_r50_uint8/            # frame engine's ArcFace (uint8 `images`, `--uint8`)
 ├── mobileclip2_s2_image_encoder/       # MobileCLIP image encoder
 │   ├── 1/model.plan
 │   └── config.pbtxt
