@@ -11,6 +11,10 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ## [Unreleased]
 
+### Changed
+
+- **Search text encoder on the GPU.** `pe_text_encoder` is a TensorRT FP16 plan on the GPU instead of ONNX Runtime on one CPU instance. `make pe-export-text-triton` builds the plan and installs it only when it matches the FP32 graph (median cosine at least 0.999, p01 at least 0.995; measured 0.99998 and 0.99995 on 2,400 COCO captions). `--platform onnxruntime_onnx` builds the CPU fallback. Re-run the export to switch an installed model.
+
 ### Added
 
 - **Geotagged test photos.** `scripts/datasets/fetch_geotagged_commons.py` fetches 52 licence-checked street photos with real camera GPS from Wikimedia Commons (pinned in `scripts/datasets/manifests/commons_geotagged_60.json`), so the map has real positions to show; `docs/CURATION.md` describes the set.

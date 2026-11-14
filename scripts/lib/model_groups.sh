@@ -57,7 +57,7 @@ model_setup_group_outputs() {
         mobileclip) echo "$m/mobileclip2_s2_image_encoder/1/model.plan $m/mobileclip2_s2_text_encoder/1/model.plan" ;;
         faces) echo "$m/scrfd_10g_bnkps/1/model.plan $m/arcface_w600k_r50/1/model.plan" ;;
         ocr) echo "$m/paddleocr_det_trt/1/model.plan $m/paddleocr_rec_trt/1/model.plan" ;;
-        pe) echo "$m/pe_image_encoder/1/model.plan $m/pe_text_encoder/1/model.onnx" ;;
+        pe) echo "$m/pe_image_encoder/1/model.plan $m/pe_text_encoder/1/model.plan" ;;
         *) echo "" ;;
     esac
 }
@@ -66,7 +66,7 @@ model_setup_group_outputs() {
 # separated: model, the ONNX (relative to OP_DIR) it is built from, the precision the
 # build is designed for. These are the engines that carry a build stamp
 # (.install/precision.tsv, see model_setup.sh); ocr_pipeline is a Python backend and
-# the PE text tower an ONNX, so neither has one.
+# the PE text tower plan is parity-gated at build (export/pe_text_engine.py) and has no stamp.
 model_setup_group_engines() {
     local t=$'\t'
     case "$1" in
@@ -95,7 +95,7 @@ model_setup_all_models() {
 
 # model_setup_required_models "core curation ..." -> comma list for OP_REQUIRED_MODELS, the
 # models the API's /health waits on. OCR is skipped by the minimal profile and the PE text
-# tower has a CPU fallback, so neither gates readiness; the PE image encoder has none.
+# tower stays optional for readiness (the ONNX Runtime fallback build exists), so neither gates it.
 model_setup_required_models() {
     local g m out=() groups
     groups="$(model_setup_groups_for_tiers "$1")" || return 2

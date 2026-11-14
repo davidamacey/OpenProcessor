@@ -36,7 +36,7 @@ in `docker-compose.yml`:
 | `paddleocr_det_trt`, `paddleocr_rec_trt` | PP-OCRv6 text detection / recognition |
 | `ocr_pipeline` | OCR orchestration (Triton Python backend, BLS) |
 | `pe_image_encoder` | PE-Core image embedding, 1024-dim (curation) |
-| `pe_text_encoder` | PE-Core text embedding for semantic search (ONNX Runtime, CPU) |
+| `pe_text_encoder` | PE-Core text embedding for semantic search (TensorRT FP16, GPU) |
 
 ## Core models
 
@@ -81,8 +81,8 @@ Curation stores a 1024-dim `pe_embedding` per item from Meta's
 PE-Core-L14-336. Semantic search, near-duplicate detection, residual
 clustering and the embedding plot all run on it. The Triton model names
 are fixed: `pe_image_encoder` (TensorRT, input `images [B,3,336,336]`,
-output `image_embeddings [B,1024]`) and `pe_text_encoder` (ONNX Runtime,
-one CPU instance, 0 GB of GPU memory). Both are already in Triton's
+output `image_embeddings [B,1024]`) and `pe_text_encoder` (a TensorRT
+FP16 plan, one GPU instance, about 0.7 GB of GPU memory). Both are already in Triton's
 `--load-model` list in `docker-compose.yml`.
 
 ```bash
@@ -96,13 +96,13 @@ make export-pe
 | `make pe-download` | Download and SHA-256 verify the pinned checkpoint into the HuggingFace cache (the repo is not gated) |
 | `make pe-export-image` | Image tower to `pytorch_models/pe_image_encoder.onnx` |
 | `make pe-build-trt` | Build the TensorRT plan in `models/pe_image_encoder` |
-| `make pe-export-text-triton` | Export the text tower (parity-gated against PyTorch) and install it as Triton's `pe_text_encoder` |
+| `make pe-export-text-triton` | Export the text tower, build its FP16 TensorRT plan, refuse it unless it matches the FP32 graph (median cosine 0.999, p01 0.995) and install it as Triton's `pe_text_encoder` |
 
 It then restarts Triton; restart `api` afterwards. If the TensorRT
 build fails on PE's attention-pool ops, run `make pe-build-ort` to serve
 the image ONNX through Triton's ONNX Runtime backend instead.
 `make pe-text-status` (`GET /health/pe_text`) shows whether Triton's shared
-CPU `pe_text_encoder` is ready. Text encoding is Triton-only; the
+GPU `pe_text_encoder` is ready. Text encoding is Triton-only; the
 `OP_PE_TEXT_*` variables are retired.
 
 ## Your own models
