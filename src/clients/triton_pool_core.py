@@ -88,11 +88,19 @@ def images_input(tensor: np.ndarray, datatype: str) -> grpcclient.InferInput:
 # =============================================================================
 # Based on Fortune 100 best practices (Google, NVIDIA, Netflix)
 # Reference: https://grpc.io/docs/guides/performance/
+RECONNECT_MAX_BACKOFF_MS = 3000
 GRPC_CHANNEL_OPTIONS = [
     # Keep connections alive (prevents reconnection overhead)
     ('grpc.keepalive_time_ms', 30000),  # Send keepalive ping every 30s
     ('grpc.keepalive_timeout_ms', 10000),  # Wait 10s for keepalive response
     ('grpc.keepalive_permit_without_calls', 1),  # Allow keepalive when idle
+    # Bounded reconnect backoff: gRPC's default grows the delay between connect attempts
+    # towards 120 s, so a channel that failed repeatedly while the server restarted kept
+    # failing for tens of seconds after the server was back. Capped, a restarted server is
+    # reached within about RECONNECT_MAX_BACKOFF_MS.
+    ('grpc.initial_reconnect_backoff_ms', 250),
+    ('grpc.min_reconnect_backoff_ms', 250),
+    ('grpc.max_reconnect_backoff_ms', RECONNECT_MAX_BACKOFF_MS),
     # Handle large tensors (embeddings, image batches, raw detector heads).
     # The ceiling is dominated by *output* size, not input: a raw
     # (non-end2end) detector head can emit hundreds of MB for a full
