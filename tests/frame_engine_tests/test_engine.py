@@ -519,6 +519,78 @@ def test_a_model_server_that_never_answers_fails_the_photo_and_frees_everything(
     assert (engine.budget.in_use, transport.slab.in_use) == (0, 0)
 
 
+def _shm(server: Any, nbytes: int) -> Any:
+    """The real shared-memory transport over a fake server and a host buffer as the region."""
+    import tritonclient.grpc as grpcclient
+
+    from frame_engine.stage_metrics import EngineMetrics
+    from frame_engine.transport import CudaShmTransport
+
+    transport = CudaShmTransport(
+        [server],
+        EngineMetrics(CollectorRegistry()),
+        timeout=5.0,
+        input_factory=grpcclient.InferInput,
+        output_factory=grpcclient.InferRequestedOutput,
+        region_factory=lambda _name, n: _Region(n),
+        nbytes=nbytes,
+        card='card',
+        instance='fe0',
+        triton_device_id=0,
+        slab_wait=0.05,
+    )
+    transport.start()
+    return transport
+
+
+STORED = np.array([[0.1, 0.1, 0.5, 0.6], [0.0, 0.0, 1.0, 1.0], [0.2, 0.3, 0.9, 0.8]], np.float64)
+
+
+def _stored_plan(size: int, batch: int) -> Any:
+    return _plan(['embed_frame', 'embed_crops'], boxes=True, detector=None, crops='none',
+                 embed={**EMBED, 'size': size, 'batch': batch})  # fmt: skip
+
+
+def test_the_squares_are_staged_one_encoder_call_at_a_time(eng: Any) -> None:
+    """A region that holds one call's squares but not the photo's four serves the photo: the
+    slab need is the plan's batch, not the number of boxes."""
+    server = _Server()
+    server.answering = True
+    square = 3 * 64 * 64
+    transport = _shm(server, 2 * square)  # two squares; the photo has four (frame + 3 boxes)
+    engine = eng(transport=transport)
+    r = _run(engine, _stored_plan(64, 2), boxes=STORED)
+    assert r.status == 'ok'
+    assert r.outputs['crop_embeddings'].shape == (3, 8)
+    assert transport.slab.peak <= 2 * square
+    assert (engine.budget.in_use, transport.slab.in_use) == (0, 0)
+
+
+def test_staging_per_call_changes_no_output(eng: Any) -> None:
+    whole = _run(eng(), _stored_plan(16, 32), boxes=STORED)
+    chunked = _run(eng(), _stored_plan(16, 1), boxes=STORED)
+    for name in ('whole_embedding', 'crop_embeddings', 'crop_embedded'):
+        assert np.array_equal(whole.outputs[name], chunked.outputs[name]), name
+
+
+def test_a_call_larger_than_the_whole_region_answers_over_budget_with_one_warning(
+    eng: Any, caplog: pytest.LogCaptureFixture
+) -> None:
+    server = _Server()
+    server.answering = True
+    square = 3 * 64 * 64
+    transport = _shm(server, 2 * square)
+    engine = eng(transport=transport)
+    for _ in range(2):
+        r = _run(engine, _stored_plan(64, 4), boxes=STORED)  # four squares in one call
+        assert (r.status, r.decode_route) == ('over_budget', 'none')
+        assert (engine.budget.in_use, transport.slab.in_use) == (0, 0)
+    warnings = [rec for rec in caplog.records if 'OP_FRAME_ENGINE_REGION_MIB' in rec.getMessage()]
+    assert len(warnings) == 1  # the first, then every hundredth
+    assert warnings[0].exc_info is None
+    assert _run(engine, _stored_plan(64, 2), boxes=STORED).status == 'ok'
+
+
 def test_every_model_call_carries_the_request_deadline(eng: Any) -> None:
     from frame_engine.messages import EngineRequest
 

@@ -20,6 +20,10 @@ class SlabTimeoutError(TimeoutError):
     """No slice of the asked size became free within the wait."""
 
 
+class SlabTooLargeError(ValueError):
+    """The request is larger than the whole region: it can never fit (a size setting, not load)."""
+
+
 def aligned(nbytes: int) -> int:
     return (nbytes + ALIGN - 1) // ALIGN * ALIGN
 
@@ -39,12 +43,12 @@ class SlabAllocator:
         """The offset of ``nbytes`` (rounded up to :data:`ALIGN`); waits at most ``timeout``.
 
         Raises:
-            ValueError: the request is larger than the whole region (it can never fit).
+            SlabTooLargeError: the request is larger than the whole region (it can never fit).
             SlabTimeoutError: no slice became free in time.
         """
         n = aligned(nbytes)
         if n > self.size:
-            raise ValueError(f'slab request {n} bytes exceeds the region of {self.size}')
+            raise SlabTooLargeError(f'slab request {n} bytes exceeds the region of {self.size}')
         deadline = time.monotonic() + timeout
         with self._cond:
             waited = False

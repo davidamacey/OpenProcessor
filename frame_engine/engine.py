@@ -51,6 +51,7 @@ from frame_engine.nvjpeg_lanes import NvJpegError, NvJpegLanes
 from frame_engine.prep_budget import ByteBudget, is_memory_error, need_bytes
 from frame_engine.prep_geometry import blur_rect, oriented_size, route, stored_box_rects
 from frame_engine.prep_kernels import PrepKernels
+from frame_engine.slab import SlabTooLargeError
 from frame_engine.stage_metrics import StageClock
 from frame_engine.transport import ModelCallError, OverloadError
 from src.domain import frame_engine_wire as wire
@@ -150,6 +151,7 @@ class FrameEngine:
         self.workers = ThreadPoolExecutor(settings.workers, thread_name_prefix='fe-image')
         self.local = threading.local()
         self.memory_events = 0
+        self.region_events = 0
 
     def _reserve_budget(self, budget_mib: float) -> ByteBudget:
         """Hold the whole budget in the shared arena once, then hand it back to the pool (which
@@ -206,6 +208,15 @@ class FrameEngine:
                 self.budget.in_use, self.budget.total,
             )  # fmt: skip
 
+    def _note_region_too_small(self, exc: SlabTooLargeError) -> None:
+        """A model input larger than the whole region: a size setting, so one line, no trace."""
+        self.region_events += 1
+        if self.region_events % 100 == 1:
+            logger.warning(
+                '%s: raise OP_FRAME_ENGINE_REGION_MIB (photos answer over_budget); event %d',
+                exc, self.region_events,
+            )  # fmt: skip
+
     def _process(self, request: EngineRequest, clock: StageClock) -> EngineResult:
         plan = request.plan
         with clock.stage('decode'):
@@ -236,6 +247,9 @@ class FrameEngine:
                 raise
             self._note_memory_failure('process', exc)
             return self._failed(plan, 'gpu_memory')
+        except SlabTooLargeError as exc:
+            self._note_region_too_small(exc)
+            return self._failed(plan, 'over_budget')
         finally:
             # every path that drops the frame has waited for this stream, a failed one included
             if im is not None and im.frame is not None:
@@ -388,49 +402,51 @@ class FrameEngine:
         clock: StageClock,
         deadline: float,
     ) -> np.ndarray:
-        """Encoder vectors of the whole-frame square (when ``frame``), then one per rectangle."""
+        """Encoder vectors of the whole-frame square (when ``frame``), then one per rectangle.
+
+        The squares are staged one encoder call (``spec.batch`` squares) at a time, so the slice of
+        the region a photo holds is bounded by the batch, not by its number of detections.
+        """
         t = spec.size
         n = int(frame) + len(rects)
         if n == 0:
             return np.zeros((0, 0), np.float32)
         sqb = 3 * t * t
-        staged = self.transport.stage(n * sqb)
-        try:
-            sq = staged.device.reshape((n, 3, t, t))
-            w, h = im.size
-            if frame:
-                with clock.stage('embed_frame'):
-                    g = whole_square_geometry(w, h, t)
-                    self.kernels.resample_into(
-                        im.frame, (0, 0, w, h), (g.new_w, g.new_h), sq[0], (g.left, g.top, t, t)
+        w, h = im.size
+        rows = []
+        for s in range(0, n, spec.batch):
+            m = min(spec.batch, n - s)
+            staged = self.transport.stage(m * sqb)
+            try:
+                sq = staged.device.reshape((m, 3, t, t))
+                if frame and s == 0:
+                    with clock.stage('embed_frame'):
+                        g = whole_square_geometry(w, h, t)
+                        self.kernels.resample_into(
+                            im.frame, (0, 0, w, h), (g.new_w, g.new_h), sq[0], (g.left, g.top, t, t)
+                        )
+                with clock.stage('embed_crops'):
+                    for k in range(max(s, int(frame)), s + m):
+                        x1, y1, x2, y2 = rects[k - int(frame)]
+                        g = whole_square_geometry(x2 - x1, y2 - y1, t)
+                        self.kernels.resample_into(
+                            im.frame,
+                            (x1, y1, x2 - x1, y2 - y1),
+                            (g.new_w, g.new_h),
+                            sq[k - s],
+                            (g.left, g.top, t, t),
+                            antialias=False,
+                        )
+                with clock.stage('embed_pe'):
+                    self.transport.commit(staged)
+                    rows.append(
+                        self.transport.infer(
+                            spec.model, staged, 0, [m, 3, t, t], EMBED_OUTPUT, deadline=deadline
+                        )
                     )
-            with clock.stage('embed_crops'):
-                for k, (x1, y1, x2, y2) in enumerate(rects, start=int(frame)):
-                    g = whole_square_geometry(x2 - x1, y2 - y1, t)
-                    self.kernels.resample_into(
-                        im.frame,
-                        (x1, y1, x2 - x1, y2 - y1),
-                        (g.new_w, g.new_h),
-                        sq[k],
-                        (g.left, g.top, t, t),
-                        antialias=False,
-                    )
-            with clock.stage('embed_pe'):
-                self.transport.commit(staged)
-                rows = [
-                    self.transport.infer(
-                        spec.model,
-                        staged,
-                        s * sqb,
-                        [min(spec.batch, n - s), 3, t, t],
-                        EMBED_OUTPUT,
-                        deadline=deadline,
-                    )
-                    for s in range(0, n, spec.batch)
-                ]
-                return np.concatenate(rows, axis=0).astype(np.float32)
-        finally:
-            self.transport.release(staged, _sync_stream)
+            finally:
+                self.transport.release(staged, _sync_stream)
+        return np.concatenate(rows, axis=0).astype(np.float32)
 
     def _blur_sums(self, im: _Image) -> np.ndarray:
         """``[1 + detections, 3]`` (pixels, sum, sum of squares): the frame, then each box."""
