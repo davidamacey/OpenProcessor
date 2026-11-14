@@ -1,0 +1,42 @@
+# PP-OCRv6 Text Detection Model (TensorRT)
+#
+# DB++ architecture for text region detection
+#
+# Input:
+#   - x: [B, 3, H, W] uint8 BGR, ((x / 255) - mean) / std (ImageNet) in the graph
+#        H,W must be multiples of 32, max 1920
+#
+# Output:
+#   - fetch_name_0: [B, 1, H, W] FP32, probability map [0, 1]
+
+name: "paddleocr_det_trt_uint8"
+platform: "tensorrt_plan"
+max_batch_size: 4
+
+input [
+  {
+    name: "x"
+    data_type: TYPE_UINT8
+    dims: [ 3, -1, -1 ]  # Dynamic H, W (multiples of 32)
+  }
+]
+
+output [
+  {
+    name: "fetch_name_0"
+    data_type: TYPE_FP32
+    dims: [ 1, -1, -1 ]  # Same H, W as input
+  }
+]
+
+instance_group [
+  {
+    count: 2
+    kind: KIND_GPU
+    gpus: [0]
+  }
+]
+
+dynamic_batching {
+  max_queue_delay_microseconds: 0
+}

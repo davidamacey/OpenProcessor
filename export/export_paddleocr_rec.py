@@ -61,6 +61,15 @@ ONNX_PATH = (
 )
 PLAN_OUTPUT = MODELS_DIR / 'paddleocr_rec_trt/1/model.plan'
 
+# The frame engine's build (``--uint8``): uint8 BGR crops ``x`` with ``(v / 127.5) - 1`` in the
+# graph (PP-OCRv6 rec RecResizeImg, ``(x / 255 - 0.5) / 0.5``), and the arg-max of the character
+# probabilities in the graph: the call returns ``indices`` and ``scores`` ``[B, T]`` and no
+# ``[B, T, 18710]`` tensor leaves the card.
+UINT8_MODEL_NAME = 'paddleocr_rec_trt_uint8'
+UINT8_PLAN_OUTPUT = MODELS_DIR / UINT8_MODEL_NAME / '1/model.plan'
+UINT8_MEAN = (0.5, 0.5, 0.5)
+UINT8_STD = (0.5, 0.5, 0.5)
+
 
 def check_onnx_exists() -> bool:
     """Check if the multilingual ONNX model has been downloaded."""
@@ -196,8 +205,11 @@ def unload_models_for_memory() -> None:
     print('  Models unloaded')
 
 
-def convert_to_tensorrt_via_python_api(onnx_path: Path, plan_path: Path) -> Path | None:
-    """Build the TensorRT engine in-process with the TensorRT Python API.
+def convert_to_tensorrt_via_python_api(
+    onnx_path: Path, plan_path: Path, *, uint8: bool = False
+) -> Path | None:
+    """Build the TensorRT engine in-process with the TensorRT Python API (``uint8``: the frame
+    engine's build, see ``UINT8_MODEL_NAME``).
 
     this script runs inside
     ``api`` (see the module docstring's ``Usage``), which has no
@@ -257,6 +269,14 @@ def convert_to_tensorrt_via_python_api(onnx_path: Path, plan_path: Path) -> Path
         # ultralytics_export.py uses, which already works on TRT 11.1.
         network = create_explicit_network(builder)
         parser = trt.OnnxParser(network, trt_logger)
+        if uint8:
+            from ocr_graph import add_argmax_outputs
+            from uint8_input import add_uint8_input
+
+            u8 = add_uint8_input(
+                onnx_path, Path(onnx_path).with_suffix('.u8.onnx'), mean=UINT8_MEAN, std=UINT8_STD
+            )
+            onnx_path = add_argmax_outputs(u8, Path(onnx_path).with_suffix('.u8.argmax.onnx'))
         with Path(onnx_path).open('rb') as f:
             if not parser.parse(f.read()):
                 for i in range(parser.num_errors):
@@ -293,15 +313,65 @@ def convert_to_tensorrt_via_python_api(onnx_path: Path, plan_path: Path) -> Path
         return None
 
 
-def create_triton_config(plan_path: Path) -> None:
-    """Create Triton config.pbtxt with dynamic dimensions."""
+def create_triton_config(plan_path: Path, *, uint8: bool = False) -> None:
+    """Create Triton config.pbtxt with dynamic dimensions (``uint8``: the frame engine's build)."""
     print('\n' + '=' * 60)
     print('Step 4: Create Triton Config')
     print('=' * 60)
 
     config_path = plan_path.parent.parent / 'config.pbtxt'
 
-    config_content = f"""# PP-OCRv6 Multilingual Text Recognition Model (TensorRT)
+    if uint8:
+        config_content = f"""# PP-OCRv6 Multilingual Text Recognition Model (TensorRT), the frame engine's build
+#
+# Input:
+#   - x: [B, 3, 48, W] uint8 BGR text crops, (v / 127.5) - 1 in the graph
+#        width={MIN_WIDTH}-{MAX_WIDTH}; padding is written as 128 (0.0039 after the graph)
+#
+# Output (the arg-max of the {NUM_CHARS} character probabilities runs in the graph):
+#   - indices: [B, T] INT32, best class per time step (0 is the CTC blank)
+#   - scores:  [B, T] FP32, its probability
+
+name: "{UINT8_MODEL_NAME}"
+platform: "tensorrt_plan"
+max_batch_size: {MAX_BATCH}
+
+input [
+  {{
+    name: "{INPUT_NAME}"
+    data_type: TYPE_UINT8
+    dims: [ 3, {REC_HEIGHT}, -1 ]
+  }}
+]
+
+output [
+  {{
+    name: "indices"
+    data_type: TYPE_INT32
+    dims: [ -1 ]
+  }},
+  {{
+    name: "scores"
+    data_type: TYPE_FP32
+    dims: [ -1 ]
+  }}
+]
+
+instance_group [
+  {{
+    count: 2
+    kind: KIND_GPU
+    gpus: [0]
+  }}
+]
+
+# The engine sends one batch per call, already sorted and padded: nothing to wait for.
+dynamic_batching {{
+  max_queue_delay_microseconds: 0
+}}
+"""
+    else:
+        config_content = f"""# PP-OCRv6 Multilingual Text Recognition Model (TensorRT)
 #
 # SVTR-LCNet architecture for text sequence recognition
 # Supports dynamic width for variable-length text recognition
@@ -368,6 +438,11 @@ def parse_args() -> argparse.Namespace:
         action='store_true',
         help='Skip TensorRT conversion (verify ONNX only)',
     )
+    parser.add_argument(
+        '--uint8',
+        action='store_true',
+        help=f'Build {UINT8_MODEL_NAME}: uint8 BGR input, arg-max in the graph (frame engine)',
+    )
     return parser.parse_args()
 
 
@@ -403,7 +478,9 @@ def main() -> int:
     # Step 3: Convert to TensorRT
     plan_path = None
     if not args.skip_tensorrt:
-        plan_path = convert_to_tensorrt_via_python_api(onnx_path, PLAN_OUTPUT)
+        plan_path = convert_to_tensorrt_via_python_api(
+            onnx_path, UINT8_PLAN_OUTPUT if args.uint8 else PLAN_OUTPUT, uint8=args.uint8
+        )
         if not plan_path:
             print('\nERROR: TensorRT conversion failed')
             print('  Check GPU memory and retry')
@@ -411,7 +488,7 @@ def main() -> int:
 
     # Step 4: Create Triton config
     if plan_path:
-        create_triton_config(plan_path)
+        create_triton_config(plan_path, uint8=args.uint8)
 
     # Summary
     print('\n' + '=' * 70)

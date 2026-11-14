@@ -29,9 +29,19 @@ MAX_RESOLUTION = 960
 MIN_RESOLUTION = 32
 OPTIMAL_RESOLUTION = 736
 
+# The frame engine's build (``--uint8``): uint8 BGR ``x`` (what the engine's kernels write), the
+# reference's normalisation in the graph, and a larger profile so a detector size above 960
+# (``ocr.limit_side``) is possible. PaddleX ``DetResizeForTest`` caps a side at 4000; the
+# profile's max here is what the high-resolution measurement of the ``ocr`` branch settled on.
+UINT8_MODEL_NAME = 'paddleocr_det_trt_uint8'
+UINT8_MAX_RESOLUTION = 1920
+UINT8_MEAN = (0.485, 0.456, 0.406)  # PP-OCRv6 det inference.yml NormalizeImage, BGR array order
+UINT8_STD = (0.229, 0.224, 0.225)
+
 # Output paths
 ONNX_PATH = Path('/app/pytorch_models/paddleocr/ppocrv6_det_small.onnx')
 PLAN_OUTPUT = Path('/app/models/paddleocr_det_trt/1/model.plan')
+UINT8_PLAN_OUTPUT = Path(f'/app/models/{UINT8_MODEL_NAME}/1/model.plan')
 
 
 def verify_onnx_model(onnx_path: Path) -> dict:
@@ -105,6 +115,8 @@ def convert_to_tensorrt(
     plan_path: Path,
     fp16: bool = True,
     max_batch_size: int = 4,
+    *,
+    uint8: bool = False,
 ) -> Path | None:
     """
     Convert ONNX model to TensorRT engine.
@@ -114,7 +126,10 @@ def convert_to_tensorrt(
         plan_path: Output path for TensorRT plan
         fp16: Use FP16 precision
         max_batch_size: Maximum batch size
+        uint8: the frame engine's build: uint8 input ``x``, normalisation in the graph, the
+            larger profile
     """
+    max_resolution = UINT8_MAX_RESOLUTION if uint8 else MAX_RESOLUTION
     print('\nConverting to TensorRT engine...')
     print(f'  Input: {onnx_path}')
     print(f'  Output: {plan_path}')
@@ -135,6 +150,12 @@ def convert_to_tensorrt(
         if fp16:
             print('  Baking FP16 (ModelOpt AutoCast, TRT 11 typed builds)...')
             onnx_path = bake_fp16_onnx(onnx_path)
+        if uint8:
+            from uint8_input import add_uint8_input
+
+            onnx_path = add_uint8_input(
+                onnx_path, Path(onnx_path).with_suffix('.u8.onnx'), mean=UINT8_MEAN, std=UINT8_STD
+            )
         # Parse ONNX
         print('  Parsing ONNX model...')
         with Path(onnx_path).open('rb') as f:
@@ -165,14 +186,14 @@ def convert_to_tensorrt(
             INPUT_NAME,
             min=(1, 3, MIN_RESOLUTION, MIN_RESOLUTION),
             opt=(1, 3, OPTIMAL_RESOLUTION, OPTIMAL_RESOLUTION),
-            max=(max_batch_size, 3, MAX_RESOLUTION, MAX_RESOLUTION),
+            max=(max_batch_size, 3, max_resolution, max_resolution),
         )
         config.add_optimization_profile(profile)
 
         print('  Optimization profile configured')
         print(f'    - Min: (1, 3, {MIN_RESOLUTION}, {MIN_RESOLUTION})')
         print(f'    - Opt: (1, 3, {OPTIMAL_RESOLUTION}, {OPTIMAL_RESOLUTION})')
-        print(f'    - Max: ({max_batch_size}, 3, {MAX_RESOLUTION}, {MAX_RESOLUTION})')
+        print(f'    - Max: ({max_batch_size}, 3, {max_resolution}, {max_resolution})')
 
         # Build engine (this takes a few minutes)
         print('\n  Building TensorRT engine (this may take 2-5 minutes)...')
@@ -204,7 +225,7 @@ def convert_to_tensorrt(
         print(f'      --minShapes={INPUT_NAME}:1x3x{MIN_RESOLUTION}x{MIN_RESOLUTION} \\')
         print(f'      --optShapes={INPUT_NAME}:1x3x{OPTIMAL_RESOLUTION}x{OPTIMAL_RESOLUTION} \\')
         print(
-            f'      --maxShapes={INPUT_NAME}:{max_batch_size}x3x{MAX_RESOLUTION}x{MAX_RESOLUTION}'
+            f'      --maxShapes={INPUT_NAME}:{max_batch_size}x3x{max_resolution}x{max_resolution}'
         )
         return None
 
@@ -216,29 +237,42 @@ def convert_to_tensorrt(
         return None
 
 
-def create_triton_config(model_dir: Path, max_batch_size: int = 4) -> None:
-    """Create Triton config.pbtxt for the detection model."""
+def create_triton_config(model_dir: Path, max_batch_size: int = 4, *, uint8: bool = False) -> None:
+    """Create Triton config.pbtxt for the detection model (``uint8``: the frame engine's build)."""
     config_path = model_dir / 'config.pbtxt'
+    name, dtype, max_resolution = (
+        (UINT8_MODEL_NAME, 'TYPE_UINT8', UINT8_MAX_RESOLUTION)
+        if uint8
+        else ('paddleocr_det_trt', 'TYPE_FP32', MAX_RESOLUTION)
+    )
+    pixels = (
+        'uint8 BGR, ((x / 255) - mean) / std (ImageNet) in the graph'
+        if uint8
+        else 'FP32, preprocessed ((x / 255 - mean) / std, ImageNet), BGR'
+    )
+    # One request per photo from the engine: nothing to wait for in a batcher (ocr_batch round 2).
+    delay = 0 if uint8 else 5000
+    preferred = '' if uint8 else '  preferred_batch_size: [ 1, 2, 4 ]\n'
 
     config_content = f"""# PP-OCRv6 Text Detection Model (TensorRT)
 #
 # DB++ architecture for text region detection
 #
 # Input:
-#   - x: [B, 3, H, W] FP32, preprocessed ((x / 255 - mean) / std, ImageNet), BGR
-#        H,W must be multiples of 32, max {MAX_RESOLUTION}
+#   - x: [B, 3, H, W] {pixels}
+#        H,W must be multiples of 32, max {max_resolution}
 #
 # Output:
 #   - fetch_name_0: [B, 1, H, W] FP32, probability map [0, 1]
 
-name: "paddleocr_det_trt"
+name: "{name}"
 platform: "tensorrt_plan"
 max_batch_size: {max_batch_size}
 
 input [
   {{
     name: "x"
-    data_type: TYPE_FP32
+    data_type: {dtype}
     dims: [ 3, -1, -1 ]  # Dynamic H, W (multiples of 32)
   }}
 ]
@@ -260,8 +294,7 @@ instance_group [
 ]
 
 dynamic_batching {{
-  preferred_batch_size: [ 1, 2, 4 ]
-  max_queue_delay_microseconds: 5000
+{preferred}  max_queue_delay_microseconds: {delay}
 }}
 """
 
@@ -298,7 +331,15 @@ def parse_args() -> argparse.Namespace:
         help='Maximum batch size for TensorRT engine',
     )
     parser.add_argument('--skip-tensorrt', action='store_true', help='Skip TensorRT conversion')
-    return parser.parse_args()
+    parser.add_argument(
+        '--uint8',
+        action='store_true',
+        help=f'Build {UINT8_MODEL_NAME}: uint8 BGR input, normalisation in the graph (frame engine)',
+    )
+    args = parser.parse_args()
+    if args.uint8 and args.output == PLAN_OUTPUT:
+        args.output = UINT8_PLAN_OUTPUT
+    return args
 
 
 def main() -> int:
@@ -332,11 +373,12 @@ def main() -> int:
             args.output,
             fp16=args.fp16,
             max_batch_size=args.max_batch_size,
+            uint8=args.uint8,
         )
 
     # Create Triton config
     if plan_path:
-        create_triton_config(plan_path.parent.parent, args.max_batch_size)
+        create_triton_config(plan_path.parent.parent, args.max_batch_size, uint8=args.uint8)
 
     # Summary
     print('\n' + '=' * 70)
