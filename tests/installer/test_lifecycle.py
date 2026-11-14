@@ -178,7 +178,7 @@ def test_image_tag_mode_runs_local_images_without_pulling(shimmed: Shimmed) -> N
     assert result.returncode == 0, result.stderr[-2000:]
     pulls = [ln for ln in shimmed.mutating_docker_calls() if ln.startswith('docker pull')]
     # Our images come from the local build; only lock-pinned third-party images are pulled.
-    assert pulls == [f'docker pull opensearchproject/opensearch:3.6.0@{fake_digest("opensearch")}']
+    assert pulls == [f'docker pull opensearchproject/opensearch:3.9.0@{fake_digest("opensearch")}']
     assert 'UNPINNED' in result.stderr
 
 
@@ -461,7 +461,7 @@ def test_local_release_dir_and_local_image_tags_install_end_to_end(shimmed: Shim
     images.mkdir()
     for name in ('openprocessor', 'openprocessor-export', 'openprocessor-triton'):
         (images / f'opinst_{name}_localtest').write_text(f'opinst/{name}@sha256:{"0" * 64}\n')
-    pinned = f'opensearchproject/opensearch:3.6.0@{fake_digest("opensearch")}'
+    pinned = f'opensearchproject/opensearch:3.9.0@{fake_digest("opensearch")}'
     (images / pinned.replace('/', '_').replace(':', '_').replace('@', '_')).write_text(
         f'opensearchproject/opensearch@{fake_digest("opensearch")}\n'
     )
@@ -587,9 +587,9 @@ def test_third_party_images_are_pinned_and_verified(shimmed: Shimmed) -> None:
     shimmed.flag('pull_bad_digest')
     result = install(shimmed)
     assert result.returncode == 7
-    assert 'digest mismatch for opensearchproject/opensearch:3.6.0@sha256:' in result.stderr
+    assert 'digest mismatch for opensearchproject/opensearch:3.9.0@sha256:' in result.stderr
     pulls = [ln for ln in shimmed.mutating_docker_calls() if ln.startswith('docker pull')]
-    assert pulls == [f'docker pull opensearchproject/opensearch:3.6.0@{fake_digest("opensearch")}']
+    assert pulls == [f'docker pull opensearchproject/opensearch:3.9.0@{fake_digest("opensearch")}']
 
 
 def test_upgrade_and_rollback_replace_running_scripts_by_rename(
