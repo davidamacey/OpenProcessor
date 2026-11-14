@@ -91,7 +91,7 @@ ENGINE_BRANCHES: tuple[EngineBranch, ...] = cast(
     tuple(b for b in BRANCHES if b not in ('near_duplicates', 'region')),
 )
 #: Branches this engine runs; the others in the plan vocabulary answer ``unsupported_branch``.
-BUILT_BRANCHES: frozenset[str] = frozenset({'detect', 'embed_frame', 'embed_crops'})
+BUILT_BRANCHES: frozenset[str] = frozenset({'detect', 'embed_frame', 'embed_crops', 'derivatives'})
 DERIVATIVES = 'derivatives'
 
 BRANCH_OUTPUTS: Mapping[str, tuple[str, ...]] = {

@@ -387,15 +387,13 @@ def test_stored_boxes_replace_the_detector(eng: Any) -> None:
 
 def test_unbuilt_branches_answer_unsupported_and_the_rest_runs(eng: Any) -> None:
     engine = eng()
-    plan = _plan(['detect', 'faces', 'ocr'], embed=None, crops='none',
-                 derivatives=[{'name': 'thumb', 'side': 256}])  # fmt: skip
+    plan = _plan(['detect', 'faces', 'ocr'], embed=None, crops='none')
     r = _run(engine, plan)
     assert r.status == 'ok'
     assert r.branches == {
         'detect': ('ok', ''),
         'faces': ('error', 'unsupported_branch'),
         'ocr': ('error', 'unsupported_branch'),
-        'derivatives': ('error', 'unsupported_branch'),
     }
     assert engine.transport.models() == ['det']
     assert not {'face_boxes', 'ocr_texts', 'derivative_jpegs'} & set(r.outputs)
@@ -966,3 +964,42 @@ def test_an_unknown_stage_is_refused() -> None:
 
     with pytest.raises(ValueError, match='unknown frame engine stage'):
         StageClock().add('typo', 1.0)
+
+
+def test_renditions_are_jpegs_in_plan_order_never_enlarged(eng: Any) -> None:
+    import cv2
+
+    engine = eng()
+    plan = _plan(['embed_frame'], detector=None, crops='none',
+                 derivatives=[{'name': 'a', 'side': 32}, {'name': 'b', 'side': 200, 'quality': 60}])  # fmt: skip
+    r = _run(engine, plan)
+    assert r.branches == {'embed_frame': ('ok', ''), 'derivatives': ('ok', '')}
+    decoded = [cv2.imdecode(np.frombuffer(j, np.uint8), cv2.IMREAD_COLOR)
+               for j in r.outputs['derivative_jpegs']]  # fmt: skip
+    sizes = [d.shape[:2] for d in decoded if d is not None]
+    assert len(decoded) == 2
+    assert sizes == [(21, 32), (H, W)]  # 96 x 64 fits 32 as 32 x 21; 200 is larger than the photo
+    assert {s for s, n in _seen(engine).items() if n} >= {'derivative_render', 'derivative_jpeg'}
+
+
+def test_a_plan_without_renditions_pays_nothing_for_them(eng: Any) -> None:
+    engine = eng()
+    r = _run(engine, _plan(['embed_frame'], detector=None, crops='none'))
+    assert 'derivative_jpegs' not in r.outputs
+    assert 'derivatives' not in r.branches
+    assert not {'derivative_render', 'derivative_jpeg'} & {s for s, n in _seen(engine).items() if n}
+
+
+@pytest.mark.parametrize('side', [32, 128, 256, 511, 512, 1024])
+def test_fit_size_is_pillow_thumbnail_for_every_shape(eng: Any, side: int) -> None:
+    from PIL import Image
+
+    eng()
+    fit_size = importlib.import_module('frame_engine.branches.derivatives').fit_size
+    rng = np.random.default_rng(side)
+    shapes = [(int(w), int(h)) for w, h in rng.integers(1, 6000, (60, 2))]
+    shapes += [(5000, 4000), (4000, 5000), (3, 9000), (9000, 3), (side, side), (side + 1, 7)]
+    for w, h in shapes:
+        im = Image.new('L', (w, h))
+        im.thumbnail((side, side))
+        assert fit_size(w, h, side) == im.size, (w, h)

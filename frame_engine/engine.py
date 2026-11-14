@@ -51,6 +51,7 @@ import numpy as np
 
 from frame_engine.branches.base import Branch, DependencyFailedError, Photo, PhotoCalls
 from frame_engine.branches.crops import CropJpegs
+from frame_engine.branches.derivatives import Derivatives
 from frame_engine.branches.detect import Detect
 from frame_engine.branches.embed import EmbedCrops, EmbedFrame
 from frame_engine.messages import EngineRequest, EngineResult
@@ -285,6 +286,8 @@ class FrameEngine:
             out.append(EmbedFrame(plan.embed))
         if plan.embed is not None and plan.runs('embed_crops'):
             out.append(EmbedCrops(plan.embed, plan.embed_classes))
+        if plan.derivatives:
+            out.append(Derivatives(self.encode_pool))
         if plan.crops == 'inline':
             out.append(CropJpegs(self.encode_pool, self.s.jpeg_quality, self.s.crop_max_side))
         return out

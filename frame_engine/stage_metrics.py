@@ -61,6 +61,8 @@ STAGES = (
     'crop_copy',
     'crop_jpeg',
     'blur',
+    'derivative_render',
+    'derivative_jpeg',
 )
 ASYNC_STAGES = frozenset({'letterbox', 'embed_frame', 'embed_crops', 'blur'})
 SECONDS_NAME = 'op_frame_engine_stage_seconds'

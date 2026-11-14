@@ -40,7 +40,7 @@ def test_the_ingest_plan_parses_and_round_trips() -> None:
 def test_the_engine_branches_are_the_plan_vocabulary_minus_api_branches() -> None:
     assert set(wire.ENGINE_BRANCHES) <= set(BRANCHES)
     assert set(BRANCHES) - set(wire.ENGINE_BRANCHES) == {'near_duplicates', 'region'}
-    assert set(wire.ENGINE_BRANCHES) >= wire.BUILT_BRANCHES
+    assert set(wire.ENGINE_BRANCHES) >= wire.BUILT_BRANCHES - {wire.DERIVATIVES}
 
 
 @pytest.mark.parametrize(
@@ -101,7 +101,7 @@ def test_stored_boxes_stand_in_for_the_detector() -> None:
     assert err.value.fault == 'bad_field'
 
 
-def test_unbuilt_branches_and_derivatives_are_reported_unsupported() -> None:
+def test_unbuilt_branches_are_reported_unsupported_and_renditions_are_built() -> None:
     plan = wire.parse_plan(
         _plan(
             branches=['detect', 'faces', 'face_embed', 'ocr'],
@@ -112,7 +112,7 @@ def test_unbuilt_branches_and_derivatives_are_reported_unsupported() -> None:
         ),
         has_boxes=False,
     )
-    assert plan.unsupported() == ('faces', 'face_embed', 'ocr', 'derivatives')
+    assert plan.unsupported() == ('faces', 'face_embed', 'ocr')
     assert plan.reported() == ('detect', 'faces', 'face_embed', 'ocr', 'derivatives')
     assert plan.if_detected == {'ocr': (0,)}
 
