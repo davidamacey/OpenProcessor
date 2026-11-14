@@ -152,7 +152,9 @@ def build_plan_bytes(onnx_path: Path, max_batch: int, workspace_bytes: int) -> b
 
 def run_plan(plan: bytes, rows: Sequence[Any]) -> list[Any]:
     """Run ``plan`` on each ``[1, T]`` int64 row through Polygraphy's TrtRunner (no CUDA bindings needed)."""
+    import numpy as np
     from polygraphy.backend.trt import EngineFromBytes, TrtRunner
 
     with TrtRunner(EngineFromBytes(plan)) as runner:
-        return [runner.infer({INPUT_TENSOR: row})[OUTPUT_TENSOR] for row in rows]
+        # TrtRunner returns its own output buffer on every infer(); copy so rows do not alias.
+        return [np.array(runner.infer({INPUT_TENSOR: row})[OUTPUT_TENSOR]) for row in rows]

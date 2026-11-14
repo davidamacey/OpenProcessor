@@ -115,3 +115,32 @@ def test_gate_treats_nan_as_failure() -> None:
     bad = ref.copy()
     bad[3, 0] = np.nan
     assert not engine.compare(ref, bad).passes()
+
+
+def test_run_plan_returns_independent_rows(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Polygraphy's TrtRunner hands back the same output buffer on every infer(): rows must be copied."""
+    import sys
+    import types
+
+    shared = np.zeros((1, 4), dtype=np.float32)
+
+    class FakeRunner:
+        def __enter__(self) -> FakeRunner:
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            return None
+
+        def infer(self, feed: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+            shared[:] = float(feed['text_tokens'][0, 0])
+            return {'text_embeddings': shared}
+
+    module = types.ModuleType('polygraphy.backend.trt')
+    module.TrtRunner = lambda _engine: FakeRunner()  # type: ignore[attr-defined]
+    module.EngineFromBytes = lambda plan: plan  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, 'polygraphy', types.ModuleType('polygraphy'))
+    monkeypatch.setitem(sys.modules, 'polygraphy.backend', types.ModuleType('polygraphy.backend'))
+    monkeypatch.setitem(sys.modules, 'polygraphy.backend.trt', module)
+    rows = [np.full((1, 3), v, dtype=np.int64) for v in (1, 2, 3)]
+    outs = engine.run_plan(b'plan', rows)
+    assert [float(o[0, 0]) for o in outs] == [1.0, 2.0, 3.0]
