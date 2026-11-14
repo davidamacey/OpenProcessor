@@ -172,22 +172,29 @@ def blur_rect(
 
 
 def filter_weights(
-    in_size: int, out_size: int, *, antialias: bool = True
+    in_size: int, out_size: int, *, antialias: bool = True, lanczos: bool = False
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Per output index: first source tap, tap count and the normalized weights
-    ``[out_size, kmax]`` of a triangle filter centred on ``(i + 0.5) * in / out``."""
+    ``[out_size, kmax]`` of a triangle filter (``lanczos``: Pillow's ``LANCZOS``, ``a = 3``)
+    centred on ``(i + 0.5) * in / out``."""
     scale = in_size / out_size
-    support = max(scale, 1.0) if antialias else 1.0
+    stretch = max(scale, 1.0) if antialias else 1.0
+    radius = 3.0 if lanczos else 1.0
+    support = radius * stretch
     centers = (np.arange(out_size, dtype=np.float64) + 0.5) * scale
     first = np.maximum(np.floor(centers - support + 0.5), 0).astype(np.int64)
     last = np.minimum(np.floor(centers + support + 0.5), in_size).astype(np.int64)
     count = np.maximum(last - first, 0)
     kmax = max(1, int(count.max()))
     xs = first[:, None] + np.arange(kmax)[None, :]
-    w = np.clip(1.0 - np.abs((xs - centers[:, None] + 0.5) / support), 0.0, None)
+    u = (xs - centers[:, None] + 0.5) / stretch
+    if lanczos:
+        w = np.where(np.abs(u) < radius, np.sinc(u) * np.sinc(u / radius), 0.0)
+    else:
+        w = np.clip(1.0 - np.abs(u), 0.0, None)
     w[np.arange(kmax)[None, :] >= count[:, None]] = 0.0
     total = w.sum(axis=1, keepdims=True)
-    w = np.divide(w, total, out=np.zeros_like(w), where=total > 0)
+    w = np.divide(w, total, out=np.zeros_like(w), where=total != 0)
     return first.astype(np.int32), count.astype(np.int32), w.astype(np.float32)
 
 

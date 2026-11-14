@@ -306,3 +306,32 @@ class TestWeights:
             _f, c, w = fg.filter_weights(5184, 640, antialias=antialias)
             np.testing.assert_allclose(w.sum(axis=1), 1.0, atol=1e-5)
             assert (c > 0).all()
+
+
+class TestLanczosWeights:
+    def test_lanczos_weights_reproduce_pillow_lanczos(self) -> None:
+        rng = np.random.default_rng(3)
+        img = rng.integers(0, 256, (230, 310, 3), dtype=np.uint8)
+        fx, cx, wx = fg.filter_weights(310, 77, lanczos=True)
+        fy, cy, wy = fg.filter_weights(230, 58, lanczos=True)
+        src = img.astype(np.float64)
+        tmp = np.stack(
+            [
+                np.tensordot(src[:, fx[x] : fx[x] + cx[x]], wx[x, : cx[x]], axes=([1], [0]))
+                for x in range(77)
+            ],
+            axis=1,
+        )
+        out = np.stack(
+            [
+                np.tensordot(wy[y, : cy[y]], tmp[fy[y] : fy[y] + cy[y]], axes=([0], [0]))
+                for y in range(58)
+            ]
+        )
+        ref = np.asarray(Image.fromarray(img).resize((77, 58), Image.Resampling.LANCZOS))
+        assert np.abs(np.clip(np.rint(out), 0, 255) - ref).max() <= 2
+
+    def test_triangle_weights_are_not_lanczos(self) -> None:
+        a = fg.filter_weights(300, 50)[2]
+        b = fg.filter_weights(300, 50, lanczos=True)[2]
+        assert a.shape != b.shape or not np.allclose(a, b)

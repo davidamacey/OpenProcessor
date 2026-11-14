@@ -69,6 +69,7 @@ _SHAPES: dict[str, list[int]] = {
     wire.CROP_EMBEDDED: [-1],
     wire.BLUR_SUMS: [-1, 3],
     wire.CROP_JPEGS: [-1],
+    wire.DERIVATIVE_JPEGS: [-1],
 }
 
 
@@ -159,7 +160,7 @@ def build_response(request: Any, result: EngineResult) -> Any:
     add(wire.DECODE_ROUTE, [1], pack_bytes([result.decode_route.encode()]))
     add(wire.BRANCH_STATUS, [1], pack_bytes([wire.encode_branch_status(result.branches).encode()]))
     for name, value in result.outputs.items():
-        if name == wire.CROP_JPEGS:
+        if name in (wire.CROP_JPEGS, wire.DERIVATIVE_JPEGS):
             add(name, [len(value)], pack_bytes(list(value)))
             continue
         arr: np.ndarray = np.ascontiguousarray(value, dtype=_NUMPY[wire.OUTPUT_DATATYPES[name]])

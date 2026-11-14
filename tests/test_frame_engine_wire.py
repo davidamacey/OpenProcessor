@@ -146,3 +146,46 @@ def test_expected_outputs_follow_the_branches() -> None:
     assert wire.expected_outputs(frame_only) == ('whole_embedding',)
     assert set(wire.OUTPUT_DATATYPES) >= set(wire.expected_outputs(full))
     assert wire.INPUT_DATATYPES['boxes'] == 'FP64'
+
+
+def test_renditions_are_parsed_with_defaults_and_round_trip() -> None:
+    plan = wire.parse_plan(
+        _plan(
+            derivatives=[
+                {'name': 'thumb', 'side': 256},
+                {'name': 'grid', 'side': 1024, 'quality': 70},
+            ]
+        ),
+        has_boxes=False,
+    )
+    assert [(r.name, r.side, r.quality, r.format) for r in plan.derivatives] == [
+        ('thumb', 256, 85, 'jpeg'),
+        ('grid', 1024, 70, 'jpeg'),
+    ]
+    assert wire.parse_plan(plan.to_json(), has_boxes=False) == plan
+    assert 'derivative_jpegs' in wire.expected_outputs(plan)
+
+
+@pytest.mark.parametrize(
+    'entry',
+    [
+        {'name': 'thumb'},
+        {'name': 'thumb', 'side': 8},
+        {'name': 'thumb', 'side': 256, 'quality': 0},
+        {'name': 'thumb', 'side': 256, 'format': 'webp'},
+        {'name': 'thumb', 'side': 256, 'crop': True},
+        {'name': '', 'side': 256},
+    ],
+)
+def test_a_bad_rendition_refuses_the_plan(entry: dict) -> None:
+    with pytest.raises(wire.EnginePlanError):
+        wire.parse_plan(_plan(derivatives=[entry]), has_boxes=False)
+
+
+def test_rendition_names_are_unique() -> None:
+    with pytest.raises(wire.EnginePlanError) as err:
+        wire.parse_plan(
+            _plan(derivatives=[{'name': 'a', 'side': 64}, {'name': 'a', 'side': 128}]),
+            has_boxes=False,
+        )
+    assert err.value.fault == 'bad_field'

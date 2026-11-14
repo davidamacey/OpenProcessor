@@ -358,7 +358,7 @@ def test_stored_boxes_replace_the_detector(eng: Any) -> None:
 def test_unbuilt_branches_answer_unsupported_and_the_rest_runs(eng: Any) -> None:
     engine = eng()
     plan = _plan(['detect', 'faces', 'ocr'], embed=None, crops='none',
-                 derivatives=[{'name': 'thumb'}])  # fmt: skip
+                 derivatives=[{'name': 'thumb', 'side': 256}])  # fmt: skip
     r = _run(engine, plan)
     assert r.status == 'ok'
     assert r.branches == {

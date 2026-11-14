@@ -57,6 +57,7 @@ CROP_EMBEDDINGS = 'crop_embeddings'
 CROP_EMBEDDED = 'crop_embedded'
 BLUR_SUMS = 'blur_sums'
 CROP_JPEGS = 'crop_jpegs'
+DERIVATIVE_JPEGS = 'derivative_jpegs'
 
 INPUT_DATATYPES: Mapping[str, str] = {IMAGE: 'BYTES', PLAN: 'BYTES', BOXES: 'FP64'}
 OUTPUT_DATATYPES: Mapping[str, str] = {
@@ -73,6 +74,7 @@ OUTPUT_DATATYPES: Mapping[str, str] = {
     CROP_EMBEDDED: 'BOOL',
     BLUR_SUMS: 'INT64',
     CROP_JPEGS: 'BYTES',
+    DERIVATIVE_JPEGS: 'BYTES',
 }
 
 #: ``status``: ``ok`` or one of :data:`src.domain.decode_route.PREP_STATUSES`.
@@ -142,6 +144,29 @@ _TOP_FIELDS = frozenset(
 )
 
 
+RENDITION_FORMATS = ('jpeg',)
+RENDITION_SIDE_RANGE = (16, 4096)
+DEFAULT_RENDITION_QUALITY = 85
+
+
+@dataclass(frozen=True)
+class RenditionSpec:
+    """One stored rendition: the long side fits ``side`` (Pillow ``thumbnail``, never enlarged)."""
+
+    name: str
+    side: int
+    quality: int = DEFAULT_RENDITION_QUALITY
+    format: str = RENDITION_FORMATS[0]
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            'name': self.name,
+            'side': self.side,
+            'quality': self.quality,
+            'format': self.format,
+        }
+
+
 class EnginePlanError(ValueError):
     """A plan the engine refuses as a whole (gRPC ``INVALID_ARGUMENT``)."""
 
@@ -179,7 +204,7 @@ class EnginePlan:
     crops: CropsMode = 'none'
     if_detected: Mapping[str, tuple[int, ...]] = field(default_factory=dict)
     faces: Mapping[str, Any] | None = None
-    derivatives: tuple[Any, ...] = ()
+    derivatives: tuple[RenditionSpec, ...] = ()
 
     def runs(self, branch: str) -> bool:
         return branch in self.branches
@@ -221,7 +246,7 @@ class EnginePlan:
         if self.faces is not None:
             body['faces'] = dict(self.faces)
         if self.derivatives:
-            body[DERIVATIVES] = list(self.derivatives)
+            body[DERIVATIVES] = [r.to_json() for r in self.derivatives]
         return json.dumps(body, sort_keys=True)
 
 
@@ -250,6 +275,31 @@ def _need(body: dict[str, Any], key: str, name: str) -> Any:
     if key not in body:
         raise EnginePlanError('missing_field', name)
     return body[key]
+
+
+def _renditions(raw: list[Any]) -> tuple[RenditionSpec, ...]:
+    specs: list[RenditionSpec] = []
+    for i, entry in enumerate(raw):
+        where = f'{DERIVATIVES}[{i}]'
+        r = _obj(entry, where, frozenset({'name', 'side', 'quality', 'format'}))
+        name = _str(_need(r, 'name', f'{where}.name'), f'{where}.name')
+        if name in {s.name for s in specs}:
+            raise EnginePlanError('bad_field', f'{where}.name')
+        specs.append(
+            RenditionSpec(
+                name=name,
+                side=_int(
+                    _need(r, 'side', f'{where}.side'), f'{where}.side', *RENDITION_SIDE_RANGE
+                ),
+                quality=_int(
+                    r.get('quality', DEFAULT_RENDITION_QUALITY), f'{where}.quality', 1, 100
+                ),
+                format=_str(
+                    r.get('format', RENDITION_FORMATS[0]), f'{where}.format', RENDITION_FORMATS
+                ),
+            )
+        )
+    return tuple(specs)
 
 
 def _detector(raw: Any) -> DetectorSpec:
@@ -358,7 +408,7 @@ def parse_plan(text: str | bytes, *, has_boxes: bool) -> EnginePlan:
         crops=cast('CropsMode', crops),
         if_detected={str(k): _class_ids(v, f'if_detected.{k}') for k, v in raw_cond.items()},
         faces=faces,
-        derivatives=tuple(derivatives),
+        derivatives=_renditions(derivatives),
     )
     _check_dependencies(plan, has_boxes=has_boxes)
     return plan
@@ -393,6 +443,8 @@ def expected_outputs(plan: EnginePlan) -> tuple[str, ...]:
         names.extend(BRANCH_OUTPUTS.get(branch, ()))
     if plan.crops == 'inline':
         names.extend(CROPS_OUTPUTS)
+    if plan.derivatives:
+        names.append(DERIVATIVE_JPEGS)
     return tuple(names)
 
 
@@ -406,6 +458,7 @@ __all__ = [
     'EmbedSpec',
     'EnginePlan',
     'EnginePlanError',
+    'RenditionSpec',
     'decode_branch_status',
     'encode_branch_status',
     'expected_outputs',
