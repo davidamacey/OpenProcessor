@@ -24,7 +24,7 @@ from frame_engine.engine import FrameEngine
 from frame_engine.front import FrontService, make_server
 from frame_engine.settings import EngineSettings
 from frame_engine.stage_metrics import EngineMetrics
-from frame_engine.transport import BodyTransport, CshmRegion, CudaShmTransport
+from frame_engine.transport import BodyTransport, CshmRegion, CudaShmTransport, channels
 
 
 MIB = 1024 * 1024
@@ -33,14 +33,7 @@ logger = logging.getLogger('frame_engine')
 
 
 def _transport(s: EngineSettings, metrics: EngineMetrics) -> BodyTransport | CudaShmTransport:
-    options = [
-        ('grpc.max_send_message_length', 512 * MIB),
-        ('grpc.max_receive_message_length', 512 * MIB),
-    ]
-    clients = [
-        grpcclient.InferenceServerClient(s.triton_url, channel_args=options)
-        for _ in range(s.triton_channels)
-    ]
+    clients = channels(s.triton_url, s.triton_channels)
     common: dict[str, Any] = {
         'timeout': s.triton_timeout_seconds,
         'input_factory': grpcclient.InferInput,

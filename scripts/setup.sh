@@ -38,6 +38,7 @@ source "${SCRIPT_DIR}/lib/download.sh"
 source "${SCRIPT_DIR}/lib/export.sh"
 source "${SCRIPT_DIR}/lib/config.sh"
 source "${SCRIPT_DIR}/lib/ports.sh"
+source "${SCRIPT_DIR}/lib/data_dir.sh"
 source "${SCRIPT_DIR}/lib/setup_prereq.sh"
 source "${SCRIPT_DIR}/lib/setup_services.sh"
 
@@ -50,6 +51,10 @@ source "${SCRIPT_DIR}/lib/setup_services.sh"
 DC_FILES=(-f "$PROJECT_DIR/docker-compose.yml")
 if [[ -f "$PROJECT_DIR/src/main.py" ]]; then
     DC_FILES+=(-f "$PROJECT_DIR/docker-compose.dev.yml")
+fi
+# OP_DATA_DIR in .env keeps the database, search and queue data on a chosen (SSD) directory.
+if [[ -f "$PROJECT_DIR/docker-compose.data-dir.yml" && -n "$(data_dir_value "$PROJECT_DIR/.env")" ]]; then
+    DC_FILES+=(-f "$PROJECT_DIR/docker-compose.data-dir.yml")
 fi
 dc() { docker compose "${DC_FILES[@]}" "$@"; }
 

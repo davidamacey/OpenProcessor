@@ -1,20 +1,26 @@
 """The frame engine's Prometheus metrics, served on ``OP_FRAME_ENGINE_METRICS_PORT``.
 
-Per-stage wall timing of one request: two counters, both labelled ``stage``,
-``op_frame_engine_stage_seconds_total`` (summed host wall seconds) and
-``op_frame_engine_stage_observations_total`` (images that ran the stage). Seconds over
-observations is the mean per image. Stage seconds are sums over concurrent requests, so they are
-compared across runs and never added up to wall time. The stage names are the ones the Triton
-prep model published, so the baseline tables stay comparable:
+Per-stage timing of one request: two counters, both labelled ``stage``,
+``op_frame_engine_stage_seconds_total`` and ``op_frame_engine_stage_observations_total`` (images
+that ran the stage). Seconds over observations is the mean per image. A stage's seconds are the
+wall time the request's worker thread spent in it. A photo's model calls are in flight together
+(two rounds, ``engine.py``), so a call stage (``detect``, ``embed_pe``) counts the commit, the send
+and the time the worker WAITED for the answer, not the call's latency: a call answered while the
+worker was in another stage costs its stage almost nothing. The stages of one request do not
+overlap (``crop_jpeg`` excepted), so per image they add up to about the worker's busy time; over
+concurrent requests they are sums, compared across runs, never added up to wall time. The stage
+names are the ones the Triton prep model published, so the baseline tables stay comparable:
 
 ``queue``        wait for a worker thread (gRPC receipt to the first stage)
 ``budget``       wait for device memory (``prep_budget``); only photos that route to the GPU
 ``decode``       header routing, nvJPEG decode, EXIF orientation
-``letterbox``    detector letterbox canvas
-``detect``       detector call, box decoding
-``embed_frame``  whole-frame square for the encoder
-``embed_crops``  one square per detection (or stored box) for the encoder
-``embed_pe``     the encoder calls over those squares
+``letterbox``    detector letterbox canvas (and the wait for room in the region)
+``detect``       round 1's one stream wait and sends, the wait for the detector's answer, boxes
+``embed_frame``  whole-frame square for the encoder (and the wait for room)
+``embed_crops``  one square per detection (or stored box) for the encoder (and the wait for room,
+                 which may collect the photo's oldest call: the window of the region)
+``embed_pe``     encoder calls: commit and send of each crop call, the waits for the answers
+                 (round 1's wait and sends when the plan has no detector)
 ``crop_copy``    device-to-host copy of each detection's pixels
 ``crop_jpeg``    JPEG encode, summed over the image's crops (host threads, concurrent)
 ``blur``         Laplacian sums of the frame and every detection
@@ -100,7 +106,12 @@ class EngineMetrics:
         self.registry = registry or CollectorRegistry()
         r = self.registry
         self.stage_seconds = Counter(
-            SECONDS_NAME, 'Frame engine stage wall seconds.', ['stage'], registry=r
+            SECONDS_NAME,
+            'Wall seconds the worker thread spent in a frame engine stage; a model call in flight '
+            'counts only while the worker waits for its answer (crop_jpeg: host-thread encode '
+            'seconds summed over the crops).',
+            ['stage'],
+            registry=r,
         )
         self.stage_observations = Counter(
             OBSERVATIONS_NAME, 'Images that ran a frame engine stage.', ['stage'], registry=r

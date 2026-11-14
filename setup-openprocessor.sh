@@ -2643,6 +2643,8 @@ do_install() {
     source "${OP_DIR}/scripts/lib/retired_env.sh"
     # shellcheck source=scripts/lib/cropwright_auth.sh
     source "${OP_DIR}/scripts/lib/cropwright_auth.sh"
+    # shellcheck source=scripts/lib/data_dir.sh
+    source "${OP_DIR}/scripts/lib/data_dir.sh"
     # shellcheck source=scripts/lib/install_summary.sh
     source "${OP_DIR}/scripts/lib/install_summary.sh"
     # shellcheck source=scripts/lib/upgrade_060.sh
@@ -2855,6 +2857,9 @@ do_install() {
     else
         log_warn "could not check free disk space on Docker's data root"
     fi
+
+    # The databases wait on the disk for every commit: say so when it spins.
+    storage_check_data_location "$OP_DIR"
 
     # OpenSearch (mmapfs) needs vm.max_map_count >= 262144; it is a host
     # kernel setting a container cannot change, so warn with the fix.
