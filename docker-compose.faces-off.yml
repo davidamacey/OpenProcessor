@@ -37,6 +37,8 @@ services:
       - --load-model=mobileclip2_s2_text_encoder
       - --load-model=paddleocr_det_trt
       - --load-model=paddleocr_rec_trt
+      - --load-model=paddleocr_det_trt_uint8
+      - --load-model=paddleocr_rec_trt_uint8
       - --load-model=ocr_pipeline
       # G-07: pe_image_encoder backs curation semantic search and the
       # near-dup/uniqueness item scorers -- CURATION.md calls it required,

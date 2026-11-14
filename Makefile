@@ -822,11 +822,13 @@ download-paddleocr: ## Download PP-OCRv6 ONNX models and dictionaries
 export-paddleocr-det: ## Export PaddleOCR detection model to TensorRT
 	@echo "Exporting PP-OCRv6 detection to TensorRT..."
 	$(EXPORT_RUN) python /app/export/export_paddleocr_det.py
+	$(EXPORT_RUN) python /app/export/export_paddleocr_det.py --uint8
 
 .PHONY: export-paddleocr-rec
 export-paddleocr-rec: ## Export PaddleOCR recognition model to TensorRT
 	@echo "Exporting PP-OCRv6 recognition to TensorRT..."
 	$(EXPORT_RUN) python /app/export/export_paddleocr_rec.py
+	$(EXPORT_RUN) python /app/export/export_paddleocr_rec.py --uint8
 
 .PHONY: export-paddleocr
 export-paddleocr: export-paddleocr-det export-paddleocr-rec ## Export both PaddleOCR models to TensorRT
@@ -841,6 +843,8 @@ load-ocr-models: ## Load OCR models into Triton
 	@echo "Loading OCR models into Triton..."
 	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/paddleocr_det_trt/load" || true
 	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/paddleocr_rec_trt/load" || true
+	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/paddleocr_det_trt_uint8/load" || true
+	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/paddleocr_rec_trt_uint8/load" || true
 	@echo "OCR models loaded."
 
 # ==================================================================================

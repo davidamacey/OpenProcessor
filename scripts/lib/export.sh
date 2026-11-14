@@ -44,6 +44,8 @@ declare -gA EXPORT_TIMES=(
     ["mobileclip2_s2_text_encoder"]="5"
     ["paddleocr_det_trt"]="10"
     ["paddleocr_rec_trt"]="15"
+    ["paddleocr_det_trt_uint8"]="10"
+    ["paddleocr_rec_trt_uint8"]="15"
     # G-07: pe_image_encoder is now in docker-compose.yml's default
     # --load-model list (required, not curation-only -- see
     # docs/CURATION.md "Models you must supply"), so it must be built
@@ -90,6 +92,8 @@ unload_models_for_export() {
         "mobileclip2_s2_text_encoder"
         "paddleocr_det_trt"
         "paddleocr_rec_trt"
+        "paddleocr_det_trt_uint8"
+        "paddleocr_rec_trt_uint8"
         "ocr_pipeline"
     )
 
@@ -404,6 +408,8 @@ check_exported_models() {
         "mobileclip2_s2_text_encoder"
         "paddleocr_det_trt"
         "paddleocr_rec_trt"
+        "paddleocr_det_trt_uint8"
+        "paddleocr_rec_trt_uint8"
     )
 
     for model in "${models[@]}"; do
@@ -431,6 +437,8 @@ all_models_exported() {
         "mobileclip2_s2_text_encoder"
         "paddleocr_det_trt"
         "paddleocr_rec_trt"
+        "paddleocr_det_trt_uint8"
+        "paddleocr_rec_trt_uint8"
     )
 
     for model in "${required[@]}"; do
