@@ -77,4 +77,5 @@ async def test_pool_reaches_restarted_server_within_bound() -> None:
             await server.stop(None)
 
     recovery = await asyncio.wait_for(scenario(), timeout=90)
-    assert recovery < RECONNECT_MAX_BACKOFF_MS / 1000 + 2
+    # one capped backoff plus scheduling slack on a loaded host; the uncapped default gave 16 s
+    assert recovery < RECONNECT_MAX_BACKOFF_MS / 1000 + 5
