@@ -50,12 +50,13 @@ def read_list(path: Path) -> list[Path]:
 
 def ingest_plan(detector: str, net_size: int, fill: int) -> str:
     """The plan photo ingest sends (``src/services/curation/ingest_gpu_decode.py``)."""
+    from src.config.settings import TritonModelConfig
     from src.domain import frame_engine_wire as wire
 
     return wire.EnginePlan(
         branches=('detect', 'embed_frame', 'embed_crops'),
         detector=wire.DetectorSpec(detector, net_size, fill),
-        embed=wire.EmbedSpec('pe_image_encoder', 336, 32),
+        embed=wire.EmbedSpec(TritonModelConfig.PE_IMAGE_MODEL, 336, 32),
         crops='inline',
     ).to_json()
 

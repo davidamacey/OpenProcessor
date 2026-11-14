@@ -60,16 +60,18 @@ def test_the_registered_task_drains_every_pending_image_once(
     async def active() -> Any:
         return make_set(run_on_ingest=True), 2
 
-    async def get_service(*_a: Any) -> Any:
-        return service
+    class _Ingest:
+        async def service(self, _opensearch: Any) -> Any:
+            return service
+
+    async def worker_ingest() -> Any:
+        return _Ingest()
 
     monkeypatch.setattr(open_vocab_ingest, 'current_active_set', active)
     monkeypatch.setattr(
         'src.services.projects.guard.make_script_opensearch', lambda *_a, **_k: fake
     )
-    monkeypatch.setattr(
-        'src.services.curation.ingest_service_factory.get_ingest_service', get_service
-    )
+    monkeypatch.setattr('src.tasks.jobs_a_support.worker_ingest', worker_ingest)
     monkeypatch.setattr('src.services.detection.segmenter_http.segment_image_http', seg)
 
     # the fake world's indexes are the default project's: the job runs as that project

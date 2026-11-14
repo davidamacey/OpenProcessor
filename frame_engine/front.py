@@ -241,6 +241,7 @@ class FrontService(service_pb2_grpc.GRPCInferenceServiceServicer):
         job = EngineRequest(image, plan, boxes)
         job.deadline = job.arrived + self.request_deadline
         result: EngineResult | None = None
+        failure: tuple[grpc.StatusCode, str] | None = None
         try:
             waiter = asyncio.wrap_future(self.engine.submit(job))
             done, _ = await asyncio.wait({waiter}, timeout=self.request_deadline)
@@ -250,15 +251,18 @@ class FrontService(service_pb2_grpc.GRPCInferenceServiceServicer):
                 waiter.cancel()  # a photo still queued never starts; a running one ends bounded
         except OverloadError as exc:
             self.metrics.overloads.labels(exc.cause).inc()
-            await context.abort(grpc.StatusCode.RESOURCE_EXHAUSTED, f'overload: {exc}')
+            failure = grpc.StatusCode.RESOURCE_EXHAUSTED, f'overload: {exc}'
         except TritonUnavailableError as exc:
-            await context.abort(grpc.StatusCode.UNAVAILABLE, f'model server unavailable: {exc}')
+            failure = grpc.StatusCode.UNAVAILABLE, f'model server unavailable: {exc}'
         except Exception as exc:
             logger.exception('frame engine request failed')
-            await context.abort(grpc.StatusCode.INTERNAL, f'frame engine: {exc}')
+            failure = grpc.StatusCode.INTERNAL, f'frame engine: {exc}'
         finally:
             self.in_flight -= 1
             self.metrics.in_flight.set(self.in_flight)
+        if failure is not None:
+            # abort sends the status before it raises: the request must already be uncounted
+            await context.abort(*failure)
         if result is None:
             await self._past_deadline(context, job)
         return build_response(request, result)
