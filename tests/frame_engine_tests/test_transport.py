@@ -20,6 +20,7 @@ from frame_engine.transport import (
     BodyTransport,
     CudaShmTransport,
     ModelCallError,
+    ModelInput,
     OverloadError,
     Staged,
     TritonUnavailableError,
@@ -28,6 +29,14 @@ from frame_engine.transport import (
 
 
 CARD = '00000000:41:00.0'
+PE = ModelInput('images', 'UINT8', (1, 3, 4, 4))
+OUT = ('image_embeddings',)
+
+
+def _infer(t: Any, staged: Staged, *, deadline: float | None = None) -> np.ndarray:
+    """One encoder call, submitted and collected (what a branch does with one chunk)."""
+    kw = {} if deadline is None else {'deadline': deadline}
+    return t.collect(t.submit('pe', staged, PE, OUT, **kw))['image_embeddings']
 
 
 def _err(code: str, msg: str) -> InferenceServerException:
@@ -198,7 +207,7 @@ def test_an_unknown_region_is_registered_again_once_and_the_call_retried(
     t.start()
     staged = t.stage(3 * 4 * 4)
     server.restart()  # the model server lost every registration
-    out = t.infer('pe', staged, 0, [1, 3, 4, 4], 'image_embeddings')
+    out = _infer(t, staged)
     assert out.shape == (1, 4)
     assert log.count(('register', t.name)) == 2
     assert log[-1] == ('infer', 'pe')
@@ -215,7 +224,7 @@ def test_concurrent_callers_register_again_only_once(server: FakeTriton, log: li
 
     def call(s: Staged) -> None:
         try:
-            t.infer('pe', s, 0, [1, 3, 4, 4], 'image_embeddings')
+            _infer(t, s)
         except BaseException as exc:  # collected and asserted below
             errors.append(exc)
 
@@ -235,7 +244,7 @@ def test_the_retry_after_registering_again_happens_once(server: FakeTriton, log:
     gone = _err('NOT_FOUND', f"Unable to find shared memory region: '{t.name}'")
     server.infer_fail = [gone, gone]
     with pytest.raises(ModelCallError, match='Unable to find shared memory region'):
-        t.infer('pe', staged, 0, [1, 3, 4, 4], 'image_embeddings')
+        _infer(t, staged)
     assert log.count(('register', t.name)) == 2
 
 
@@ -244,7 +253,7 @@ def test_another_model_error_is_not_a_registration_problem(server: FakeTriton, l
     t.start()
     server.infer_fail = [_err('INVALID_ARGUMENT', 'unexpected shape for input images')]
     with pytest.raises(ModelCallError) as err:
-        t.infer('pe', t.stage(48), 0, [1, 3, 4, 4], 'image_embeddings')
+        _infer(t, t.stage(48))
     assert err.value.code == 'StatusCode.INVALID_ARGUMENT'
     assert log.count(('register', t.name)) == 1
 
@@ -257,13 +266,13 @@ def test_an_unreachable_server_is_unavailable_and_the_health_check_recovers(
     staged = t.stage(48)
     server.up = False
     with pytest.raises(TritonUnavailableError):
-        t.infer('pe', staged, 0, [1, 3, 4, 4], 'image_embeddings')
+        _infer(t, staged)
     assert not t.ready()
     server.up = True
     server.restart()
     assert t.check()  # back, and the lost region registered again without traffic
     assert log.count(('register', t.name)) == 2
-    t.infer('pe', staged, 0, [1, 3, 4, 4], 'image_embeddings')
+    _infer(t, staged)
 
 
 def test_a_full_region_is_an_overload_within_the_bounded_wait(
@@ -277,7 +286,7 @@ def test_a_full_region_is_an_overload_within_the_bounded_wait(
     assert err.value.cause == 'slab'
 
 
-def test_release_waits_for_the_stream_before_the_slice_is_reused(
+def test_release_waits_for_the_stream_before_a_slice_never_committed_is_reused(
     server: FakeTriton, log: list
 ) -> None:
     t = _cuda(server, log, nbytes=4 * ALIGN)
@@ -287,6 +296,134 @@ def test_release_waits_for_the_stream_before_the_slice_is_reused(
     t.release(s, lambda: synced.append(t.slab.in_use))
     assert synced == [4 * ALIGN]  # waited while the slice was still held
     assert t.slab.in_use == 0
+
+
+def test_one_commit_waits_for_the_stream_once_for_every_slice(
+    server: FakeTriton, log: list
+) -> None:
+    """Round 1: every slice written, one stream wait, then all the calls go out. A committed
+    slice is released without another wait (nothing writes it after the commit)."""
+    t = _cuda(server, log)
+    t.start()
+    slices = [t.stage(48) for _ in range(3)]
+    synced: list[int] = []
+    t.commit(slices, lambda: synced.append(1))
+    assert synced == [1]
+    for s in slices:
+        t.release(s, lambda: synced.append(2))
+    assert synced == [1]
+    assert t.slab.in_use == 0
+
+
+class Delayed(FakeTriton):
+    """Answers every call from another thread after ``delay`` seconds, each output named."""
+
+    def __init__(self, log: list[tuple[str, str]], delay: float) -> None:
+        super().__init__(log)
+        self.delay = delay
+        self.sent: list[Any] = []
+        self.answered = 0
+
+    def async_infer(self, model_name: str, inputs: Any, callback: Any, *, outputs: Any = None,
+                    client_timeout: Any = None) -> Any:  # fmt: skip
+        self.sent.append((model_name, inputs[0]._get_tensor(), [o.name() for o in outputs]))
+        names = [o.name() for o in outputs]
+
+        def answer() -> None:
+            self.answered += 1
+            arrays = {n: np.full((1, 2), k, np.float32) for k, n in enumerate(names)}
+            callback(result=types.SimpleNamespace(as_numpy=arrays.__getitem__), error=None)
+
+        threading.Timer(self.delay, answer).start()
+        return types.SimpleNamespace(cancel=lambda: None)
+
+
+def test_submit_returns_with_the_call_in_flight_and_collect_gives_every_named_output(
+    log: list,
+) -> None:
+    server = Delayed(log, 0.2)
+    t = _cuda(server, log)
+    t.start()
+    scrfd = ModelInput('input.1', 'FP32', (1, 3, 4, 4))
+    outs = ('score_8', 'bbox_8', 'kps_8')
+    a, b = t.stage(scrfd.nbytes), t.stage(scrfd.nbytes)
+    start = time.monotonic()
+    pa = t.submit('scrfd', a, scrfd, outs)
+    pb = t.submit('scrfd', b, scrfd, outs)
+    assert time.monotonic() - start < 0.1  # neither waited for its answer
+    assert (len(server.sent), server.answered) == (2, 0)
+    got = [t.collect(pa), t.collect(pb)]
+    assert time.monotonic() - start < 0.35  # the two waits overlapped
+    for answer in got:
+        assert list(answer) == list(outs)
+        assert [int(answer[n][0, 0]) for n in outs] == [0, 1, 2]
+
+
+def test_the_call_carries_the_input_name_datatype_and_byte_size(log: list) -> None:
+    server = Delayed(log, 0.0)
+    t = _cuda(server, log)
+    t.start()
+    arcface = ModelInput('input', 'FP32', (2, 3, 4, 4))
+    assert arcface.nbytes == 2 * 3 * 4 * 4 * 4
+    s = t.stage(arcface.nbytes)
+    t.collect(t.submit('arcface', s, arcface, ('output',)))
+    [(model, tensor, outputs)] = server.sent
+    assert (model, tensor.name, tensor.datatype, list(tensor.shape)) == (
+        'arcface', 'input', 'FP32', [2, 3, 4, 4],
+    )  # fmt: skip
+    params = tensor.parameters
+    assert params['shared_memory_region'].string_param == t.name
+    assert params['shared_memory_byte_size'].int64_param == arcface.nbytes
+    assert params['shared_memory_offset'].int64_param == s.offset
+    assert outputs == ['output']
+
+
+def test_pending_calls_never_answered_all_end_by_the_one_deadline(log: list) -> None:
+    """A photo with four calls in flight against a server that went away waits about one
+    timeout in total, not four: each call's end is fixed when it is submitted."""
+    server = Unanswered(log)
+    t = _cuda(server, log, timeout=0.3)
+    t.start()
+    staged = [t.stage(48) for _ in range(4)]
+    pending = [t.submit('pe', s, PE, OUT) for s in staged]
+    start = time.monotonic()
+    for p in pending:
+        with pytest.raises(TritonUnavailableError, match='no answer'):
+            t.collect(p)
+    assert time.monotonic() - start < 0.6
+    assert server.cancelled == 4
+    for s in staged:
+        t.release(s, lambda: None)
+    assert t.slab.in_use == 0
+
+
+def test_cancel_ends_a_pending_call_without_counting_a_model_server_error(log: list) -> None:
+    server = Unanswered(log)
+    t = _cuda(server, log)
+    t.start()
+    s = t.stage(48)
+    t.cancel(t.submit('pe', s, PE, OUT))
+    assert server.cancelled == 1
+    assert _errors(t) == {}
+    assert t.ready()  # a call this engine gave up is no sign the server went away
+    t.release(s, lambda: None)
+    assert t.slab.in_use == 0
+
+
+def test_cancel_of_an_answered_call_does_nothing(server: FakeTriton, log: list) -> None:
+    t = _cuda(server, log)
+    t.start()
+    cancelled: list[int] = []
+    real = server.async_infer
+
+    def answered(*a: Any, **k: Any) -> Any:
+        real(*a, **k)
+        return types.SimpleNamespace(cancel=lambda: cancelled.append(1))
+
+    server.async_infer = answered  # type: ignore[method-assign]
+    p = t.submit('pe', t.stage(48), PE, OUT)
+    t.cancel(p)
+    assert cancelled == []
 
 
 def test_shutdown_unregisters_before_it_frees(server: FakeTriton, log: list) -> None:
@@ -358,7 +495,7 @@ def test_a_call_that_is_never_answered_is_unavailable_within_its_deadline(log: l
     staged = t.stage(48)
     start = time.monotonic()
     with pytest.raises(TritonUnavailableError, match='no answer'):
-        t.infer('pe', staged, 0, [1, 3, 4, 4], 'image_embeddings')
+        _infer(t, staged)
     assert time.monotonic() - start < 1.5
     assert server.timeouts == [0.3]
     assert server.cancelled == 1  # the call is cancelled, not left running
@@ -375,15 +512,13 @@ def test_a_call_never_takes_longer_than_what_is_left_of_its_request(log: list) -
     staged = t.stage(48)
     start = time.monotonic()
     with pytest.raises(TritonUnavailableError):
-        t.infer('pe', staged, 0, [1, 3, 4, 4], 'image_embeddings',
-                deadline=time.perf_counter() + 0.2)  # fmt: skip
+        _infer(t, staged, deadline=time.perf_counter() + 0.2)
     assert time.monotonic() - start < 1.5
     [first] = server.timeouts
     assert first is not None
     assert first <= 0.2
     with pytest.raises(TritonUnavailableError, match='deadline'):
-        t.infer('pe', staged, 0, [1, 3, 4, 4], 'image_embeddings',
-                deadline=time.perf_counter() - 1)  # fmt: skip
+        _infer(t, staged, deadline=time.perf_counter() - 1)
     assert len(server.timeouts) == 1  # a request out of time makes no further call
 
 
@@ -403,7 +538,7 @@ def test_a_call_that_fails_mid_call_is_unavailable_and_counted_with_its_reason(
     t.start()
     staged = t.stage(48)
     with pytest.raises(TritonUnavailableError):
-        t.infer('pe', staged, 0, [1, 3, 4, 4], 'image_embeddings')
+        _infer(t, staged)
     assert _errors(t) == {('pe', *want): 1.0}
     t.release(staged, lambda: None)
     assert t.slab.in_use == 0
@@ -421,10 +556,10 @@ def test_a_failed_registration_during_a_call_is_unavailable(server: FakeTriton, 
 
     server.register_cuda_shared_memory = down  # type: ignore[method-assign]
     with pytest.raises(TritonUnavailableError):
-        t.infer('pe', staged, 0, [1, 3, 4, 4], 'image_embeddings')
+        _infer(t, staged)
     server.register_cuda_shared_memory = real  # type: ignore[method-assign]
     assert t.check()
-    t.infer('pe', staged, 0, [1, 3, 4, 4], 'image_embeddings')
+    _infer(t, staged)
 
 
 def test_the_body_transport_copies_to_the_host_and_sends_the_bytes(
@@ -444,11 +579,35 @@ def test_the_body_transport_copies_to_the_host_and_sends_the_bytes(
     )
     t.start()
     assert t.ready()
-    s = t.stage(2 * 48)
-    s.device[48:] = 7
+    s = t.stage(48)
+    s.device[:] = 7
     with pytest.raises(RuntimeError, match='before commit'):
-        t.infer('pe', s, 48, [1, 3, 4, 4], 'image_embeddings')
-    t.commit(s)
-    assert t.infer('pe', s, 48, [1, 3, 4, 4], 'image_embeddings').shape == (1, 4)
+        t.submit('pe', s, PE, OUT)
+    t.commit([s], lambda: None)
+    assert _infer(t, s).shape == (1, 4)
     t.release(s, lambda: None)
     assert log == [('infer', 'pe')]
+
+
+def test_the_body_transport_sends_the_bytes_as_the_input_datatype(log: list) -> None:
+    class _Dev(np.ndarray):
+        def get(self) -> np.ndarray:
+            return np.asarray(self).copy()
+
+    server = Delayed(log, 0.0)
+    t = BodyTransport(
+        [server],
+        EngineMetrics(CollectorRegistry()),
+        timeout=5.0,
+        input_factory=grpcclient.InferInput,
+        output_factory=grpcclient.InferRequestedOutput,
+        empty=lambda n: np.zeros(n, np.uint8).view(_Dev),
+    )
+    t.start()
+    x = ModelInput('x', 'FP32', (1, 3, 2, 2))
+    s = t.stage(x.nbytes)
+    s.device[:] = np.arange(12, dtype=np.float32).view(np.uint8)
+    t.commit([s], lambda: None)
+    t.collect(t.submit('rec', s, x, ('fetch_name_0',)))
+    [(_model, tensor, _outs)] = server.sent
+    assert (tensor.name, tensor.datatype, list(tensor.shape)) == ('x', 'FP32', [1, 3, 2, 2])
