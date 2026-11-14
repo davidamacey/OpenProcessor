@@ -13,6 +13,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Changed
 
+- **Capture metadata without a temporary file, in parallel.** A new photo's EXIF is read by a pool of 2 to 4 kept-open ExifTool processes (one per 8 cores) instead of one process behind one thread: the file's bytes reach the process through a named pipe in a private directory, not through a whole-file temporary file. 14 to 17 MB photos read in 9 ms instead of 32 ms (indicative, loaded host); the tags are identical for every format tested (JPEG, PNG, TIFF, WebP, AVIF, GIF and the decoder fixtures). A read that hangs is killed and the photo's capture is recorded as unknown, as before.
 - **Search text encoder on the GPU.** `pe_text_encoder` is a TensorRT FP16 plan on the GPU instead of ONNX Runtime on one CPU instance. `make pe-export-text-triton` builds the plan and installs it only when it matches the FP32 graph (median cosine at least 0.999, p01 at least 0.995; measured 0.99998 and 0.99995 on 2,400 COCO captions). `--platform onnxruntime_onnx` builds the CPU fallback. Re-run the export to switch an installed model.
 
 ### Added
