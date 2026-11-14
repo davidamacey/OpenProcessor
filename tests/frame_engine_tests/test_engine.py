@@ -254,6 +254,25 @@ def test_the_full_plan_answers_every_output_and_observes_every_stage(eng: Any) -
     assert engine.transport.staged == 0
 
 
+def test_a_photo_without_detections_still_answers_every_output_of_its_plan(eng: Any) -> None:
+    """``crop_jpegs`` is an output of ``crops: inline`` whatever the detector found, as the Triton
+    prep model answered it (an empty list): the API reads it for every photo."""
+    engine = eng()
+    real = engine.transport.infer
+
+    def nothing_found(model: str, staged: Any, off: int, shape: list[int], output: str) -> Any:
+        out = real(model, staged, off, shape, output)
+        return np.zeros_like(out) if model == 'det' else out
+
+    engine.transport.infer = nothing_found
+    r = _run(engine)
+    assert r.status == 'ok'
+    assert set(r.outputs) == {'size', *wire.expected_outputs(_plan())}
+    assert r.outputs['crop_jpegs'] == []
+    assert r.outputs['det_boxes'].shape == (0, 4)
+    assert r.outputs['crop_embeddings'].shape == (0, 8)
+
+
 def test_encoder_chunks_follow_the_plan_batch(eng: Any) -> None:
     engine = eng()
     _run(engine, _plan(embed={**EMBED, 'batch': 2}))

@@ -292,8 +292,9 @@ class FrameEngine:
             im.frame = None
         finally:
             done = [f.result() for f in jpegs]
+        if plan.crops == 'inline' and have_rects:
+            out[wire.CROP_JPEGS] = [data for data, _ in done]  # empty when nothing was found
         if jpegs:
-            out[wire.CROP_JPEGS] = [data for data, _ in done]
             clock.add('crop_jpeg', sum(secs for _, secs in done))
         return EngineResult(wire.STATUS_OK, wire.DECODED_GPU, _ordered(plan, states), out)
 
@@ -365,7 +366,7 @@ class FrameEngine:
             states['embed_frame'] = ('ok', '')
         if crops:
             rows = vectors[1:] if frame else vectors
-            out[wire.CROP_EMBEDDINGS] = rows.reshape(len(picked), -1)
+            out[wire.CROP_EMBEDDINGS] = rows  # [len(picked), dim]; reshape(0, -1) cannot infer dim
             out[wire.CROP_EMBEDDED] = mask
             states['embed_crops'] = ('ok', '')
 
