@@ -178,7 +178,12 @@ async def discard_many(
         refresh='wait_for',
     )
     by: dict[str, list[str]] = {'discarded': [], 'conflicts': [], 'not_found': [], 'failed': []}
-    outcome_of = {'updated': 'discarded', 'not-found': 'not_found', 'error': 'failed'}
+    outcome_of = {
+        'updated': 'discarded',
+        'not-found': 'not_found',
+        'error': 'failed',
+        'nested-limit': 'failed',
+    }
     for crop_id in crop_ids:
         by[outcome_of.get(status.get(crop_id, ''), 'conflicts')].append(crop_id)
     return by

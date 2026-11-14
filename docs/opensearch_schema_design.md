@@ -255,7 +255,56 @@ this mapping: 8.4 KB per vector for `pe_embedding` and for each nested box vecto
 One trap: a search whose `_source` names the bare `region_box_embeddings` path gets
 the number `1` for each vector; readers use
 `region_box_embeddings.box_vector_source_includes` (the leaf paths), which returns
-the real values. `_source` excludes, `GET`, `mget` and `_update` are unaffected.
+the real values. `_source` excludes are unaffected.
+
+#### Nested documents per item: the limit of 150
+
+OpenSearch k-NN issue 3623 (<https://github.com/opensearch-project/k-NN/issues/3623>, fixed by
+PR 3624 for 3.10, not released; every 3.x is affected, measured on 3.6.0 with this mapping): with
+derived source for vectors, a parent document with 150 or more nested Lucene documents, counted
+across ALL its nested fields, is read back with another document's nested vectors on search,
+`GET` and `mget`, and any partial update, scripted update, `update_by_query` or reindex then
+writes those wrong vectors to disk. At 74 boxes (148 nested documents) none of 200 items was
+wrong; at 75 boxes (150) 96% were. The item's own `pe_embedding` is never wrong. Turning derived
+source off avoids it at 20.5 KB stored per vector instead of 4.2 KB.
+
+One item document holds these nested documents: `region_boxes` (one per box), every box-vector
+list (`region_box_embeddings`, and one `boxvec_<key>` per further box space: one entry per
+embedded box each), `assist.attributes` and `assist.boxes` with their `attributes` (the last are
+nested inside a nested field; Lucene gives each its own document, the case was not measured
+separately). With the default configuration each box takes two (the box and its vector), so one
+item holds at most 74 boxes (148 documents); a second box space lowers that to 49, a third to 37.
+The rule, `src/domain/nested_limit.py`:
+
+- A write whose result holds 150 or more nested documents is refused (the edit routes answer 422
+  `item_over_nested_limit` with the limit in the body; the region worker records the item as
+  `detection_failed` with that reason; an import reports the image as failed; a combine does not
+  copy the item and lists its id in `over_nested_limit_ids`). A box list is never truncated.
+- The count assumes one vector per box in every box-vector list, because reads leave the vectors
+  out; the limit therefore holds before the embed stage runs.
+- An item that already holds 150 or more (written before the limit) accepts no write but one: a
+  box-list write that brings it under the limit, which also empties its box vectors (they are
+  read back wrong); the box embed stage and `backfill_region_embeddings.py` re-create them.
+  `scripts/curation/find_items_over_nested_limit.py --project <slug> [--repair-plan]` lists such
+  items and exits 1 when any exist.
+- The cluster projection scripts and the embedding-state backfill leave such an item as it is and
+  count it (`skipped_over_nested_limit`, `legacy_repair_skipped_over_nested_limit`).
+
+These writers send partial updates to item documents outside the guarded paths. They are only
+reachable for an item that already holds 150 or more nested documents (no guarded writer can
+take an item there), and for such an item they persist wrong box vectors; repair those items first:
+
+| Writer | File | What it writes |
+|---|---|---|
+| needs-new-class flag | `src/routers/curation/crops_write.py` | `needs_new_class*` |
+| review dismissal | `src/services/curation/label_undo.py` (`review_dismiss`) | `review_dismissed_*` |
+| probe predictions | `src/services/curation/probe_predictions.py` | `probe_pred_*` |
+| scatter coordinates | `src/services/curation/embedding_viz.py` | `viz_x`, `viz_y` |
+| scores | `src/services/curation/item_scores/job.py` | `uniqueness_*`, `mistakenness_*` |
+| near-duplicate projection | `src/services/near_duplicates/projection.py` | `near_dup_*` (bulk, clear script, `update_by_query`) |
+| source backfill | `src/services/source_backfill/capture.py`, `location_purge.py` | `capture*` (bulk, `update_by_query`) |
+| embedding space re-index | `src/services/embedding_spaces/reindex_opensearch.py` | the new space's vectors (bulk, `update_by_query`) |
+| 0.6.0 rollback | `src/services/upgrade/from_060/rollback.py` | restores exported documents |
 
 `region_revision` is bumped by any write that changes a box's state, geometry or
 text (a cluster-only write does not). Editors send it back as

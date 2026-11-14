@@ -247,6 +247,7 @@ def _many_boxes_doc(n: int) -> dict[str, dict[str, Any]]:
 @pytest.mark.asyncio
 async def test_inner_window_ensure_issues_one_put_when_low_and_none_when_enough() -> None:
     fake = QueryFakeOpenSearch({ITEMS: {}})
+    fake.max_inner_result_window = 20
     limit = CFG.region_max_boxes_per_write
 
     first = await ensure_items_inner_result_window(fake)
@@ -257,6 +258,19 @@ async def test_inner_window_ensure_issues_one_put_when_low_and_none_when_enough(
     assert len(fake.settings_puts) == 1
     assert fake.settings_puts[0]['body'] == {'index': {'max_inner_result_window': limit}}
     assert inner_result_window(ITEMS) == limit
+
+
+@pytest.mark.asyncio
+async def test_inner_window_ensure_issues_no_put_when_the_default_window_covers_the_box_limit() -> (
+    None
+):
+    # The box limit (74, k-NN issue 3623) is below OpenSearch's default window of 100.
+    fake = QueryFakeOpenSearch({ITEMS: {}})
+
+    result = await ensure_items_inner_result_window(fake)
+
+    assert result['max_inner_result_window'] == 100
+    assert fake.settings_puts == []
 
 
 @pytest.mark.asyncio
@@ -271,8 +285,9 @@ async def test_inner_window_ensure_never_lowers_a_larger_window() -> None:
 
 
 @pytest.mark.asyncio
-async def test_an_item_with_150_matching_boxes_returns_150_rows_once_the_window_is_raised() -> None:
-    fake = QueryFakeOpenSearch({ITEMS: _many_boxes_doc(150)})
+async def test_an_item_at_the_box_limit_returns_every_box_as_a_row() -> None:
+    limit = CFG.region_max_boxes_per_write
+    fake = QueryFakeOpenSearch({ITEMS: _many_boxes_doc(limit)})
     await ensure_items_inner_result_window(fake)
     client = _client(fake)
 
@@ -280,16 +295,17 @@ async def test_an_item_with_150_matching_boxes_returns_150_rows_once_the_window_
 
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert len(body['items']) == 150
+    assert len(body['items']) == limit
     assert body['total'] == 1
-    assert body['total_rows'] == 150
+    assert body['total_rows'] == limit
     assert body['rows_truncated'] is False
 
 
-def test_an_item_with_more_matching_boxes_than_the_window_reports_truncation(
+def test_an_item_over_the_box_limit_reports_truncation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # No ensure step ran (the project counts as bootstrapped): the window is OpenSearch's default 100.
+    # A legacy item written before the limit (src/domain/nested_limit.py) holds 150 boxes: a
+    # list reports the first `region_max_boxes_per_write` and says it is truncated.
     from src.services.curation import index_bootstrap
 
     monkeypatch.setattr(index_bootstrap, '_INDEXES_BOOTSTRAPPED', {'default'})
@@ -299,7 +315,7 @@ def test_an_item_with_more_matching_boxes_than_the_window_reports_truncation(
 
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert len(body['items']) == 100
+    assert len(body['items']) == CFG.region_max_boxes_per_write
     assert body['total_rows'] == 150
     assert body['rows_truncated'] is True
 
@@ -311,10 +327,10 @@ def test_inner_hits_size_clamps_to_the_window_the_ensure_step_read_back(
     from src.services.curation.region_rows import inner_hits_size
 
     limit = CFG.region_max_boxes_per_write
-    # Never read back (the ensure step failed): OpenSearch's default, so the
-    # request can't 400.
-    assert inner_hits_size(ITEMS) == 100
-    monkeypatch.setitem(ensure_overlay_fields._INNER_RESULT_WINDOWS, ITEMS, 250)
-    assert inner_hits_size(ITEMS) == min(limit, 250)
+    # Never read back (the ensure step failed): OpenSearch's default window of 100 (above the
+    # box limit), so the request can't 400.
+    assert inner_hits_size(ITEMS) == limit
+    monkeypatch.setitem(ensure_overlay_fields._INNER_RESULT_WINDOWS, ITEMS, 50)
+    assert inner_hits_size(ITEMS) == 50
     monkeypatch.setitem(ensure_overlay_fields._INNER_RESULT_WINDOWS, ITEMS, limit + 1000)
     assert inner_hits_size(ITEMS) == limit

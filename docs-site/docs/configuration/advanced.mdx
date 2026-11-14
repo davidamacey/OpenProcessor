@@ -197,7 +197,7 @@ deactivates).
 | `OP_REGION_DETECTION_TEXT_*` | Dominant-text rules: `_MIN_HEIGHT_RATIO`, `_BORDER_MARGIN`, `_CHARSET`, `_STOPWORDS`, `_FORMAT`, `_PLACEHOLDERS`, `_REJECT_SEQUENCES` |
 | `OP_ITEM_TEXT_ENABLED` / `OP_ITEM_TEXT_MIN_CONFIDENCE` | Store OCR lines read on the item crop for `GET /crops?item_text=` (`true` / `0.5`). Effective only when the profile names an OCR pipeline model |
 | `OP_REGION_EMBED_ENABLED` | `true`: the worker writes a PE embedding per accepted or false-positive box at flush time (auto-disables if `pe_image_encoder` isn't ready) |
-| `OP_REGION_MAX_BOXES_PER_WRITE` | `500`. Abuse guard on the number of boxes in one human region write request. Served as `region_profile.limits.max_boxes_per_write` |
+| `OP_REGION_MAX_BOXES_PER_WRITE` | `74` (also the ceiling; a larger value stops the start). The most boxes one item may hold and one region write may carry: an item document with 150 or more nested documents (each box takes two, the box and its vector) is read back with another document's vectors (OpenSearch k-NN issue 3623). Lowered to 49 or 37 when the project has a second or third box space. Served as `region_profile.limits.max_boxes_per_write` |
 
 The segmenter leg also needs a non-empty `segmenter_text_prompt`; without
 one it is disabled even when `OP_SEGMENTER_URL` is set. How many boxes an

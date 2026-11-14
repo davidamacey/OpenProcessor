@@ -37,10 +37,10 @@ class _OpenSearchLike:
 
 
 @pytest.mark.asyncio
-async def test_fetch_pending_ids_returns_ids_without_loading_source() -> None:
+async def test_fetch_pending_ids_returns_ids_loading_only_what_counts_nested_documents() -> None:
     client = _OpenSearchLike(['a', 'b'])
     ids = await fetch_pending_ids(
         client, slug='default', scope_cache=ScopeCache(), batch_size=2, classifier_skip_conf=0.9
     )
     assert ids == ['a', 'b']
-    assert client.bodies[0]['_source'] is False
+    assert client.bodies[0]['_source'] == ['region_boxes.box_id', 'assist']

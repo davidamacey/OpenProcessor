@@ -56,11 +56,12 @@ Sibling modules, split out of this one to keep each to one concern:
   ``DetectionProfile``-driven Triton detector runners (single-image and
   **batched**) and their tensor decoding.
 * :mod:`src.services.curation.ingest_batch` — ``ingest_batch``'s
-  implementation: one msearch dedup, one batched decode, **one batched
+  implementation: one lookup of the stored contents, one batched decode, **one batched
   Triton call per detector per ``batch_limit`` chunk** (not one per
-  image), the results fed back into ``ingest_one`` through its
-  ``prefilled_image`` / ``prefilled_items`` / ``prefilled_secondary``
-  arguments, plus optional companion-YOLO-label import.
+  image), the results fed to the finish phase as ``PhotoJob`` prefilled fields.
+* :mod:`src.services.curation.ingest_finish` — the finish phase of a batch (``ingest_one`` is a
+  batch of one): per-photo work in parallel, and the PostgreSQL steps (classes, placement, content
+  claims with the pending rows, release, events) once per batch.
 """
 
 from __future__ import annotations
@@ -79,12 +80,12 @@ from src.services.curation.ingest_detect import (
     SecondaryOutput,
     WholeImageDetector,
 )
+from src.services.curation.ingest_finish import PhotoJob, finish_photos
 from src.services.curation.ingest_helpers import _decode_image
 from src.services.curation.ingest_index import ImageContext, IndexOutcome, index_items
-from src.services.curation.ingest_items import IngestItemsMixin
+from src.services.curation.ingest_items import DetectResult, IngestItemsMixin
 from src.services.curation.ingest_models import (
     ERROR_KIND_DECODE_FAILED,
-    ERROR_KIND_DETECTOR_INFER,
     ERROR_KIND_EMPTY,
     BatchIngestResult,
     IngestResult,
@@ -92,15 +93,15 @@ from src.services.curation.ingest_models import (
 )
 from src.services.curation.ingest_policy import IngestPolicy
 from src.services.curation.item_doc import DetectedItem, region_seed_status
-from src.services.curation.ops_metrics import record_ingest_result
 from src.services.events.publish import apublish_crops_created
 from src.services.near_duplicates.content_key import content_image_id, content_imohash
 from src.utils.cpu_pool import encoded_nbytes, run_cpu
 from src.utils.image_decode import IMAGE_DECODE_ERRORS
+from src.utils.stage_timing import stage_timer
 
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable, Callable, Sequence
 
     from opensearchpy import AsyncOpenSearch
 
@@ -184,6 +185,7 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
         ingest_run_id: str | None = None,
         adopt_existing: bool = False,
         known_existing: dict[str, Any] | None = None,
+        resolved: Resolved | None = None,
     ) -> ImageContext | IngestResult:
         """Decode, fingerprint and dedup one image.
 
@@ -191,7 +193,8 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
         a terminal :class:`IngestResult`: ``failed`` for empty or
         undecodable bytes, ``duplicate`` for an image the index already
         holds. ``known_existing`` is a lookup result the caller already has
-        (an image it indexed moments ago that search cannot see yet).
+        (an image it indexed moments ago that search cannot see yet); ``resolved`` is the whole
+        lookup of this file the caller already made (a batch resolves all its files at once).
         ``adopt_existing=True`` (a dataset import, which must attach
         labels to an already-indexed image) turns a duplicate into a
         context with ``created=False`` carrying the existing doc's
@@ -232,11 +235,12 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
             width, height = prefilled_frame.width, prefilled_frame.height
 
         image_hash = content_imohash(image_bytes)
-        resolved = (
-            Resolved(known_existing, image_hash)
-            if known_existing is not None
-            else await self._lookup_image(image_hash, image_bytes)
-        )
+        if resolved is None:
+            resolved = (
+                Resolved(known_existing, image_hash)
+                if known_existing is not None
+                else await self._lookup_image(image_hash, image_bytes)
+            )
         existing = resolved.existing
         if existing is not None and not adopt_existing:
             return IngestResult(
@@ -250,7 +254,8 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
         if existing is None:
             image_id = content_image_id(resolved.key)
             resolved_path = image_path
-            capture = await self.read_capture(image_bytes)
+            with stage_timer('capture'):
+                capture = await self.read_capture(image_bytes)
         else:
             image_id = existing['image_id']
             resolved_path = existing.get('image_path') or image_path
@@ -337,64 +342,65 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
         (``POST /curation/ingest/image``, scripts) behave exactly as they
         did before the batch path existed.
         """
-        ctx = await self.ingest_image(
-            image_bytes,
-            image_path,
-            source,
-            prefilled_image=prefilled_image,
-            prefilled_frame=prefilled_frame,
-            decode_route=decode_route,
-            source_identifier=source_identifier,
-            ingest_run_id=ingest_run_id,
-        )
-        if isinstance(ctx, IngestResult):
-            return record_ingest_result(ctx)
-
-        try:
-            if ctx.pil is None:
-                detected = await self.filter_detections(
-                    prefilled_items or [], ctx.width, ctx.height
-                )
-            else:
-                detected = await self.detect_items(
-                    ctx.pil,
-                    image_path=image_path,
+        [result] = await self.ingest_photos(
+            [
+                PhotoJob(
+                    image_bytes,
+                    image_path,
+                    source,
+                    prefilled_image=prefilled_image,
                     prefilled_items=prefilled_items,
                     prefilled_secondary=prefilled_secondary,
-                )
-        except Exception as exc:
-            logger.error('ingest_primary_detector_failed', path=image_path, error=str(exc))
-            return record_ingest_result(
-                IngestResult(
-                    status='failed',
-                    image_path=image_path,
+                    prefilled_frame=prefilled_frame,
+                    decode_route=decode_route,
                     source_identifier=source_identifier,
-                    error=str(exc),
-                    error_kind=ERROR_KIND_DETECTOR_INFER,
-                    decode_route=ctx.decode_route,
+                    ingest_run_id=ingest_run_id,
                 )
-            )
-
-        outcome = await index_items(
-            self,
-            ctx,
-            detected.items,
-            secondary_detector_error=detected.secondary_detector_error,
+            ],
         )
-        outcome.result.n_filtered = detected.n_filtered
-        if outcome.result.status != 'duplicate':
-            outcome.result.decode_route = ctx.decode_route
-        return record_ingest_result(outcome.result)
+        return result
+
+    async def ingest_photos(self, jobs: Sequence[PhotoJob]) -> list[IngestResult]:
+        """Ingest a batch of photos (:func:`~src.services.curation.ingest_finish.finish_photos`):
+        one result per job, in order; the database steps run once for the whole batch."""
+        return await finish_photos(self, jobs)
+
+    async def detect_for_ingest(
+        self,
+        ctx: ImageContext,
+        image_path: str,
+        prefilled_items: list[DetectedItem] | None,
+        prefilled_secondary: SecondaryOutput | None,
+    ) -> DetectResult | Exception:
+        """The detector's items for a decoded image, the project's detect filter applied; the
+        class names are left to :meth:`resolve_classes`, which a batch runs once for all its
+        photos. A failure of the detector is returned (the photo fails, the batch goes on)."""
+        try:
+            if ctx.pil is None:
+                return await self.filter_detections(
+                    prefilled_items or [], ctx.width, ctx.height, resolve=False
+                )
+            return await self.detect_items(
+                ctx.pil,
+                image_path=image_path,
+                prefilled_items=prefilled_items,
+                prefilled_secondary=prefilled_secondary,
+                resolve=False,
+            )
+        except Exception as exc:
+            return exc
 
     @staticmethod
-    async def _publish_created(crop_ids: list[str], image_path: str) -> None:
-        """Announce newly written items on the live-update event stream.
+    async def _publish_created(crops: Sequence[tuple[str, str]]) -> None:
+        """Announce newly written items, ``(crop_id, image_path)`` each, on the live-update event
+        stream.
 
         Only ids ``occ_upsert_bulk`` confirmed as created are published —
         a re-ingest update or a rejected create is not a new crop. One
-        transaction per call; a failed write is raised, not swallowed.
+        transaction per call (a batch announces all its crops in one); a failed write is
+        raised, not swallowed.
         """
-        await apublish_crops_created([(crop_id, image_path) for crop_id in crop_ids])
+        await apublish_crops_created(crops)
 
     async def refresh_indexes(self) -> None:
         """Make this call's writes visible to search (stats, previews) once the

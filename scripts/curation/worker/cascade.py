@@ -23,6 +23,7 @@ from src.config.region_state import RegionStatus
 from src.core.logging import get_logger
 from src.domain.region_boxes import read_boxes
 from src.services.curation.class_write_guard import CLASS_GUARD_SOURCE_FIELDS, class_state_token
+from src.services.curation.over_limit_memo import MEMO, bound_project_box_vector_paths
 from src.services.curation.region_scope import parent_classes_clause
 from src.services.detection.cascade_detect.candidate import RegionCandidate
 from src.services.detection.profile_registry import get_active_region_profile
@@ -89,21 +90,12 @@ def _build_pending_query(exclude_ids: list[str] | None = None) -> dict[str, Any]
     return query
 
 
-async def _fetch_pending(
-    opensearch: AsyncOpenSearch,
-    *,
-    batch_size: int,
-    exclude_ids: list[str] | None = None,
-    project: Any = None,
-) -> list[_ItemTask]:
-    """Pull up to ``batch_size`` pending crops, oldest first.
-
-    ``track_total_hits: False`` (the exact match count is never
-    read here) and a ``crop_id`` sort tiebreaker for stable ordering
-    among same-``created_at`` crops. ``_source`` stays an explicit
-    includes list (unlike the VLM worker's ids-only fetch) — this
-    worker needs bbox/class fields for every task it dispatches.
-    """
+async def _search_pending(
+    opensearch: AsyncOpenSearch, batch_size: int, exclude_ids: list[str]
+) -> list[dict[str, Any]]:
+    """One page of pending crops, oldest first (``_source`` is an explicit includes list: the
+    worker needs bbox/class fields for every task it dispatches, and the ``assist`` attributes
+    for the nested-document count)."""
     F = get_region_fields()
     body = {
         'size': batch_size,
@@ -124,6 +116,7 @@ async def _fetch_pending(
             'test_holdout',
             'region_run_verify',
             'region_run_id',
+            'assist',
             *CLASS_GUARD_SOURCE_FIELDS,
         ],
         'track_total_hits': False,
@@ -131,7 +124,39 @@ async def _fetch_pending(
         'sort': [{'created_at': {'order': 'asc', 'unmapped_type': 'date'}}, {'crop_id': 'asc'}],
     }
     resp = await opensearch.search(index=items_index(), body=body)
-    hits = (resp.get('hits') or {}).get('hits') or []
+    return (resp.get('hits') or {}).get('hits') or []
+
+
+async def _fetch_pending(
+    opensearch: AsyncOpenSearch,
+    *,
+    batch_size: int,
+    exclude_ids: list[str] | None = None,
+    project: Any = None,
+) -> list[_ItemTask]:
+    """Pull up to ``batch_size`` pending crops, oldest first.
+
+    ``track_total_hits: False`` (the exact match count is never
+    read here) and a ``crop_id`` sort tiebreaker for stable ordering
+    among same-``created_at`` crops. ``_source`` stays an explicit
+    includes list (unlike the VLM worker's ids-only fetch) — this
+    worker needs bbox/class fields for every task it dispatches.
+    """
+    F = get_region_fields()
+    over_limit = 0
+    while True:
+        hits = await _search_pending(
+            opensearch, batch_size, [*(exclude_ids or []), *MEMO.excluded()]
+        )
+        if not hits:
+            break
+        hits, over = MEMO.split(hits, await bound_project_box_vector_paths())
+        over_limit += len(over)
+        # A page of nothing but over-limit items says nothing about the work behind it.
+        if hits or len(over) < batch_size:
+            break
+    if over_limit:
+        logger.warning('region_worker_skipped_over_nested_limit', items=over_limit)
     policy_verify = await project_region_verify() if hits else 'vlm'
     tasks: list[_ItemTask] = []
     for h in hits:

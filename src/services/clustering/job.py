@@ -238,4 +238,5 @@ async def cluster_projection_sync(ctx: JobContext) -> dict[str, Any]:
         'written': result.written,
         'cleared': result.cleared,
         'failed': result.failed,
+        'skipped_over_nested_limit': result.skipped_over_nested_limit,
     }

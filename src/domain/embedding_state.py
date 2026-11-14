@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from typing import Any, Final, Literal
 
+from src.domain.nested_limit import painless_guard
+
 
 EMBEDDED = 'embedded'
 # Ingest policy mode ``selected``: this detection was left out of the embedding.
@@ -67,7 +69,9 @@ def legacy_embedded_backfill_body(vector_field: str, state_field: str) -> dict[s
         'query': legacy_embedded_clause(vector_field, state_field),
         'script': {
             'lang': 'painless',
-            'source': f"ctx._source.{state_field} = '{EMBEDDED}'",
+            # Not on an item at the nested-document limit (nested_limit.py): the update rewrites
+            # the whole document, and the vectors stored on such an item are read back wrong.
+            'source': painless_guard(f"ctx._source.{state_field} = '{EMBEDDED}';", on_over='noop'),
         },
     }
 

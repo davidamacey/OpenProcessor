@@ -104,7 +104,9 @@ async def test_an_upgraded_image_is_refused_after_the_backfill(
         images={'old-image': {'image_id': 'old-image', 'image_path': str(stored)}}
     )
     svc, _, _ = _make_service(opensearch=svc_os)
-    assert await svc._check_duplicates([(content_imohash(data), data)]) == [None]
+    assert [r.existing for r in await svc.resolve_contents([(content_imohash(data), data)])] == [
+        None
+    ]
 
     ctx = _Ctx(project, _Search({'old-image': str(stored)}))
     outcome = await job.run(ctx)  # type: ignore[arg-type]

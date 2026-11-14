@@ -54,7 +54,7 @@ class WorkerIngest:
         from src.clients.pe_encoder import PEEncoder
         from src.services.classes.registry import get_class_registry
         from src.services.curation.capture_read import read_capture
-        from src.services.curation.detector_class_map import ensure_detector_class
+        from src.services.curation.detector_class_map import ensure_detector_classes
         from src.services.curation.ingest import CurationIngestService
         from src.services.curation.ingest_detector import refreshed_ingest_profiles
         from src.services.curation.ingest_policy_store import get_ingest_policy
@@ -85,7 +85,7 @@ class WorkerIngest:
             policy=await get_ingest_policy(),
             capture_reader=read_capture,
             location_policy=get_location_policy,
-            class_ensurer=ensure_detector_class,
+            class_ensurer=ensure_detector_classes,
             frame_engine=self._engine,
         )
 

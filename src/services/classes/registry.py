@@ -24,7 +24,7 @@ from src.db.session import async_session_factory, deployment_tx, project_tx
 
 if TYPE_CHECKING:
     import uuid
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable, Callable, Sequence
 
     from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -168,6 +168,19 @@ class ClassRegistry:
         """:meth:`ensure_class` returning the whole entry (callers need its spelling)."""
         row, created = await self._write(lambda s, p: repo.ensure_class(s, p, name, group, notes))
         return entry_from_row(row), created
+
+    async def ensure_entries(
+        self, specs: Sequence[tuple[str, str, str]]
+    ) -> list[tuple[RegistryClassEntry, bool]]:
+        """:meth:`ensure_entry` for each ``(name, group, notes)`` in one transaction (one commit,
+        the registry row locked once): the batch a detector's new labels arrive in."""
+
+        async def ensure(s: AsyncSession, p: uuid.UUID) -> list[tuple[repo.ClassRow, bool]]:
+            return [
+                await repo.ensure_class(s, p, name, group, notes) for name, group, notes in specs
+            ]
+
+        return [(entry_from_row(row), created) for row, created in await self._write(ensure)]
 
     async def update_class(
         self,

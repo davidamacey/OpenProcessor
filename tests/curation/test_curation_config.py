@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 from src.config import CurationConfig, IndexRole, index_name
+from src.config.nested_limit import MAX_BOXES_PER_ITEM_DEFAULT_SPACE
 
 
 def test_defaults_are_the_default_projects_names() -> None:
@@ -167,20 +168,42 @@ def test_from_env_probe_actionable_min_confidence_unset_stays_default(
 # =============================================================================
 
 
-def test_region_max_boxes_per_write_default_is_500() -> None:
-    assert CurationConfig().region_max_boxes_per_write == 500
+def test_region_max_boxes_per_write_default_is_the_nested_limit_bound() -> None:
+    assert CurationConfig().region_max_boxes_per_write == 74
+    assert CurationConfig().region_max_boxes_per_write == MAX_BOXES_PER_ITEM_DEFAULT_SPACE
 
 
 def test_from_env_overrides_region_max_boxes_per_write(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv('OP_REGION_MAX_BOXES_PER_WRITE', '250')
-    assert CurationConfig.from_env().region_max_boxes_per_write == 250
+    monkeypatch.setenv('OP_REGION_MAX_BOXES_PER_WRITE', '50')
+    assert CurationConfig.from_env().region_max_boxes_per_write == 50
 
 
 def test_from_env_region_max_boxes_per_write_unset_stays_default(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv('OP_REGION_MAX_BOXES_PER_WRITE', raising=False)
-    assert CurationConfig.from_env().region_max_boxes_per_write == 500
+    assert CurationConfig.from_env().region_max_boxes_per_write == 74
+
+
+@pytest.mark.parametrize('value', ['75', '500'])
+def test_a_box_limit_above_the_nested_limit_bound_is_refused_at_startup(
+    monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    """k-NN issue 3623: 75 boxes x 2 nested documents reaches the 150 that corrupts vectors."""
+    monkeypatch.setenv('OP_REGION_MAX_BOXES_PER_WRITE', value)
+    with pytest.raises(ValueError, match=r'OP_REGION_MAX_BOXES_PER_WRITE.*74.*issues/3623'):
+        CurationConfig.from_env()
+
+
+def test_a_box_limit_below_one_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('OP_REGION_MAX_BOXES_PER_WRITE', '0')
+    with pytest.raises(ValueError, match='OP_REGION_MAX_BOXES_PER_WRITE'):
+        CurationConfig.from_env()
+
+
+def test_the_direct_constructor_refuses_a_limit_above_the_bound_too() -> None:
+    with pytest.raises(ValueError, match='issues/3623'):
+        CurationConfig(region_max_boxes_per_write=75)
 
 
 # =============================================================================

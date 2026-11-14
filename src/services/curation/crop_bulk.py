@@ -10,6 +10,7 @@ from opensearchpy.exceptions import OpenSearchException
 from src.clients.occ_bulk import failed_entry, occ_update_bulk
 from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
+from src.domain.nested_limit import ERROR_CODE
 from src.services.embedding_spaces.readers import vector_source_excludes
 
 
@@ -61,7 +62,12 @@ async def occ_bulk_human_relabel(
     )
     updated_ids = [cid for cid in crop_ids if status_map.get(cid) == 'updated']
     failed = [failed_entry(cid) for cid in crop_ids if status_map.get(cid) == 'error']
-    conflict_ids = [cid for cid in crop_ids if status_map.get(cid) not in ('updated', 'error')]
+    failed += [
+        failed_entry(cid, ERROR_CODE) for cid in crop_ids if status_map.get(cid) == 'nested-limit'
+    ]
+    conflict_ids = [
+        cid for cid in crop_ids if status_map.get(cid) not in ('updated', 'error', 'nested-limit')
+    ]
 
     conflicts: list[dict[str, Any]] = []
     if conflict_ids:

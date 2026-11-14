@@ -37,7 +37,6 @@ import imohash
 from prometheus_client import Counter
 
 from src.core.logging import get_logger
-from src.db.checkout_budget import db_slot
 from src.db.repos import image_contents as repo
 from src.db.session import async_session_factory, core_tx, project_tx
 from src.services.config_store.bound_project import bound_project_id
@@ -133,6 +132,25 @@ async def _fill_sha256(session: AsyncSession, rows: list[repo.ContentRow]) -> No
         await repo.set_sha256(session, row.id, sha)
 
 
+async def _verdict(
+    session: AsyncSession,
+    rows: list[repo.ContentRow],
+    imohash_hex: str,
+    data: bytes,
+    known_sha: str | None = None,
+) -> Verdict:
+    """The verdict for ``data`` given the content ``rows`` that share its ``imohash`` (read under
+    the ``imohash`` lock). ``known_sha`` spares the hash when the caller computed it already."""
+    if not rows:
+        return Verdict(None, imohash_hex, None)
+    sha = known_sha if known_sha is not None else await asyncio.to_thread(content_sha256, data)
+    await _fill_sha256(session, rows)
+    for row in rows:
+        if row.content_sha256 == sha:
+            return Verdict(row.image_id, imohash_hex, sha, row.image_path)
+    return Verdict(None, sha, sha)
+
+
 async def _decide(
     session: AsyncSession,
     project_id: uuid.UUID | None,
@@ -145,14 +163,7 @@ async def _decide(
     the hash when the caller computed it already."""
     await repo.lock_imohash(session, project_id, imohash_hex)
     rows = await repo.rows_for_imohash(session, project_id, imohash_hex)
-    if not rows:
-        return Verdict(None, imohash_hex, None)
-    sha = known_sha if known_sha is not None else await asyncio.to_thread(content_sha256, data)
-    await _fill_sha256(session, rows)
-    for row in rows:
-        if row.content_sha256 == sha:
-            return Verdict(row.image_id, imohash_hex, sha, row.image_path)
-    return Verdict(None, sha, sha)
+    return await _verdict(session, rows, imohash_hex, data, known_sha)
 
 
 async def resolve_many_bound(entries: Sequence[tuple[str, bytes]]) -> list[Verdict]:
@@ -173,34 +184,103 @@ async def resolve_many_bound(entries: Sequence[tuple[str, bytes]]) -> list[Verdi
     return verdicts
 
 
+@dataclass(frozen=True)
+class ContentClaim:
+    """One image's claim on its content: what :func:`claim_bound` takes."""
+
+    imohash: str
+    image_id: str
+    image_path: str
+    data: bytes
+
+
+@dataclass(frozen=True)
+class ClaimOutcome:
+    """How one claim of :func:`claim_in_session` ended: stored now (both fields ``None``), held
+    by another image (``holder``), or refused for this image alone (``error``)."""
+
+    holder: str | None = None
+    error: Exception | None = None
+    """Why this image alone was refused (the content key's own refusals, or the database)."""
+
+
+async def claim_in_session(
+    session: AsyncSession, project_id: uuid.UUID, claims: Sequence[ContentClaim]
+) -> list[ClaimOutcome]:
+    """:func:`claim_bound` for several images in the caller's transaction: the same decision and
+    the same answers, one outcome per claim in order, and a refused claim never touches the others.
+
+    The ``imohash`` locks of all claims are taken first, in sorted order (a transaction that takes
+    several advisory locks takes them in one order everywhere, so concurrent batches cannot wait
+    on each other in a cycle: https://www.postgresql.org/docs/18/explicit-locking.html, "Deadlocks"),
+    the rows of all of them are read in one query and the new rows are inserted in one statement.
+    The claims must have distinct ``imohash`` values: copies of one content are decided one after
+    the other, never in one call.
+    """
+    imohashes = [c.imohash for c in claims]
+    if len(set(imohashes)) != len(imohashes):
+        msg = 'a batch claims each imohash once'
+        raise ValueError(msg)
+    await repo.lock_imohashes(session, project_id, sorted(imohashes))
+    rows = await repo.rows_for_imohashes(session, project_id, imohashes)
+    outcomes: list[ClaimOutcome | None] = [None] * len(claims)
+    staged: list[tuple[int, repo.NewContent, Verdict]] = []
+    for i, claim in enumerate(claims):
+        verdict = await _verdict(session, rows[claim.imohash], claim.imohash, claim.data)
+        if verdict.holder is not None:
+            outcomes[i] = ClaimOutcome(holder=verdict.holder)
+        elif content_image_id(verdict.key) != claim.image_id:
+            msg = f'image {claim.image_id} no longer names these bytes (imohash collision stored first)'
+            outcomes[i] = ClaimOutcome(error=ContentKeyChangedError(msg))
+        else:
+            new = repo.NewContent(
+                claim.imohash,
+                verdict.sha256,
+                claim.image_id,
+                claim.image_path,
+                len(claim.data),
+            )
+            staged.append((i, new, verdict))
+    inserted = await repo.insert_contents(session, project_id, [new for _, new, _ in staged])
+    for i, new, verdict in staged:
+        holder: str | None = None
+        if new.image_id not in inserted:  # a retry of this image's own row, or a taken SHA-256
+            try:
+                holder = await repo.insert_content(
+                    session,
+                    project_id,
+                    imohash=new.imohash,
+                    sha256=new.sha256,
+                    image_id=new.image_id,
+                    image_path=new.image_path,
+                    size_bytes=new.size_bytes,
+                )
+            except repo.ContentKeyConflictError as exc:
+                outcomes[i] = ClaimOutcome(error=exc)
+                continue
+        if holder is None and verdict.key != new.imohash:
+            IMOHASH_COLLISIONS.inc()
+            logger.warning(
+                'exact_key_imohash_collision', imohash=new.imohash, image_id=new.image_id
+            )
+        outcomes[i] = ClaimOutcome(holder=holder)
+    return [o for o in outcomes if o is not None]
+
+
 async def claim_bound(imohash_hex: str, image_id: str, image_path: str, data: bytes) -> str | None:
     """Store the content for ``image_id``; ``None`` when stored now, else the holder's image id.
 
-    The lookup and the insert share one transaction under the ``imohash`` lock. Raises
+    One claim of :func:`claim_in_session` in its own transaction. Raises
     :class:`ContentKeyChangedError` when ``image_id`` is not the id these bytes now derive (an
     ``imohash`` collision stored by another writer since the lookup).
     """
     project_id = await bound_project_id()
-    async with db_slot(), async_session_factory()() as session, project_tx(session, project_id):
-        verdict = await _decide(session, project_id, imohash_hex, data)
-        if verdict.holder is not None:
-            return verdict.holder
-        if content_image_id(verdict.key) != image_id:
-            msg = f'image {image_id} no longer names these bytes (imohash collision stored first)'
-            raise ContentKeyChangedError(msg)
-        holder = await repo.insert_content(
-            session,
-            project_id,
-            imohash=imohash_hex,
-            sha256=verdict.sha256,
-            image_id=image_id,
-            image_path=image_path,
-            size_bytes=len(data),
-        )
-        if holder is None and verdict.key != imohash_hex:
-            IMOHASH_COLLISIONS.inc()
-            logger.warning('exact_key_imohash_collision', imohash=imohash_hex, image_id=image_id)
-        return holder
+    claim = ContentClaim(imohash_hex, image_id, image_path, data)
+    async with async_session_factory()() as session, project_tx(session, project_id):
+        [outcome] = await claim_in_session(session, project_id, [claim])
+    if outcome.error is not None:
+        raise outcome.error
+    return outcome.holder
 
 
 async def record_copy_bound(imohash_hex: str, image_id: str, image_path: str, size: int) -> None:
@@ -228,7 +308,7 @@ async def release_bound(image_ids: Iterable[str]) -> int:
     if not ids:
         return 0
     project_id = await bound_project_id()
-    async with db_slot(), async_session_factory()() as session, project_tx(session, project_id):
+    async with async_session_factory()() as session, project_tx(session, project_id):
         return await repo.release_contents(session, project_id, ids)
 
 

@@ -18,7 +18,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from src.config.curation_roles import IndexRole
+from src.config.nested_limit import NESTED_DOCS_LIMIT
 from src.config.project_context import bind_project
+from src.domain.nested_limit import nested_doc_count
 from src.services.curation.dataset_import.mapping import norm_class_name
 from src.services.curation.dataset_import.project_source import item_class_name
 from src.services.near_duplicates import content_key
@@ -69,6 +71,9 @@ class CopyContext:
     """The target's ``location_policy``: a copied position is kept only as far as it allows."""
     containment: float = 0.9
     counts: Counter[str] = field(default_factory=Counter)
+    over_limit_ids: list[str] = field(default_factory=list)
+    """``origin_project:origin_item_id`` of every item not copied for holding too many nested
+    documents (:func:`refuse_over_limit`); reported with the run."""
 
     @property
     def items_index(self) -> str:
@@ -186,6 +191,26 @@ def _attach(
     return standalone
 
 
+def refuse_over_limit(ctx: CopyContext, docs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """``docs`` without the item documents at or over the nested-document limit
+    (``src/domain/nested_limit.py``, OpenSearch k-NN issue 3623): such a document would be read
+    back with another document's box vectors. It is not written, never truncated; it is counted
+    in ``items_over_nested_limit`` and its id is kept for the report."""
+    kept: list[dict[str, Any]] = []
+    for doc in docs:
+        if (
+            nested_doc_count(doc, unread_box_vector_paths=[ctx.fields.box_embeddings], F=ctx.fields)
+            >= NESTED_DOCS_LIMIT
+        ):
+            ctx.counts['items_over_nested_limit'] += 1
+            ctx.over_limit_ids.append(
+                _origin(doc) if doc.get('origin_item_id') else str(doc.get('crop_id'))
+            )
+        else:
+            kept.append(doc)
+    return kept
+
+
 def _apply_holdout(docs: list[dict[str, Any]], flag: bool, mode: str) -> None:
     for doc in docs:
         if mode == 'preserve_union':
@@ -270,7 +295,7 @@ async def _copy_image(
     ]
     docs, regions = _item_docs(ctx, source_index, image, tid, tpath)
     standalone = _attach(ctx, docs, regions, tid, tpath, project)
-    all_docs = [*docs, *standalone]
+    all_docs = refuse_over_limit(ctx, [*docs, *standalone])
     _apply_holdout(all_docs, _holdout_flag(ctx, image), ctx.request.holdout)
     ops.extend({'index': ctx.items_index, 'id': d['crop_id'], 'doc': d} for d in all_docs)
     ctx.counts['images_copied'] += 1
@@ -353,7 +378,8 @@ async def _merge_duplicate(
         )
     )
     flag = _holdout_flag(ctx, image)
-    final = [*changed.values(), *added]
+    added = refuse_over_limit(ctx, added)
+    final = [*refuse_over_limit(ctx, list(changed.values())), *added]
     untouched = [d for d in existing if d['crop_id'] not in changed]
     if flag:
         for doc in (*final, *untouched):

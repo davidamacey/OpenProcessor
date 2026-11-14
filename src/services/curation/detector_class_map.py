@@ -12,12 +12,14 @@ from typing import TYPE_CHECKING
 from src.config.ingest_profiles import model_class_name
 from src.core.logging import get_logger
 from src.services.classes.registry import get_class_registry
-from src.services.classes.resolve import ensure_class_by_name
+from src.services.classes.resolve import ensure_classes_by_name
 from src.services.curation.detector_vocabulary import DETECTOR_CLASS_GROUP, detector_class_notes
 from src.utils.class_names import normalize_class_name
 
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from src.config import DetectionProfile
 
 
@@ -43,12 +45,20 @@ def registry_class_for(
     return found
 
 
-async def ensure_detector_class(name: str, label: str) -> tuple[int, str]:
-    """``(class_id, class_name)`` of the bound project's active class called ``name`` (the
-    detector label ``label`` in registry-name form), created under the ``detector`` group when
-    the registry lacks it. The same create ``POST /classes/seed_from_detector`` makes, one name at
-    a time: append-only, idempotent, a concurrent writer of the same name yields the same id."""
-    resolved = await ensure_class_by_name(
-        get_class_registry(), name, group=DETECTOR_CLASS_GROUP, notes=detector_class_notes(label)
+async def ensure_detector_classes(
+    wanted: Sequence[tuple[str, str]],
+) -> dict[str, tuple[int, str]]:
+    """``{name: (class_id, class_name)}`` of the bound project's active class for each ``(name,
+    label)`` of ``wanted`` (``name`` the detector label in registry-name form, ``label`` as the
+    detector spells it), created under the ``detector`` group where the registry lacks it, all in
+    one transaction. The same create ``POST /classes/seed_from_detector`` makes: append-only,
+    idempotent, a concurrent writer of the same name yields the same id."""
+    ordered = sorted(dict(wanted).items())
+    resolved = await ensure_classes_by_name(
+        get_class_registry(),
+        [(name, DETECTOR_CLASS_GROUP, detector_class_notes(label)) for name, label in ordered],
     )
-    return resolved.class_id, resolved.class_name
+    return {
+        name: (r.class_id, r.class_name)
+        for (name, _label), r in zip(ordered, resolved, strict=True)
+    }

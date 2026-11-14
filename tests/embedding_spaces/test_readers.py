@@ -74,3 +74,28 @@ async def test_the_images_excludes_are_the_frame_vectors_only(embedding_registry
         'pe_embedding',
         'vec_mobileclip2_s2_v1',
     ]
+
+
+@pytest.mark.asyncio
+async def test_the_box_limit_falls_with_each_live_box_space(embedding_registry) -> None:
+    """k-NN issue 3623: every box-vector list adds one nested document per box."""
+    assert await readers.box_vector_list_count() == 1
+    assert await readers.max_boxes_per_write() == 74
+    embedding_registry.add(new_space(Target.BOX, 'mobileclip2_s2'))
+    assert await readers.max_boxes_per_write() == 49
+    embedding_registry.add(new_space(Target.BOX, 'other_model'))
+    assert await readers.max_boxes_per_write() == 37
+
+
+@pytest.mark.asyncio
+async def test_a_configured_box_limit_below_the_bound_wins(
+    embedding_registry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import src.config.curation_accessors as curation_config_mod
+
+    monkeypatch.setenv('OP_REGION_MAX_BOXES_PER_WRITE', '30')
+    monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
+    assert await readers.max_boxes_per_write() == 30
+    embedding_registry.add(new_space(Target.BOX, 'mobileclip2_s2'))
+    embedding_registry.add(new_space(Target.BOX, 'other_model'))
+    assert await readers.max_boxes_per_write() == 30  # the bound (37) is higher

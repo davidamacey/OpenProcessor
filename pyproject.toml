@@ -255,6 +255,7 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "scripts/curation/bulk_ingest.py" = ["E402"]
 "scripts/curation/cluster_raw_labels.py" = ["E402"]
 "scripts/curation/eval_regions_vs_gt.py" = ["E402"]
+"scripts/curation/find_items_over_nested_limit.py" = ["E402"]
 "scripts/curation/import_labeled_dataset.py" = ["E402"]
 "scripts/curation/ingest_upload.py" = ["E402"]
 "scripts/curation/prune_exports.py" = ["E402"]

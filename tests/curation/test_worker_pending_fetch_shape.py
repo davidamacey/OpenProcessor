@@ -97,7 +97,8 @@ async def test_vlm_worker_fetch_pending_ids_query_shape() -> None:
     assert captured['index'] == items_index()
     assert ids == ['c1', 'c2']
     body = captured['body']
-    assert body['_source'] is False
+    # Ids come back; the source holds only what counts the item's nested documents.
+    assert body['_source'] == ['region_boxes.box_id', 'assist']
     assert 'stored_fields' not in body
     assert body['track_total_hits'] is False
     assert body['sort'] == [

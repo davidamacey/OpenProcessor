@@ -175,7 +175,7 @@ def test_push_writes_images_lock_with_every_key_and_leaves_the_manifest(
     assert set(entries) == {'api', 'triton', *keys}
     for key in ('api', 'triton'):
         assert entries[key].startswith('davidamacey/openprocessor')  # default namespace
-    assert entries['opensearch'].startswith('opensearchproject/opensearch:3.6.0@sha256:')
+    assert entries['opensearch'].startswith('opensearchproject/opensearch:3.9.0@sha256:')
     for ref in entries.values():
         assert '@sha256:' in ref
         assert ':latest' not in ref
@@ -185,7 +185,7 @@ def test_push_writes_images_lock_with_every_key_and_leaves_the_manifest(
     sums = (sandbox / 'images.lock.sha256').read_text().split()
     assert sums == [hashlib.sha256(lock.read_bytes()).hexdigest(), 'images.lock']
     calls = (fake_bin.parent / 'docker_calls.log').read_text()
-    assert 'pull opensearchproject/opensearch:3.6.0' in calls
+    assert 'pull opensearchproject/opensearch:3.9.0' in calls
 
 
 def test_refuses_to_write_the_installer_manifest(sandbox: Path, fake_bin: Path) -> None:
@@ -391,7 +391,7 @@ def test_release_lock_round_trips_through_the_installer_parser(
     assert by_key['api'][1].startswith('davidamacey/openprocessor:1.2.3@sha256:')
     assert by_key['triton'][1].startswith('davidamacey/openprocessor-triton:1.2.3@sha256:')
     assert by_key['opensearch'] == ('OPENSEARCH_IMAGE', by_key['opensearch'][1])
-    assert by_key['opensearch'][1].startswith('opensearchproject/opensearch:3.6.0@sha256:')
+    assert by_key['opensearch'][1].startswith('opensearchproject/opensearch:3.9.0@sha256:')
     assert len(rows) == len(lock.read_text().splitlines())
 
 

@@ -53,6 +53,20 @@ OP_DECODE_ROUTE_TOTAL = Counter(
 )
 
 
+OP_INGEST_BATCH_FALLBACK_TOTAL = Counter(
+    'op_ingest_batch_fallback_total',
+    'Ingest batches whose one-transaction database step failed as a whole and ran photo by photo '
+    'instead, by stage (claim, class_create) and the error class. A deployment where this keeps '
+    'rising has a failing batch path.',
+    labelnames=('stage', 'reason'),
+)
+
+
+def count_batch_fallback(stage: str, exc: BaseException) -> None:
+    """Count one batch that fell back to per-photo transactions at ``stage`` because of ``exc``."""
+    OP_INGEST_BATCH_FALLBACK_TOTAL.labels(stage=stage, reason=type(exc).__name__).inc()
+
+
 def count_decode_route(route: str, path: str) -> None:
     """Count one photo on ``op_decode_route_total``; a route outside the closed list raises."""
     OP_DECODE_ROUTE_TOTAL.labels(route=check_route(route), path=path).inc()

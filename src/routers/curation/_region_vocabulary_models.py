@@ -51,8 +51,12 @@ class RegionProfileLimits(BaseModel):
 
     max_boxes_per_write: int = Field(
         description=(
-            "Abuse guard: max element count of one crop's boxes in a PUT/batch PUT, or the "
-            'targets count of one batch_box_state call. See OP_REGION_MAX_BOXES_PER_WRITE.'
+            "The most boxes one item may hold: max element count of one crop's boxes in a "
+            'PUT/batch PUT, or the targets count of one batch_box_state call. '
+            'OP_REGION_MAX_BOXES_PER_WRITE (default 74), lowered to the nested-document bound of '
+            "the project's live box spaces (74, 49 or 37). A write that would take an item to 150 "
+            'nested documents is refused with 422 item_over_nested_limit (OpenSearch k-NN issue '
+            '3623).'
         )
     )
 
@@ -77,9 +81,9 @@ class ActiveRegionProfileSummary(BaseModel):
     )
     limits: RegionProfileLimits = Field(
         description=(
-            'Served write-size guards. max_boxes_per_write is an abuse guard on the '
-            'element count of one region-box write request, not a labeling rule -- human '
-            'box lists are otherwise unbounded.'
+            'Served write-size guards. max_boxes_per_write is the most boxes one item may hold '
+            'and one region-box write request may carry; it follows from the nested-document '
+            'limit of one item document, not from a labeling rule.'
         )
     )
 

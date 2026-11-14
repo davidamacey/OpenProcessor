@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -12,6 +13,7 @@ from test_incremental_bands import SPACE, _data, forget_prototypes
 from src.db.session import async_session_factory, project_tx
 from src.services.clustering.activation import activate
 from src.services.clustering.run import run_partition
+from src.services.curation.ingest_policy import IngestPolicy
 from src.services.curation.item_doc import DetectedItem, build_item_doc
 
 
@@ -58,7 +60,9 @@ async def test_an_embedded_item_gets_its_cluster_fields_in_the_doc(
     centers = await _serve(project)
     item = DetectedItem(bbox_pixel=(0, 0, 10, 10), score=0.9, pe_embedding=centers[1] + 0.01)
     bare = DetectedItem(bbox_pixel=(0, 0, 10, 10), score=0.9)
-    await ingest_index.place_in_serving_partition([item, bare], ['a', 'b'])
+    service = SimpleNamespace(policy=IngestPolicy())
+    prepared = SimpleNamespace(items=[item, bare], cids=['a', 'b'])
+    await ingest_index.place_prepared(service, [prepared])  # type: ignore[arg-type, list-item]
     assert item.placement is not None
     assert item.placement.state == 'assigned'
     assert bare.placement is None

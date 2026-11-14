@@ -22,6 +22,8 @@ if TYPE_CHECKING:
     from types import TracebackType
 
 
+# ``capture``, ``class_create``, ``placement``, ``claim`` (content claim and pending rows in one
+# transaction), ``release`` and ``publish`` are the batch ingest's per-batch database steps.
 # ``decode`` .. ``opensearch_write`` are the original ingest stages. The rest (#210)
 # name the work that ran untimed on the event loop. All are wall time of a synchronous block,
 # so on the loop thread a stage's seconds are API CPU seconds; ``embed``, ``opensearch_write``,
@@ -44,6 +46,12 @@ STAGES: tuple[str, ...] = (
     'admission_wait',
     'file_read',
     'gpu_decode',
+    'capture',
+    'class_create',
+    'placement',
+    'claim',
+    'release',
+    'publish',
     'project_create_validate',
     'project_create_capacity',
     'project_create_row',

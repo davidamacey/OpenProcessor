@@ -31,6 +31,7 @@ from src.config.env import (
     env_path,
     env_str,
 )
+from src.config.nested_limit import MAX_BOXES_PER_ITEM_DEFAULT_SPACE, NESTED_DOCS_LIMIT
 
 
 if TYPE_CHECKING:
@@ -218,12 +219,13 @@ class CurationConfig:
     # a deployment-tunable bar, not a magic number.
     probe_actionable_min_confidence: float = 0.5
 
-    # served abuse guard on human region-box writes. Human box lists
-    # are unbounded per the owner's rule -- this caps the ELEMENT COUNT of
-    # one write request (PUT .../regions, batch PUT, batch_box_state
-    # targets), not a labeling rule. Served on /health and
-    # /regions/vocabulary as region_profile.limits.max_boxes_per_write.
-    region_max_boxes_per_write: int = 500
+    # The most boxes one region-box write may carry (PUT .../regions, batch PUT, batch_box_state
+    # targets), served on /health and /regions/vocabulary as
+    # region_profile.limits.max_boxes_per_write. It is bounded by the nested-document limit of
+    # one item document (OpenSearch k-NN issue 3623; src/config/nested_limit.py): a value above
+    # the bound is refused at startup. The exact per-item check happens at write time
+    # (src/domain/nested_limit.py) and also counts further box spaces and assist attributes.
+    region_max_boxes_per_write: int = MAX_BOXES_PER_ITEM_DEFAULT_SPACE
 
     # GPU decode (#217): photos at or above the size gate are decoded once on the
     # GPU by the frame engine (frame_engine/), which also builds the detector letterbox, the PE
@@ -250,6 +252,15 @@ class CurationConfig:
     model_prefix: str = ''
 
     def __post_init__(self) -> None:
+        if not 1 <= self.region_max_boxes_per_write <= MAX_BOXES_PER_ITEM_DEFAULT_SPACE:
+            msg = (
+                f'OP_REGION_MAX_BOXES_PER_WRITE={self.region_max_boxes_per_write} is outside '
+                f'1..{MAX_BOXES_PER_ITEM_DEFAULT_SPACE}: an item document with '
+                f'{NESTED_DOCS_LIMIT} or more nested documents (each box takes two: the box and '
+                "its vector) is read back with another document's vectors, "
+                'https://github.com/opensearch-project/k-NN/issues/3623'
+            )
+            raise ValueError(msg)
         unset_indexes = [
             attr
             for attr in INDEX_ROLE_ATTR.values()

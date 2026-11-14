@@ -75,7 +75,9 @@ async def test_same_content_in_two_concurrent_batches_is_stored_once(
     svc, os_fake, _ = _make_service()
     cache = _cache_in(svc, tmp_path)
     shared, only_a, only_b = (_jpeg_bytes(seed=s) for s in (1, 2, 3))
-    _hold_writes_until_lookups(os_fake, 6, monkeypatch)  # 2 batch lookups, 4 images
+    _hold_writes_until_lookups(
+        os_fake, 2, monkeypatch
+    )  # one lookup per batch: a batch's photos share it
 
     batch_a, batch_b = await asyncio.gather(
         svc.ingest_batch([shared, only_a], ['/a/copy.jpg', '/a/two.jpg']),

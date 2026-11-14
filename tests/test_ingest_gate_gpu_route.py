@@ -16,14 +16,17 @@ from typing import TYPE_CHECKING, Any, cast
 from PIL import Image
 
 from src.services.curation import ingest_batch, ingest_gpu_decode
+from src.services.curation.ingest_dedup import Resolved
 from src.services.curation.ingest_models import IngestResult
 from src.utils.cpu_pool import InflightGate, mib
 
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Sequence
 
     import pytest
+
+    from src.services.curation.ingest_finish import PhotoJob
 
 
 def _photo(shade: int = 90, width: int = 1500, height: int = 1200) -> bytes:
@@ -53,11 +56,14 @@ class _Service:
     async def _primary(self, imgs: list[Image.Image]) -> list[list]:
         return [[] for _ in imgs]
 
-    async def _check_duplicates(self, entries: list[tuple[str, bytes]]) -> list[str | None]:
-        return [None] * len(entries)
+    async def resolve_contents(self, entries: list[tuple[str, bytes]]) -> list[Resolved]:
+        return [Resolved(None, h) for h, _ in entries]
 
-    async def ingest_one(self, _bytes: bytes, path: str, **_kw: Any) -> IngestResult:
-        return IngestResult(status='success', image_id=path, image_path=path)
+    async def ingest_photos(self, jobs: Sequence[PhotoJob]) -> list[IngestResult]:
+        return [
+            IngestResult(status='success', image_id=j.image_path, image_path=j.image_path)
+            for j in jobs
+        ]
 
     async def refresh_indexes(self) -> None:
         return None

@@ -10,8 +10,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol
 
+from sqlalchemy.exc import SQLAlchemyError, TimeoutError as PoolTimeoutError
+
 from src.config import get_region_fields
 from src.core.logging import get_logger
+from src.db.repos.classes import ClassRegistryError
 from src.services.curation.ingest_policy import (
     IngestPolicy,
     apply_detect_filter,
@@ -20,6 +23,7 @@ from src.services.curation.ingest_policy import (
     registry_name_index,
 )
 from src.services.curation.ingest_writer import get_ingest_writer
+from src.services.curation.ops_metrics import count_batch_fallback
 from src.services.detection.geometry import letterbox_params
 from src.utils.class_names import class_name_deprecation_index, normalize_class_name
 from src.utils.retry import TRITON_CALL_ERRORS
@@ -27,6 +31,8 @@ from src.utils.stage_timing import stage_timer
 
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from PIL import Image
 
     from src.clients.curation_opensearch import ClassRegistryFile
@@ -37,12 +43,16 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+#: What a failed class create is: the database, or the registry refusing a name.
+CLASS_CREATE_ERRORS = (SQLAlchemyError, OSError, ClassRegistryError, ValueError)
+
 
 class ClassEnsurer(Protocol):
-    """Adds the registry class for a detector label (``name`` in registry-name form, ``label`` as
-    the detector spells it) when it is missing; answers ``(class_id, class_name)``."""
+    """Adds the registry classes for detector labels, all in one transaction: ``wanted`` holds
+    ``(name, label)`` pairs (``name`` in registry-name form, ``label`` as the detector spells it);
+    answers ``{name: (class_id, class_name)}``. A name the registry has is not added again."""
 
-    async def __call__(self, name: str, label: str) -> tuple[int, str]: ...
+    async def __call__(self, wanted: Sequence[tuple[str, str]]) -> dict[str, tuple[int, str]]: ...
 
 
 @dataclass
@@ -130,6 +140,7 @@ class IngestItemsMixin:
         image_path: str = '',
         prefilled_items: list[DetectedItem] | None = None,
         prefilled_secondary: SecondaryOutput | None = None,
+        resolve: bool = True,
     ) -> DetectResult:
         """The ingest detectors on one decoded image: the primary, then the
         optional secondary's class override and backbone embeddings, then the
@@ -169,7 +180,9 @@ class IngestItemsMixin:
                     logger.warning(
                         'ingest_secondary_resolve_failed', path=image_path, error=str(exc)
                     )
-        return await self.filter_detections(items, img.width, img.height, secondary_detector_error)
+        return await self.filter_detections(
+            items, img.width, img.height, secondary_detector_error, resolve=resolve
+        )
 
     async def filter_detections(
         self,
@@ -177,29 +190,82 @@ class IngestItemsMixin:
         width: int,
         height: int,
         secondary_detector_error: str | None = None,
+        *,
+        resolve: bool = True,
     ) -> DetectResult:
-        """The project's detect filter and class resolution over detected items."""
+        """The project's detect filter and class resolution over detected items.
+
+        ``resolve=False`` leaves the class resolution to the caller, which resolves the items of
+        a whole batch at once (:meth:`resolve_classes`)."""
         items, n_filtered = apply_detect_filter(items, self.policy.detect, width, height)
-        if self.policy.detect.class_resolution == 'by_name':
-            low_conf = f'{self.profile.name}_low_conf'
-            await self._create_detector_classes(items, low_conf)
-            assign_classes_by_name(
-                items, {**registry_name_index(self.registry), **self.ensured_classes}, low_conf
-            )
+        if resolve:
+            [error] = await self.resolve_classes([items])
+            if error is not None:
+                raise error
         return DetectResult(items, secondary_detector_error, n_filtered)
 
-    async def _create_detector_classes(self, items: list[DetectedItem], low_conf: str) -> None:
-        """Add the registry class of every detector label these items carry that the registry
-        does not know at all. A deprecated class of that name, or the region class, counts as
-        known: neither is brought back or duplicated (the rule ``seed_from_detector`` follows)."""
-        if self.class_ensurer is None:
-            return
+    async def resolve_classes(
+        self, item_lists: Sequence[list[DetectedItem]]
+    ) -> list[Exception | None]:
+        """Give every item its registry class by name (``detect.class_resolution = by_name``),
+        creating the classes the registry lacks first, all of them in one transaction for all
+        the lists. Answers, per list, the error that kept a label of it from getting its class
+        (the list's items stay without that class), else ``None``.
+
+        A deprecated class of a label's name, or the region class, counts as known: neither is
+        brought back or duplicated (the rule ``seed_from_detector`` follows). A name this service
+        created is not created again; a name another request created is in the registry snapshot
+        the service was built with, or is found by name by the idempotent create. When the one
+        transaction fails, each name is created alone, so a failure stays with the lists that
+        carry that name.
+        """
+        if self.policy.detect.class_resolution != 'by_name':
+            return [None] * len(item_lists)
+        low_conf = f'{self.profile.name}_low_conf'
+        failed: dict[str, Exception] = {}
+        missing = self._missing_classes(item_lists, low_conf)
+        if missing and self.class_ensurer is not None:
+            with stage_timer('class_create'):
+                try:
+                    self.ensured_classes.update(await self.class_ensurer(list(missing.items())))
+                except PoolTimeoutError as exc:  # no connection to retry with: fail them all now
+                    failed = dict.fromkeys(missing, exc)
+                except CLASS_CREATE_ERRORS as exc:
+                    count_batch_fallback('class_create', exc)
+                    logger.warning('ingest_batch_class_create_fell_back', n_names=len(missing))
+                    for name, label in missing.items():
+                        try:
+                            self.ensured_classes.update(await self.class_ensurer([(name, label)]))
+                        except CLASS_CREATE_ERRORS as one:
+                            failed[name] = one
+        index = {**registry_name_index(self.registry), **self.ensured_classes}
+        for items in item_lists:
+            assign_classes_by_name(items, index, low_conf)
+        return [self._first_failure(items, failed, low_conf) for items in item_lists]
+
+    def _missing_classes(
+        self, item_lists: Sequence[list[DetectedItem]], low_conf: str
+    ) -> dict[str, str]:
+        """``{name: label}`` of the detector labels of these items whose class nobody has."""
         known = class_name_deprecation_index(self.registry.classes)
+        missing: dict[str, str] = {}
+        for items in item_lists:
+            for item in items:
+                if not awaits_class_by_name(item, low_conf):
+                    continue
+                label = item.proposal_name or ''
+                slug = normalize_class_name(label)
+                if slug and slug not in known and slug not in self.ensured_classes:
+                    missing.setdefault(slug, label)
+        return missing
+
+    @staticmethod
+    def _first_failure(
+        items: list[DetectedItem], failed: dict[str, Exception], low_conf: str
+    ) -> Exception | None:
         for item in items:
-            if not awaits_class_by_name(item, low_conf):
-                continue
-            label = item.proposal_name or ''
-            slug = normalize_class_name(label)
-            if not slug or slug in known or slug in self.ensured_classes:
-                continue
-            self.ensured_classes[slug] = await self.class_ensurer(slug, label)
+            if awaits_class_by_name(item, low_conf):
+                error = failed.get(normalize_class_name(item.proposal_name or ''))
+                if error is not None:
+                    return error
+        return None
