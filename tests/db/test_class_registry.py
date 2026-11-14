@@ -384,3 +384,31 @@ async def test_load_registry_refuses_an_empty_row_that_has_been_written_to(proje
             await repo.load_registry(s, project, [ClassLoad(class_id=0, name='b')], revision=1)
 
     await _in_tx(project, run)
+
+
+@pytest.mark.asyncio
+async def test_ensure_entries_adds_the_missing_names_in_one_call_and_is_idempotent(
+    project, pg
+) -> None:
+    from src.services.classes.registry import registry_for
+
+    with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
+        row = conn.execute('SELECT slug FROM projects WHERE id = %s', (project,)).fetchone()
+    assert row is not None
+    slug = row[0]
+    registry = registry_for(slug)
+    first = await registry.ensure_entries(
+        [('gadget', 'detector', 'a'), ('widget', 'detector', 'b'), ('gadget', 'detector', 'a')]
+    )
+    assert [(e.class_name, created) for e, created in first] == [
+        ('gadget', True),
+        ('widget', True),
+        ('gadget', False),  # the same name twice in one call is one class
+    ]
+    again = await registry.ensure_entries(
+        [('widget', 'detector', 'b'), ('Gadget', 'detector', 'a')]
+    )
+    assert [created for _, created in again] == [False, False]
+    assert {e.class_id for e, _ in first} == {e.class_id for e, _ in again}
+    rows = await _in_tx(project, lambda s: repo.read_registry(s, project))
+    assert rows.revision == 2  # one bump per class created, none for the repeats

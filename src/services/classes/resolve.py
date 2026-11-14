@@ -16,6 +16,8 @@ from src.utils.class_names import normalize_class_name, resolve_class_by_name
 
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from src.services.classes.registry import ClassRegistry
 
 
@@ -42,6 +44,18 @@ async def ensure_class_by_name(
     return ResolvedClass(entry.class_id, entry.class_name)
 
 
+async def ensure_classes_by_name(
+    registry: ClassRegistry, specs: Sequence[tuple[str, str, str]]
+) -> list[ResolvedClass]:
+    """:func:`ensure_class_by_name` for each ``(name, group, notes)`` in one transaction, answered
+    in order. One invalid name refuses the whole call before anything is written."""
+    for name, _group, _notes in specs:
+        if not normalize_class_name(name):
+            raise ClassNameInvalidError('class_name must contain a letter or digit')
+    added = await registry.ensure_entries(specs)
+    return [ResolvedClass(entry.class_id, entry.class_name) for entry, _created in added]
+
+
 async def class_id_for_name(name: str) -> int | None:
     """The id of the bound project's active class called ``name``, or ``None``."""
     doc = await get_class_registry().snapshot()
@@ -61,4 +75,5 @@ __all__ = [
     'class_id_for_name',
     'class_name_for_id',
     'ensure_class_by_name',
+    'ensure_classes_by_name',
 ]

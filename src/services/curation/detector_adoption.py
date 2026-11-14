@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
-from src.services.curation.detector_class_map import ensure_detector_class
+from src.services.curation.detector_class_map import ensure_detector_classes
 from src.services.curation.item_selection import MAX_BULK_SELECTION, resolve_ids
 from src.services.curation.label_ops import record as label_op_record
 from src.services.curation.label_ops.adopt_merge import ADOPT_WRITER
@@ -169,8 +169,9 @@ async def start_adoption(
     that gives the unclassed items their detector's class."""
     plan = plan_adoption(await detector_census(opensearch), registry.classes)
     classes = dict(plan.existing)
+    created = await ensure_detector_classes([(normalize_class_name(n), n) for n in plan.create])
     for name in plan.create:
-        classes[name] = await ensure_detector_class(normalize_class_name(name), name)
+        classes[name] = created[normalize_class_name(name)]
     ids: list[str] = []
     if classes and plan.items:
         query = adoptable_query()
