@@ -5,7 +5,7 @@ registry lacks is created by name; nothing else changes."""
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 from _embedding_registry_fake import DEFAULT_WRITE_FIELDS
@@ -27,6 +27,10 @@ from src.services.curation.ingest_policy import (
     registry_name_index,
 )
 from src.services.curation.item_doc import DetectedItem
+
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 @pytest.fixture(autouse=True)
@@ -124,9 +128,12 @@ class _Ensurer:
     def __init__(self) -> None:
         self.asked: list[tuple[str, str]] = []
 
-    async def __call__(self, name: str, label: str) -> tuple[int, str]:
-        self.asked.append((name, label))
-        return 100 + len(self.asked), name
+    async def __call__(self, wanted: Sequence[tuple[str, str]]) -> dict[str, tuple[int, str]]:
+        found: dict[str, tuple[int, str]] = {}
+        for name, label in wanted:
+            self.asked.append((name, label))
+            found[name] = (100 + len(self.asked), name)
+        return found
 
 
 def _service(

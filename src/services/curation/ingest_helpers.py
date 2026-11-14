@@ -12,7 +12,7 @@ from src.utils.image_decode import DecodedImage, decode_image
 from src.utils.stage_timing import stage_timer
 
 
-# Per-batch in-flight `ingest_one` calls. Triton's own dynamic batching
+# Photos of a batch in flight in each per-photo step of the finish phase. Triton's own dynamic batching
 # coalesces the actual GPU work; this cap just keeps the request
 # pipeline from swamping Triton's queue. Override with
 # OP_MAX_INGEST_CONCURRENCY (no rebuild required).

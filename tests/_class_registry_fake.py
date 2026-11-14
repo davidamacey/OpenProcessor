@@ -133,6 +133,9 @@ class InMemoryRegistry:
     async def ensure_entry(self, name: str, group: str = 'unknown', notes: str = '') -> Any:
         return self._add(name, group, notes, None, ensure=True)
 
+    async def ensure_entries(self, specs: Any) -> Any:
+        return [self._add(name, group, notes, None, ensure=True) for name, group, notes in specs]
+
     def _add(
         self, name: str, group: str, notes: str, hotkey: str | None, *, ensure: bool
     ) -> tuple[RegistryClassEntry, bool]:

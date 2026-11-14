@@ -44,7 +44,7 @@ class IngestDedupMixin:
 
     async def _lookup_image(self, imohash: str, data: bytes) -> Resolved:
         """The stored image that holds these exact bytes (if any) and the key a new one uses."""
-        return (await self._resolve([(imohash, data)]))[0]
+        return (await self.resolve_contents([(imohash, data)]))[0]
 
     async def stored_image(self, image_id: str) -> dict[str, Any] | None:
         """The images doc ``image_id`` (``image_id``, ``image_path``, ``dataset_split``)
@@ -54,12 +54,7 @@ class IngestDedupMixin:
             return None
         return _stored_view(image_id, resp['_source'])
 
-    async def _check_duplicates(self, entries: Sequence[tuple[str, bytes]]) -> list[str | None]:
-        """The image id that holds each ``(imohash, bytes)`` file's content, or None."""
-        resolved = await self._resolve(entries)
-        return [r.existing['image_id'] if r.existing is not None else None for r in resolved]
-
-    async def _resolve(self, entries: Sequence[tuple[str, bytes]]) -> list[Resolved]:
+    async def resolve_contents(self, entries: Sequence[tuple[str, bytes]]) -> list[Resolved]:
         """Each ``(imohash, bytes)`` file against the stored contents.
 
         One query finds the imohashes the project stores; only those files are compared by

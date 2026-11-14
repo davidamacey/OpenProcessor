@@ -263,10 +263,11 @@ def content_rows(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
     them in memory (``.rows``: imohash to image id), and a ``db`` test uses the real table."""
     from _content_fake import ContentRows
 
-    from src.services.near_duplicates import content_key
+    from src.services.near_duplicates import content_key, ingest_claim
 
     fake = ContentRows()
     if request.node.get_closest_marker('db') is None:
+        monkeypatch.setattr(ingest_claim, 'claim_and_mark_bound', fake.claim_and_mark_bound)
         for name in (
             'resolve_many_bound',
             'claim_bound',

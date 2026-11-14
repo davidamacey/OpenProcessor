@@ -28,9 +28,12 @@ Triton round-trips and is measurably slower for identical output. It is:
    :class:`~src.services.curation.ingest_detect.WholeImageDetector`'s
    batched methods, one Triton call per ``DetectionProfile.batch_limit``
    chunk per detector, with both detectors launched concurrently.
-4. **Bounded-concurrency finish** — per-image work (crops, embeddings,
-   quality metrics, bulk index) runs under a semaphore, consuming the
-   prefilled results via ``ingest_one``'s ``prefilled_*`` arguments.
+4. **Finish, once per batch where it touches PostgreSQL** — per-image work (capture, crops,
+   embeddings, quality metrics) runs under a semaphore, consuming the prefilled results; the
+   registry classes, the placement, the content claims with the pending rows and the
+   ``crop.created`` events are one transaction each for the whole batch
+   (:mod:`~src.services.curation.ingest_finish`). Photos of one content that cannot be decided in
+   one transaction (two files with one ``imohash`` and other bytes) finish in later waves.
 
 Ingesting an already-labeled dataset is ``POST /datasets/imports`` — this module carries no
 label-import machinery.
@@ -47,8 +50,8 @@ import time
 from typing import TYPE_CHECKING, Literal
 
 from src.core.logging import get_logger
-from src.db.checkout_budget import checkout_budget
 from src.domain.decode_route import CPU_GPU_OFF, CPU_NOT_IMAGE, CPU_SMALL, GPU, prep_status_route
+from src.services.curation.ingest_finish import PhotoJob
 from src.services.curation.ingest_models import BatchIngestResult, IngestResult, IngestSummary
 from src.services.curation.ops_metrics import record_ingest_result
 from src.utils.cpu_pool import encoded_nbytes, ingest_gate, mib, run_cpu
@@ -57,11 +60,10 @@ from src.utils.task_group import run_all, run_settled
 
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable
-
     from PIL import Image
 
     from src.services.curation.ingest import CurationIngestService
+    from src.services.curation.ingest_dedup import Resolved
     from src.services.curation.ingest_detect import SecondaryOutput
     from src.services.curation.ingest_gpu_decode import GpuDecodeFrame, GpuRoute
     from src.services.curation.item_doc import DetectedItem
@@ -69,10 +71,6 @@ if TYPE_CHECKING:
 
 
 logger = get_logger(__name__)
-
-#: Postgres connections one batch request may hold at once (the API pool is 16 per process, with
-#: no overflow): enough to overlap two images' short transactions.
-BATCH_DB_CONNECTIONS = 2
 
 
 async def _prefill_gpu_decode(
@@ -196,22 +194,21 @@ async def _prefill_detections(
 
 def _group_batch(
     hashes: list[str], images: list[bytes], existing_ids: list[str | None]
-) -> tuple[dict[int, int], dict[int, int], list[int]]:
-    """``(batch_dup_of, after_peer, non_dup)`` for one batch.
+) -> tuple[dict[int, int], list[int]]:
+    """``(batch_dup_of, non_dup)`` for one batch.
 
     D3: ``existing_ids`` only resolves content already committed *before* this batch started --
     two byte-identical files uploaded together share a content neither has stored yet, and
-    since every image in the batch is ingested concurrently, both would otherwise land as
-    separate 'success' items with 0 duplicates reported. Same-batch repeats collapse onto one
-    representative index per content (the first occurrence) before deciding what needs
-    detection/inference at all (``batch_dup_of``). The imohash is only the candidate key: a
-    repeat is a duplicate when its bytes are equal, and a same-imohash file with other bytes (an
-    imohash collision) is its own image (``after_peer``) that waits for the earlier one to be
-    stored, so the content key sees the collision instead of two writers racing it.
+    both would otherwise land as separate 'success' items with 0 duplicates reported.
+    Same-batch repeats collapse onto one representative index per content (the first
+    occurrence) before deciding what needs detection/inference at all (``batch_dup_of``). The
+    imohash is only the candidate key: a repeat is a duplicate when its bytes are equal, and a
+    same-imohash file with other bytes (an imohash collision) is its own image, which
+    :func:`_rounds` finishes after the earlier one is stored, so the content key sees the
+    collision instead of two writers racing it.
     """
     by_hash: dict[str, list[int]] = {}
     batch_dup_of: dict[int, int] = {}
-    after_peer: dict[int, int] = {}
     non_dup: list[int] = []
     for i, h in enumerate(hashes):
         if existing_ids[i] is not None:
@@ -221,29 +218,48 @@ def _group_batch(
         if same is not None:
             batch_dup_of[i] = same
             continue
-        if peers:
-            after_peer[i] = peers[-1]
         peers.append(i)
         non_dup.append(i)
-    return batch_dup_of, after_peer, non_dup
+    return batch_dup_of, non_dup
 
 
-async def _publish_result(
-    future: asyncio.Future[IngestResult] | None, ingest: Awaitable[IngestResult]
+def _rounds(indices: list[int], hashes: list[str]) -> list[list[int]]:
+    """``indices`` split so that no round holds two photos of one ``imohash``: a batch decides one
+    content key per ``imohash`` in one transaction, and the later photo of a pair is decided once
+    the earlier one is stored."""
+    seen: dict[str, int] = {}
+    rounds: list[list[int]] = []
+    for i in indices:
+        n = seen.get(hashes[i], 0)
+        seen[hashes[i]] = n + 1
+        while len(rounds) <= n:
+            rounds.append([])
+        rounds[n].append(i)
+    return rounds
+
+
+def _result_of(
+    i: int,
+    image_paths: list[str],
+    hashes: list[str],
+    source_identifiers: list[str | None] | None,
+    existing_ids: list[str | None],
+    batch_dup_of: dict[int, int],
+    stored: dict[int, IngestResult],
 ) -> IngestResult:
-    """Await ``ingest`` and hand its result to the byte-identical copies waiting on ``future``.
-
-    A failure cancels ``future`` so a copy never waits on a result that will not come (the group
-    is cancelling the copies anyway)."""
-    try:
-        result = await ingest
-    except BaseException:
-        if future is not None:
-            future.cancel()
-        raise
-    if future is not None:
-        future.set_result(result)
-    return result
+    """Photo ``i``'s result: its own when it was ingested; else the duplicate it is of."""
+    if i in stored:
+        return stored[i]
+    holder = existing_ids[i] if existing_ids[i] else stored[batch_dup_of[i]].image_id
+    return record_ingest_result(
+        IngestResult(
+            status='duplicate',
+            image_id=holder,
+            image_path=image_paths[i],
+            imohash=hashes[i],
+            source_identifier=source_identifiers[i] if source_identifiers else None,
+        )
+    )
 
 
 async def run_ingest_batch(
@@ -259,7 +275,6 @@ async def run_ingest_batch(
     See that method's docstring for the argument contract.
     """
     from src.services.curation.ingest_gpu_decode import gpu_route
-    from src.services.curation.ingest_helpers import MAX_INGEST_CONCURRENCY
     from src.services.near_duplicates.content_key import content_imohash
 
     if len(images) != len(image_paths):
@@ -269,9 +284,10 @@ async def run_ingest_batch(
 
     summary = IngestSummary()
     hashes = [content_imohash(b) for b in images]
-    existing_ids = await service._check_duplicates(list(zip(hashes, images, strict=True)))
+    resolved = await service.resolve_contents(list(zip(hashes, images, strict=True)))
+    existing_ids = [r.existing['image_id'] if r.existing is not None else None for r in resolved]
 
-    batch_dup_of, after_peer, non_dup = _group_batch(hashes, images, existing_ids)
+    batch_dup_of, non_dup = _group_batch(hashes, images, existing_ids)
 
     # Hold the decoded megabytes this request will bring against the process's in-flight cap,
     # so more clients queue here instead of all decoding at once (#241).
@@ -293,82 +309,45 @@ async def run_ingest_batch(
             routes,
         ) = await _prefill_detections(service, images, image_paths, non_dup, sizes, route)
 
-        sem = asyncio.Semaphore(MAX_INGEST_CONCURRENCY)
-
-        # Representatives with an in-batch follower publish their finished
-        # IngestResult here so the follower can report the same image_id
-        # (the same wire field the cross-batch duplicate path uses) instead of
-        # re-ingesting byte-identical content.
-        rep_futures: dict[int, asyncio.Future[IngestResult]] = {
-            rep: asyncio.get_running_loop().create_future()
-            for rep in {*batch_dup_of.values(), *after_peer.values()}
-        }
-
-        async def _one(
-            i: int, image_bytes: bytes, image_path: str, image_hash: str
-        ) -> IngestResult:
+        def job(i: int, *, prefilled: bool = True, looked_up: Resolved | None = None) -> PhotoJob:
             # Clients match results to request entries by source_identifier, so
             # every duplicate carries its own, even though image_id is shared.
-            source_identifier = source_identifiers[i] if source_identifiers else None
-            existing_id = existing_ids[i]
-            if existing_id:
-                return record_ingest_result(
-                    IngestResult(
-                        status='duplicate',
-                        image_id=existing_id,
-                        image_path=image_path,
-                        imohash=image_hash,
-                        source_identifier=source_identifier,
-                    )
-                )
-            rep = batch_dup_of.get(i)
-            if rep is not None:
-                rep_result = await rep_futures[rep]
-                # A representative that lost the images-doc create to another request
-                # is itself a duplicate; its image_id is the stored image's.
-                if rep_result.status != 'failed':
-                    return record_ingest_result(
-                        IngestResult(
-                            status='duplicate',
-                            image_id=rep_result.image_id,
-                            image_path=image_path,
-                            imohash=image_hash,
-                            source_identifier=source_identifier,
-                        )
-                    )
-                # The representative failed (e.g. undecodable bytes) — don't
-                # guess a duplicate-of relationship against a failed ingest;
-                # give this copy its own real attempt instead (falls back to
-                # ingest_one's own decode/detect since it wasn't prefilled).
-            peer = after_peer.get(i)
-            if peer is not None:
-                await rep_futures[peer]
-            async with sem:
-                return await _publish_result(
-                    rep_futures.get(i),
-                    service.ingest_one(
-                        image_bytes,
-                        image_path,
-                        source=source,
-                        prefilled_image=prefilled_imgs.get(i),
-                        prefilled_items=prefilled_items.get(i),
-                        prefilled_secondary=prefilled_secondary.get(i),
-                        prefilled_frame=frames.get(i),
-                        decode_route=routes.get(i),
-                        source_identifier=source_identifier,
-                        ingest_run_id=ingest_run_id,
-                    ),
-                )
-
-        # The images share a few connections: each image's write phases are short transactions
-        # that queue here, not on the pool the other requests of this process draw from.
-        with checkout_budget(BATCH_DB_CONNECTIONS):
-            results = await run_all(
-                [
-                    _one(i, b, p, h)
-                    for i, (b, p, h) in enumerate(zip(images, image_paths, hashes, strict=False))
-                ]
+            return PhotoJob(
+                images[i],
+                image_paths[i],
+                source,
+                prefilled_image=prefilled_imgs.get(i) if prefilled else None,
+                prefilled_items=prefilled_items.get(i) if prefilled else None,
+                prefilled_secondary=prefilled_secondary.get(i) if prefilled else None,
+                prefilled_frame=frames.get(i) if prefilled else None,
+                decode_route=routes.get(i) if prefilled else None,
+                source_identifier=source_identifiers[i] if source_identifiers else None,
+                ingest_run_id=ingest_run_id,
+                resolved=looked_up,
             )
+
+        stored: dict[int, IngestResult] = {}
+        for n, wave in enumerate(_rounds(non_dup, hashes)):
+            # The first wave's files were resolved above, before anything of this batch was
+            # stored; a later wave resolves again, now that the earlier file it waited for is.
+            looked_up = (
+                [resolved[i] for i in wave]
+                if n == 0
+                else await service.resolve_contents([(hashes[i], images[i]) for i in wave])
+            )
+            jobs = [job(i, looked_up=r) for i, r in zip(wave, looked_up, strict=True)]
+            stored.update(zip(wave, await service.ingest_photos(jobs), strict=True))
+        # A copy of a representative that failed (e.g. undecodable bytes) gets its own real
+        # attempt instead of a guessed duplicate-of relationship; it was not prefilled.
+        retry = [i for i, rep in batch_dup_of.items() if stored[rep].status == 'failed']
+        for again in _rounds(retry, hashes):
+            jobs = [job(i, prefilled=False) for i in again]
+            stored.update(zip(again, await service.ingest_photos(jobs), strict=True))
+
+    results = [
+        _result_of(i, image_paths, hashes, source_identifiers, existing_ids, batch_dup_of, stored)
+        for i in range(len(images))
+    ]
 
     await service.refresh_indexes()
 

@@ -12,13 +12,18 @@ import numpy as np
 from PIL import Image
 
 from src.services.curation import ingest_batch
+from src.services.curation.ingest_dedup import Resolved
 from src.services.curation.ingest_models import IngestResult
 from src.utils import cpu_pool
 from src.utils.cpu_pool import InflightGate
 
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     import pytest
+
+    from src.services.curation.ingest_finish import PhotoJob
 
 
 def _jpeg(seed: int = 0) -> bytes:
@@ -46,11 +51,14 @@ class _Service:
         self.in_detector -= len(imgs)
         return [[] for _ in imgs]
 
-    async def _check_duplicates(self, entries: list[tuple[str, bytes]]) -> list[str | None]:
-        return [None] * len(entries)
+    async def resolve_contents(self, entries: list[tuple[str, bytes]]) -> list[Resolved]:
+        return [Resolved(None, h) for h, _ in entries]
 
-    async def ingest_one(self, _bytes: bytes, path: str, **_kw) -> IngestResult:
-        return IngestResult(status='success', image_id=path, image_path=path)
+    async def ingest_photos(self, jobs: Sequence[PhotoJob]) -> list[IngestResult]:
+        return [
+            IngestResult(status='success', image_id=j.image_path, image_path=j.image_path)
+            for j in jobs
+        ]
 
     async def refresh_indexes(self) -> None:
         return None

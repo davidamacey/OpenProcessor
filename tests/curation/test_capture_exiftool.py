@@ -111,11 +111,11 @@ def test_a_killed_process_is_replaced_on_the_next_read(
 
 def test_read_bytes_reads_an_in_memory_file(client: ExifToolClient, tmp_path: Path) -> None:
     path = _jpeg(tmp_path, 'a.jpg', '-Make=Acme')
-    cap = parse_capture(client.read_bytes(path.read_bytes(), '.jpg'))
+    cap = parse_capture(client.read_bytes(path.read_bytes()))
     assert cap.camera_make == 'Acme'
     buf = io.BytesIO()
     Image.new('RGB', (8, 8)).save(buf, 'PNG')
-    assert parse_capture(client.read_bytes(buf.getvalue(), '.png')).exif_status == 'absent'
+    assert parse_capture(client.read_bytes(buf.getvalue())).exif_status == 'absent'
 
 
 def test_a_missing_binary_is_a_typed_outage() -> None:

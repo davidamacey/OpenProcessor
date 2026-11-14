@@ -7,6 +7,13 @@ avoid paying the Perl start-up cost per file. The process starts on the first re
 every thread of the worker (a lock serialises the pipe, not any shared state between workers), and
 is restarted after a failure.
 
+A photo that is only in memory reaches the process through a named pipe (:meth:`read_bytes`), not
+through a whole-file temporary file: ``-stay_open ... -@ -`` takes its commands on standard input
+(https://exiftool.org/exiftool_pod.html, ``-stay_open``), so the file cannot also arrive there. A
+short-lived thread writes the bytes into the pipe and ends quietly when ExifTool stops reading
+(``-fast`` stops after the metadata segments, which closes the pipe early); every wait of that
+thread is bounded by the same ``timeout_s`` and the same watchdog.
+
 Every read is bounded by ``timeout_s``. PyExifTool has no timeout of its own and keeps reading a
 dead pipe forever, so a watchdog kills the process on expiry and replaces the pipe it reads with a
 descriptor that cannot be read, which ends the read with an ``OSError``.
@@ -23,8 +30,12 @@ from __future__ import annotations
 import contextlib
 import functools
 import os
+import select
+import shutil
 import tempfile
 import threading
+import time
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
 from exiftool import ExifToolHelper
@@ -36,13 +47,18 @@ from src.domain.capture_metadata import EXIFTOOL_TAGS, FILE_ERROR_KEY
 
 if TYPE_CHECKING:
     import subprocess
-    from pathlib import Path
+    from collections.abc import Callable
 
 logger = get_logger(__name__)
 
 DEFAULT_TIMEOUT_S: Final = 10.0
 #: ``-fast`` stops reading a JPEG after the metadata segments (exiftool.org, option ``-fast``).
 _ARGS: Final = ('-fast',)
+_PIPE_CHUNK: Final = 1 << 20
+#: How often the writer looks again for a reader that has not opened the pipe yet, and for the
+#: end of the read it serves.
+_PIPE_POLL_S: Final = 0.002
+_FEED_JOIN_S: Final = 5.0
 
 
 class ExifToolError(RuntimeError):
@@ -82,6 +98,37 @@ def _discard(proc: subprocess.Popen[bytes] | None) -> None:
                 pipe.close()
 
 
+def _feed_pipe(path: Path, data: bytes, done: threading.Event, deadline: float) -> None:
+    """Write ``data`` into the named pipe ``path`` until ExifTool has read what it wants.
+
+    The pipe is opened non-blocking and retried until a reader is there: a blocking open would
+    wait forever for a process that never opens it. A reader that goes away (``-fast`` stops
+    after the metadata) is the normal end: ``BrokenPipeError`` is not an error. The thread also
+    ends when ``done`` is set (the read ended some other way) or at ``deadline``."""
+    fd = -1
+    try:
+        while fd < 0:
+            if done.is_set() or time.monotonic() > deadline:
+                return
+            try:
+                fd = os.open(path, os.O_WRONLY | os.O_NONBLOCK)
+            except OSError:  # ENXIO: no reader yet
+                done.wait(_PIPE_POLL_S)
+        view = memoryview(data)
+        while view:
+            if done.is_set() or time.monotonic() > deadline:
+                return
+            try:
+                view = view[os.write(fd, view[:_PIPE_CHUNK]) :]
+            except BlockingIOError:
+                select.select([], [fd], [], _PIPE_POLL_S * 10)
+            except OSError:  # the reader closed its end (EPIPE), or the pipe is gone
+                return
+    finally:
+        if fd >= 0:
+            os.close(fd)
+
+
 class ExifToolClient:
     """One shared ``-stay_open`` ExifTool process; ``read`` returns the capture tags of a file."""
 
@@ -91,10 +138,16 @@ class ExifToolClient:
         self._lock = threading.Lock()
         self._helper: ExifToolHelper | None = None
         self._aborted = threading.Event()
+        self._pipe_path: Path | None = None
 
     def _process(self) -> subprocess.Popen[bytes] | None:
         # PyExifTool exposes no handle on its subprocess; the watchdog needs it to kill a hung one.
         return getattr(self._helper, '_process', None)
+
+    def pid(self) -> int | None:
+        """The running process's id, or ``None`` when none is running."""
+        proc = self._process()
+        return proc.pid if proc is not None and proc.poll() is None else None
 
     def _start(self) -> ExifToolHelper:
         # -n: numeric values, GPS as signed decimals; -G: group-prefixed keys. The same two
@@ -129,34 +182,73 @@ class ExifToolClient:
         self._helper = None
         _discard(proc)
 
+    def _attempts(self, run: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+        """``run`` under the lock with one fresh process tried when the first attempt failed; a
+        timeout is not retried. Raises :class:`ExifToolError` on an outage."""
+        for attempt in (1, 2):
+            try:
+                return run()
+            except (ExifToolException, OSError, ValueError, RuntimeError) as exc:
+                timed_out = self._aborted.is_set()
+                self._reset()
+                logger.warning(
+                    'exiftool_read_failed',
+                    attempt=attempt,
+                    timed_out=timed_out,
+                    error=type(exc).__name__,
+                )
+                if timed_out or attempt == 2 or isinstance(exc, FileNotFoundError):
+                    msg = f'exiftool failed ({type(exc).__name__})'
+                    raise ExifToolError(msg) from exc
+        raise AssertionError  # unreachable: the loop returns or raises
+
     def read(self, path: str | Path) -> dict[str, Any]:
         """The capture tags of the file at ``path``. Raises :class:`ExifToolError` on an outage;
         one fresh process is tried when the first attempt failed, a timeout is not retried."""
         target = str(path)
         with self._lock:
-            for attempt in (1, 2):
-                try:
-                    return self._run_once(target)
-                except (ExifToolException, OSError, ValueError, RuntimeError) as exc:
-                    timed_out = self._aborted.is_set()
-                    self._reset()
-                    logger.warning(
-                        'exiftool_read_failed',
-                        attempt=attempt,
-                        timed_out=timed_out,
-                        error=type(exc).__name__,
-                    )
-                    if timed_out or attempt == 2 or isinstance(exc, FileNotFoundError):
-                        msg = f'exiftool failed ({type(exc).__name__})'
-                        raise ExifToolError(msg) from exc
-        raise AssertionError  # unreachable: the loop returns or raises
+            return self._attempts(lambda: self._run_once(target))
 
-    def read_bytes(self, data: bytes, suffix: str = '') -> dict[str, Any]:
-        """The capture tags of in-memory file ``data`` (written to a temporary file for ExifTool)."""
-        with tempfile.NamedTemporaryFile(suffix=suffix) as handle:
-            handle.write(data)
-            handle.flush()
-            return self.read(handle.name)
+    def _pipe(self) -> Path:
+        """This process's named pipe, in a private directory made on first use."""
+        if self._pipe_path is None or not self._pipe_path.exists():
+            if self._pipe_path is not None:
+                shutil.rmtree(self._pipe_path.parent, ignore_errors=True)
+            directory = Path(tempfile.mkdtemp(prefix='op-exiftool-'))  # mode 0700
+            self._pipe_path = directory / 'photo'
+            os.mkfifo(self._pipe_path, 0o600)
+        return self._pipe_path
+
+    def _run_fed(self, data: bytes) -> dict[str, Any]:
+        pipe = self._pipe()
+        done = threading.Event()
+        feeder = threading.Thread(
+            target=_feed_pipe,
+            args=(pipe, data, done, time.monotonic() + self._timeout_s),
+            name='exiftool-feed',
+            daemon=True,
+        )
+        feeder.start()
+        try:
+            return self._run_once(str(pipe))
+        finally:
+            done.set()
+            feeder.join(_FEED_JOIN_S)
+            if feeder.is_alive():  # unreachable by the writer's own bounds; never leave one behind
+                logger.error('exiftool_feeder_stuck')
+                self._reset()
+                self._drop_pipe()
+
+    def read_bytes(self, data: bytes) -> dict[str, Any]:
+        """The capture tags of in-memory file ``data``, handed to the process through its named
+        pipe (no temporary copy of the file). Raises :class:`ExifToolError` on an outage."""
+        with self._lock:
+            return self._attempts(lambda: self._run_fed(data))
+
+    def _drop_pipe(self) -> None:
+        if self._pipe_path is not None:
+            shutil.rmtree(self._pipe_path.parent, ignore_errors=True)
+            self._pipe_path = None
 
     def strip_gps(self, src: str | Path, dest: str | Path) -> None:
         """Write ``dest`` as ``src`` without any GPS tag, losslessly (no re-encode; every other
@@ -183,6 +275,7 @@ class ExifToolClient:
                 with contextlib.suppress(ExifToolException, OSError):
                     helper.terminate(timeout=5)
             _discard(proc)
+            self._drop_pipe()
 
 
 @functools.cache
