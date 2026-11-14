@@ -47,7 +47,7 @@ def test_the_ingest_plan_parses_and_round_trips() -> None:
 def test_the_engine_branches_are_the_plan_vocabulary_minus_api_branches() -> None:
     assert set(wire.ENGINE_BRANCHES) <= set(BRANCHES)
     assert set(BRANCHES) - set(wire.ENGINE_BRANCHES) == {'near_duplicates', 'region'}
-    assert set(wire.ENGINE_BRANCHES) >= wire.BUILT_BRANCHES
+    assert set(wire.ENGINE_BRANCHES) >= wire.BUILT_BRANCHES - {wire.DERIVATIVES}
 
 
 @pytest.mark.parametrize(
@@ -109,7 +109,7 @@ def test_stored_boxes_stand_in_for_the_detector() -> None:
     assert err.value.fault == 'bad_field'
 
 
-def test_unbuilt_branches_and_derivatives_are_reported_unsupported() -> None:
+def test_unbuilt_branches_are_reported_unsupported_and_renditions_are_built() -> None:
     plan = wire.parse_plan(
         _plan(
             branches=['detect', 'faces', 'face_embed'],
@@ -120,7 +120,7 @@ def test_unbuilt_branches_and_derivatives_are_reported_unsupported() -> None:
         ),
         has_boxes=False,
     )
-    assert plan.unsupported() == ('faces', 'face_embed', 'derivatives')
+    assert plan.unsupported() == ('faces', 'face_embed')
     assert plan.reported() == ('detect', 'faces', 'face_embed', 'derivatives')
     assert plan.if_detected == {'faces': (0,)}
 
@@ -222,3 +222,46 @@ def test_the_ocr_outputs_are_declared_with_their_datatypes() -> None:
         'FP32',
         'INT32',
     ]
+
+
+def test_renditions_are_parsed_with_defaults_and_round_trip() -> None:
+    plan = wire.parse_plan(
+        _plan(
+            derivatives=[
+                {'name': 'thumb', 'side': 256},
+                {'name': 'grid', 'side': 1024, 'quality': 70},
+            ]
+        ),
+        has_boxes=False,
+    )
+    assert [(r.name, r.side, r.quality, r.format) for r in plan.derivatives] == [
+        ('thumb', 256, 85, 'jpeg'),
+        ('grid', 1024, 70, 'jpeg'),
+    ]
+    assert wire.parse_plan(plan.to_json(), has_boxes=False) == plan
+    assert 'derivative_jpegs' in wire.expected_outputs(plan)
+
+
+@pytest.mark.parametrize(
+    'entry',
+    [
+        {'name': 'thumb'},
+        {'name': 'thumb', 'side': 8},
+        {'name': 'thumb', 'side': 256, 'quality': 0},
+        {'name': 'thumb', 'side': 256, 'format': 'webp'},
+        {'name': 'thumb', 'side': 256, 'crop': True},
+        {'name': '', 'side': 256},
+    ],
+)
+def test_a_bad_rendition_refuses_the_plan(entry: dict) -> None:
+    with pytest.raises(wire.EnginePlanError):
+        wire.parse_plan(_plan(derivatives=[entry]), has_boxes=False)
+
+
+def test_rendition_names_are_unique() -> None:
+    with pytest.raises(wire.EnginePlanError) as err:
+        wire.parse_plan(
+            _plan(derivatives=[{'name': 'a', 'side': 64}, {'name': 'a', 'side': 128}]),
+            has_boxes=False,
+        )
+    assert err.value.fault == 'bad_field'

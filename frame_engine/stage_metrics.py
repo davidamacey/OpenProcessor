@@ -73,6 +73,8 @@ STAGES = (
     'ocr_crops',
     'ocr_rec',
     'ocr_decode',
+    'derivative_render',
+    'derivative_jpeg',
 )
 ASYNC_STAGES = frozenset(
     {'letterbox', 'embed_frame', 'embed_crops', 'blur', 'ocr_prep', 'ocr_crops'}

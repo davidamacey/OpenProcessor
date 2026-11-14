@@ -154,3 +154,12 @@ def test_memory_errors_are_told_from_other_failures(pb: Any) -> None:
     assert pb.is_memory_error(NvJpegError(5))  # NVJPEG_STATUS_ALLOCATOR_FAILURE
     assert not pb.is_memory_error(NvJpegError(2))
     assert not pb.is_memory_error(ValueError('bad'))
+
+
+def test_a_rendition_adds_its_resample_scratch_to_an_upright_photo(pb: Any) -> None:
+    frame = 6240 * 4160 * 3
+    # 512 px rendition of 6240 x 4160: 512 x 341 output, scratch = every source row x 512 x 12 bytes
+    assert pb.need_bytes(_header(6240, 4160), (256, 512)) == frame + 4160 * 512 * 12
+    # a rotated photo already holds two frames while the tag is applied: the scratch fits under it
+    assert pb.need_bytes(_header(6240, 4160, 6), (512,)) == 2 * frame
+    assert pb.need_bytes(_header(6240, 4160)) == frame

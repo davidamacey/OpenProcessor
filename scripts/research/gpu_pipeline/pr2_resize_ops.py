@@ -77,13 +77,17 @@ def downstream(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Boxes in frame pixels (from the arm's letterbox) and PE vectors (from the arm's squares)."""
     import cupy as cp
-    from image_geometry import letterbox_geometry, undo_letterbox
+
+    from src.domain.image_geometry import letterbox_geometry, undo_letterbox
 
     out = detector.run(canvas)
     n = int(out['num_dets'][0][0])
     lb = letterbox_geometry(size[0], size[1], 640)
     boxes = np.array(
-        [undo_letterbox(tuple(b), 640, lb) for b in out['det_boxes'][0][:n].astype(np.float32)],
+        [
+            undo_letterbox(tuple(b), lb.scale, (lb.pad_w, lb.pad_h))
+            for b in out['det_boxes'][0][:n].astype(np.float32)
+        ],
         np.float32,
     ).reshape(-1, 4)
     vec = np.concatenate(
@@ -178,8 +182,9 @@ def run_gpu(args: argparse.Namespace, files: list[Path]) -> dict[str, Any]:
     import cupy as cp
     import resize_arms
     from decoder_arms import ShippedLanes
-    from image_geometry import crop_rect, letterbox_geometry, undo_letterbox
     from trt_runner import TrtModel
+
+    from src.domain.image_geometry import crop_rect, letterbox_geometry, undo_letterbox
 
     detector, encoder = TrtModel(args.det_plan), TrtModel(args.pe_plan)
     decoder = ShippedLanes()
@@ -202,7 +207,7 @@ def run_gpu(args: argparse.Namespace, files: list[Path]) -> dict[str, Any]:
             lb = letterbox_geometry(w, h, 640)
             det = detector.run(base)
             rects = [
-                crop_rect(undo_letterbox(tuple(b), 640, lb), w, h)
+                crop_rect(undo_letterbox(tuple(b), lb.scale, (lb.pad_w, lb.pad_h)), w, h)
                 for b in det['det_boxes'][0][: int(det['num_dets'][0][0])].astype(np.float32)
             ]
             ref = reference.pillow_frame(path) if rep == 0 else None

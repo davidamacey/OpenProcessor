@@ -16,6 +16,11 @@ export function progressPercent(p: BulkIngestProgress): number {
   return Math.min(100, Math.round((p.processed / p.discovered) * 100));
 }
 
+/** Photos per decode route, largest first. */
+export function decodeRouteRows(run: BulkIngestRun): [string, number][] {
+  return Object.entries(run.decode_routes ?? {}).sort((a, b) => b[1] - a[1]);
+}
+
 /** Stage seconds, largest first. */
 export function stageRows(run: BulkIngestRun): [string, number][] {
   return Object.entries(run.stage_s ?? {}).sort((a, b) => b[1] - a[1]);

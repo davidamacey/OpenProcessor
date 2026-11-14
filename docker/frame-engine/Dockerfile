@@ -22,14 +22,16 @@
 # API image's (python:3.13-slim-trixie, same digest), because the engine imports src/domain.
 # =============================================================================
 
-# -- Stage 1: the virtual environment ---------------------------------------------------------
+# -- Stage 1: the packages (a --user install, like every other image of this repository) ----------------------------------------------------------
 FROM python:3.13-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 AS builder
 
 COPY docker/frame-engine/requirements.txt /tmp/requirements.txt
-RUN --mount=type=cache,target=/root/.cache/pip python -m venv /opt/venv \
-    && /opt/venv/bin/pip install --no-deps --only-binary=:all: -r /tmp/requirements.txt \
-    && /opt/venv/bin/pip check \
-    && /opt/venv/bin/pip uninstall -y pip
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --user --no-warn-script-location --no-deps --only-binary=:all: -r /tmp/requirements.txt \
+    && pip check \
+    && rm -rf /root/.local/lib/python3.13/site-packages/pip \
+        /root/.local/lib/python3.13/site-packages/pip-*.dist-info \
+        /root/.local/bin/pip*
 
 # -- Stage 2: runtime ------------------------------------------------------------------------
 FROM python:3.13-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
@@ -41,7 +43,7 @@ RUN apt-get update && apt-get upgrade -y \
     && groupadd -r engine \
     && useradd -r -g engine -G video -u 1000 -m -s /usr/sbin/nologin engine
 
-COPY --from=builder /opt/venv /opt/venv
+COPY --from=builder --chown=engine:engine /root/.local /home/engine/.local
 # The engine's code and the one part of src/ it imports (the wire module, the decode-route
 # vocabulary and the geometry the CPU paths share).
 COPY src/domain /app/src/domain
@@ -50,8 +52,8 @@ COPY frame_engine /app/frame_engine
 COPY models/paddleocr_rec_trt/ppocrv6_dict.txt /app/ocr/ppocrv6_dict.txt
 
 # nvJPEG is opened by name (ctypes); CuPy finds NVRTC and the runtime in the same wheel directory.
-ENV PATH=/opt/venv/bin:$PATH \
-    LD_LIBRARY_PATH=/opt/venv/lib/python3.13/site-packages/nvidia/cu13/lib \
+ENV PATH=/home/engine/.local/bin:$PATH \
+    LD_LIBRARY_PATH=/home/engine/.local/lib/python3.13/site-packages/nvidia/cu13/lib \
     PYTHONPATH=/app \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
