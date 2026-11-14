@@ -329,6 +329,12 @@ model above (the API's `/ocr` route still uses it); it is what the plan routes u
 Outputs (`ocr_quads` `[n, 8]` in source pixels, `ocr_texts`, `ocr_scores`, `ocr_char_min`, `ocr_det_scores`, `ocr_overflow`): `src/domain/frame_engine_wire.py`. A photo with no text costs the detector call and
 nothing else; past `max_lines` the lowest detector scores are dropped and counted in `ocr_overflow`.
 
+Device memory (RTX A6000, TensorRT 11, the plans run at their profile maximum, and loaded into Triton with the shipped two instances each): the detector profile is 1 x 1920 x 1920 (one call per photo)
+and the recogniser's 16 x 48 x 2048 (`UINT8_MAX_BATCH` in the two exporters; the wire's `ocr.batch` and `ocr.det_max_side` are bounded by the same numbers). One execution context needs 385 MiB
+(detector) and 734 MiB (recogniser) on top of 32 MiB of weights each; the model server's process grew by 828 MiB for the detector and 1,552 MiB for the recogniser, 2.4 GB for the pair
+(1.2 GB at one instance each). Larger profiles only reserve memory the branch never uses: 4 x 1920 and 64 x 2048 cost 3.3 GB and 5.9 GB loaded (9.3 GB the pair). For comparison the pipeline's FP32 pair
+needs 400 and 1,768 MiB per context at its maximum, and the recogniser's `[B, T, 18710]` output adds 1.2 GB of buffers at batch 64 that the arg-max build does not have.
+
 What differs from `ocr_pipeline`, one factor at a time on the 400 COCO-Text images of the public set (strict end-to-end F1 at recogniser confidence 0.8; the pipeline's own value is 0.186):
 
 | Difference | Pipeline | `ocr` branch (the reference: PaddleX release/3.3, the code PaddleOCR 3.x runs) | Effect alone |
