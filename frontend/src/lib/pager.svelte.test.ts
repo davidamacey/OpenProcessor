@@ -231,4 +231,69 @@ describe('createPager', () => {
     expect(pager.items.map((r) => r.id)).toEqual(['b']);
     expect(pager.hasMore).toBe(false);
   });
+
+  describe('a long scroll', () => {
+    const PAGES = 100;
+    const PER_PAGE = 100;
+    const pageAt = (k: number) =>
+      page(
+        Array.from({ length: PER_PAGE }, (_, i) => ({ id: `r${k * PER_PAGE + i}` })),
+        k + 1 < PAGES ? `c${k + 1}` : null,
+        PAGES * PER_PAGE,
+      );
+
+    it('appending a page reads only that page, never the rows already loaded', async () => {
+      const keyOf = vi.fn((r: Row) => r.id);
+      const fetchPage = async (cursor: string | null) =>
+        pageAt(cursor === null ? 0 : Number(cursor.slice(1)));
+      const pager = createPager<Row>({ fetchPage, keyOf });
+      await pager.loadFirst();
+      for (let k = 1; k < PAGES; k++) await pager.loadMore();
+      expect(pager.items).toHaveLength(PAGES * PER_PAGE);
+      // O(rows) overall: one key per served row (plus the first page's dedupe pass). Re-reading
+      // the buffer on every page costs PAGES * rows / 2 = 500,000 calls.
+      expect(keyOf.mock.calls.length).toBeLessThanOrEqual(2 * PAGES * PER_PAGE);
+    });
+
+    it('still dedupes a row that moved onto a later page', async () => {
+      const fetchPage = async (cursor: string | null) =>
+        cursor === null ? page(rows('a', 'b'), 'c1') : page(rows('b', 'c'), null);
+      const pager = createPager<Row>({ fetchPage, keyOf: (r) => r.id });
+      await pager.loadFirst();
+      await pager.loadMore();
+      expect(pager.items.map((r) => r.id)).toEqual(['a', 'b', 'c']);
+    });
+
+    it('notices rows the page removed locally, so a returning row is shown again', async () => {
+      const fetchPage = async (cursor: string | null) =>
+        cursor === null ? page(rows('a', 'b'), 'c1') : page(rows('b', 'c'), null);
+      const pager = createPager<Row>({ fetchPage, keyOf: (r) => r.id });
+      await pager.loadFirst();
+      pager.items = pager.items.filter((r) => r.id !== 'b');
+      await pager.loadMore();
+      expect(pager.items.map((r) => r.id)).toEqual(['a', 'b', 'c']);
+    });
+
+    it('a reset forgets the keys of the old buffer', async () => {
+      const fetchPage = async (cursor: string | null) =>
+        cursor === null ? page(rows('a'), 'c1') : page(rows('x'), null);
+      const pager = createPager<Row>({ fetchPage, keyOf: (r) => r.id });
+      await pager.loadFirst();
+      await pager.loadMore();
+      await pager.loadFirst();
+      expect(pager.items.map((r) => r.id)).toEqual(['a']);
+      await pager.loadMore();
+      expect(pager.items.map((r) => r.id)).toEqual(['a', 'x']);
+    });
+
+    it('loads 10,000 rows in 100 pages within a second', async () => {
+      const fetchPage = async (cursor: string | null) =>
+        pageAt(cursor === null ? 0 : Number(cursor.slice(1)));
+      const pager = createPager<Row>({ fetchPage, keyOf: (r) => r.id });
+      const t0 = performance.now();
+      await pager.loadFirst();
+      for (let k = 1; k < PAGES; k++) await pager.loadMore();
+      expect(performance.now() - t0).toBeLessThan(1000);
+    });
+  });
 });

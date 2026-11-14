@@ -77,6 +77,21 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
   let startCursor: string | null = null;
   const hasMore = $derived(nextCursor !== null);
 
+  // Keys of `items`, kept across pages so appending costs the page, not the buffer. It describes
+  // the buffer only while `items.length === seenLength`: the pages remove and replace rows
+  // optimistically, and any length the pager did not produce rebuilds the set on the next append.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- plain bookkeeping set, never read by a template
+  let seen = new Set<string>();
+  let seenLength = 0;
+  function seenKeys(): Set<string> {
+    if (items.length !== seenLength) {
+      // eslint-disable-next-line svelte/prefer-svelte-reactivity -- same: not reactive state
+      seen = new Set(items.map(opts.keyOf));
+      seenLength = items.length;
+    }
+    return seen;
+  }
+
   // Bumped by every reset (loadFirst / loadAt / reload). loadMore() and the
   // resets each capture the epoch in effect when their fetch started; if a
   // newer reset has since started by the time a fetch resolves, its result is
@@ -102,6 +117,9 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
       if (myEpoch !== epoch) return;
       const fresh = uniqueByKey(res?.items ?? [], opts);
       items = fresh;
+      // eslint-disable-next-line svelte/prefer-svelte-reactivity -- same: not reactive state
+      seen = new Set(fresh.map(opts.keyOf));
+      seenLength = fresh.length;
       total = res?.total ?? fresh.length;
       nextCursor = res?.next_cursor ?? null;
       startCursor = cursor;
@@ -122,6 +140,8 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
     },
     set items(next: T[]) {
       items = next;
+      // The caller's array replaces ours; its keys are unknown until the next append.
+      seenLength = -1;
     },
     get total() {
       return total;
@@ -166,12 +186,12 @@ export function createPager<T>(opts: PagerOptions<T>): Pager<T> {
         if (myEpoch !== epoch) return;
         // Dedup: the server collection shrinks as crops are relabeled, so a
         // later page can repeat an item an earlier page already returned.
-        // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local dedup set consumed synchronously within this call, never stored in reactive state
-        const seen = new Set(items.map(opts.keyOf));
-        const fresh = (res?.items ?? []).filter(
-          (i) => !seen.has(opts.keyOf(i)) && (opts.accept?.(i) ?? true),
-        );
-        items = [...items, ...fresh];
+        const fresh = unseen(res?.items ?? [], seenKeys(), opts);
+        // Appended in place: a `$state` array is a proxy that reports a push as one change, where
+        // re-spreading the buffer copied every loaded row on every page
+        // (https://svelte.dev/docs/svelte/$state#Deep-state).
+        items.push(...fresh);
+        seenLength = items.length;
         total = res?.total ?? total;
         nextCursor = res?.next_cursor ?? null;
       } catch (e) {
@@ -191,12 +211,29 @@ function uniqueByKey<T>(
   items: T[],
   opts: { keyOf: (i: T) => string; accept?: (i: T) => boolean },
 ): T[] {
-  const keys: string[] = [];
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, consumed within this call
+  const keys = new Set<string>();
   return items.filter((i) => {
     if (!(opts.accept?.(i) ?? true)) return false;
     const k = opts.keyOf(i);
-    if (keys.includes(k)) return false;
-    keys.push(k);
+    if (keys.has(k)) return false;
+    keys.add(k);
     return true;
   });
+}
+
+/** The accepted items of a served page whose key is not in `known`, adding their keys to it. */
+function unseen<T>(
+  items: T[],
+  known: Set<string>,
+  opts: { keyOf: (i: T) => string; accept?: (i: T) => boolean },
+): T[] {
+  const fresh: T[] = [];
+  for (const item of items) {
+    const key = opts.keyOf(item);
+    if (known.has(key) || !(opts.accept?.(item) ?? true)) continue;
+    known.add(key);
+    fresh.push(item);
+  }
+  return fresh;
 }
