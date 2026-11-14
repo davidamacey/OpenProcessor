@@ -299,6 +299,9 @@ def leak_env(
             raise ConnectionError('triton disabled in the leak test')
 
     monkeypatch.setattr(resources_module, 'get_async_triton_pool', _LeakTritonPool)
+    # photo ingest also asks for the frame engine's pool; its probe fails the same way, so the
+    # service takes the CPU decode path
+    monkeypatch.setattr(resources_module, 'get_frame_engine_pool', _LeakTritonPool)
 
     # The repository index is the server's own list of models; with no server the control
     # service fails closed (503 triton_unavailable), so the sweep serves an empty repository.
