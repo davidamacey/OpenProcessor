@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from opensearchpy.exceptions import OpenSearchException
+
 from src.clients.occ_bulk import failed_entry, occ_update_bulk
 from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
@@ -17,6 +19,16 @@ HUMAN_RELABEL_RETRIES = 5
 """Retry rounds a human relabel gives a 409 before it reports a conflict."""
 
 
+async def refresh_items_index(opensearch: Any) -> None:
+    """One refresh of the items index, at the end of a job that wrote its pages with
+    ``refresh=False``, so a client that reads when the job ends sees every write. A failure is
+    logged, not raised: the writes already succeeded."""
+    try:
+        await opensearch.indices.refresh(index=items_index())
+    except OpenSearchException as exc:
+        logger.warning('label_job_refresh_failed', error=str(exc))
+
+
 async def occ_bulk_human_relabel(
     opensearch: Any,
     crop_ids: list[str],
@@ -24,11 +36,13 @@ async def occ_bulk_human_relabel(
     *,
     writer_id: str,
     max_retries: int = HUMAN_RELABEL_RETRIES,
+    refresh: bool | str = 'wait_for',
 ) -> dict[str, Any]:
     """Batch OCC relabel: one mget page + one bulk call instead of
     one ``occ_update_one`` round-trip per crop. ``refresh='wait_for'`` is
     attached only to the final bulk call of each retry round (see
-    :func:`src.clients.occ_bulk.occ_update_bulk`), not per crop.
+    :func:`src.clients.occ_bulk.occ_update_bulk`), not per crop. A queued job passes
+    ``refresh=False`` and calls :func:`refresh_items_index` once at its end.
 
     ``current_source`` on each conflict entry is looked up with one
     follow-up ``mget`` restricted to the (normally empty) conflict set,
@@ -43,7 +57,7 @@ async def occ_bulk_human_relabel(
         ids=list(crop_ids),
         merge_fn=lambda _crop_id, source: merger(source),
         max_retries=max_retries,
-        refresh='wait_for',
+        refresh=refresh,
     )
     updated_ids = [cid for cid in crop_ids if status_map.get(cid) == 'updated']
     failed = [failed_entry(cid) for cid in crop_ids if status_map.get(cid) == 'error']

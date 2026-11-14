@@ -18,6 +18,7 @@ from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
 from src.domain.label_ops import UndoOutcome, undo_outcome
 from src.services.curation.class_undo import UNDO_READ_FIELDS, restore_update
+from src.services.curation.crop_bulk import refresh_items_index
 from src.services.curation.label_ops.store import (
     UNDO_PASSES_KEPT,
     LabelOpRecord,
@@ -88,6 +89,8 @@ async def _restore(
     record: LabelOpRecord,
     members: list[LabelOperationMemberLoad],
     registry_name: Callable[[int], str | None],
+    *,
+    refresh: bool | str,
 ) -> dict[str, str]:
     priors = {m.item_id: m.prior for m in members}
     outcomes: dict[str, str] = {}
@@ -118,7 +121,7 @@ async def _restore(
         on_written=on_written,
         on_failed=on_failed,
         max_retries=5,
-        refresh='wait_for',
+        refresh=refresh,
         source_includes=UNDO_READ_FIELDS,
     )
     return outcomes
@@ -205,12 +208,21 @@ async def restore_op(
     record.status = 'undoing'
     await save_op(record)
     outcomes: dict[str, str] = {}
-    async for members in member_pages(record):
-        if ctx is not None and ctx.cancelled():
-            return None
-        outcomes.update(await _restore(opensearch, record, members, registry_name))
+    # A queued pass writes its pages with refresh=False and refreshes once at its end (also on an
+    # early stop); a pass with no job answers a request that reads right after, so it waits.
+    page_refresh: bool | str = False if ctx is not None else 'wait_for'
+    try:
+        async for members in member_pages(record):
+            if ctx is not None and ctx.cancelled():
+                return None
+            outcomes.update(
+                await _restore(opensearch, record, members, registry_name, refresh=page_refresh)
+            )
+            if ctx is not None:
+                await ctx.progress(len(outcomes), None, 'restoring')
+    finally:
         if ctx is not None:
-            await ctx.progress(len(outcomes), None, 'restoring')
+            await refresh_items_index(opensearch)
     response = _response(record, outcomes, dry_run=False, status='undone')
     record.status = 'undone'
     record.undo_passes = [
