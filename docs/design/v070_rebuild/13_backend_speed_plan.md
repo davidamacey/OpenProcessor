@@ -81,6 +81,35 @@ Each decision names its evidence and the measurement that can overturn it.
 
 ### D1. Decode and prep leave Triton's Python backend; which host is decided by spike E0
 
+**Decided 2026-11-14 from E0 (rows in section 10): arm B, a standalone engine process, with CUDA
+shared memory as its transport and the plain request body as the second, explicit transport
+setting.** System shared memory is not built.
+
+- Speed does not separate the arms: on 20 MP photos one card gives 44 to 47 photos per second
+  in every arm and the card is 84 to 93% busy. Arm B with CUDA shared memory is 1.02x, 0.97x and
+  0.96x of arm A at one, two and four processes, with 15% less host CPU per photo.
+- Arm B passed the kill test on both shared-memory transports (50 of 50 kills each, the model
+  server never restarted). Arm C did not: after its Python stub was killed the prep model stayed
+  not ready for at least 45 s with no recovery by itself. Arm A is today's path, where the same
+  night a model unload hung and only a restart of the whole model server cleared it.
+- Transport. System shared memory is 0.94x of arm A at two processes and needs the engine in
+  the model server's IPC namespace, so the engine container has to be recreated after every
+  model-server restart. The request body needs no coupling at all and costs 2% at one process
+  and 9% at two. CUDA shared memory is the only transport at 0.95x or better at every process
+  count. The rule below about beating system shared memory by more than the spread is not met
+  (the ranges overlap); CUDA shared memory is chosen on the 0.95x rule and on operations.
+- What E0 changed in the rules below: `pid: host` is not needed. Registration fails only when the
+  engine process has the same process id as `tritonserver` (both are 1 by default), so the
+  engine container runs with `init: true`. A killed engine leaves its regions registered and
+  1 GiB of GPU memory pinned until the next engine start unregisters them by prefix; that step
+  is mandatory. The model server needs `--allow-client-shm=true`.
+- The gap to arm A at two and four processes is batch fill at the encoder (8 to 12 crops per
+  batch against 17 to 19), not transport. E1 sends crops of every photo in flight through one
+  queue per process; more than one engine process per card is a measured setting, not a default
+  (the +51% for a second process was measured under the scan regression and is withdrawn).
+- Not measured in E0 and measured on the E1 engine instead: arm C throughput, the unary front,
+  small images, 16 and 64 photos in flight.
+
 Decode, EXIF orientation, letterbox, crops, face alignment, OCR crop handling and the order in
 which models run are one component, the **frame engine**. It keeps today's design (decode once,
 keep the full-resolution frame on the GPU, cut every model input from that frame). What changes
@@ -119,8 +148,9 @@ Rules for the choice:
 
 What is decided regardless of the arm:
 
-- **Several engine processes per card.** Two prep processes gave +51% over one. The API spreads
-  requests over them with the existing router (`src/clients/triton_router.py`).
+- **Engine processes per card are a measured setting.** One process saturates a card on 20 MP
+  photos; when more are configured the API spreads requests over them with the existing router
+  (`src/clients/triton_router.py`).
 - **Overload is an answer, not a fallback.** A full engine answers with a retryable status; the
   API retries with backoff. No silent second route.
 - **Engine down means the image fails visibly** (its decode route says so and the bulk run retries
