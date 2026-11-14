@@ -123,6 +123,7 @@ def build_image_doc(
     whole_frame_embedding: Any | None = None,
     source_identifier: str | None = None,
     ingest_run_id: str | None = None,
+    decode_route: str | None = None,
 ) -> dict[str, Any]:
     """Build the single images-index document for one ingested photo.
 
@@ -137,6 +138,9 @@ def build_image_doc(
     ``ingest_run_id`` is an optional client-supplied tag for one
     upload call, so ``GET /ingest/status?run_id=`` can scope counts to
     it.
+
+    ``decode_route`` (:mod:`src.domain.decode_route`) is how the photo's pixels were decoded; this
+    create is its only writer.
     """
     doc: dict[str, Any] = {
         'image_id': image_id,
@@ -154,6 +158,8 @@ def build_image_doc(
         doc['source_identifier'] = source_identifier
     if ingest_run_id is not None:
         doc['ingest_run_id'] = ingest_run_id
+    if decode_route is not None:
+        doc['decode_route'] = decode_route
     return doc
 
 

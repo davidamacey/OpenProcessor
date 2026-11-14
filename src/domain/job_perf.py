@@ -3,8 +3,7 @@
 ``bulk_ingest_run``, ``reprocess`` and ``directory_ingest`` return one so the scale ladders read
 throughput from the job record instead of a side script. The model is validated when a handler
 returns it; an unknown decode route or a missing summary fails the job, so a typo cannot reach
-a benchmark table. New decode routes are added to :data:`DECODE_ROUTES` with the lane that
-creates them.
+a benchmark table. The closed list is :data:`src.domain.decode_route.DECODE_ROUTES`.
 """
 
 from __future__ import annotations
@@ -13,22 +12,12 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
+from src.domain.decode_route import DECODE_ROUTES
+
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-DECODE_ROUTES: tuple[str, ...] = (
-    'gpu',
-    'gpu_large',
-    'gpu_hw_jpeg',
-    'cpu_small',
-    'cpu_large',
-    'cpu_progressive',
-    'cpu_decoder',
-    'cpu_gpu_memory',
-    'cpu_call_failed',
-    'cpu_not_image',
-)
 PERF_SUMMARY_KINDS: frozenset[str] = frozenset({'bulk_ingest_run', 'reprocess', 'directory_ingest'})
 RESULT_KEY = 'perf_summary'
 

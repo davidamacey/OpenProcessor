@@ -111,6 +111,9 @@ class BulkIngestRun(BaseModel):
     # rest are the pipeline's stage timers over the run (the whole process, so
     # other ingest traffic in the same API worker is included).
     stage_s: dict[str, float] = Field(default_factory=dict)
+    # Photos per decode route over the run's attempts (src/domain/decode_route.py): a photo that
+    # fell back from the GPU decode to the CPU shows under its ``cpu_<reason>``.
+    decode_routes: dict[str, int] = Field(default_factory=dict)
     attempts: int = 1
     # What the run allows now: cancel while it is live; resume (start the same
     # source again) once it stopped with work left.

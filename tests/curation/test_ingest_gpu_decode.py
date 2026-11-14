@@ -260,3 +260,110 @@ async def test_a_verdict_is_cached_across_lookups(tmp_path) -> None:
     assert await ingest_gpu_decode.gpu_decode_ready(svc) is True
     assert await ingest_gpu_decode.gpu_decode_ready(svc) is True
     assert len(probes) == 1
+
+
+def _routes(result: Any, os_fake: Any) -> dict[str, str | None]:
+    """Route by image path from the results, checked against the stored images docs."""
+    stored = {d['image_path']: d.get('decode_route') for d in os_fake.images.values()}
+    by_path = {r.image_path: r.decode_route for r in result.results}
+    assert {p: r for p, r in by_path.items() if r is not None} == stored
+    return by_path
+
+
+@pytest.mark.asyncio
+async def test_every_route_decision_is_on_the_result_and_the_image_doc(tmp_path) -> None:
+    svc, os_fake, _triton, _calls, sizes = _gpu_service(tmp_path, gate=0.2)
+    big = _register(sizes, _jpeg_bytes((640, 480), seed=11), (640, 480))
+    small = _jpeg_bytes((320, 240), seed=12)
+    not_image = b'not an image at all'
+    result = await svc.ingest_batch(
+        [big, small, not_image], ['/x/big.jpg', '/x/small.jpg', '/x/bad.bin']
+    )
+    by_path = _routes(result, os_fake)
+    assert by_path == {'/x/big.jpg': 'gpu', '/x/small.jpg': 'cpu_small', '/x/bad.bin': None}
+    assert result.summary.decode_routes == {'gpu': 1, 'cpu_small': 1}
+
+
+@pytest.mark.asyncio
+async def test_an_undecodable_file_has_no_route_and_no_doc(tmp_path) -> None:
+    svc, os_fake, _triton, _calls, _sizes = _gpu_service(tmp_path)
+    result = await svc.ingest_batch([b'garbage'], ['/x/g.bin'])
+    assert result.results[0].status == 'failed'
+    assert result.results[0].decode_route is None  # failed before decode: no route stored
+    assert not os_fake.images
+
+
+@pytest.mark.parametrize('status', ['progressive', 'not_jpeg', 'decoder', 'gpu_memory'])
+@pytest.mark.asyncio
+async def test_a_declined_status_is_the_route_on_result_doc_and_summary(
+    tmp_path, status: str
+) -> None:
+    svc, os_fake, _triton, _calls, sizes = _gpu_service(tmp_path, status=status)
+    big = _register(sizes, _jpeg_bytes((640, 480), seed=13), (640, 480))
+    result = await svc.ingest_batch([big], ['/x/d.jpg'])
+    assert _routes(result, os_fake) == {'/x/d.jpg': f'cpu_{status}'}
+    assert result.summary.decode_routes == {f'cpu_{status}': 1}
+
+
+@pytest.mark.asyncio
+async def test_gpu_decode_off_is_cpu_gpu_off_on_every_image_and_is_counted(tmp_path) -> None:
+    from prometheus_client import REGISTRY
+
+    def sample() -> float:
+        return (
+            REGISTRY.get_sample_value(
+                'op_decode_route_total', {'route': 'cpu_gpu_off', 'path': 'ingest'}
+            )
+            or 0.0
+        )
+
+    svc, os_fake, _triton, calls, sizes = _gpu_service(tmp_path)
+    svc.config = dataclasses.replace(svc.config, ingest_gpu_decode=False)
+    big = _register(sizes, _jpeg_bytes((640, 480), seed=14), (640, 480))
+    small = _jpeg_bytes((320, 240), seed=15)
+    before = sample()
+    result = await svc.ingest_batch([big, small], ['/x/a.jpg', '/x/b.jpg'])
+    assert calls == []
+    assert _routes(result, os_fake) == {'/x/a.jpg': 'cpu_gpu_off', '/x/b.jpg': 'cpu_gpu_off'}
+    assert result.summary.decode_routes == {'cpu_gpu_off': 2}
+    assert sample() == before + 2
+
+
+@pytest.mark.asyncio
+async def test_a_failed_gpu_call_falls_back_and_says_cpu_call_failed(tmp_path) -> None:
+    svc, os_fake, triton, _calls, sizes = _gpu_service(tmp_path)
+
+    async def broken(_model: str, _inputs: list) -> _Result:
+        raise RuntimeError('stream closed without a response')
+
+    triton.stream_one = broken
+    big = _register(sizes, _jpeg_bytes((640, 480), seed=16), (640, 480))
+    result = await svc.ingest_batch([big], ['/x/f.jpg'])
+    assert result.summary.successful == 1
+    assert triton.calls == ['primary_end2end']  # the CPU path ran
+    assert _routes(result, os_fake) == {'/x/f.jpg': 'cpu_call_failed'}
+
+
+@pytest.mark.asyncio
+async def test_the_single_image_path_is_cpu_single_and_stored(tmp_path) -> None:
+    svc, os_fake, _triton, calls, _sizes = _gpu_service(tmp_path)
+    result = await svc.ingest_one(_jpeg_bytes((640, 480), seed=17), '/x/one.jpg')
+    assert calls == []
+    assert result.decode_route == 'cpu_single'
+    [doc] = list(os_fake.images.values())
+    assert doc['decode_route'] == 'cpu_single'
+
+
+@pytest.mark.asyncio
+async def test_a_duplicate_has_no_route_and_the_doc_keeps_its_first_route(tmp_path) -> None:
+    svc, os_fake, _triton, _calls, sizes = _gpu_service(tmp_path)
+    big = _register(sizes, _jpeg_bytes((640, 480), seed=18), (640, 480))
+    first = await svc.ingest_batch([big], ['/x/1.jpg'])
+    assert first.results[0].decode_route == 'gpu'
+    svc.config = dataclasses.replace(svc.config, ingest_gpu_decode=False)
+    again = await svc.ingest_batch([big], ['/x/1.jpg'])
+    assert again.results[0].status == 'duplicate'
+    assert again.results[0].decode_route is None
+    assert again.summary.decode_routes == {}
+    [doc] = list(os_fake.images.values())
+    assert doc['decode_route'] == 'gpu'

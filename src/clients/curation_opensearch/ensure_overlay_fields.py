@@ -75,7 +75,7 @@ async def ensure_images_upload_fields(
     client: AsyncOpenSearch,
 ) -> dict[str, Any]:
     """PUT the BA-1/BA-4 ``source_identifier`` / ``ingest_run_id`` keyword
-    fields, the ``imohash`` exact key, the near-duplicate projection fields and the
+    fields, the ``decode_route`` keyword, the ``imohash`` exact key, the near-duplicate projection fields and the
     ingest write id onto the existing images mapping.
 
     Additive ``PUT <index>/_mapping`` — idempotent.
@@ -85,6 +85,7 @@ async def ensure_images_upload_fields(
         'properties': {
             'source_identifier': {'type': 'keyword'},
             'ingest_run_id': {'type': 'keyword'},
+            'decode_route': {'type': 'keyword'},
             'imohash': {'type': 'keyword'},
             **NEAR_DUP_MAPPING,
             **IMAGES_WRITE_ID_MAPPING,

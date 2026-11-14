@@ -93,6 +93,8 @@ class ImageContext:
     indexed on this image later inherit it."""
     image_extra: dict[str, Any] = field(default_factory=dict)
     """Extra fields merged into the images doc this call creates."""
+    decode_route: str | None = None
+    """Which decode route the pixels took (:mod:`src.domain.decode_route`); stored on a created images doc."""
     capture: CaptureMetadata | None = None
     """The file's capture metadata as read, location included (``repr`` hides it); ``None`` for
     an image that already has a doc, whose capture is already stored."""
@@ -360,6 +362,7 @@ async def index_items(
                 whole_frame_embedding=whole_frame_embedding,
                 source_identifier=ctx.source_identifier,
                 ingest_run_id=ctx.ingest_run_id,
+                decode_route=ctx.decode_route,
             )
             image_doc.update(ctx.image_extra)
             if ctx.capture is not None:

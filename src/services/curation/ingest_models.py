@@ -47,6 +47,9 @@ class IngestSummary(BaseModel):
     n_embed_failed: int = 0
     # Detections the project's detect filter dropped (never stored).
     n_filtered: int = 0
+    # Images per decode route (src/domain/decode_route.py); a duplicate or an image that failed
+    # before decode has none, so the counts add up to the images this call decoded.
+    decode_routes: dict[str, int] = Field(default_factory=dict)
 
 
 class IngestResult(BaseModel):
@@ -84,6 +87,9 @@ class IngestResult(BaseModel):
     # wire even though the operator asked for a secondary classifier and
     # it never ran.
     secondary_detector_error: str | None = None
+    # How this image's pixels were decoded (src/domain/decode_route.py); null for a duplicate or
+    # an image that failed before decode.
+    decode_route: str | None = None
 
 
 class BatchIngestResult(BaseModel):

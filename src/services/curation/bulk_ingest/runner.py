@@ -154,6 +154,9 @@ class BulkIngestRun:
         self.in_flight = 0
         # Totals continue from the earlier attempts of a resumed run (the checkpoint).
         self.totals = {key: int((prior or {}).get(key) or 0) for key in COUNTER_KEYS}
+        self.decode_routes: dict[str, int] = {
+            route: int(n) for route, n in ((prior or {}).get('decode_routes') or {}).items()
+        }
         self._attempt_done = 0
         self._consecutive_failed_batches = 0
         self._abort: str | None = None
@@ -198,6 +201,7 @@ class BulkIngestRun:
             'unreadable': self.unreadable,
             'unreadable_samples': self.unreadable_samples,
             **self.totals,
+            'decode_routes': dict(self.decode_routes),
             'in_flight': self.in_flight,
             'images_per_s': round(overall, 3),
             'images_per_s_recent': round(recent, 3) if recent is not None else None,
@@ -233,7 +237,7 @@ class BulkIngestRun:
         await self.reporter.progress(
             self.processed, self.discovered, 'ingest', self.counters(now), force=force
         )
-        await self.reporter.checkpoint(dict(self.totals))
+        await self.reporter.checkpoint({**self.totals, 'decode_routes': dict(self.decode_routes)})
 
     # ----------------------------------------------------------------- producer
 
@@ -318,6 +322,8 @@ class BulkIngestRun:
         self._attempt_done += len(done)
         for key in ('crops_indexed', 'n_embedded', 'n_not_embedded', 'n_embed_failed'):
             self.totals[key] += summary.get(key, 0)
+        for route, n in (summary.get('decode_routes') or {}).items():
+            self.decode_routes[route] = self.decode_routes.get(route, 0) + int(n)
         first_error = next(
             (r.get('error') for r in body.get('results', []) if r.get('error')), None
         )
@@ -371,7 +377,7 @@ class BulkIngestRun:
                 images=images,
                 wall_s=wall,
                 images_per_s=round(images / wall, 3) if wall else 0.0,
-                decode_routes={},
+                decode_routes=dict(self.decode_routes),
                 stage_seconds={k: float(v) for k, v in self._stage_delta.items()},
                 pe_calls_per_image=0.0,
                 servers=self.servers,

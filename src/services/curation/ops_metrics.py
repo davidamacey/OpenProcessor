@@ -25,6 +25,7 @@ from typing import Any, Protocol
 from prometheus_client import Counter, Gauge, Histogram
 
 from src.config.env import env_int
+from src.domain.decode_route import check_route
 
 
 OTHER_PROJECT = 'other'
@@ -50,6 +51,13 @@ OP_DECODE_ROUTE_TOTAL = Counter(
     'decoder, call_failed, ...). The reprocess path counts only while the GPU decode is usable.',
     labelnames=('route', 'path'),
 )
+
+
+def count_decode_route(route: str, path: str) -> None:
+    """Count one photo on ``op_decode_route_total``; a route outside the closed list raises."""
+    OP_DECODE_ROUTE_TOTAL.labels(route=check_route(route), path=path).inc()
+
+
 OP_INGEST_ITEMS_TOTAL = Counter(
     'op_ingest_items_total',
     'Items (crops) indexed by ingest, by project.',

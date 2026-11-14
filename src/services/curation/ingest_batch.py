@@ -48,6 +48,7 @@ from typing import TYPE_CHECKING, Literal
 
 from src.core.logging import get_logger
 from src.db.checkout_budget import checkout_budget
+from src.domain.decode_route import CPU_GPU_OFF, CPU_NOT_IMAGE, CPU_SMALL, GPU, prep_status_route
 from src.services.curation.ingest_models import BatchIngestResult, IngestResult, IngestSummary
 from src.services.curation.ops_metrics import record_ingest_result
 from src.utils.cpu_pool import encoded_nbytes, ingest_gate, mib, run_cpu
@@ -76,19 +77,28 @@ BATCH_DB_CONNECTIONS = 2
 
 async def _prefill_gpu_decode(
     service: CurationIngestService, images: list[bytes], indices: list[int], route: GpuRoute
-) -> tuple[dict[int, GpuDecodeFrame], dict[int, list[DetectedItem]]]:
-    """Run the GPU decode on the images ``route`` chose."""
+) -> tuple[dict[int, GpuDecodeFrame], dict[int, list[DetectedItem]], dict[int, str]]:
+    """Run the GPU decode on the images ``route`` chose; the third map is the decode route of
+    every image of ``indices`` (counted once each), whatever path it takes."""
     from src.services.curation.ingest_gpu_decode import count_route, run_gpu_decode
 
     frames: dict[int, GpuDecodeFrame] = {}
     items: dict[int, list[DetectedItem]] = {}
+    routes: dict[int, str] = {}
+
+    def decided(idx: int, name: str) -> None:
+        routes[idx] = name
+        count_route(name)
+
     if not route.ready:
-        return frames, items
+        for idx in indices:
+            decided(idx, CPU_GPU_OFF)
+        return frames, items, routes
     chosen = set(route.chosen)
     unreadable = set(route.unreadable)
     for idx in indices:
         if idx not in chosen:
-            count_route('cpu_not_image' if idx in unreadable else 'cpu_small')
+            decided(idx, CPU_NOT_IMAGE if idx in unreadable else CPU_SMALL)
     taken = [idx for idx in indices if idx in chosen]
     embed_crops = service.policy.embedding.mode not in ('lazy', 'none')
 
@@ -100,11 +110,11 @@ async def _prefill_gpu_decode(
     outcomes = await run_all([timed(idx) for idx in taken])
     for idx, outcome in zip(taken, outcomes, strict=True):
         if isinstance(outcome, str):
-            count_route(f'cpu_{outcome}')
+            decided(idx, prep_status_route(outcome))
             continue
-        count_route('gpu')
+        decided(idx, GPU)
         frames[idx], items[idx] = outcome
-    return frames, items
+    return frames, items, routes
 
 
 async def _prefill_detections(
@@ -119,10 +129,11 @@ async def _prefill_detections(
     dict[int, list[DetectedItem]],
     dict[int, SecondaryOutput],
     dict[int, GpuDecodeFrame],
+    dict[int, str],
 ]:
     """Batch-decode ``indices`` and run the whole-image detectors batched.
 
-    Returns three index-keyed maps consumed by
+    Returns the index-keyed maps (and the decode route of each image) consumed by
     :meth:`~src.services.curation.ingest.CurationIngestService.ingest_one`'s
     ``prefilled_*`` arguments. On a batched-inference failure both
     detection maps come back empty so every image falls back to the
@@ -132,10 +143,10 @@ async def _prefill_detections(
 
     prefilled_imgs: dict[int, DecodedImage] = {}
     prefilled_secondary: dict[int, SecondaryOutput] = {}
-    frames, prefilled_items = await _prefill_gpu_decode(service, images, indices, route)
+    frames, prefilled_items, routes = await _prefill_gpu_decode(service, images, indices, route)
     indices = [idx for idx in indices if idx not in frames]
     if not indices:
-        return prefilled_imgs, prefilled_items, prefilled_secondary, frames
+        return prefilled_imgs, prefilled_items, prefilled_secondary, frames, routes
 
     valid_imgs: list[Image.Image] = []
     valid_indices: list[int] = []
@@ -153,7 +164,7 @@ async def _prefill_detections(
         valid_indices.append(idx)
 
     if not valid_imgs:
-        return prefilled_imgs, prefilled_items, prefilled_secondary, frames
+        return prefilled_imgs, prefilled_items, prefilled_secondary, frames, routes
 
     detector = service.detector
     secondary_per: list[SecondaryOutput | None]
@@ -174,13 +185,13 @@ async def _prefill_detections(
             n_images=len(valid_imgs),
         )
         gpu_decode_items = {idx: prefilled_items[idx] for idx in frames}
-        return prefilled_imgs, gpu_decode_items, {}, frames
+        return prefilled_imgs, gpu_decode_items, {}, frames, routes
 
     for idx, items, secondary in zip(valid_indices, items_per, secondary_per, strict=False):
         prefilled_items[idx] = items
         if secondary is not None:
             prefilled_secondary[idx] = secondary
-    return prefilled_imgs, prefilled_items, prefilled_secondary, frames
+    return prefilled_imgs, prefilled_items, prefilled_secondary, frames, routes
 
 
 def _group_batch(
@@ -274,9 +285,13 @@ async def run_ingest_batch(
         # Only pay the (expensive) batched decode + inference for images that
         # dedup did not already resolve to an existing document or an
         # earlier-in-batch representative.
-        prefilled_imgs, prefilled_items, prefilled_secondary, frames = await _prefill_detections(
-            service, images, image_paths, non_dup, sizes, route
-        )
+        (
+            prefilled_imgs,
+            prefilled_items,
+            prefilled_secondary,
+            frames,
+            routes,
+        ) = await _prefill_detections(service, images, image_paths, non_dup, sizes, route)
 
         sem = asyncio.Semaphore(MAX_INGEST_CONCURRENCY)
 
@@ -339,6 +354,7 @@ async def run_ingest_batch(
                         prefilled_items=prefilled_items.get(i),
                         prefilled_secondary=prefilled_secondary.get(i),
                         prefilled_frame=frames.get(i),
+                        decode_route=routes.get(i),
                         source_identifier=source_identifier,
                         ingest_run_id=ingest_run_id,
                     ),
@@ -373,6 +389,10 @@ async def run_ingest_batch(
         # batch summary, not just a per-item field a caller has to notice.
         if res.secondary_detector_error:
             summary.secondary_detector_failures += 1
+        if res.decode_route is not None:
+            summary.decode_routes[res.decode_route] = (
+                summary.decode_routes.get(res.decode_route, 0) + 1
+            )
 
     if summary.failed == 0:
         status: Literal['success', 'partial', 'error'] = 'success'

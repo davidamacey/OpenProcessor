@@ -26,13 +26,14 @@ from tritonclient.utils import InferenceServerException
 
 from src.clients.pe_encoder import _l2_normalize
 from src.core.logging import get_logger
+from src.domain.decode_route import CPU_BOX_COUNT, CPU_NOT_IMAGE, CPU_SMALL, GPU, prep_status_route
 from src.services.curation.ingest_gpu_decode import (
     GPU_IMAGE_PREP_MODEL,
     call_gpu_image_prep,
     gpu_decode_ready,
     megapixels,
 )
-from src.services.curation.ops_metrics import OP_DECODE_ROUTE_TOTAL
+from src.services.curation.ops_metrics import count_decode_route
 
 
 if TYPE_CHECKING:
@@ -79,7 +80,7 @@ async def gpu_embed_route(service: CurationIngestService) -> GpuEmbedRoute | Non
 
 
 def _count(route: str) -> None:
-    OP_DECODE_ROUTE_TOTAL.labels(route=route, path='reprocess').inc()
+    count_decode_route(route, 'reprocess')
 
 
 async def embed_on_gpu(
@@ -89,21 +90,21 @@ async def embed_on_gpu(
     ``None`` when this photo takes the CPU path."""
     mp = megapixels(data)
     if mp is None or mp < route.min_megapixels:
-        _count('cpu_not_image' if mp is None else 'cpu_small')
+        _count(CPU_NOT_IMAGE if mp is None else CPU_SMALL)
         return None
     rows = np.asarray(boxes, np.float64).reshape(-1, 4)
     result = await call_gpu_image_prep(
         route.triton_pool, data, [(BOXES_INPUT, rows, 'FP64')], caller='reprocess_embed'
     )
     if isinstance(result, str):
-        _count(f'cpu_{result}')
+        _count(prep_status_route(result))
         return None
     frame = result.as_numpy('whole_embedding').astype(np.float32)
     vectors = result.as_numpy('crop_embeddings').astype(np.float32).reshape(-1, frame.shape[0])
     if vectors.shape[0] != rows.shape[0]:
-        _count('cpu_box_count')
+        _count(CPU_BOX_COUNT)
         return None
-    _count('gpu')
+    _count(GPU)
     return StoredBoxVectors(frame=_l2_normalize(frame), boxes=_l2_normalize(vectors))
 
 

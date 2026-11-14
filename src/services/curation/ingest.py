@@ -72,6 +72,7 @@ from opensearchpy.exceptions import OpenSearchException
 from src.config import get_curation_config
 from src.core.logging import get_logger
 from src.domain.capture_metadata import unknown_capture
+from src.domain.decode_route import CPU_SINGLE, GPU
 from src.services.curation.ingest_dedup import IngestDedupMixin, Resolved
 from src.services.curation.ingest_detect import (
     SECONDARY_IOU_MATCH,
@@ -175,6 +176,7 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
         *,
         prefilled_image: DecodedImage | None = None,
         prefilled_frame: GpuDecodeFrame | None = None,
+        decode_route: str | None = None,
         source_identifier: str | None = None,
         ingest_run_id: str | None = None,
         adopt_existing: bool = False,
@@ -257,6 +259,7 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
             pil=decoded.pil if decoded is not None else None,
             rgb=decoded.rgb if decoded is not None else None,
             gpu_frame=prefilled_frame,
+            decode_route=decode_route or (GPU if prefilled_frame is not None else CPU_SINGLE),
             width=width,
             height=height,
             imohash=image_hash,
@@ -298,6 +301,7 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
         prefilled_items: list[DetectedItem] | None = None,
         prefilled_secondary: SecondaryOutput | None = None,
         prefilled_frame: GpuDecodeFrame | None = None,
+        decode_route: str | None = None,
         source_identifier: str | None = None,
         ingest_run_id: str | None = None,
     ) -> IngestResult:
@@ -321,6 +325,9 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
             prefilled_frame: The GPU decode's products for this image
                 (:mod:`~src.services.curation.ingest_gpu_decode`), with its
                 items in ``prefilled_items``; the API never decodes it.
+            decode_route: The route the batch path chose for this image
+                (:mod:`src.domain.decode_route`); without it the route is ``gpu`` for a
+                ``prefilled_frame`` and ``cpu_single`` otherwise.
 
         Every ``prefilled_*`` argument defaults to ``None``, in which
         case this method does the work itself — so direct callers
@@ -333,6 +340,7 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
             source,
             prefilled_image=prefilled_image,
             prefilled_frame=prefilled_frame,
+            decode_route=decode_route,
             source_identifier=source_identifier,
             ingest_run_id=ingest_run_id,
         )
@@ -360,6 +368,7 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
                     source_identifier=source_identifier,
                     error=str(exc),
                     error_kind=ERROR_KIND_DETECTOR_INFER,
+                    decode_route=ctx.decode_route,
                 )
             )
 
@@ -370,6 +379,8 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
             secondary_detector_error=detected.secondary_detector_error,
         )
         outcome.result.n_filtered = detected.n_filtered
+        if outcome.result.status != 'duplicate':
+            outcome.result.decode_route = ctx.decode_route
         return record_ingest_result(outcome.result)
 
     @staticmethod
