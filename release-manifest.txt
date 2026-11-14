@@ -37,3 +37,5 @@ examples/vlm/catalog.tsv
 export/build_pe_trt.sh	exec
 monitoring/**	optional
 docker-compose.faces-off.yml	optional
+docker-compose.data-dir.yml	optional
+scripts/lib/data_dir.sh

@@ -45,23 +45,49 @@ about 90 GiB of index and needs about 180 GiB free. Merges rewrite data many tim
 real index merged 68 GB in total to hold a few GB), so free space is a hard requirement, not a
 comfort.
 
-## Moving the data directory to NVMe
+## Put the databases on SSD or NVMe (`OP_DATA_DIR`)
 
-`OP_OPENSEARCH_DATA` in `.env` is either a Docker volume name (the default, `opensearch_data`) or
-an absolute host path. To move an existing deployment:
+PostgreSQL, OpenSearch and Valkey keep their data in Docker named volumes, which live in Docker's
+data root. When that root is a spinning array, every PostgreSQL commit waits on the write-ahead
+log: on one measured host the commit took 40 to 60 ms and the database phase was 78 to 87 percent
+of an ingest request. Solid-state storage is a requirement for all three data directories.
+
+Set one line in `.env` to an absolute directory on SSD or NVMe:
 
 ```bash
-./openprocessor stop                              # or: make down
-sudo mkdir -p /srv/opensearch-data
-sudo docker run --rm -v <project>_opensearch_data:/from -v /srv/opensearch-data:/to \
-  alpine sh -c 'cp -a /from/. /to/'               # <project> is COMPOSE_PROJECT_NAME
-sudo chown -R 1000:1000 /srv/opensearch-data # OpenSearch runs as uid 1000
-echo 'OP_OPENSEARCH_DATA=/srv/opensearch-data' >> .env
-./openprocessor start
-curl -s localhost:4607/_cluster/health            # green, then check the document counts
+OP_DATA_DIR=/srv/openprocessor
 ```
 
-Keep the old volume until the counts match, then remove it.
+The CLI, `make` and `scripts/setup.sh` then add `docker-compose.data-dir.yml` by themselves (with
+plain Compose add `-f docker-compose.data-dir.yml`). The data goes to `$OP_DATA_DIR/postgres`,
+`$OP_DATA_DIR/opensearch` and `$OP_DATA_DIR/valkey`; `./openprocessor start` creates them. The
+OpenSearch directory must be owned by uid 1000 (start refuses and prints the `chown` command
+otherwise). `OP_OPENSEARCH_DATA` is gone: a `.env` that still sets it stops the start with these steps. Without the setting nothing changes.
+The installer and `./openprocessor status` warn when the data location is on a rotating disk
+(read from the kernel's `queue/rotational` flag, through md, LVM and device-mapper), or say they
+could not determine it.
+
+### Moving existing databases
+
+`start` refuses when `OP_DATA_DIR` is set, a named volume of this project holds data and the
+matching directory is empty: it never starts with empty databases. Move the data once:
+
+```bash
+./openprocessor stop
+P=<COMPOSE_PROJECT_NAME>; D=/srv/openprocessor      # the value of OP_DATA_DIR
+sudo mkdir -p $D/postgres $D/opensearch $D/valkey
+for pair in openprocessor-pg:postgres opensearch_data:opensearch openprocessor-queue:valkey; do
+  sudo docker run --rm -v ${P}_${pair%%:*}:/from:ro -v $D/${pair##*:}:/to \
+    alpine sh -c 'cp -a /from/. /to/'
+done
+sudo chown -R 1000:1000 $D/opensearch               # OpenSearch runs as uid 1000
+sudo du -s $D/*                                      # compare with the volumes' sizes
+echo "OP_DATA_DIR=$D" >> .env
+./openprocessor start
+```
+
+Check `curl -s localhost:4607/_cluster/health` and the project document counts before you rely on
+it. The old volumes are kept; remove them (`docker volume rm`) only after you are satisfied.
 
 ## Ingest settings that depend on where the files are
 

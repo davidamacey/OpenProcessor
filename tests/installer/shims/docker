@@ -25,6 +25,8 @@
 #   compose_ps          the answer to `compose ps --format ...` (one line per service)
 #   upgrade_fail        present -> a `compose run` of the 0.6.0 upgrade (scripts.db.upgrade_from_060) fails
 #   rollback_fail       present -> a `compose run` of the 0.6.0 rollback (scripts.db.rollback_to_060) fails
+#   volume_data/<vol>   the files a named volume holds, one per line: `docker run --entrypoint ls`
+#                       on it prints them (read-only; an absent file is an empty volume)
 #   up_hangs            present -> `compose up` creates up_started and blocks (a
 #                       long recreate a test can interrupt)
 # Writes mutations.log: every state-changing call, whether allowed or not.
@@ -316,6 +318,12 @@ case "${1:-}" in
         record_image "${2:?}"
         ;;
     run)
+        if [[ " $* " == *" --entrypoint ls "* ]]; then
+            for a in "$@"; do
+                [[ "$a" == *:/v:ro ]] && cat "${state}/volume_data/${a%%:*}" 2>/dev/null
+            done
+            exit 0
+        fi
         refuse run
         echo "GPU 0: Shim GPU (UUID: GPU-shim)"
         ;;
