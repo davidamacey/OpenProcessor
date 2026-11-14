@@ -5,6 +5,11 @@ Order of a stop (SIGTERM or SIGINT): readiness turns false and new requests are 
 ``Server.stop(grace)``), the worker threads finish their current photo (every wait inside one is
 bounded), and only then is the region unregistered from the model server and freed
 (:meth:`frame_engine.transport.CudaShmTransport.close`).
+
+A lost CUDA context (:mod:`frame_engine.cuda_fault`) turns readiness false at once; the health tick
+then stops the server the same way and the process exits 1, so the container's restart policy
+starts a fresh one. The region is not freed then (CUDA calls fail in a lost context): the process
+exit releases it and the next process unregisters it from the model server by its prefix.
 """
 
 from __future__ import annotations
@@ -54,11 +59,15 @@ def _transport(s: EngineSettings, metrics: EngineMetrics) -> BodyTransport | Cud
     )
 
 
-async def _health(transport: Any, every: float, stop: asyncio.Event) -> None:
-    """Readiness and re-registration without traffic (a model-server restart)."""
+async def _health(transport: Any, engine: FrameEngine, every: float, stop: asyncio.Event) -> None:
+    """Readiness and re-registration without traffic (a model-server restart); a lost CUDA
+    context stops the process."""
     loop = asyncio.get_running_loop()
     with ThreadPoolExecutor(1, thread_name_prefix='fe-health') as pool:
         while not stop.is_set():
+            if engine.lost.is_set():
+                stop.set()
+                return
             await loop.run_in_executor(pool, transport.check)
             try:
                 await asyncio.wait_for(stop.wait(), timeout=every)
@@ -66,7 +75,8 @@ async def _health(transport: Any, every: float, stop: asyncio.Event) -> None:
                 continue
 
 
-async def serve(s: EngineSettings) -> None:
+async def serve(s: EngineSettings) -> int:
+    """Serve until SIGTERM or SIGINT (exit 0) or a lost CUDA context (exit 1)."""
     metrics = EngineMetrics()
     start_http_server(s.metrics_port, registry=metrics.registry)
     cp.cuda.Device(DEVICE).use()
@@ -75,7 +85,7 @@ async def serve(s: EngineSettings) -> None:
     engine = FrameEngine(s, transport, metrics, device=DEVICE)
     service = FrontService(
         engine,
-        transport.ready,
+        lambda: transport.ready() and not engine.lost.is_set(),
         metrics,
         max_in_flight=s.max_in_flight,
         request_deadline=s.request_deadline_seconds,
@@ -88,7 +98,7 @@ async def serve(s: EngineSettings) -> None:
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, stop.set)
-    health = asyncio.create_task(_health(transport, s.health_seconds, stop))
+    health = asyncio.create_task(_health(transport, engine, s.health_seconds, stop))
     logger.info(
         'frame engine serving on %d (transport %s, model server %s)',
         s.port,
@@ -101,8 +111,12 @@ async def serve(s: EngineSettings) -> None:
     await server.stop(grace=s.drain_seconds)
     await health
     engine.close()
+    if engine.lost.is_set():
+        logger.critical('stopped after a lost CUDA context: exiting 1 for a restart')
+        return 1
     freed = transport.close() if isinstance(transport, CudaShmTransport) else True
     logger.info('stopped (region freed here: %s)', freed)
+    return 0
 
 
 def main() -> int:
@@ -111,8 +125,7 @@ def main() -> int:
         stream=sys.stdout,
         format='%(asctime)s %(levelname)s %(name)s %(message)s',
     )
-    asyncio.run(serve(EngineSettings.from_env()))
-    return 0
+    return asyncio.run(serve(EngineSettings.from_env()))
 
 
 if __name__ == '__main__':

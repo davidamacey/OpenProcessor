@@ -8,7 +8,8 @@ Status codes (gRPC status-code guide: RESOURCE_EXHAUSTED for "some resource has 
 retryable; UNAVAILABLE for a transient condition; INVALID_ARGUMENT for a request that can never
 succeed): an overload (budget or slab wait timed out, or more requests than
 ``OP_FRAME_ENGINE_MAX_IN_FLIGHT`` admitted) is RESOURCE_EXHAUSTED; a model server that does not
-answer, an engine that is not ready or is draining is UNAVAILABLE; a malformed request or plan is
+answer, an engine that is not ready or is draining, and one whose CUDA context was lost
+(:mod:`frame_engine.cuda_fault`), is UNAVAILABLE; a malformed request or plan is
 INVALID_ARGUMENT; an unknown model is NOT_FOUND; a request still running at
 ``OP_FRAME_ENGINE_REQUEST_DEADLINE_SECONDS`` is DEADLINE_EXCEEDED (logged and counted with the
 stage it was in; the photo goes on to release what it holds, every wait in it being bounded);
@@ -30,6 +31,7 @@ import grpc
 import numpy as np
 from tritonclient.grpc import service_pb2, service_pb2_grpc
 
+from frame_engine.cuda_fault import ContextLostError
 from frame_engine.messages import EngineRequest
 from frame_engine.transport import OverloadError, TritonUnavailableError
 from src.domain import frame_engine_wire as wire
@@ -260,6 +262,8 @@ class FrontService(service_pb2_grpc.GRPCInferenceServiceServicer):
             failure = grpc.StatusCode.RESOURCE_EXHAUSTED, f'overload: {exc}'
         except TritonUnavailableError as exc:
             failure = grpc.StatusCode.UNAVAILABLE, f'model server unavailable: {exc}'
+        except ContextLostError as exc:
+            failure = grpc.StatusCode.UNAVAILABLE, f'frame engine restarting: {exc}'
         except Exception as exc:
             logger.exception('frame engine request failed')
             failure = grpc.StatusCode.INTERNAL, f'frame engine: {exc}'

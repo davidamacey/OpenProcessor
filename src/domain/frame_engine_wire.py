@@ -480,8 +480,6 @@ def _check_dependencies(plan: EnginePlan, *, has_boxes: bool) -> None:
     for name in plan.if_detected:
         if name not in CONDITIONAL or not runs(name):
             raise EnginePlanError('condition_on_unconditional', name)
-        if name in BUILT_BRANCHES:  # no conditional path in the engine yet: fail closed
-            raise EnginePlanError('bad_field', f'if_detected.{name}')
         if not runs('detect'):
             raise EnginePlanError('missing_dependency', 'detect')
 

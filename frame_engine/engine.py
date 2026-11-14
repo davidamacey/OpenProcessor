@@ -21,6 +21,11 @@ rounds of model calls and the mapping of failures. The branches themselves live 
    of the region; then host work overlaps the calls in flight (crop JPEGs).
 6. Finish: collect, blur sums of the frame and of every detection, outputs.
 
+A branch with an ``if_detected`` condition (and what needs it) skips round 1; after the settle its
+condition is checked against the detector's classes, and when it holds its round-1 calls go out
+before the round-2 calls (one extra detector round for that branch, overlapped with round 2);
+otherwise it is ``not_run`` (:class:`_Rounds`).
+
 The kernels, their order and the JPEG settings are those of the Triton prep model this engine
 replaces, so the outputs are bit-identical for the photos it decoded. Model inputs travel through
 :mod:`frame_engine.transport`.
@@ -57,6 +62,7 @@ from frame_engine.branches.detect import Detect
 from frame_engine.branches.embed import EmbedCrops, EmbedFrame
 from frame_engine.branches.ocr import Ocr
 from frame_engine.colour import ColourStep
+from frame_engine.cuda_fault import ContextLostError, is_sticky
 from frame_engine.messages import EngineRequest, EngineResult
 from frame_engine.nvjpeg_lanes import NvJpegError, NvJpegLanes
 from frame_engine.ocr.ctc import CtcDecoder
@@ -71,7 +77,7 @@ from src.domain import frame_engine_wire as wire
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable
 
     from frame_engine.prep_geometry import JpegHeader
     from frame_engine.settings import EngineSettings
@@ -159,6 +165,10 @@ class FrameEngine:
         self.local = threading.local()
         self.memory_events = 0
         self.region_events = 0
+        #: Set for good once the CUDA context is lost (``cuda_fault``): every request is refused.
+        self.lost = threading.Event()
+        #: Raises the context's error if it is lost (any CUDA call does then).
+        self.probe_context: Callable[[], None] = _sync_stream
 
     def _reserve_budget(self, budget_mib: float) -> ByteBudget:
         """Hold the whole budget in the shared arena once, then hand it back to the pool (which
@@ -183,6 +193,8 @@ class FrameEngine:
     def run(self, request: EngineRequest) -> EngineResult:
         clock = StageClock(_sync_stream if self.s.stage_sync else None, request.enter)
         clock.add('queue', time.perf_counter() - request.arrived)
+        if self.lost.is_set():
+            raise ContextLostError('the CUDA context of this engine is lost; it is restarting')
         try:
             stream = getattr(self.local, 'stream', None)
             if stream is None:
@@ -190,6 +202,10 @@ class FrameEngine:
                 stream = self.local.stream = cp.cuda.Stream(non_blocking=True)
             with stream:
                 result = self._process(request, clock)
+        except cp.cuda.runtime.CUDARuntimeError as exc:
+            if is_sticky(exc):
+                raise self._lose(exc) from exc
+            raise
         finally:
             self.metrics.publish(clock)
         self.metrics.outcomes.labels(result.status, result.decode_route).inc()
@@ -281,6 +297,7 @@ class FrameEngine:
             if is_memory_error(exc):
                 self._note_memory_failure('decode', exc)
                 return 'gpu_memory'
+            self._check_context(exc)
             return 'decoder'
         frame = _orient(frame, header.orientation, self.alloc_stream)
         if (int(frame.shape[1]), int(frame.shape[0])) != oriented_size(header):
@@ -292,6 +309,27 @@ class FrameEngine:
             outcome = 'ignored' if header.icc else 'srgb'
         self.metrics.colour.labels(outcome).inc()
         return frame
+
+    def _check_context(self, exc: BaseException) -> None:
+        """A decoder failure is the photo's only while the context still works."""
+        if is_sticky(exc):
+            raise self._lose(exc) from exc
+        try:
+            self.probe_context()
+        except cp.cuda.runtime.CUDARuntimeError as probe:
+            if is_sticky(probe):
+                raise self._lose(probe) from exc
+            raise
+
+    def _lose(self, exc: BaseException) -> ContextLostError:
+        """Mark the context lost (readiness turns false, the entry point exits for a restart)."""
+        if not self.lost.is_set():
+            self.lost.set()
+            self.metrics.context_lost.labels(str(getattr(exc, 'status', 'unknown'))).inc()
+            logger.critical(
+                'CUDA context lost (%s: %s): refusing work, exiting', type(exc).__name__, exc
+            )
+        return ContextLostError(f'CUDA context lost: {exc}')
 
     def _decoder(self) -> CtcDecoder:
         """The recogniser's dictionary, read on the first ``ocr`` photo (a missing file fails
@@ -321,52 +359,123 @@ class FrameEngine:
     def _branches(self, request: EngineRequest, photo: Photo) -> EngineResult:
         plan = request.plan
         states = self._initial_states(plan)
-        calls = photo.calls
         if request.boxes is not None:
             photo.rects = stored_box_rects(request.boxes, *photo.size)
-        branches = self._plan_branches(plan)
-        failed: set[int] = set()
-
-        def phase(hook: Callable[[Branch], Callable[[Photo], None]]) -> None:
-            for k, branch in enumerate(branches):
-                if k not in failed:
-                    try:
-                        hook(branch)(photo)
-                    except (ModelCallError, DependencyFailedError) as exc:
-                        failed.add(k)
-                        self._branch_failed(branch, exc, calls, states)
-
+        rounds = _Rounds(plan, photo, self._plan_branches(plan), states)
         try:
-            with calls.together():
-                phase(lambda b: b.round1)
-            phase(lambda b: b.settle)
-            phase(lambda b: b.round2)
-            phase(lambda b: b.finish)
+            rounds.run()
         finally:
-            calls.close()
-            for branch in branches:
+            photo.calls.close()
+            for branch in rounds.branches:
                 branch.close(photo)
-        for k, branch in enumerate(branches):
-            if k not in failed and branch.status is not None:
-                states[branch.status] = ('ok', '')
         return EngineResult(
-            wire.STATUS_OK, wire.DECODED_GPU, _ordered(plan, states),
+            wire.STATUS_OK, wire.DECODED_GPU, _ordered(plan, rounds.finished()),
             _ordered_outputs(plan, photo.out),
         )  # fmt: skip
 
-    @staticmethod
-    def _branch_failed(
-        branch: Branch,
-        exc: Exception,
-        calls: PhotoCalls,
+
+class _Rounds:
+    """The hooks of one photo's branches, in rounds, with the conditions and failures mapped.
+
+    Unconditional branches: round 1 (one commit), settle. Then the conditions of the plan's
+    ``if_detected`` are checked against the detector's classes; the branches whose condition holds
+    (and those that ``need`` them) send their round-1 calls now, before the round-2 calls of the
+    others, then settle; a condition that does not hold is ``not_run`` for the branch and what
+    needs it, and a detector that failed or did not run is ``dependency_failed``. Then round 2 and
+    finish for every branch still running. A plan without conditions takes the first path only.
+    """
+
+    def __init__(
+        self,
+        plan: wire.EnginePlan,
+        photo: Photo,
+        branches: list[Branch],
         states: dict[str, tuple[wire.BranchState, str]],
     ) -> None:
-        """One branch failed: its status, its calls cancelled; the others go on."""
-        calls.cancel(branch)
-        if isinstance(exc, ModelCallError):
-            logger.warning('%s: model call failed: %s', type(branch).__name__, exc)
-            reason = wire.MODEL_ERROR
-        else:
-            reason = wire.DEPENDENCY_FAILED
-        if branch.status is not None:
-            states[branch.status] = ('error', reason)
+        self.plan = plan
+        self.photo = photo
+        self.branches = branches
+        self.states = states
+        self.stopped: set[int] = set()
+        conditional = {k for k, b in enumerate(branches) if b.status in plan.if_detected}
+        self.late = conditional | {d for k in conditional for d in self._dependents(k)}
+
+    def run(self) -> None:
+        early = [k for k in range(len(self.branches)) if k not in self.late]
+        with self.photo.calls.together():
+            self._phase(lambda b: b.round1, early)
+        self._phase(lambda b: b.settle, early)
+        late = self._check_conditions()
+        if late:
+            with self.photo.calls.together():
+                self._phase(lambda b: b.round1, late)
+        self._phase(lambda b: b.round2, early)
+        if late:
+            self._phase(lambda b: b.settle, late)
+            self._phase(lambda b: b.round2, late)
+        self._phase(lambda b: b.finish, range(len(self.branches)))
+
+    def finished(self) -> dict[str, tuple[wire.BranchState, str]]:
+        for k, branch in enumerate(self.branches):
+            if k not in self.stopped and branch.status is not None:
+                self.states[branch.status] = ('ok', '')
+        return self.states
+
+    def _phase(
+        self, hook: Callable[[Branch], Callable[[Photo], None]], among: Iterable[int]
+    ) -> None:
+        for k in among:
+            if k in self.stopped:
+                continue
+            branch = self.branches[k]
+            try:
+                hook(branch)(self.photo)
+            except ModelCallError as exc:
+                logger.warning('%s: model call failed: %s', type(branch).__name__, exc)
+                self._stop(k, ('error', wire.MODEL_ERROR), ('error', wire.DEPENDENCY_FAILED))
+            except DependencyFailedError:
+                self._stop(k, ('error', wire.DEPENDENCY_FAILED), ('error', wire.DEPENDENCY_FAILED))
+
+    def _check_conditions(self) -> list[int]:
+        """The late branches still to run, after each condition was checked."""
+        classes = self.photo.classes
+        for k in sorted(self.late):
+            ids = self.plan.if_detected.get(self.branches[k].status or '')
+            if ids is None or k in self.stopped:
+                continue  # follows the branch it needs
+            if classes is None:  # the detector failed (or did not run): no answer to check
+                self._stop(k, ('error', wire.DEPENDENCY_FAILED), ('error', wire.DEPENDENCY_FAILED))
+            elif not np.isin(classes, np.array(ids, np.int32)).any():
+                self._stop(k, ('not_run', ''), ('not_run', ''))
+        return [k for k in sorted(self.late) if k not in self.stopped]
+
+    def _stop(
+        self,
+        k: int,
+        state: tuple[wire.BranchState, str],
+        dependents: tuple[wire.BranchState, str],
+    ) -> None:
+        """Branch ``k`` ends with ``state`` (its calls cancelled), what needs it with
+        ``dependents``; none of their later hooks runs."""
+        for j, st in ((k, state), *((d, dependents) for d in self._dependents(k))):
+            if j in self.stopped:
+                continue
+            self.stopped.add(j)
+            branch = self.branches[j]
+            self.photo.calls.cancel(branch)
+            if branch.status is not None:
+                self.states[branch.status] = st
+
+    def _dependents(self, k: int) -> list[int]:
+        """The branches that need ``k``, directly or through another, in plan order."""
+        start = self.branches[k].status
+        found: set[str] = set()
+        names: set[str] = set() if start is None else {start}
+        while names:
+            names = {
+                status
+                for b in self.branches
+                if (status := b.status) is not None and status not in found and names & set(b.needs)
+            }
+            found |= names
+        return [j for j, b in enumerate(self.branches) if b.status in found]

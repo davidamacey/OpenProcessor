@@ -17,6 +17,12 @@ Contract (``engine.py`` is the orchestrator; a branch is a :class:`~.base.Branch
   ``dependency_failed``), cancels that branch's calls and skips its later hooks. Anything else
   fails the photo. ``status`` is the ``branch_status`` entry the branch owns (``ok`` when its
   hooks all returned).
+* **Dependencies and conditions**: ``needs`` names the ``branch_status`` entries whose answers
+  the branch reads; when one fails or does not run, the branch ends the same way without running.
+  A branch the plan names in ``if_detected`` (and what needs it) runs late: its ``round1`` after
+  the detector's ``settle`` and only when the detector found one of the classes, sent before the
+  other branches' ``round2``; then its ``settle`` and ``round2``. Otherwise it is ``not_run``. The
+  hooks are the same; the orchestrator schedules them.
 * **Time**: wrap kernel launches and host work in ``photo.clock.stage(<stage name>)``; the calls
   clock themselves in the stage given to ``stage``/``submit``.
 
