@@ -5,7 +5,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from src.config import get_region_fields
 from src.domain.embedding_state import embedded_clause
+from src.services.curation.over_limit_memo import MEMO, bound_project_box_vector_paths
 from src.services.curation.vlm_policy import VlmPolicy
 from src.services.curation.vlm_scope import ScopeCache, daily_budget_remaining, vlm_scope_clauses
 from src.services.embedding_spaces.readers import item_vector_field
@@ -168,8 +170,9 @@ async def fetch_pending_ids(
     the VLM, under its VLM scope policy: none when the scope is ``off`` or today's
     budget is spent, and at most what is left of the budget.
 
-    ``_source: False`` returns ids only. (Not ``stored_fields: '_none_'``:
-    OpenSearch drops the ``_id`` metadata field with it too.)
+    Ids are returned; the hits carry only the box ids and assist attributes needed to skip an
+    item at the nested-document limit (:mod:`src.services.curation.over_limit_memo`), which
+    would refuse the write after the VLM call, for ever.
     ``track_total_hits: False`` skips the exact-count pass this producer
     never reads. ``exclude_ids`` (the caller's in-flight set) is pushed
     into the query itself instead of being filtered out in Python after
@@ -182,22 +185,35 @@ async def fetch_pending_ids(
     limit = batch_size if remaining is None else min(batch_size, remaining)
     if policy.scope == 'off' or limit <= 0:
         return []
-    body = {
-        'size': limit,
-        '_source': False,
-        'track_total_hits': False,
-        'query': _build_pending_query(
-            classifier_skip_conf,
-            exclude_ids=exclude_ids,
-            vector_field=await item_vector_field(),
-            policy=policy,
-            representative_ids=reps,
-        ),
-        # Oldest pending first — fairness across crops added across the
-        # run; also avoids head-of-line starvation when new crops keep
-        # arriving from ingest. crop_id tiebreaker keeps paging stable
-        # for same-timestamp crops.
-        'sort': [{'created_at': {'order': 'asc', 'unmapped_type': 'date'}}, {'crop_id': 'asc'}],
-    }
-    resp = await opensearch.search(index=items_index(), body=body)
-    return [h['_id'] for h in resp.get('hits', {}).get('hits', [])]
+    vector_field = await item_vector_field()
+    while True:
+        body = {
+            'size': limit,
+            # Box ids and assist attributes only, to count the item's nested documents.
+            '_source': [f'{get_region_fields().boxes}.box_id', 'assist'],
+            'track_total_hits': False,
+            'query': _build_pending_query(
+                classifier_skip_conf,
+                exclude_ids=[*(exclude_ids or []), *MEMO.excluded()],
+                vector_field=vector_field,
+                policy=policy,
+                representative_ids=reps,
+            ),
+            # Oldest pending first — fairness across crops added across the
+            # run; also avoids head-of-line starvation when new crops keep
+            # arriving from ingest. crop_id tiebreaker keeps paging stable
+            # for same-timestamp crops.
+            'sort': [
+                {'created_at': {'order': 'asc', 'unmapped_type': 'date'}},
+                {'crop_id': 'asc'},
+            ],
+        }
+        resp = await opensearch.search(index=items_index(), body=body)
+        hits = resp.get('hits', {}).get('hits', [])
+        kept, over = MEMO.split(hits, await bound_project_box_vector_paths())
+        if over:
+            print(f'[vlm-worker] project={slug} skipped {len(over)} item(s) over the nested limit')
+        ids = [h['_id'] for h in kept]
+        # A page of nothing but over-limit items says nothing about the work behind it.
+        if ids or len(over) < limit:
+            return ids

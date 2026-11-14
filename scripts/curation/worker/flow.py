@@ -19,6 +19,7 @@ from scripts.curation.worker.state import _ItemTask, _wait_while_gpu_claimed
 from src.core.logging import get_logger
 from src.services.curation.crop_bytes import cache_stats as crop_cache_stats
 from src.services.curation.ops_metrics import OP_DETECTION_WORKER_ITEMS_TOTAL
+from src.services.curation.over_limit_memo import MEMO
 from src.services.jobs.stream_claims import ProjectClaims
 
 
@@ -373,6 +374,7 @@ async def metrics_reporter(ctx: PipelineContext) -> None:
             out_q_depth=out_q.qsize(),
             out_q_max=out_q.maxsize,
             in_flight=in_flight_count,
+            skipped_over_nested_limit=MEMO.skipped,
             window_cps=round(window_cps, 2),
             session_processed=metrics['total_processed'],
             cache_hits=cache_hits,
