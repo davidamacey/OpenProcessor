@@ -69,6 +69,13 @@ _SHAPES: dict[str, list[int]] = {
     wire.CROP_EMBEDDED: [-1],
     wire.BLUR_SUMS: [-1, 3],
     wire.CROP_JPEGS: [-1],
+    wire.FACE_BOXES: [-1, 4],
+    wire.FACE_SCORES: [-1],
+    wire.FACE_LANDMARKS: [-1, 10],
+    wire.FACE_BLUR_SUMS: [-1, 3],
+    wire.FACE_OVERFLOW: [1],
+    wire.FACE_EMBEDDINGS: [-1, -1],
+    wire.FACE_EMBEDDED: [-1],
 }
 
 

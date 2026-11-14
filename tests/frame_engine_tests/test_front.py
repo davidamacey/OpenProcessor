@@ -29,12 +29,18 @@ DETECTOR = {'model': 'det', 'input_size': 640, 'letterbox_fill': 114}
 EMBED = {'model': 'pe', 'size': 336, 'batch': 32}
 
 
+FACES = {'detector': 'scrfd', 'input_size': 640, 'recogniser': 'arcface', 'batch': 32,
+         'score_min': 0.5, 'nms': 0.4, 'max_faces': 128}  # fmt: skip
+
+
 def _plan(branches: list[str], **over: Any) -> str:
     body: dict[str, Any] = {'version': 1, 'branches': branches, 'crops': 'none', **over}
     if 'detect' in branches:
         body.setdefault('detector', DETECTOR)
     if {'embed_frame', 'embed_crops'} & set(branches):
         body.setdefault('embed', EMBED)
+    if 'faces' in branches:
+        body.setdefault('faces', FACES)
     return json.dumps(body)
 
 
