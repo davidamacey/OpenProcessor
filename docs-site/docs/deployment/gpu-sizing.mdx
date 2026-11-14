@@ -40,6 +40,10 @@ The frame engine is a core service, so it runs on `minimal` too, where the model
 8 GB budget (8,192 MiB). There the idle engine holds 342 MiB (measured on an RTX A6000: 16 MiB
 region, 64 MiB frame budget, one lane, one worker), so `minimal` runs **about 0.35 GB over** its
 8 GB model budget; `./openprocessor gpu plan` shows the engine's share.
+A photo tagged with a wide-gamut colour profile (Display P3, Adobe RGB) is converted to sRGB on
+the card through a 48 MiB table per profile, built when the first such photo arrives and kept for
+at most `OP_FRAME_ENGINE_COLOUR_TABLES` profiles (default 2, so at most 96 MiB more, from the
+pool and outside the frame budget). The idle engine holds none.
 **Measured on an RTX A6000, Triton holds 36.5 GB with the default load list, not 17.4 GB**; set
 `OP_LOAD_PROFILE=ingest` to preload only what ingest calls and free 27.7 GB
 ([Ingest load profile and GPU memory](../operations/ingest-load-profile.mdx)). You can still set `GPU_PROFILE=full` by hand; `./openprocessor gpu plan`

@@ -10,7 +10,8 @@ rounds of model calls and the mapping of failures. The branches themselves live 
 1. Route by header (JPEG, 8-bit, 1 or 3 components, baseline, end-of-image marker present, size
    gate); anything else answers with a status (the API decodes that image on the CPU, counted).
 2. Reserve the frame's bytes (``prep_budget``, a bounded wait), nvJPEG decode (GPU Huffman lanes),
-   EXIF orientation applied on the GPU.
+   EXIF orientation applied on the GPU, then the embedded colour profile (``colour``: the frame
+   every branch reads is sRGB).
 3. Round 1: every requested branch that needs only the frame stages its input and its call (the
    detector letterbox, the whole-frame encoder square); one wait for the stream, then all those
    calls go out at once. The caller's stored ``boxes`` (the embed pass) stand in for the detector.
@@ -54,6 +55,7 @@ from frame_engine.branches.crops import CropJpegs
 from frame_engine.branches.derivatives import Derivatives
 from frame_engine.branches.detect import Detect
 from frame_engine.branches.embed import EmbedCrops, EmbedFrame
+from frame_engine.colour import ColourStep
 from frame_engine.messages import EngineRequest, EngineResult
 from frame_engine.nvjpeg_lanes import NvJpegError, NvJpegLanes
 from frame_engine.prep_budget import ByteBudget, is_memory_error, need_bytes
@@ -142,6 +144,8 @@ class FrameEngine:
         self.budget = self._reserve_budget(settings.budget_mib)
         metrics.watch_budget(self.budget)
         self.kernels = PrepKernels()
+        self.colour = ColourStep(settings.colour_tables, self.alloc_stream)
+        metrics.watch_colour(self.colour)
         self.encode_pool = ThreadPoolExecutor(settings.encode_threads, thread_name_prefix='fe-jpeg')
         self.workers = ThreadPoolExecutor(settings.workers, thread_name_prefix='fe-image')
         #: Region bytes one photo may hold with calls in flight: its worker's fair share.
@@ -275,6 +279,12 @@ class FrameEngine:
         frame = _orient(frame, header.orientation, self.alloc_stream)
         if (int(frame.shape[1]), int(frame.shape[0])) != oriented_size(header):
             return 'decoder'
+        # a profile is read for colour frames only, as the CPU route reads it for RGB images only
+        if header.components == 3:
+            outcome = self.colour.apply(frame, header.icc)
+        else:
+            outcome = 'ignored' if header.icc else 'srgb'
+        self.metrics.colour.labels(outcome).inc()
         return frame
 
     def _plan_branches(self, plan: wire.EnginePlan) -> list[Branch]:

@@ -85,6 +85,8 @@ class EngineSettings:
     #: so four budget waits stay inside the 20 s the Triton model waited before it gave up.
     budget_wait_seconds: float = 4.0
     slab_wait_seconds: float = 4.0
+    #: Profile-to-sRGB tables kept on the device (48 MiB each, from the pool, outside the budget).
+    colour_tables: int = 2
     min_megapixels: float = 0.0
     max_megapixels: float = 100.0
     jpeg_quality: int = 90
@@ -136,6 +138,7 @@ class EngineSettings:
             slab_wait_seconds=env_float(
                 'OP_FRAME_ENGINE_SLAB_WAIT_SECONDS', d.slab_wait_seconds, 0, 600
             ),
+            colour_tables=env_int('OP_FRAME_ENGINE_COLOUR_TABLES', d.colour_tables, 1, 64),
             min_megapixels=env_float('OP_FRAME_ENGINE_MIN_MEGAPIXELS', d.min_megapixels, 0, 10_000),
             max_megapixels=env_float('OP_FRAME_ENGINE_MAX_MEGAPIXELS', d.max_megapixels, 0, 10_000),
             jpeg_quality=env_int('OP_FRAME_ENGINE_JPEG_QUALITY', d.jpeg_quality, 1, 100),
