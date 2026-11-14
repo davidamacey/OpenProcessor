@@ -27,8 +27,8 @@ def fused_tensor(detections: list[Detection], *, net: int, batch: int = 1) -> np
 
 
 class GpuDecodeAbsent:
-    """A Triton pool whose repository has no ``gpu_image_prep`` model, as a server that does not
-    load it: ingest reads the failed load as "GPU decode unavailable" and decodes on the CPU."""
+    """A Triton pool that reports no model ready and loads none (a model missing from the
+    repository): a caller that asks for a model on first use sees the refusal."""
 
     async def is_model_ready(self, _model_name: str) -> bool:
         return False

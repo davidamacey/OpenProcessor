@@ -132,8 +132,7 @@ in front of PostgreSQL.
   `yolo26_small_trt` (fused `[300, 6]`), `scrfd_10g_bnkps`, `arcface_w600k_r50`,
   `mobileclip2_s2_image_encoder`, `mobileclip2_s2_text_encoder`,
   `paddleocr_det_trt`, `paddleocr_rec_trt`, `ocr_pipeline` (a BLS pipeline;
-  see [OCR.md](OCR.md)), `gpu_image_prep` (decode-once ingest, loaded on first use) and
-  the curation encoders `pe_image_encoder` (TensorRT) and `pe_text_encoder`
+  see [OCR.md](OCR.md)) and the curation encoders `pe_image_encoder` (TensorRT) and `pe_text_encoder`
   (TensorRT FP16, GPU). Dynamic batching is on; preferred sizes and instance counts are in each
   `config.pbtxt`. The API reads a detector's output format from Triton
   metadata, so YOLO11 and YOLO26 are interchangeable at `/detect`.
@@ -143,9 +142,10 @@ in front of PostgreSQL.
 - **Preprocessing** (letterbox, normalization) runs in the API on CPU before
   the request. Keep the API layer to validation and decoding; the models own the
   rest. The exception is photo ingest: with `OP_INGEST_GPU_DECODE` on, a photo at or
-  above `OP_INGEST_GPU_MIN_MEGAPIXELS` goes to the `gpu_image_prep` model, which
-  decodes it once on the GPU and builds the detector input, the PE vectors, the blur
-  scores and the crop JPEGs there. A file it declines falls back to the CPU path.
+  above `OP_INGEST_GPU_MIN_MEGAPIXELS` goes to the frame engine (`frame-engine`), which
+  decodes it once on the GPU, builds the detector input, the PE vectors, the blur
+  scores and the crop JPEGs there and calls the models in Triton as a client. A file it
+  declines falls back to the CPU path.
   Details and numbers: [PERFORMANCE.md](PERFORMANCE.md).
 - **Thread safety.** Ultralytics model objects keep internal state. The code
   creates a thin client wrapper per request rather than sharing one instance

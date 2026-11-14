@@ -64,32 +64,22 @@ Poll `GET /curation/projects/<project>/reprocess/jobs/<job_id>` until it
 finishes. `parts: ["region"]` alone leaves the edge-crop vectors unfixed. Whole-frame
 vectors are not touched. Class fields and locks are never written by this scope.
 
-### New `gpu_image_prep` files and the GPU embed route (0.7.0)
+### The GPU decode moves to the frame engine (0.7.0)
 
-0.7.0 changes the `gpu_image_prep` Triton model (an optional `boxes` input and two
-instances on the `full` profile). The GPU embed route stays off, with only a
-`reprocess_gpu_embed_model_outdated` log line, while the installed model still has the
-old files.
-
-- **Installed directory:** `./openprocessor upgrade` copies the changed model files
-  for you. Each model directory that carries a `MODEL_VERSION` file is replaced when the
-  release's version is newer than the installed one; engines and files the release does
-  not ship are never touched, and the profile step then rewrites the instance count and
-  GPU id in `config.pbtxt`. To run just that step without a full upgrade:
-
-  ```bash
-  ./openprocessor models install --only preflight
-  ```
-
-- **Checkout:** `git pull` is enough for the files (they are bind-mounted); apply the
-  profile's instance count with `./openprocessor profile`.
-
-Then restart Triton so it reloads the model, and check the route:
+0.7.0 replaces the `gpu_image_prep` Triton model with the `frame-engine` service (its own image,
+`openprocessor-frame-engine`). The upgrade pulls and digest-verifies the image like the others,
+and Triton starts with `--allow-client-shm=true` (the engine hands it model inputs through CUDA
+shared memory). Nothing to do by hand; check the decode with:
 
 ```bash
-./openprocessor restart triton-server
-./openprocessor gpu plan
+./openprocessor status       # frame-engine: healthy
+./openprocessor gpu plan     # GPU decode on or off, and the engine's memory on the Triton card
 ```
+
+The installer writes the engine's sizes for the profile into `.env`
+(`OP_FRAME_ENGINE_REGION_MIB`, `OP_FRAME_ENGINE_POOL_MIB`, `OP_FRAME_ENGINE_BUDGET_MIB`); a
+checkout applies them with `./openprocessor profile`. A `models/gpu_image_prep/` directory left in
+an installed model repository is no longer loaded and can be deleted.
 
 ### Upgrading from a release with the single API image (0.6.x and earlier)
 

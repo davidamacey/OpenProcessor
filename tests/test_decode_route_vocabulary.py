@@ -1,4 +1,4 @@
-"""The decode-route vocabulary is closed and covers every status the prep model can answer."""
+"""The decode-route vocabulary is closed and covers every status the frame engine can answer."""
 
 from __future__ import annotations
 
@@ -10,12 +10,12 @@ import pytest
 from src.domain.decode_route import DECODE_ROUTES, PREP_STATUSES, check_route, prep_status_route
 
 
-MODEL_DIR = Path(__file__).resolve().parents[1] / 'models' / 'gpu_image_prep' / '1'
+ENGINE_DIR = Path(__file__).resolve().parents[1] / 'frame_engine'
 
 
 def _returned_reasons() -> set[str]:
     """The status strings ``prep_geometry.route`` returns (all but ``gpu``)."""
-    tree = ast.parse((MODEL_DIR / 'prep_geometry.py').read_text())
+    tree = ast.parse((ENGINE_DIR / 'prep_geometry.py').read_text())
     (func,) = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == 'route']
     reasons: set[str] = set()
     for node in ast.walk(func):
@@ -26,29 +26,32 @@ def _returned_reasons() -> set[str]:
     return reasons - {'gpu', 'jpeg', 'other'}
 
 
-def _model_statuses() -> set[str]:
-    """The literals ``model.py`` passes to ``_status`` or assigns to ``reason`` (all but ``ok``)."""
-    tree = ast.parse((MODEL_DIR / 'model.py').read_text())
+def _engine_statuses() -> set[str]:
+    """The literals ``engine.py`` answers a photo with: the status it passes to ``_failed`` and
+    the reasons ``_decode`` returns."""
+    tree = ast.parse((ENGINE_DIR / 'engine.py').read_text())
     found: set[str] = set()
     for node in ast.walk(tree):
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
-            and node.func.attr == '_status'
-            and isinstance(node.args[0], ast.Constant)
+            and node.func.attr == '_failed'
+            and isinstance(node.args[1], ast.Constant)
         ):
-            found.add(str(node.args[0].value))
-        if (
-            isinstance(node, ast.Assign)
-            and isinstance(node.value, ast.Constant)
-            and any(isinstance(t, ast.Attribute) and t.attr == 'reason' for t in node.targets)
-        ):
-            found.add(str(node.value.value))
-    return found - {'ok'}
+            found.add(str(node.args[1].value))
+        if isinstance(node, ast.FunctionDef) and node.name == '_decode':
+            found.update(
+                str(r.value.value)
+                for r in ast.walk(node)
+                if isinstance(r, ast.Return) and isinstance(r.value, ast.Constant)
+            )
+    return found
 
 
-def test_every_status_the_model_answers_has_a_route() -> None:
-    answered = _returned_reasons() | _model_statuses()
+def test_every_status_the_engine_answers_has_a_route() -> None:
+    engine = _engine_statuses()
+    assert {'over_budget', 'gpu_memory', 'decoder'} <= engine, engine
+    answered = _returned_reasons() | engine
     assert answered, 'the scan found no statuses'
     assert answered <= set(PREP_STATUSES), answered - set(PREP_STATUSES)
     for status in answered:

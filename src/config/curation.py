@@ -226,11 +226,11 @@ class CurationConfig:
     region_max_boxes_per_write: int = 500
 
     # GPU decode (#217): photos at or above the size gate are decoded once on the
-    # GPU by the gpu_image_prep Triton model, which also builds the detector letterbox, the PE
+    # GPU by the frame engine (frame_engine/), which also builds the detector letterbox, the PE
     # squares, the blur sums and the crop JPEGs. On by default (the installer writes 0 for profiles
-    # whose card has no room for its ~8.5 GB): it changes the stored numerics once (nvJPEG
-    # decode), smaller images stay on the CPU path, and any failure to load or run it falls back
-    # to the CPU path per image.
+    # whose card has no room for it): it changes the stored numerics once (nvJPEG decode), smaller
+    # images stay on the CPU path, and any failure of the engine falls back to the CPU path per
+    # image.
     ingest_gpu_decode: bool = True
     ingest_gpu_min_megapixels: float = 3.0
 

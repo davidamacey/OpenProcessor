@@ -57,21 +57,26 @@ class ImportRowMissingError(RuntimeError):
 
 @dataclass
 class IngestRuntime:
-    """What the ingest service needs that a worker builds for itself: Triton and the encoder."""
+    """What the ingest service needs that a worker builds for itself: Triton, the frame engine
+    and the encoder."""
 
     pool: AsyncTritonPool
+    engine: AsyncTritonPool
     pe_encoder: PEEncoder
 
     async def close(self) -> None:
         await self.pool.close()
+        await self.engine.close()
 
 
 async def open_ingest_runtime() -> IngestRuntime:
+    from src.clients.frame_engine import open_pool
     from src.clients.pe_encoder import PEEncoder
     from src.services.serving_router import open_routed_pool
 
     pool = await open_routed_pool(pool_size=2, max_concurrent=16)
-    return IngestRuntime(pool, PEEncoder(triton_pool=pool))
+    engine = await open_pool(pool_size=2, max_concurrent=16)
+    return IngestRuntime(pool, engine, PEEncoder(triton_pool=pool))
 
 
 async def _import_service(opensearch: Any, runtime: IngestRuntime, *, need_detector: bool) -> Any:
@@ -88,6 +93,7 @@ async def _import_service(opensearch: Any, runtime: IngestRuntime, *, need_detec
     return CurationIngestService(
         opensearch=opensearch,
         triton_pool=runtime.pool if need_detector else None,
+        frame_engine=runtime.engine if need_detector else None,
         registry=await get_class_registry().snapshot(),
         profile=profile,
         pe_encoder=runtime.pe_encoder,

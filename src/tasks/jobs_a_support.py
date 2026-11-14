@@ -46,6 +46,7 @@ class WorkerIngest:
 
     def __init__(self) -> None:
         self._pool: Any = None
+        self._engine: Any = None
         self._executor: ThreadPoolExecutor | None = None
 
     async def service(self, opensearch: Any) -> Any:
@@ -61,7 +62,10 @@ class WorkerIngest:
         from src.services.serving_router import open_routed_pool, sync_router
 
         if self._pool is None:
+            from src.clients.frame_engine import open_pool
+
             self._pool = await open_routed_pool(pool_size=4, max_concurrent=64)
+            self._engine = await open_pool(pool_size=4, max_concurrent=64)
             self._executor = ThreadPoolExecutor(max_workers=16, thread_name_prefix='job-ingest-')
             AppResources.async_triton_pool = self._pool
             AppResources.shared_executor = self._executor
@@ -82,6 +86,7 @@ class WorkerIngest:
             capture_reader=read_capture,
             location_policy=get_location_policy,
             class_ensurer=ensure_detector_class,
+            frame_engine=self._engine,
         )
 
     async def aclose(self) -> None:
@@ -91,6 +96,9 @@ class WorkerIngest:
             await self._pool.close()
             AppResources.async_triton_pool = None
             self._pool = None
+        if self._engine is not None:
+            await self._engine.close()
+            self._engine = None
         if self._executor is not None:
             self._executor.shutdown(wait=False)
             AppResources.shared_executor = None

@@ -420,41 +420,6 @@ class AsyncTritonPool:
             self._stats.active_requests -= 1
             semaphore.release()
 
-    async def stream_one(self, model_name: str, inputs: list, timeout: float = 120.0) -> Any:
-        """One request to a decoupled model (gRPC bidirectional stream), its one final response.
-
-        Decoupled models answer only on a stream; this opens one per request on a pooled
-        channel, under the same back-pressure as :meth:`infer`. No retry: the caller has a CPU
-        fallback for the image.
-        """
-        if not self._initialized or self._semaphore is None:
-            raise RuntimeError('AsyncTritonPool not initialized. Call initialize() first.')
-
-        async def _requests() -> Any:
-            yield {'model_name': model_name, 'inputs': inputs}
-
-        with self.router.route(model_name) as route:
-            await ensure_loaded(self._channels(route.url)[0], model_name)
-            async with self._semaphore:
-                client = self._channels(route.url)[await self._get_client_index(route.url)]
-                responses = client.stream_infer(_requests(), stream_timeout=timeout)
-                async for result, error in responses:
-                    if error is not None:
-                        raise error
-                    return result
-        msg = f'{model_name}: stream closed without a response'
-        raise RuntimeError(msg)
-
-    async def get_model_parameters(self, model_name: str, timeout: float = 10.0) -> dict[str, str]:
-        """The string ``parameters`` of a model's Triton configuration."""
-        if not self._initialized:
-            raise RuntimeError('AsyncTritonPool not initialized. Call initialize() first.')
-        client = await self._next_client(model_name)
-        await ensure_loaded(client, model_name)
-        config = await client.get_model_config(model_name, as_json=True, client_timeout=timeout)
-        params = config.get('config', {}).get('parameters', {})
-        return {k: str(v.get('string_value', '')) for k, v in params.items()}
-
     async def get_model_output_names(self, model_name: str, timeout: float = 10.0) -> list[str]:
         """Output tensor names from the model's Triton metadata.
 
@@ -463,14 +428,6 @@ class AsyncTritonPool:
         Raises on any Triton error — callers decide how to degrade.
         """
         return await self._metadata_names(model_name, 'outputs', timeout)
-
-    async def get_model_input_names(self, model_name: str, timeout: float = 10.0) -> list[str]:
-        """Input tensor names from the model's Triton metadata, optional inputs included.
-
-        Lets callers send an optional input only when the loaded model files declare it.
-        Raises on any Triton error.
-        """
-        return await self._metadata_names(model_name, 'inputs', timeout)
 
     async def get_model_input_datatype(
         self, model_name: str, timeout: float = 10.0, *, input_name: str = 'images'

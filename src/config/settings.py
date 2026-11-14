@@ -50,9 +50,6 @@ class TritonModelConfig:
     PE_IMAGE_MODEL = env_str('PE_IMAGE_MODEL', 'pe_image_encoder')
     PE_TEXT_MODEL = env_str('PE_TEXT_MODEL', 'pe_text_encoder')
 
-    # GPU decode (decode once, letterbox, squares, blur, crop JPEGs; Python backend)
-    GPU_IMAGE_PREP_MODEL = env_str('GPU_IMAGE_PREP_MODEL', 'gpu_image_prep')
-
 
 class Settings(BaseSettings):
     """

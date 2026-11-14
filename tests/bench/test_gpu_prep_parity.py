@@ -1,4 +1,4 @@
-"""``scripts/bench/gpu_prep_parity.py``: the comparison that gates a change to ``gpu_image_prep``."""
+"""``scripts/bench/gpu_prep_parity.py``: the comparison that gates a change to the frame engine."""
 
 from __future__ import annotations
 

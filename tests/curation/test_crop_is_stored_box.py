@@ -7,27 +7,17 @@ contain. Both decode paths now cut the image-clamped rectangle; interior boxes a
 
 from __future__ import annotations
 
-import importlib.util
 import io
-import sys
-from pathlib import Path
 
 import numpy as np
 import pytest
 from PIL import Image
 
 from curation.ingest_fakes import FakePEEncoder, _jpeg_bytes, _make_service
+from frame_engine import prep_geometry as gpu_geometry
 from src.domain.image_geometry import crop_rect
 from src.services.curation.ingest_index import crop_pil
 
-
-_PATH = Path(__file__).resolve().parents[2] / 'models' / 'gpu_image_prep' / '1' / 'prep_geometry.py'
-sys.path.insert(0, str(_PATH.parent))  # prep_geometry imports its sibling image_geometry
-_spec = importlib.util.spec_from_file_location('prep_geometry_259', _PATH)
-assert _spec is not None
-assert _spec.loader is not None
-gpu_geometry = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(gpu_geometry)
 
 W, H = 100, 80
 EDGE_BOXES = [

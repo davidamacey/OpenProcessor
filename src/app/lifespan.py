@@ -73,6 +73,9 @@ async def _start_pools(settings: Settings) -> None:
     )
     await AppResources.async_triton_pool.initialize()
     logger.info('triton_pool_initialized', channels=channels, max_concurrent=inflight)
+    from src.clients.frame_engine import open_pool
+
+    AppResources.frame_engine_pool = await open_pool(pool_size=channels, max_concurrent=inflight)
 
 
 async def _report_stored_face_data() -> None:
@@ -244,6 +247,9 @@ async def _close_triton_pool() -> None:
     if pool is not None:
         await pool.close()
         logger.info('triton_pool_closed')
+    engine, AppResources.frame_engine_pool = AppResources.frame_engine_pool, None
+    if engine is not None:
+        await engine.close()
 
 
 def _shutdown_shared_executor() -> None:

@@ -17,7 +17,7 @@ python3.12 -m venv /path/to/venvs/op-gpu-research
 ```
 
 `requirements-gpu-research.lock.txt` is the resolved `pip freeze` of the run. The scripts import
-the shipped `models/gpu_image_prep/1/` modules by path and read the detector and PE plans of a
+the shipped `frame_engine/` modules by path and read the detector and PE plans of a
 model repository read-only.
 
 ## Scripts

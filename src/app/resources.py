@@ -11,6 +11,8 @@ class AppResources:
 
     shared_executor: ThreadPoolExecutor | None = None
     async_triton_pool: AsyncTritonPool | None = None
+    #: A pool on the frame engine's address (src/clients/frame_engine.py).
+    frame_engine_pool: AsyncTritonPool | None = None
     project_registry_poll_task: asyncio.Task[None] | None = None
     ops_metrics_task: asyncio.Task[None] | None = None
     config_store_poll_task: asyncio.Task[None] | None = None
@@ -54,3 +56,10 @@ def get_async_triton_pool() -> AsyncTritonPool:
     if AppResources.async_triton_pool is None:
         raise RuntimeError('AsyncTritonPool not initialized. Call during lifespan.')
     return AppResources.async_triton_pool
+
+
+def get_frame_engine_pool() -> AsyncTritonPool:
+    """The pool on the frame engine (GPU decode of photo ingest)."""
+    if AppResources.frame_engine_pool is None:
+        raise RuntimeError('frame engine pool not initialized. Call during lifespan.')
+    return AppResources.frame_engine_pool

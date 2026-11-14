@@ -67,7 +67,7 @@ acts on). The API runs 32 uvicorn workers and every service that sets
 |---|---|---|
 | `GPU_PROFILE` | `standard` | `minimal` (under 12 GB), `small` (12-15 GB), `standard` (16-39 GB), `full` (40 GB+). Read by `./openprocessor gpu plan` and the model setup, not by compose |
 | `GPU_ID` | `0` | GPU the setup scripts measure for the profile |
-| `OP_INGEST_GPU_DECODE` | `1` for `full`, `0` for `minimal` and `standard` | Decode large photos on the GPU; costs about 8.5 GB more VRAM on the Triton card per `gpu_image_prep` instance (every profile runs one) |
+| `OP_INGEST_GPU_DECODE` | `1` for `full`, `0` for `minimal`, `small` and `standard` | Decode large photos on the GPU (the frame engine, on the Triton card; about 6 GB at its working sizes, which the installer writes for the profile) |
 | `OP_TRT_BUILD_TARGET` / `OP_TRT_WORKSPACE_GB` | unset (`small` is implied by `GPU_PROFILE=small`) | TensorRT engine build target and workspace; see [12 GB cards](../deployment/gpu-sizing.mdx#12-gb-cards) |
 | `OPENSEARCH_HEAP` | `2g` in `env.template` | OpenSearch JVM heap. The installer sets it to half of host RAM, between 2 and 30 GB, and never overwrites a value you set. Raise it for more projects: about 1 GB per 20 shards |
 

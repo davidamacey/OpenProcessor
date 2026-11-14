@@ -78,10 +78,10 @@ def test_untracked_model_in_the_seed_fails() -> None:
 
 def test_pyc_is_accepted_only_next_to_its_tracked_source() -> None:
     audit = _load()
-    tracked = TRACKED | {'src/utils/retry.py', 'models/gpu_image_prep/1/model.py'}
+    tracked = TRACKED | {'src/utils/retry.py', 'models/ocr_pipeline/1/model.py'}
     ok = '/app/src/utils/__pycache__/retry.cpython-312.pyc'
     assert audit.untracked_files(DOCKERFILE, '.', tracked, {ok}) == []
-    no_source = f'{SEED}/gpu_image_prep/1/__pycache__/foo.cpython-312.pyc'
+    no_source = f'{SEED}/ocr_pipeline/1/__pycache__/foo.cpython-312.pyc'
     orphan = '/app/src/__pycache__/ghost.cpython-312.pyc'
     assert audit.untracked_files(DOCKERFILE, '.', tracked, {no_source, orphan}) == [
         orphan,
