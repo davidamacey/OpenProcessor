@@ -46,26 +46,26 @@ The parity gate compares ONNX Runtime CPU (full 32-token input *and* the
 trimmed input) against PyTorch on the full 32-token input, over a fixed
 prompt set at batch 1 and batch 8, and fails the export below cosine 0.9999.
 
-Serving options
----------------
-1. **In-process ONNX Runtime (default, recommended).** Mount the ``.onnx``
-   into the API container and set ``OP_PE_TEXT_ONNX_PATH`` (default
-   ``/app/pytorch_models/pe_text_encoder.onnx``). ``PEEncoder`` prefers it
-   over PyTorch automatically.
-2. **Triton (optional).** ``--install-triton`` copies the graph to
-   ``<models-dir>/pe_text_encoder/1/model.onnx`` and writes a matching
-   ``config.pbtxt`` (``platform: onnxruntime_onnx``). The API then uses it
-   when Triton reports the model ready (``OP_PE_TEXT_BACKEND=auto`` with no
-   local ONNX file, or ``=triton``), and falls back to in-process encoding if
-   Triton stops answering. Remember ``--load-model=pe_text_encoder`` under
-   ``--model-control-mode=explicit``.
+Serving
+-------
+The API encodes every query through the Triton model ``pe_text_encoder``. ``--install-triton``
+builds and installs it:
+
+1. **TensorRT FP16 plan (default, ``--platform tensorrt_plan``).** FP16 is baked into the ONNX, the plan is
+   built with an optimization profile of batch 1..``--max-batch`` and 2..32 tokens, and it is compared
+   with the FP32 ONNX Runtime graph over distinct prompts of many lengths. The export REFUSES to install an
+   engine below median cosine 0.999 or p01 0.995 (``pe_text_engine.py``). Config: ``KIND_GPU``.
+2. **ONNX Runtime fallback (``--platform onnxruntime_onnx``).** Copies the graph to
+   ``<models-dir>/pe_text_encoder/1/model.onnx`` with a ``onnxruntime_onnx`` config (CPU unless ``--kind gpu``).
+
+Remember ``--load-model=pe_text_encoder`` under ``--model-control-mode=explicit``.
 
 Usage
 -----
     # ONNX + parity gate (API container: has torch + perception_models)
     docker compose run --rm model-export python /app/export/export_pe_text_encoder.py
 
-    # Also install as a Triton model
+    # Also build the TensorRT plan, gate it, and install it as the Triton model
     docker compose run --rm model-export python /app/export/export_pe_text_encoder.py \\
         --install-triton --models-dir /app/models
 
@@ -89,16 +89,26 @@ from pe_text_constants import (
     INPUT_TENSOR,
     MODELS_DIR,
     ONNX_OPSET_VERSION,
+    ORT_PLATFORM,
     OUTPUT_TENSOR,
     PARITY_MIN_COSINE,
     PARITY_PROMPTS,
     PE_VARIANT,
+    PLATFORMS,
     TRACE_BATCH,
     TRITON_MODEL_NAME,
+    TRT_PLATFORM,
 )
+from pe_text_engine import EngineGateError, build_and_gate, build_plan_bytes, gate_prompts, run_plan
 from pe_text_parity import ParityReport, benchmark, check_parity
-from pe_text_triton_config import PETextTritonConfig, install_triton_model, write_triton_config
+from pe_text_triton_config import (
+    PETextTritonConfig,
+    install_triton_model,
+    model_file_name,
+    write_triton_config,
+)
 from pe_text_validate import check_client_contract, validate_onnx
+from trt_build_settings import workspace_bytes
 
 
 logging.basicConfig(
@@ -242,10 +252,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--opset', type=int, default=ONNX_OPSET_VERSION)
     parser.add_argument('--instance-count', type=int, default=1)
     parser.add_argument(
+        '--platform',
+        choices=PLATFORMS,
+        default=TRT_PLATFORM,
+        help='Served form: TensorRT FP16 plan (default) or the ONNX Runtime fallback',
+    )
+    parser.add_argument(
         '--kind',
         choices=['cpu', 'gpu'],
-        default='cpu',
-        help='Triton instance kind (default cpu: queries are tiny and rare; keeps VRAM free)',
+        default=None,
+        help='Triton instance kind (default: gpu for the plan, cpu for the ONNX Runtime fallback)',
     )
     parser.add_argument('--gpus', type=int, nargs='+', default=[0], help='GPU ids for --kind gpu')
     parser.add_argument(
@@ -282,9 +298,57 @@ def config_from_args(args: argparse.Namespace) -> PETextTritonConfig:
         context_length=args.context_length,
         embedding_dim=args.embedding_dim,
         instance_count=args.instance_count,
-        kind='KIND_GPU' if args.kind == 'gpu' else 'KIND_CPU',
+        platform=args.platform,
+        kind='KIND_GPU'
+        if (args.kind or ('gpu' if args.platform == TRT_PLATFORM else 'cpu')) == 'gpu'
+        else 'KIND_CPU',
         gpu_ids=tuple(args.gpus),
     )
+
+
+def install_engine(
+    onnx_path: Path, tokenizer: Any, models_dir: Path, cfg: PETextTritonConfig
+) -> None:
+    """Build the FP16 plan, gate it against the FP32 ONNX graph, and install it with its config."""
+    import numpy as np
+    import onnxruntime as ort
+    from trt_utils import atomic_write_plan
+
+    session = ort.InferenceSession(str(onnx_path), providers=['CPUExecutionProvider'])
+    tokens = np.asarray(tokenizer(gate_prompts()), dtype=np.int64)
+    rows = [np.ascontiguousarray(row[None, : int(row.argmax()) + 1]) for row in tokens]
+    plan_path = models_dir / cfg.model_name / '1' / model_file_name(cfg.platform)
+
+    def install(plan: bytes) -> Path:
+        path = atomic_write_plan(plan, plan_path)
+        write_triton_config(models_dir, cfg)
+        (plan_path.parent / model_file_name(ORT_PLATFORM)).unlink(missing_ok=True)
+        return path
+
+    build_and_gate(
+        build=lambda: build_plan_bytes(
+            onnx_path, cfg.max_batch_size, workspace_bytes(cfg.model_name)
+        ),
+        run_engine=run_plan,
+        reference=lambda row: session.run([OUTPUT_TENSOR], {INPUT_TENSOR: row})[0],
+        token_rows=rows,
+        install=install,
+    )
+
+
+def install_model(
+    onnx_path: Path, tokenizer: Any, models_dir: Path, cfg: PETextTritonConfig
+) -> bool:
+    """Install the served form for ``cfg.platform``; False (nothing installed) when the engine is refused."""
+    if cfg.platform != TRT_PLATFORM:
+        install_triton_model(onnx_path, models_dir, cfg)
+        return True
+    try:
+        install_engine(onnx_path, tokenizer, models_dir, cfg)
+    except (EngineGateError, RuntimeError, ValueError) as exc:
+        logger.error(f'Engine not installed: {exc}')
+        return False
+    return True
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -351,8 +415,8 @@ def main(argv: list[str] | None = None) -> int:
         logger.error('Not installing into Triton; the graph will NOT serve PEEncoder as-is.')
         return 1
 
-    if args.install_triton:
-        install_triton_model(onnx_path, args.models_dir, cfg)
+    if args.install_triton and not install_model(onnx_path, tokenizer, args.models_dir, cfg):
+        return 1
 
     logger.info('=' * 70)
     logger.info(f'ONNX:     {onnx_path}')

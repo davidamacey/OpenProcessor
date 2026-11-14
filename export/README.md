@@ -23,7 +23,7 @@ In the `model-export` image (the `export` target of the root `Dockerfile`), neve
 | `export_pe_image_encoder.py` | PE-Core-L14-336 image encoder (curation `pe_embedding`) | ONNX + `config.pbtxt` |
 | `build_pe_trt.sh` | PE-Core ONNX → TensorRT engine (Path 1) | TensorRT engine |
 | `build_pe_ort_fallback.sh` | PE-Core ONNX served by Triton's ORT backend (Path 2) | ONNX model dir |
-| `export_pe_text_encoder.py` | PE-Core-L14-336 text encoder (semantic-search queries), parity-gated | ONNX (+ optional Triton ORT model dir) |
+| `export_pe_text_encoder.py` | PE-Core-L14-336 text encoder (semantic-search queries), parity-gated | ONNX, then the TensorRT FP16 plan (default) or the ORT fallback model dir |
 | `export_paddleocr_det.py` | PP-OCRv6 text detection | TensorRT engine |
 | `export_paddleocr_rec.py` | PP-OCRv6 text recognition | TensorRT engine |
 | `download_face_models.py` | Download pre-trained face models | PyTorch weights |
@@ -71,8 +71,9 @@ models/
 │   ├── 1/model.onnx                    #   Path 2 (ONNX Runtime) - never both
 │   └── config.pbtxt
 ├── pe_text_encoder/                    # PE-Core-L14-336 text encoder (optional)
-│   ├── 1/model.onnx                    #   --install-triton
-│   └── config.pbtxt                    #   onnxruntime_onnx, KIND_CPU
+│   ├── 1/model.plan                    #   --install-triton (TensorRT FP16), OR
+│   ├── 1/model.onnx                    #   --platform onnxruntime_onnx (fallback) - never both
+│   └── config.pbtxt                    #   tensorrt_plan, KIND_GPU (fallback: onnxruntime_onnx, KIND_CPU)
 ├── paddleocr_det_trt/                  # PP-OCRv6 detection
 │   ├── 1/model.plan
 │   └── config.pbtxt
@@ -132,7 +133,7 @@ Encoder) provides both towers of one shared 1024-d embedding space:
 | Tower | Consumer | Serving | Contract (hardcoded in `src/clients/pe_encoder.py`, `src/clients/pe_text_backends.py`) |
 |-------|----------|---------|-----------------------------------------------------|
 | Image | `PEEncoder.encode_images` → `pe_embedding` field (semantic search, near-dup, clustering, embedding viz) | Triton `pe_image_encoder`, **required** | `images` UINT8 `[B, 3, 336, 336]` → `image_embeddings` FP32 `[B, 1024]` |
-| Text  | `PEEncoder.encode_text` → `GET /curation/projects/{project}/search/text` queries | **Triton `pe_text_encoder`** only (one shared CPU instance for every uvicorn worker); there is no in-process fallback | `text_tokens` INT64 `[B, T≤32]` → `text_embeddings` FP32 `[B, 1024]` |
+| Text  | `PEEncoder.encode_text` → `GET /curation/projects/{project}/search/text` queries | **Triton `pe_text_encoder`** only (one shared GPU TensorRT FP16 instance for every uvicorn worker); there is no in-process fallback | `text_tokens` INT64 `[B, T≤32]` → `text_embeddings` FP32 `[B, 1024]` |
 
 Both embeddings come out L2-normalized. See
 [`docs/CURATION.md`](../docs/CURATION.md#models-you-must-supply) for what
@@ -147,7 +148,7 @@ make pe-export-image    # 1. image tower -> pytorch_models/pe_image_encoder.onnx
 make pe-build-trt       # 2. -> models/pe_image_encoder/1/model.plan (Path 1)
 #   make pe-build-ort   #    ...or serve the ONNX via Triton ORT (Path 2 fallback)
 make pe-export-text-triton  # 3. text tower -> pytorch_models/pe_text_encoder.onnx
-                             #    + installs models/pe_text_encoder/1/model.onnx + config.pbtxt
+                             #    + builds, gates and installs models/pe_text_encoder/1/model.plan + config.pbtxt
 # 4. load both models in Triton (explicit model control): add
 #    --load-model=pe_image_encoder and --load-model=pe_text_encoder to
 #    the triton-server command (both are in docker-compose.yml's default
@@ -264,8 +265,17 @@ Net effect for a single query: ~114 ms → ~48 ms, half the memory, a third
 of the warm-up. At batch 8 both backends are within noise once trimmed —
 the tower is weight-bandwidth bound in FP32 on this CPU.
 
-Optional Triton serving (onnxruntime backend, CPU instances by default so it
-takes no VRAM; `--kind gpu --gpus N` for GPU):
+Triton serving. `--install-triton` builds the **TensorRT FP16 plan** (default `--platform tensorrt_plan`,
+`KIND_GPU`): FP16 is baked into the ONNX (`trt_utils.bake_fp16_onnx`), the plan is built with the Python
+builder over an optimization profile of batch 1..`--max-batch` (opt 1) and 2..32 tokens (opt 12), then
+compared with the FP32 ONNX Runtime graph over a set of distinct prompts of many lengths. **The export
+refuses to install an engine below median cosine 0.999 or p01 0.995** (`pe_text_engine.py`) and leaves any
+existing plan untouched. Measured 2026-11-13 on 2,400 distinct COCO val2017 captions (RTX A6000, TensorRT
+11.4.0.106): median cosine 0.99998, p01 0.99995, min 0.99978; a batched call equals the batch-1 call to
+1.3e-5; plan 681 MiB on disk, built in 59 s.
+
+`--platform onnxruntime_onnx` is the explicit fallback (the ONNX Runtime graph, CPU instances unless
+`--kind gpu --gpus N`):
 
 ```bash
 docker compose run --rm model-export python /app/export/export_pe_text_encoder.py \
@@ -281,7 +291,7 @@ batches are accepted.
 |------|---------|
 | `--checkpoint-path`, `--no-verify-checkpoint` | As for the image exporter. |
 | `--onnx-out` | Destination (default `/app/pytorch_models/pe_text_encoder.onnx`). |
-| `--install-triton`, `--models-dir`, `--kind`, `--gpus`, `--instance-count`, `--max-batch` | Triton model-repo entry. |
+| `--install-triton`, `--models-dir`, `--platform`, `--kind`, `--gpus`, `--instance-count`, `--max-batch` | Triton model-repo entry (plan by default; `--platform onnxruntime_onnx` for the fallback). |
 | `--config-only` | Re-render only `config.pbtxt` (no torch needed). |
 | `--skip-validate`, `--skip-parity`, `--parity-threshold` | QA gates. A failed gate exits 1 and never installs into Triton. |
 | `--benchmark`, `--bench-threads`, `--bench-iterations` | Latency table. |
