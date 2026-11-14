@@ -10,7 +10,7 @@ from src.config.curation_accessors import items_index
 from src.services.curation.crop_browse import parse_crop_sort
 from src.services.curation.item_filter import ItemFilter, item_filter_clauses, visibility_clauses
 from src.services.curation.list_cursor import page_body
-from src.services.curation.wire import item_list_source_excludes, serialize_item
+from src.services.curation.wire import item_list_source_excludes, serialize_items
 from src.services.embedding_spaces.readers import item_state_fields, vector_source_excludes
 
 
@@ -83,7 +83,12 @@ def build_crop_list_query(
 
 
 def crop_list_body(
-    query: CropListQuery, *, cursor: str | None, limit: int, vector_excludes: Sequence[str]
+    query: CropListQuery,
+    *,
+    cursor: str | None,
+    limit: int,
+    vector_excludes: Sequence[str],
+    count_total: bool = True,
 ) -> dict[str, Any]:
     """The search body for one page of ``query``.
 
@@ -91,9 +96,9 @@ def crop_list_body(
     return page_body(
         {
             'query': query.query_clause,
-            # Exact total (not the default 10k cap) so the labeler shows real
-            # queue sizes for filtered views.
-            'track_total_hits': True,
+            # Exact total (not the default 10k cap) so the labeler shows real queue sizes, counted
+            # on the page that has to report it; later pages carry it in their cursor.
+            'track_total_hits': count_total,
             # Never ship the 1024-d embedding vectors or class_id_history
             # to the card grid (history is undo-only).
             '_source': {'excludes': item_list_source_excludes(vector_excludes)},
@@ -118,8 +123,11 @@ async def crops_by_ids(opensearch: Any, ids: list[str]) -> list[dict[str, Any]]:
         _source_excludes=item_list_source_excludes(await vector_source_excludes()),
     )
     state_fields = await item_state_fields()
-    return [
-        serialize_item(d.get('_source') or {}, d.get('_id', ''), state_fields=state_fields)
-        for d in (resp.get('docs') or [])
-        if d.get('found')
-    ]
+    return serialize_items(
+        [
+            (d.get('_id', ''), d.get('_source') or {})
+            for d in (resp.get('docs') or [])
+            if d.get('found')
+        ],
+        state_fields=state_fields,
+    )

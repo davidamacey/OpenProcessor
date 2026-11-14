@@ -1,6 +1,6 @@
 """The Table view: one page of detection rows or image rows with the requested columns.
 
-Detection rows are `GET /crops` rows (`build_crop_list_query`, `serialize_item`) and image rows are
+Detection rows are `GET /crops` rows (`build_crop_list_query`, `serialize_items`) and image rows are
 `GET /images` rows (`image_page`); the page differs only in its cells, which
 ``table_cells`` builds from the served wire dicts. Paging, the cursor and the filter are the
 shared ones, so the table lists exactly what the list routes list under the same request.
@@ -16,11 +16,11 @@ from src.schemas.curation.views import SortOption
 from src.services.curation import table_cells
 from src.services.curation.cluster_cards import attach_item_display_nos
 from src.services.curation.crop_listing import crop_list_body
-from src.services.curation.hidden_counts import hidden_counts
 from src.services.curation.image_join import join_truncated
 from src.services.curation.image_view import ImageQuery, image_page_counted
+from src.services.curation.list_counts import carried_counts, page_counts, page_hidden
 from src.services.curation.list_cursor import split_page
-from src.services.curation.wire import serialize_item
+from src.services.curation.wire import serialize_items
 from src.services.embedding_spaces.readers import item_state_fields, vector_source_excludes
 
 
@@ -116,24 +116,32 @@ async def detections_table(
     limit: int,
 ) -> TablePage:
     """A page of the items ``listing`` matches (raises ``CursorError`` for a foreign cursor)."""
-    body = crop_list_body(
-        listing, cursor=cursor, limit=limit, vector_excludes=await vector_source_excludes()
-    )
-    resp = await opensearch.search(index=items_index(), body=body)
-    hits, next_cursor = split_page(resp['hits']['hits'], sort_id=listing.sort_id, limit=limit)
-    state_fields = await item_state_fields()
-    wires = [
-        serialize_item(h.get('_source') or {}, h.get('_id', ''), state_fields=state_fields)
-        for h in hits
-    ]
-    await attach_item_display_nos(wires)
-    ids = [c.id for c in columns]
-    hidden = await hidden_counts(
+    carried = carried_counts(cursor, sort_id=listing.sort_id)
+    hidden = await page_hidden(
         opensearch,
+        carried,
         listing.filter_clauses,
         include_test=False,
         include_excluded='excluded' in listing.item_filter.review_status,
     )
+    body = crop_list_body(
+        listing,
+        cursor=cursor,
+        limit=limit,
+        vector_excludes=await vector_source_excludes(),
+        count_total=carried is None,
+    )
+    resp = await opensearch.search(index=items_index(), body=body)
+    counts = page_counts(carried, resp, hidden)
+    hits, next_cursor = split_page(
+        resp['hits']['hits'], sort_id=listing.sort_id, limit=limit, carry=counts.as_carry()
+    )
+    state_fields = await item_state_fields()
+    wires = serialize_items(
+        [(h.get('_id', ''), h.get('_source') or {}) for h in hits], state_fields=state_fields
+    )
+    await attach_item_display_nos(wires)
+    ids = [c.id for c in columns]
     return _page(
         'detections',
         columns,
@@ -148,10 +156,10 @@ async def detections_table(
         ],
         narrowed=not listing.item_filter.is_empty(),
         next_cursor=next_cursor,
-        total=int(resp['hits']['total']['value']),
+        total=counts.total,
         limit=limit,
         sort_applied=table_sort,
-        hidden=hidden,
+        hidden=counts.hidden,
         join_truncated=join_truncated(listing.image_join),
     )
 

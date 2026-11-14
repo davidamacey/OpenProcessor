@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import Query
+from fastapi.responses import JSONResponse
 
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._crop_params import CropBrowse
@@ -25,7 +24,7 @@ async def class_crops(
     cursor: CursorQ = None,
     limit: int = Query(50, ge=1, le=500),
     include_test: bool = False,
-) -> dict[str, Any]:
+) -> JSONResponse:
     """Crops in a single class."""
     return await list_crops(
         opensearch=opensearch,

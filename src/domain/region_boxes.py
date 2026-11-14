@@ -81,18 +81,21 @@ class RegionBox:
 
     def to_doc(self) -> dict[str, Any]:
         """The nested-list element dict, as written to OpenSearch."""
-        doc = {f.name: getattr(self, f.name) for f in fields(self)}
+        doc = {name: getattr(self, name) for name in _BOX_FIELD_NAMES}
         doc['bbox_norm'] = list(doc['bbox_norm'])
         return doc
 
     @classmethod
     def from_doc(cls, doc: dict[str, Any]) -> RegionBox:
-        known = {f.name for f in fields(cls)}
-        kwargs = {k: v for k, v in doc.items() if k in known}
+        kwargs = {k: v for k, v in doc.items() if k in _BOX_FIELD_NAME_SET}
         bbox = kwargs.get('bbox_norm')
         if bbox is not None:
             kwargs['bbox_norm'] = tuple(bbox)
         return cls(**kwargs)
+
+
+_BOX_FIELD_NAMES: tuple[str, ...] = tuple(f.name for f in fields(RegionBox))
+_BOX_FIELD_NAME_SET = frozenset(_BOX_FIELD_NAMES)
 
 
 def read_boxes(src: dict[str, Any], F: RegionFields | None = None) -> list[RegionBox]:

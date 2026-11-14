@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import HTTPException, Query
+from fastapi.responses import JSONResponse
 
 from src.config.curation_accessors import items_index
 from src.routers._errors import server_error
@@ -20,10 +21,18 @@ from src.services.curation.crop_listing import MAX_IDS, crop_list_body, crops_by
 from src.services.curation.crop_orders import ordered_crops_page
 from src.services.curation.hidden_counts import hidden_counts
 from src.services.curation.image_join import join_truncated
+from src.services.curation.list_counts import carried_counts, page_counts, page_hidden
 from src.services.curation.list_cursor import CursorError, split_page, with_tiebreak
 from src.services.curation.list_locate import locate_item
-from src.services.curation.wire import item_source_excludes, serialize_item
+from src.services.curation.wire import item_source_excludes, serialize_item, serialize_items
 from src.services.embedding_spaces.readers import item_state_fields, vector_source_excludes
+
+
+def _json(page: dict[str, Any]) -> JSONResponse:
+    """``page`` as the response body, encoded once. A plain ``dict`` return goes through
+    FastAPI's ``jsonable_encoder``, which cost about six times the item serializer per row on a
+    page of items that are already JSON types (https://fastapi.tiangolo.com/advanced/response-directly/)."""
+    return JSONResponse(page)
 
 
 @router.get('/crops', response_model=None, responses={200: {'model': CropsPageResponse}})
@@ -44,7 +53,7 @@ async def list_crops(
             )
         ),
     ] = None,
-) -> dict[str, Any]:
+) -> JSONResponse:
     """Cursor-paged crop browse with the standard filter set.
 
     ``next_cursor`` resumes the same sort; the page is as deep as the list. The computed orders
@@ -68,18 +77,21 @@ async def list_crops(
         if len(wanted) > MAX_IDS:
             raise HTTPException(status_code=400, detail=f'at most {MAX_IDS} ids per request')
         found = await crops_by_ids(opensearch, wanted)
-        return crops_page(
-            total=len(found), next_cursor=None, limit=len(wanted), crops=found, sort_applied='ids'
+        return _json(
+            crops_page(
+                total=len(found),
+                next_cursor=None,
+                limit=len(wanted),
+                crops=found,
+                sort_applied='ids',
+            )
         )
     listing = await resolve_listing(opensearch, item_filter, browse)
     narrowed = not listing.item_filter.is_empty()
+    include_excluded = browse.include_excluded or 'excluded' in listing.item_filter.review_status
     try:
-        hidden = await hidden_counts(
-            opensearch,
-            listing.filter_clauses,
-            include_test=browse.include_test,
-            include_excluded=browse.include_excluded
-            or 'excluded' in listing.item_filter.review_status,
+        carried = (
+            carried_counts(cursor, sort_id=listing.sort_id) if browse.order == 'default' else None
         )
         if browse.order != 'default':
             # Computed orders (outliers / core_first / diverse) rank the matched pool; None
@@ -106,36 +118,56 @@ async def list_crops(
             )
             if ordered is not None:
                 await attach_item_display_nos(ordered['crops'])
-                ordered['hidden'] = hidden
+                ordered['hidden'] = await hidden_counts(
+                    opensearch,
+                    listing.filter_clauses,
+                    include_test=browse.include_test,
+                    include_excluded=include_excluded,
+                )
                 ordered['join_truncated'] = join_truncated(listing.image_join)
-                return ordered
+                return _json(ordered)
+        hidden = await page_hidden(
+            opensearch,
+            carried,
+            listing.filter_clauses,
+            include_test=browse.include_test,
+            include_excluded=include_excluded,
+        )
         body = crop_list_body(
-            listing, cursor=cursor, limit=limit, vector_excludes=await vector_source_excludes()
+            listing,
+            cursor=cursor,
+            limit=limit,
+            vector_excludes=await vector_source_excludes(),
+            count_total=carried is None,
         )
         resp = await opensearch.search(index=items_index(), body=body)
+        counts = page_counts(carried, resp, hidden)
     except CursorError as exc:
         raise cursor_refused(exc) from exc
     except Exception as exc:
         raise server_error(503, 'opensearch unavailable', exc) from exc
-    total = int((resp.get('hits') or {}).get('total', {}).get('value', 0))
     hits, next_cursor = split_page(
-        (resp.get('hits') or {}).get('hits') or [], sort_id=listing.sort_id, limit=limit
+        (resp.get('hits') or {}).get('hits') or [],
+        sort_id=listing.sort_id,
+        limit=limit,
+        carry=counts.as_carry(),
     )
     state_fields = await item_state_fields()
-    crops = [
-        serialize_item(h.get('_source') or {}, h.get('_id', ''), state_fields=state_fields)
-        for h in hits
-    ]
+    crops = serialize_items(
+        [(h.get('_id', ''), h.get('_source') or {}) for h in hits], state_fields=state_fields
+    )
     await attach_item_display_nos(crops)
-    return crops_page(
-        total=total,
-        next_cursor=next_cursor,
-        limit=limit,
-        crops=crops,
-        sort_applied=listing.sort_id,
-        narrowed=narrowed,
-        hidden=hidden,
-        join_truncated=join_truncated(listing.image_join),
+    return _json(
+        crops_page(
+            total=counts.total,
+            next_cursor=next_cursor,
+            limit=limit,
+            crops=crops,
+            sort_applied=listing.sort_id,
+            narrowed=narrowed,
+            hidden=counts.hidden,
+            join_truncated=join_truncated(listing.image_join),
+        )
     )
 
 

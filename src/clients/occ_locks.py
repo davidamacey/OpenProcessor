@@ -16,7 +16,7 @@ from src.config import get_region_fields
 
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
 
 
 def is_human_marker(value: Any) -> bool:
@@ -134,16 +134,19 @@ def is_locked_geometry(source: Mapping[str, Any]) -> bool:
     )
 
 
-def is_locked_item(source: dict[str, Any], F: Any = None) -> bool:
+def is_locked_item(
+    source: dict[str, Any], F: Any = None, boxes: Sequence[Any] | None = None
+) -> bool:
     """Item-level lock test reprocess and undo use: locked class, OR a locked
     geometry, OR any locked box in the item's region list, OR a validated set
-    whose verifier is ``human``/``import``."""
+    whose verifier is ``human``/``import``. ``boxes`` are the item's already-read region boxes
+    (a caller that has them skips reading the list again)."""
     if is_locked_class(source) or is_locked_geometry(source):
         return True
     from src.domain.region_boxes import read_boxes
 
     fields = F or get_region_fields()
-    if any(is_locked_box(box) for box in read_boxes(source, fields)):
+    if any(is_locked_box(box) for box in (read_boxes(source, fields) if boxes is None else boxes)):
         return True
     return bool(source.get(fields.validated)) and source.get(fields.verifier) in ('human', 'import')
 
