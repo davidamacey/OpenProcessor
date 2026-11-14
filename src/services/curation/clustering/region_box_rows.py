@@ -17,17 +17,17 @@ rather than dropping the write.
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import aclosing
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
-
-from opensearchpy.exceptions import OpenSearchException
 
 from src.clients.occ import occ_skip_on_conflict_bulk
 from src.clients.occ_locks import is_locked_box
 from src.config import get_region_fields
 from src.core.logging import get_logger
 from src.domain.region_boxes import RegionBox, box_query, boxes_write_fields, read_boxes
+from src.services.curation.clustering.pit_pages import iter_pages
 from src.services.curation.region_box_embeddings import box_vector_source_includes, join_box_vectors
 from src.services.embedding_spaces.readers import vector_source_excludes
 
@@ -43,7 +43,6 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 _CONFLICT_RETRIES = 3
-_SCROLL_PAGE = 2000
 
 
 @dataclass(frozen=True)
@@ -93,7 +92,9 @@ async def scroll_box_rows(
     must_not: Sequence[dict[str, Any]] = (),
 ) -> list[RegionBoxRow]:
     """Every box in ``states`` with a valid stored
-    vector, from the items matching ``filters`` / not matching ``must_not``.
+    vector, read through :func:`~src.services.curation.clustering.pit_pages.iter_pages`
+    with ``_source`` (a nested ``knn_vector`` is not documented for ``docvalue_fields``, see
+    ``vector_read``), from the items matching ``filters`` / not matching ``must_not``.
 
     A box whose vector is missing or stale (the box moved since it was
     computed) is not a row: the backfill / worker re-embeds it first.
@@ -114,17 +115,15 @@ async def scroll_box_rows(
             'must_not': list(must_not),
         }
     }
-    body = {
-        'size': _SCROLL_PAGE,
-        'query': query,
-        '_source': [F.boxes, *box_vector_source_includes(F), 'class_name'],
-    }
     rows: list[RegionBoxRow] = []
-    resp = await client.search(index=index, body=body, scroll='5m')
-    scroll_id = resp.get('_scroll_id')
-    hits = resp['hits']['hits']
-    try:
-        while hits:
+    pager = iter_pages(
+        client,
+        index=index,
+        query=query,
+        source=[F.boxes, *box_vector_source_includes(F), 'class_name'],
+    )
+    async with aclosing(pager) as pages:
+        async for hits in pages:
             for hit in hits:
                 src = hit.get('_source') or {}
                 for box, vector in join_box_vectors(src, F):
@@ -138,15 +137,6 @@ async def scroll_box_rows(
                             class_name=src.get('class_name'),
                         )
                     )
-            resp = await client.scroll(scroll_id=scroll_id, scroll='5m')
-            scroll_id = resp.get('_scroll_id')
-            hits = resp['hits']['hits']
-    finally:
-        if scroll_id:
-            try:
-                await client.clear_scroll(scroll_id=scroll_id)
-            except OpenSearchException as exc:
-                logger.warning('curation_clear_scroll_failed', error=str(exc))
     rows.sort(key=lambda r: (r.crop_id, r.box_id))
     return rows
 

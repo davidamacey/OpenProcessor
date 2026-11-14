@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from src.services.curation.clustering.pit_pages import iter_pages
+from src.services.curation.clustering.vector_read import iter_vector_pages
 from src.services.near_duplicates.candidates import unit_rows
 
 
@@ -15,6 +15,8 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Iterable
 
     from opensearchpy import AsyncOpenSearch
+
+    from src.services.curation.clustering.vector_read import VectorPage
 
 MGET_CHUNK = 500
 ITEM_FIELDS = ('image_id', 'detector_class_name')
@@ -65,16 +67,31 @@ async def fetch_members(
     return found
 
 
+def _page_members(page: VectorPage, *, item: bool) -> list[MemberDoc]:
+    unit = unit_rows(page.matrix)
+    return [
+        MemberDoc(
+            doc_id,
+            unit[row],
+            source.get('image_id') if item else None,
+            source.get('detector_class_name') if item else None,
+        )
+        for row, (doc_id, source) in enumerate(zip(page.ids, page.sources, strict=True))
+    ]
+
+
 async def scan_members(
     client: AsyncOpenSearch, *, index: str, field: str, item: bool
 ) -> AsyncIterator[list[MemberDoc]]:
     """Pages of every member of the index that has a vector."""
-    source = [field, *ITEM_FIELDS] if item else [field]
-    async for hits in iter_pages(
-        client, index=index, query={'exists': {'field': field}}, source=source
+    async for page in iter_vector_pages(
+        client,
+        index=index,
+        field=field,
+        query={'exists': {'field': field}},
+        source=ITEM_FIELDS if item else (),
     ):
-        page = [_member(h['_id'], h.get('_source') or {}, field, item=item) for h in hits]
-        yield [m for m in page if m is not None]
+        yield _page_members(page, item=item)
 
 
 def stack(members: Iterable[MemberDoc]) -> tuple[list[str], np.ndarray]:
@@ -100,9 +117,8 @@ async def scan_items_of_images(
                 ]
             }
         }
-        async for hits in iter_pages(
-            client, index=index, query=query, source=[field, *ITEM_FIELDS]
+        async for page in iter_vector_pages(
+            client, index=index, field=field, query=query, source=ITEM_FIELDS
         ):
-            page = [_member(h['_id'], h.get('_source') or {}, field, item=True) for h in hits]
-            found.extend(m for m in page if m is not None)
+            found.extend(_page_members(page, item=True))
     return found

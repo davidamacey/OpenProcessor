@@ -98,3 +98,18 @@ def random_docs(
             fields['pe_embedding'] = rng.standard_normal(dim).astype(np.float32)
         docs.append((doc_id, fields))
     return docs
+
+
+def docvalue_hit(doc_id: str, vector: list[float], field: str = 'pe_embedding') -> dict[str, Any]:
+    """A hit that carries ``vector`` the way a ``docvalue_fields`` request returns it."""
+    raw = np.asarray(vector, dtype='<f4').tobytes()
+    return {'_id': doc_id, 'fields': {field: [base64.b64encode(raw).decode('ascii')]}}
+
+
+def no_point_in_time() -> Any:
+    """``create_pit`` for a mock client: the page reader then reads with a plain scroll."""
+    from unittest.mock import AsyncMock
+
+    from opensearchpy.exceptions import OpenSearchException
+
+    return AsyncMock(side_effect=OpenSearchException(400, 'point in time is not served here'))

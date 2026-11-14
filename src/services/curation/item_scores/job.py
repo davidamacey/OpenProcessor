@@ -11,13 +11,13 @@ and this module builds each *needed* pool exactly ONCE per job — never
 unconditionally, and never once per scorer — then hands each scorer the
 pool it asked for:
 
-* ``'residual'`` — :func:`clustering.residual_fetch.fetch_residual_embeddings_parallel`,
+* ``'residual'`` — :func:`clustering.residual_fetch.fetch_residual_embeddings`,
   unchanged from the original single-pool design. The OpenSearch read (with
   embeddings) is the dominant cost here (350k crops x 1024-d f32 = 1.43 GB),
   not the math, so scorers sharing this pool (``uniqueness``, ``near_dup``)
   share one fetch. ``test_holdout=true`` crops are excluded via an explicit
   ``must_not`` (belt and suspenders — they're also implicitly excluded
-  because ``fetch_residual_embeddings_parallel`` already drops
+  because ``fetch_residual_embeddings`` already drops
   ``class_validated: true`` crops, and a crop can only be
   ``test_holdout=true`` if it was ``class_validated=true`` at freeze time;
   see the reference review module's ``freeze_test_holdout``).
@@ -182,12 +182,12 @@ async def _build_pools(
     ``pool`` values actually declared by the requested scorers — a pool
     nothing asked for is never fetched."""
     from src.domain.embedding_spaces import Target
-    from src.services.curation.clustering.residual_fetch import fetch_residual_embeddings_parallel
+    from src.services.curation.clustering.residual_fetch import fetch_residual_embeddings
     from src.services.embedding_spaces.resolve import embedding_space
 
     pools: dict[str, tuple[list[str], np.ndarray]] = {}
     if 'residual' in needed:
-        pools['residual'] = await fetch_residual_embeddings_parallel(
+        pools['residual'] = await fetch_residual_embeddings(
             opensearch,
             field=(await embedding_space(Target.ITEM)).vector_field,
             # Belt-and-suspenders test_holdout exclusion — see module

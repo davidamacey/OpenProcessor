@@ -10,6 +10,7 @@ import pytest
 
 import src.services.curation.clustering.outliers as outliers_mod
 from src.services.curation.clustering.outliers import compute_outlier_order, make_cache_key
+from tests.curation.vector_os_fake import docvalue_hit, no_point_in_time
 
 
 class _FakeScrollOS:
@@ -20,9 +21,11 @@ class _FakeScrollOS:
         self._docs = docs
 
     async def search(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:
-        field = body['_source'][0]
-        hits = [{'_id': doc_id, '_source': {field: emb}} for doc_id, emb in self._docs.items()]
+        field = body['docvalue_fields'][0]
+        hits = [docvalue_hit(doc_id, emb, field) for doc_id, emb in self._docs.items()]
         return {'_scroll_id': 'scroll-1', 'hits': {'hits': hits}}
+
+    create_pit = no_point_in_time()
 
     async def scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:
         return {'_scroll_id': scroll_id, 'hits': {'hits': []}}
@@ -172,13 +175,15 @@ async def test_cache_invalidated_when_member_count_changes() -> None:
 @pytest.mark.asyncio
 async def test_members_missing_embedding_field_are_skipped() -> None:
     class _PartialOS:
+        create_pit = no_point_in_time()
+
         async def search(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:
             return {
                 '_scroll_id': 's1',
                 'hits': {
                     'hits': [
-                        {'_id': 'no-embedding', '_source': {}},
-                        {'_id': 'has-embedding', '_source': {'pe_embedding': [1.0, 0.0, 0.0]}},
+                        {'_id': 'no-embedding'},
+                        docvalue_hit('has-embedding', [1.0, 0.0, 0.0]),
                     ]
                 },
             }

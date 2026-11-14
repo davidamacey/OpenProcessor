@@ -8,7 +8,7 @@ the mean of the members' vectors and rank each member by cosine
 distance from it — farthest first. Same idea a folder-sorting utility
 used to float outliers to the top of a review folder.
 
-The expensive part is the OpenSearch scroll of the members' embeddings, so
+The expensive part is the OpenSearch read of the members' embeddings, so
 the ranked order is cached per (index, query) for a TTL. The centroid is
 stable under in-cluster edits (validating a label doesn't move it), and a
 cheap member-count check invalidates the cache when membership changes
@@ -22,10 +22,10 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from cachetools import TTLCache
-from opensearchpy.exceptions import OpenSearchException
 
 from src.config.env import env_float, env_int
 from src.core.logging import get_logger
+from src.services.curation.clustering.vector_read import read_vectors
 
 
 if TYPE_CHECKING:
@@ -34,11 +34,10 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-# Above this many members the pairwise scroll + sort isn't worth it for an
+# Above this many members the pairwise read + sort isn't worth it for an
 # interactive request — callers fall back to the default sort.
 _MAX_MEMBERS = env_int('OP_OUTLIER_MAX_MEMBERS', 20000)
 _TTL_S = env_float('OP_OUTLIER_CACHE_TTL_S', 600)
-_SCROLL_PAGE = 2000
 
 # cache_key -> {'distances': dict, 'count': int}; bounded, expires after _TTL_S
 _CACHE: TTLCache[str, dict[str, Any]] = TTLCache(maxsize=256, ttl=_TTL_S)
@@ -70,8 +69,8 @@ async def compute_centroid_distances(
         typed: dict[str, float] | None = cached['distances']
         return typed
 
-    # Count before scrolling — a cluster far past _MAX_MEMBERS should
-    # never pay for a scroll (even a partial, break-early one) just to
+    # Count before reading — a cluster far past _MAX_MEMBERS should
+    # never pay for a read (even a partial, break-early one) just to
     # discover it's too large; the exact count is cheap and decides that
     # up front.
     if current_count is None:
@@ -81,38 +80,16 @@ async def compute_centroid_distances(
         logger.info('curation_outlier_skip_too_large_precount', index=index, n_seen=current_count)
         return None
 
-    ids: list[str] = []
-    vecs: list[list[float]] = []
-    body = {'size': _SCROLL_PAGE, 'query': query, '_source': [embedding_field]}
-    resp = await client.search(index=index, body=body, scroll='2m')
-    scroll_id = resp.get('_scroll_id')
-    hits = resp['hits']['hits']
-    too_large = False
-    while hits:
-        for h in hits:
-            emb = (h.get('_source') or {}).get(embedding_field)
-            if emb is not None:
-                ids.append(h['_id'])
-                vecs.append(emb)
-        if len(ids) > _MAX_MEMBERS:
-            too_large = True
-            break
-        resp = await client.scroll(scroll_id=scroll_id, scroll='2m')
-        scroll_id = resp.get('_scroll_id')
-        hits = resp['hits']['hits']
-    if scroll_id:
-        try:
-            await client.clear_scroll(scroll_id=scroll_id)
-        except OpenSearchException as exc:
-            logger.warning('curation_outlier_clear_scroll_failed', error=str(exc))
-
-    if too_large:
-        logger.info('curation_outlier_skip_too_large', index=index, n_seen=len(ids))
+    read = await read_vectors(
+        client, index=index, field=embedding_field, query=query, max_rows=_MAX_MEMBERS
+    )
+    if read.truncated:
+        logger.info('curation_outlier_skip_too_large', index=index, n_seen=len(read.ids))
         return None
+    ids, x = read.ids, read.matrix
     if not ids:
         return {}
 
-    x = np.asarray(vecs, dtype=np.float32)
     # Unit-normalize members (the stored vectors are already L2-normed, but be safe),
     # build the centroid, normalize it, then cosine distance = 1 - cos.
     xn = x / (np.linalg.norm(x, axis=1, keepdims=True) + 1e-9)

@@ -2,14 +2,11 @@
 
 Pulls embeddings for residual crops (no confident class assigned) from the items index,
 L2-normalized, from the vector field the caller names (the project's primary item space,
-``embedding_space(Target.ITEM).vector_field``). Two variants share one residual-pool gate: a
-sequential scroll (:func:`fetch_residual_embeddings`) and a PIT + sliced parallel read
-(:func:`fetch_residual_embeddings_parallel`).
+``embedding_space(Target.ITEM).vector_field``). One read, :func:`fetch_residual_embeddings`.
 """
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -19,11 +16,13 @@ from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
 from src.domain.embedding_state import embedded_clause
 from src.domain.ingest_class_sources import confident_class_sources
-from src.services.curation.clustering.page_rows import hits_to_rows, stack_pages
-from src.utils.task_group import run_all
+from src.services.curation.clustering.pit_pages import DEFAULT_PAGE_SIZE, DEFAULT_SLICES
+from src.services.curation.clustering.vector_read import empty_matrix, read_vectors
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from opensearchpy import AsyncOpenSearch
 
 
@@ -49,17 +48,8 @@ CONFIDENT_CLASS_SOURCES = confident_class_sources()
 def _normalize_rows(matrix: np.ndarray) -> np.ndarray:
     norms = np.linalg.norm(matrix, axis=1, keepdims=True)
     norms = np.where(norms == 0, 1.0, norms)
-    return matrix / norms
-
-
-def _sorted_by_id(ids: list[str], matrix: np.ndarray) -> tuple[list[str], np.ndarray]:
-    """The pool in document-id order, so a fit is a function of the document set (#372).
-
-    The fetch order is the shard and ingest order, and k-means picks its initial centroids and
-    training sample by row position: the same documents in another order gave another partition.
-    """
-    order = sorted(range(len(ids)), key=ids.__getitem__)
-    return [ids[i] for i in order], matrix[order]
+    matrix /= norms
+    return matrix
 
 
 def residual_pool_query(*, field: str, extra_must: list[dict[str, Any]] | None) -> dict[str, Any]:
@@ -95,221 +85,45 @@ async def _precount(client: AsyncOpenSearch, query: dict[str, Any], progress: An
     return total_estimate
 
 
+def _progress_hook(progress: Any | None, total_estimate: int) -> Callable[[int], None] | None:
+    if progress is None:
+        return None
+
+    def on_page(n_rows: int) -> None:
+        progress.update(processed=n_rows, total=total_estimate or n_rows)
+        progress.raise_if_cancelled()
+
+    return on_page
+
+
 async def fetch_residual_embeddings(
     client: AsyncOpenSearch,
     *,
     field: str,
     extra_must: list[dict[str, Any]] | None = None,
+    n_slices: int = DEFAULT_SLICES,
+    page_size: int = DEFAULT_PAGE_SIZE,
     progress: Any | None = None,
 ) -> tuple[list[str], np.ndarray]:
-    """Pull unvalidated crops that have a vector in ``field`` (the residual pool).
+    """Unvalidated crops that have a vector in ``field`` (the residual pool), by document id.
 
-    When ``progress`` is supplied, the scroll loop updates
-    ``processed`` after each page and checks the cancel sentinel so an
-    operator-initiated cancel takes effect within a single scroll
-    batch (~50 ms) instead of waiting for the full fetch to finish.
+    One read (:func:`~src.services.curation.clustering.vector_read.read_vectors`: sliced
+    point-in-time pages read at once, the vector through ``docvalue_fields``), rows L2-normalised.
+    When ``progress`` is supplied it is updated after each page and its cancel flag is checked,
+    so an operator's cancel takes effect within one page.
     """
     query = residual_pool_query(field=field, extra_must=extra_must)
     total_estimate = await _precount(client, query, progress)
 
-    body: dict[str, Any] = {
-        'size': 1000,
-        '_source': [field],
-        'query': query,
-    }
-    ids: list[str] = []
-    pages: list[np.ndarray] = []
-    resp = await client.search(index=items_index(), body=body, scroll='2m')
-    scroll_id = resp.get('_scroll_id')
-    try:
-        while True:
-            hits = resp['hits']['hits']
-            if not hits:
-                break
-            page_ids, page = hits_to_rows(hits, field)
-            if page is not None:
-                ids.extend(page_ids)
-                pages.append(page)
-            if progress is not None:
-                # Scroll-loop checkpoint: emit progress and honour cancel
-                # after each page. Per-page is ~50 ms so a cancel is felt
-                # within a fraction of a second of the click.
-                progress.update(processed=len(ids), total=total_estimate or len(ids))
-                progress.raise_if_cancelled()
-            if not scroll_id:
-                break
-            resp = await client.scroll(scroll_id=scroll_id, scroll='2m')
-            scroll_id = resp.get('_scroll_id')
-    finally:
-        if scroll_id:
-            try:
-                await client.clear_scroll(scroll_id=scroll_id)
-            except OpenSearchException as exc:
-                logger.debug('curation_embedding_clear_scroll_failed', error=str(exc))
-
-    if not pages:
-        return [], np.zeros((0, 0), dtype=np.float32)
-    return _sorted_by_id(ids, _normalize_rows(stack_pages(pages)))
-
-
-# ============================================================================
-# PIT + sliced parallel fetch — N-way concurrent variant of the scroll
-# loop above. ~8x faster on 347k docs (10 min -> ~1.5 min) by letting
-# OpenSearch coordinate N async slices over a frozen Point-In-Time view.
-#
-# Use this for the big pools; keep the scroll variant for callers
-# that don't have a sortable index or want simpler semantics.
-# ============================================================================
-
-
-PARALLEL_FETCH_DEFAULT_SLICES = 8
-PARALLEL_FETCH_PAGE_SIZE = 2000
-PARALLEL_FETCH_PIT_KEEPALIVE = '5m'
-
-
-async def _create_pit(client: AsyncOpenSearch) -> str:
-    pit_resp = await client.create_pit(
+    read = await read_vectors(
+        client,
         index=items_index(),
-        keep_alive=PARALLEL_FETCH_PIT_KEEPALIVE,
+        field=field,
+        query=query,
+        on_page=_progress_hook(progress, total_estimate),
+        n_slices=n_slices,
+        page_size=page_size,
     )
-    pit_id = pit_resp.get('pit_id') or pit_resp.get('pit')
-    if not pit_id:
-        raise RuntimeError(f'create_pit returned no pit_id: {pit_resp!r}')
-    typed: str = pit_id
-    return typed
-
-
-class _SliceProgress:
-    """Progress shared across slices; integer mutation under the GIL is atomic
-    enough for an int-bucket counter, the lock keeps update + cancel check ordered."""
-
-    def __init__(self, progress: Any | None, total_estimate: int) -> None:
-        self._progress = progress
-        self._total_estimate = total_estimate
-        self._n = 0
-        self._lock = asyncio.Lock()
-
-    async def __call__(self, added: int) -> None:
-        if self._progress is None:
-            return
-        async with self._lock:
-            self._n += added
-            self._progress.update(processed=self._n, total=self._total_estimate or self._n)
-            self._progress.raise_if_cancelled()
-
-
-async def _fetch_one_slice(
-    client: AsyncOpenSearch,
-    slice_id: int,
-    *,
-    field: str,
-    query: dict[str, Any],
-    pit_id: str,
-    n_slices: int,
-    page_size: int,
-    emit_progress: _SliceProgress,
-) -> tuple[list[str], list[np.ndarray]]:
-    ids_local: list[str] = []
-    embs_local: list[np.ndarray] = []
-    search_after: list[Any] | None = None
-    while True:
-        body: dict[str, Any] = {
-            'size': page_size,
-            '_source': [field],
-            'query': query,
-            'pit': {'id': pit_id, 'keep_alive': PARALLEL_FETCH_PIT_KEEPALIVE},
-            # _shard_doc is a synthetic sort key OpenSearch exposes
-            # specifically for PIT pagination; doesn't require a
-            # mapping change. Same sort across all slices keeps the
-            # cursors comparable.
-            'sort': [{'_shard_doc': 'asc'}],
-        }
-        if n_slices > 1:
-            body['slice'] = {'id': slice_id, 'max': n_slices}
-        if search_after is not None:
-            body['search_after'] = search_after
-
-        resp = await client.search(body=body)
-        hits = resp.get('hits', {}).get('hits') or []
-        if not hits:
-            break
-        page_ids, page = hits_to_rows(hits, field)
-        if page is not None:
-            ids_local.extend(page_ids)
-            embs_local.append(page)
-        await emit_progress(len(hits))
-        # search_after cursor = sort key of the last hit. Required
-        # to continue paging within this slice.
-        last_sort = hits[-1].get('sort')
-        if not last_sort:
-            break
-        search_after = last_sort
-    return ids_local, embs_local
-
-
-async def fetch_residual_embeddings_parallel(
-    client: AsyncOpenSearch,
-    *,
-    field: str,
-    extra_must: list[dict[str, Any]] | None = None,
-    n_slices: int = PARALLEL_FETCH_DEFAULT_SLICES,
-    page_size: int = PARALLEL_FETCH_PAGE_SIZE,
-    progress: Any | None = None,
-) -> tuple[list[str], np.ndarray]:
-    """Same shape as :func:`fetch_residual_embeddings`, PIT + slice impl.
-
-    Freezes a Point-In-Time view of the index and dispatches
-    ``n_slices`` parallel async scrolls (each owning ``slice {id: i,
-    max: n_slices}``). OpenSearch partitions by shard+doc-id so the
-    slices return disjoint result sets. PIT keeps results stable even
-    if the ingest path is writing concurrently.
-
-    Falls back to the sequential scroll-based fetcher on any error
-    (older OpenSearch, missing _shard_doc sort support, etc.) so the
-    pipeline never breaks on a fetch-layer issue.
-    """
-    query = residual_pool_query(field=field, extra_must=extra_must)
-    total_estimate = await _precount(client, query, progress)
-
-    # Create a Point-In-Time. Without PIT we'd need scroll cursors per
-    # slice -- PIT is the supported pattern for sliced parallel reads.
-    try:
-        pit_id = await _create_pit(client)
-    except (OpenSearchException, RuntimeError) as exc:
-        logger.warning('curation_embedding_pit_unavailable_fallback_scroll', error=str(exc))
-        return await fetch_residual_embeddings(
-            client, field=field, extra_must=extra_must, progress=progress
-        )
-
-    emit_progress = _SliceProgress(progress, total_estimate)
-    try:
-        slice_results = await run_all(
-            [
-                _fetch_one_slice(
-                    client,
-                    slice_id,
-                    field=field,
-                    query=query,
-                    pit_id=pit_id,
-                    n_slices=n_slices,
-                    page_size=page_size,
-                    emit_progress=emit_progress,
-                )
-                for slice_id in range(n_slices)
-            ]
-        )
-    finally:
-        try:
-            await client.delete_pit(body={'pit_id': [pit_id]})
-        except OpenSearchException as exc:
-            logger.debug('curation_embedding_pit_delete_failed', error=str(exc))
-
-    ids: list[str] = []
-    embs: list[np.ndarray] = []
-    for sl_ids, sl_embs in slice_results:
-        ids.extend(sl_ids)
-        embs.extend(sl_embs)
-
-    if not embs:
-        return [], np.zeros((0, 0), dtype=np.float32)
-    return _sorted_by_id(ids, _normalize_rows(stack_pages(embs)))
+    if not read.ids:
+        return [], empty_matrix()
+    return read.ids, _normalize_rows(read.matrix)
