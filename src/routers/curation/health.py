@@ -146,9 +146,14 @@ async def curation_health(
 
     from src.services.curation.region_vocabulary import region_profile_summary
     from src.services.detection.profile_registry import get_active_region_profile
+    from src.services.embedding_spaces.readers import max_boxes_per_write
 
     active_profile = get_active_region_profile()
-    region_profile = region_profile_summary(active_profile) if active_profile is not None else None
+    region_profile = (
+        region_profile_summary(active_profile, max_boxes_per_write=await max_boxes_per_write())
+        if active_profile is not None
+        else None
+    )
 
     cfg = get_curation_config()
     return HealthResponse(

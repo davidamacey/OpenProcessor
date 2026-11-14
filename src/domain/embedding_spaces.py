@@ -26,6 +26,8 @@ MAX_LIVE_SPACES_PER_TARGET = 3
 LEGACY_ITEM_VECTOR_FIELD = 'pe_embedding'
 LEGACY_ITEM_STATE_FIELD = 'embedding_state'
 LEGACY_BOX_NESTED_PATH = 'region_box_embeddings'
+# A new box space keeps its vectors in a nested sibling named with this prefix.
+BOX_SPACE_NESTED_PREFIX = 'boxvec_'
 LEGACY_BOX_VECTOR_LEAF = 'embedding'
 
 
@@ -110,7 +112,9 @@ def physical_names(key: str, target: Target) -> PhysicalNames:
     Box spaces get their own nested sibling so one space's writer never rewrites another's.
     """
     if target is Target.BOX:
-        return PhysicalNames(f'boxvec_{key}.embedding', None, f'boxvec_{key}')
+        return PhysicalNames(
+            f'{BOX_SPACE_NESTED_PREFIX}{key}.embedding', None, f'{BOX_SPACE_NESTED_PREFIX}{key}'
+        )
     state = None if target is Target.FRAME else f'vec_{key}_state'
     return PhysicalNames(f'vec_{key}', state, None)
 

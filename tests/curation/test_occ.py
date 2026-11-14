@@ -176,6 +176,7 @@ class TestEmptyInput:
             'updated_ids': [],
             'skipped_due_to_conflict': 0,
             'skipped_ids': [],
+            'refused_over_nested_limit': 0,
             'errors': [],
         }
         client.mget.assert_not_awaited()

@@ -556,7 +556,7 @@
           },
           "limits": {
             "$ref": "#/components/schemas/RegionProfileLimits",
-            "description": "Served write-size guards. max_boxes_per_write is an abuse guard on the element count of one region-box write request, not a labeling rule -- human box lists are otherwise unbounded."
+            "description": "Served write-size guards. max_boxes_per_write is the most boxes one item may hold and one region-box write request may carry; it follows from the nested-document limit of one item document, not from a labeling rule."
           },
           "name": {
             "title": "Name",
@@ -30482,7 +30482,7 @@
         "description": "Write-size guards, never hardcoded by a client.",
         "properties": {
           "max_boxes_per_write": {
-            "description": "Abuse guard: max element count of one crop's boxes in a PUT/batch PUT, or the targets count of one batch_box_state call. See OP_REGION_MAX_BOXES_PER_WRITE.",
+            "description": "The most boxes one item may hold: max element count of one crop's boxes in a PUT/batch PUT, or the targets count of one batch_box_state call. OP_REGION_MAX_BOXES_PER_WRITE (default 74), lowered to the nested-document bound of the project's live box spaces (74, 49 or 37). A write that would take an item to 150 nested documents is refused with 422 item_over_nested_limit (OpenSearch k-NN issue 3623).",
             "title": "Max Boxes Per Write",
             "type": "integer"
           }
@@ -53528,7 +53528,7 @@
     },
     "/curation/projects/{project}/crops/{crop_id}/regions": {
       "put": {
-        "description": "Set the full per-item box list.\n\nThe full list, in display order; omitting a stored box deletes it.\nAn element is ``{box_id}`` alone for an untouched box, ``{box_id,\nbbox_norm}`` for a moved box (keeps state; a moved box is human\ngeometry, an unmoved one a confirmation), ``{box_id, state}`` /\n``{box_id, bbox_norm, state}`` to change state too, and ``{box_id:\nnull, bbox_norm, state?}`` for a new box (default ``accepted``).\n``frame: \"parent\"`` projects into the source frame\nserver-side. Optional ``region_status`` applies a\nwhole-set status to the built list in the same write;\nan empty list is the human \"no region visible\".\nA stale ``expected_region_revision`` is 409 ``region_conflict``.\nOver ``region_profile.limits.max_boxes_per_write`` is 422\n``too_many_boxes``. A ``text`` element on a text-free profile is 422\n``region_text_disabled``. An out-of-range or degenerate ``bbox_norm``\nis 422.",
+        "description": "Set the full per-item box list.\n\nThe full list, in display order; omitting a stored box deletes it.\nAn element is ``{box_id}`` alone for an untouched box, ``{box_id,\nbbox_norm}`` for a moved box (keeps state; a moved box is human\ngeometry, an unmoved one a confirmation), ``{box_id, state}`` /\n``{box_id, bbox_norm, state}`` to change state too, and ``{box_id:\nnull, bbox_norm, state?}`` for a new box (default ``accepted``).\n``frame: \"parent\"`` projects into the source frame\nserver-side. Optional ``region_status`` applies a\nwhole-set status to the built list in the same write;\nan empty list is the human \"no region visible\".\nA stale ``expected_region_revision`` is 409 ``region_conflict``.\nOver ``region_profile.limits.max_boxes_per_write`` is 422\n``too_many_boxes``; a list that would take the item to 150 nested documents\n(boxes, their vectors, assist attributes), or any write on an item that already\nholds that many, is 422 ``item_over_nested_limit`` with the limit in the body. A ``text`` element on a text-free profile is 422\n``region_text_disabled``. An out-of-range or degenerate ``bbox_norm``\nis 422.",
         "operationId": "set_crop_regions_curation_projects__project__crops__crop_id__regions_put",
         "parameters": [
           {

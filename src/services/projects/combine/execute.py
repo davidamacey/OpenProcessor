@@ -209,6 +209,7 @@ async def _copy_all(
     last: dict[str, str] = {str(k): v for k, v in resume.items()}
     chunk = int((cursor or {}).get('chunk', 0))
     report = _sum_counts((cursor or {}).get('counts'))
+    copy_ctx.over_limit_ids.extend((cursor or {}).get('over_limit_ids') or [])
     for source_index, (source, record) in enumerate(
         zip(plan.request.sources, copy_ctx.sources, strict=True)
     ):
@@ -228,7 +229,14 @@ async def _copy_all(
             report.update(counts)
             last[str(source_index)] = page[-1].image_id
             chunk += 1
-            await ctx.checkpoint({'chunk': chunk, 'last': dict(last), 'counts': dict(report)})
+            await ctx.checkpoint(
+                {
+                    'chunk': chunk,
+                    'last': dict(last),
+                    'counts': dict(report),
+                    'over_limit_ids': copy_ctx.over_limit_ids,
+                }
+            )
             seen = report['images_copied'] + report['images_duplicate']
             await ctx.progress(seen, plan.images_total, 'images', dict(report))
     return False, report
@@ -262,6 +270,9 @@ async def _finish(
             copy_ctx.client, copy_ctx.target, copy_ctx.items_index, job_id
         )
     report = {**counts, **extra}
+    if copy_ctx.over_limit_ids:
+        # Items not copied (nested-document limit, k-NN issue 3623): the ids, never a truncation.
+        report['over_nested_limit_ids'] = copy_ctx.over_limit_ids
     _check_lease(ctx)  # the holdout step is long; a takeover may have landed in it
     try:
         await settle(True)

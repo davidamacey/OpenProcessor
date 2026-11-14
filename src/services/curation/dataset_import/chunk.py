@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from src.clients.occ import occ_update_one
 from src.core.logging import get_logger
+from src.domain.nested_limit import ERROR_CODE, NestedLimitError
 from src.services.curation.dataset_import import reconcile, region_labels
 from src.services.curation.dataset_import.image_load import ImageLoadError, load_image_bytes
 from src.services.curation.dataset_import.image_plan import (
@@ -258,28 +259,33 @@ async def _import_one(
             report,
         )
     ctx.seen_images[img.imohash] = {'image_id': img.image_id, 'image_path': img.image_path}
-    if not img.created:
-        await _stamp_existing_image(ctx, img.image_id, entry, state)
-    await stamp_matched_noops(ctx, plans)
-    updates = await apply_item_updates(ctx, entry, plans, now)
-    report.items_reconciled_removed += await reconcile.remove_dropped(ctx, plan.dropped)
+    try:
+        if not img.created:
+            await _stamp_existing_image(ctx, img.image_id, entry, state)
+        await stamp_matched_noops(ctx, plans)
+        updates = await apply_item_updates(ctx, entry, plans, now)
+        report.items_reconciled_removed += await reconcile.remove_dropped(ctx, plan.dropped)
 
-    ledger_items = list(row['items'])
-    cids = outcome.crop_ids
-    n_labeled, n_standalone, n_parent = len(new.labeled), len(new.standalone), len(new.parents)
-    standalone_ids = cids[n_labeled : n_labeled + n_standalone]
-    parent_ids = cids[n_labeled + n_standalone : n_labeled + n_standalone + n_parent]
-    machine_ids = cids[n_labeled + n_standalone + n_parent :]
-    ledger_items.extend({'crop_id': cid, 'action': 'standalone'} for cid in standalone_ids)
-    ledger_items.extend({'crop_id': cid, 'action': 'parent'} for cid in parent_ids)
-    ledger_items.extend({'crop_id': cid, 'action': 'proposal'} for cid in machine_ids)
+        ledger_items = list(row['items'])
+        cids = outcome.crop_ids
+        n_labeled, n_standalone, n_parent = len(new.labeled), len(new.standalone), len(new.parents)
+        standalone_ids = cids[n_labeled : n_labeled + n_standalone]
+        parent_ids = cids[n_labeled + n_standalone : n_labeled + n_standalone + n_parent]
+        machine_ids = cids[n_labeled + n_standalone + n_parent :]
+        ledger_items.extend({'crop_id': cid, 'action': 'standalone'} for cid in standalone_ids)
+        ledger_items.extend({'crop_id': cid, 'action': 'parent'} for cid in parent_ids)
+        ledger_items.extend({'crop_id': cid, 'action': 'proposal'} for cid in machine_ids)
 
-    ledger_boxes: list[dict[str, Any]] = []
-    await _write_regions(ctx, entry, plan.attach, parent_keys, state, now, report, ledger_boxes)
+        ledger_boxes: list[dict[str, Any]] = []
+        await _write_regions(ctx, entry, plan.attach, parent_keys, state, now, report, ledger_boxes)
 
-    if plan.merge_plan is not None:
-        await note_matches(ctx, plan.merge_plan)
-        _tally_proposals(report, entry, plan.merge_plan, len(machine_ids))
+        if plan.merge_plan is not None:
+            await note_matches(ctx, plan.merge_plan)
+            _tally_proposals(report, entry, plan.merge_plan, len(machine_ids))
+    except NestedLimitError as exc:
+        # The item holds too many nested documents (k-NN issue 3623): this image's rows are
+        # refused and reported, never truncated.
+        return await _failed(ctx, base, ERROR_CODE, str(exc), report)
 
     _count_plans(report, plans, updates, n_labeled)
     report.parents_detected += n_parent

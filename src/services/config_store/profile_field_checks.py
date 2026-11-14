@@ -7,6 +7,7 @@ import re
 from typing import TYPE_CHECKING, Any
 
 from src.config.env import env_str
+from src.config.nested_limit import MAX_BOXES_PER_ITEM_DEFAULT_SPACE
 from src.domain.region_text import confusables_issue
 from src.services.config_store.pack_validation import NAME_RE, RESERVED_NAMES
 from src.services.config_store.profile_issues import region_issue as _issue
@@ -31,7 +32,8 @@ PROFILE_FIELD_RANGES: dict[str, tuple[float, float]] = {
     'text_crop_margin': (0.0, 1.0),
     'batch_limit': (1, 256),
     'input_size': (32, 2048),
-    'max_regions_per_item': (1, 64),
+    # Never above what one item may hold (k-NN issue 3623, src/config/nested_limit.py).
+    'max_regions_per_item': (1, min(64, MAX_BOXES_PER_ITEM_DEFAULT_SPACE)),
     # (0, 1] -- exclusive 0, checked separately below.
     'region_nms_iou': (0.0, 1.0),
     'gate_hit_window': (1, 1000),

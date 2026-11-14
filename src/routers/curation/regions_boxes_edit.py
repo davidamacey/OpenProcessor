@@ -21,8 +21,8 @@ from pydantic import BaseModel, Field
 
 from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.config import get_region_fields
-from src.config.curation_accessors import get_curation_config
 from src.config.region_state import RegionStatus
+from src.domain.nested_limit import NestedLimitError
 from src.domain.region_boxes import RegionBoxWriteError, read_boxes
 from src.routers.curation._common import OpenSearchDep, RegionProfileDep, router
 from src.routers.curation._error_models import REGION_PROFILE_RESPONSES
@@ -51,7 +51,11 @@ from src.services.curation.region_writes import (
     parent_to_source_bbox,
     post_write_item,
 )
-from src.services.embedding_spaces.readers import item_state_fields, vector_source_excludes
+from src.services.embedding_spaces.readers import (
+    item_state_fields,
+    max_boxes_per_write,
+    vector_source_excludes,
+)
 from src.utils.timeutil import now_iso
 
 
@@ -167,8 +171,8 @@ def _check_box_states(route: str, elements: list[Any]) -> None:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-def _too_many_boxes_check(n_boxes: int) -> None:
-    limit = get_curation_config().region_max_boxes_per_write
+async def _too_many_boxes_check(n_boxes: int) -> None:
+    limit = await max_boxes_per_write()
     if n_boxes > limit:
         raise HTTPException(
             status_code=422,
@@ -229,7 +233,7 @@ async def _write_one_boxes(opensearch: Any, crop_id: str, rec: _Recorder, writer
             refresh='wait_for',
             writer_id=writer_id,
         )
-    except OCCFinalConflictError:
+    except (OCCFinalConflictError, NestedLimitError):
         raise
     except RegionConflictError as exc:
         raise HTTPException(
@@ -309,11 +313,13 @@ async def set_crop_regions(
     an empty list is the human "no region visible".
     A stale ``expected_region_revision`` is 409 ``region_conflict``.
     Over ``region_profile.limits.max_boxes_per_write`` is 422
-    ``too_many_boxes``. A ``text`` element on a text-free profile is 422
+    ``too_many_boxes``; a list that would take the item to 150 nested documents
+    (boxes, their vectors, assist attributes), or any write on an item that already
+    holds that many, is 422 ``item_over_nested_limit`` with the limit in the body. A ``text`` element on a text-free profile is 422
     ``region_text_disabled``. An out-of-range or degenerate ``bbox_norm``
     is 422.
     """
-    _too_many_boxes_check(len(payload.boxes))
+    await _too_many_boxes_check(len(payload.boxes))
     _check_text_allowed(payload.boxes, profile)
     _check_box_states('PUT /crops/{crop_id}/regions', payload.boxes)
     _check_put_status(payload)
@@ -345,7 +351,7 @@ async def batch_set_crop_regions(
     # is trivially valid (0 items to write), but an invalid
     # `state`/oversized/text-disabled payload must still 422 even when it
     # would touch nothing, not silently short-circuit to 200.
-    _too_many_boxes_check(len(payload.boxes))
+    await _too_many_boxes_check(len(payload.boxes))
     _check_text_allowed(payload.boxes, profile)
     _check_box_states('PUT /crops/batch_regions', payload.boxes)
     _check_put_status(payload)
