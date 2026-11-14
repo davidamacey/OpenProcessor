@@ -1882,7 +1882,7 @@ under `store_coarse` cells are at most precision 15 and markers are rounded to 0
   when `status` is `failed`.
 - `BatchIngestResponse`: `status` (`success`, `partial`, `error`),
   `summary` (`successful`, `duplicates`, `failed`, `crops_indexed`,
-  `secondary_detector_failures`) and `results[]`.
+  `secondary_detector_failures`, `decode_routes`) and `results[]`.
 - Duplicates are detected by content hash (`imohash`) against the project's
   stored contents and within a batch; a file that shares an `imohash` with a
   stored file is compared by SHA-256, and only an equal SHA-256 is a duplicate
@@ -1907,7 +1907,8 @@ under `store_coarse` cells are at most precision 15 and markers are rounded to 0
   (`discovered`, `discovery_complete`, `skipped`, `ingested`, `duplicates`,
   `failed`, `processed`, `crops_indexed`, `n_embedded`, `n_not_embedded`,
   `n_embed_failed`, `in_flight`, `images_per_s`, `images_per_s_recent`, `eta_s`,
-  `elapsed_s`), `stage_s`, `attempts`, `can_cancel`, `can_resume`,
+  `elapsed_s`), `stage_s`, `decode_routes` (photos per decode route over the run, for
+  example `gpu` and `cpu_progressive`), `attempts`, `can_cancel`, `can_resume`,
   `cancel_requested`, `error`, `started_at`, `finished_at`, `poll_after_s` (null once
   the run is over). `POST /ingest/bulk` starts a run, or continues the
   interrupted, cancelled, failed or partly failed run of the same source

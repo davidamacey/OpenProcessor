@@ -138,8 +138,8 @@ async def test_run_ingest_batch_runs_its_images_under_the_budget(
         async def refresh_indexes(self) -> None:
             return None
 
-    async def no_prefill(*_a: Any, **_k: Any) -> tuple[dict, dict, dict, dict]:
-        return {}, {}, {}, {}
+    async def no_prefill(*_a: Any, **_k: Any) -> tuple[dict, dict, dict, dict, dict]:
+        return {}, {}, {}, {}, {}
 
     monkeypatch.setattr(ingest_batch, '_prefill_detections', no_prefill)
     images = [bytes([i]) * 64 for i in range(16)]

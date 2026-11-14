@@ -93,6 +93,7 @@ def run_wire(run: JobView, *, resumed: bool = False) -> BulkIngestRun:
             elapsed_s=counters.get('elapsed_s'),
         ),
         stage_s=counters.get('stage_s') or {},
+        decode_routes=counters.get('decode_routes') or {},
         attempts=max(run.attempt, 1),
         can_cancel=run.status in {'queued', 'running', 'interrupted'},
         can_resume=run.status in RESUMABLE_RUN_STATUSES,

@@ -99,6 +99,8 @@ def _images_body() -> dict[str, Any]:
                 'source_identifier': {'type': 'keyword'},
                 # BA-4: optional client-supplied tag for one upload call.
                 'ingest_run_id': {'type': 'keyword'},
+                # How the pixels were decoded (src/domain/decode_route.py); set at create only.
+                'decode_route': {'type': 'keyword'},
                 **IMAGES_WRITE_ID_MAPPING,
                 'source': {'type': 'keyword'},
                 'width': {'type': 'integer'},

@@ -43,7 +43,7 @@ def test_the_runner_counters_fill_the_progress_model_exactly() -> None:
     )
     counters = run.counters(0.0)
     served = set(BulkIngestProgress.model_fields)
-    written = set(counters) - {'stage_s'}
+    written = set(counters) - {'stage_s', 'decode_routes'}
     # elapsed_s, eta_s, images_per_s(_recent) are written; everything served is written.
     # run_wire fills ``processed`` from the job's own counter and ``skipped`` is fixed at 0.
     assert served - {'processed', 'skipped'} == written

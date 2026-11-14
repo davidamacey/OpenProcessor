@@ -4493,6 +4493,13 @@
             "title": "Cancel Requested",
             "type": "boolean"
           },
+          "decode_routes": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Decode Routes",
+            "type": "object"
+          },
           "error": {
             "anyOf": [
               {

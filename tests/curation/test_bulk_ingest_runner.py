@@ -129,6 +129,7 @@ class FakeSender:
             if self.fail_all:
                 raise sender_mod.BatchRequestError('HTTP 503: triton down')
             results = []
+            routes: dict[str, int] = {}
             for path in paths:
                 name = Path(path).name
                 if name in self.failing:
@@ -142,6 +143,9 @@ class FakeSender:
                     )
                     continue
                 status = 'duplicate' if name in self.duplicates else 'success'
+                if status == 'success':
+                    route = 'gpu' if int(Path(name).stem) % 2 == 0 else 'cpu_small'
+                    routes[route] = routes.get(route, 0) + 1
                 results.append({'status': status, 'image_path': path, 'image_id': name})
             return {
                 'summary': {
@@ -149,6 +153,7 @@ class FakeSender:
                     'n_embedded': 2 * len(paths),
                     'n_not_embedded': 0,
                     'n_embed_failed': 0,
+                    'decode_routes': routes,
                 },
                 'results': results,
             }
@@ -354,3 +359,26 @@ def test_the_run_reports_the_unreadable_entries_discovery_gave_it() -> None:
     assert result['discovered'] == 0
     assert result['unreadable'] == 2
     assert result['unreadable_samples'] == ['a.jpg']
+
+
+def test_the_run_tallies_the_decode_routes_of_the_images_it_ingested() -> None:
+    ledger, sender = MemoryLedger(_paths(10)), FakeSender(duplicates={'003.jpg'})
+    run, reporter = _run(ledger, sender)
+    result = asyncio.run(run.run())
+
+    assert result['decode_routes'] == {'gpu': 5, 'cpu_small': 4}
+    assert sum(result['decode_routes'].values()) == result['ingested']
+    assert reporter.snapshots[-1]['decode_routes'] == result['decode_routes']
+    assert JobPerfSummary.model_validate(result['perf_summary']).decode_routes == {
+        'gpu': 5,
+        'cpu_small': 4,
+    }
+
+
+def test_a_resumed_run_continues_the_decode_route_tally() -> None:
+    ledger, sender = MemoryLedger(_paths(4)), FakeSender()
+    run, reporter = _run(ledger, sender, prior={'ingested': 6, 'decode_routes': {'gpu': 6}})
+    result = asyncio.run(run.run())
+
+    assert result['decode_routes'] == {'gpu': 8, 'cpu_small': 2}
+    assert reporter.checkpoints[-1]['decode_routes'] == {'gpu': 8, 'cpu_small': 2}
