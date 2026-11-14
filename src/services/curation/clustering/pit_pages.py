@@ -22,7 +22,7 @@ from src.utils.task_group import run_all
 
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncGenerator, Sequence
 
     from opensearchpy import AsyncOpenSearch
 
@@ -34,10 +34,22 @@ DEFAULT_SLICES = 8
 DEFAULT_PAGE_SIZE = 2000
 
 
+def _fields_body(source: Sequence[str], docvalue_fields: Sequence[str]) -> dict[str, Any]:
+    """The ``_source`` / ``docvalue_fields`` part of a search body (no ``_source`` when none is wanted)."""
+    body: dict[str, Any] = {'_source': list(source) if source else False}
+    if docvalue_fields:
+        body['docvalue_fields'] = list(docvalue_fields)
+    return body
+
+
 async def _scroll_pages(
-    client: AsyncOpenSearch, index: str, query: dict[str, Any], source: list[str], page_size: int
-) -> AsyncIterator[list[dict[str, Any]]]:
-    body: dict[str, Any] = {'size': page_size, '_source': source, 'query': query}
+    client: AsyncOpenSearch,
+    index: str,
+    query: dict[str, Any],
+    fields: dict[str, Any],
+    page_size: int,
+) -> AsyncGenerator[list[dict[str, Any]], None]:
+    body: dict[str, Any] = {'size': page_size, 'query': query, **fields}
     resp = await client.search(index=index, body=body, scroll='2m')
     scroll_id = resp.get('_scroll_id')
     try:
@@ -63,11 +75,15 @@ async def iter_pages(
     *,
     index: str,
     query: dict[str, Any],
-    source: list[str],
+    source: Sequence[str],
+    docvalue_fields: Sequence[str] = (),
     n_slices: int = DEFAULT_SLICES,
     page_size: int = DEFAULT_PAGE_SIZE,
-) -> AsyncIterator[list[dict[str, Any]]]:
-    """Yield each page of hits of ``query`` (``_source`` limited to ``source``)."""
+) -> AsyncGenerator[list[dict[str, Any]], None]:
+    """Yield each page of hits of ``query``: ``_source`` limited to ``source``, and the
+    ``docvalue_fields`` (a ``knn_vector`` field: base64 float32 under ``fields``, OpenSearch 3.7,
+    https://opensearch.org/blog/retrieve-vectors-5x-faster-with-docvalue_fields-in-opensearch/)."""
+    fields = _fields_body(source, docvalue_fields)
     try:
         pit_resp = await client.create_pit(index=index, keep_alive=KEEP_ALIVE)
         pit_id = pit_resp.get('pit_id') or pit_resp.get('pit')
@@ -75,7 +91,7 @@ async def iter_pages(
             raise RuntimeError(f'create_pit returned no pit_id: {pit_resp!r}')
     except (OpenSearchException, RuntimeError) as exc:
         logger.debug('curation_pit_pages_unavailable_scroll', error=str(exc))
-        async for page in _scroll_pages(client, index, query, source, page_size):
+        async for page in _scroll_pages(client, index, query, fields, page_size):
             yield page
         return
 
@@ -86,8 +102,8 @@ async def iter_pages(
         while True:
             body: dict[str, Any] = {
                 'size': page_size,
-                '_source': source,
                 'query': query,
+                **fields,
                 'pit': {'id': pit_id, 'keep_alive': KEEP_ALIVE},
                 'sort': [{'_shard_doc': 'asc'}],
             }
@@ -107,8 +123,12 @@ async def iter_pages(
     async def run() -> None:
         try:
             await run_all([produce(i) for i in range(n_slices)])
-        finally:
+        except Exception:
+            # wake the consumer, which re-raises through ``await task``; a cancel (the consumer
+            # left) must not wait on a full queue, so it is not caught here
             await queue.put(None)
+            raise
+        await queue.put(None)
 
     task = asyncio.create_task(run())
     try:

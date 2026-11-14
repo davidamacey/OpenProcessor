@@ -29,6 +29,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from tests.curation.vector_os_fake import docvalue_hit, no_point_in_time
+
 
 class _Client(TestClient):
     """The test client with the fakes its fixture hangs on it."""
@@ -46,7 +48,8 @@ def _fake_scroll_client(ids_and_embeddings: list[tuple[str, list[float]]]) -> As
     never exceed the real 2000-doc scroll page), one ``scroll`` call ends
     the scroll with an empty page, ``clear_scroll`` is a no-op."""
     fake_os = AsyncMock()
-    hits = [{'_id': cid, '_source': {'pe_embedding': emb}} for cid, emb in ids_and_embeddings]
+    hits = [docvalue_hit(cid, emb) for cid, emb in ids_and_embeddings]
+    fake_os.create_pit = no_point_in_time()
     fake_os.search = AsyncMock(return_value={'_scroll_id': 'sid-1', 'hits': {'hits': hits}})
     fake_os.scroll = AsyncMock(return_value={'_scroll_id': 'sid-1', 'hits': {'hits': []}})
     fake_os.clear_scroll = AsyncMock(return_value=None)
@@ -414,7 +417,8 @@ def test_select_diverse_sync_path_respects_k_and_stays_in_scope(
 ) -> None:
     pool = _orthonormal_pool(6)
     select_app_client.fake_os.count = AsyncMock(return_value={'count': 6})
-    hits = [{'_id': cid, '_source': {'pe_embedding': emb}} for cid, emb in pool]
+    hits = [docvalue_hit(cid, emb) for cid, emb in pool]
+    select_app_client.fake_os.create_pit = no_point_in_time()
     select_app_client.fake_os.search = AsyncMock(
         return_value={'_scroll_id': 'sid', 'hits': {'hits': hits}}
     )

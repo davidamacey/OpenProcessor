@@ -39,12 +39,14 @@ indexes nulls (``exists`` is false for them).
 
 from __future__ import annotations
 
+import base64
 import copy
 import math
 import re
 from typing import TYPE_CHECKING, Any
 
-from opensearchpy.exceptions import NotFoundError
+import numpy as np
+from opensearchpy.exceptions import NotFoundError, OpenSearchException
 
 
 if TYPE_CHECKING:
@@ -74,6 +76,15 @@ def _values(doc: dict[str, Any], field: str) -> list[Any]:
     if isinstance(value, list):
         return [v for v in value if v is not None]
     return [value]
+
+
+def _docvalues(doc: dict[str, Any], field: str) -> list[Any]:
+    """The ``fields`` entry of a ``docvalue_fields`` request: a ``knn_vector`` (a field named
+    ``*embedding`` holding floats) comes back as one base64 little-endian float32 string, as in 3.7."""
+    values = _values(doc, field)
+    if field.endswith('embedding') and values and all(isinstance(v, float) for v in values):
+        return [base64.b64encode(np.asarray(values, dtype='<f4').tobytes()).decode('ascii')]
+    return values
 
 
 def _wildcard_regex(value: str) -> str:
@@ -255,7 +266,7 @@ def _top_hit(doc: dict[str, Any], spec: dict[str, Any]) -> dict[str, Any]:
     }
     hit: dict[str, Any] = {'_id': doc_id}
     if spec.get('docvalue_fields'):
-        hit['fields'] = {f: _values(visible, f) for f in spec['docvalue_fields']}
+        hit['fields'] = {f: _docvalues(visible, f) for f in spec['docvalue_fields']}
     source = spec.get('_source', True)
     if source is not False:
         includes = source.get('includes') if isinstance(source, dict) else None
@@ -570,6 +581,10 @@ class QueryFakeOpenSearch:
             hit.setdefault('inner_hits', {})[spec.get('name', clause['path'])] = {
                 'hits': {'total': {'value': len(matched)}, 'hits': matched[:size]}
             }
+
+    async def create_pit(self, **_kw: Any) -> dict[str, Any]:
+        # no point in time here: the page reader falls back to the scroll below
+        raise OpenSearchException(400, 'point in time is not served by this double')
 
     async def scroll(self, *, scroll_id: str, **_kw: Any) -> dict[str, Any]:
         return {'_scroll_id': scroll_id, 'hits': {'hits': []}}

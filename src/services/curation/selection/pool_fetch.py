@@ -1,6 +1,6 @@
 """Shared embedding-pool fetch for the selection overlay.
 
-Scroll-based ``ids + pe_embedding`` fetch for an arbitrary OpenSearch query,
+``ids + pe_embedding`` fetch (``read_vectors``) for an arbitrary OpenSearch query,
 capped at a caller-supplied ``cap`` — same scroll-then-break shape as
 :func:`src.services.curation.clustering.outliers.compute_outlier_order`'s
 member fetch, generalized to an arbitrary query clause instead of one
@@ -19,18 +19,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from opensearchpy.exceptions import OpenSearchException
 
-from src.core.logging import get_logger
+from src.services.curation.clustering.vector_read import read_vectors
 
 
 if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
-
-
-logger = get_logger(__name__)
-
-_SCROLL_PAGE = 2000
 
 
 def l2_normalize(x: np.ndarray) -> np.ndarray:
@@ -52,9 +46,9 @@ async def fetch_pool_embeddings(
     cap: int,
     embedding_field: str,
 ) -> tuple[list[str], np.ndarray, bool]:
-    """Scroll ``query``'s matches, collecting ``crop_id`` + ``embedding_field``.
+    """Read ``query``'s matches, collecting ``crop_id`` + ``embedding_field``.
 
-    Breaks out (without finishing the scroll) as soon as more than ``cap``
+    Stops reading as soon as more than ``cap``
     docs have been seen, mirroring ``compute_outlier_order``'s
     too-large-for-interactive-request behavior. Returns
     ``(ids, embeddings, truncated)`` — when ``truncated`` is ``True``,
@@ -68,36 +62,8 @@ async def fetch_pool_embeddings(
     if int((count_resp or {}).get('count', 0)) > cap:
         return [], np.zeros((0, 0), dtype=np.float32), True
 
-    ids: list[str] = []
-    vecs: list[list[float]] = []
-    body = {'size': _SCROLL_PAGE, 'query': query, '_source': [embedding_field]}
-    resp = await client.search(index=index, body=body, scroll='2m')
-    scroll_id = resp.get('_scroll_id')
-    hits = resp['hits']['hits']
-    truncated = False
-    while hits:
-        for h in hits:
-            emb = (h.get('_source') or {}).get(embedding_field)
-            if emb is not None:
-                ids.append(h['_id'])
-                vecs.append(emb)
-        if len(ids) > cap:
-            truncated = True
-            break
-        resp = await client.scroll(scroll_id=scroll_id, scroll='2m')
-        scroll_id = resp.get('_scroll_id')
-        hits = resp['hits']['hits']
-    if scroll_id:
-        try:
-            await client.clear_scroll(scroll_id=scroll_id)
-        except OpenSearchException as exc:
-            logger.warning('curation_select_clear_scroll_failed', error=str(exc))
-
-    if truncated:
-        return ids[:cap], np.zeros((0, 0), dtype=np.float32), True
-    if not ids:
-        return [], np.zeros((0, 0), dtype=np.float32), False
-    return ids, np.asarray(vecs, dtype=np.float32), False
+    read = await read_vectors(client, index=index, field=embedding_field, query=query, max_rows=cap)
+    return read.ids, read.matrix, read.truncated
 
 
 __all__ = ['fetch_pool_embeddings', 'l2_normalize']

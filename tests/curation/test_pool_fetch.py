@@ -11,6 +11,7 @@ from typing import Any, cast
 import pytest
 
 from src.services.curation.selection.pool_fetch import fetch_pool_embeddings
+from tests.curation.vector_os_fake import docvalue_hit, no_point_in_time
 
 
 class _CountOnlyOS:
@@ -48,9 +49,11 @@ class _ScrollOS(_CountOnlyOS):
         self._docs = docs
 
     async def search(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:
-        field = body['_source'][0]
-        hits = [{'_id': cid, '_source': {field: emb}} for cid, emb in self._docs.items()]
+        field = body['docvalue_fields'][0]
+        hits = [docvalue_hit(cid, emb, field) for cid, emb in self._docs.items()]
         return {'_scroll_id': 'sid-1', 'hits': {'hits': hits}}
+
+    create_pit = no_point_in_time()
 
     async def scroll(self, *, scroll_id: str, **kw: Any) -> dict[str, Any]:
         return {'_scroll_id': scroll_id, 'hits': {'hits': []}}

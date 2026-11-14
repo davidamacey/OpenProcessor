@@ -13,7 +13,7 @@ x-limits: &limits
 
 services:
   opensearch:
-    image: opensearchproject/opensearch:3.6.0
+    image: opensearchproject/opensearch:3.9.0
     <<: *limits
     profiles: [opensearch]
     environment:

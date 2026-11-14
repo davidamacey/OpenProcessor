@@ -90,7 +90,7 @@ async def _async_main(args: argparse.Namespace) -> int:
 
         extra_must = [{'bool': {'must_not': [{'term': {'test_holdout': True}}]}}]
         field = (await embedding_space(Target.ITEM)).vector_field
-        ids, embeddings = await residual_fetch.fetch_residual_embeddings_parallel(
+        ids, embeddings = await residual_fetch.fetch_residual_embeddings(
             client, field=field, extra_must=extra_must
         )
         if args.limit is not None:

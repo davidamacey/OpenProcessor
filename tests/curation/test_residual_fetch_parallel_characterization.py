@@ -1,4 +1,4 @@
-"""Characterization of ``fetch_residual_embeddings_parallel`` (PIT + sliced fetch).
+"""Characterization of ``fetch_residual_embeddings`` (sliced point-in-time fetch, the one residual reader).
 
 Pins the request bodies it sends (pool gate, slice and search_after paging,
 PIT keep-alive), the order and normalization of what it returns, the
@@ -19,12 +19,13 @@ from opensearchpy.exceptions import OpenSearchException
 from src.services.curation.clustering import residual_fetch
 from src.services.curation.clustering.residual_fetch import (
     CONFIDENT_CLASS_SOURCES,
-    fetch_residual_embeddings_parallel as _fetch_parallel,
+    fetch_residual_embeddings as _fetch,
 )
+from tests.curation.vector_os_fake import docvalue_hit
 
 
 FIELD = 'item_vec'
-fetch_residual_embeddings_parallel = partial(_fetch_parallel, field=FIELD)
+fetch_residual_embeddings = partial(_fetch, field=FIELD)
 
 
 class _CancelledError(Exception):
@@ -74,7 +75,7 @@ class _Client:
     def _hit(self, i: int) -> dict[str, Any]:
         h: dict[str, Any] = {
             '_id': self.docs[i][0],
-            '_source': {FIELD: self.docs[i][1]},
+            **docvalue_hit(self.docs[i][0], self.docs[i][1], FIELD),
         }
         if not self.no_sort_key:
             h['sort'] = [i]
@@ -127,9 +128,7 @@ def _unit(rows: list[list[float]]) -> np.ndarray:
 @pytest.mark.asyncio
 async def test_slices_page_with_search_after_and_return_normalized_rows_in_id_order() -> None:
     client = _Client(7)
-    ids, matrix = await fetch_residual_embeddings_parallel(
-        cast('Any', client), n_slices=3, page_size=2
-    )
+    ids, matrix = await fetch_residual_embeddings(cast('Any', client), n_slices=3, page_size=2)
     # slice 0 = d0,d3,d6; slice 1 = d1,d4; slice 2 = d2,d5 -- merged in document-id order (#372)
     assert ids == ['d0', 'd1', 'd2', 'd3', 'd4', 'd5', 'd6']
     order = [0, 1, 2, 3, 4, 5, 6]
@@ -146,7 +145,8 @@ async def test_slices_page_with_search_after_and_return_normalized_rows_in_id_or
     body = client.bodies[0]
     assert body['pit'] == {'id': 'pit-1', 'keep_alive': '5m'}
     assert body['sort'] == [{'_shard_doc': 'asc'}]
-    assert body['_source'] == [FIELD]
+    assert body['docvalue_fields'] == [FIELD]
+    assert body['_source'] is False
     assert body['slice'] == {'id': 0, 'max': 3}
     assert client.pit_requests == [{'index': client.pit_requests[0]['index'], 'keep_alive': '5m'}]
     assert client.deleted == [{'pit_id': ['pit-1']}]
@@ -155,7 +155,7 @@ async def test_slices_page_with_search_after_and_return_normalized_rows_in_id_or
 @pytest.mark.asyncio
 async def test_a_single_slice_sends_no_slice_clause() -> None:
     client = _Client(3)
-    ids, _ = await fetch_residual_embeddings_parallel(cast('Any', client), n_slices=1, page_size=10)
+    ids, _ = await fetch_residual_embeddings(cast('Any', client), n_slices=1, page_size=10)
     assert ids == ['d0', 'd1', 'd2']
     assert all('slice' not in b for b in client.bodies)
 
@@ -163,7 +163,7 @@ async def test_a_single_slice_sends_no_slice_clause() -> None:
 @pytest.mark.asyncio
 async def test_a_hit_without_a_sort_key_ends_that_slice() -> None:
     client = _Client(5, no_sort_key=True)
-    ids, _ = await fetch_residual_embeddings_parallel(cast('Any', client), n_slices=1, page_size=2)
+    ids, _ = await fetch_residual_embeddings(cast('Any', client), n_slices=1, page_size=2)
     assert ids == ['d0', 'd1']
     assert len(client.bodies) == 1
 
@@ -171,7 +171,7 @@ async def test_a_hit_without_a_sort_key_ends_that_slice() -> None:
 @pytest.mark.asyncio
 async def test_the_pool_gate_is_in_the_query() -> None:
     client = _Client(2)
-    await fetch_residual_embeddings_parallel(
+    await fetch_residual_embeddings(
         cast('Any', client), extra_must=[{'range': {'rank': {'gte': 1}}}], n_slices=1
     )
     query = client.bodies[0]['query']['bool']
@@ -189,9 +189,7 @@ async def test_the_pool_gate_is_in_the_query() -> None:
 async def test_progress_gets_a_precount_a_running_total_and_cancel_checks() -> None:
     client = _Client(5)
     progress = _Progress()
-    await fetch_residual_embeddings_parallel(
-        cast('Any', client), n_slices=1, page_size=2, progress=progress
-    )
+    await fetch_residual_embeddings(cast('Any', client), n_slices=1, page_size=2, progress=progress)
     assert client.counts[0]['body'] == {'query': client.bodies[0]['query']}
     assert progress.updates == [(0, 5), (2, 5), (4, 5), (5, 5)]
     assert progress.cancel_checks == 3
@@ -200,7 +198,7 @@ async def test_progress_gets_a_precount_a_running_total_and_cancel_checks() -> N
 @pytest.mark.asyncio
 async def test_no_progress_means_no_count_query() -> None:
     client = _Client(2)
-    await fetch_residual_embeddings_parallel(cast('Any', client), n_slices=1)
+    await fetch_residual_embeddings(cast('Any', client), n_slices=1)
     assert client.counts == []
 
 
@@ -210,7 +208,7 @@ async def test_a_failed_precount_does_not_stop_the_fetch_and_total_falls_back_to
 ):
     client = _Client(3, fail_count=True)
     progress = _Progress()
-    ids, _ = await fetch_residual_embeddings_parallel(
+    ids, _ = await fetch_residual_embeddings(
         cast('Any', client), n_slices=1, page_size=10, progress=progress
     )
     assert ids == ['d0', 'd1', 'd2']
@@ -221,7 +219,7 @@ async def test_a_failed_precount_does_not_stop_the_fetch_and_total_falls_back_to
 async def test_a_cancel_raised_by_progress_still_deletes_the_pit() -> None:
     client = _Client(6)
     with pytest.raises(_CancelledError):
-        await fetch_residual_embeddings_parallel(
+        await fetch_residual_embeddings(
             cast('Any', client), n_slices=1, page_size=2, progress=_Progress(cancel_after=2)
         )
     assert client.deleted == [{'pit_id': ['pit-1']}]
@@ -232,7 +230,7 @@ async def test_a_cancel_raised_by_progress_still_deletes_the_pit() -> None:
 async def test_without_a_pit_it_falls_back_to_the_scroll_fetch(kwargs: dict[str, Any]) -> None:
     client = _Client(4, **kwargs)
     progress = _Progress()
-    ids, matrix = await fetch_residual_embeddings_parallel(
+    ids, matrix = await fetch_residual_embeddings(
         cast('Any', client),
         n_slices=3,
         extra_must=[{'range': {'rank': {'gte': 1}}}],
@@ -242,7 +240,7 @@ async def test_without_a_pit_it_falls_back_to_the_scroll_fetch(kwargs: dict[str,
     assert np.allclose(matrix, _unit([d[1] for d in client.docs]))
     assert client.bodies == []
     assert client.scroll_searches[0]['scroll'] == '2m'
-    assert client.scroll_searches[0]['body']['size'] == 1000
+    assert client.scroll_searches[0]['body']['size'] == 2000
     assert {'range': {'rank': {'gte': 1}}} in client.scroll_searches[0]['body']['query']['bool'][
         'filter'
     ]
@@ -252,38 +250,14 @@ async def test_without_a_pit_it_falls_back_to_the_scroll_fetch(kwargs: dict[str,
 @pytest.mark.asyncio
 async def test_a_failed_pit_delete_is_swallowed() -> None:
     client = _Client(2, fail_delete_pit=True)
-    ids, _ = await fetch_residual_embeddings_parallel(cast('Any', client), n_slices=1)
+    ids, _ = await fetch_residual_embeddings(cast('Any', client), n_slices=1)
     assert ids == ['d0', 'd1']
 
 
 @pytest.mark.asyncio
 async def test_an_empty_pool_returns_empty_ids_and_a_zero_matrix() -> None:
     client = _Client(0)
-    ids, matrix = await fetch_residual_embeddings_parallel(cast('Any', client), n_slices=2)
+    ids, matrix = await fetch_residual_embeddings(cast('Any', client), n_slices=2)
     assert ids == []
     assert matrix.shape == (0, 0)
     assert matrix.dtype == np.float32
-
-
-@pytest.mark.asyncio
-async def test_the_scroll_fetch_uses_the_same_pool_gate_and_precount() -> None:
-    kwargs: dict[str, Any] = {'extra_must': [{'range': {'rank': {'gte': 1}}}]}
-    pit_client = _Client(4)
-    await fetch_residual_embeddings_parallel(cast('Any', pit_client), n_slices=1, **kwargs)
-    scroll_client = _Client(4)
-    progress = _Progress()
-    ids, matrix = await residual_fetch.fetch_residual_embeddings(
-        cast('Any', scroll_client), field=FIELD, progress=progress, **kwargs
-    )
-    assert scroll_client.scroll_searches[0]['body']['query'] == pit_client.bodies[0]['query']
-    assert scroll_client.scroll_searches[0]['body']['_source'] == [FIELD]
-    assert scroll_client.counts == [
-        {
-            'index': scroll_client.counts[0]['index'],
-            'body': {'query': pit_client.bodies[0]['query']},
-        }
-    ]
-    assert ids == ['d0', 'd1', 'd2', 'd3']
-    assert np.allclose(matrix, _unit([d[1] for d in scroll_client.docs]))
-    assert progress.updates == [(0, 4), (4, 4)]
-    assert progress.cancel_checks == 1

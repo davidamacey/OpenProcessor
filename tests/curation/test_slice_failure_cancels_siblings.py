@@ -8,7 +8,7 @@ from typing import Any, cast
 import pytest
 
 from src.services.curation.clustering.pit_pages import iter_pages
-from src.services.curation.clustering.residual_fetch import fetch_residual_embeddings_parallel
+from src.services.curation.clustering.residual_fetch import fetch_residual_embeddings
 
 
 class _SliceClient:
@@ -64,7 +64,7 @@ async def test_iter_pages_cancels_the_other_slices_when_one_fails() -> None:
 async def test_residual_fetch_cancels_the_other_slices_when_one_fails() -> None:
     client = _SliceClient()
     with pytest.raises(RuntimeError, match='shard failure'):
-        await fetch_residual_embeddings_parallel(
+        await fetch_residual_embeddings(
             cast('Any', client), field='pe_embedding', n_slices=3, page_size=1
         )
     await _no_orphans_and_no_more_searches(client)

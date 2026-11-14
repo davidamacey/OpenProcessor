@@ -15,6 +15,7 @@ import numpy as np
 from src.config.curation_accessors import items_index
 from src.domain.embedding_state import embedded_clause
 from src.domain.ingest_class_sources import confident_class_sources
+from src.services.curation.clustering.vector_read import read_vectors
 
 
 if TYPE_CHECKING:
@@ -22,8 +23,6 @@ if TYPE_CHECKING:
 
     from opensearchpy import AsyncOpenSearch
 
-PAGE = 5000
-PIT_KEEP_ALIVE = '5m'
 BOX_KEY_SEPARATOR = ':'
 GOOD_BOX_STATES: tuple[str, ...] = ('proposed', 'accepted')
 
@@ -44,38 +43,14 @@ def item_pool_query(vector_field: str, extra_must: Sequence[dict[str, Any]] = ()
 async def snapshot_items(
     client: AsyncOpenSearch, vector_field: str, extra_must: Sequence[dict[str, Any]] = ()
 ) -> tuple[list[str], np.ndarray]:
-    """``(item ids, vectors)`` sorted by id, from one point in time (PIT + ``search_after``)."""
-    index = items_index()
-    pit = (await client.create_pit(index=index, keep_alive=PIT_KEEP_ALIVE))['pit_id']
-    ids: list[str] = []
-    rows: list[list[float]] = []
-    after: list[Any] | None = None
-    try:
-        while True:
-            body: dict[str, Any] = {
-                'size': PAGE,
-                'query': item_pool_query(vector_field, extra_must),
-                '_source': [vector_field],
-                'pit': {'id': pit, 'keep_alive': PIT_KEEP_ALIVE},
-                'sort': [{'_shard_doc': 'asc'}],
-            }
-            if after is not None:
-                body['search_after'] = after
-            hits = (await client.search(body=body))['hits']['hits']
-            if not hits:
-                break
-            for hit in hits:
-                vector = (hit.get('_source') or {}).get(vector_field)
-                if vector:
-                    ids.append(hit['_id'])
-                    rows.append(vector)
-            after = hits[-1]['sort']
-    finally:
-        await client.delete_pit(body={'pit_id': [pit]})
-    if not ids:
-        return [], np.zeros((0, 0), dtype=np.float32)
-    order = sorted(range(len(ids)), key=ids.__getitem__)
-    return [ids[i] for i in order], np.asarray(rows, dtype=np.float32)[order]
+    """``(item ids, vectors)`` sorted by id, from one point in time (``read_vectors``)."""
+    read = await read_vectors(
+        client,
+        index=items_index(),
+        field=vector_field,
+        query=item_pool_query(vector_field, extra_must),
+    )
+    return read.ids, read.matrix
 
 
 async def snapshot_boxes(client: AsyncOpenSearch) -> tuple[list[str], np.ndarray]:
