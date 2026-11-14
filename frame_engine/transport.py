@@ -75,6 +75,39 @@ if TYPE_CHECKING:
 logger = logging.getLogger('frame_engine.transport')
 
 REGION_PREFIX = 'op-fe-'
+MIB = 1024 * 1024
+RECONNECT_MAX_BACKOFF_MS = 3000
+#: The whole option set of the engine's channels to the model server (tritonclient uses
+#: ``channel_args`` INSTEAD of its own defaults). Keepalive and reconnect are the API pool's values
+#: (``src/clients/triton_pool_core.py`` ``GRPC_CHANNEL_OPTIONS``; a test pins them equal, the
+#: engine image carries no ``src/clients``). gRPC keepalive guide: the client's keepalive time must
+#: not be below the server's minimum ping interval (Triton runs with
+#: ``--grpc-http2-min-recv-ping-interval-without-data=20000`` and pings without calls permitted),
+#: else the server answers GOAWAY ``too_many_pings``. gRPC connection backoff: the delay between
+#: connect attempts grows towards 120 s by default; capped, a restarted model server is reached
+#: within about ``RECONNECT_MAX_BACKOFF_MS``.
+CHANNEL_OPTIONS: tuple[tuple[str, int], ...] = (
+    ('grpc.max_send_message_length', 512 * MIB),
+    ('grpc.max_receive_message_length', 512 * MIB),
+    ('grpc.keepalive_time_ms', 30000),
+    ('grpc.keepalive_timeout_ms', 10000),
+    ('grpc.keepalive_permit_without_calls', 1),
+    ('grpc.http2.max_pings_without_data', 2),
+    ('grpc.initial_reconnect_backoff_ms', 250),
+    ('grpc.min_reconnect_backoff_ms', 250),
+    ('grpc.max_reconnect_backoff_ms', RECONNECT_MAX_BACKOFF_MS),
+)
+
+
+def channels(url: str, n: int) -> list[Any]:
+    """``n`` channels (tritonclient gRPC clients) to the model server at ``url``."""
+    import tritonclient.grpc as grpcclient  # the offline tests build transports without it
+
+    return [
+        grpcclient.InferenceServerClient(url, channel_args=list(CHANNEL_OPTIONS)) for _ in range(n)
+    ]
+
+
 _STATUS_DEADLINE = 'StatusCode.DEADLINE_EXCEEDED'
 #: Codes that mean the server or the channel is gone (retryable), with the metric reason.
 _GONE = {
