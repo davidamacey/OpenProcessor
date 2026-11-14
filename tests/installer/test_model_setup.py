@@ -4,7 +4,10 @@ logic (installer plan section 9.2, last paragraph)."""
 from __future__ import annotations
 
 import hashlib
+import json
 from typing import TYPE_CHECKING
+
+from installer_harness import REPO_ROOT
 
 
 if TYPE_CHECKING:
@@ -12,6 +15,12 @@ if TYPE_CHECKING:
 
 
 LIB = 'scripts/lib/model_setup.sh'
+FACE_MODELS = {
+    'scrfd_10g_bnkps',
+    'arcface_w600k_r50',
+    'scrfd_10g_bnkps_uint8',
+    'arcface_w600k_r50_uint8',
+}
 
 
 def _source(extra: str) -> str:
@@ -475,7 +484,7 @@ def test_faces_off_skips_the_faces_group(bash) -> None:
 def test_faces_off_leaves_the_face_models_out_of_the_required_list(bash) -> None:
     required = bash(_faces_off('model_setup_required_models "core"')).stdout.strip().split(',')
     assert 'yolov11_small_trt_end2end' in required
-    assert not {'scrfd_10g_bnkps', 'arcface_w600k_r50'} & set(required)
+    assert not FACE_MODELS & set(required)
 
 
 def test_a_malformed_faces_switch_fails_the_group_list(bash) -> None:
@@ -497,3 +506,25 @@ def test_running_only_the_faces_group_with_faces_off_fails_without_touching_dock
     assert 'failed_groups=faces' in result.stdout
     assert 'rc=1' in result.stdout
     assert not (tmp_path / 'dc.log').exists()
+
+
+def test_the_faces_group_builds_stamps_and_loads_the_frame_engine_uint8_models(bash) -> None:
+    uint8 = {'scrfd_10g_bnkps_uint8', 'arcface_w600k_r50_uint8'}
+    models = bash(_source('model_setup_group_models faces')).stdout.split()
+    assert uint8 <= set(models)
+    outputs = bash(_source('OP_DIR=/op; model_setup_group_outputs faces')).stdout
+    assert all(f'/op/models/{m}/1/model.plan' in outputs for m in uint8)
+    engines = bash(_source('model_setup_group_engines faces')).stdout.splitlines()
+    assert uint8 <= {row.split('\t')[0] for row in engines}
+    steps = (REPO_ROOT / LIB).read_text()
+    for exporter in ('export_face_recognition.py', 'export_scrfd.py'):
+        assert f'/app/export/{exporter} --uint8' in steps
+
+
+def test_the_uint8_face_models_are_required_and_generate_a_config(bash) -> None:
+    required = bash(_source('model_setup_required_models "core"')).stdout.strip().split(',')
+    assert {'scrfd_10g_bnkps_uint8', 'arcface_w600k_r50_uint8'} <= set(required)
+    minimal = json.loads((REPO_ROOT / 'config_templates/profiles/minimal.json').read_text())
+    assert {'scrfd_10g_bnkps_uint8', 'arcface_w600k_r50_uint8'} <= set(minimal['models'])
+    configs = (REPO_ROOT / 'scripts/lib/config.sh').read_text()
+    assert configs.count('scrfd_10g_bnkps_uint8') >= 2  # the case and generate_all_configs

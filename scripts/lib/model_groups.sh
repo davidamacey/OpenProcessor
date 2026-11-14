@@ -42,7 +42,7 @@ model_setup_group_models() {
     case "$1" in
         yolo) echo "yolov11_small_trt_end2end" ;;
         mobileclip) echo "mobileclip2_s2_image_encoder mobileclip2_s2_text_encoder" ;;
-        faces) echo "scrfd_10g_bnkps arcface_w600k_r50" ;;
+        faces) echo "scrfd_10g_bnkps arcface_w600k_r50 scrfd_10g_bnkps_uint8 arcface_w600k_r50_uint8" ;;
         ocr) echo "paddleocr_det_trt paddleocr_rec_trt ocr_pipeline" ;;
         pe) echo "pe_image_encoder pe_text_encoder" ;;
         *) echo "" ;;
@@ -55,7 +55,8 @@ model_setup_group_outputs() {
     case "$1" in
         yolo) echo "$m/yolov11_small_trt_end2end/1/model.plan" ;;
         mobileclip) echo "$m/mobileclip2_s2_image_encoder/1/model.plan $m/mobileclip2_s2_text_encoder/1/model.plan" ;;
-        faces) echo "$m/scrfd_10g_bnkps/1/model.plan $m/arcface_w600k_r50/1/model.plan" ;;
+        faces) echo "$m/scrfd_10g_bnkps/1/model.plan $m/arcface_w600k_r50/1/model.plan" \
+            "$m/scrfd_10g_bnkps_uint8/1/model.plan $m/arcface_w600k_r50_uint8/1/model.plan" ;;
         ocr) echo "$m/paddleocr_det_trt/1/model.plan $m/paddleocr_rec_trt/1/model.plan" ;;
         pe) echo "$m/pe_image_encoder/1/model.plan $m/pe_text_encoder/1/model.plan" ;;
         *) echo "" ;;
@@ -77,7 +78,9 @@ model_setup_group_engines() {
             echo "mobileclip2_s2_text_encoder${t}pytorch_models/mobileclip2_s2_text_encoder.onnx${t}fp32" ;;
         faces)
             echo "scrfd_10g_bnkps${t}pytorch_models/scrfd_10g_bnkps.onnx${t}fp16"
-            echo "arcface_w600k_r50${t}pytorch_models/arcface_w600k_r50.onnx${t}fp16" ;;
+            echo "arcface_w600k_r50${t}pytorch_models/arcface_w600k_r50.onnx${t}fp16"
+            echo "scrfd_10g_bnkps_uint8${t}pytorch_models/scrfd_10g_bnkps.onnx${t}fp16"
+            echo "arcface_w600k_r50_uint8${t}pytorch_models/arcface_w600k_r50.onnx${t}fp16" ;;
         ocr)
             echo "paddleocr_det_trt${t}pytorch_models/paddleocr/ppocrv6_det_small.onnx${t}fp32"
             echo "paddleocr_rec_trt${t}pytorch_models/paddleocr/ppocrv6_rec_small.onnx${t}fp32" ;;

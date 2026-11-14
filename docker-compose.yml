@@ -96,6 +96,8 @@ services:
       - --load-model=yolov11_small_trt_end2end
       - --load-model=scrfd_10g_bnkps
       - --load-model=arcface_w600k_r50
+      - --load-model=scrfd_10g_bnkps_uint8
+      - --load-model=arcface_w600k_r50_uint8
       - --load-model=mobileclip2_s2_image_encoder
       - --load-model=mobileclip2_s2_text_encoder
       - --load-model=paddleocr_det_trt

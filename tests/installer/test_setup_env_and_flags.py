@@ -14,6 +14,13 @@ if TYPE_CHECKING:
 
     from installer_harness import Shimmed
 
+FACE_MODELS = {
+    'scrfd_10g_bnkps',
+    'arcface_w600k_r50',
+    'scrfd_10g_bnkps_uint8',
+    'arcface_w600k_r50_uint8',
+}
+
 
 # --- .env content ------------------------------------------------------------------
 
@@ -304,7 +311,7 @@ def test_no_faces_writes_the_switch_and_drops_the_face_models(shimmed: Shimmed) 
     assert env['OP_FACES_ENABLED'] == 'false'
     required = env['OP_REQUIRED_MODELS'].split(',')
     assert 'yolov11_small_trt_end2end' in required
-    assert not {'scrfd_10g_bnkps', 'arcface_w600k_r50'} & set(required)
+    assert not FACE_MODELS & set(required)
 
 
 def test_without_no_faces_the_env_does_not_carry_the_switch(shimmed: Shimmed) -> None:

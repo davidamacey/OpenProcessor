@@ -64,7 +64,12 @@ def test_models_outside_the_required_list_are_ignored() -> None:
     assert mr.models_not_ready(index, ['a']) == []
 
 
-FACE_MODELS = {'scrfd_10g_bnkps', 'arcface_w600k_r50'}
+FACE_MODELS = {
+    'scrfd_10g_bnkps',
+    'arcface_w600k_r50',
+    'scrfd_10g_bnkps_uint8',
+    'arcface_w600k_r50_uint8',
+}
 
 
 def test_faces_off_drops_the_face_models_from_the_default(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -80,6 +85,8 @@ def test_faces_off_drops_the_face_models_from_an_explicit_list(
 ) -> None:
     monkeypatch.setenv('OP_FACES_ENABLED', 'false')
     monkeypatch.setenv(
-        'OP_REQUIRED_MODELS', 'yolov11_small_trt_end2end,scrfd_10g_bnkps,arcface_w600k_r50'
+        'OP_REQUIRED_MODELS',
+        'yolov11_small_trt_end2end,scrfd_10g_bnkps,arcface_w600k_r50,'
+        'scrfd_10g_bnkps_uint8,arcface_w600k_r50_uint8',
     )
     assert mr.required_model_names() == ['yolov11_small_trt_end2end']

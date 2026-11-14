@@ -90,10 +90,12 @@ wait_for_services() {
 
     # Wait for required models to load
     log_info "Waiting for TensorRT models to load..."
-    local required_models=("yolov11_small_trt_end2end" "scrfd_10g_bnkps" "arcface_w600k_r50" "mobileclip2_s2_image_encoder" "mobileclip2_s2_text_encoder" "paddleocr_det_trt" "paddleocr_rec_trt")
+    local required_models=("yolov11_small_trt_end2end" "scrfd_10g_bnkps" "arcface_w600k_r50" "scrfd_10g_bnkps_uint8" "arcface_w600k_r50_uint8" "mobileclip2_s2_image_encoder" "mobileclip2_s2_text_encoder" "paddleocr_det_trt" "paddleocr_rec_trt")
     if ! _setup_faces_on; then
         required_models=("${required_models[@]/scrfd_10g_bnkps}")
         required_models=("${required_models[@]/arcface_w600k_r50}")
+        required_models=("${required_models[@]/scrfd_10g_bnkps_uint8}")
+        required_models=("${required_models[@]/arcface_w600k_r50_uint8}")
         mapfile -t required_models < <(printf '%s\n' "${required_models[@]}" | sed '/^$/d')
     fi
     local all_loaded=false

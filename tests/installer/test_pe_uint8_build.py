@@ -205,6 +205,8 @@ UINT8_BUILDERS = {
     'pe_image_encoder': ['export/build_pe_trt.sh', 'scripts/lib/model_setup.sh'],
     'yolov11_small_trt_end2end': ['export/yolo_trt_build.py'],
     'yolo26_small_trt': ['export/yolo_trt_build.py'],
+    'scrfd_10g_bnkps_uint8': ['export/scrfd_triton.py'],
+    'arcface_w600k_r50_uint8': ['export/export_face_recognition.py'],
 }
 
 
@@ -227,7 +229,7 @@ def _uint8_tensorrt_configs() -> set[str]:
     found = set()
     for cfg in _shipped_model_configs():
         text = cfg.read_text()
-        block = re.search(r'^input\s*\[(.*?)^\]', text, re.DOTALL | re.MULTILINE)
+        block = re.search(r'^input\s*[\[{](.*?)^[\]}]', text, re.DOTALL | re.MULTILINE)
         if 'tensorrt_plan' in text and block and 'TYPE_UINT8' in block.group(1):
             found.add(cfg.parent.name)
     return found
