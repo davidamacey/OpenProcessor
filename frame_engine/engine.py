@@ -53,8 +53,11 @@ from frame_engine.branches.base import Branch, DependencyFailedError, Photo, Pho
 from frame_engine.branches.crops import CropJpegs
 from frame_engine.branches.detect import Detect
 from frame_engine.branches.embed import EmbedCrops, EmbedFrame
+from frame_engine.branches.ocr import Ocr
 from frame_engine.messages import EngineRequest, EngineResult
 from frame_engine.nvjpeg_lanes import NvJpegError, NvJpegLanes
+from frame_engine.ocr.ctc import CtcDecoder
+from frame_engine.ocr.kernels import LineWarp
 from frame_engine.prep_budget import ByteBudget, is_memory_error, need_bytes
 from frame_engine.prep_geometry import oriented_size, route, stored_box_rects
 from frame_engine.prep_kernels import PrepKernels
@@ -141,6 +144,9 @@ class FrameEngine:
         self.budget = self._reserve_budget(settings.budget_mib)
         metrics.watch_budget(self.budget)
         self.kernels = PrepKernels()
+        self.line_warp = LineWarp()
+        self._ocr_decoder: CtcDecoder | None = None
+        self._ocr_decoder_lock = threading.Lock()
         self.encode_pool = ThreadPoolExecutor(settings.encode_threads, thread_name_prefix='fe-jpeg')
         self.workers = ThreadPoolExecutor(settings.workers, thread_name_prefix='fe-image')
         #: Region bytes one photo may hold with calls in flight: its worker's fair share.
@@ -276,6 +282,14 @@ class FrameEngine:
             return 'decoder'
         return frame
 
+    def _decoder(self) -> CtcDecoder:
+        """The recogniser's dictionary, read on the first ``ocr`` photo (a missing file fails
+        that photo loudly: it is a deployment fault, not a branch outcome)."""
+        with self._ocr_decoder_lock:
+            if self._ocr_decoder is None:
+                self._ocr_decoder = CtcDecoder.from_file(self.s.ocr_dictionary)
+            return self._ocr_decoder
+
     def _plan_branches(self, plan: wire.EnginePlan) -> list[Branch]:
         """The branch modules the plan runs, in plan order (round 2 submits before host work)."""
         out: list[Branch] = []
@@ -285,6 +299,8 @@ class FrameEngine:
             out.append(EmbedFrame(plan.embed))
         if plan.embed is not None and plan.runs('embed_crops'):
             out.append(EmbedCrops(plan.embed, plan.embed_classes))
+        if plan.ocr is not None and plan.runs('ocr'):
+            out.append(Ocr(plan.ocr, self._decoder(), self.line_warp))
         if plan.crops == 'inline':
             out.append(CropJpegs(self.encode_pool, self.s.jpeg_quality, self.s.crop_max_side))
         return out

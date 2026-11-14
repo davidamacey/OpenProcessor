@@ -92,6 +92,9 @@ class EngineSettings:
     crop_max_side: int = 0
     #: Wait for the stream at the end of a kernel stage so its GPU time lands there (attribution).
     stage_sync: bool = False
+    #: The recogniser's character dictionary: baked into the image from ``models/paddleocr_rec_trt``
+    #: (no environment variable: it belongs to the model build, not to a deployment).
+    ocr_dictionary: str = '/app/ocr/ppocrv6_dict.txt'
     port: int = 8001
     metrics_port: int = 8002
     max_message_mib: int = 256
