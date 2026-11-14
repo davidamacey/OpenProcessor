@@ -127,6 +127,69 @@ def test_plan_passes_adds_tiles_only_when_finer_than_the_whole_pass() -> None:
     assert all(p.scaled == (1920, 1280) for p in big[1:])
 
 
+def test_a_photo_no_larger_than_the_tile_side_gets_no_tiles() -> None:
+    """The rule that picks the scheme: tiles only when the long side exceeds ``tile_side``, so a
+    2 MP photo is one detector call (whole + coarse) and a 20 MP photo is tiled at long side
+    ``tile_side``. Catches tiles on every photo larger than the input."""
+    two_mp = fs.plan_passes(1920, 1080, 640, coarse=256, tile_side=1920, overlap=160)
+    assert [p.scaled for p in two_mp] == [(640, 360), (256, 144)]
+    twenty = fs.plan_passes(5472, 3648, 640, coarse=256, tile_side=1920, overlap=160)
+    assert all(p.scaled == (1920, 1280) for p in twenty[2:])
+    assert len(twenty) == 2 + 12
+
+
+def _seen_by(p: fs.DetPass, w: int, h: int, face: tuple[float, float, float, float]) -> tuple:
+    """What an ideal detector answers for one pass: the face's part inside the window, in input
+    pixels, score 0.9 (a face cut by the window is a cut box, as a real detector sees it)."""
+    sx, sy = p.scaled[0] / w, p.scaled[1] / h
+    left, top, ww, wh = p.window
+    x1, y1, x2, y2 = (
+        face[0] * sx - left,
+        face[1] * sy - top,
+        face[2] * sx - left,
+        face[3] * sy - top,
+    )
+    cx1, cy1, cx2, cy2 = max(x1, 0), max(y1, 0), min(x2, ww), min(y2, wh)
+    if cx2 - cx1 < 4 or cy2 - cy1 < 4:
+        return (
+            np.zeros(0, np.float32),
+            np.zeros((0, 4), np.float32),
+            np.zeros((0, 5, 2), np.float32),
+        )
+    box = np.array([[cx1, cy1, cx2, cy2]], np.float32)
+    kps = np.repeat(((box[:, :2] + box[:, 2:]) / 2)[:, None, :], 5, axis=1)
+    return np.array([0.9], np.float32), box, kps
+
+
+@pytest.mark.parametrize(
+    ('face', 'why'),
+    [
+        ((1800.0, 1600.0, 1910.0, 1710.0), 'small face inside the overlap of two tiles'),
+        ((1083.0, 900.0, 2565.0, 2382.0), 'face larger than the overlap, cut by every tile'),
+        ((0.0, 1500.0, 110.0, 1610.0), 'small face on the frame edge'),
+    ],
+)
+def test_a_face_across_a_tile_seam_is_found_once(face: tuple, why: str) -> None:
+    """A 20 MP photo with tiles at 1920 and the whole pass: whatever the face's place, the merge
+    returns it exactly once, never twice (two tiles) and never zero times (every tile cut it)."""
+    w, h = 5472, 3648
+    passes = fs.plan_passes(w, h, 640, tile_side=1920, overlap=160)
+    k = 1920 / w
+    edges = {p.window[0] for p in passes[1:]} | {p.window[0] + p.window[2] for p in passes[1:]}
+    inner = [e for e in edges if 0 < e < 1920]
+    assert any(face[0] * k < e < face[2] * k for e in inner) or face[0] == 0.0, why
+    if 'every tile' in why:  # no tile holds it whole: only the whole pass can find it
+        for p in passes[1:]:
+            left, top, ww, wh = p.window
+            inside = left <= face[0] * k and face[2] * k <= left + ww
+            inside = inside and top <= face[1] * k and face[3] * k <= top + wh
+            assert not inside
+    parts = [fs.to_source(p, w, h, *_seen_by(p, w, h, face)) for p in passes]
+    merged = fs.merge(parts, 0.4, 128)
+    assert len(merged.scores) == 1, why
+    np.testing.assert_allclose(merged.boxes[0], face, atol=4.0)
+
+
 def test_to_source_maps_each_axis_by_its_own_scale_and_offset() -> None:
     """A tile at (left 300, top 100) of a frame scaled 0.5 x 0.5: input (10, 20) is source
     ((10 + 300) / 0.5, (20 + 100) / 0.5). The whole pass of a 1000 x 667 frame scales x by

@@ -106,15 +106,14 @@ def plan_passes(
     w: int, h: int, net: int, *, coarse: int = 0, tile_side: int = 0, overlap: int = 0
 ) -> list[DetPass]:
     """The passes of one photo: the whole frame in ``net``; with ``coarse``, the whole frame in a
-    ``coarse`` square as well; with ``tile_side``, tiles of the frame scaled so its longer side is
-    ``tile_side`` (never above the source size), when that is finer than the whole pass."""
+    ``coarse`` square as well; with ``tile_side``, when the photo's longer side exceeds it, tiles
+    of the frame scaled to that longer side. Every photo is so searched at a long side of at most
+    ``tile_side``: a photo no larger costs the whole pass (one call), a 20 MP one is tiled."""
     passes = [whole_pass(w, h, net)]
     if coarse:
         passes.append(whole_pass(w, h, min(coarse, net)))
-    if tile_side:
-        scale = min(1.0, tile_side / max(w, h))
-        if round(max(w, h) * scale) > max(passes[0].scaled):
-            passes.extend(tile_passes(w, h, net, scale, overlap))
+    if tile_side and max(w, h) > tile_side:
+        passes.extend(tile_passes(w, h, net, tile_side / max(w, h), overlap))
     return passes
 
 
