@@ -113,7 +113,9 @@ def _answer(result: Any, plan: wire.EnginePlan) -> EngineAnswer:
             if value is None:
                 continue  # the branch that makes it failed; its branch_status says so
             outputs[name] = (
-                [bytes(v) for v in value.reshape(-1)] if name == wire.CROP_JPEGS else value
+                [bytes(v) for v in value.reshape(-1)]
+                if name in (wire.CROP_JPEGS, wire.DERIVATIVE_JPEGS)
+                else value
             )
     return EngineAnswer(status, _text(result, wire.DECODE_ROUTE), branches, outputs)
 
