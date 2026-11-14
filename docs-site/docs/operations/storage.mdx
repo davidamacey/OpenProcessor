@@ -62,7 +62,7 @@ The CLI, `make` and `scripts/setup.sh` then add `docker-compose.data-dir.yml` by
 plain Compose add `-f docker-compose.data-dir.yml`). The data goes to `$OP_DATA_DIR/postgres`,
 `$OP_DATA_DIR/opensearch` and `$OP_DATA_DIR/valkey`; `./openprocessor start` creates them. The
 OpenSearch directory must be owned by uid 1000 (start refuses and prints the `chown` command
-otherwise). `OP_DATA_DIR` replaces `OP_OPENSEARCH_DATA`. Without the setting nothing changes.
+otherwise). `OP_OPENSEARCH_DATA` is gone: a `.env` that still sets it stops the start with these steps. Without the setting nothing changes.
 The installer and `./openprocessor status` warn when the data location is on a rotating disk
 (read from the kernel's `queue/rotational` flag, through md, LVM and device-mapper), or say they
 could not determine it.
@@ -88,24 +88,6 @@ echo "OP_DATA_DIR=$D" >> .env
 
 Check `curl -s localhost:4607/_cluster/health` and the project document counts before you rely on
 it. The old volumes are kept; remove them (`docker volume rm`) only after you are satisfied.
-
-## Moving only the OpenSearch directory
-
-`OP_OPENSEARCH_DATA` in `.env` is either a Docker volume name (the default, `opensearch_data`) or
-an absolute host path. To move an existing deployment:
-
-```bash
-./openprocessor stop                              # or: make down
-sudo mkdir -p /srv/opensearch-data
-sudo docker run --rm -v <project>_opensearch_data:/from -v /srv/opensearch-data:/to \
-  alpine sh -c 'cp -a /from/. /to/'               # <project> is COMPOSE_PROJECT_NAME
-sudo chown -R 1000:1000 /srv/opensearch-data # OpenSearch runs as uid 1000
-echo 'OP_OPENSEARCH_DATA=/srv/opensearch-data' >> .env
-./openprocessor start
-curl -s localhost:4607/_cluster/health            # green, then check the document counts
-```
-
-Keep the old volume until the counts match, then remove it.
 
 ## Ingest settings that depend on where the files are
 
