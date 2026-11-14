@@ -1,0 +1,386 @@
+# 13: backend speed plan (image processing, GPU serving, clustering and labelling)
+
+| Field | Value |
+|---|---|
+| Status | plan, revision 2 (independent review of revision 1 applied); items are coded batch by batch as each is decided and reviewed |
+| Code base | `int/b4-stateless` at `d08d5e7a0` |
+| Replaces | the open parts of `06b_b5_decode_once.md`, `06c_b5_crops_ocr_faces.md` and `06d_b5_processing_plans.md` (their keep-lists move here when a batch merges) |
+| Issues | umbrella #500; #493, #494, #495, #496, #499, #501, #502, #503, #504, #505, #507, #508, #509, #510, #67, #346 |
+| Hardware | two RTX A6000 (48 GB each): GPU 0 serves Triton today, GPU 2 is free |
+| Numbers | every number names its dataset and run; raw outputs are kept outside the tracked tree and summarised in section 10 |
+
+## 1. What this plan is for
+
+The user's job ([VISION_AND_GOALS.md](../../VISION_AND_GOALS.md)): load photos, let an existing
+detector find the objects, label whole clusters in the user's own classes, train a model, serve it.
+Two request shapes set the targets, because they stress different parts of the system:
+
+- **A single-branch pass over a large library**, for example faces only: the other models are off,
+  so decode, prep and the small models decide the speed, and grouping must stay correct as photos
+  are added.
+- **A full pass at bulk scale**: detect, embed every wanted crop, cluster, label by cluster, train
+  and serve. The embedding encoder decides the speed. The target is 100 photos per second.
+
+Everything below is judged by measured photos per second, p50 and p99 latency, GPU use and memory
+on the running stack, with output parity against the stored references and no loss of cluster
+quality.
+
+## 2. What binds today (evidence)
+
+Baseline rows are in section 10. The findings that shape the design:
+
+1. **The embedding encoder is the arithmetic bound when every crop is embedded.** The Perception
+   Encoder (PE-Core-L14-336, FP16) is 72 to 91% of the GPU kernel time per photo and serves about
+   200 to 225 inferences per second on one A6000 (224.6 at batch 16 through Triton). At 4.67
+   crops per photo plus the frame (5.67 inferences) that is 35 to 40 photos per second for the
+   encoder alone, and about 29 to 36 once the other kernels are counted. At 2.41 crops per photo
+   the stack reached 48.3 photos per second with the GPU 94% busy.
+2. **Below the ceiling, the GPU waits for the host.** On the 4,000-image mix the GPU is 65% busy
+   at 22 to 26 photos per second; with one client on 20 MP photos it is 16% busy. The batch route
+   runs in phases (all GPU calls of a request, then all writes, then an index refresh). Inside the
+   prep model a photo spends 74 ms in the detector call (about 2.4 ms of GPU work) and 124 ms in
+   the encoder call (about 24 ms of GPU work): queue delay (25 ms and 15 ms) and waiting for batch
+   partners.
+3. **Faces and OCR do not use the resident frame.** `/faces` decodes on the host and aligns on the
+   CPU: 1.8 to 3.1 ms of GPU work per image against 0.36 to 0.43 s of API CPU per 16 MP photo.
+   `/analyze` decodes the same bytes four to five times. OCR calls the recogniser once per text
+   crop although the engine takes batches of 64.
+4. **Decode and prep run inside Triton's Python backend, calling other models from 16 threads.**
+   That configuration is not documented, and the crash it produced once (SIGSEGV in
+   `libtriton_python.so`, every model down) matches two upstream issues that are open and unfixed
+   through Triton 26.09 (triton-inference-server/server #8882 and #7517).
+5. **The labelling loop pays for writes it does not need.** A 10,000-item label operation waits
+   for an index refresh on each 500-item page (a floor of about 20 s). Every cluster refresh
+   rewrites every member document, and every such update re-indexes the document's vector. List
+   pages spend about 1.8 ms per row in Python serialisation, four times the search itself. The
+   "photos containing X" join is cut at 10,000 photos and its negative form is wrong past the cut.
+6. **Semantic search spends 75% of its time encoding the query on one CPU instance** (about 53 ms
+   p50, 148 ms p99).
+
+### 2.1 The path to 100 photos per second
+
+No single item reaches the target. The factors multiply, and each has its own evidence and gate:
+
+| Factor | Evidence today | Item | Expected |
+|---|---|---|---|
+| Encoder inferences per photo | 5.67 at policy `all`; 3.41 when only the wanted classes are embedded gave 48.3 photos per second on one card | P6 (embedding policy as a throughput setting) | 1.3 to 1.7x on the encoder-bound pass, with a quality gate |
+| Cards | 1.91x measured for the encoder on two A6000 | P5 | about 1.9x |
+| Pipeline fill | GPU 65% busy on the mix, 94% in the best configuration | P1, P2 | up to 1.4x on the mix; little where the GPU is already full |
+| Encoder speed | FP16 near the published best for this network; an INT8 recipe that failed vector parity was 1.47x | T3 | 1.0 to 1.4x, only if a mixed-precision recipe passes every gate |
+
+On one card with every crop embedded the honest ceiling is about 35 photos per second. Two cards
+with the wanted-class policy reach about 90 on today's numbers; reaching 100 needs either P1 and
+P2 to close the last fill gap or a win from T3. The ceiling itself is checked first: the
+per-engine curve of the encoder at batch 16 and 32 under saturation, and the encoder's share of
+GPU time at 4.67 crops per photo. If the encoder serves more than about 250 inferences per second
+the table is redone.
+
+## 3. Design decisions
+
+Each decision names its evidence and the measurement that can overturn it.
+
+### D1. Decode and prep leave Triton's Python backend; which host is decided by spike E0
+
+Decode, EXIF orientation, letterbox, crops, face alignment, OCR crop handling and the order in
+which models run are one component, the **frame engine**. It keeps today's design (decode once,
+keep the full-resolution frame on the GPU, cut every model input from that frame). What changes
+is where it runs and how it reaches the TensorRT models. The requirement is fixed: **a fault in
+decode or prep must not take the TensorRT models down.** The host is chosen by E0 from three arms
+measured on the same photos, the same engines and the same day:
+
+| Arm | Host | Calls the models by | Keeps for free | Open risk |
+|---|---|---|---|---|
+| A | today: Python backend model in the one Triton | BLS from worker threads | everything | the crash class takes every model down |
+| C | a second `tritonserver` that hosts only the prep model | Triton client | model control, metrics, the front | the Python-backend stub is still there, but its fault ends only the prep server |
+| B | a standalone process with a KServe v2 unary front | Triton client | nothing; needs its own readiness, metrics and config answers | new code to own |
+
+For arms B and C the model inputs are small (1.2 MB for the detector letterbox, 339 KB per encoder
+square), so E0 also measures three transports: CUDA shared memory, system shared memory, and the
+plain request body
+([shared-memory extension, 26.10](https://docs.nvidia.com/deeplearning/triton-inference-server/archives/triton-inference-server-2610/user-guide/docs/protocol/extension_shared_memory.html)).
+
+Rules for the choice:
+
+- An arm must pass the kill test: its process is killed at least 50 times with 32 photos in
+  flight, and the model server stays up, logs no CUDA error, returns to its memory baseline and
+  serves the next request.
+- CUDA shared memory is used only if it beats system shared memory by more than the run-to-run
+  spread. It has two costs the others do not: the exporting process must outlive every import
+  (CUDA documents freeing exported memory before the importer closes it as undefined behaviour),
+  and the two containers must share a PID namespace because the handle carries the exporter's
+  process id. If it is used, regions are plain device allocations made once at start, registered
+  once, addressed by offset, unregistered by name prefix when a new engine process starts, and
+  both containers run with `pid: host`.
+- Arm B is chosen over arm C only if it wins by more than the spread or C fails the kill test.
+- The winner must reach at least 0.95x the photos per second of arm A at equal process count and
+  equal crops per photo, with p99 and host CPU per photo not worse, and pass the parity profiles
+  (`scripts/bench/parity.py`) read against a control captured twice, because the TensorRT detector
+  is not bit-stable between runs. Blur sums and crop JPEG bytes must be identical.
+
+What is decided regardless of the arm:
+
+- **Several engine processes per card.** Two prep processes gave +51% over one. The API spreads
+  requests over them with the existing router (`src/clients/triton_router.py`).
+- **Overload is an answer, not a fallback.** A full engine answers with a retryable status; the
+  API retries with backoff. No silent second route.
+- **Engine down means the image fails visibly** (its decode route says so and the bulk run retries
+  it). The API keeps no pixel-decoding fallback for ingest.
+- **The request protocol is version 1 below**, written once before the engine is built, so later
+  items are API-side work.
+
+Why not a Triton ensemble: its data flow is static, so one photo cannot fan out to a
+data-dependent number of crops. Why not the DALI backend: it lost 19 to 40% on 12 to 24 MP photos
+in our earlier measurement and failed the letterbox parity gate.
+
+#### Engine protocol, version 1
+
+One request per image, KServe v2 tensors.
+
+| Input | Type | Meaning |
+|---|---|---|
+| `image` | bytes | the encoded file (any format the engine decodes) |
+| `plan` | one JSON string | see below |
+| `boxes` | float32 `[n, 4]`, optional | stored boxes: the detections come from the caller, not the detector (reprocess) |
+
+`plan` fields: `branches` (from `detect`, `embed_frame`, `embed_crops`, `faces`, `face_embed`,
+`ocr`); `detector` (model name, input size, letterbox fill); `embed` (model name and preprocessing
+recipe for the frame and for crops, so the core routes can ask for MobileCLIP2 and curation for
+PE); `embed_classes` (detector class ids that get a crop vector; absent means all);
+`if_detected` (class ids per conditional branch); `faces` (detector input size or tiling, stored
+score floor); `crops` (`inline` or `none`); `derivatives` (named stored renditions such as a
+thumbnail: longest side and quality).
+
+| Output | Present when | Content |
+|---|---|---|
+| `status`, `decode_route` | always | `ok` or the reason the image failed; which decoder produced the pixels |
+| `branch_status` | always | per requested branch: `ok`, `error` with a reason, or `not_run` (condition false) |
+| `size` | decoded | width and height after orientation |
+| `det_boxes`, `det_scores`, `det_classes`, `letterbox` | `detect` | as today |
+| `whole_embedding` | `embed_frame` | one vector |
+| `crop_embeddings`, `crop_embedded` | `embed_crops` | vectors and the mask of detections that got one |
+| `blur_sums` | `detect` | as today |
+| `crop_jpegs` | `crops: inline` | as today |
+| `face_boxes`, `face_landmarks`, `face_scores`, `face_quality` | `faces` | every face above the stored floor; quality columns are face side in pixels, blur, and a pose measure from the five points |
+| `face_embeddings` | `face_embed` | one vector per face |
+| `ocr_quads`, `ocr_texts`, `ocr_scores` | `ocr` | per text region |
+| `derivative_jpegs` | `derivatives` | one JPEG per named rendition |
+
+### D2. A request is a plan; the engine runs only the requested branches (#67)
+
+`/analyze`, core `/ingest` and curation ingest resolve a plan through
+`src/domain/processing_plan.py` and send it to the engine. Decisions on the open questions of
+`06d_b5_processing_plans.md` section 3:
+
+| ID | Decision | Reason |
+|---|---|---|
+| Q1 | The legacy selection flags are removed in the same change. | No shims (repo standard); the frontend has no consumer. |
+| Q2 | One decoder feeds every branch; the face and OCR references are re-captured after the gates pass on public data. | Four to five decodes per `/analyze` request today. Gates: ArcFace cosine p01 at least 0.995 against today's path on the same faces; OCR exact-text share at least 0.98. |
+| Q3 | A curation request may narrow the project's policy, never widen it (422). | The policy is the project's contract. |
+| Q4 | The `selected` mask is resolved by class name in the API and sent as `embed_classes`. | Class identity is the name; one parity test against `ingest_policy`. |
+| Q5 | A failed branch returns 200 with that branch marked `error`; 502 only when every branch failed. | One failing model must not discard the other results. |
+| Q6 | A missing dependency is refused (`missing_dependency`, 422). | Fail closed. |
+| Q7 | Core `/ingest` without `embed_frame` stores no global vector; `near_duplicates` requires `embed_frame`. | No zero vectors in an index. |
+| Q8 | No named presets. | Nothing needs them yet. |
+| Q9 | A reprocess scope is a plan with stored boxes. | One executor instead of two. |
+
+Every pixel consumer and where it goes:
+
+| Consumer of decoded pixels today | After |
+|---|---|
+| Curation batch ingest, GPU route and CPU route | engine (the engine picks the decoder per image; the size gate is an engine setting, P4) |
+| Single-image ingest and dataset import | engine (import uses stored boxes) |
+| A project with a secondary detector | engine: the second detector is a second `detect` model in the plan; until that lands such a project keeps today's route and the old code is deleted with it, not before |
+| Region-embed stage (decodes the source again per item, 217 to 220 ms per item) | engine with stored boxes (E3) |
+| Core `/detect`, `/embed`, `/search/image`, `/faces`, `/ocr`, `/analyze`, core `/ingest` | engine through plans (A1) |
+| Crop-cache miss and thumbnails | stay on the host decoder: one small image per user request, not a pipeline |
+| Training export and VLM crops | read stored crops; unchanged |
+
+`OP_INGEST_GPU_DECODE` and `OP_INGEST_GPU_MIN_MEGAPIXELS` are retired in `retired_env.py` when
+the last API-side decode for ingest is deleted.
+
+### D3. The batch route streams
+
+Each photo of a batch request moves on its own from the engine call to its write. The writes stay
+coalesced: the process-wide writer (`ingest_writer.py`) already batches documents across photos
+and requests, and it stays. The index is refreshed by its refresh interval, with one explicit
+refresh when a run or request ends only where a caller reads its own writes. The work in flight is
+bounded by the engine and the writer, not by the request shape. Database connections per request
+are sized from the timeline measurement, with a bar of no `database_busy` at 64 clients.
+
+### D4. Faces are a project stage
+
+This supersedes the "core-only now" recommendation for decision O1 in
+`cluster_search_makemodel_plan.md`: grouping one library's faces is a per-library job, and the
+project is the unit of isolation.
+
+- A project owns a `faces` index role beside `images` and `items`. A face row is an immutable
+  fact: box, five landmarks, detector score, quality measures, the embedding, and the versions of
+  the models that produced it. Every face above a low stored score floor is kept; thresholds apply
+  at read time, so changing one never means running a model again.
+- People, memberships and every human decision (confirm, reject, merge, split, cannot-link) are
+  rows in PostgreSQL, apart from the machine grouping and keyed by a stable face id, so a
+  re-grouping never loses a decision. When a detector or recogniser changes, new detections are
+  matched to stored faces by box overlap so the id and its decisions carry over.
+- Grouping is a rebuildable projection of the face rows and the decisions.
+- The detector input scale is a measured setting: a 640 letterbox shrinks a 40-pixel face on a
+  24 MP photo to a few pixels. F1 measures 640, 1280 and tiles on the full-resolution frame by
+  face-size bucket.
+- "Every photo of this person" is the person's accepted members from PostgreSQL plus a radial
+  search (a minimum score, not a top-k:
+  [radial search](https://docs.opensearch.org/latest/vector-search/specialized-operations/radial-search-knn/))
+  around the person's prototypes for review candidates.
+- The deployment-wide faces index holds names, merges and locks today. They are exported into the
+  new decision tables before the core routes are removed (F4); nothing is deleted without that
+  step.
+
+### D5. Machine results that change must not re-index vectors
+
+Any update of an OpenSearch document re-indexes the whole document, its vector included
+([update API](https://docs.opensearch.org/latest/api-reference/document-apis/update-document/)).
+A cluster refresh and a label operation therefore pay for vector indexing today. Writing only the
+changed items (L2) reduces how often; only a split of the item document into an immutable vector
+document and a small mutable one removes it. The split is measured first (V0), before L2 and L6
+are written, and every index change of this plan (the split if adopted, the shard count, the
+`faces` role, the class-name field of L4) ships as **one migration wave**: one reindex per
+project.
+
+### D6. Precision and batching are chosen per model by measurement
+
+FP16 stays where it is. The text tower moves from ONNX Runtime FP32 on the CPU to TensorRT FP16
+(S1). INT8 is adopted for a model only when it passes that model's quality gate and wins at least
+1.15x on the engine (section 8). Queue delays, preferred batch sizes and instance counts are set
+from the per-engine curves and the photo-mix sweep (P2).
+
+### D7. A card is a unit: one model server and its engines
+
+Triton cannot pin a request to the card its input lives on. So each card runs its own Triton with
+its own engine processes, and the API spreads requests over the cards' engines with the existing
+router. A second card is a second copy of the same pair; no per-card model names. Profiles decide
+what a card runs: bulk ingest runs the pair on both cards; labelling gives GPU 2 to the VLM and
+the segmenter. Switching a profile under load is part of the soak (R1). One card remains a
+supported target (the 12 GB acceptance, #510, is unchanged).
+
+## 4. Work items, ranked
+
+Each item: baseline, documented approach, check, expected win, risk. "Measure first" items have a
+spike before code.
+
+### Batch 1: independent wins (no dependency on the engine)
+
+| ID | Item | Baseline | Approach (docs) | Check | Expected win | Risk |
+|---|---|---|---|---|---|---|
+| S1 | PE text tower on TensorRT FP16 (#493) | 53 ms p50, 148 ms p99 per uncached query, one CPU instance | Built as the image tower is built (FP16 baked into the ONNX, TensorRT 11 strong typing; [TensorRT](https://docs.nvidia.com/deeplearning/tensorrt/latest/index.html)); the export refuses an engine that fails the gate | Cosine to the FP32 tower on 2,000 COCO captions: median at least 0.999, p01 at least 0.995; batched equals batch 1; text-to-image recall@10 within 0.003 | Query encode under 10 ms | Low |
+| R2 | Per-photo decode route in the ingest record | Only a process-wide counter and summed stage seconds | One closed vocabulary of routes; `decode_route` on the ingest result and the image document; `decode_routes` on the bulk run | Every route decision has a test; a status outside the vocabulary fails a test | Enabler for every decode measurement | Low |
+| L1 | Label operations refresh once | A 10,000-item label operation: 20 pages, each waiting for a refresh (about 1 s) | `refresh=false` on page writes and one refresh before the job reports complete ([bulk API](https://docs.opensearch.org/latest/api-reference/document-apis/bulk/)); synchronous single-item writes keep `wait_for` | `label_op_probe.py` lost and extra writes stay 0; undo unchanged; the lock rule untouched | 10,000 items: about 20 s to a few seconds | Low; a write path, reviewed by the coordinator |
+| L3 | List pages cost what a page costs | About 200 ms per 100 rows (1.8 ms per row in Python); an exact total and a second aggregation search on every page; the frontend pager re-copies every loaded row per page | Totals and hidden counts on the first page only, carried in the cursor; one serializer made cheaper with byte-identical output; the pager appends in place | A cursor page issues one search and no aggregation; serializer output identical on 1,000 documents; **browser time to row 10,000** and per-page API time by depth measured before and after | 3x or more per page; linear deep scroll | Low |
+| O1b | OCR recognition in batches | One recogniser call per text crop; 42 to 46 ms of pipeline time for about 9 ms of GPU | **Spike only** (the orchestration moves into the engine, so no product code lands in the Python backend): crops sorted by aspect ratio and resized to a small set of fixed widths so a batch needs no padding (padded batches changed text: 86% exact); PaddleOCR's own batch recipe as the comparison arm | Character accuracy on a public scene-text set not below batch 1; exact-text share against batch 1 at least 0.98 | 2 to 4x on the OCR branch | Medium (text parity) |
+
+### Batch 2: the pipeline
+
+| ID | Item | Baseline | Approach | Check | Expected win | Risk |
+|---|---|---|---|---|---|---|
+| E0 | Spike: the three host arms and three transports | arm A on the same day | D1 | D1's rules | Decides D1 | Throwaway |
+| E1 | The frame engine on the chosen host, protocol version 1 | as E0 | D1. Decode through nvImageCodec where it matches or beats the hand-written nvJPEG lanes on the same photos (it adds progressive and CMYK JPEG and other formats; [nvImageCodec](https://docs.nvidia.com/cuda/nvimagecodec/)); resize kernels stay unless CV-CUDA passes the tensor gate at no more GPU time ([CV-CUDA](https://cvcuda.github.io/CV-CUDA/)) | `tests/gpu` parity tier, the stored prep and decode references, R1 | Robustness; one route for every image | High: GPU memory hand-off; core written by the coordinator, wiring by lanes |
+| R1 | Soak: a decode fault cannot take the models down | One crash in about five bulk runs, not reproduced since | Large public photos at concurrency 16, 32 and 64 with model unload and load between runs, the engine killed on purpose mid-run, and a profile switch under load; today's path soaked once for its rate | Model-server restart count unchanged; every photo ingested after the bulk run's retry; crashes per 10,000 photos reported | The requirement of item 0 | Low |
+| P1 | Streaming batch route (D3) | 32 photos per request: about 4.3 s, GPU 16% busy at one client; the wall-clock timeline of one request names the stages | D3 | Same documents as today for the same input (store parity); `failed` 0; no `database_busy` at 64 clients | Measured: the gap between GPU 65% and 94% busy on the mix | Medium |
+| P2 | Batching and instances from measurement (#502) | Detector delay 25 ms, encoder delay 15 ms and one instance, mean encoder batch 21 of 32 | Per-engine curves with `perf_analyzer`, then a sweep of delay, preferred sizes and instance counts on the photo mix ([dynamic batcher](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/user_guide/model_configuration.html)) | Config only: parity profiles pass | 5 to 20% | Low |
+| P3 | Crop JPEGs off the critical path (#505) | 52 ms of host CPU per 20 MP photo on encode threads | *Measure first:* the timeline shows whether the response waits for the encode. If it does: `crops: none` at ingest by policy, with the existing miss route cutting a crop on first read | Crop bytes identical on the miss route; first-open latency p95 not worse | 0 to 15% | Medium |
+| P4 | The size gate, re-measured | 3 MP, set before the current encoder layout | Ingest sweep at 1, 2, 3, 5 and 8 MP, GPU and CPU decode inside the engine | Parity per route | Correct routing | Low |
+| P5 | Second card for bulk ingest (D7) | One card | A second Triton and engine pair on GPU 2 behind the router | Parity profiles per card | About 1.9x on the encoder-bound pass | Low |
+| P6 | Embedding policy as a throughput setting | Policy `all`: 5.67 encoder inferences per photo; the policy modes were timed on 50 images only | Measure `all`, `selected` (wanted classes; minimum box side and score) and `lazy` on the 4,000-image mix; the default stays `all` unless the gate passes | Text-to-image recall@10 and the cluster metrics within 0.01 of `all` for the wanted classes, real photos | 1.3 to 1.7x on the encoder-bound pass | Medium: a quality decision |
+| E3 | Region-embed stage on stored boxes | 217 to 220 ms per item (the source is decoded again per item) | The engine's stored-box input | PE vectors within the parity gates against today's CPU-cut vectors | About 2.5x on that stage | Low |
+
+### Batch 3: plans and faces
+
+| ID | Item | Baseline | Approach | Check | Expected win | Risk |
+|---|---|---|---|---|---|---|
+| A1 | Plans on `/analyze`, core `/ingest` and curation ingest (D2) | `/analyze` 55 photos per second without OCR and 20 with it (COCO, 16 clients); four to five decodes | The routes resolve a plan and call the engine; legacy flags removed; per-branch outcomes | One skip-proof test per branch; default plans reproduce today's responses (the core routes ask for their own detector and embedder in the plan) | A single-branch request pays only for its branch | Medium |
+| F0 | Face scoring harness | Nothing scored | Verification on LFW, CALFW and CPLFW; identity clustering on the pooled sets; error by quality signal; stability when photos are added in batches | The harness's own unit tests | The baseline every face change is judged by | Low |
+| F1 | Face branch on the resident frame | 36 photos per second on photos at 16 clients, host-bound | SCRFD on a letterbox or tiles cut on the GPU (640, 1280 and tiles measured by face-size bucket); anchor decode and NMS; five-point similarity alignment cut from the full-resolution frame on the GPU; ArcFace in batches | Boxes within 1 px at 640; ArcFace cosine p01 at least 0.995 against today's path; verification accuracy on the three sets not lower; recall by face-size bucket reported | 3 to 6x on photos for a faces-only plan; more small faces found | Medium |
+| F2 | Faces in the project (D4) | Faces only in one deployment-wide index | The `faces` role in the migration wave of D5 (the PostgreSQL role check, the index for every existing project, the combine, clone, delete and capacity paths); the people and decision tables | Project isolation tests; the guard refuses a foreign faces index | Faces usable per library | Medium (migration) |
+| F3 | Face grouping rebuilt against F0's scores | Single linkage at cosine 0.7 | Quality-gated core points, incremental assignment to per-person prototypes, a review band, same-photo cannot-link, human decisions as constraints | F0's bars; real photos only | High recall at high purity; additions never regroup the library | High: written by the coordinator |
+| F4 | People routes on the project | Core routes on the global index | Project routes for people, the review queue and "every photo of this person" (D4); existing names, merges and locks exported into the decision tables; then the core routes are removed | Contract tests; recall of one identity at fixed precision | The face workload end to end | Medium |
+| T0 | Stored thumbnail at ingest | Thumbnails re-decoded from the original, with a per-process cache | A `derivatives` entry in the plan; the engine cuts the rendition from the resident frame | Thumbnail bytes decode to within the stored-crop quality bar; list latency p95 | A grid page never decodes an original | Low |
+
+### Batch 4: clustering and scale
+
+| ID | Item | Baseline | Approach | Check | Expected win | Risk |
+|---|---|---|---|---|---|---|
+| V0 | Spike: item document split and update cost | Every update re-indexes the vector | Time 100,000 label and membership updates on documents with and without the vector field; filtered k-NN with the filter fields in a second document is not possible, so the spike also lists which filters must stay beside the vector | Decides D5's layout | Decides L2, L6, V1 | Throwaway |
+| L2 | Cluster projection writes only what changed | Every member rewritten on every refresh | "Changed" is membership and state only; score and margin are read from PostgreSQL; the out-of-order guard stays on the writes that remain; stage timers for snapshot, fit, carry-over, record and projection | Projection result identical to a full write | Refresh write time proportional to change | Medium |
+| L4 | "Photos containing X" without the 10,000 cap | A `terms` aggregation cut at 10,000 image ids; the negative form is wrong past the cut | The class names of a photo's items kept on the image document (which class field, and how the image-counts refresh keeps it consistent with label writes, is written before coding); ad hoc item filters page with a `composite` aggregation ([composite](https://docs.opensearch.org/latest/aggregations/bucket/composite/)); the field ships in the migration wave | 12,000 matching photos: exact total, paging reaches the last photo; the negative form exact at 10,001; staleness after a label write bounded and stated | Correctness at scale | Medium |
+| L5 | One vector reader | `_source` float lists through one sequential cursor | `docvalue_fields` with sliced point-in-time pages ([docvalue_fields](https://opensearch.org/blog/retrieve-vectors-5x-faster-with-docvalue_fields-in-opensearch/)); the three readers become one | Vectors bitwise identical | About 5x on the fetch | Low |
+| L6 | Cluster cards and outlier order from stored results | One aggregation with about ten sub-aggregations per page; outlier order cached per process | Per-cluster counts and outlier order kept in PostgreSQL by the projection and the label operations | Counts equal to the aggregation on a seeded project | Card list independent of library size; no per-process cache | Medium |
+| V1 | Shards and vector storage | One shard per index | Section 7 | Section 7's bars | Scale | Medium |
+
+## 5. Measured tracks (spikes that end in a decision, not a default)
+
+| ID | Track | Question | Decision rule |
+|---|---|---|---|
+| T1 | Rust engine behind protocol version 1 | Does an engine with decode, prep and inference in one process beat the chosen arm? | Compared per plan (detect-only, faces-only, full) on throughput by image size, p50 and p99, GPU busy, memory, image size, start time and parity. A port is recommended only where it wins by more than the spread on a plan that matters; a full port is an owner decision. |
+| T2 | Slim Triton | What do a TensorRT-only image and the removal of PyTorch save? | Built with Triton's `compose.py` ([compose](https://github.com/triton-inference-server/server/blob/main/docs/customization_guide/compose.md)); adopted if every model loads and the parity tier passes. |
+| T3 | Encoder cost | Can the crop encoder cost less at equal cluster quality (INT8 mixed precision; a smaller encoder for crops)? | Section 8 gates; cluster quality on labelled vehicle and fine-grained sets, real photos only. |
+| T4 | VLM serving | Which vLLM settings and which model label mini-clusters fastest at equal accuracy? | Label agreement at least 0.97 against today's answers on 1,000 public crops; crops per second. |
+| T5 | Segmenter | What does SAM 3 cost per image and per prompt on this card, and does one image pass serve all prompts? | Baseline first; a change needs identical hits. |
+| T6 | Training and serving | Export build time, trainer data loading, promote time, serving settings of a promoted model | Baseline; fix what the baseline shows. |
+| T7 | Clustering on ground truth | Does a different cluster-count rule or method lower labelling decisions per item at equal precision? Does a GPU fit agree with the CPU fit? | The protocol of `09c_research_clustering_protocol.md`; five seeds; above the seed floor. A GPU fit is adopted only when L2's stage timers show the fit dominating. |
+| T8 | Vector stores | How do Milvus, Qdrant and pgvector compare with tuned OpenSearch on the same 1 million real vectors? | The bars of section 7 and a 100,000-item membership rewrite under 60 s. |
+| T9 | Ingest metadata | What does capture-metadata extraction cost per photo at ingest? | Measured in the timeline; reported with the ingest numbers. |
+
+## 6. Not in this plan, with the reason
+
+| Item | Decision |
+|---|---|
+| CPU letterbox in the API (#495) | Dropped: the API stops preparing pixels for ingest (D2); small images are decoded on the CPU inside the engine and letterboxed on the GPU. |
+| Asynchronous OCR (#496) | Covered by plans: a caller that does not want to wait leaves `ocr` out and runs it later as a reprocess plan (Q9). No second mechanism. |
+| Progressive JPEG guard (#494) | Covered by E1: the engine decodes progressive files itself (CPU, or GPU through nvImageCodec if that wins). |
+| MPS (#507) | Not pursued: it needs a root daemon and a fatal fault under MPS reaches every client. Reopened only if E0 shows time-slicing between processes costs more than 10%. |
+| EXIF-upright frame vectors for copies whose orientation tag was dropped | Not pursued: such files hold rotated pixels and no tag, so there is nothing to upright; frames with a tag are already embedded upright. Matching rotated copies would need four encoder passes per frame. |
+| HEIC and RAW at ingest | After E1: a decoder in the engine; the codec licences are an owner decision. |
+| Research scripts that need `leidenalg` or `igraph` | Deleted with their always-skipped tests in the Batch 4 clean-up unless T7 adopts a graph method, which then pins its own research tier. Recorded results stay. |
+| Remote GPU index build | Not applicable: it serves Faiss fields, ours are Lucene. |
+
+## 7. Vector storage at library scale
+
+Sizing at today's dimensions: one million photos with 13 crops each is about 13 million 1,024-d
+vectors, about 55 to 60 GB in a Lucene shard, above the usual 10 to 50 GB per shard. Decisions to
+take by measurement on real, non-replicated public vectors (1 million first):
+
+- shard count for the items index (1, 2, 4, 8) with concurrent segment search;
+- Lucene scalar quantisation (4-bit, 1-bit) and on-disk mode with rescoring against float:
+  recall@10 within 0.01 under no filter and under 2.6% and 32% filters, p99 under 100 ms;
+- the document split of D5 (V0);
+- the embedding policy (P6), which also decides how many vectors are stored.
+
+## 8. Precision per model
+
+| Model | Today | Candidate | Gate |
+|---|---|---|---|
+| YOLO11 and YOLO26 small detectors | FP16, uint8 input | INT8 with Q/DQ (TensorRT ModelOpt) | COCO AP and AP50 within 0.5 points; the `precision` parity profile; at least 1.15x on the engine |
+| PE image encoder | FP16 | INT8 mixed precision (SmoothQuant or per-layer search); the all-INT8 recipes failed vector parity | Every `precision` gate; cluster purity within 0.5 points; at least 1.15x |
+| PE text encoder | ONNX Runtime FP32 on the CPU | TensorRT FP16 (S1) | S1 |
+| MobileCLIP2 image and text | FP16 with some FP32 layers | keep | none |
+| SCRFD, ArcFace | FP16 | keep FP16; INT8 only after F0's scores exist | Verification accuracy within 0.2 points; cosine p01 at least 0.98 |
+| PP-OCRv6 detection and recognition | FP16 | keep; batching first (O1b) | O1b |
+| SAM 3 | FP32 weights with BF16 autocast | T5 | T5 |
+| VLM | BF16 | weight-only quantised checkpoints that Ampere supports | T4 |
+
+## 9. Order, lanes and sweeps
+
+1. Batch 1 lanes run now; they touch no engine code.
+2. The baseline rows, the per-engine curves, the request timeline and E0 run first on the GPU.
+   E1 starts when E0 has chosen the arm; protocol version 1 does not change after that.
+3. P1, P6, E3 and A1 are API-side work against protocol version 1 and follow E1. F0 has no
+   dependency and runs now; F1 is an engine branch.
+4. V0 runs before L2 and L6; the migration wave carries every index change at once.
+5. The tracks run beside the batches as GPU time allows.
+
+Each batch: lanes in their own worktrees with light checks, merged into `int/b4-stateless`, one
+sweep, then the same benchmark rows as the baseline. A change is kept only if it wins and holds
+parity; a dropped item is recorded in section 10 with its numbers.
+
+## 10. Results
+
+| Row | Dataset | Before | After | Parity | Decision |
+|---|---|---|---|---|---|
+| (filled as rows are measured) | | | | | |
