@@ -27,10 +27,23 @@ EOT_TOKEN_ID = 49407
 ONNX_OPSET_VERSION = 18
 DEFAULT_MAX_BATCH = 32
 
-# Only Triton's ONNX Runtime backend is templated: the text tower is tiny
-# next to the vision tower, and queries arrive one at a time.
+# The served form is a TensorRT FP16 plan on the GPU (query embedding is 75% of a
+# semantic-search request on one CPU instance). The ONNX Runtime model stays as the explicit
+# fallback build (``--platform onnxruntime_onnx``), as for the image tower.
+TRT_PLATFORM = 'tensorrt_plan'
 ORT_PLATFORM = 'onnxruntime_onnx'
+PLATFORMS = (TRT_PLATFORM, ORT_PLATFORM)
 INSTANCE_KINDS = ('KIND_CPU', 'KIND_GPU')
+
+# Engine optimization profile: batch 1 is the hot path (one query), tokens are dynamic
+# (the client trims padding after the batch's last EOT; SOT + EOT is the 2-token floor).
+ENGINE_MIN_TOKENS = 2
+ENGINE_OPT_TOKENS = 12
+ENGINE_OPT_BATCH = 1
+# Gate on the built engine against the FP32 graph (measured 2026-11-13 on 2,400 COCO captions:
+# median 0.99998, p01 0.99995, min 0.99978; the gate leaves headroom and refuses a real regression).
+ENGINE_PARITY_MEDIAN_MIN = 0.999
+ENGINE_PARITY_P01_MIN = 0.995
 
 MODELS_DIR = Path('/app/models')
 EXPORT_DIR = Path('/app/pytorch_models')

@@ -7,6 +7,7 @@
 # Mirrors the [project.optional-dependencies] `export` extra in pyproject.toml.
 tensorrt-cu13==11.4.0.106  # MUST match the Triton image TensorRT (11.4.0.106 -- asserted at image build) for engine compatibility -- bump only together with the Dockerfile.triton TRT_VERSION assertion
 nvidia-modelopt[onnx]==0.48.0  # TRT 11 is strongly-typed: FP16 is baked into ONNX via ModelOpt AutoCast at export time
+polygraphy==0.53.6  # export/pe_text_engine.py runs the built plan through TrtRunner (also a dependency of nvidia-modelopt[onnx])
 onnx-graphsurgeon==0.6.1  # required by nvidia-modelopt[onnx] (>=0.6.1); pinned exact like the rest of the image
 onnxsim==0.8.1
 onnxslim==0.1.99

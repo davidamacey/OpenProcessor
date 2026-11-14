@@ -374,7 +374,7 @@ def test_a_degraded_group_is_not_skipped_as_up_to_date(tmp_path: Path, bash) -> 
     (models / 'pe_image_encoder' / '1').mkdir(parents=True)
     (models / 'pe_image_encoder' / '1' / 'model.plan').write_text('x')
     (models / 'pe_text_encoder' / '1').mkdir(parents=True)
-    (models / 'pe_text_encoder' / '1' / 'model.onnx').write_text('x')
+    (models / 'pe_text_encoder' / '1' / 'model.plan').write_text('x')
     (tmp_path / '.install').mkdir()
     (tmp_path / '.install' / 'state.json').write_text('{"triton_image_digest": "sha256:abc"}')
     _put_onnx(tmp_path)
@@ -416,7 +416,7 @@ def test_pe_build_records_a_full_stamp(tmp_path: Path, bash) -> None:
 def _installed_pe(tmp_path: Path, *, stamp: str | None) -> str:
     """An installed, READY, up-to-date-looking PE group; returns the bash prelude."""
     models = tmp_path / 'models'
-    for rel in ('pe_image_encoder/1/model.plan', 'pe_text_encoder/1/model.onnx'):
+    for rel in ('pe_image_encoder/1/model.plan', 'pe_text_encoder/1/model.plan'):
         (models / rel).parent.mkdir(parents=True, exist_ok=True)
         (models / rel).write_text('x')
     (tmp_path / '.install').mkdir(exist_ok=True)

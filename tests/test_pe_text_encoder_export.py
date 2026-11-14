@@ -62,7 +62,7 @@ class TestClientContract:
     def test_rendered_config_declares_the_client_tensors(self) -> None:
         out = pe_text_triton_config.render_config(pe_text_triton_config.PETextTritonConfig())
         assert f'name: "{text_backends.PE_TEXT_TRITON_MODEL}"' in out
-        assert 'platform: "onnxruntime_onnx"' in out
+        assert 'platform: "tensorrt_plan"' in out
         assert f'name: "{text_backends.PE_TEXT_INPUT}"' in out
         assert f'name: "{text_backends.PE_TEXT_OUTPUT}"' in out
         assert 'data_type: TYPE_INT64' in out
@@ -84,8 +84,10 @@ class TestClientContract:
 
 
 class TestRenderConfig:
-    def test_cpu_instances_by_default(self) -> None:
-        out = pe_text_triton_config.render_config(pe_text_triton_config.PETextTritonConfig())
+    def test_ort_fallback_uses_cpu_instances(self) -> None:
+        out = pe_text_triton_config.render_config(
+            pe_text_triton_config.PETextTritonConfig(platform='onnxruntime_onnx', kind='KIND_CPU')
+        )
         assert 'kind: KIND_CPU' in out
         assert 'gpus:' not in out
 
@@ -139,7 +141,8 @@ class TestCli:
         args = text_export.build_parser().parse_args([])
         assert args.install_triton is False
         assert args.config_only is False
-        assert args.kind == 'cpu'
+        assert (args.platform, args.kind) == ('tensorrt_plan', None)
+        assert text_export.config_from_args(args).kind == 'KIND_GPU'
         assert args.verify_checkpoint is True
         assert args.checkpoint_path is None
         assert args.parity_threshold == pe_text_constants.PARITY_MIN_COSINE == 0.9999
@@ -159,7 +162,14 @@ class TestCli:
     def test_config_only_writes_the_model_repo_entry(self, tmp_path: Path) -> None:
         assert text_export.main(['--config-only', '--models-dir', str(tmp_path)]) == 0
         body = (tmp_path / text_backends.PE_TEXT_TRITON_MODEL / 'config.pbtxt').read_text()
+        assert 'platform: "tensorrt_plan"' in body
+
+    def test_ort_fallback_cli_writes_a_cpu_onnx_entry(self, tmp_path: Path) -> None:
+        argv = ['--config-only', '--platform', 'onnxruntime_onnx', '--models-dir', str(tmp_path)]
+        assert text_export.main(argv) == 0
+        body = (tmp_path / text_backends.PE_TEXT_TRITON_MODEL / 'config.pbtxt').read_text()
         assert 'platform: "onnxruntime_onnx"' in body
+        assert 'kind: KIND_CPU' in body
 
     @pytest.mark.parametrize(
         'argv',
@@ -180,7 +190,9 @@ class TestCli:
         onnx_file = tmp_path / 'text.onnx'
         onnx_file.write_bytes(b'graph-bytes')
         target = pe_text_triton_config.install_triton_model(
-            onnx_file, tmp_path / 'models', pe_text_triton_config.PETextTritonConfig()
+            onnx_file,
+            tmp_path / 'models',
+            pe_text_triton_config.PETextTritonConfig(platform='onnxruntime_onnx', kind='KIND_CPU'),
         )
         assert (
             target == tmp_path / 'models' / text_backends.PE_TEXT_TRITON_MODEL / '1' / 'model.onnx'

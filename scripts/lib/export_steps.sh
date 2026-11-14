@@ -265,14 +265,12 @@ export_pe() {
         log_success "PE-Core image encoder exported (ONNX Runtime fallback)"
     fi
 
-    # Text tower: runs in-process (ONNX Runtime), not on Triton -- no
-    # --load-model entry needed, so a failure here is a warning, not a
-    # hard failure of the whole export step (semantic-search TEXT
-    # queries degrade to PyTorch eager; embeddings/near-dup/clustering,
-    # which only need the image tower above, are unaffected).
-    if ! run_in_export_container python /app/export/export_pe_text_encoder.py 2>&1 | tee /tmp/export_pe_text.log; then
-        log_warn "PE-Core text tower export failed -- semantic-search text queries will fall back to PyTorch eager"
-        log_info "Check log: /tmp/export_pe_text.log"
+    # Text tower: a parity-gated TensorRT FP16 plan served by Triton as pe_text_encoder. A failure here is a
+    # warning: the image tower above (embeddings, near-dup, clustering) does not need it, only text queries do.
+    if ! run_in_export_container python /app/export/export_pe_text_encoder.py \
+            --install-triton --models-dir /app/models 2>&1 | tee /tmp/export_pe_text.log; then
+        log_warn "PE-Core text tower export failed -- semantic-search text queries will fail until it is built"
+        log_info "Check log: /tmp/export_pe_text.log (fallback: --platform onnxruntime_onnx)"
     fi
 
     return 0

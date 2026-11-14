@@ -11,6 +11,10 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ## [Unreleased]
 
+### Changed
+
+- **Search text encoder on the GPU.** `pe_text_encoder` is a TensorRT FP16 plan on the GPU instead of ONNX Runtime on one CPU instance. `make pe-export-text-triton` builds the plan and installs it only when it matches the FP32 graph (median cosine at least 0.999, p01 at least 0.995; measured 0.99998 and 0.99995 on 2,400 COCO captions). `--platform onnxruntime_onnx` builds the CPU fallback. Re-run the export to switch an installed model.
+
 ### Added
 
 - **Decode route per photo.** A newly ingested photo's images document stores `decode_route` (`gpu`, or `cpu_<reason>` such as `cpu_progressive`, `cpu_call_failed` or `cpu_gpu_off`), `IngestResult` and the batch summary carry it (`decode_routes` counts per route), and `GET /ingest/bulk/{run}` serves `decode_routes` for the run, so a silent fall-back from the GPU decode shows per photo and per run. One closed list (`src/domain/decode_route.py`) names the routes for the metric and the fields. The release acceptance script now treats `cpu_gpu_off` (not the never-emitted `cpu_off`) as policy.

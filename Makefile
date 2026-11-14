@@ -684,7 +684,7 @@ pe-export-text: ## PE-Core: text tower -> pytorch_models/pe_text_encoder.onnx (p
 	$(EXPORT_RUN) python /app/export/export_pe_text_encoder.py
 
 .PHONY: pe-export-text-triton
-pe-export-text-triton: ## PE-Core: text export + install as optional Triton model pe_text_encoder
+pe-export-text-triton: ## PE-Core: text export; builds the FP16 TensorRT plan, parity-gates it and installs Triton model pe_text_encoder
 	$(EXPORT_RUN) python /app/export/export_pe_text_encoder.py \
 		--install-triton --models-dir /app/models
 
@@ -694,12 +694,12 @@ pe-text-status: ## PE-Core: which text backend the API is using (GET /health/pe_
 		echo "API not reachable on port $(API_PORT)"
 
 .PHONY: export-pe
-export-pe: pe-download pe-export-image pe-build-trt pe-export-text-triton ## PE-Core: full chain (weights, image ONNX + TRT, text ONNX served via Triton)
+export-pe: pe-download pe-export-image pe-build-trt pe-export-text-triton ## PE-Core: full chain (weights, image ONNX + TRT, text TensorRT plan served via Triton)
 	@echo "If pe-build-trt failed on attention-pool ops: make pe-build-ort"
-	@echo "pe_text_encoder is now installed under models/pe_text_encoder/1/model.onnx --"
+	@echo "pe_text_encoder is now installed under models/pe_text_encoder/1/model.plan --"
 	@echo "reload/restart Triton (or 'make reload-promoted') to pick it up if it wasn't already loaded."
 	@$(MAKE) restart-triton
-	@echo "Restart the API to pick up the text ONNX: $(COMPOSE) restart $(API_SERVICE)"
+	@echo "Restart the API to pick up the text engine: $(COMPOSE) restart $(API_SERVICE)"
 
 .PHONY: export-status
 export-status: ## Show status of all exported models

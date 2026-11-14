@@ -133,7 +133,7 @@ in front of PostgreSQL.
   `paddleocr_det_trt`, `paddleocr_rec_trt`, `ocr_pipeline` (a BLS pipeline;
   see [OCR.md](OCR.md)), `gpu_image_prep` (decode-once ingest, loaded on first use) and
   the curation encoders `pe_image_encoder` (TensorRT) and `pe_text_encoder`
-  (CPU). Dynamic batching is on; preferred sizes and instance counts are in each
+  (TensorRT FP16, GPU). Dynamic batching is on; preferred sizes and instance counts are in each
   `config.pbtxt`. The API reads a detector's output format from Triton
   metadata, so YOLO11 and YOLO26 are interchangeable at `/detect`.
 - **One shared gRPC client pool** (`src/clients/triton_pool_core.py`) per process.
