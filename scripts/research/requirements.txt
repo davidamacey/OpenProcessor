@@ -4,3 +4,5 @@
 # (The fine-grained benchmark has its own list: fine_grained_requirements.txt.)
 igraph
 leidenalg
+finch-clust==0.2.3
+chinese-whispers==0.9.0
