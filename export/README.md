@@ -274,6 +274,16 @@ existing plan untouched. Measured 2026-11-13 on 2,400 distinct COCO val2017 capt
 11.4.0.106): median cosine 0.99998, p01 0.99995, min 0.99978; a batched call equals the batch-1 call to
 1.3e-5; plan 681 MiB on disk, built in 59 s.
 
+Engine-side latency (RTX A6000 under trtexec, GPU compute, tokens T=12 or 13; ONNX Runtime CPU FP32 in the
+export image, default threads, loaded shared host, 2026-11-14):
+
+| Backend | Batch 1 p50 / p99 | Batch 8 | Batch 32 |
+|---|---:|---:|---:|
+| TensorRT FP16 plan | 1.37 ms / 1.38 ms | 2,778 queries/s | 3,609 queries/s |
+| ONNX Runtime CPU FP32 | 46.1 ms / 73.0 ms | 42 queries/s | 45 queries/s |
+
+These are engine-side figures; the gRPC hop and tokenization come on top in a request.
+
 `--platform onnxruntime_onnx` is the explicit fallback (the ONNX Runtime graph, CPU instances unless
 `--kind gpu --gpus N`):
 
