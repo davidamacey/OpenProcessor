@@ -74,6 +74,9 @@ generate_model_config() {
         paddleocr_rec_trt)
             generate_paddleocr_rec_config "$config_file" "$profile" "$gpu_id"
             ;;
+        paddleocr_det_trt_uint8|paddleocr_rec_trt_uint8)
+            generate_ocr_uint8_config "$config_file" "$profile" "$gpu_id"
+            ;;
         ocr_pipeline)
             # Python BLS model: its instance count is the OCR concurrency and
             # has its own per-profile value, bounded by the profile's
@@ -216,6 +219,8 @@ generate_all_configs() {
         "mobileclip2_s2_text_encoder"
         "paddleocr_det_trt"
         "paddleocr_rec_trt"
+        "paddleocr_det_trt_uint8"
+        "paddleocr_rec_trt_uint8"
         "ocr_pipeline"
     )
 

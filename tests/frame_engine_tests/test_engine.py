@@ -209,7 +209,7 @@ class _Transport:
 def m_needs_cupy(name: str) -> bool:
     """The engine modules that import CuPy at load (re-imported against the stand-in)."""
     return name in ('frame_engine.engine', 'frame_engine.nvjpeg_lanes', 'frame_engine.prep_kernels',
-                    'frame_engine.colour') or name.startswith('frame_engine.branches')  # fmt: skip
+                    'frame_engine.colour', 'frame_engine.ocr.kernels') or name.startswith('frame_engine.branches')  # fmt: skip
 
 
 @pytest.fixture
@@ -222,6 +222,7 @@ def eng(monkeypatch: pytest.MonkeyPatch) -> Any:
     mod = importlib.import_module('frame_engine.engine')
     monkeypatch.setattr(mod, 'NvJpegLanes', _Lanes)
     monkeypatch.setattr(mod, 'PrepKernels', _Kernels)
+    monkeypatch.setattr(mod, 'LineWarp', object)
     _Lanes.fail_with = None
     _Lanes.seen_streams = []
     _Kernels.fail_on_call = None
@@ -407,16 +408,16 @@ def test_stored_boxes_replace_the_detector(eng: Any) -> None:
 
 def test_unbuilt_branches_answer_unsupported_and_the_rest_runs(eng: Any) -> None:
     engine = eng()
-    plan = _plan(['detect', 'faces', 'ocr'], embed=None, crops='none')
+    plan = _plan(['detect', 'faces', 'face_embed'], embed=None, crops='none')
     r = _run(engine, plan)
     assert r.status == 'ok'
     assert r.branches == {
         'detect': ('ok', ''),
         'faces': ('error', 'unsupported_branch'),
-        'ocr': ('error', 'unsupported_branch'),
+        'face_embed': ('error', 'unsupported_branch'),
     }
     assert engine.transport.models() == ['det']
-    assert not {'face_boxes', 'ocr_texts', 'derivative_jpegs'} & set(r.outputs)
+    assert not {'face_boxes', 'face_embeddings', 'derivative_jpegs'} & set(r.outputs)
 
 
 def test_every_reported_name_has_exactly_one_branch_status_entry(eng: Any) -> None:

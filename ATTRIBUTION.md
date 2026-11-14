@@ -122,8 +122,9 @@ models exported to ONNX/TensorRT.
 ### Usage in This Project
 - `export/export_paddleocr_det.py` / `export/export_paddleocr_rec.py`: TensorRT export of the detection/recognition ONNX models
 - `export/download_paddleocr.py`: fetches the ONNX source models
-- No PaddleOCR source code is vendored into this repository; only the exported model weights are used, served behind Triton's `ocr_pipeline` BLS
-- `pyclipper` 1.4.0 (installed in the Triton image and the offline test requirements): Python wrapper of Angus Johnson's Clipper library, MIT License (Clipper itself: Boost Software License 1.0). `models/ocr_pipeline/1/ocr_postprocess.py` uses it for the DB unclip polygon offset, as PaddleOCR's `DBPostProcess` does. Not redistributed in this repository.
+- No PaddleOCR source file is vendored into this repository; only the exported model weights are used, served behind Triton's `ocr_pipeline` BLS
+- The frame engine's `ocr` branch re-implements, in `frame_engine/ocr/`, the algorithms of PaddleX release/3.3 (Apache-2.0, the code PaddleOCR 3.x runs): `DBPostProcess.boxes_from_bitmap`, `SortQuadBoxes`, `DetResizeForTest.resize_image_type0` (`db_boxes.py`, `det_input.py`), `get_rotate_crop_image` and `resize_norm_img` (`crop_geometry.py`, `kernels.py`), PaddleOCR's `predict_rec.py` batching (`batching.py`) and `CTCLabelDecode` (`ctc.py`). The offline tests compare against the reference's own outputs (`tests/frame_engine_tests/db_reference.npz`: synthetic maps and what the reference made of them)
+- `pyclipper` 1.4.0 (installed in the Triton image, the frame-engine image and the offline test requirements): Python wrapper of Angus Johnson's Clipper library, MIT License (Clipper itself: Boost Software License 1.0). `models/ocr_pipeline/1/ocr_postprocess.py` uses it for the DB unclip polygon offset, as PaddleOCR's `DBPostProcess` does. Not redistributed in this repository.
 
 ---
 

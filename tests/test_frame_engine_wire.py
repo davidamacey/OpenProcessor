@@ -13,6 +13,13 @@ from src.domain.processing_plan import BRANCHES
 
 DETECTOR = {'model': 'yolov11_small_trt_end2end', 'input_size': 640, 'letterbox_fill': 114}
 EMBED = {'model': 'pe_image_encoder', 'size': 336, 'batch': 32}
+OCR = {
+    'detector': 'paddleocr_det_trt_uint8',
+    'recogniser': 'paddleocr_rec_trt_uint8',
+    'batch': 16,
+    'max_lines': 128,
+    'det_side': 960,
+}
 
 
 def _plan(**over: Any) -> str:
@@ -69,7 +76,8 @@ def test_the_engine_branches_are_the_plan_vocabulary_minus_api_branches() -> Non
         (_plan(branches=['detect', 'embed_frame'], embed_classes=[2]), 'bad_field'),
         (_plan(if_detected={'embed_crops': [2]}), 'condition_on_unconditional'),
         (_plan(if_detected={'ocr': [2]}), 'condition_on_unconditional'),
-        (_plan(branches=['ocr'], crops='none', if_detected={'ocr': [2]}), 'missing_dependency'),
+        (_plan(branches=['ocr'], crops='none', if_detected={'ocr': [2]}), 'missing_field'),
+        (_plan(branches=['detect', 'ocr'], ocr=OCR, if_detected={'ocr': [2]}), 'bad_field'),
         (_plan(derivatives={'thumb': 256}), 'bad_field'),
     ],
 )
@@ -104,17 +112,17 @@ def test_stored_boxes_stand_in_for_the_detector() -> None:
 def test_unbuilt_branches_are_reported_unsupported_and_renditions_are_built() -> None:
     plan = wire.parse_plan(
         _plan(
-            branches=['detect', 'faces', 'face_embed', 'ocr'],
+            branches=['detect', 'faces', 'face_embed'],
             embed=None,
             crops='none',
-            if_detected={'ocr': [0]},
+            if_detected={'faces': [0]},
             derivatives=[{'name': 'thumb', 'side': 256}],
         ),
         has_boxes=False,
     )
-    assert plan.unsupported() == ('faces', 'face_embed', 'ocr')
-    assert plan.reported() == ('detect', 'faces', 'face_embed', 'ocr', 'derivatives')
-    assert plan.if_detected == {'ocr': (0,)}
+    assert plan.unsupported() == ('faces', 'face_embed')
+    assert plan.reported() == ('detect', 'faces', 'face_embed', 'derivatives')
+    assert plan.if_detected == {'faces': (0,)}
 
 
 def test_branch_status_round_trips_one_entry_per_name() -> None:
@@ -146,6 +154,75 @@ def test_expected_outputs_follow_the_branches() -> None:
     assert wire.expected_outputs(frame_only) == ('whole_embedding',)
     assert set(wire.OUTPUT_DATATYPES) >= set(wire.expected_outputs(full))
     assert wire.INPUT_DATATYPES['boxes'] == 'FP64'
+
+
+# ------------------------------------------------------------------ the ocr branch
+
+
+def test_the_ocr_spec_parses_with_the_reference_defaults_and_round_trips() -> None:
+    plan = wire.parse_plan(
+        _plan(branches=['ocr'], detector=None, embed=None, crops='none', ocr=OCR), has_boxes=False
+    )
+    o = plan.ocr
+    assert o is not None
+    assert (o.thresh, o.box_thresh, o.unclip_ratio) == (0.2, 0.45, 1.4)  # PP-OCRv6 small yml
+    assert (o.det_limit, o.det_max_side, o.det_antialias, o.taps) == ('max', 1920, False, 1)
+    assert plan.unsupported() == ()
+    assert wire.parse_plan(plan.to_json(), has_boxes=False) == plan
+
+
+def test_ocr_needs_its_spec_and_the_spec_needs_the_branch() -> None:
+    with pytest.raises(wire.EnginePlanError) as err:
+        wire.parse_plan(
+            _plan(branches=['ocr'], detector=None, embed=None, crops='none'), has_boxes=False
+        )
+    assert (err.value.fault, err.value.detail) == ('missing_field', 'ocr')
+    with pytest.raises(wire.EnginePlanError) as err:
+        wire.parse_plan(_plan(ocr=OCR), has_boxes=False)
+    assert (err.value.fault, err.value.detail) == ('bad_field', 'ocr')
+
+
+@pytest.mark.parametrize(
+    ('change', 'fault'),
+    [
+        ({'batch': 0}, 'bad_field'),
+        ({'batch': 17}, 'bad_field'),  # the recogniser profile's maximum
+        ({'det_max_side': 1921}, 'bad_field'),  # the detector profile's maximum
+        ({'det_limit': 'long'}, 'bad_field'),
+        ({'det_antialias': 1}, 'bad_field'),
+        ({'thresh': 1.5}, 'bad_field'),
+        ({'taps': 9}, 'bad_field'),
+        ({'nms': 0.5}, 'unknown_field'),
+    ],
+)
+def test_a_bad_ocr_spec_is_refused(change: dict[str, Any], fault: str) -> None:
+    text = _plan(branches=['ocr'], detector=None, embed=None, crops='none', ocr={**OCR, **change})
+    with pytest.raises(wire.EnginePlanError) as err:
+        wire.parse_plan(text, has_boxes=False)
+    assert err.value.fault == fault
+
+
+def test_the_ocr_outputs_are_declared_with_their_datatypes() -> None:
+    plan = wire.parse_plan(
+        _plan(branches=['ocr'], detector=None, embed=None, crops='none', ocr=OCR), has_boxes=False
+    )
+    names = wire.expected_outputs(plan)
+    assert names == (
+        'ocr_quads',
+        'ocr_texts',
+        'ocr_scores',
+        'ocr_char_min',
+        'ocr_det_scores',
+        'ocr_overflow',
+    )
+    assert [wire.OUTPUT_DATATYPES[n] for n in names] == [
+        'FP32',
+        'BYTES',
+        'FP32',
+        'FP32',
+        'FP32',
+        'INT32',
+    ]
 
 
 def test_renditions_are_parsed_with_defaults_and_round_trip() -> None:

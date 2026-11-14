@@ -422,6 +422,8 @@ _ms_run_group_steps() {
             "$runner" ocr_download _ms_export python /app/export/download_paddleocr.py || return 1
             "$runner" ocr_det _ms_export python /app/export/export_paddleocr_det.py || return 1
             "$runner" ocr_rec _ms_export python /app/export/export_paddleocr_rec.py || return 1
+            "$runner" ocr_det_uint8 _ms_export python /app/export/export_paddleocr_det.py --uint8 || return 1
+            "$runner" ocr_rec_uint8 _ms_export python /app/export/export_paddleocr_rec.py --uint8 || return 1
             "$runner" ocr_stamp _ms_record_group_stamps ocr || return 1
             ;;
         pe)

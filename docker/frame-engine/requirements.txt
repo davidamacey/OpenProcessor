@@ -12,6 +12,7 @@ opencv-python-headless==5.0.0.93
 # littleCMS (bundled in the wheel) builds the profile-to-sRGB tables (frame_engine/colour.py); the
 # API pin, so both decode routes convert with the same lcms2 build.
 pillow==13.0.0
+pyclipper==1.4.0
 numpy==2.5.4
 tritonclient[grpc]==2.74.0
 grpcio==1.84.0

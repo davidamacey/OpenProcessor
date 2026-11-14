@@ -13,8 +13,9 @@ Complete guide for deploying and using PP-OCRv6 text detection and recognition o
 5. [Configuration](#configuration)
 6. [API Usage](#api-usage)
 7. [Performance Tuning](#performance-tuning)
-8. [Troubleshooting](#troubleshooting)
-9. [File Reference](#file-reference)
+8. [The frame engine's `ocr` branch](#the-frame-engines-ocr-branch)
+9. [Troubleshooting](#troubleshooting)
+10. [File Reference](#file-reference)
 
 ---
 
@@ -309,6 +310,44 @@ Measured `/ocr/predict` throughput and latency are in [PERFORMANCE.md](PERFORMAN
 | Batch (4 images) | 40-50 RPS | 100-150ms |
 
 ---
+
+## The frame engine's `ocr` branch
+
+The frame engine (`frame_engine/`, see [ARCHITECTURE](ARCHITECTURE.md)) runs OCR as a branch of one photo's plan: the photo is decoded once on the GPU and
+the text detector's input and every text line are cut from that resident full-resolution frame by CUDA kernels. It does not replace the `ocr_pipeline`
+model above (the API's `/ocr` route still uses it); it is what the plan routes use.
+
+| Step | Where | What |
+|---|---|---|
+| Detector input | GPU kernel | the frame resized as PaddleX `DetResizeForTest` does (`det_limit` `min` raises the shorter side to `det_side`, `max` caps the longer; never beyond `det_max_side`, the detector engine's profile, 1920), written as uint8 BGR |
+| Detector | `paddleocr_det_trt_uint8` | uint8 input, `(x/255 - mean)/std` in the graph, probability map out |
+| Text boxes | host, on the map | PaddleOCR's DB post-process (threshold 0.2, box score 0.45, unclip 1.4, `pyclipper`), reading order |
+| Line crops | GPU kernel | each quadrilateral warped from the full-resolution frame to 48 pixels high straight into the recogniser batch (perspective cut, quarter turn of a tall line, resize composed into one sampling) |
+| Recogniser | `paddleocr_rec_trt_uint8` | batches by PaddleOCR's recipe (sorted by width over height, padded to the widest, at least 320, at most `batch` lines), uint8 input, arg-max in the graph: a call returns `indices` and `scores` `[B, T]`, no `[B, T, 18710]` tensor |
+| Text | host | CTC collapse of the small tensor |
+
+Outputs (`ocr_quads` `[n, 8]` in source pixels, `ocr_texts`, `ocr_scores`, `ocr_char_min`, `ocr_det_scores`, `ocr_overflow`): `src/domain/frame_engine_wire.py`. A photo with no text costs the detector call and
+nothing else; past `max_lines` the lowest detector scores are dropped and counted in `ocr_overflow`.
+
+Device memory (RTX A6000, TensorRT 11, the plans run at their profile maximum, and loaded into Triton with the shipped two instances each): the detector profile is 1 x 1920 x 1920 (one call per photo)
+and the recogniser's 16 x 48 x 2048 (`UINT8_MAX_BATCH` in the two exporters; the wire's `ocr.batch` and `ocr.det_max_side` are bounded by the same numbers). One execution context needs 385 MiB
+(detector) and 734 MiB (recogniser) on top of 32 MiB of weights each; the model server's process grew by 828 MiB for the detector and 1,552 MiB for the recogniser, 2.4 GB for the pair
+(1.2 GB at one instance each). Larger profiles only reserve memory the branch never uses: 4 x 1920 and 64 x 2048 cost 3.3 GB and 5.9 GB loaded (9.3 GB the pair). For comparison the pipeline's FP32 pair
+needs 400 and 1,768 MiB per context at its maximum, and the recogniser's `[B, T, 18710]` output adds 1.2 GB of buffers at batch 64 that the arg-max build does not have.
+
+What differs from `ocr_pipeline`, one factor at a time on the 400 COCO-Text images of the public set (strict end-to-end F1 at recogniser confidence 0.8; the pipeline's own value is 0.186):
+
+| Difference | Pipeline | `ocr` branch (the reference: PaddleX release/3.3, the code PaddleOCR 3.x runs) | Effect alone |
+|---|---|---|---|
+| Detector size | long side to 960, up to 640 if smaller (`src/clients/triton_ocr.py`) | `DetResizeForTest`: the short side raised to 736, never shrunk, capped by the engine profile (1920) | 0.193 to 0.238 (spotted words 0.431 to 0.501) |
+| Channel order into the detector | RGB after normalising BGR (`models/ocr_pipeline/1/model.py`) | BGR, as the model's `inference.yml` (`DecodeImage img_mode: BGR`) | 0.186 to 0.193 |
+| Box score and thresholds | centre pixel of the map, 0.4 / 1.5 / 1000 candidates, dilation | mean of the map inside the box, the model's 0.45 / 1.4 / 3000, no dilation | precision up, recall down, F1 equal |
+| Crop interpolation | linear | bicubic in the reference; the kernel samples the frame once, bilinear | none |
+| Recogniser batching | one call per crop | PaddleOCR's recipe (sorted, padded to the widest, at least 320) | +0.018 character accuracy on COCO-Text word crops (0.5706 against 0.5522) |
+
+A 20 MP photo is read at 1920 x 1280 by default. On synthetic labels pasted onto public 12 to 22 MP photos, a line of text 16 pixels high or more is found
+(recall 0.98); text 12 pixels high is found 79% of the time at 1920 and 100% of the time with tiles of 1920 pixels at native resolution (about 9 detector calls per photo);
+today's 960 size finds 10% of the 12-pixel text and 44% of the 16-pixel text. Tiling is not part of the branch.
 
 ## Troubleshooting
 
