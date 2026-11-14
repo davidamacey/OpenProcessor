@@ -22,6 +22,7 @@ noisy when the 1-minute average at the start was above 16 (repeat it before it d
     run_baseline.py MANIFEST --api-url URL --slug-prefix NAME --policy all|selected|lazy \\
         --out PATH_NO_SUFFIX [--stages ingest,embed,region,vlm,cluster] \\
         [--opensearch-url URL] [--worker-metrics-url URL] [--triton-metrics-url URL] \\
+        [--frame-engine-metrics-url URL] \\
         [--reps N] [--drop-cache] [--gpu-interval 0.5]
     run_baseline.py --compare before.json after.json
 """
@@ -54,7 +55,7 @@ from scripts.bench.baseline_report import (
     SCHEMA,
     BatchOutcome,
     compare_reports,
-    gpu_prep_stages,
+    frame_engine_stages,
     ingest_summary,
     median_range,
     metrics_delta,
@@ -71,8 +72,8 @@ STAGE_ORDER = ('ingest', 'region', 'embed', 'vlm', 'cluster')
 API_METRIC_PREFIXES = ('op_', 'http_request_duration_seconds')
 NOISY_LOADAVG_1MIN = 16.0
 LOADAVG = Path('/proc/loadavg')
+FRAME_ENGINE_METRIC_PREFIXES = ('op_frame_engine_stage',)
 TRITON_METRIC_PREFIXES = (
-    'op_gpu_prep_stage',
     'nv_inference_compute_input_duration_us',
     'nv_inference_compute_infer_duration_us',
     'nv_inference_compute_output_duration_us',
@@ -368,6 +369,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--worker-metrics-url')
     p.add_argument('--triton-metrics-url')
     p.add_argument(
+        '--frame-engine-metrics-url',
+        help='the frame engine metrics endpoint (stage counters), e.g. http://127.0.0.1:4613/metrics',
+    )
+    p.add_argument(
         '--crop-cache-dir', type=Path, help='host directory of the crop cache, sized at the end'
     )
     p.add_argument(
@@ -431,6 +436,7 @@ def run(
             'api': (f'{args.api_url}/metrics', API_METRIC_PREFIXES),
             'worker': (args.worker_metrics_url, API_METRIC_PREFIXES),
             'triton': (args.triton_metrics_url, TRITON_METRIC_PREFIXES),
+            'frame_engine': (args.frame_engine_metrics_url, FRAME_ENGINE_METRIC_PREFIXES),
         }
         before = {name: _scrape(client, url) for name, (url, _) in sources.items()}
         sampler = GpuSampler(gpu_reader, args.gpu_interval)
@@ -510,9 +516,9 @@ def run(
             if url
         },
     }
-    triton = report['metrics'].get('triton')
-    if triton and (prep := gpu_prep_stages(triton['counters'])):
-        report['gpu_prep_stages'] = prep
+    engine = report['metrics'].get('frame_engine')
+    if engine and (engine_stages := frame_engine_stages(engine['counters'])):
+        report['frame_engine_stages'] = engine_stages
     _write_report(out, report)
     return report
 

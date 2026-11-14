@@ -29,7 +29,7 @@ def _report(rate: float, *, jpeg_s: float = 2.0, noisy: bool = False) -> dict[st
             'api_cpu_s': 5.0,
             'triton_cpu_pct_mean': 250.0,
         },
-        'gpu_prep_stages': {
+        'frame_engine_stages': {
             'decode': {'seconds': 6.0, 'observations': 100.0, 'mean_s': 0.06, 'share': 0.75},
             'crop_jpeg': {'seconds': jpeg_s, 'observations': 100.0, 'mean_s': 0.02, 'share': 0.25},
         },

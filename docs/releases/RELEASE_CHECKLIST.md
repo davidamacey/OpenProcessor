@@ -114,7 +114,8 @@ second undo refused; holdout and validated items unchanged), an auto-label loop 
 (optional, skipped without a VLM), export, a 2-epoch probe train, bake-off, promote
 (forced when the gate rejects the undertrained model), inference via `/detect?model_name=`,
 model delete, metrics (GPU decode fallbacks within `--decode-fallback-max`, default 0.5 %, and
-`op_gpu_prep_stage_*` on Triton's metrics port when `--triton-metrics-url` is given) and
+`op_frame_engine_stage_*` on the frame engine's metrics port when `--frame-engine-metrics-url`
+is given) and
 log-noise checks, and the installer lifecycle (`--only
 installer_uninstall` and `--upgrade-version vX` are opt-in). A cleanup trap always deletes
 the throwaway project and promoted models. Exit status is non-zero if any required phase

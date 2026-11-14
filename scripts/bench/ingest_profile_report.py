@@ -86,23 +86,23 @@ def triton_model_rows(reports: list[dict[str, Any]]) -> list[tuple[str, float, f
 
 
 def prep_stage_rows(reports: list[dict[str, Any]]) -> list[tuple[str, float, float]]:
-    """``(stage, mean ms per image, share)`` of the gpu_image_prep stages."""
-    stages = sorted({s for r in reports for s in r.get('gpu_prep_stages', {})})
+    """``(stage, mean ms per image, share)`` of the frame engine stages."""
+    stages = sorted({s for r in reports for s in r.get('frame_engine_stages', {})})
     return [
         (
             s,
             _median(
                 [
-                    r['gpu_prep_stages'][s]['mean_s'] * 1000
+                    r['frame_engine_stages'][s]['mean_s'] * 1000
                     for r in reports
-                    if s in r.get('gpu_prep_stages', {})
+                    if s in r.get('frame_engine_stages', {})
                 ]
             ),
             _median(
                 [
-                    r['gpu_prep_stages'][s]['share']
+                    r['frame_engine_stages'][s]['share']
                     for r in reports
-                    if s in r.get('gpu_prep_stages', {})
+                    if s in r.get('frame_engine_stages', {})
                 ]
             ),
         )
@@ -117,7 +117,7 @@ def _table(header: tuple[str, ...], rows: list[tuple[str, ...]]) -> list[str]:
 
 
 def render_row(name: str, reports: list[dict[str, Any]], gpu_index: str = '0') -> str:
-    """Markdown for one row: headline, API stages, Triton models, gpu_image_prep stages."""
+    """Markdown for one row: headline, API stages, Triton models, frame engine stages."""
     rates = [r['ingest']['images_per_s'] for r in reports]
     images = reports[0]['ingest']['images']
     gpu = [r['gpu'][gpu_index] for r in reports]  # the stack's GPU; the sampler logs all of them
@@ -177,7 +177,7 @@ def render_row(name: str, reports: list[dict[str, Any]], gpu_index: str = '0') -
     prep = prep_stage_rows(reports)
     if prep:
         lines += [
-            '#### gpu_image_prep stages (host wall, sums over concurrent requests)',
+            '#### Frame engine stages (host wall, sums over concurrent requests)',
             '',
             *_table(
                 ('stage', 'ms / image', 'share'),

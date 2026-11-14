@@ -7,7 +7,8 @@ container's CPU (``docker stats``) over the run. ``table`` renders the per-stage
 already run. Raw JSON goes to ``OUT_ROOT/ROW/``; the table holds aggregates only.
 
     ingest_profile.py run setB MANIFEST --api-url http://127.0.0.1:5703 \\
-        --triton-metrics-url http://127.0.0.1:5702/metrics --path-map HOST=CONTAINER \\
+        --triton-metrics-url http://127.0.0.1:5702/metrics \\
+        --frame-engine-metrics-url http://127.0.0.1:5713/metrics --path-map HOST=CONTAINER \\
         --api-container NAME --triton-container NAME --out-root artifacts_local/bench/v070/sp0
     ingest_profile.py table setA=artifacts_local/bench/v070/sp0/setA setB=...
 """
@@ -115,6 +116,8 @@ def build_run_args(ns: argparse.Namespace) -> argparse.Namespace:
     ]  # fmt: skip
     if ns.triton_metrics_url:
         argv += ['--triton-metrics-url', ns.triton_metrics_url]
+    if ns.frame_engine_metrics_url:
+        argv += ['--frame-engine-metrics-url', ns.frame_engine_metrics_url]
     for spec in ns.path_map:
         argv += ['--path-map', spec]
     return rb.build_parser().parse_args(argv)
@@ -128,6 +131,7 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument('manifest', type=Path)
     run.add_argument('--api-url', required=True)
     run.add_argument('--triton-metrics-url')
+    run.add_argument('--frame-engine-metrics-url')
     run.add_argument('--api-container', required=True)
     run.add_argument('--triton-container', required=True)
     run.add_argument('--path-map', action='append', default=[], metavar='HOST=CONTAINER')

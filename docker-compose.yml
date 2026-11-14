@@ -154,6 +154,10 @@ services:
     # Registering a CUDA shared-memory region fails when the registering
     # process has the model server's process id (both are 1 without an init).
     init: true
+    ports:
+      # Prometheus metrics (stage timing, overloads, region registrations); the gRPC
+      # front (8001) stays on the internal network.
+      - "${OP_BIND_ADDRESS:-127.0.0.1}:${FRAME_ENGINE_METRICS_PORT:-4613}:8002"
     env_file:
       - path: ./.env
         required: false
