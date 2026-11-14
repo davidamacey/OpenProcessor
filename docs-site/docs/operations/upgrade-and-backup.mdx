@@ -78,8 +78,9 @@ shared memory). Nothing to do by hand; check the decode with:
 
 The installer writes the engine's sizes for the profile into `.env`
 (`OP_FRAME_ENGINE_REGION_MIB`, `OP_FRAME_ENGINE_POOL_MIB`, `OP_FRAME_ENGINE_BUDGET_MIB`); a
-checkout applies them with `./openprocessor profile`. A `models/gpu_image_prep/` directory left in
-an installed model repository is no longer loaded and can be deleted.
+checkout applies them with `./openprocessor profile`. The upgrade's model seed step removes the
+retired `models/gpu_image_prep/` directory from an installed model repository; in a checkout
+`git pull` removes it.
 
 ### Upgrading from a release with the single API image (0.6.x and earlier)
 

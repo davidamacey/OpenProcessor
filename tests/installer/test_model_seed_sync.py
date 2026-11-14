@@ -145,3 +145,35 @@ def test_the_shipped_ocr_pipeline_replaces_an_unversioned_install(tmp_path: Path
     assert 'TYPE_UINT8' in (dest / 'ocr_pipeline/config.pbtxt').read_text()
     assert (dest / 'ocr_pipeline/1/model.py').read_text() != 'old'
     assert (dest / 'paddleocr_rec_trt/1/model.plan').read_text() == 'engine'
+
+
+def test_a_retired_model_directory_is_removed_from_the_install(repos: tuple[Path, Path]) -> None:
+    """0.7.0 replaced the gpu_image_prep Triton model with the frame engine service; an upgraded
+    install must not keep its directory (Triton would list it, and its built files are dead)."""
+    seed, dest = repos
+    _write(seed, 'kept/config.pbtxt', 'seed')
+    _write(dest, 'gpu_image_prep/1/model.py', 'old')
+    _write(dest, 'gpu_image_prep/config.pbtxt', 'old')
+    _write(dest, 'my_custom_model/config.pbtxt', 'mine')  # not in the seed, not retired: kept
+    sync = _load()
+    sync.sync(seed, dest)
+    assert sync.remove_retired(dest) == ['gpu_image_prep']
+    assert not (dest / 'gpu_image_prep').exists()
+    assert (dest / 'my_custom_model' / 'config.pbtxt').read_text() == 'mine'
+    assert (dest / 'kept' / 'config.pbtxt').exists()
+    assert 'gpu_image_prep' in sync.RETIRED_MODELS
+
+
+def test_the_command_line_entry_point_reports_removed_models(repos: tuple[Path, Path]) -> None:
+    seed, dest = repos
+    seed.mkdir()
+    _write(dest, 'gpu_image_prep/config.pbtxt', 'old')
+    done = subprocess.run(
+        ['python3', str(SCRIPT), str(seed), str(dest)],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert done.returncode == 0, done.stderr
+    assert 'removed retired models: gpu_image_prep' in done.stdout
