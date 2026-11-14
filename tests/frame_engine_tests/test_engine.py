@@ -126,6 +126,7 @@ class _Transport:
 
     def __init__(self) -> None:
         self.calls: list[tuple[str, list[int]]] = []
+        self.deadlines: list[float] = []
         self.staged = 0
         self.fail: dict[str, Exception] = {}
         self.stage_fails: Exception | None = None
@@ -141,9 +142,11 @@ class _Transport:
     def commit(self, staged: Any) -> None:
         staged.host = np.asarray(staged.device)
 
-    def infer(self, model: str, staged: Any, off: int, shape: list[int], output: str) -> Any:
+    def infer(self, model: str, staged: Any, off: int, shape: list[int], output: str, *,
+              deadline: float) -> Any:  # fmt: skip
         assert staged.host is not None, 'infer before commit'
         self.calls.append((model, shape))
+        self.deadlines.append(deadline)
         if model in self.fail:
             raise self.fail[model]
         n = shape[0]
@@ -180,9 +183,9 @@ def eng(monkeypatch: pytest.MonkeyPatch) -> Any:
 
     created: list[Any] = []
 
-    def build(**over: Any) -> Any:
+    def build(transport: Any = None, **over: Any) -> Any:
         settings = EngineSettings(**{'workers': 2, **over})
-        transport = _Transport()
+        transport = transport or _Transport()
         engine = mod.FrameEngine(settings, transport, EngineMetrics(CollectorRegistry()))
         created.append(engine)
         return engine
@@ -260,8 +263,8 @@ def test_a_photo_without_detections_still_answers_every_output_of_its_plan(eng: 
     engine = eng()
     real = engine.transport.infer
 
-    def nothing_found(model: str, staged: Any, off: int, shape: list[int], output: str) -> Any:
-        out = real(model, staged, off, shape, output)
+    def nothing_found(model: str, *args: Any, **kwargs: Any) -> Any:
+        out = real(model, *args, **kwargs)
         return np.zeros_like(out) if model == 'det' else out
 
     engine.transport.infer = nothing_found
@@ -423,6 +426,132 @@ def test_an_unreachable_model_server_is_raised_not_answered(eng: Any) -> None:
         _run(engine)
     assert engine.budget.in_use == 0
     assert engine.transport.staged == 0
+
+
+class _Region:
+    raw_handle = b'aGFuZGxl'
+
+    def __init__(self, nbytes: int) -> None:
+        self.buf = np.zeros(nbytes, np.uint8)
+
+    def view(self) -> Any:
+        return self.buf
+
+    def free(self) -> None:
+        return None
+
+
+class _Server:
+    """A model server that takes every call and answers none until ``answering`` is set (then the
+    detector finds nothing and the encoder answers 8-wide vectors)."""
+
+    def __init__(self) -> None:
+        self.answering = False
+        self.cancelled = 0
+        self.regions: dict[str, int] = {}
+
+    def is_server_ready(self, client_timeout: float | None = None) -> bool:
+        return True
+
+    def get_cuda_shared_memory_status(self, as_json: bool = False,
+                                      client_timeout: float | None = None) -> Any:  # fmt: skip
+        return {'regions': {name: {} for name in self.regions}}
+
+    def register_cuda_shared_memory(self, name: str, *_a: Any, client_timeout: Any = None) -> None:
+        self.regions[name] = 1
+
+    def unregister_cuda_shared_memory(self, name: str = '', client_timeout: Any = None) -> None:
+        self.regions.pop(name, None)
+
+    @staticmethod
+    def _result(model: str, inputs: Any) -> Any:
+        n = int(inputs[0].shape()[0])
+        out = np.zeros((1, 300, 6), np.float32) if model == 'det' else np.ones((n, 8), np.float32)
+        return types.SimpleNamespace(as_numpy=lambda _name: out)
+
+    def async_infer(self, model_name: str, inputs: Any, callback: Any, *, outputs: Any = None,
+                    client_timeout: Any = None) -> Any:  # fmt: skip
+        if self.answering:
+            callback(result=self._result(model_name, inputs), error=None)
+        return types.SimpleNamespace(cancel=self._cancel)
+
+    def _cancel(self) -> None:
+        self.cancelled += 1
+
+
+def test_a_model_server_that_never_answers_fails_the_photo_and_frees_everything(
+    eng: Any,
+) -> None:
+    """The model server restarted with calls in flight: each call ends at its deadline, the photo
+    is answered (unavailable, retryable), its slice and its budget come back, and the next photo
+    is served once the server answers again, without restarting the engine."""
+    import tritonclient.grpc as grpcclient
+
+    from frame_engine.stage_metrics import EngineMetrics
+    from frame_engine.transport import CudaShmTransport, TritonUnavailableError
+
+    server = _Server()
+    transport = CudaShmTransport(
+        [server],
+        EngineMetrics(CollectorRegistry()),
+        timeout=0.3,
+        input_factory=grpcclient.InferInput,
+        output_factory=grpcclient.InferRequestedOutput,
+        region_factory=lambda _name, n: _Region(n),
+        nbytes=8 << 20,
+        card='card',
+        instance='fe0',
+        triton_device_id=0,
+        slab_wait=0.05,
+    )
+    transport.start()
+    engine = eng(transport=transport)
+    start = time.monotonic()
+    with pytest.raises(TritonUnavailableError, match='no answer'):
+        _run(engine)
+    assert time.monotonic() - start < 2
+    assert server.cancelled == 1
+    assert (engine.budget.in_use, transport.slab.in_use) == (0, 0)
+    server.answering = True
+    assert transport.check()
+    r = _run(engine)
+    assert r.status == 'ok'
+    assert (engine.budget.in_use, transport.slab.in_use) == (0, 0)
+
+
+def test_every_model_call_carries_the_request_deadline(eng: Any) -> None:
+    from frame_engine.messages import EngineRequest
+
+    engine = eng()
+    request = EngineRequest(_jpeg(), _plan(), deadline=time.perf_counter() + 42)
+    assert engine.submit(request).result(timeout=20).status == 'ok'
+    assert engine.transport.deadlines == [request.deadline] * 2
+
+
+def test_the_request_shows_the_stage_it_is_in(eng: Any) -> None:
+    from frame_engine.messages import EngineRequest
+
+    engine = eng()
+    gate = threading.Event()
+    real = engine.transport.infer
+
+    def slow_detector(model: str, *a: Any, **k: Any) -> Any:
+        if model == 'det':
+            gate.wait(5)
+        return real(model, *a, **k)
+
+    engine.transport.infer = slow_detector
+    request = EngineRequest(_jpeg(), _plan())
+    assert request.stage == 'queue'
+    future = engine.submit(request)
+    for _ in range(500):
+        if request.stage == 'detect':
+            break
+        time.sleep(0.01)
+    seen = request.stage
+    gate.set()
+    assert future.result(timeout=5).status == 'ok'
+    assert seen == 'detect'
 
 
 # ------------------------------------------------------------------ statuses and memory

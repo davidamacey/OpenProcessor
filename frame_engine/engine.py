@@ -28,6 +28,9 @@ one worker serves any other. That is only safe if no kernel of the freeing worke
 block: every path that drops a frame waits for its worker stream first. An allocation that fails
 anyway answers ``gpu_memory``; a photo larger than the whole budget answers ``over_budget``; a
 budget wait that times out raises :class:`~frame_engine.transport.OverloadError`.
+
+Time: every model call ends by the request's deadline (:mod:`frame_engine.transport`), and the
+request records the stage it is in (``EngineRequest.stage``) for the front's deadline log.
 """
 
 from __future__ import annotations
@@ -141,6 +144,7 @@ class FrameEngine:
         self.lanes = NvJpegLanes(lanes=settings.lanes)
         self.alloc_stream = cp.cuda.Stream(non_blocking=True)
         self.budget = self._reserve_budget(settings.budget_mib)
+        metrics.watch_budget(self.budget)
         self.kernels = PrepKernels()
         self.encode_pool = ThreadPoolExecutor(settings.encode_threads, thread_name_prefix='fe-jpeg')
         self.workers = ThreadPoolExecutor(settings.workers, thread_name_prefix='fe-image')
@@ -168,7 +172,7 @@ class FrameEngine:
     # ------------------------------------------------------------------ one request
 
     def run(self, request: EngineRequest) -> EngineResult:
-        clock = StageClock(_sync_stream if self.s.stage_sync else None)
+        clock = StageClock(_sync_stream if self.s.stage_sync else None, request.enter)
         clock.add('queue', time.perf_counter() - request.arrived)
         try:
             stream = getattr(self.local, 'stream', None)
@@ -265,7 +269,7 @@ class FrameEngine:
         have_rects = False
         if plan.runs('detect') and plan.detector is not None:
             try:
-                self._detect(im, plan.detector, clock)
+                self._detect(im, plan.detector, clock, request.deadline)
                 states['detect'] = ('ok', '')
                 have_rects = True
                 out[wire.LETTERBOX] = np.array([im.lb.scale, im.lb.pad_w, im.lb.pad_h], np.float64)
@@ -284,7 +288,7 @@ class FrameEngine:
                 pixels = self._crop_pixels(im)
             jpegs = [self.encode_pool.submit(self._encode, px) for px in pixels]
         try:
-            self._embed_branches(plan, im, have_rects, states, out, clock)
+            self._embed_branches(request, im, have_rects, states, out, clock)
             if states.get('detect') == ('ok', ''):
                 with clock.stage('blur'):
                     out[wire.BLUR_SUMS] = self._blur_sums(im)
@@ -300,7 +304,9 @@ class FrameEngine:
 
     # ------------------------------------------------------------------ stages
 
-    def _detect(self, im: _Image, det: wire.DetectorSpec, clock: StageClock) -> None:
+    def _detect(
+        self, im: _Image, det: wire.DetectorSpec, clock: StageClock, deadline: float
+    ) -> None:
         w, h = im.size
         net = det.input_size
         lb = letterbox_geometry(w, h, net)
@@ -315,7 +321,9 @@ class FrameEngine:
                 self.kernels.resample_into(im.frame, (0, 0, w, h), (lb.new_w, lb.new_h), dst)
             with clock.stage('detect'):
                 self.transport.commit(staged)
-                fused = self.transport.infer(det.model, staged, 0, [1, 3, net, net], DET_OUTPUT)
+                fused = self.transport.infer(
+                    det.model, staged, 0, [1, 3, net, net], DET_OUTPUT, deadline=deadline
+                )
         finally:
             if staged is not None:
                 self.transport.release(staged, _sync_stream)
@@ -331,13 +339,14 @@ class FrameEngine:
 
     def _embed_branches(
         self,
-        plan: wire.EnginePlan,
+        request: EngineRequest,
         im: _Image,
         have_rects: bool,
         states: dict[str, tuple[wire.BranchState, str]],
         out: dict[str, Any],
         clock: StageClock,
     ) -> None:
+        plan = request.plan
         frame = plan.runs('embed_frame')
         crops = plan.runs('embed_crops')
         if crops and not have_rects:
@@ -354,7 +363,7 @@ class FrameEngine:
                 mask = np.isin(im.classes, wanted)
         picked = [r for r, keep in zip(im.rects, mask, strict=True) if keep]
         try:
-            vectors = self._embed(im, plan.embed, frame, picked, clock)
+            vectors = self._embed(im, plan.embed, frame, picked, clock, request.deadline)
         except ModelCallError as exc:
             logger.warning('encoder call failed: %s', exc)
             for name in ('embed_frame', 'embed_crops'):
@@ -377,6 +386,7 @@ class FrameEngine:
         frame: bool,
         rects: list[tuple[int, int, int, int]],
         clock: StageClock,
+        deadline: float,
     ) -> np.ndarray:
         """Encoder vectors of the whole-frame square (when ``frame``), then one per rectangle."""
         t = spec.size
@@ -409,7 +419,12 @@ class FrameEngine:
                 self.transport.commit(staged)
                 rows = [
                     self.transport.infer(
-                        spec.model, staged, s * sqb, [min(spec.batch, n - s), 3, t, t], EMBED_OUTPUT
+                        spec.model,
+                        staged,
+                        s * sqb,
+                        [min(spec.batch, n - s), 3, t, t],
+                        EMBED_OUTPUT,
+                        deadline=deadline,
                     )
                     for s in range(0, n, spec.batch)
                 ]

@@ -25,8 +25,9 @@ its GPU time lands in the next stage that waits (usually ``detect`` or ``embed_p
 the time is attributed where the work ran; that removes overlap inside one image, so use it for
 attribution runs, not for throughput numbers.
 
-Besides the stages: requests in flight, the shared-memory slab (bytes in use, peak, waits), budget
-waits, region registrations, failed model calls by gRPC code, overloads and image outcomes.
+Besides the stages: requests in flight, the shared-memory slab (bytes in use, peak, waits), the
+frame budget (bytes in use, waits), region registrations, failed model calls by gRPC code and
+reason, overloads, requests answered at their deadline (by stage) and image outcomes.
 """
 
 from __future__ import annotations
@@ -63,10 +64,15 @@ OBSERVATIONS_NAME = 'op_frame_engine_stage_observations'
 class StageClock:
     """Seconds spent per stage by one request."""
 
-    __slots__ = ('_sync', 'seconds')
+    __slots__ = ('_on_enter', '_sync', 'seconds')
 
-    def __init__(self, sync: Callable[[], None] | None = None) -> None:
+    def __init__(
+        self,
+        sync: Callable[[], None] | None = None,
+        on_enter: Callable[[str], None] | None = None,
+    ) -> None:
         self._sync = sync
+        self._on_enter = on_enter  # told the name of every stage as it starts
         self.seconds: dict[str, float] = {}
 
     def add(self, stage: str, seconds: float) -> None:
@@ -76,6 +82,8 @@ class StageClock:
 
     @contextmanager
     def stage(self, name: str) -> Iterator[None]:
+        if self._on_enter is not None:
+            self._on_enter(name)
         start = time.perf_counter()
         try:
             yield
@@ -109,6 +117,11 @@ class EngineMetrics:
         self.slab_waits = Gauge(
             'op_frame_engine_slab_waits', 'Requests that waited for room in the region.', registry=r
         )
+        self.budget_in_use = Gauge(
+            'op_frame_engine_budget_in_use_bytes',
+            'Bytes of the decoded-frame budget held by requests.',
+            registry=r,
+        )
         self.budget_waits = Counter(
             'op_frame_engine_budget_waits',
             'Requests that waited for device memory, by outcome (admitted or timeout).',
@@ -123,8 +136,17 @@ class EngineMetrics:
         )
         self.triton_errors = Counter(
             'op_frame_engine_triton_call_errors',
-            'Failed model-server calls, by model and gRPC status.',
-            ['model', 'code'],
+            'Failed model-server calls, by model, gRPC status and reason (deadline: no answer in '
+            'time; unavailable: the channel or server went away; client: the client library '
+            'failed the call; rejected: the server answered an error).',
+            ['model', 'code', 'reason'],
+            registry=r,
+        )
+        self.deadlines = Counter(
+            'op_frame_engine_request_deadlines',
+            'Requests answered DEADLINE_EXCEEDED at the request deadline, by the stage they were '
+            'last in.',
+            ['stage'],
             registry=r,
         )
         self.outcomes = Counter(
@@ -144,6 +166,10 @@ class EngineMetrics:
         for stage, secs in clock.seconds.items():
             self.stage_seconds.labels(stage).inc(secs)
             self.stage_observations.labels(stage).inc()
+
+    def watch_budget(self, budget: Any) -> None:
+        """Read the budget's bytes in use at scrape time."""
+        self.budget_in_use.set_function(lambda: float(budget.in_use))
 
     def watch_slab(self, slab: Any) -> None:
         """Read the slab's counters at scrape time."""

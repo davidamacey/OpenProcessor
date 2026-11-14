@@ -68,7 +68,12 @@ class EngineSettings:
     #: The card's device id as the model server numbers its devices (0 when it sees one card).
     triton_device_id: int = 0
     triton_channels: int = 4
-    triton_timeout_seconds: float = 60.0
+    #: Deadline of one model-server call; a call without an answer by then is cancelled and the
+    #: request answered UNAVAILABLE (retryable). Also capped by what is left of the request.
+    triton_timeout_seconds: float = 15.0
+    #: Every request is answered by then (DEADLINE_EXCEEDED if the photo is still running); keep it
+    #: under the API client's 120 s call timeout (``src/clients/frame_engine.py``).
+    request_deadline_seconds: float = 60.0
     workers: int = 16
     lanes: int = 16
     encode_threads: int = 8
@@ -116,6 +121,9 @@ class EngineSettings:
             triton_timeout_seconds=env_float(
                 'OP_FRAME_ENGINE_TRITON_TIMEOUT_SECONDS', d.triton_timeout_seconds, 1, 600
             ),
+            request_deadline_seconds=env_float(
+                'OP_FRAME_ENGINE_REQUEST_DEADLINE_SECONDS', d.request_deadline_seconds, 1, 600
+            ),
             workers=env_int('OP_FRAME_ENGINE_WORKERS', d.workers, 1, 256),
             lanes=env_int('OP_FRAME_ENGINE_LANES', d.lanes, 1, 256),
             encode_threads=env_int('OP_FRAME_ENGINE_ENCODE_THREADS', d.encode_threads, 1, 256),
@@ -143,5 +151,10 @@ class EngineSettings:
             raise SettingsError(
                 f'OP_FRAME_ENGINE_BUDGET_MIB {s.budget_mib} exceeds '
                 f'OP_FRAME_ENGINE_POOL_MIB {s.pool_mib}'
+            )
+        if s.triton_timeout_seconds > s.request_deadline_seconds:
+            raise SettingsError(
+                f'OP_FRAME_ENGINE_TRITON_TIMEOUT_SECONDS {s.triton_timeout_seconds:g} exceeds '
+                f'OP_FRAME_ENGINE_REQUEST_DEADLINE_SECONDS {s.request_deadline_seconds:g}'
             )
         return s

@@ -9,8 +9,10 @@ retryable; UNAVAILABLE for a transient condition; INVALID_ARGUMENT for a request
 succeed): an overload (budget or slab wait timed out, or more requests than
 ``OP_FRAME_ENGINE_MAX_IN_FLIGHT`` admitted) is RESOURCE_EXHAUSTED; a model server that does not
 answer, an engine that is not ready or is draining is UNAVAILABLE; a malformed request or plan is
-INVALID_ARGUMENT; an unknown model is NOT_FOUND; anything else is INTERNAL. The API's retry
-helper (``src/utils/retry.py``) retries the first two.
+INVALID_ARGUMENT; an unknown model is NOT_FOUND; a request still running at
+``OP_FRAME_ENGINE_REQUEST_DEADLINE_SECONDS`` is DEADLINE_EXCEEDED (logged and counted with the
+stage it was in; the photo goes on to release what it holds, every wait in it being bounded);
+anything else is INTERNAL. The API's retry helper (``src/utils/retry.py``) retries the first two.
 
 The handler stays on the event loop only to unpack and pack tensors; the photo runs on the
 engine's worker threads (``engine.submit``), awaited through ``asyncio.wrap_future``. The in-flight
@@ -22,7 +24,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import struct
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, NoReturn, Protocol
 
 import grpc
 import numpy as np
@@ -180,11 +182,13 @@ class FrontService(service_pb2_grpc.GRPCInferenceServiceServicer):
         metrics: EngineMetrics,
         *,
         max_in_flight: int,
+        request_deadline: float,
     ) -> None:
         self.engine = engine
         self._ready = ready
         self.metrics = metrics
         self.max_in_flight = max_in_flight
+        self.request_deadline = request_deadline
         self.in_flight = 0
         self.draining = False
 
@@ -233,9 +237,16 @@ class FrontService(service_pb2_grpc.GRPCInferenceServiceServicer):
             )
         self.in_flight += 1
         self.metrics.in_flight.set(self.in_flight)
+        job = EngineRequest(image, plan, boxes)
+        job.deadline = job.arrived + self.request_deadline
+        result: EngineResult | None = None
         try:
-            future = self.engine.submit(EngineRequest(image, plan, boxes))
-            result = await asyncio.wrap_future(future)
+            waiter = asyncio.wrap_future(self.engine.submit(job))
+            done, _ = await asyncio.wait({waiter}, timeout=self.request_deadline)
+            if done:
+                result = waiter.result()
+            else:
+                waiter.cancel()  # a photo still queued never starts; a running one ends bounded
         except OverloadError as exc:
             self.metrics.overloads.labels(exc.cause).inc()
             await context.abort(grpc.StatusCode.RESOURCE_EXHAUSTED, f'overload: {exc}')
@@ -247,7 +258,21 @@ class FrontService(service_pb2_grpc.GRPCInferenceServiceServicer):
         finally:
             self.in_flight -= 1
             self.metrics.in_flight.set(self.in_flight)
+        if result is None:
+            await self._past_deadline(context, job)
         return build_response(request, result)
+
+    async def _past_deadline(self, context: Any, job: EngineRequest) -> NoReturn:
+        self.metrics.deadlines.labels(job.stage).inc()
+        logger.error(
+            'request answered DEADLINE_EXCEEDED after %.1f s in stage %s',
+            self.request_deadline, job.stage,
+        )  # fmt: skip
+        await context.abort(
+            grpc.StatusCode.DEADLINE_EXCEEDED,
+            f'frame engine: no answer within {self.request_deadline:g} s (stage {job.stage})',
+        )
+        raise RuntimeError('context.abort returned')  # grpc.aio documents that it raises
 
 
 def make_server(

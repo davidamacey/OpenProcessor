@@ -4,6 +4,8 @@ then free; and the overload and unavailable answers."""
 from __future__ import annotations
 
 import threading
+import time
+import types
 from typing import Any
 
 import numpy as np
@@ -78,9 +80,19 @@ class FakeTriton:
             self.log.append(('unregister', name))
             del self.regions[name]
 
-    def infer(self, model_name: str, inputs: Any, *, outputs: Any = None,
-              client_timeout: Any = None) -> Any:  # fmt: skip
-        self._check_up()
+    def async_infer(self, model_name: str, inputs: Any, callback: Any, *, outputs: Any = None,
+                    client_timeout: Any = None) -> Any:  # fmt: skip
+        """Answers through ``callback`` before it returns (tritonclient calls it on a gRPC
+        thread; the transport waits for either)."""
+        self._check_up()  # a refused connection fails the call before it is sent
+        try:
+            result, error = self._answer(model_name, inputs), None
+        except InferenceServerException as exc:
+            result, error = None, exc
+        callback(result=result, error=error)
+        return types.SimpleNamespace(cancel=lambda: None)
+
+    def _answer(self, model_name: str, inputs: Any) -> Any:
         if self.infer_fail:
             raise self.infer_fail.pop(0)
         tensor = inputs[0]._get_tensor()
@@ -118,11 +130,12 @@ def server(log: list[tuple[str, str]]) -> FakeTriton:
 
 
 def _cuda(server: FakeTriton, log: list[tuple[str, str]], *, nbytes: int = 64 * ALIGN,
-          instance: str = 'fe0', slab_wait: float = 0.05) -> CudaShmTransport:  # fmt: skip
+          instance: str = 'fe0', slab_wait: float = 0.05,
+          timeout: float = 5.0) -> CudaShmTransport:  # fmt: skip
     return CudaShmTransport(
         [server, server],
         EngineMetrics(CollectorRegistry()),
-        timeout=5.0,
+        timeout=timeout,
         input_factory=grpcclient.InferInput,
         output_factory=grpcclient.InferRequestedOutput,
         region_factory=lambda name, n: FakeRegion(log, name, n),
@@ -293,6 +306,125 @@ def test_shutdown_keeps_the_memory_when_the_server_still_imports_it(
     server.unregister_fails = True
     assert t.close() is False
     assert ('free', t.name) not in log
+
+
+class Unanswered(FakeTriton):
+    """Takes every call and never answers it: the channel was lost with the call in flight. It
+    ignores the call's deadline too, so only the transport's own bound can end the wait."""
+
+    def __init__(self, log: list[tuple[str, str]]) -> None:
+        super().__init__(log)
+        self.timeouts: list[float | None] = []
+        self.cancelled = 0
+
+    def async_infer(self, model_name: str, inputs: Any, callback: Any, *, outputs: Any = None,
+                    client_timeout: Any = None) -> Any:  # fmt: skip
+        self.timeouts.append(client_timeout)
+        return types.SimpleNamespace(cancel=self._cancel)
+
+    def _cancel(self) -> None:
+        self.cancelled += 1
+
+
+class FailsMidCall(FakeTriton):
+    """Takes the call, then fails it from the channel's own thread a moment later."""
+
+    def __init__(self, log: list[tuple[str, str]], error: Exception) -> None:
+        super().__init__(log)
+        self.error = error
+
+    def async_infer(self, model_name: str, inputs: Any, callback: Any, *, outputs: Any = None,
+                    client_timeout: Any = None) -> Any:  # fmt: skip
+        error = self.error if isinstance(self.error, InferenceServerException) else None
+        if error is None:
+            raise self.error  # the client refuses the call itself (closed channel)
+        threading.Timer(0.05, callback, kwargs={'result': None, 'error': error}).start()
+        return types.SimpleNamespace(cancel=lambda: None)
+
+
+def _errors(t: Any) -> dict[tuple[str, str, str], float]:
+    return {
+        (s.labels['model'], s.labels['code'], s.labels['reason']): s.value
+        for m in t.metrics.triton_errors.collect()
+        for s in m.samples
+        if s.name.endswith('_total')
+    }
+
+
+def test_a_call_that_is_never_answered_is_unavailable_within_its_deadline(log: list) -> None:
+    server = Unanswered(log)
+    t = _cuda(server, log, timeout=0.3)
+    t.start()
+    staged = t.stage(48)
+    start = time.monotonic()
+    with pytest.raises(TritonUnavailableError, match='no answer'):
+        t.infer('pe', staged, 0, [1, 3, 4, 4], 'image_embeddings')
+    assert time.monotonic() - start < 1.5
+    assert server.timeouts == [0.3]
+    assert server.cancelled == 1  # the call is cancelled, not left running
+    assert _errors(t) == {('pe', 'StatusCode.DEADLINE_EXCEEDED', 'deadline'): 1.0}
+    assert not t.ready()  # the health check decides when the server is back
+    t.release(staged, lambda: None)
+    assert t.slab.in_use == 0
+
+
+def test_a_call_never_takes_longer_than_what_is_left_of_its_request(log: list) -> None:
+    server = Unanswered(log)
+    t = _cuda(server, log, timeout=30.0)
+    t.start()
+    staged = t.stage(48)
+    start = time.monotonic()
+    with pytest.raises(TritonUnavailableError):
+        t.infer('pe', staged, 0, [1, 3, 4, 4], 'image_embeddings',
+                deadline=time.perf_counter() + 0.2)  # fmt: skip
+    assert time.monotonic() - start < 1.5
+    [first] = server.timeouts
+    assert first is not None
+    assert first <= 0.2
+    with pytest.raises(TritonUnavailableError, match='deadline'):
+        t.infer('pe', staged, 0, [1, 3, 4, 4], 'image_embeddings',
+                deadline=time.perf_counter() - 1)  # fmt: skip
+    assert len(server.timeouts) == 1  # a request out of time makes no further call
+
+
+@pytest.mark.parametrize(
+    ('error', 'want'),
+    [
+        (_err('UNAVAILABLE', 'Socket closed'), ('StatusCode.UNAVAILABLE', 'unavailable')),
+        (_err('CANCELLED', 'server shutting down'), ('StatusCode.CANCELLED', 'unavailable')),
+        (ValueError('Cannot invoke RPC on closed channel!'), ('ValueError', 'client')),
+    ],
+)
+def test_a_call_that_fails_mid_call_is_unavailable_and_counted_with_its_reason(
+    log: list, error: Exception, want: tuple[str, str]
+) -> None:
+    server = FailsMidCall(log, error)
+    t = _cuda(server, log)
+    t.start()
+    staged = t.stage(48)
+    with pytest.raises(TritonUnavailableError):
+        t.infer('pe', staged, 0, [1, 3, 4, 4], 'image_embeddings')
+    assert _errors(t) == {('pe', *want): 1.0}
+    t.release(staged, lambda: None)
+    assert t.slab.in_use == 0
+
+
+def test_a_failed_registration_during_a_call_is_unavailable(server: FakeTriton, log: list) -> None:
+    t = _cuda(server, log)
+    t.start()
+    staged = t.stage(48)
+    server.restart()
+    real = server.register_cuda_shared_memory
+
+    def down(*a: Any, **k: Any) -> None:
+        raise _err('UNAVAILABLE', 'failed to connect to all addresses')
+
+    server.register_cuda_shared_memory = down  # type: ignore[method-assign]
+    with pytest.raises(TritonUnavailableError):
+        t.infer('pe', staged, 0, [1, 3, 4, 4], 'image_embeddings')
+    server.register_cuda_shared_memory = real  # type: ignore[method-assign]
+    assert t.check()
+    t.infer('pe', staged, 0, [1, 3, 4, 4], 'image_embeddings')
 
 
 def test_the_body_transport_copies_to_the_host_and_sends_the_bytes(

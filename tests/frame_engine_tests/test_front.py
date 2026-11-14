@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import json
 import threading
+import time
 from concurrent.futures import Future
 from typing import Any
 
@@ -43,15 +44,20 @@ class FakeEngine:
     def __init__(self) -> None:
         self.raise_: Exception | None = None
         self.gate: threading.Event | None = None
+        self.stuck_in = 'detect'
         self.seen: list[EngineRequest] = []
 
     def submit(self, request: EngineRequest) -> Future[EngineResult]:
         self.seen.append(request)
         fut: Future[EngineResult] = Future()
+        gate = self.gate
 
         def work() -> None:
-            if self.gate is not None:
-                self.gate.wait(10)
+            if not fut.set_running_or_notify_cancel():  # as ThreadPoolExecutor does
+                return
+            if gate is not None:
+                request.enter(self.stuck_in)
+                gate.wait(10)
             if self.raise_ is not None:
                 fut.set_exception(self.raise_)
                 return
@@ -86,12 +92,13 @@ class FakeEngine:
 
 
 class Harness:
-    def __init__(self, engine: FakeEngine, *, max_in_flight: int = 8) -> None:
+    def __init__(self, engine: FakeEngine, *, max_in_flight: int = 8,
+                 request_deadline: float = 30.0) -> None:  # fmt: skip
         self.engine = engine
         self.is_ready = True
         self.service = FrontService(
             engine, lambda: self.is_ready, EngineMetrics(CollectorRegistry()),
-            max_in_flight=max_in_flight,
+            max_in_flight=max_in_flight, request_deadline=request_deadline,
         )  # fmt: skip
 
     async def __aenter__(self) -> Harness:
@@ -205,7 +212,7 @@ async def test_a_bad_request_is_invalid_argument(plan: str, kwargs: dict[str, An
 async def test_an_unknown_model_is_not_found() -> None:
     async with Harness(FakeEngine()) as h:
         with pytest.raises(InferenceServerException) as err:
-            await h.infer(_plan(['detect']), model='gpu_image_prep')
+            await h.infer(_plan(['detect']), model='some_other_model')
     assert _code(err) == 'StatusCode.NOT_FOUND'
 
 
@@ -215,7 +222,7 @@ async def test_readiness_follows_the_transport_and_draining() -> None:
         assert await h.client.is_server_live()
         assert await h.client.is_server_ready()
         assert await h.client.is_model_ready('frame_engine')
-        assert not await h.client.is_model_ready('gpu_image_prep')
+        assert not await h.client.is_model_ready('some_other_model')
         h.is_ready = False  # the model server went away or the region is not registered
         assert not await h.client.is_server_ready()
         assert not await h.client.is_model_ready('frame_engine')
@@ -269,3 +276,37 @@ async def test_requests_above_the_in_flight_cap_are_an_overload() -> None:
         assert (await first).as_numpy('status')[0] == b'ok'
     assert _code(err) == 'StatusCode.RESOURCE_EXHAUSTED'
     assert len(engine.seen) == 1
+
+
+async def test_a_request_past_its_deadline_is_answered_with_the_stage_it_was_in(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Whatever blocks inside the engine, the caller gets an answer at the request deadline."""
+    engine = FakeEngine()
+    engine.gate = threading.Event()  # the photo never finishes on its own
+    engine.stuck_in = 'embed_pe'
+    try:
+        async with Harness(engine, request_deadline=0.3) as h:
+            start = time.monotonic()
+            with pytest.raises(InferenceServerException) as err:
+                await h.infer(_plan(['detect']))
+            elapsed = time.monotonic() - start
+            assert h.service.in_flight == 0
+            engine.gate.set()
+            engine.gate = None
+            assert (await h.infer(_plan(['detect']))).as_numpy('status')[0] == b'ok'
+            deadlines = {
+                s.labels['stage']: s.value
+                for m in h.service.metrics.deadlines.collect()
+                for s in m.samples
+                if s.name.endswith('_total')
+            }
+    finally:
+        if engine.gate is not None:
+            engine.gate.set()
+    assert _code(err) == 'StatusCode.DEADLINE_EXCEEDED'
+    assert 'embed_pe' in str(err.value)
+    assert elapsed < 2
+    assert deadlines == {'embed_pe': 1.0}
+    assert any('embed_pe' in r.getMessage() for r in caplog.records)
+    assert engine.seen[0].deadline - engine.seen[0].arrived == pytest.approx(0.3)

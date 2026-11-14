@@ -25,6 +25,16 @@ Region rules (all mandatory, see the plan's D1):
   documents freeing exported memory before the importer closes it as undefined behaviour). The
   memory is freed only after a successful unregister; otherwise the process exit releases it.
 * The slab wait is bounded; a timeout is :class:`OverloadError`.
+
+Every model call has a deadline: ``OP_FRAME_ENGINE_TRITON_TIMEOUT_SECONDS``, or what is left of the
+request's deadline when that is sooner. The call is issued with tritonclient's ``async_infer`` (the
+gRPC deadline is its ``client_timeout``) and the worker waits for the answer no longer than that
+deadline, then cancels the call (``CallContext.cancel``): a channel lost with the call in flight
+cannot hold a worker, its slice or its budget. A call without an answer in time, a channel or server
+that went away (UNAVAILABLE, CANCELLED) and a call the client library itself fails are
+:class:`TritonUnavailableError` (the request is answered UNAVAILABLE, retryable); an error the
+server answered is :class:`ModelCallError` (the branch fails). Each failure is counted with its
+reason in ``op_frame_engine_triton_call_errors_total``.
 """
 
 from __future__ import annotations
@@ -32,10 +42,12 @@ from __future__ import annotations
 import base64
 import itertools
 import logging
+import math
 import os
 import socket
 import threading
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
@@ -53,8 +65,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger('frame_engine.transport')
 
 REGION_PREFIX = 'op-fe-'
-_STATUS_UNAVAILABLE = 'StatusCode.UNAVAILABLE'
 _STATUS_DEADLINE = 'StatusCode.DEADLINE_EXCEEDED'
+#: Codes that mean the server or the channel is gone (retryable), with the metric reason.
+_GONE = {
+    'StatusCode.UNAVAILABLE': 'unavailable',
+    'StatusCode.CANCELLED': 'unavailable',
+    _STATUS_DEADLINE: 'deadline',
+}
 _REGION_UNKNOWN = 'Unable to find shared memory region'
 
 
@@ -119,6 +136,19 @@ def _message(exc: BaseException) -> str:
     return str(message() if callable(message) else exc)
 
 
+@dataclass
+class _Answer:
+    """Where ``async_infer``'s callback (run on a gRPC thread) leaves the result or the error."""
+
+    done: threading.Event = field(default_factory=threading.Event)
+    result: Any = None
+    error: InferenceServerException | None = None
+
+    def __call__(self, result: Any, error: InferenceServerException | None) -> None:
+        self.result, self.error = result, error
+        self.done.set()
+
+
 class _Base:
     """The model-server channels and the infer call both transports share."""
 
@@ -144,19 +174,41 @@ class _Base:
     def _client(self) -> Any:
         return self.clients[next(self._rr) % len(self.clients)]
 
-    def _call(self, model: str, inp: Any, output: str) -> np.ndarray:
+    def _unavailable(self, model: str, code: str, reason: str, text: str) -> TritonUnavailableError:
+        self.metrics.triton_errors.labels(model, code, reason).inc()
+        self.server_ready = False  # the health check says when the server answers again
+        return TritonUnavailableError(f'{model}: {code} {text}')
+
+    def _failed(self, model: str, exc: InferenceServerException) -> Exception:
+        code = _code(exc)
+        if code in _GONE:
+            return self._unavailable(model, code, _GONE[code], _message(exc))
+        self.metrics.triton_errors.labels(model, code, 'rejected').inc()
+        return ModelCallError(model, code, _message(exc))
+
+    def _call(self, model: str, inp: Any, output: str, deadline: float) -> np.ndarray:
+        """One model call that ends by its deadline, answered or not (module docstring)."""
+        timeout = min(self.timeout, deadline - time.perf_counter())
+        if timeout <= 0:
+            raise self._unavailable(model, _STATUS_DEADLINE, 'deadline', 'request deadline passed')
+        answer = _Answer()
         try:
-            result = self._client().infer(
-                model, [inp], outputs=[self._output(output)], client_timeout=self.timeout
+            call = self._client().async_infer(
+                model, [inp], answer, outputs=[self._output(output)], client_timeout=timeout
             )
         except InferenceServerException as exc:
-            code = _code(exc)
-            self.metrics.triton_errors.labels(model, code).inc()
-            if code in (_STATUS_UNAVAILABLE, _STATUS_DEADLINE):
-                self.server_ready = False
-                raise TritonUnavailableError(f'{model}: {code} {_message(exc)}') from exc
-            raise ModelCallError(model, code, _message(exc)) from exc
-        out: np.ndarray = result.as_numpy(output)
+            raise self._failed(model, exc) from exc
+        except Exception as exc:  # the client refused the call itself (a closed channel)
+            logger.warning('%s: the client failed the call', model, exc_info=True)
+            raise self._unavailable(model, type(exc).__name__, 'client', str(exc)) from exc
+        if not answer.done.wait(timeout):
+            call.cancel()
+            raise self._unavailable(
+                model, _STATUS_DEADLINE, 'deadline', f'no answer within {timeout:.2f} s'
+            )
+        if answer.error is not None:
+            raise self._failed(model, answer.error) from answer.error
+        out: np.ndarray = answer.result.as_numpy(output)
         return out
 
     def check_server(self) -> bool:
@@ -185,14 +237,21 @@ class BodyTransport(_Base):
         staged.host = staged.device.get()
 
     def infer(
-        self, model: str, staged: Staged, byte_offset: int, shape: list[int], output: str
+        self,
+        model: str,
+        staged: Staged,
+        byte_offset: int,
+        shape: list[int],
+        output: str,
+        *,
+        deadline: float = math.inf,
     ) -> np.ndarray:
         if staged.host is None:
             raise RuntimeError('infer before commit')
         n = int(np.prod(shape))
         inp = self._input('images', shape, 'UINT8')
         inp.set_data_from_numpy(staged.host[byte_offset : byte_offset + n].reshape(shape))
-        return self._call(model, inp, output)
+        return self._call(model, inp, output, deadline)
 
     def release(self, staged: Staged, sync: Callable[[], None]) -> None:
         sync()  # no kernel may still write the block when the pool hands it out again
@@ -355,18 +414,33 @@ class CudaShmTransport(_Base):
         cp.cuda.get_current_stream().synchronize()
 
     def infer(
-        self, model: str, staged: Staged, byte_offset: int, shape: list[int], output: str
+        self,
+        model: str,
+        staged: Staged,
+        byte_offset: int,
+        shape: list[int],
+        output: str,
+        *,
+        deadline: float = math.inf,
     ) -> np.ndarray:
         n = int(np.prod(shape))
         gen = self.generation
         try:
-            return self._call(model, self._shm_input(staged, byte_offset, shape, n), output)
+            return self._call(
+                model, self._shm_input(staged, byte_offset, shape, n), output, deadline
+            )
         except ModelCallError as exc:
             if _REGION_UNKNOWN not in str(exc):
                 raise
             logger.warning('region %s unknown to the server: registering again', self.name)
-            self.reregister(gen, 'region_unknown')
-            return self._call(model, self._shm_input(staged, byte_offset, shape, n), output)
+            try:
+                self.reregister(gen, 'region_unknown')
+            except InferenceServerException as reg:  # the server went away again
+                self.registered = False
+                raise self._unavailable(model, _code(reg), 'unavailable', _message(reg)) from reg
+            return self._call(
+                model, self._shm_input(staged, byte_offset, shape, n), output, deadline
+            )
 
     def _shm_input(self, staged: Staged, byte_offset: int, shape: list[int], n: int) -> Any:
         inp = self._input('images', shape, 'UINT8')

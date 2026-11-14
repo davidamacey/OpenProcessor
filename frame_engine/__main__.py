@@ -80,7 +80,13 @@ async def serve(s: EngineSettings) -> None:
     transport = _transport(s, metrics)
     transport.start()
     engine = FrameEngine(s, transport, metrics, device=DEVICE)
-    service = FrontService(engine, transport.ready, metrics, max_in_flight=s.max_in_flight)
+    service = FrontService(
+        engine,
+        transport.ready,
+        metrics,
+        max_in_flight=s.max_in_flight,
+        request_deadline=s.request_deadline_seconds,
+    )
     server, _port = make_server(
         service, address=f'0.0.0.0:{s.port}', max_message_bytes=s.max_message_mib * MIB
     )
