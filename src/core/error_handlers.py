@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from src.clients.occ import OCCFinalConflictError
     from src.config.faces import FacesDisabledError
     from src.core.exceptions import RequestRejectedError
+    from src.domain.nested_limit import NestedLimitError
     from src.utils.retry import RetryExhaustedError, TritonDeadlineError
     from src.utils.upstream_errors import UpstreamError
 
@@ -125,6 +126,21 @@ async def faces_disabled_response(request: Request, exc: FacesDisabledError) -> 
         status_code=400,
         content={'detail': str(exc), 'error': 'faces_disabled', 'request_id': req_id},
     )
+
+
+async def nested_limit_response(request: Request, exc: NestedLimitError) -> JSONResponse:
+    """A write the nested-document limit refused (OpenSearch k-NN issue 3623) -> 422 carrying the
+    limit, the item's numbers and the crop id. Registered ahead of the generic ``Exception``
+    handler, so no route turns it into a 404 or a 500."""
+    logger.warning(
+        'nested_limit_refused',
+        request_id=get_request_id(),
+        method=request.method,
+        path=request.url.path,
+        crop_id=exc.doc_id,
+        nested_docs=exc.nested_docs,
+    )
+    return JSONResponse(status_code=422, content={'detail': exc.detail()})
 
 
 async def occ_final_conflict_response(request: Request, exc: OCCFinalConflictError) -> JSONResponse:

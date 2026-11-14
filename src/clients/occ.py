@@ -39,6 +39,7 @@ from src.config import get_region_fields
 from src.config.curation_accessors import items_index
 from src.config.env import env_int
 from src.core.logging import get_logger
+from src.domain.nested_limit import ERROR_CODE as NESTED_LIMIT_ERROR, NestedLimitError, guard_write
 
 
 if TYPE_CHECKING:
@@ -144,7 +145,7 @@ async def occ_update_one(
         source, seq_no, primary_term = await _fetch_with_version(
             client, index=index, doc_id=doc_id, vector_excludes=vector_excludes
         )
-        update_doc = merger(source)
+        update_doc = guard_write(doc_id, source, merger(source), excludes=vector_excludes)
         try:
             await client.update(
                 index=index,
@@ -180,6 +181,34 @@ async def occ_update_one(
         retries=max_retries,
     )
     raise OCCFinalConflictError(doc_id=doc_id, retries=max_retries, last_error=last_error)
+
+
+def _merge_page(
+    page_ids: list[str],
+    docs: dict[str, Any],
+    merger: Callable[[str, dict[str, Any]], dict[str, Any]],
+    vector_excludes: list[str],
+    refused_ids: list[str],
+) -> list[tuple[str, dict[str, Any], dict[str, Any]]]:
+    """``(id, update, source)`` for every fetched doc whose merger returned a write that the
+    nested-document limit allows (:func:`~src.domain.nested_limit.guard_write`); the ids it refused
+    are appended to ``refused_ids``."""
+    pending: list[tuple[str, dict[str, Any], dict[str, Any]]] = []
+    for doc_id in page_ids:
+        doc = docs.get(doc_id)
+        if doc is None:
+            continue
+        source = doc.get('_source') or {}
+        update_doc = merger(doc_id, source)
+        if not update_doc:
+            continue
+        try:
+            update_doc = guard_write(doc_id, source, update_doc, excludes=vector_excludes)
+        except NestedLimitError:
+            refused_ids.append(doc_id)
+            continue
+        pending.append((doc_id, update_doc, source))
+    return pending
 
 
 async def occ_skip_on_conflict_bulk(
@@ -233,9 +262,12 @@ async def occ_skip_on_conflict_bulk(
       unchanged (``True``/``False``/``'wait_for'``).
 
     Returns:
-        ``{updated, updated_ids, skipped_due_to_conflict, skipped_ids, errors}`` --
-        ``updated_ids`` names the docs written; ``skipped_ids`` names the docs a conflict skipped, for a caller
-        whose write must not be lost (it re-merges and retries them).
+        ``{updated, updated_ids, skipped_due_to_conflict, skipped_ids,
+        refused_over_nested_limit, errors}`` -- ``updated_ids`` names the docs written;
+        ``skipped_ids`` names the docs a conflict skipped, for a caller whose write must not be
+        lost (it re-merges and retries them). A doc whose write would reach the nested-document
+        limit (:mod:`src.domain.nested_limit`) is not written: it is counted in
+        ``refused_over_nested_limit`` and listed in ``errors`` with ``phase: 'guard'``.
     """
     if index is None:
         index = items_index()
@@ -245,6 +277,7 @@ async def occ_skip_on_conflict_bulk(
     skipped = 0
     skipped_ids: list[str] = []
     errors: list[dict[str, Any]] = []
+    refused_over_limit = 0
 
     page = page_size if page_size is not None else OCC_BULK_PAGE_SIZE
     if page <= 0:
@@ -270,16 +303,12 @@ async def occ_skip_on_conflict_bulk(
 
         # doc_id -> (update_doc, source) for every non-empty merge result,
         # in page order so bulk item i maps back to this list's i-th entry.
-        pending: list[tuple[str, dict[str, Any], dict[str, Any]]] = []
-        for doc_id in page_ids:
-            doc = docs.get(doc_id)
-            if doc is None:
-                continue
-            source = doc.get('_source') or {}
-            update_doc = merger(doc_id, source)
-            if not update_doc:
-                continue
-            pending.append((doc_id, update_doc, source))
+        refused_ids: list[str] = []
+        pending = _merge_page(page_ids, docs, merger, vector_excludes, refused_ids)
+        refused_over_limit += len(refused_ids)
+        errors.extend(
+            {'doc_id': i, 'phase': 'guard', 'error': NESTED_LIMIT_ERROR} for i in refused_ids
+        )
 
         if not pending:
             continue
@@ -332,11 +361,16 @@ async def occ_skip_on_conflict_bulk(
             errors.append({'doc_id': doc_id, 'phase': 'update', 'error': str(error or action)})
         await mark_items_written(client, index, written)
 
+    if refused_over_limit:
+        logger.warning(
+            'curation_occ_refused_over_nested_limit', writer_id=writer_id, items=refused_over_limit
+        )
     return {
         'updated': len(updated_ids),
         'updated_ids': updated_ids,
         'skipped_due_to_conflict': skipped,
         'skipped_ids': skipped_ids,
+        'refused_over_nested_limit': refused_over_limit,
         'errors': errors,
     }
 

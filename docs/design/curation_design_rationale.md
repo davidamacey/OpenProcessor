@@ -488,7 +488,8 @@ What follows from the list:
   scored high.
 - **Explicit mapping.** The nested list and its embeddings have an explicit
   OpenSearch mapping and a raised `index.max_inner_result_window`, and a
-  per-write cap (`OP_REGION_MAX_BOXES_PER_WRITE`) bounds abuse. Element keys
+  per-item cap (`OP_REGION_MAX_BOXES_PER_WRITE`, at most 74: one item document may hold 149
+  nested documents, OpenSearch k-NN issue 3623) is enforced on every write. Element keys
   inside the list are fixed strings, not `RegionFields`-indirected: the list is
   new, so no deployment has legacy names for them.
 

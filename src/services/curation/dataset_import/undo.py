@@ -16,10 +16,12 @@ from typing import TYPE_CHECKING, Any
 
 from src.clients.occ import occ_update_one
 from src.clients.occ_locks import is_human_marker, is_human_owned_item
+from src.config.nested_limit import NESTED_DOCS_LIMIT
 from src.config.region_source import CANDIDATE_IMPORT
 from src.config.region_state import RegionStatus
 from src.domain.history import CLASS_STATE_FIELDS, restore_class_state
 from src.domain.ingest_class_sources import LABEL_IMPORT_CLASS_SOURCE
+from src.domain.nested_limit import NestedLimitError, nested_doc_count
 from src.domain.region_boxes import (
     RegionBox,
     boxes_write_fields,
@@ -326,6 +328,9 @@ async def undo_import(
             cid = entry['crop_id']
             if entry.get('action') == reconcile.ACTION:
                 if cid not in docs:
+                    # An item kept whole in the ledger that holds too many nested documents is
+                    # not written back (k-NN issue 3623): the undo fails with its id.
+                    check_reinstate(cid, entry['doc'], ctx.region_fields)
                     report.items_reinstated += 1
                     if not dry_run:
                         await _reinstate(ctx, cid, entry['doc'])
@@ -382,6 +387,18 @@ async def _delete_decided(
         report.sample('kept_human_edited', cid)
         await _write(ctx, cid, entry, boxes)
     return skipped
+
+
+def check_reinstate(crop_id: str, doc: dict[str, Any], F: RegionFields) -> None:
+    """Raise :class:`NestedLimitError` when ``doc``, about to be re-created, is at the limit."""
+    nested = nested_doc_count(doc, unread_box_vector_paths=[F.box_embeddings], F=F)
+    if nested >= NESTED_DOCS_LIMIT:
+        raise NestedLimitError(
+            crop_id,
+            nested_docs=nested,
+            boxes=len(doc.get(F.boxes) or []),
+            reason='the item cannot be put back: it holds too many nested documents',
+        )
 
 
 async def _reinstate(ctx: UndoContext, crop_id: str, doc: dict[str, Any]) -> None:

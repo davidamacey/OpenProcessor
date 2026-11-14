@@ -127,7 +127,7 @@ def _text_rules(profile: Any) -> dict[str, Any] | None:
     return region_text_rules(profile).catalog() if profile.reads_text else None
 
 
-def region_profile_summary(profile: Any) -> dict[str, Any]:
+def region_profile_summary(profile: Any, *, max_boxes_per_write: int) -> dict[str, Any]:
     """``{name, display_name, display_name_singular, region_class_name,
     text_reader, reads_text, text_hint_enabled, limits}`` for one
     ``DetectionProfile`` -- served on ``GET /health`` and
@@ -137,12 +137,11 @@ def region_profile_summary(profile: Any) -> dict[str, Any]:
 
     ``limits.max_boxes_per_write`` is the served abuse guard on one
     human region-box write request -- an element count, not a labeling
-    rule. It comes from the bound project's ``CurationConfig``, never a
-    hardcoded number, so Cropwright never duplicates it.
+    rule. The caller passes it from
+    :func:`src.services.embedding_spaces.readers.max_boxes_per_write` (the configured value, lowered
+    to the nested-document bound of the project's live box spaces), never a hardcoded
+    number, so Cropwright never duplicates it.
     """
-    from src.config.curation_accessors import get_curation_config
-
-    config = get_curation_config()
     return {
         'name': profile.name,
         'display_name': profile.display_name,
@@ -151,11 +150,11 @@ def region_profile_summary(profile: Any) -> dict[str, Any]:
         'text_reader': profile.text_reader,
         'reads_text': profile.reads_text,
         'text_hint_enabled': profile.text_hint_enabled,
-        'limits': {'max_boxes_per_write': config.region_max_boxes_per_write},
+        'limits': {'max_boxes_per_write': max_boxes_per_write},
     }
 
 
-def region_vocabulary_catalog() -> dict[str, Any]:
+def region_vocabulary_catalog(*, max_boxes_per_write: int) -> dict[str, Any]:
     """``{region_profile, detectors, region_sources, chain_actors,
     text_rules, text_choices, rejection_reasons}`` for the active
     deployment config. Never hardcodes a private model id.
@@ -188,7 +187,7 @@ def region_vocabulary_catalog() -> dict[str, Any]:
     # region_detector filter value).
     chain_actors = [{'id': d['id'], 'label': d['label'], 'role': d['role']} for d in detectors]
     return {
-        'region_profile': region_profile_summary(profile),
+        'region_profile': region_profile_summary(profile, max_boxes_per_write=max_boxes_per_write),
         'detectors': detectors,
         'region_sources': region_sources,
         'chain_actors': chain_actors,

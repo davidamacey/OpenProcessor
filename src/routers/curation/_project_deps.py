@@ -94,8 +94,9 @@ def install_project_exception_handlers(app: FastAPI) -> None:
     config store cannot confirm -> 503 ``config_store_unavailable``; a service's refusal
     (:class:`RequestRejectedError`) -> the status and body it carries."""
     from src.config.project_context import ProjectNotBound
-    from src.core.error_handlers import request_rejected_response
+    from src.core.error_handlers import nested_limit_response, request_rejected_response
     from src.core.exceptions import RequestRejectedError
+    from src.domain.nested_limit import NestedLimitError
     from src.services.curation.ingest_detector import IngestProfileUnresolvedError
     from src.services.projects.guard_errors import CrossProjectAccess, ProjectReadOnly
 
@@ -125,3 +126,4 @@ def install_project_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(ProjectNotBound, _isolation_error)
     app.add_exception_handler(ProjectReadOnly, _read_only)
     app.exception_handler(RequestRejectedError)(request_rejected_response)
+    app.exception_handler(NestedLimitError)(nested_limit_response)

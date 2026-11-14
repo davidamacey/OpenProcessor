@@ -549,3 +549,83 @@ def test_put_regions_patching_existing_box_to_rejected_stamps_human_reason(
     stored = {b['box_id']: b for b in fake_os._docs['crop-1'][F.boxes]}
     assert stored['b1']['state'] == 'rejected'
     assert stored['b1']['rejection_reason'] == REJECT_REASON_HUMAN
+
+
+# ---------------------------------------------------------------------------
+# Nested-document limit (OpenSearch k-NN issue 3623, src/domain/nested_limit.py)
+# ---------------------------------------------------------------------------
+
+
+def _new_boxes(n: int) -> list[dict[str, Any]]:
+    return [
+        {'box_id': None, 'bbox_norm': [0.01 * i, 0.1, 0.01 * i + 0.05, 0.3], 'state': 'accepted'}
+        for i in range(n)
+    ]
+
+
+def _stored_boxes(n: int) -> list[dict[str, Any]]:
+    return [
+        {
+            'box_id': f'b{i + 1}',
+            'bbox_norm': [0.01 * i, 0.1, 0.01 * i + 0.05, 0.3],
+            'state': 'accepted',
+        }
+        for i in range(n)
+    ]
+
+
+def test_put_regions_refuses_a_list_that_takes_the_item_to_the_nested_limit(
+    app_client: TestClient, fake_os: _FakeRegionOS
+) -> None:
+    # Two assist attributes leave room for 73 boxes (146 + 2 = 148), not 74 (148 + 2 = 150).
+    fake_os._docs['crop-2']['assist'] = {'attributes': [{'key': 'k', 'value': 'v'}] * 2}
+    refused = app_client.put(
+        '/curation/projects/default/crops/crop-2/regions', json={'boxes': _new_boxes(74)}
+    )
+    assert refused.status_code == 422, refused.text
+    detail = refused.json()['detail']
+    assert detail['error'] == 'item_over_nested_limit'
+    assert (detail['limit'], detail['nested_docs'], detail['crop_id']) == (150, 150, 'crop-2')
+    assert fake_os._docs['crop-2'][F.boxes] == []  # nothing written, nothing truncated
+
+    accepted = app_client.put(
+        '/curation/projects/default/crops/crop-2/regions', json={'boxes': _new_boxes(73)}
+    )
+    assert accepted.status_code == 200, accepted.text
+    assert len(fake_os._docs['crop-2'][F.boxes]) == 73
+
+
+def test_any_other_write_on_an_item_over_the_limit_is_422(
+    app_client: TestClient, fake_os: _FakeRegionOS
+) -> None:
+    fake_os._docs['crop-2'][F.boxes] = _stored_boxes(80)
+    resp = app_client.patch(
+        '/curation/projects/default/crops/crop-2/regions/b1', json={'state': 'rejected'}
+    )
+    assert resp.status_code == 422, resp.text
+    assert resp.json()['detail']['error'] == 'item_over_nested_limit'
+    assert fake_os._docs['crop-2'][F.boxes][0]['state'] == 'accepted'
+
+
+def test_the_repair_write_on_an_item_over_the_limit_drops_its_box_vectors(
+    app_client: TestClient, fake_os: _FakeRegionOS, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The OCC read leaves the vectors out (``_source_excludes``), as OpenSearch does.
+    read = fake_os.get
+
+    async def get_without_excluded(*, index: str, id: str, **kw: Any) -> dict[str, Any]:
+        resp = await read(index=index, id=id, **kw)
+        excluded = set(kw.get('_source_excludes') or ())
+        resp['_source'] = {k: v for k, v in resp['_source'].items() if k not in excluded}
+        return resp
+
+    monkeypatch.setattr(fake_os, 'get', get_without_excluded)
+    fake_os._docs['crop-2'][F.boxes] = _stored_boxes(80)
+    fake_os._docs['crop-2'][F.box_embeddings] = [
+        {'box_id': 'b1', 'bbox_norm': [0.0, 0.1, 0.05, 0.3], 'embedding': [0.1, 0.2]}
+    ]
+    keep = [{'box_id': f'b{i + 1}'} for i in range(40)]
+    resp = app_client.put('/curation/projects/default/crops/crop-2/regions', json={'boxes': keep})
+    assert resp.status_code == 200, resp.text
+    assert len(fake_os._docs['crop-2'][F.boxes]) == 40
+    assert fake_os._docs['crop-2'][F.box_embeddings] == []

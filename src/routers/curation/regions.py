@@ -36,7 +36,11 @@ from src.services.curation.review_tab_clauses import region_text_clause
 from src.services.curation.training_cohorts import REGION_LOW_SCORE_MAX, TRAINING_CANDIDATE_MODES
 from src.services.curation.wire import item_list_source_excludes
 from src.services.detection.profile_registry import region_profile_or_neutral
-from src.services.embedding_spaces.readers import item_write_fields, vector_source_excludes
+from src.services.embedding_spaces.readers import (
+    item_write_fields,
+    max_boxes_per_write,
+    vector_source_excludes,
+)
 from src.services.labeling.vlm_endpoints import refresh_vlm_state
 
 
@@ -466,4 +470,4 @@ async def regions_vocabulary() -> dict[str, Any]:
         # Best-effort: the verifier entries come from the endpoint registry;
         # an unreachable store just leaves them out.
         await refresh_vlm_state()
-    return region_vocabulary_catalog()
+    return region_vocabulary_catalog(max_boxes_per_write=await max_boxes_per_write())

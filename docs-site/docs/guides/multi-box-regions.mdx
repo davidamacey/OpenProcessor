@@ -34,7 +34,7 @@ Examples assume `API=http://localhost:4603` and project `cars`. Boxes are
 - **Locked box.** One a human created, verdicted or edited, or imported from a labeled
   dataset. Automated stages and reprocessing never touch it.
 - **Caps.** `max_regions_per_item` in the [region profile](./region-profiles.mdx) (default 1,
-  up to 64) after the score floor and NMS; `OP_REGION_MAX_BOXES_PER_WRITE` (default 500) per write.
+  up to 64) after the score floor and NMS; `OP_REGION_MAX_BOXES_PER_WRITE` (default and ceiling 74) per item and write. A write that would take an item to 150 nested documents is refused with 422 `item_over_nested_limit`, never truncated; `scripts/curation/find_items_over_nested_limit.py` lists items that already hold that many.
 
 ## How boxes are produced
 

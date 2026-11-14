@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.config import TERMINAL_STATUSES, RegionStatus, get_region_fields
 from src.core.logging import get_logger
+from src.domain.nested_limit import ERROR_CODE
 from src.services.curation.crop_bytes import CROP_JPEG_QUALITY, load_item_crop_jpeg
 from src.services.detection.profile_registry import get_active_region_profile
 from src.services.jobs.gpu_pause import vlm_paused
@@ -334,6 +335,17 @@ def unreadable_crop_update(task: _ItemTask) -> dict[str, Any]:
         F.status: RegionStatus.DETECTION_FAILED,
         F.reason: 'image_unavailable',
         F.detector_chain: [*task.detection_trace, 'worker:image_unavailable'],
+    }
+
+
+def nested_limit_update(task: _ItemTask) -> dict[str, Any]:
+    """Region update for an item whose detected boxes would reach the nested-document limit
+    (``src/domain/nested_limit.py``): ``detection_failed``, never a truncated list."""
+    F = get_region_fields()
+    return {
+        F.status: RegionStatus.DETECTION_FAILED,
+        F.reason: ERROR_CODE,
+        F.detector_chain: [*task.detection_trace, f'worker:{ERROR_CODE}'],
     }
 
 

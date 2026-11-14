@@ -24,6 +24,7 @@ from src.clients.image_counts_dirty import mark_items_written
 from src.clients.occ import OCC_BULK_PAGE_SIZE
 from src.config.curation_accessors import items_index
 from src.core.logging import get_logger
+from src.domain.nested_limit import NestedLimitError, guard_write
 
 
 if TYPE_CHECKING:
@@ -34,9 +35,10 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-BulkFailure = Literal['conflict', 'transport', 'error']
+BulkFailure = Literal['conflict', 'transport', 'error', 'nested_limit']
 """Why a doc was not written: a 409 that outlasted the retries, a bulk request
-that failed as a whole, or a non-409 error on the item."""
+that failed as a whole, a non-409 error on the item, or a write refused by the
+nested-document limit (:mod:`src.domain.nested_limit`)."""
 
 
 _TRANSIENT_STATUSES = frozenset({429, 502, 503, 504})
@@ -65,9 +67,9 @@ WRITE_FAILED = 'write_failed'
 """Per-item reason code on the wire for a doc that was not written and did not conflict."""
 
 
-def failed_entry(doc_id: str) -> dict[str, str]:
+def failed_entry(doc_id: str, reason: str = WRITE_FAILED) -> dict[str, str]:
     """The per-item wire entry for an id whose write failed for a reason other than a 409."""
-    return {'crop_id': doc_id, 'reason': WRITE_FAILED}
+    return {'crop_id': doc_id, 'reason': reason}
 
 
 def raise_on_failed(failed: list[dict[str, str]]) -> None:
@@ -107,6 +109,39 @@ def _item_outcome(doc_id: str, item: dict[str, Any]) -> Literal['written', 'conf
         return 'conflict'
     logger.warning('curation_occ_update_bulk_item_error', doc_id=doc_id, error=str(error or action))
     return 'error'
+
+
+def _prepare_page(
+    page_ids: list[str],
+    docs: dict[str, Any],
+    prepare: Callable[[str, dict[str, Any] | None], dict[str, Any] | None],
+    on_failed: Callable[[str, dict[str, Any] | None, BulkFailure], None],
+    source_excludes: list[str] | None,
+) -> list[tuple[str, dict[str, Any]]]:
+    """``(id, update)`` for every doc ``prepare`` wants written and the nested-document limit
+    allows (:func:`~src.domain.nested_limit.guard_write`); a refused doc fails with
+    ``'nested_limit'``."""
+    pending: list[tuple[str, dict[str, Any]]] = []
+    refused = 0
+    for doc_id in page_ids:
+        update_doc = prepare(doc_id, docs.get(doc_id))
+        if update_doc is None:
+            continue
+        try:
+            update_doc = guard_write(
+                doc_id,
+                docs[doc_id].get('_source') or {},
+                update_doc,
+                excludes=source_excludes or (),
+            )
+        except NestedLimitError:
+            refused += 1
+            on_failed(doc_id, docs[doc_id], 'nested_limit')
+            continue
+        pending.append((doc_id, update_doc))
+    if refused:
+        logger.warning('curation_occ_refused_over_nested_limit', items=refused)
+    return pending
 
 
 async def occ_bulk_rounds(
@@ -159,11 +194,7 @@ async def occ_bulk_rounds(
                 source_excludes=source_excludes,
                 seq_no=True,
             )
-            pending: list[tuple[str, dict[str, Any]]] = []
-            for doc_id in page_ids:
-                update_doc = prepare(doc_id, docs.get(doc_id))
-                if update_doc is not None:
-                    pending.append((doc_id, update_doc))
+            pending = _prepare_page(page_ids, docs, prepare, on_failed, source_excludes)
             if not pending:
                 continue
 
@@ -233,8 +264,9 @@ async def occ_update_bulk(
 
     Returns:
         Per-id status: ``'updated'``, ``'not-found'``, ``'conflict-exhausted'``
-        (a 409 that outlasted the retries) or ``'error'`` (a failed bulk request
-        or a non-409 item error).
+        (a 409 that outlasted the retries), ``'nested-limit'`` (refused by the
+        nested-document limit, :mod:`src.domain.nested_limit`) or ``'error'`` (a failed bulk
+        request or a non-409 item error).
     """
     status: dict[str, str] = {}
 
@@ -252,7 +284,10 @@ async def occ_update_bulk(
         status[doc_id] = 'updated'
 
     def on_failed(doc_id: str, _doc: dict[str, Any] | None, why: BulkFailure) -> None:
-        status[doc_id] = 'conflict-exhausted' if why == 'conflict' else 'error'
+        status[doc_id] = {
+            'conflict': 'conflict-exhausted',
+            'nested_limit': 'nested-limit',
+        }.get(why, 'error')
 
     await occ_bulk_rounds(
         client,

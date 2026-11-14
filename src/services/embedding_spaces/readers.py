@@ -10,6 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from src.config.curation_accessors import get_curation_config
+from src.config.nested_limit import max_boxes_per_item
 from src.domain.embedding_spaces import EmbeddingSpaceError, Target
 from src.domain.embedding_state import DEFERRED
 from src.services.embedding_spaces.resolve import embedding_space, live_spaces
@@ -85,3 +87,17 @@ async def item_vector_resets() -> dict[str, Any]:
 async def frame_vector_field() -> str:
     """The vector field of the bound project's primary frame space (the images index)."""
     return (await embedding_space(Target.FRAME)).vector_field
+
+
+async def box_vector_list_count() -> int:
+    """How many box-vector lists one item of the bound project can carry: its live box spaces
+    (each is a nested list with up to one entry per box), and at least the default one."""
+    return max(1, sum(1 for s in await live_spaces() if s.target is Target.BOX))
+
+
+async def max_boxes_per_write() -> int:
+    """The most boxes one write may carry for the bound project: ``OP_REGION_MAX_BOXES_PER_WRITE``,
+    lowered to the nested-document bound of its live box spaces (``src/domain/nested_limit.py``:
+    74 with one, 49 with two, 37 with three). The exact per-item check is made at write time."""
+    configured = get_curation_config().region_max_boxes_per_write
+    return min(configured, max_boxes_per_item(await box_vector_list_count()))

@@ -14,10 +14,12 @@ from typing import TYPE_CHECKING, Any
 import httpx
 from opensearchpy.exceptions import OpenSearchException
 
+from scripts.curation.worker.state import nested_limit_update
 from src.clients.occ import occ_skip_on_conflict_bulk
 from src.config import get_region_fields
 from src.config.project_context import project_api_base
 from src.core.logging import get_logger
+from src.domain.nested_limit import NestedLimitError, guard_write
 from src.services.curation.region_box_edits import same_box
 from src.services.curation.region_box_embeddings import entry_for, write_box_embeddings
 from src.services.curation.region_box_pass import (
@@ -147,6 +149,7 @@ async def _bulk_update_one_project(
         by_id[t.crop_id] = t
     if not eligible:
         return 0, n_skipped_empty
+    excludes = await vector_source_excludes()
 
     def _merge(doc_id: str, current: dict[str, Any]) -> dict[str, Any]:
         task = by_id[doc_id]
@@ -250,6 +253,13 @@ async def _bulk_update_one_project(
         if written and task.region_run_verify:
             # An assist run's choice is spent once the item is written; the run id stays.
             written['region_run_verify'] = None
+        try:
+            guard_write(doc_id, current, written, excludes=excludes)
+        except NestedLimitError as exc:
+            # Never a truncated list and never an item left pending for ever: the item is
+            # recorded as failed with the reason (k-NN issue 3623, src/domain/nested_limit.py).
+            logger.warning('region_write_over_nested_limit', crop_id=doc_id, error=str(exc))
+            return nested_limit_update(task)
         return written
 
     # Marked before the write: a skipped (stale) task only costs one idempotent rescore.
@@ -258,7 +268,7 @@ async def _bulk_update_one_project(
     )
     result = await occ_skip_on_conflict_bulk(
         opensearch,
-        vector_excludes=await vector_source_excludes(),
+        vector_excludes=excludes,
         doc_ids=[t.crop_id for t in eligible],
         merger=_merge,
         index=items_index(),

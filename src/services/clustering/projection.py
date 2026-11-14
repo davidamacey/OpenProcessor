@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import text
 
+from src.core.logging import get_logger
+from src.domain.nested_limit import is_over_limit_bulk_error, painless_guard
 from src.services.clustering.activation import complete_projection
 
 
@@ -30,11 +32,17 @@ if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
     from sqlalchemy.ext.asyncio import AsyncSession
 
+logger = get_logger(__name__)
+
 BATCH = 1000
 BOX_SEPARATOR = ':'
 ASSIGNED_BY_RUN = 'run'
 
-_ITEM_SCRIPT = """
+# Both scripts run only on an item under the nested-document limit (src/domain/nested_limit.py,
+# OpenSearch k-NN issue 3623): a scripted update rewrites the whole document, and on an item at
+# the limit the stored box vectors it would write back are another document's. An item over the
+# limit fails its bulk item with a reason `_bulk` recognises and counts apart from real failures.
+_ITEM_BODY = """
 if (ctx._source.cluster_partition_id != null && ctx._source.cluster_partition_id.compareTo(params.pid) > 0) {
   ctx.op = 'noop';
 } else {
@@ -46,7 +54,8 @@ if (ctx._source.cluster_partition_id != null && ctx._source.cluster_partition_id
   ctx._source.cluster_assigned_by = params.by;
 }
 """
-_BOX_SCRIPT = """
+_ITEM_SCRIPT = painless_guard(_ITEM_BODY, on_over='throw')
+_BOX_BODY = """
 if (ctx._source.region_boxes == null) { ctx.op = 'noop'; } else {
   for (def box : ctx._source.region_boxes) {
     if (box.box_id == params.box_id) {
@@ -61,6 +70,7 @@ if (ctx._source.region_boxes == null) { ctx.op = 'noop'; } else {
   }
 }
 """
+_BOX_SCRIPT = painless_guard(_BOX_BODY, on_over='throw')
 
 _PAGE = text(
     'SELECT item_key, cluster_uid, state, score, margin FROM cluster_memberships '
@@ -80,6 +90,9 @@ class ProjectionResult:
     written: int = 0
     cleared: int = 0
     failed: int = 0
+    skipped_over_nested_limit: int = 0
+    """Items left as they were: they hold too many nested documents (the count of items, not
+    of writes; a warning is logged once with it)."""
 
 
 def update_action(
@@ -126,15 +139,24 @@ async def _still_pending(session: AsyncSession, partition_id: uuid.UUID) -> bool
 
 async def _bulk(
     client: AsyncOpenSearch, actions: list[tuple[dict[str, Any], dict[str, Any]]]
-) -> int:
-    """Send one batch; return the number of failed items."""
+) -> tuple[int, int]:
+    """Send one batch; return ``(failed items, items skipped over the nested limit)``."""
     if not actions:
-        return 0
+        return 0, 0
     body = [line for pair in actions for line in pair]
     response = await client.bulk(body=body, refresh=False)
     if not response.get('errors'):
-        return 0
-    return sum(1 for item in response['items'] if 'error' in item.get('update', {}))
+        return 0, 0
+    failed = skipped = 0
+    for item in response['items']:
+        error = item.get('update', {}).get('error')
+        if error is None:
+            continue
+        if is_over_limit_bulk_error(error):
+            skipped += 1
+        else:
+            failed += 1
+    return failed, skipped
 
 
 async def project_partition(
@@ -149,23 +171,25 @@ async def project_partition(
     on_batch: Callable[[int], Awaitable[None]] | None = None,
 ) -> ProjectionResult:
     """Project ``partition_id`` onto ``index`` and flip it to serving; fenced as described above."""
-    written = cleared = failed = 0
+    written = cleared = failed = over_limit = 0
     after = ''
     while True:
         if not await _still_pending(session, partition_id):
-            return ProjectionResult('superseded', written, cleared, failed)
+            return ProjectionResult('superseded', written, cleared, failed, over_limit)
         page = (
             await session.execute(_PAGE, {'id': partition_id, 'after': after, 'n': BATCH})
         ).all()
         if not page:
             break
-        failed += await _bulk(
+        batch_failed, batch_over = await _bulk(
             client,
             [
                 update_action(index, target, key, partition_id, _row(uid, state, score, margin))
                 for key, uid, state, score, margin in page
             ],
         )
+        failed += batch_failed
+        over_limit += batch_over
         written += len(page)
         after = page[-1][0]
         if on_batch is not None:
@@ -174,7 +198,7 @@ async def project_partition(
         after = ''
         while True:
             if not await _still_pending(session, partition_id):
-                return ProjectionResult('superseded', written, cleared, failed)
+                return ProjectionResult('superseded', written, cleared, failed, over_limit)
             gone = (
                 await session.execute(
                     _GONE_PAGE,
@@ -183,7 +207,7 @@ async def project_partition(
             ).all()
             if not gone:
                 break
-            failed += await _bulk(
+            batch_failed, batch_over = await _bulk(
                 client,
                 [
                     update_action(
@@ -192,10 +216,18 @@ async def project_partition(
                     for (key,) in gone
                 ],
             )
+            failed += batch_failed
+            over_limit += batch_over
             cleared += len(gone)
             after = gone[-1][0]
+    if over_limit:
+        logger.warning(
+            'cluster_projection_skipped_over_nested_limit',
+            partition_id=str(partition_id),
+            items=over_limit,
+        )
     if failed:
-        return ProjectionResult('failed', written, cleared, failed)
+        return ProjectionResult('failed', written, cleared, failed, over_limit)
     flipped = await complete_projection(session, project=project, partition_id=partition_id)
     await session.execute(
         text(
@@ -204,7 +236,9 @@ async def project_partition(
         ),
         {'id': str(partition_id)},
     )
-    return ProjectionResult('flipped' if flipped else 'superseded', written, cleared, failed)
+    return ProjectionResult(
+        'flipped' if flipped else 'superseded', written, cleared, failed, over_limit
+    )
 
 
 __all__ = ['BATCH', 'ProjectionResult', 'project_partition', 'update_action']

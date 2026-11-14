@@ -195,6 +195,13 @@ def test_schema_row_min_max_equal_validator_range() -> None:
         assert lo <= hi
 
 
+def test_max_regions_per_item_never_exceeds_the_nested_limit_bound() -> None:
+    """k-NN issue 3623: boxes per item are bounded by src/config/nested_limit.py."""
+    from src.config.nested_limit import MAX_BOXES_PER_ITEM_DEFAULT_SPACE
+
+    assert PROFILE_FIELD_RANGES['max_regions_per_item'][1] <= MAX_BOXES_PER_ITEM_DEFAULT_SPACE
+
+
 def test_input_size_must_be_multiple_of_32() -> None:
     body = _body(input_size=100)
     report = _run(validate_profile(None, body))

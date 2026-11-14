@@ -167,7 +167,9 @@ async def test_a_later_process_reads_the_marker_and_runs_no_migration(
     assert cold >= 30, f'the full bootstrap made {cold} calls'
     assert _slug() in index_bootstrap._INDEXES_BOOTSTRAPPED
     items = get_curation_config().items_index
-    assert inner_result_window(items) == int(get_curation_config().region_max_boxes_per_write)
+    window = inner_result_window(items)
+    assert window is not None
+    assert window >= int(get_curation_config().region_max_boxes_per_write)
 
 
 @pytest.mark.asyncio

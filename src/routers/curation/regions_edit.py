@@ -22,6 +22,7 @@ from src.clients.occ import OCCFinalConflictError, occ_update_one
 from src.clients.occ_bulk import BulkFailure, occ_bulk_rounds
 from src.config import get_region_fields
 from src.config.curation_accessors import items_index
+from src.domain.nested_limit import ERROR_CODE, NestedLimitError
 from src.domain.region_boxes import RegionBoxWriteError
 from src.routers.curation._common import OpenSearchDep, RegionProfileDep, logger, router
 from src.routers.curation._crop_write_models import (
@@ -106,7 +107,7 @@ async def _write_one(
             writer_id=writer_id,
             **kw,
         )
-    except OCCFinalConflictError:
+    except (OCCFinalConflictError, NestedLimitError):
         raise
     except RegionBoxWriteError as exc:
         raise _write_error(exc) from exc
@@ -243,6 +244,9 @@ async def _batch_write(
         items.append(as_row(recorders[crop_id].item(crop_id), None))
 
     def on_failed(crop_id: str, doc: dict[str, Any] | None, why: BulkFailure) -> None:
+        if why == 'nested_limit':
+            invalid.append({'crop_id': crop_id, 'detail': ERROR_CODE})
+            return
         if why == 'transport':
             logger.warning('batch_region_write_failed', writer_id=writer_id)
             conflicts.append({'crop_id': crop_id, 'current_source': None})

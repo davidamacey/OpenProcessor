@@ -124,14 +124,14 @@ def test_region_profile_summary_serves_max_boxes_per_write_limit(
     from src.services.detection import profile_registry
 
     monkeypatch.setenv('OP_REGION_PROFILE_PATH', EXAMPLE_LICENSE_PLATE_PROFILE_PATH)
-    monkeypatch.setenv('OP_REGION_MAX_BOXES_PER_WRITE', '250')
+    monkeypatch.setenv('OP_REGION_MAX_BOXES_PER_WRITE', '30')
     monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
     profile_registry._reset_registry_for_tests()
     try:
         resp = client.get('/curation/projects/default/regions/vocabulary')
         assert resp.status_code == 200, resp.text
         summary = resp.json()['region_profile']
-        assert summary['limits'] == {'max_boxes_per_write': 250}
+        assert summary['limits'] == {'max_boxes_per_write': 30}
     finally:
         monkeypatch.setattr(curation_config_mod, '_default_curation_config', None)
         profile_registry._reset_registry_for_tests()

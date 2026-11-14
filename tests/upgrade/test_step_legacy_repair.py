@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from structlog.testing import capture_logs
 
 from src.domain.embedding_state import legacy_embedded_clause
 from src.services.upgrade.from_060.admin_client import ControlWriter
@@ -35,6 +36,7 @@ class _Client:
 
     def __init__(self, legacy: int = 7, failures: int = 0) -> None:
         self.legacy, self.failures = legacy, failures
+        self.left_after = 0  # items the script left as they were (over the nested limit)
         self.calls: list[dict[str, Any]] = []
         self.tasks = self
         self.polled: list[str] = []
@@ -51,6 +53,7 @@ class _Client:
             self.failures -= 1
             raise _BusyError('rejected_execution_exception')
         self.calls.append(kw)
+        self.legacy = self.left_after
         return {'task': 'node:1'}
 
 
@@ -81,6 +84,27 @@ async def test_the_backfill_targets_only_vectored_items_without_a_state() -> Non
     assert call['wait_for_completion'] is False
     assert client.polled == ['node:1']
     assert call['body']['query']['bool']['must_not'] == [{'exists': {'field': 'embedding_state'}}]
+
+
+@pytest.mark.asyncio
+async def test_the_backfill_script_skips_an_item_at_the_nested_limit() -> None:
+    client = _Client()
+    await legacy_repair.backfill_embedded_state(_ctx(client), 'items')
+    [call] = client.calls
+    source = call['body']['script']['source']
+    assert 'op_nested >= 150' in source
+    assert "ctx.op = 'noop'" in source
+    assert "ctx._source.embedding_state = 'embedded'" in source
+
+
+@pytest.mark.asyncio
+async def test_items_the_script_skipped_are_logged_with_their_count() -> None:
+    client = _Client()
+    client.left_after = 3
+    with capture_logs() as logs:
+        assert await legacy_repair.backfill_embedded_state(_ctx(client), 'items') == 7
+    [event] = [e for e in logs if e['event'] == 'legacy_repair_skipped_over_nested_limit']
+    assert event['items'] == 3
 
 
 @pytest.mark.asyncio
