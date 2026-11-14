@@ -37,7 +37,7 @@ from src.domain.capture_metadata import parse_capture
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-FIXTURES = Path(os.environ.get('OP_EXIF_FIXTURES', ''))
+FIXTURES = Path(os.environ['OP_EXIF_FIXTURES']) if os.environ.get('OP_EXIF_FIXTURES') else None
 TAGS = (
     '-Make=Acme',
     '-Model=Cam1',
@@ -100,9 +100,11 @@ def test_bytes_give_the_tags_of_the_file(client: ExifToolClient, tmp_path: Path,
 
 
 @pytest.mark.skipif(
-    not FIXTURES.is_dir(), reason='OP_EXIF_FIXTURES names no decoder-coverage fixture directory'
+    FIXTURES is None or not FIXTURES.is_dir(),
+    reason='OP_EXIF_FIXTURES names no decoder-coverage fixture directory',
 )
 def test_bytes_give_the_tags_of_every_fixture_file(client: ExifToolClient) -> None:
+    assert FIXTURES is not None
     files = sorted(FIXTURES.iterdir())
     assert files
     for path in files:
