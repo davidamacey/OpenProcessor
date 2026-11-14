@@ -20,7 +20,7 @@ from src.db.repos import job_items
 from src.db.repos.records import new_label_operation_id
 from src.db.session import async_session_factory, project_tx
 from src.services.curation.class_label import ItemLabel, candidate_move_update, class_label_update
-from src.services.curation.crop_bulk import occ_bulk_human_relabel
+from src.services.curation.crop_bulk import occ_bulk_human_relabel, refresh_items_index
 from src.services.curation.label_ops.accept_merge import accept_merger
 from src.services.curation.label_ops.adopt_merge import adoption_merger
 from src.services.curation.label_ops.store import (
@@ -190,22 +190,30 @@ async def run_relabel(ctx: JobContext, opensearch: Any) -> dict[str, Any]:
     updated = int(cursor.get('updated', 0))
     conflicts = int(cursor.get('conflicts', 0))
     total = int(params['total'])
-    while done < total:
-        if ctx.cancelled():
-            break
-        async with ctx.session() as session:
-            page = await job_items.read_items(
-                session, ctx.job_id, start=done, limit=OCC_BULK_PAGE_SIZE
+    try:
+        while done < total:
+            if ctx.cancelled():
+                break
+            async with ctx.session() as session:
+                page = await job_items.read_items(
+                    session, ctx.job_id, start=done, limit=OCC_BULK_PAGE_SIZE
+                )
+            result = await occ_bulk_human_relabel(
+                opensearch, page, merge, writer_id=params['writer'], refresh=False
             )
-        result = await occ_bulk_human_relabel(opensearch, page, merge, writer_id=params['writer'])
-        await write_members(record, [(i, priors[i]) for i in result['updated_ids'] if i in priors])
-        priors.clear()
-        raise_on_failed(result['failed'])
-        done += len(page)
-        updated += len(result['updated_ids'])
-        conflicts += len(result['conflicts'])
-        await ctx.checkpoint({'done': done, 'updated': updated, 'conflicts': conflicts})
-        await ctx.progress(done, total, 'writing', {'updated': updated, 'conflicts': conflicts})
+            await write_members(
+                record, [(i, priors[i]) for i in result['updated_ids'] if i in priors]
+            )
+            priors.clear()
+            raise_on_failed(result['failed'])
+            done += len(page)
+            updated += len(result['updated_ids'])
+            conflicts += len(result['conflicts'])
+            await ctx.checkpoint({'done': done, 'updated': updated, 'conflicts': conflicts})
+            await ctx.progress(done, total, 'writing', {'updated': updated, 'conflicts': conflicts})
+    finally:
+        # Pages wrote with refresh=False; one refresh makes them all visible, also on an early stop.
+        await refresh_items_index(opensearch)
     if done >= total:
         record.status = 'written'
         record.count = updated
