@@ -54,7 +54,7 @@ repos:
         language: pygrep
         entry: '# noqa: ?[A-Z][A-Z0-9, ]*$'
         types: [python]
-        files: ^(src|scripts|docker|export)/
+        files: ^(src|scripts|docker|export|frame_engine)/
 
   # Dockerfile linting with hadolint
   - repo: https://github.com/hadolint/hadolint
@@ -120,7 +120,7 @@ repos:
         entry: python3 scripts/codegen/check_layering.py
         language: system
         pass_filenames: false
-        files: ^(src|scripts)/.*\.py$
+        files: ^(src|scripts|frame_engine)/.*\.py$
 
       # Both ratchets run ruff from the project interpreter, so they use the pinned version.
       - id: check-ruff-ratchet
@@ -128,7 +128,7 @@ repos:
         entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/codegen/check_ruff_ratchet.py'
         language: system
         pass_filenames: false
-        files: ^(src|scripts|docker|export|models)/.*\.py$|^scripts/codegen/baselines/(complexity|broad_except)\.txt$
+        files: ^(src|scripts|docker|export|models|frame_engine)/.*\.py$|^scripts/codegen/baselines/(complexity|broad_except)\.txt$
 
       - id: check-noqa-ratchet
         name: noqa comments per file may not grow
@@ -170,7 +170,7 @@ repos:
         entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/codegen/check_vulture.py'
         language: system
         pass_filenames: false
-        files: ^(src|scripts|export|docker)/.*\.py$|^scripts/codegen/baselines/vulture\.txt$
+        files: ^(src|scripts|export|docker|frame_engine)/.*\.py$|^scripts/codegen/baselines/vulture\.txt$
 
       # mypy runs from the project interpreter so numpy, fastapi and pydantic types are
       # real (the isolated mirror hook saw none of them and passed vacuously). It falls
@@ -181,7 +181,7 @@ repos:
         entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" -m mypy'
         language: system
         pass_filenames: false
-        files: ^(src|scripts|docker|export|tests)/.*\.py$|^(pyproject\.toml|requirements-test\.txt)$
+        files: ^(src|scripts|docker|export|frame_engine|tests)/.*\.py$|^(pyproject\.toml|requirements-test\.txt)$
 
       - id: check-mypy-tests
         name: The list of test modules mypy still skips only shrinks
@@ -232,14 +232,14 @@ repos:
         language: system
         files: ^frontend/src/.*\.(js|ts|svelte)$
 
-      # jscpd clone detector over src, scripts and frontend/src (~1.5 s). Whole-project
+      # jscpd clone detector over src, scripts, frame_engine and frontend/src (~1.5 s). Whole-project
       # because a clone is a pair of files, so it takes no filenames.
       - id: check-duplication
         name: No new duplicated code (jscpd ratchet)
         entry: python3 scripts/codegen/check_duplication.py
         language: system
         pass_filenames: false
-        files: ^(src|scripts)/.*\.py$|^frontend/(src/.*\.(js|ts|svelte)|eslint\.complexity\.config\.js|package(-lock)?\.json)$|^scripts/codegen/check_duplication\.py$|^scripts/codegen/baselines/duplication\.txt$
+        files: ^(src|scripts|frame_engine)/.*\.py$|^frontend/(src/.*\.(js|ts|svelte)|eslint\.complexity\.config\.js|package(-lock)?\.json)$|^scripts/codegen/check_duplication\.py$|^scripts/codegen/baselines/duplication\.txt$
 
       # Whole-project type check, too slow (~30 s) for every commit: runs on git push.
       - id: frontend-svelte-check

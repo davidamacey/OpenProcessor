@@ -28,7 +28,7 @@ import _baseline
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BASELINE_PATH = REPO_ROOT / 'scripts' / 'codegen' / 'baselines' / 'vulture.txt'
-TARGETS = ('src', 'scripts', 'export', 'docker')
+TARGETS = ('src', 'scripts', 'export', 'docker', 'frame_engine')
 MIN_CONFIDENCE = '60'
 IGNORE_DECORATORS = (
     '@*router.*,@app.*,@application.*,@*.on_event,@field_validator,@model_validator,@validator,'

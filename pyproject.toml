@@ -137,6 +137,7 @@ line-length = 100
 # Directories to include/exclude
 include = [
     "src/**/*.py",
+    "frame_engine/**/*.py",
     "export/**/*.py",
     "models/**/*.py",
     "scripts/**/*.py",
@@ -235,6 +236,10 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 # The fake Triton implements Triton's gRPC service, whose method names (ServerLive, ModelInfer, ...)
 # are fixed by its proto.
 "docker/test/fake_triton.py" = ["N802"]
+# The frame engine's front implements the same KServe service (frame_engine/front.py).
+"frame_engine/front.py" = ["N802"]
+# The engine image carries no src.config, so its one settings module reads the environment itself.
+"frame_engine/settings.py" = ["TID251"]
 # Entry-point scripts that must run before their imports are valid: the seed scripts put the
 # repo root on sys.path first.
 "scripts/curation/seed_docs_run_results.py" = ["E402"]
@@ -408,7 +413,7 @@ exempt-modules = [
 # Import sorting configuration (follows black/blue style)
 force-single-line = false
 lines-after-imports = 2
-known-first-party = ["src"]
+known-first-party = ["src", "frame_engine"]
 known-third-party = ["ultralytics", "tritonclient", "fastapi", "pydantic"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 

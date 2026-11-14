@@ -29,7 +29,7 @@ import _baseline
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BASELINES = REPO_ROOT / 'scripts' / 'codegen' / 'baselines'
-TARGETS = ('src', 'scripts', 'docker', 'export', 'models')
+TARGETS = ('src', 'scripts', 'docker', 'export', 'models', 'frame_engine')
 MAX_COMPLEXITY = 15
 _SCORE = re.compile(r'`(?P<name>[^`]+)` is too complex \((?P<score>\d+) >')
 

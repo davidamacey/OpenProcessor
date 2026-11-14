@@ -29,7 +29,7 @@ import _baseline
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BASELINE = REPO_ROOT / 'scripts' / 'codegen' / 'baselines' / 'duplication.txt'
 JSCPD = Path('frontend') / 'node_modules' / '.bin' / 'jscpd'
-TARGETS = ('src', 'scripts', 'frontend/src')
+TARGETS = ('src', 'scripts', 'frame_engine', 'frontend/src')
 FORMATS = 'python,typescript,javascript,svelte'
 MIN_LINES = '12'
 MIN_TOKENS = '100'
