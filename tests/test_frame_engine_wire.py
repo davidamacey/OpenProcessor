@@ -167,6 +167,15 @@ def test_a_bad_faces_object_is_refused(faces: Any, branches: list[str], fault: s
     assert err.value.fault == fault
 
 
+def test_a_condition_on_a_built_branch_is_refused_until_the_engine_runs_conditions() -> None:
+    """The orchestrator has no conditional path yet: a plan asking for faces only when a class
+    is detected would get faces on every photo. Refused (fail closed), never silently run."""
+    with pytest.raises(wire.EnginePlanError) as err:
+        wire.parse_plan(_plan(branches=['detect', 'faces'], embed=None, crops='none', faces=FACES,
+                              if_detected={'faces': [0]}), has_boxes=False)  # fmt: skip
+    assert (err.value.fault, err.value.detail) == ('bad_field', 'if_detected.faces')
+
+
 def test_branch_status_round_trips_one_entry_per_name() -> None:
     states: dict[str, tuple[wire.BranchState, str]] = {
         'detect': ('ok', ''),
