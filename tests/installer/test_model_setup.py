@@ -487,6 +487,21 @@ def test_faces_off_leaves_the_face_models_out_of_the_required_list(bash) -> None
     assert not FACE_MODELS & set(required)
 
 
+def test_faces_off_drops_exactly_the_face_models_from_the_setup_wait(bash) -> None:
+    """Catches a substring filter: removing ``scrfd_10g_bnkps`` from ``scrfd_10g_bnkps_uint8``
+    left ``_uint8``, a model setup then waited for and never saw."""
+    script = (
+        'set -euo pipefail; PROJECT_DIR=/nonexistent; export OP_FACES_ENABLED=false; '
+        'source scripts/lib/setup_services.sh; _setup_required_models'
+    )
+    waited = bash(script).stdout.split()
+    assert not FACE_MODELS & set(waited)
+    assert all(m.startswith(('yolov11', 'mobileclip2', 'paddleocr')) for m in waited)
+    assert {'paddleocr_det_trt_uint8', 'paddleocr_rec_trt_uint8'} <= set(waited)
+    on = bash(script.replace('=false', '=true')).stdout.split()
+    assert set(on) >= FACE_MODELS
+
+
 def test_a_malformed_faces_switch_fails_the_group_list(bash) -> None:
     result = bash(_source('OP_FACES_ENABLED=maybe model_setup_groups_for_tiers "core"'))
     assert result.returncode != 0
