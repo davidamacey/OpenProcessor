@@ -77,7 +77,6 @@ def test_the_engine_branches_are_the_plan_vocabulary_minus_api_branches() -> Non
         (_plan(if_detected={'embed_crops': [2]}), 'condition_on_unconditional'),
         (_plan(if_detected={'ocr': [2]}), 'condition_on_unconditional'),
         (_plan(branches=['ocr'], crops='none', if_detected={'ocr': [2]}), 'missing_field'),
-        (_plan(branches=['detect', 'ocr'], ocr=OCR, if_detected={'ocr': [2]}), 'bad_field'),
         (_plan(derivatives={'thumb': 256}), 'bad_field'),
     ],
 )
@@ -107,6 +106,14 @@ def test_stored_boxes_stand_in_for_the_detector() -> None:
             has_boxes=True,
         )  # fmt: skip
     assert err.value.fault == 'bad_field'
+
+
+def test_a_built_branch_may_carry_a_detector_condition() -> None:
+    """The engine runs a conditional branch after the detector (``engine._Rounds``)."""
+    plan = wire.parse_plan(
+        _plan(branches=['detect', 'ocr'], ocr=OCR, if_detected={'ocr': [2, 7]}), has_boxes=False
+    )
+    assert plan.if_detected == {'ocr': (2, 7)}
 
 
 def test_unbuilt_branches_are_reported_unsupported_and_renditions_are_built() -> None:
