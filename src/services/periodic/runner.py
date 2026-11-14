@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -30,6 +30,7 @@ from src.core.logging import get_logger
 from src.db.engine import current_async_engine, get_sync_engine, run_with_engine
 from src.db.repos import projects as projects_repo
 from src.db.session import sync_deployment_tx
+from src.services.curation.job_binding import opensearch_client
 from src.services.projects.records import record_from_row
 
 
@@ -114,6 +115,38 @@ async def for_each_project(
     return report
 
 
+class TickOpenSearch:
+    """One guarded OpenSearch client for every project of one tick, built on first use.
+
+    The client belongs to the tick's event loop and is closed when the tick ends. The project
+    guard reads the bound project at each request, so sharing the client across the tick's
+    projects changes no isolation; a tick that never needs OpenSearch never builds one.
+    """
+
+    def __init__(self, timeout: float | None = None) -> None:
+        self._timeout = timeout
+        self._client: Any = None
+
+    async def get(self) -> Any:
+        if self._client is None:
+            self._client = await opensearch_client(self._timeout)
+        return self._client
+
+    async def close(self) -> None:
+        if self._client is not None:
+            await self._client.close()
+            self._client = None
+
+
+@asynccontextmanager
+async def tick_opensearch(timeout: float | None = None) -> AsyncIterator[TickOpenSearch]:
+    shared = TickOpenSearch(timeout)
+    try:
+        yield shared
+    finally:
+        await shared.close()
+
+
 def run_periodic[T](name: str, body: Awaitable[T]) -> T:
     """Run one tick's coroutine on a new event loop with its own engine bound."""
     return asyncio.run(run_with_engine(body, f'op-periodic-{name}', one_shot=True))
@@ -121,10 +154,12 @@ def run_periodic[T](name: str, body: Awaitable[T]) -> T:
 
 __all__ = [
     'PeriodicTickError',
+    'TickOpenSearch',
     'TickProject',
     'TickReport',
     'for_each_project',
     'read_tick_projects',
     'run_periodic',
     'tick_lock',
+    'tick_opensearch',
 ]

@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 from fixtures.job_rows import make_project, sql
 
-from src.services.periodic import open_vocab_sweep
+from src.services.periodic import open_vocab_sweep, runner
 from src.services.periodic.runner import run_periodic
 
 
@@ -44,7 +44,7 @@ def world(monkeypatch: pytest.MonkeyPatch):
     async def active() -> Any:
         return state['active']
 
-    monkeypatch.setattr(open_vocab_sweep, 'opensearch_client', client)
+    monkeypatch.setattr(runner, 'opensearch_client', lambda _timeout=None: client())
     monkeypatch.setattr(open_vocab_sweep, 'current_active_set', active)
     monkeypatch.setattr(open_vocab_sweep, 'images_index', lambda: 'images')
     return state
