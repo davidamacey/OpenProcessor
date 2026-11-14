@@ -58,6 +58,7 @@ from frame_engine.branches.base import Branch, DependencyFailedError, Photo, Pho
 from frame_engine.branches.crops import CropJpegs
 from frame_engine.branches.detect import Detect
 from frame_engine.branches.embed import EmbedCrops, EmbedFrame
+from frame_engine.cuda_fault import ContextLostError, is_sticky
 from frame_engine.messages import EngineRequest, EngineResult
 from frame_engine.nvjpeg_lanes import NvJpegError, NvJpegLanes
 from frame_engine.prep_budget import ByteBudget, is_memory_error, need_bytes
@@ -153,6 +154,10 @@ class FrameEngine:
         self.local = threading.local()
         self.memory_events = 0
         self.region_events = 0
+        #: Set for good once the CUDA context is lost (``cuda_fault``): every request is refused.
+        self.lost = threading.Event()
+        #: Raises the context's error if it is lost (any CUDA call does then).
+        self.probe_context: Callable[[], None] = _sync_stream
 
     def _reserve_budget(self, budget_mib: float) -> ByteBudget:
         """Hold the whole budget in the shared arena once, then hand it back to the pool (which
@@ -177,6 +182,8 @@ class FrameEngine:
     def run(self, request: EngineRequest) -> EngineResult:
         clock = StageClock(_sync_stream if self.s.stage_sync else None, request.enter)
         clock.add('queue', time.perf_counter() - request.arrived)
+        if self.lost.is_set():
+            raise ContextLostError('the CUDA context of this engine is lost; it is restarting')
         try:
             stream = getattr(self.local, 'stream', None)
             if stream is None:
@@ -184,6 +191,10 @@ class FrameEngine:
                 stream = self.local.stream = cp.cuda.Stream(non_blocking=True)
             with stream:
                 result = self._process(request, clock)
+        except cp.cuda.runtime.CUDARuntimeError as exc:
+            if is_sticky(exc):
+                raise self._lose(exc) from exc
+            raise
         finally:
             self.metrics.publish(clock)
         self.metrics.outcomes.labels(result.status, result.decode_route).inc()
@@ -275,11 +286,33 @@ class FrameEngine:
             if is_memory_error(exc):
                 self._note_memory_failure('decode', exc)
                 return 'gpu_memory'
+            self._check_context(exc)
             return 'decoder'
         frame = _orient(frame, header.orientation, self.alloc_stream)
         if (int(frame.shape[1]), int(frame.shape[0])) != oriented_size(header):
             return 'decoder'
         return frame
+
+    def _check_context(self, exc: BaseException) -> None:
+        """A decoder failure is the photo's only while the context still works."""
+        if is_sticky(exc):
+            raise self._lose(exc) from exc
+        try:
+            self.probe_context()
+        except cp.cuda.runtime.CUDARuntimeError as probe:
+            if is_sticky(probe):
+                raise self._lose(probe) from exc
+            raise
+
+    def _lose(self, exc: BaseException) -> ContextLostError:
+        """Mark the context lost (readiness turns false, the entry point exits for a restart)."""
+        if not self.lost.is_set():
+            self.lost.set()
+            self.metrics.context_lost.labels(str(getattr(exc, 'status', 'unknown'))).inc()
+            logger.critical(
+                'CUDA context lost (%s: %s): refusing work, exiting', type(exc).__name__, exc
+            )
+        return ContextLostError(f'CUDA context lost: {exc}')
 
     def _plan_branches(self, plan: wire.EnginePlan) -> list[Branch]:
         """The branch modules the plan runs, in plan order (round 2 submits before host work)."""

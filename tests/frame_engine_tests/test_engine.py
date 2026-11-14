@@ -1124,3 +1124,70 @@ def test_a_failed_branch_fails_what_needs_it_without_running_it(
     assert r.branches['faces'] == ('error', 'model_error')
     assert r.branches['face_embed'] == ('error', 'dependency_failed')
     assert 'arc' not in engine.transport.models()
+
+
+# ------------------------------------------------------------------ a poisoned CUDA context
+
+
+def _sticky(eng: Any, status: int = 700) -> Exception:
+    """What CuPy raises after an illegal memory access (``CUDARuntimeError.status``)."""
+    exc = eng.cp.cuda.runtime.CUDARuntimeError('cudaErrorIllegalAddress')
+    exc.status = status
+    return exc
+
+
+def test_a_sticky_cuda_error_loses_the_context_and_refuses_every_later_photo(eng: Any) -> None:
+    from frame_engine.cuda_fault import ContextLostError
+
+    engine = eng()
+    _Kernels.fail_on_call = (2, _sticky(eng))
+    with pytest.raises(ContextLostError):
+        _run(engine)
+    assert engine.lost.is_set()
+    decoded = len(_Lanes.seen_streams)
+    with pytest.raises(ContextLostError):
+        _run(engine)  # refused before any CUDA work
+    assert len(_Lanes.seen_streams) == decoded
+
+
+def test_a_decoder_failure_in_a_lost_context_is_not_blamed_on_the_photo(eng: Any) -> None:
+    """nvJPEG answers its own status in a poisoned context; the engine asks the context before it
+    calls the photo undecodable (1,458 COCO photos were answered ``decoder`` on 2026-11-14)."""
+    from frame_engine.cuda_fault import ContextLostError
+
+    engine = eng()
+    _Lanes.fail_with = eng.module.NvJpegError('DecodeJpegHost', 6)
+    engine.probe_context = lambda: (_ for _ in ()).throw(_sticky(eng))
+    with pytest.raises(ContextLostError):
+        _run(engine)
+    assert engine.lost.is_set()
+    assert engine.budget.in_use == 0
+
+
+def test_a_cuda_error_that_is_not_sticky_does_not_lose_the_context(eng: Any) -> None:
+    engine = eng()
+    _Kernels.fail_on_call = (2, _sticky(eng, status=1))  # cudaErrorInvalidValue: a bug, not fatal
+    with pytest.raises(eng.cp.cuda.runtime.CUDARuntimeError):
+        _run(engine)
+    assert not engine.lost.is_set()
+    _Kernels.fail_on_call = None
+    assert _run(engine).status == 'ok'
+
+
+def test_a_lost_context_is_counted_and_restarts_are_visible(eng: Any) -> None:
+    """A deployment whose engine restarts every hour shows it: the lost-context counter (by
+    cudaError code) and the process start time (``changes()`` over it counts restarts even when
+    the dying process was not scraped)."""
+    from frame_engine.cuda_fault import ContextLostError
+
+    engine = eng()
+    _Kernels.fail_on_call = (2, _sticky(eng))
+    with pytest.raises(ContextLostError):
+        _run(engine)
+    samples = {
+        (s.name, tuple(sorted(s.labels.items()))): s.value
+        for m in engine.metrics.registry.collect()
+        for s in m.samples
+    }
+    assert samples[('op_frame_engine_context_lost_total', (('code', '700'),))] == 1.0
+    assert samples[('process_start_time_seconds', ())] > 0
