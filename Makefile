@@ -19,7 +19,7 @@ DEV_DEV_COMPOSE := docker compose -f docker-compose.yml -f docker-compose.dev.ym
 # The curation services `curation-up SERVICES=...` accepts (the evaluator is on demand).
 CURATION_SERVICES := curation-detection-worker curation-vlm-worker curation-auto-label-worker curation-assist-loop-worker curation-evaluator
 # Recursive (=): OP_FACES_ENABLED comes from the `-include .env` further down.
-COMPOSE = docker compose $(if $(wildcard src/main.py),-f docker-compose.yml -f docker-compose.dev.yml,-f docker-compose.yml)$(if $(filter 0 false no off False FALSE,$(OP_FACES_ENABLED)), -f docker-compose.faces-off.yml)$(if $(wildcard docker-compose.local.yml), -f docker-compose.local.yml)
+COMPOSE = docker compose $(if $(wildcard src/main.py),-f docker-compose.yml -f docker-compose.dev.yml,-f docker-compose.yml)$(if $(filter 0 false no off False FALSE,$(OP_FACES_ENABLED)), -f docker-compose.faces-off.yml)$(if $(OP_DATA_DIR), -f docker-compose.data-dir.yml)$(if $(wildcard docker-compose.local.yml), -f docker-compose.local.yml)
 V := .venv/bin
 # Prefer the project venv's interpreter when it exists; fall back to
 # system python3 for a fresh checkout that hasn't created .venv yet.
@@ -91,6 +91,7 @@ ensure-host-bind-mount-dirs: ## Pre-create bind-mount source dirs as the invokin
 	@mkdir -p test_images data/source cache/huggingface cache/vllm
 	@(umask 077; mkdir -p secrets/vlm)
 	@bash -c 'source scripts/lib/secrets_control_plane.sh && ensure_control_plane_secrets .'
+	@bash -c 'source scripts/lib/colors.sh && source scripts/lib/data_dir.sh && dc() { $(COMPOSE) "$$@"; } && data_dir_prepare . "$(or $(COMPOSE_PROJECT_NAME),$(notdir $(CURDIR)))" && storage_check_data_location .'
 	@for d in test_images data/source cache/huggingface cache/vllm secrets/vlm; do \
 		owner="$$(stat -c '%U' "$$d" 2>/dev/null || echo unknown)"; \
 		if [ "$$owner" != "$$(id -un)" ] && [ "$$(stat -c '%u' "$$d" 2>/dev/null)" = "0" ]; then \

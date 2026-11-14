@@ -181,6 +181,7 @@ def test_installer_sources_only_verified_install_files() -> None:
         'source "${OP_DIR}/scripts/lib/secrets_control_plane.sh"',
         'source "${OP_DIR}/scripts/lib/retired_env.sh"',
         'source "${OP_DIR}/scripts/lib/cropwright_auth.sh"',
+        'source "${OP_DIR}/scripts/lib/data_dir.sh"',
         'source "${OP_DIR}/scripts/lib/install_summary.sh"',
         'source "${OP_DIR}/scripts/lib/upgrade_060.sh"',
     }
