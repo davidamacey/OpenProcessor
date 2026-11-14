@@ -381,6 +381,14 @@ parity; a dropped item is recorded in section 10 with its numbers.
 
 ## 10. Results
 
+Measured 2026-11-13 and 2026-11-14 on the running stack unless a row says otherwise.
+
 | Row | Dataset | Before | After | Parity | Decision |
 |---|---|---|---|---|---|
-| (filled as rows are measured) | | | | | |
+| Encoder ceiling (`perf_analyzer`, FP16 engine, one instance) | synthetic input | assumed 200 to 225 inferences per second | 225 measured, compute-bound at 4.4 ms per image; batch size above 8 and concurrency above 2 add nothing | not applicable | The ceiling of section 2.1 stands |
+| Detector ceiling (`perf_analyzer`, two instances) | synthetic input | not measured | 1,037 images per second at batch 16, not yet saturated | not applicable | The detector is not a bound |
+| Queue delay at one request | synthetic input | not measured | encoder: 24 ms p50, 15 ms of it queue delay; detector: 45 ms p50, 25 ms of it queue delay | not applicable | Input to P2 |
+| End-of-image scan in the prep model (regression of 2026-11-13) | 4,000-image mix, 4 clients | 21.9 photos per second on 2026-11-11; 10.6 with the regression (three runs, 0 failed) | fixed in `432674aa0`: the scan takes about 2 ms instead of about 80 ms per 7 MB photo and releases the interpreter lock; 16 threads scan 1,315 photos per second instead of 7.4 | identical end offsets on 400 real files and on generated streams | Kept; the re-measured mix row follows |
+| S1 parity: PE text tower, TensorRT FP16 against ONNX Runtime FP32 | 2,400 COCO val2017 captions | gate: median at least 0.999, p01 at least 0.995 | cosine median 0.999979, p01 0.999950, min 0.999780; batched against batch 1 within 1.3e-5 | passes | Latency row follows |
+| F0: recogniser as served | LFW, CALFW, CPLFW (10-fold) | not measured | accuracy 0.9965, 0.9575, 0.9558; the detector found no face in 17 LFW and 100 CPLFW pairs | not applicable | Baseline for F1 and F3 |
+| F0: grouping, pooled set of 36,926 faces (BCubed) | LFW, CALFW and CPLFW joined by identity | single linkage at 0.7: precision 0.996, recall 0.407 | at precision 0.99 or better: single linkage at 0.55 recall 0.785, average linkage at 0.4 recall 0.889, a label-propagation graph method recall 0.896 | not applicable | F3 replaces single linkage; the quality gate as first designed lowered precision and recall and is not built; naive batch-by-batch assignment fell to precision 0.845, so incremental assignment needs its own design |
