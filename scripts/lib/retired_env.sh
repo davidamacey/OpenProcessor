@@ -31,6 +31,24 @@ refuse_retired_env() {
         fi
     done
     (( found == 0 )) || exit 2
+    refuse_retired_opensearch_data "$file"
+}
+
+# refuse_retired_opensearch_data FILE -- exit 2 when FILE sets OP_OPENSEARCH_DATA. It chose the
+# OpenSearch data directory and OP_DATA_DIR replaced it; ignoring it would start OpenSearch on
+# the empty default volume while the index sits where the old value points.
+refuse_retired_opensearch_data() {
+    local file="$1" value
+    [[ -f "$file" ]] || return 0
+    value="$(awk '{ i = index($0, "=") } i > 1 && substr($0, 1, i - 1) == "OP_OPENSEARCH_DATA" { v = substr($0, i + 1); f = 1 } END { if (f) print v; exit !f }' "$file")" || return 0
+    if [[ "$value" == /* ]]; then
+        echo "[ERROR] OP_OPENSEARCH_DATA=${value} is no longer read: OpenSearch would start on an empty volume and your index stays at ${value}." >&2
+        echo "[ERROR] Stop the stack, set OP_DATA_DIR=<dir> in ${file} so that <dir>/opensearch is that data (move it there, or choose <dir> so the path is already <dir>/opensearch), then delete the OP_OPENSEARCH_DATA line. Steps: docs-site/docs/operations/storage.mdx" >&2
+    else
+        echo "[ERROR] OP_OPENSEARCH_DATA=${value} is no longer read: OpenSearch would start on the default volume <project>_opensearch_data instead of ${value}." >&2
+        echo "[ERROR] To keep a custom volume, mount it in docker-compose.local.yml (opensearch service, target /usr/share/opensearch/data), or copy its data into the default volume or into <OP_DATA_DIR>/opensearch (docs-site/docs/operations/storage.mdx); then delete the OP_OPENSEARCH_DATA line." >&2
+    fi
+    exit 2
 }
 
 # refuse_control_plane_only_install DIR -- exit 2 for an install made with the retired

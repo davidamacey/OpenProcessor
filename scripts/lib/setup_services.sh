@@ -52,6 +52,9 @@ start_services_step() {
     dc stop 2>/dev/null || true
     dc rm -f 2>/dev/null || true
 
+    data_dir_prepare "$PROJECT_DIR" "${compose_project:-$(basename "$PROJECT_DIR")}" || return 1
+    storage_check_data_location "$PROJECT_DIR"
+
     # Start all services (now that model.plan files exist, triton-server will load them)
     log_info "Starting all services..."
     dc up -d --remove-orphans

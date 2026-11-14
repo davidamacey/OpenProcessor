@@ -1,0 +1,39 @@
+# Opt-in overlay: keep the PostgreSQL, OpenSearch and Valkey data under one host directory
+# (OP_DATA_DIR in .env, an absolute path on SSD or NVMe) instead of Docker named volumes.
+# Docker's data root is often a spinning array; a database commit waits on the disk, so ingest
+# is several times slower there. The CLI, the Makefile and scripts/setup.sh add this file by
+# themselves when OP_DATA_DIR is set; with plain Compose add it with -f.
+#
+# Usage:
+#   OP_DATA_DIR=/srv/openprocessor docker compose -f docker-compose.yml -f docker-compose.data-dir.yml up -d
+#
+# Long syntax with create_host_path: false: a missing directory is an error, never a silent
+# empty database (the short syntax would create it root-owned and start empty). The CLI
+# (scripts/lib/data_dir.sh) creates the three directories and refuses to start when a named
+# volume still holds data and the directory is empty. Service volumes merge by container path,
+# so each entry below replaces the base file's named volume at the same path.
+# https://docs.docker.com/reference/compose-file/services/#volumes
+# https://docs.docker.com/reference/compose-file/merge/
+
+services:
+  postgres:
+    volumes:
+      - type: bind
+        source: ${OP_DATA_DIR:?set OP_DATA_DIR to an absolute host path}/postgres
+        target: /var/lib/postgresql
+        bind:
+          create_host_path: false
+  valkey:
+    volumes:
+      - type: bind
+        source: ${OP_DATA_DIR:?set OP_DATA_DIR to an absolute host path}/valkey
+        target: /data
+        bind:
+          create_host_path: false
+  opensearch:
+    volumes:
+      - type: bind
+        source: ${OP_DATA_DIR:?set OP_DATA_DIR to an absolute host path}/opensearch
+        target: /usr/share/opensearch/data
+        bind:
+          create_host_path: false

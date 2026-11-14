@@ -48,6 +48,11 @@ State lives in `<dir>/.install/` (`state.json`, `install.log`, mode 600).
   it tells you what is missing and stops.
 - Disk for the tiers you pick, on both the install dir and Docker's data root
   (tier sizes: [README](README.md#tiers)), plus 20 GB headroom.
+- Solid-state storage for the PostgreSQL, OpenSearch and Valkey data. Docker's data root is often a
+  spinning array, where every database commit waits on the disk and ingest is several times slower.
+  Set `OP_DATA_DIR=/path/on/ssd` in `.env`; the installer and `./openprocessor status` warn about a
+  rotating disk. Moving existing data:
+  [Storage and sizing](docs-site/docs/operations/storage.mdx#moving-existing-databases).
 - For the `segmenter` tier: a HuggingFace token with access to SAM 3 (gated).
   Pass it with `HF_TOKEN_FILE=<path>` (or `HF_TOKEN`), or paste it at the prompt.
   An unattended install (`--unattended`, or no terminal) without a token does not
@@ -63,7 +68,7 @@ which also has the profile table):
 | GPU | NVIDIA, 8 GB+ VRAM, Ampere or newer | A100 / A6000 / RTX 4090 class, 16 GB+ |
 | RAM | 16 GB | 64 GB |
 | CPU | 16 cores | 48+ cores |
-| Storage | | NVMe SSD for image storage |
+| Storage | SSD for the database, search and queue data (`OP_DATA_DIR`) | NVMe SSD for image storage and the data |
 
 <details>
 <summary>Installing the NVIDIA Container Toolkit (Ubuntu/Debian)</summary>

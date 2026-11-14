@@ -2,21 +2,23 @@
 
 One request per image (protocol version 1, :mod:`src.domain.frame_engine_wire`). Requests run on a
 pool of worker threads, each with its own CuPy stream, so decoding, kernels and the model calls of
-different images overlap; the detector and encoder calls of concurrent images meet in those
-models' own dynamic batchers in Triton. Per image, and only for the branches the plan names:
+different images overlap; the calls of concurrent images meet in the models' own dynamic batchers
+in Triton. This module is the orchestrator: routing, the device-memory budget, the decode, the two
+rounds of model calls and the mapping of failures. The branches themselves live in
+:mod:`frame_engine.branches` (contract in its docstring). Per image:
 
 1. Route by header (JPEG, 8-bit, 1 or 3 components, baseline, end-of-image marker present, size
    gate); anything else answers with a status (the API decodes that image on the CPU, counted).
 2. Reserve the frame's bytes (``prep_budget``, a bounded wait), nvJPEG decode (GPU Huffman lanes),
    EXIF orientation applied on the GPU.
-3. ``detect``: the detector letterbox (uint8, Pillow ``BILINEAR``) and the detector call; or the
-   caller's stored ``boxes`` (the embed pass), cut by the rectangle the CPU pass cuts.
-4. ``crops: inline``: each rectangle's pixels copied to the host and encoded as a JPEG on host
-   threads (quality 90), started before the encoder call so the two overlap.
-5. ``embed_frame`` / ``embed_crops``: the whole-frame square (Pillow ``BILINEAR``, shorter edge to
-   the encoder size, centre crop) and one square per wanted rectangle (``crop_pil``'s rectangle,
-   plain bilinear as ``resize_crop_rgb``), through the encoder in chunks of the plan's batch.
-6. ``detect``: the blur sums of the frame and of every detection's clamped rectangle.
+3. Round 1: every requested branch that needs only the frame stages its input and its call (the
+   detector letterbox, the whole-frame encoder square); one wait for the stream, then all those
+   calls go out at once. The caller's stored ``boxes`` (the embed pass) stand in for the detector.
+4. Settle: the answers later branches read (the detector's boxes as frame rectangles).
+5. Round 2: the branches cut from those answers stage and submit every call before collecting any
+   (the encoder squares of the rectangles, a call per ``spec.batch``), within the photo's window
+   of the region; then host work overlaps the calls in flight (crop JPEGs).
+6. Finish: collect, blur sums of the frame and of every detection, outputs.
 
 The kernels, their order and the JPEG settings are those of the Triton prep model this engine
 replaces, so the outputs are bit-identical for the photos it decoded. Model inputs travel through
@@ -27,7 +29,10 @@ orientation copies are allocated on one dedicated stream (``alloc_stream``), so 
 one worker serves any other. That is only safe if no kernel of the freeing worker still reads the
 block: every path that drops a frame waits for its worker stream first. An allocation that fails
 anyway answers ``gpu_memory``; a photo larger than the whole budget answers ``over_budget``; a
-budget wait that times out raises :class:`~frame_engine.transport.OverloadError`.
+budget wait that times out raises :class:`~frame_engine.transport.OverloadError`. The region
+bytes one photo holds with calls in flight are bounded by its fair share of the region
+(``OP_FRAME_ENGINE_REGION_MIB`` over ``OP_FRAME_ENGINE_WORKERS``, at least one call), so every
+worker can hold its share at once.
 
 Time: every model call ends by the request's deadline (:mod:`frame_engine.transport`), and the
 request records the stage it is in (``EngineRequest.stage``) for the front's deadline log.
@@ -39,41 +44,35 @@ import logging
 import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import cupy as cp
-import cv2
 import numpy as np
 
+from frame_engine.branches.base import Branch, DependencyFailedError, Photo, PhotoCalls
+from frame_engine.branches.crops import CropJpegs
+from frame_engine.branches.detect import Detect
+from frame_engine.branches.embed import EmbedCrops, EmbedFrame
 from frame_engine.messages import EngineRequest, EngineResult
 from frame_engine.nvjpeg_lanes import NvJpegError, NvJpegLanes
 from frame_engine.prep_budget import ByteBudget, is_memory_error, need_bytes
-from frame_engine.prep_geometry import blur_rect, oriented_size, route, stored_box_rects
+from frame_engine.prep_geometry import oriented_size, route, stored_box_rects
 from frame_engine.prep_kernels import PrepKernels
 from frame_engine.slab import SlabTooLargeError
 from frame_engine.stage_metrics import StageClock
 from frame_engine.transport import ModelCallError, OverloadError
 from src.domain import frame_engine_wire as wire
-from src.domain.image_geometry import (
-    crop_rect,
-    letterbox_geometry,
-    undo_letterbox,
-    whole_square_geometry,
-)
 
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from frame_engine.prep_geometry import JpegHeader
     from frame_engine.settings import EngineSettings
     from frame_engine.stage_metrics import EngineMetrics
     from frame_engine.transport import BodyTransport, CudaShmTransport
 
 
-#: The detector's single fused tensor ``[batch, 300, 6]``: ``x1, y1, x2, y2, score, class`` in
-#: letterboxed input pixels, zero-padded past the last detection.
-DET_OUTPUT = 'output0'
-EMBED_OUTPUT = 'image_embeddings'
 MIB = 1024 * 1024
 logger = logging.getLogger('frame_engine')
 
@@ -114,15 +113,10 @@ def _sync_stream() -> None:
     cp.cuda.get_current_stream().synchronize()
 
 
-@dataclass
-class _Image:
-    frame: Any
-    size: tuple[int, int]
-    rects: list[tuple[int, int, int, int]] = field(default_factory=list)
-    boxes: np.ndarray | None = None
-    scores: np.ndarray | None = None
-    classes: np.ndarray | None = None
-    lb: Any = None
+def _ordered_outputs(plan: wire.EnginePlan, out: dict[str, Any]) -> dict[str, Any]:
+    """The outputs in the wire module's order, whatever order the branches finished in."""
+    names = (wire.SIZE, *wire.expected_outputs(plan))
+    return {name: out[name] for name in names if name in out}
 
 
 class FrameEngine:
@@ -149,6 +143,8 @@ class FrameEngine:
         self.kernels = PrepKernels()
         self.encode_pool = ThreadPoolExecutor(settings.encode_threads, thread_name_prefix='fe-jpeg')
         self.workers = ThreadPoolExecutor(settings.workers, thread_name_prefix='fe-image')
+        #: Region bytes one photo may hold with calls in flight: its worker's fair share.
+        self.window = settings.region_mib * MIB // settings.workers
         self.local = threading.local()
         self.memory_events = 0
         self.region_events = 0
@@ -234,14 +230,19 @@ class FrameEngine:
             raise OverloadError(
                 'budget', f'{need} bytes not free within {self.s.budget_wait_seconds:g} s'
             )
-        im: _Image | None = None
+        photo: Photo | None = None
         try:
             with clock.stage('decode'):
-                im_or_reason = self._decode(data, header)
-            if isinstance(im_or_reason, str):
-                return self._failed(plan, im_or_reason)
-            im = im_or_reason
-            return self._branches(request, im, clock)
+                decoded = self._decode(data, header)
+            if isinstance(decoded, str):
+                return self._failed(plan, decoded)
+            # the photo is the frame's one holder: cleared below, never pinned by a traceback
+            calls = PhotoCalls(self.transport, clock, request.deadline, self.window, _sync_stream)
+            size = oriented_size(header)
+            photo = Photo(plan, decoded, size, calls, clock, self.kernels,
+                          {wire.SIZE: np.array(size, np.int32)})  # fmt: skip
+            del decoded
+            return self._branches(request, photo)
         except (cp.cuda.memory.OutOfMemoryError, cp.cuda.runtime.CUDARuntimeError) as exc:
             if not is_memory_error(exc):
                 raise
@@ -252,12 +253,13 @@ class FrameEngine:
             return self._failed(plan, 'over_budget')
         finally:
             # every path that drops the frame has waited for this stream, a failed one included
-            if im is not None and im.frame is not None:
+            if photo is not None and photo.frame is not None:
                 cp.cuda.get_current_stream().synchronize()
-                im.frame = None
+                photo.frame = None
             self.budget.release(need)
 
-    def _decode(self, data: bytes, header: JpegHeader) -> _Image | str:
+    def _decode(self, data: bytes, header: JpegHeader) -> Any:
+        """The oriented frame, or the status that says why there is none."""
         try:
             frame, _backend = self.lanes.decode(data, self.alloc_stream)
         except (
@@ -270,221 +272,72 @@ class FrameEngine:
                 return 'gpu_memory'
             return 'decoder'
         frame = _orient(frame, header.orientation, self.alloc_stream)
-        w, h = oriented_size(header)
-        if (int(frame.shape[1]), int(frame.shape[0])) != (w, h):
+        if (int(frame.shape[1]), int(frame.shape[0])) != oriented_size(header):
             return 'decoder'
-        return _Image(frame=frame, size=(w, h))
+        return frame
 
-    def _branches(self, request: EngineRequest, im: _Image, clock: StageClock) -> EngineResult:
+    def _plan_branches(self, plan: wire.EnginePlan) -> list[Branch]:
+        """The branch modules the plan runs, in plan order (round 2 submits before host work)."""
+        out: list[Branch] = []
+        if plan.runs('detect') and plan.detector is not None:
+            out.append(Detect(plan.detector))
+        if plan.embed is not None and plan.runs('embed_frame'):
+            out.append(EmbedFrame(plan.embed))
+        if plan.embed is not None and plan.runs('embed_crops'):
+            out.append(EmbedCrops(plan.embed, plan.embed_classes))
+        if plan.crops == 'inline':
+            out.append(CropJpegs(self.encode_pool, self.s.jpeg_quality, self.s.crop_max_side))
+        return out
+
+    def _branches(self, request: EngineRequest, photo: Photo) -> EngineResult:
         plan = request.plan
         states = self._initial_states(plan)
-        w, h = im.size
-        out: dict[str, Any] = {wire.SIZE: np.array([w, h], np.int32)}
-        have_rects = False
-        if plan.runs('detect') and plan.detector is not None:
-            try:
-                self._detect(im, plan.detector, clock, request.deadline)
-                states['detect'] = ('ok', '')
-                have_rects = True
-                out[wire.LETTERBOX] = np.array([im.lb.scale, im.lb.pad_w, im.lb.pad_h], np.float64)
-                out[wire.DET_BOXES] = im.boxes
-                out[wire.DET_SCORES] = im.scores
-                out[wire.DET_CLASSES] = im.classes
-            except ModelCallError as exc:
-                logger.warning('detector call failed: %s', exc)
-                states['detect'] = ('error', wire.MODEL_ERROR)
-        elif request.boxes is not None:
-            im.rects = stored_box_rects(request.boxes, w, h)
-            have_rects = True
-        jpegs: list[Future[tuple[bytes, float]]] = []
-        if plan.crops == 'inline' and have_rects:
-            with clock.stage('crop_copy'):
-                pixels = self._crop_pixels(im)
-            jpegs = [self.encode_pool.submit(self._encode, px) for px in pixels]
+        calls = photo.calls
+        if request.boxes is not None:
+            photo.rects = stored_box_rects(request.boxes, *photo.size)
+        branches = self._plan_branches(plan)
+        failed: set[int] = set()
+
+        def phase(hook: Callable[[Branch], Callable[[Photo], None]]) -> None:
+            for k, branch in enumerate(branches):
+                if k not in failed:
+                    try:
+                        hook(branch)(photo)
+                    except (ModelCallError, DependencyFailedError) as exc:
+                        failed.add(k)
+                        self._branch_failed(branch, exc, calls, states)
+
         try:
-            self._embed_branches(request, im, have_rects, states, out, clock)
-            if states.get('detect') == ('ok', ''):
-                with clock.stage('blur'):
-                    out[wire.BLUR_SUMS] = self._blur_sums(im)
-            cp.cuda.get_current_stream().synchronize()
-            im.frame = None
+            with calls.together():
+                phase(lambda b: b.round1)
+            phase(lambda b: b.settle)
+            phase(lambda b: b.round2)
+            phase(lambda b: b.finish)
         finally:
-            done = [f.result() for f in jpegs]
-        if plan.crops == 'inline' and have_rects:
-            out[wire.CROP_JPEGS] = [data for data, _ in done]  # empty when nothing was found
-        if jpegs:
-            clock.add('crop_jpeg', sum(secs for _, secs in done))
-        return EngineResult(wire.STATUS_OK, wire.DECODED_GPU, _ordered(plan, states), out)
+            calls.close()
+            for branch in branches:
+                branch.close(photo)
+        for k, branch in enumerate(branches):
+            if k not in failed and branch.status is not None:
+                states[branch.status] = ('ok', '')
+        return EngineResult(
+            wire.STATUS_OK, wire.DECODED_GPU, _ordered(plan, states),
+            _ordered_outputs(plan, photo.out),
+        )  # fmt: skip
 
-    # ------------------------------------------------------------------ stages
-
-    def _detect(
-        self, im: _Image, det: wire.DetectorSpec, clock: StageClock, deadline: float
-    ) -> None:
-        w, h = im.size
-        net = det.input_size
-        lb = letterbox_geometry(w, h, net)
-        im.lb = lb
-        staged = None
-        try:
-            with clock.stage('letterbox'):
-                staged = self.transport.stage(3 * net * net)
-                canvas = staged.device.reshape((1, 3, net, net))
-                canvas.fill(det.letterbox_fill)
-                dst = canvas[0, :, lb.top : lb.top + lb.new_h, lb.left : lb.left + lb.new_w]
-                self.kernels.resample_into(im.frame, (0, 0, w, h), (lb.new_w, lb.new_h), dst)
-            with clock.stage('detect'):
-                self.transport.commit(staged)
-                fused = self.transport.infer(
-                    det.model, staged, 0, [1, 3, net, net], DET_OUTPUT, deadline=deadline
-                )
-        finally:
-            if staged is not None:
-                self.transport.release(staged, _sync_stream)
-        with clock.stage('detect'):
-            rows = fused[0][fused[0][:, 4] > 0.0]
-            im.boxes = rows[:, :4].astype(np.float32)
-            im.scores = rows[:, 4].astype(np.float32)
-            im.classes = rows[:, 5].astype(np.int32)
-            im.rects = [
-                crop_rect(undo_letterbox(tuple(b), lb.scale, (lb.pad_w, lb.pad_h)), w, h)
-                for b in im.boxes
-            ]
-
-    def _embed_branches(
-        self,
-        request: EngineRequest,
-        im: _Image,
-        have_rects: bool,
+    @staticmethod
+    def _branch_failed(
+        branch: Branch,
+        exc: Exception,
+        calls: PhotoCalls,
         states: dict[str, tuple[wire.BranchState, str]],
-        out: dict[str, Any],
-        clock: StageClock,
     ) -> None:
-        plan = request.plan
-        frame = plan.runs('embed_frame')
-        crops = plan.runs('embed_crops')
-        if crops and not have_rects:
-            states['embed_crops'] = ('error', wire.DEPENDENCY_FAILED)
-            crops = False
-        if not (frame or crops) or plan.embed is None:
-            return
-        mask = np.zeros(len(im.rects), np.bool_)
-        if crops:
-            if plan.embed_classes is None or im.classes is None:
-                mask[:] = True
-            else:
-                wanted = np.array(sorted(plan.embed_classes), np.int32)
-                mask = np.isin(im.classes, wanted)
-        picked = [r for r, keep in zip(im.rects, mask, strict=True) if keep]
-        try:
-            vectors = self._embed(im, plan.embed, frame, picked, clock, request.deadline)
-        except ModelCallError as exc:
-            logger.warning('encoder call failed: %s', exc)
-            for name in ('embed_frame', 'embed_crops'):
-                if plan.runs(name) and name not in states:
-                    states[name] = ('error', wire.MODEL_ERROR)
-            return
-        if frame:
-            out[wire.WHOLE_EMBEDDING] = vectors[0]
-            states['embed_frame'] = ('ok', '')
-        if crops:
-            rows = vectors[1:] if frame else vectors
-            out[wire.CROP_EMBEDDINGS] = rows  # [len(picked), dim]; reshape(0, -1) cannot infer dim
-            out[wire.CROP_EMBEDDED] = mask
-            states['embed_crops'] = ('ok', '')
-
-    def _embed(
-        self,
-        im: _Image,
-        spec: wire.EmbedSpec,
-        frame: bool,
-        rects: list[tuple[int, int, int, int]],
-        clock: StageClock,
-        deadline: float,
-    ) -> np.ndarray:
-        """Encoder vectors of the whole-frame square (when ``frame``), then one per rectangle.
-
-        The squares are staged one encoder call (``spec.batch`` squares) at a time, so the slice of
-        the region a photo holds is bounded by the batch, not by its number of detections.
-        """
-        t = spec.size
-        n = int(frame) + len(rects)
-        if n == 0:
-            return np.zeros((0, 0), np.float32)
-        sqb = 3 * t * t
-        w, h = im.size
-        rows = []
-        for s in range(0, n, spec.batch):
-            m = min(spec.batch, n - s)
-            staged = self.transport.stage(m * sqb)
-            try:
-                sq = staged.device.reshape((m, 3, t, t))
-                if frame and s == 0:
-                    with clock.stage('embed_frame'):
-                        g = whole_square_geometry(w, h, t)
-                        self.kernels.resample_into(
-                            im.frame, (0, 0, w, h), (g.new_w, g.new_h), sq[0], (g.left, g.top, t, t)
-                        )
-                with clock.stage('embed_crops'):
-                    for k in range(max(s, int(frame)), s + m):
-                        x1, y1, x2, y2 = rects[k - int(frame)]
-                        g = whole_square_geometry(x2 - x1, y2 - y1, t)
-                        self.kernels.resample_into(
-                            im.frame,
-                            (x1, y1, x2 - x1, y2 - y1),
-                            (g.new_w, g.new_h),
-                            sq[k - s],
-                            (g.left, g.top, t, t),
-                            antialias=False,
-                        )
-                with clock.stage('embed_pe'):
-                    self.transport.commit(staged)
-                    rows.append(
-                        self.transport.infer(
-                            spec.model, staged, 0, [m, 3, t, t], EMBED_OUTPUT, deadline=deadline
-                        )
-                    )
-            finally:
-                self.transport.release(staged, _sync_stream)
-        return np.concatenate(rows, axis=0).astype(np.float32)
-
-    def _blur_sums(self, im: _Image) -> np.ndarray:
-        """``[1 + detections, 3]`` (pixels, sum, sum of squares): the frame, then each box."""
-        w, h = im.size
-        boxes = im.boxes if im.boxes is not None else np.zeros((0, 4), np.float32)
-        clamped = [
-            blur_rect(undo_letterbox(tuple(b), im.lb.scale, (im.lb.pad_w, im.lb.pad_h)), w, h)
-            for b in boxes
-        ]
-        rects = [(0, 0, w, h)] + [r for r in clamped if r is not None]
-        sums = iter(cp.asnumpy(self.kernels.lap_sums(im.frame, rects)))
-        rows = [(w * h, *next(sums))]
-        rows.extend(
-            (0, 0, 0) if r is None else ((r[2] - r[0]) * (r[3] - r[1]), *next(sums))
-            for r in clamped
-        )
-        return np.array(rows, np.int64).reshape(-1, 3)
-
-    def _crop_pixels(self, im: _Image) -> list[np.ndarray]:
-        """Each rectangle (inside the frame), BGR (host)."""
-        return [
-            cp.ascontiguousarray(im.frame[y1:y2, x1:x2, ::-1]).get() for x1, y1, x2, y2 in im.rects
-        ]
-
-    def _encode(self, pixels: np.ndarray) -> tuple[bytes, float]:
-        """The JPEG and the seconds the encode took on its host thread."""
-        start = time.perf_counter()
-        side = max(pixels.shape[:2])
-        cap = self.s.crop_max_side
-        if 0 < cap < side:  # cap before encode: area filter, never upscaled
-            scale = cap / side
-            h, w = pixels.shape[:2]
-            pixels = cv2.resize(
-                pixels,
-                (max(1, round(w * scale)), max(1, round(h * scale))),
-                interpolation=cv2.INTER_AREA,
-            )
-        ok, buf = cv2.imencode('.jpg', pixels, [cv2.IMWRITE_JPEG_QUALITY, self.s.jpeg_quality])
-        if not ok:
-            raise RuntimeError('crop JPEG encode failed')
-        return buf.tobytes(), time.perf_counter() - start
+        """One branch failed: its status, its calls cancelled; the others go on."""
+        calls.cancel(branch)
+        if isinstance(exc, ModelCallError):
+            logger.warning('%s: model call failed: %s', type(branch).__name__, exc)
+            reason = wire.MODEL_ERROR
+        else:
+            reason = wire.DEPENDENCY_FAILED
+        if branch.status is not None:
+            states[branch.status] = ('error', reason)

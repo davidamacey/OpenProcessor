@@ -25,6 +25,7 @@ from src.domain import frame_engine_wire as wire
 
 
 W, H = 96, 64
+MIB = 1024 * 1024
 FULL_STAGES = {
     'queue', 'budget', 'decode', 'letterbox', 'detect', 'embed_frame', 'embed_crops',
     'embed_pe', 'crop_copy', 'crop_jpeg', 'blur',
@@ -122,13 +123,16 @@ class _Kernels:
 
 
 class _Transport:
-    """Records every model call; the detector finds two objects of classes 1 and 2."""
+    """Records every model call and the order of commits, sends, collections and cancels; the
+    detector finds two objects of classes 1 and 2. Every call is answered when it is sent."""
 
     def __init__(self) -> None:
         self.calls: list[tuple[str, list[int]]] = []
+        self.events: list[tuple[str, Any]] = []
         self.deadlines: list[float] = []
         self.staged = 0
         self.fail: dict[str, Exception] = {}
+        self.fail_call: dict[int, Exception] = {}  # by the call's place in send order
         self.stage_fails: Exception | None = None
 
     def stage(self, nbytes: int) -> Any:
@@ -139,38 +143,62 @@ class _Transport:
         self.staged += 1
         return Staged(device=_dev(np.zeros(nbytes, np.uint8)), nbytes=nbytes)
 
-    def commit(self, staged: Any) -> None:
-        staged.host = np.asarray(staged.device)
+    def commit(self, staged: list[Any], sync: Any) -> None:
+        sync()
+        self.events.append(('commit', len(staged)))
+        for s in staged:
+            s.host = np.asarray(s.device).copy()
+            s.committed = True
 
-    def infer(self, model: str, staged: Any, off: int, shape: list[int], output: str, *,
-              deadline: float) -> Any:  # fmt: skip
-        assert staged.host is not None, 'infer before commit'
+    def submit(self, model: str, staged: Any, tensor: Any, outputs: Any, *,
+               deadline: float) -> Any:  # fmt: skip
+        assert staged.host is not None, 'submit before commit'
+        shape = list(tensor.shape)
         self.calls.append((model, shape))
+        self.events.append(('submit', model))
         self.deadlines.append(deadline)
-        if model in self.fail:
-            raise self.fail[model]
-        n = shape[0]
-        if model == 'det':
+        return types.SimpleNamespace(model=model, host=staged.host, shape=shape, outputs=outputs,
+                                     index=len(self.calls) - 1)  # fmt: skip
+
+    def collect(self, p: Any) -> dict[str, Any]:
+        self.events.append(('collect', p.model))
+        if p.model in self.fail:
+            raise self.fail[p.model]
+        if p.index in self.fail_call:
+            raise self.fail_call[p.index]
+        if p.model == 'det':
             fused = np.zeros((1, 300, 6), np.float32)
             fused[0, :2] = [[100, 120, 300, 400, 0.9, 1], [320, 320, 600, 600, 0.8, 2]]
-            return fused
-        flat = staged.host[off : off + int(np.prod(shape))].reshape(n, -1)
-        return flat[:, :8].astype(np.float32) + np.arange(8, dtype=np.float32)
+            return {p.outputs[0]: fused}
+        n = p.shape[0]
+        flat = p.host[: int(np.prod(p.shape))].reshape(n, -1)
+        return {p.outputs[0]: flat[:, :8].astype(np.float32) + np.arange(8, dtype=np.float32)}
+
+    def cancel(self, p: Any) -> None:
+        self.events.append(('cancel', p.model))
 
     def release(self, staged: Any, sync: Any) -> None:
-        sync()
+        if not staged.committed:
+            sync()
         self.staged -= 1
 
     def models(self) -> list[str]:
         return [m for m, _ in self.calls]
 
 
+def m_needs_cupy(name: str) -> bool:
+    """The engine modules that import CuPy at load (re-imported against the stand-in)."""
+    return name in ('frame_engine.engine', 'frame_engine.nvjpeg_lanes',
+                    'frame_engine.prep_kernels') or name.startswith('frame_engine.branches')  # fmt: skip
+
+
 @pytest.fixture
 def eng(monkeypatch: pytest.MonkeyPatch) -> Any:
     cp = _fake_cupy()
     monkeypatch.setitem(sys.modules, 'cupy', cp)
-    for name in ('frame_engine.engine', 'frame_engine.nvjpeg_lanes', 'frame_engine.prep_kernels'):
-        monkeypatch.delitem(sys.modules, name, raising=False)
+    for name in [m for m in sys.modules if m.startswith('frame_engine.')]:
+        if m_needs_cupy(name):
+            monkeypatch.delitem(sys.modules, name, raising=False)
     mod = importlib.import_module('frame_engine.engine')
     monkeypatch.setattr(mod, 'NvJpegLanes', _Lanes)
     monkeypatch.setattr(mod, 'PrepKernels', _Kernels)
@@ -240,8 +268,10 @@ def _mem_error(eng: Any) -> Exception:
 def test_the_full_plan_answers_every_output_and_observes_every_stage(eng: Any) -> None:
     engine = eng()
     r1 = _run(engine)
-    # one detector call, one encoder call with the frame and both crops, in that order
-    assert engine.transport.calls == [('det', [1, 3, 640, 640]), ('pe', [3, 3, 16, 16])]
+    # round 1: the detector and the frame square; round 2: one encoder call with both crops
+    assert engine.transport.calls == [
+        ('det', [1, 3, 640, 640]), ('pe', [1, 3, 16, 16]), ('pe', [2, 3, 16, 16]),
+    ]  # fmt: skip
     _run(engine)
     assert r1.status == 'ok'
     assert r1.decode_route == 'gpu'
@@ -261,13 +291,13 @@ def test_a_photo_without_detections_still_answers_every_output_of_its_plan(eng: 
     """``crop_jpegs`` is an output of ``crops: inline`` whatever the detector found, as the Triton
     prep model answered it (an empty list): the API reads it for every photo."""
     engine = eng()
-    real = engine.transport.infer
+    real = engine.transport.collect
 
-    def nothing_found(model: str, *args: Any, **kwargs: Any) -> Any:
-        out = real(model, *args, **kwargs)
-        return np.zeros_like(out) if model == 'det' else out
+    def nothing_found(p: Any) -> Any:
+        out = real(p)
+        return {k: np.zeros_like(v) for k, v in out.items()} if p.model == 'det' else out
 
-    engine.transport.infer = nothing_found
+    engine.transport.collect = nothing_found
     r = _run(engine)
     assert r.status == 'ok'
     assert set(r.outputs) == {'size', *wire.expected_outputs(_plan())}
@@ -278,8 +308,8 @@ def test_a_photo_without_detections_still_answers_every_output_of_its_plan(eng: 
 
 def test_encoder_chunks_follow_the_plan_batch(eng: Any) -> None:
     engine = eng()
-    _run(engine, _plan(embed={**EMBED, 'batch': 2}))
-    assert engine.transport.calls[1:] == [('pe', [2, 3, 16, 16]), ('pe', [1, 3, 16, 16])]
+    _run(engine, _plan(embed={**EMBED, 'batch': 1}))
+    assert engine.transport.calls[1:] == [('pe', [1, 3, 16, 16])] * 3
 
 
 # ------------------------------------------------------------------ skip-proof, per branch
@@ -308,7 +338,7 @@ def test_an_embed_frame_only_plan_issues_no_detector_call(eng: Any) -> None:
     assert engine.transport.calls == [('pe', [1, 3, 16, 16])]
     assert set(r.outputs) == {'size', 'whole_embedding'}
     assert {s for s, n in _seen(engine).items() if n} == {
-        'queue', 'budget', 'decode', 'embed_frame', 'embed_crops', 'embed_pe',
+        'queue', 'budget', 'decode', 'embed_frame', 'embed_pe',
     }  # fmt: skip
 
 
@@ -324,7 +354,7 @@ def test_embed_classes_embeds_only_the_wanted_detections(eng: Any) -> None:
     engine = eng()
     full = _run(engine, _plan())
     r = _run(engine, _plan(embed_classes=[2]))
-    assert engine.transport.calls[-1] == ('pe', [2, 3, 16, 16])  # the frame and one crop
+    assert engine.transport.calls[-1] == ('pe', [1, 3, 16, 16])  # the one wanted crop
     assert r.outputs['crop_embedded'].tolist() == [False, True]
     assert r.outputs['crop_embeddings'].shape == (1, 8)
     np.testing.assert_array_equal(
@@ -346,7 +376,7 @@ def test_stored_boxes_replace_the_detector(eng: Any) -> None:
     boxes = np.array([[0.1, 0.1, 0.5, 0.6], [0.0, 0.0, 1.0, 1.0]], np.float64)
     r = _run(engine, _plan(['embed_frame', 'embed_crops'], boxes=True, detector=None, crops='none'),
              boxes=boxes)  # fmt: skip
-    assert engine.transport.calls == [('pe', [3, 3, 16, 16])]
+    assert engine.transport.calls == [('pe', [1, 3, 16, 16]), ('pe', [2, 3, 16, 16])]
     assert r.outputs['crop_embeddings'].shape == (2, 8)
     assert r.outputs['crop_embedded'].tolist() == [True, True]
     assert set(r.outputs) == {'size', 'whole_embedding', 'crop_embeddings', 'crop_embedded'}
@@ -442,11 +472,13 @@ class _Region:
 
 
 class _Server:
-    """A model server that takes every call and answers none until ``answering`` is set (then the
-    detector finds nothing and the encoder answers 8-wide vectors)."""
+    """A model server that takes every call and answers none until ``answering`` is set, or only
+    the models in ``answers`` (the detector finds two objects, the encoder answers 8-wide
+    vectors)."""
 
     def __init__(self) -> None:
         self.answering = False
+        self.answers: set[str] = set()
         self.cancelled = 0
         self.regions: dict[str, int] = {}
 
@@ -466,12 +498,16 @@ class _Server:
     @staticmethod
     def _result(model: str, inputs: Any) -> Any:
         n = int(inputs[0].shape()[0])
-        out = np.zeros((1, 300, 6), np.float32) if model == 'det' else np.ones((n, 8), np.float32)
+        if model == 'det':
+            out = np.zeros((1, 300, 6), np.float32)
+            out[0, :2] = [[100, 120, 300, 400, 0.9, 1], [320, 320, 600, 600, 0.8, 2]]
+        else:
+            out = np.ones((n, 8), np.float32)
         return types.SimpleNamespace(as_numpy=lambda _name: out)
 
     def async_infer(self, model_name: str, inputs: Any, callback: Any, *, outputs: Any = None,
                     client_timeout: Any = None) -> Any:  # fmt: skip
-        if self.answering:
+        if self.answering or model_name in self.answers:
             callback(result=self._result(model_name, inputs), error=None)
         return types.SimpleNamespace(cancel=self._cancel)
 
@@ -510,7 +546,7 @@ def test_a_model_server_that_never_answers_fails_the_photo_and_frees_everything(
     with pytest.raises(TritonUnavailableError, match='no answer'):
         _run(engine)
     assert time.monotonic() - start < 2
-    assert server.cancelled == 1
+    assert server.cancelled == 2  # the detector's call at its deadline, the frame square's with it
     assert (engine.budget.in_use, transport.slab.in_use) == (0, 0)
     server.answering = True
     assert transport.check()
@@ -558,7 +594,7 @@ def test_the_squares_are_staged_one_encoder_call_at_a_time(eng: Any) -> None:
     server.answering = True
     square = 3 * 64 * 64
     transport = _shm(server, 2 * square)  # two squares; the photo has four (frame + 3 boxes)
-    engine = eng(transport=transport)
+    engine = eng(transport=transport, region_mib=2 * square / MIB)
     r = _run(engine, _stored_plan(64, 2), boxes=STORED)
     assert r.status == 'ok'
     assert r.outputs['crop_embeddings'].shape == (3, 8)
@@ -580,9 +616,9 @@ def test_a_call_larger_than_the_whole_region_answers_over_budget_with_one_warnin
     server.answering = True
     square = 3 * 64 * 64
     transport = _shm(server, 2 * square)
-    engine = eng(transport=transport)
+    engine = eng(transport=transport, region_mib=2 * square / MIB)
     for _ in range(2):
-        r = _run(engine, _stored_plan(64, 4), boxes=STORED)  # four squares in one call
+        r = _run(engine, _stored_plan(64, 4), boxes=STORED)  # three crop squares in one call
         assert (r.status, r.decode_route) == ('over_budget', 'none')
         assert (engine.budget.in_use, transport.slab.in_use) == (0, 0)
     warnings = [rec for rec in caplog.records if 'OP_FRAME_ENGINE_REGION_MIB' in rec.getMessage()]
@@ -591,13 +627,150 @@ def test_a_call_larger_than_the_whole_region_answers_over_budget_with_one_warnin
     assert _run(engine, _stored_plan(64, 2), boxes=STORED).status == 'ok'
 
 
+def _boxes(n: int, seed: int = 3) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    xy = rng.uniform(0.0, 0.6, (n, 2))
+    return np.concatenate([xy, xy + rng.uniform(0.1, 0.4, (n, 2))], axis=1).clip(0.0, 1.0)
+
+
+def _count_in_flight(transport: Any) -> list[int]:
+    """Wraps the transport: [calls in flight now, most at once]."""
+    seen = [0, 0]
+    submit, collect = transport.submit, transport.collect
+
+    def counted_submit(*a: Any, **k: Any) -> Any:
+        p = submit(*a, **k)
+        seen[0] += 1
+        seen[1] = max(seen)
+        return p
+
+    def counted_collect(p: Any) -> Any:
+        seen[0] -= 1
+        return collect(p)
+
+    transport.submit, transport.collect = counted_submit, counted_collect
+    return seen
+
+
+def test_round_one_sends_the_detector_and_the_frame_square_after_one_commit(eng: Any) -> None:
+    """Both calls that need only the frame are in flight together; the crop squares wait for
+    the detector's boxes, then go out before any encoder answer is collected."""
+    engine = eng()
+    _run(engine)
+    assert engine.transport.events == [
+        ('commit', 2), ('submit', 'det'), ('submit', 'pe'),  # round 1: one wait, two calls
+        ('collect', 'det'),  # settle: the boxes
+        ('commit', 1), ('submit', 'pe'),  # round 2: the crop squares
+        ('collect', 'pe'), ('collect', 'pe'),  # finish
+    ]  # fmt: skip
+
+
+def test_round_two_submits_every_chunk_before_it_collects_any(eng: Any) -> None:
+    engine = eng()
+    _run(engine, _plan(embed={**EMBED, 'batch': 1}))
+    events = engine.transport.events
+    last_submit = max(i for i, e in enumerate(events) if e == ('submit', 'pe'))
+    first_collect = min(i for i, e in enumerate(events) if e == ('collect', 'pe'))
+    assert last_submit < first_collect
+    assert events.count(('submit', 'pe')) == 3
+
+
+def test_the_window_bounds_what_one_photo_holds_with_calls_in_flight(eng: Any) -> None:
+    """300 rectangles in calls of 4 squares: many calls in flight at once, never more region
+    than the photo's fair share (region over workers) plus one call."""
+    server = _Server()
+    server.answering = True
+    square = 3 * 64 * 64
+    region = 1 << 20
+    transport = _shm(server, region)
+    seen = _count_in_flight(transport)
+    engine = eng(transport=transport, region_mib=region / MIB, workers=2)
+    r = _run(engine, _stored_plan(64, 4), boxes=_boxes(300))
+    assert r.status == 'ok'
+    assert r.outputs['crop_embeddings'].shape == (300, 8)
+    assert seen[1] >= 8  # the window holds ten calls of four squares
+    assert transport.slab.peak <= engine.window + 4 * square
+    assert (engine.budget.in_use, transport.slab.in_use) == (0, 0)
+
+
+def test_a_photo_with_300_detections_is_served_by_a_16_mib_region(eng: Any) -> None:
+    """The smallest region the settings allow, the encoder's real square (336) and batch (32),
+    sixteen workers: the photo's 300 crop squares (97 MiB) go through it one window at a time."""
+    server = _Server()
+    server.answering = True
+    region = 16 * MIB
+    transport = _shm(server, region)
+    engine = eng(transport=transport, region_mib=16, workers=16)
+    r = _run(engine, _stored_plan(336, 32), boxes=_boxes(300))
+    assert r.status == 'ok'
+    assert r.outputs['crop_embeddings'].shape == (300, 8)
+    assert transport.slab.peak <= region
+    assert (engine.budget.in_use, transport.slab.in_use) == (0, 0)
+
+
+def test_a_failed_crop_call_fails_embed_crops_only_and_cancels_its_other_calls(eng: Any) -> None:
+    from frame_engine.transport import ModelCallError
+
+    engine = eng()
+    # sent in order: detector, frame square, crop square 1, crop square 2
+    engine.transport.fail_call[2] = ModelCallError('pe', 'StatusCode.INTERNAL', 'boom')
+    r = _run(engine, _plan(embed={**EMBED, 'batch': 1}))
+    assert r.branches == {
+        'detect': ('ok', ''),
+        'embed_frame': ('ok', ''),
+        'embed_crops': ('error', 'model_error'),
+    }
+    assert ('cancel', 'pe') in engine.transport.events  # crop square 2, still in flight
+    assert set(r.outputs) == {'size', *wire.expected_outputs(_plan())} - {
+        'crop_embeddings', 'crop_embedded',
+    }  # fmt: skip
+    assert engine.transport.staged == 0
+
+
+def test_a_failed_frame_call_fails_embed_frame_only(eng: Any) -> None:
+    from frame_engine.transport import ModelCallError
+
+    engine = eng()
+    engine.transport.fail_call[1] = ModelCallError('pe', 'StatusCode.INTERNAL', 'boom')
+    r = _run(engine)
+    assert r.branches['embed_frame'] == ('error', 'model_error')
+    assert r.branches['embed_crops'] == ('ok', '')
+    assert r.outputs['crop_embeddings'].shape == (2, 8)
+    assert 'whole_embedding' not in r.outputs
+    assert engine.transport.staged == 0
+
+
+def test_an_encoder_that_never_answers_ends_the_photo_by_one_deadline(eng: Any) -> None:
+    """The detector answers; the frame square and two crop calls are in flight and never
+    answered: the photo is answered once, at about one call deadline, and every call is
+    cancelled and every slice back."""
+    from frame_engine.transport import TritonUnavailableError
+
+    server = _Server()
+    server.answers = {'det'}
+    transport = _shm(server, 8 << 20)
+    transport.timeout = 0.3
+    engine = eng(transport=transport)
+    start = time.monotonic()
+    with pytest.raises(TritonUnavailableError, match='no answer'):
+        _run(engine, _plan(embed={**EMBED, 'batch': 1}))
+    assert time.monotonic() - start < 0.9
+    assert server.cancelled == 3
+    assert (engine.budget.in_use, transport.slab.in_use) == (0, 0)
+
+
+def test_outputs_come_in_the_wire_order(eng: Any) -> None:
+    r = _run(eng())
+    assert list(r.outputs) == ['size', *wire.expected_outputs(_plan())]
+
+
 def test_every_model_call_carries_the_request_deadline(eng: Any) -> None:
     from frame_engine.messages import EngineRequest
 
     engine = eng()
     request = EngineRequest(_jpeg(), _plan(), deadline=time.perf_counter() + 42)
     assert engine.submit(request).result(timeout=20).status == 'ok'
-    assert engine.transport.deadlines == [request.deadline] * 2
+    assert engine.transport.deadlines == [request.deadline] * 3
 
 
 def test_the_request_shows_the_stage_it_is_in(eng: Any) -> None:
@@ -605,14 +778,14 @@ def test_the_request_shows_the_stage_it_is_in(eng: Any) -> None:
 
     engine = eng()
     gate = threading.Event()
-    real = engine.transport.infer
+    real = engine.transport.collect
 
-    def slow_detector(model: str, *a: Any, **k: Any) -> Any:
-        if model == 'det':
+    def slow_detector(p: Any) -> Any:
+        if p.model == 'det':
             gate.wait(5)
-        return real(model, *a, **k)
+        return real(p)
 
-    engine.transport.infer = slow_detector
+    engine.transport.collect = slow_detector
     request = EngineRequest(_jpeg(), _plan())
     assert request.stage == 'queue'
     future = engine.submit(request)
