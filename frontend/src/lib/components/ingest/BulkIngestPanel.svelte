@@ -11,7 +11,12 @@
     FAILURES_PAGE_SIZE,
   } from '$lib/ingest/bulkIngestController.svelte';
   import { formatDuration } from '$lib/format/duration';
-  import { headlineRate, progressPercent, stageRows } from '$lib/ingest/bulkIngestFormat';
+  import {
+    decodeRouteRows,
+    headlineRate,
+    progressPercent,
+    stageRows,
+  } from '$lib/ingest/bulkIngestFormat';
   import BulkPreviewResult from './BulkPreviewResult.svelte';
   import type { BulkIngestStatus } from '$lib/types_bulkIngest';
 
@@ -337,6 +342,26 @@
             </table>
             <p class="mt-1 text-fg-3">
               Seconds summed over concurrent work, so a stage can exceed the elapsed time.
+            </p>
+          </details>
+        {/if}
+
+        {#if decodeRouteRows(run).length > 0}
+          <details class="text-meta text-fg-2">
+            <summary class="cursor-pointer">How the photos were decoded</summary>
+            <table class="mt-2 w-full max-w-md" data-testid="bulk-decode-routes">
+              <tbody>
+                {#each decodeRouteRows(run) as [route, photos] (route)}
+                  <tr>
+                    <td class="pr-4">{route}</td>
+                    <td class="text-right">{photos}</td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+            <p class="mt-1 text-fg-3">
+              gpu is the GPU decode; cpu_ followed by a reason is a photo that took the
+              CPU path.
             </p>
           </details>
         {/if}

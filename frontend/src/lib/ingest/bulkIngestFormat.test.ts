@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { progressFixture, runFixture } from '$lib/test/fixtures/bulkIngest';
-import { headlineRate, progressPercent, stageRows } from './bulkIngestFormat';
+import {
+  decodeRouteRows,
+  headlineRate,
+  progressPercent,
+  stageRows,
+} from './bulkIngestFormat';
 
 describe('bulk ingest formatting', () => {
   it('bounds the bar and has none before anything is found', () => {
@@ -20,5 +25,15 @@ describe('bulk ingest formatting', () => {
   it('lists stages largest first', () => {
     const run = runFixture({ stage_s: { crop: 1, embed: 9, decode: 3 } });
     expect(stageRows(run).map(([name]) => name)).toEqual(['embed', 'decode', 'crop']);
+  });
+
+  it('lists decode routes largest first and nothing when none are served', () => {
+    const run = runFixture({ decode_routes: { cpu_small: 2, gpu: 90, cpu_corrupt: 5 } });
+    expect(decodeRouteRows(run)).toEqual([
+      ['gpu', 90],
+      ['cpu_corrupt', 5],
+      ['cpu_small', 2],
+    ]);
+    expect(decodeRouteRows(runFixture())).toEqual([]);
   });
 });
