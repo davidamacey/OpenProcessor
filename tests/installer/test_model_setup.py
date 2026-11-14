@@ -6,6 +6,8 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING
 
+from installer_harness import REPO_ROOT
+
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -497,3 +499,25 @@ def test_running_only_the_faces_group_with_faces_off_fails_without_touching_dock
     assert 'failed_groups=faces' in result.stdout
     assert 'rc=1' in result.stdout
     assert not (tmp_path / 'dc.log').exists()
+
+
+def test_the_ocr_group_builds_stamps_and_loads_the_frame_engine_uint8_models(bash) -> None:
+    uint8 = {'paddleocr_det_trt_uint8', 'paddleocr_rec_trt_uint8'}
+    models = bash(_source('model_setup_group_models ocr')).stdout.split()
+    assert uint8 <= set(models)
+    assert {'paddleocr_det_trt', 'paddleocr_rec_trt'} <= set(models)
+    outputs = bash(_source('OP_DIR=/op; model_setup_group_outputs ocr')).stdout
+    assert all(f'/op/models/{m}/1/model.plan' in outputs for m in uint8)
+    engines = bash(_source('model_setup_group_engines ocr')).stdout.splitlines()
+    assert uint8 <= {row.split('\t')[0] for row in engines}
+    steps = (REPO_ROOT / LIB).read_text()
+    for exporter in ('export_paddleocr_det.py', 'export_paddleocr_rec.py'):
+        assert f'/app/export/{exporter} --uint8' in steps
+
+
+def test_the_uint8_ocr_models_generate_a_config_and_load_with_the_server() -> None:
+    configs = (REPO_ROOT / 'scripts/lib/config.sh').read_text()
+    assert configs.count('paddleocr_det_trt_uint8') >= 2  # the case and generate_all_configs
+    compose = (REPO_ROOT / 'docker-compose.yml').read_text()
+    assert '--load-model=paddleocr_det_trt_uint8' in compose
+    assert '--load-model=paddleocr_rec_trt_uint8' in compose

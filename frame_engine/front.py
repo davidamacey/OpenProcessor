@@ -71,6 +71,13 @@ _SHAPES: dict[str, list[int]] = {
     wire.CROP_EMBEDDED: [-1],
     wire.BLUR_SUMS: [-1, 3],
     wire.CROP_JPEGS: [-1],
+    wire.OCR_QUADS: [-1, 8],
+    wire.OCR_TEXTS: [-1],
+    wire.OCR_SCORES: [-1],
+    wire.OCR_CHAR_MIN: [-1],
+    wire.OCR_DET_SCORES: [-1],
+    wire.OCR_OVERFLOW: [1],
+    wire.DERIVATIVE_JPEGS: [-1],
 }
 
 
@@ -161,7 +168,7 @@ def build_response(request: Any, result: EngineResult) -> Any:
     add(wire.DECODE_ROUTE, [1], pack_bytes([result.decode_route.encode()]))
     add(wire.BRANCH_STATUS, [1], pack_bytes([wire.encode_branch_status(result.branches).encode()]))
     for name, value in result.outputs.items():
-        if name == wire.CROP_JPEGS:
+        if wire.OUTPUT_DATATYPES[name] == 'BYTES':  # the crop JPEGs, the line texts
             add(name, [len(value)], pack_bytes(list(value)))
             continue
         arr: np.ndarray = np.ascontiguousarray(value, dtype=_NUMPY[wire.OUTPUT_DATATYPES[name]])
@@ -242,6 +249,7 @@ class FrontService(service_pb2_grpc.GRPCInferenceServiceServicer):
         job = EngineRequest(image, plan, boxes)
         job.deadline = job.arrived + self.request_deadline
         result: EngineResult | None = None
+        failure: tuple[grpc.StatusCode, str] | None = None
         try:
             waiter = asyncio.wrap_future(self.engine.submit(job))
             done, _ = await asyncio.wait({waiter}, timeout=self.request_deadline)
@@ -251,17 +259,20 @@ class FrontService(service_pb2_grpc.GRPCInferenceServiceServicer):
                 waiter.cancel()  # a photo still queued never starts; a running one ends bounded
         except OverloadError as exc:
             self.metrics.overloads.labels(exc.cause).inc()
-            await context.abort(grpc.StatusCode.RESOURCE_EXHAUSTED, f'overload: {exc}')
+            failure = grpc.StatusCode.RESOURCE_EXHAUSTED, f'overload: {exc}'
         except TritonUnavailableError as exc:
-            await context.abort(grpc.StatusCode.UNAVAILABLE, f'model server unavailable: {exc}')
+            failure = grpc.StatusCode.UNAVAILABLE, f'model server unavailable: {exc}'
         except ContextLostError as exc:
-            await context.abort(grpc.StatusCode.UNAVAILABLE, f'frame engine restarting: {exc}')
+            failure = grpc.StatusCode.UNAVAILABLE, f'frame engine restarting: {exc}'
         except Exception as exc:
             logger.exception('frame engine request failed')
-            await context.abort(grpc.StatusCode.INTERNAL, f'frame engine: {exc}')
+            failure = grpc.StatusCode.INTERNAL, f'frame engine: {exc}'
         finally:
             self.in_flight -= 1
             self.metrics.in_flight.set(self.in_flight)
+        if failure is not None:
+            # abort sends the status before it raises: the request must already be uncounted
+            await context.abort(*failure)
         if result is None:
             await self._past_deadline(context, job)
         return build_response(request, result)

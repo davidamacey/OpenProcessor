@@ -388,9 +388,14 @@ async def test_load_registry_refuses_an_empty_row_that_has_been_written_to(proje
 
 @pytest.mark.asyncio
 async def test_ensure_entries_adds_the_missing_names_in_one_call_and_is_idempotent(
-    project, pg
+    project, pg, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from src.services.classes import registry as registry_module
     from src.services.classes.registry import registry_for
+
+    # the autouse in-memory registries would answer instead of PostgreSQL
+    monkeypatch.setattr(registry_module, '_registries', {})
+    monkeypatch.setattr(registry_module, '_project_ids', {})
 
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
         row = conn.execute('SELECT slug FROM projects WHERE id = %s', (project,)).fetchone()

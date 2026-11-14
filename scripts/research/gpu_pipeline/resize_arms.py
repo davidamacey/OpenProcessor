@@ -18,8 +18,9 @@ common.use_shipped_prep_modules()
 
 import cupy as cp
 import nvtx
-from image_geometry import letterbox_geometry, whole_square_geometry
 from prep_kernels import PrepKernels
+
+from src.domain.image_geometry import letterbox_geometry, whole_square_geometry
 
 
 NET, PE, FILL = 640, 336, 114

@@ -28,6 +28,13 @@ pytestmark = pytest.mark.asyncio(loop_scope='function')
 
 DETECTOR = {'model': 'det', 'input_size': 640, 'letterbox_fill': 114}
 EMBED = {'model': 'pe', 'size': 336, 'batch': 32}
+OCR = {
+    'detector': 'ocr_det',
+    'recogniser': 'ocr_rec',
+    'batch': 16,
+    'max_lines': 128,
+    'det_side': 736,
+}
 
 
 def _plan(branches: list[str], **over: Any) -> str:
@@ -36,6 +43,8 @@ def _plan(branches: list[str], **over: Any) -> str:
         body.setdefault('detector', DETECTOR)
     if {'embed_frame', 'embed_crops'} & set(branches):
         body.setdefault('embed', EMBED)
+    if 'ocr' in branches:
+        body.setdefault('ocr', OCR)
     return json.dumps(body)
 
 
@@ -85,6 +94,13 @@ class FakeEngine:
             out[wire.CROP_EMBEDDED] = np.ones(n, np.bool_)
         if plan.crops == 'inline':
             out[wire.CROP_JPEGS] = [b'\xff\xd8a', b'\xff\xd8bc'][:n]
+        if plan.runs('ocr'):
+            out[wire.OCR_QUADS] = np.zeros((2, 8), np.float32)
+            out[wire.OCR_TEXTS] = [b'STOP', 'caf\u00e9'.encode()]
+            out[wire.OCR_SCORES] = np.full(2, 0.9, np.float32)
+            out[wire.OCR_CHAR_MIN] = np.full(2, 0.8, np.float32)
+            out[wire.OCR_DET_SCORES] = np.full(2, 0.7, np.float32)
+            out[wire.OCR_OVERFLOW] = np.array([0], np.int32)
         branches: dict[str, tuple[wire.BranchState, str]] = {
             b: ('ok', '') for b in plan.branches if b in wire.BUILT_BRANCHES
         }
@@ -144,6 +160,8 @@ async def test_bytes_tensors_round_trip() -> None:
         (['detect'], {}, {'det_boxes': [2, 4], 'det_scores': [2], 'det_classes': [2],
                           'letterbox': [3], 'blur_sums': [3, 3]}),
         (['embed_frame'], {}, {'whole_embedding': [4]}),
+        (['ocr'], {}, {'ocr_quads': [2, 8], 'ocr_texts': [2], 'ocr_scores': [2],
+                       'ocr_char_min': [2], 'ocr_det_scores': [2], 'ocr_overflow': [1]}),
         (['detect', 'embed_crops'], {'crops': 'inline'}, {
             'det_boxes': [2, 4], 'det_scores': [2], 'det_classes': [2], 'letterbox': [3],
             'blur_sums': [3, 3], 'crop_embeddings': [2, 4], 'crop_embedded': [2],
@@ -170,6 +188,8 @@ async def test_each_branch_combination_answers_its_tensors(
     assert states == dict.fromkeys(branches, ('ok', ''))
     if 'crop_jpegs' in want:
         assert [bytes(x) for x in result.as_numpy('crop_jpegs')] == [b'\xff\xd8a', b'\xff\xd8bc']
+    if 'ocr_texts' in want:  # a BYTES output of one element per line, UTF-8
+        assert [bytes(x) for x in result.as_numpy('ocr_texts')] == [b'STOP', 'caf\u00e9'.encode()]
 
 
 async def test_stored_boxes_reach_the_engine_as_fp64_rows() -> None:

@@ -23,10 +23,16 @@ import cupy as cp
 import cv2
 import numpy as np
 import nvtx
-from image_geometry import crop_rect, letterbox_geometry, undo_letterbox, whole_square_geometry
 from nvjpeg_lanes import NvJpegLanes
 from prep_geometry import blur_rect, oriented_size, route
 from prep_kernels import PrepKernels
+
+from src.domain.image_geometry import (
+    crop_rect,
+    letterbox_geometry,
+    undo_letterbox,
+    whole_square_geometry,
+)
 
 
 if TYPE_CHECKING:
@@ -139,7 +145,10 @@ class ShippedPipeline:
             out = self.detector.run(canvas)
             n = int(out['num_dets'][0][0])
             boxes = out['det_boxes'][0][:n].astype(np.float32).reshape(-1, 4)
-            rects = [crop_rect(undo_letterbox(tuple(b), NET, lb), w, h) for b in boxes]
+            rects = [
+                crop_rect(undo_letterbox(tuple(b), lb.scale, (lb.pad_w, lb.pad_h)), w, h)
+                for b in boxes
+            ]
         res.detections, res.rects, res.boxes = n, rects, boxes
         with stage(res, 'crop_copy'):
             pixels = [
@@ -170,7 +179,10 @@ class ShippedPipeline:
             ]
             vectors = np.concatenate(rows, axis=0).astype(np.float32)
         with stage(res, 'blur'):
-            clamped = [blur_rect(undo_letterbox(tuple(b), NET, lb), w, h) for b in boxes]
+            clamped = [
+                blur_rect(undo_letterbox(tuple(b), lb.scale, (lb.pad_w, lb.pad_h)), w, h)
+                for b in boxes
+            ]
             lap_rects = [(0, 0, w, h)] + [r for r in clamped if r is not None]
             sums = cp.asnumpy(self.kernels.lap_sums(frame, lap_rects))
         with stage(res, 'crop_jpeg'):

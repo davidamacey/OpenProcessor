@@ -205,6 +205,8 @@ UINT8_BUILDERS = {
     'pe_image_encoder': ['export/build_pe_trt.sh', 'scripts/lib/model_setup.sh'],
     'yolov11_small_trt_end2end': ['export/yolo_trt_build.py'],
     'yolo26_small_trt': ['export/yolo_trt_build.py'],
+    'paddleocr_det_trt_uint8': ['export/export_paddleocr_det.py'],
+    'paddleocr_rec_trt_uint8': ['export/export_paddleocr_rec.py'],
 }
 
 

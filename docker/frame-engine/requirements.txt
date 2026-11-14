@@ -9,6 +9,7 @@ nvidia-cuda-nvrtc==13.2.86
 nvidia-cuda-runtime==13.2.86
 nvidia-nvjpeg==13.2.3.58
 opencv-python-headless==5.0.0.93
+pyclipper==1.4.0
 numpy==2.5.4
 tritonclient[grpc]==2.74.0
 grpcio==1.84.0

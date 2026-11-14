@@ -24,6 +24,12 @@ names are the ones the Triton prep model published, so the baseline tables stay 
 ``crop_copy``    device-to-host copy of each detection's pixels
 ``crop_jpeg``    JPEG encode, summed over the image's crops (host threads, concurrent)
 ``blur``         Laplacian sums of the frame and every detection
+``ocr_prep``     the detector's input: the frame resized into the staged slice (BGR)
+``ocr_detect``   the detector call: commit, send, wait for the probability map
+``ocr_boxes``    host DB post-process of the map: contours, unclip, reading order, batches
+``ocr_crops``    the line-warp kernel of each recogniser batch (and the wait for room)
+``ocr_rec``      recogniser calls: commit, send, the waits for the answers
+``ocr_decode``   CTC collapse of the indices and scores
 
 CUDA launches are asynchronous, so by default a kernel stage ends when its launches are queued and
 its GPU time lands in the next stage that waits (usually ``detect`` or ``embed_pe``). With
@@ -62,8 +68,18 @@ STAGES = (
     'crop_copy',
     'crop_jpeg',
     'blur',
+    'ocr_prep',
+    'ocr_detect',
+    'ocr_boxes',
+    'ocr_crops',
+    'ocr_rec',
+    'ocr_decode',
+    'derivative_render',
+    'derivative_jpeg',
 )
-ASYNC_STAGES = frozenset({'letterbox', 'embed_frame', 'embed_crops', 'blur'})
+ASYNC_STAGES = frozenset(
+    {'letterbox', 'embed_frame', 'embed_crops', 'blur', 'ocr_prep', 'ocr_crops'}
+)
 SECONDS_NAME = 'op_frame_engine_stage_seconds'
 OBSERVATIONS_NAME = 'op_frame_engine_stage_observations'
 

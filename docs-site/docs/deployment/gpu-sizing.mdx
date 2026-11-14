@@ -45,6 +45,11 @@ region, 64 MiB frame budget, one lane, one worker), so `minimal` runs **about 0.
 ([Ingest load profile and GPU memory](../operations/ingest-load-profile.mdx)). You can still set `GPU_PROFILE=full` by hand; `./openprocessor gpu plan`
 warns when the card cannot hold it.
 
+The frame engine's text branch adds two small models, `paddleocr_det_trt_uint8` and `paddleocr_rec_trt_uint8`:
+2.4 GB in Triton at their two instances each, 1.2 GB at one instance each (measured on an RTX A6000; their
+profiles are one detector image of up to 1920 pixels and 16 text lines of up to 2048 pixels per call). On a 12 GB
+card set one instance each in their `config.pbtxt` and count about 1.2 GB; the whole `small` stack has not been measured.
+
 The values are in `config_templates/profiles/*.json`. We have not measured a throughput
 figure per profile; the measured rows are in [Measured performance](#measured-performance)
 below and in `docs/PERFORMANCE.md`, and they come from one RTX A6000.

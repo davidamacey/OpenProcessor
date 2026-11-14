@@ -139,16 +139,16 @@ class PrepKernels:
         self._local = threading.local()
 
     def _weights(
-        self, n_in: int, n_out: int, left: int, take: int, antialias: bool
+        self, n_in: int, n_out: int, left: int, take: int, antialias: bool, lanczos: bool
     ) -> tuple[Any, ...]:
-        key = (n_in, n_out, left, take, antialias)
-        cache: dict[tuple[int, int, int, int, bool], tuple[Any, ...]] | None
+        key = (n_in, n_out, left, take, antialias, lanczos)
+        cache: dict[tuple[int, int, int, int, bool, bool], tuple[Any, ...]] | None
         cache = getattr(self._local, 'cache', None)
         if cache is None:
             cache = self._local.cache = {}
         hit = cache.get(key)
         if hit is None:
-            f, c, w = filter_weights(n_in, n_out, antialias=antialias)
+            f, c, w = filter_weights(n_in, n_out, antialias=antialias, lanczos=lanczos)
             f, c, w = f[left : left + take], c[left : left + take], w[left : left + take]
             hit = (
                 cp.asarray(f),
@@ -173,6 +173,7 @@ class PrepKernels:
         window: tuple[int, int, int, int] | None = None,
         *,
         antialias: bool = True,
+        lanczos: bool = False,
     ) -> None:
         """Resample ``frame[roi]`` (``x0, y0, w, h``) to ``size`` (``w, h``) and write its
         ``window`` (``left, top, w, h``; default all of it) into ``dst``, a CHW uint8 view."""
@@ -180,8 +181,8 @@ class PrepKernels:
         x0, y0, rw, rh = roi
         ow, oh = size
         left, top, ww, wh = window or (0, 0, ow, oh)
-        fx, cx, wx, kx, _, _ = self._weights(rw, ow, left, ww, antialias)
-        fy, cy, wy, ky, y_lo, y_hi = self._weights(rh, oh, top, wh, antialias)
+        fx, cx, wx, kx, _, _ = self._weights(rw, ow, left, ww, antialias, lanczos)
+        fy, cy, wy, ky, y_lo, y_hi = self._weights(rh, oh, top, wh, antialias, lanczos)
         rows = max(1, y_hi - y_lo)
         tmp = cp.empty((rows, ww, 3), dtype=cp.float32)
         self.k_h(

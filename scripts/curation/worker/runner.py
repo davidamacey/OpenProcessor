@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import collections
 import contextlib
+import functools
 import os
 import signal
 import time
@@ -38,9 +39,9 @@ from src.utils.retry import TRITON_CALL_ERRORS
 
 logger = get_logger('curation_worker')
 
-
 if TYPE_CHECKING:
     import argparse
+    from collections.abc import Coroutine
 
     from aiohttp import web
 
@@ -115,6 +116,20 @@ async def _build_region_embedder(pool: AsyncTritonPool) -> Any:
                 detail='box vectors will not be written this run',
             )
     return region_embed_pe
+
+
+def _spawn_into(
+    pipeline: list[asyncio.Task[Any]], coro: Coroutine[Any, Any, Any], *, name: str
+) -> asyncio.Task[Any]:
+    task = spawn_critical(coro, name=name)
+    pipeline.append(task)
+    return task
+
+
+async def _cancel_all(tasks: list[asyncio.Task[Any]]) -> None:
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
 
 
 async def run(args: argparse.Namespace) -> int:
@@ -436,29 +451,32 @@ async def run(args: argparse.Namespace) -> int:
         max_no_verdict_attempts=no_verdict_cap,
     )
 
+    pipeline: list[asyncio.Task[Any]] = []
+
+    _spawn = functools.partial(_spawn_into, pipeline)
+
     try:
-        prod_task = spawn_critical(producer(ctx, _sync_project_runtime), name='producer')
+        prod_task = _spawn(producer(ctx, _sync_project_runtime), name='producer')
         # Stage A.primary pool: primary-detector + pending_verification
         # routing only. Sized to keep the primary-detector Triton
         # instances saturated; secondary-segmenter work has moved to
         # its own pool below.
         stage_a_tasks = [
-            spawn_critical(stage_a_consumer(ctx, i), name=f'stage-a-{i}')
-            for i in range(args.concurrency)
+            _spawn(stage_a_consumer(ctx, i), name=f'stage-a-{i}') for i in range(args.concurrency)
         ]
         # Stage A.vlm_visible pool: batched yes/no region-visibility
         # filter for primary-miss / secondary-shape crops. Sized
         # smaller than the combined pool because the visibility prompt
         # is cheap.
         stage_a_visible_tasks = [
-            spawn_critical(stage_a_vlm_visible(ctx, i), name=f'stage-a-visible-{i}')
+            _spawn(stage_a_vlm_visible(ctx, i), name=f'stage-a-visible-{i}')
             for i in range(vlm_visible_concurrency)
         ]
         # Stage A.secondary pool: secondary-segmenter run on every crop
         # the visibility filter said could contain a region. Sized to
         # keep the secondary-segmenter deployment saturated.
         stage_a_sam_tasks = [
-            spawn_critical(stage_a_sam_consumer(ctx, i), name=f'stage-a-sam-{i}')
+            _spawn(stage_a_sam_consumer(ctx, i), name=f'stage-a-sam-{i}')
             for i in range(args.concurrency)
         ]
         # Stage B pool: batched combined VLM call (COMBINED_CHUNK
@@ -467,10 +485,9 @@ async def run(args: argparse.Namespace) -> int:
         # ONE combined VLM round-trip here (plus at most ONE yes/no
         # call up in the visibility stage = ≤ 2 per crop total).
         stage_b_tasks = [
-            spawn_critical(stage_b_combined(ctx, i), name=f'stage-b-{i}')
-            for i in range(vlm_concurrency)
+            _spawn(stage_b_combined(ctx, i), name=f'stage-b-{i}') for i in range(vlm_concurrency)
         ]
-        writer_task = spawn_critical(writer(ctx), name='writer')
+        writer_task = _spawn(writer(ctx), name='writer')
         metrics_task = asyncio.create_task(metrics_reporter(ctx))
         liveness_task = asyncio.create_task(
             liveness_loop(
@@ -488,6 +505,7 @@ async def run(args: argparse.Namespace) -> int:
                 stop_event,
             )
         )
+        pipeline.extend((metrics_task, liveness_task, heartbeat_task))
         # Phase 4c: stand up an aiohttp /metrics endpoint inside the
         # worker process so Prometheus can scrape the stage-timing
         # histograms (the worker is not an HTTP server otherwise).
@@ -554,6 +572,9 @@ async def run(args: argparse.Namespace) -> int:
         with contextlib.suppress(Exception):
             await metrics_server_runner.cleanup()
     finally:
+        # A cancelled run() ends with its stage tasks still alive; they would go on against the
+        # clients closed below and their crash handler would take the process down.
+        await _cancel_all(pipeline)
         # Close every project's own segmenter/VLM clients (B1: no
         # single process-wide pair to close anymore).
         for _rt in runtime_holder.current.values():

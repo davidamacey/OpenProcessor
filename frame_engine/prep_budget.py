@@ -18,6 +18,8 @@ import time
 from collections import deque
 from typing import TYPE_CHECKING
 
+from frame_engine.prep_geometry import fit_size, oriented_size
+
 
 if TYPE_CHECKING:
     from frame_engine.prep_geometry import JpegHeader
@@ -30,11 +32,19 @@ class OverBudgetError(Exception):
     """A single request needs more bytes than the whole budget."""
 
 
-def need_bytes(header: JpegHeader) -> int:
+def need_bytes(header: JpegHeader, rendition_sides: tuple[int, ...] = ()) -> int:
     """Bytes the request's frame holds in the shared arena: the HWC uint8 RGB decode, plus the
-    re-oriented copy that exists next to it while an EXIF tag other than 1 is applied."""
+    re-oriented copy that exists next to it while an EXIF tag other than 1 is applied. A rendition
+    adds the float32 scratch of its horizontal resample pass (every source row at the output
+    width, three channels) once the oriented frame is the only copy; renditions run one after the
+    other, so the largest counts."""
     frame = header.width * header.height * 3
-    return frame * (2 if header.orientation != 1 else 1)
+    held = frame * (2 if header.orientation != 1 else 1)
+    width, height = oriented_size(header)
+    scratch = max(
+        (height * fit_size(width, height, side)[0] * 12 for side in rendition_sides), default=0
+    )
+    return max(held, frame + scratch)
 
 
 class ByteBudget:

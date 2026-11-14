@@ -44,8 +44,8 @@ def test_each_worker_thread_uploads_and_keeps_its_own_weights(kernels: Any) -> N
     got: dict[str, Any] = {}
 
     def worker(name: str) -> None:
-        got[name] = kernels._weights(4000, 336, 0, 336, True)
-        assert kernels._weights(4000, 336, 0, 336, True) is got[name]  # a hit on this worker
+        got[name] = kernels._weights(4000, 336, 0, 336, True, False)
+        assert kernels._weights(4000, 336, 0, 336, True, False) is got[name]  # a hit on this worker
 
     for name in ('a', 'b'):
         t = threading.Thread(target=worker, args=(name,))
@@ -57,9 +57,9 @@ def test_each_worker_thread_uploads_and_keeps_its_own_weights(kernels: Any) -> N
 def test_a_full_cache_is_emptied_only_after_the_stream_was_waited_for(kernels: Any) -> None:
     limit = kernels.module.CACHE_KEYS
     for n in range(1, limit + 1):
-        kernels._weights(n + 10, 8, 0, 8, False)
+        kernels._weights(n + 10, 8, 0, 8, False, False)
     assert kernels.events == []
-    kept = kernels._weights(11, 8, 0, 8, False)
-    kernels._weights(limit + 50, 8, 0, 8, False)  # one key over the limit
+    kept = kernels._weights(11, 8, 0, 8, False, False)
+    kernels._weights(limit + 50, 8, 0, 8, False, False)  # one key over the limit
     assert kernels.events == [('sync', threading.get_ident())]
-    assert kernels._weights(11, 8, 0, 8, False) is not kept  # uploaded again after the clear
+    assert kernels._weights(11, 8, 0, 8, False, False) is not kept  # uploaded again after the clear
