@@ -211,6 +211,12 @@ async def test_two_project_worker_alpha_activation_swaps_alpha_only() -> None:
             run_task.cancel()
             with __import__('contextlib').suppress(_asyncio.CancelledError):
                 await run_task
+            # A cancelled run() must not leave its pipeline running: a stage task that outlives
+            # the test fails against torn-down state and its crash handler exits the process.
+            leftover = [t.get_name() for t in asyncio.all_tasks() if not t.done()]
+            me = asyncio.current_task()
+            assert me is not None
+            assert leftover == [me.get_name()]
     finally:
         for obj, name, old in reversed(monkeypatch_targets):
             setattr(obj, name, old)
