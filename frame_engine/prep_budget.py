@@ -1,13 +1,14 @@
-"""Device-memory admission for ``gpu_image_prep`` (host only, so the offline suite covers it).
+"""Device-memory admission for the frame engine (host only, so the offline suite covers it).
 
 A photo's decoded frame (and, for a rotated photo, its re-oriented copy) is the one large
 allocation of a request. Every request reserves those bytes from a :class:`ByteBudget` before it
 decodes and gives them back when its frame is dropped. Memory pressure therefore makes requests
 wait in line (first come, first served, so a large photo is not starved by small ones) instead of
-failing a CUDA or nvJPEG allocation in the middle of an image. A wait that outlasts its limit, a
-photo larger than the whole budget, and an allocation that fails anyway are answered with a
-status (``gpu_memory``, ``over_budget``) and the API decodes that photo on the CPU, counted
-(``cpu_gpu_memory``, ``cpu_over_budget``): never a silent fallback and never a partial output.
+failing a CUDA or nvJPEG allocation in the middle of an image. A wait that outlasts its limit is
+the engine's overload answer (a retryable gRPC status); a photo larger than the whole budget and
+an allocation that fails anyway are answered with a status (``over_budget``, ``gpu_memory``) and
+the API decodes that photo on the CPU, counted (``cpu_over_budget``, ``cpu_gpu_memory``): never a
+silent fallback and never a partial output.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ from typing import TYPE_CHECKING
 
 
 if TYPE_CHECKING:
-    from prep_geometry import JpegHeader
+    from frame_engine.prep_geometry import JpegHeader
 
 _CUDA_ERROR_MEMORY_ALLOCATION = 2
 _NVJPEG_STATUS_ALLOCATOR_FAILURE = 5

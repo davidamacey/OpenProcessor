@@ -1,20 +1,18 @@
 """The GPU decode's host-side arithmetic reproduces the CPU ingest path it stands in for
-(``models/gpu_image_prep/1/prep_geometry.py``; the CUDA kernels apply these weights)."""
+(``frame_engine/prep_geometry.py``; the CUDA kernels apply these weights)."""
 
 from __future__ import annotations
 
-import importlib.util
 import io
-import sys
 import time
 from collections.abc import Callable
-from pathlib import Path
 
 import cv2
 import numpy as np
 import pytest
 from PIL import Image
 
+from frame_engine import prep_geometry as fg
 from src.domain.image_geometry import (
     crop_rect,
     letterbox_geometry,
@@ -25,15 +23,6 @@ from src.services.curation.ingest_index import crop_pil
 from src.services.detection.crop_quality import crop_lap_var, variance_from_sums
 from src.services.detection.geometry import letterbox_to_square
 from src.utils.pe_preprocess import resize_crop_rgb, whole_frame_rgb_from_image
-
-
-_PATH = Path(__file__).resolve().parents[2] / 'models' / 'gpu_image_prep' / '1' / 'prep_geometry.py'
-sys.path.insert(0, str(_PATH.parent))  # prep_geometry imports its sibling image_geometry
-_spec = importlib.util.spec_from_file_location('prep_geometry', _PATH)
-assert _spec is not None
-assert _spec.loader is not None
-fg = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(fg)
 
 
 def _jpeg(w: int, h: int, *, progressive: bool = False, orientation: int | None = None) -> bytes:

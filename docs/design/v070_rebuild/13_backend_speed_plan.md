@@ -170,7 +170,7 @@ One request per image, KServe v2 tensors.
 |---|---|---|
 | `image` | bytes | the encoded file (any format the engine decodes) |
 | `plan` | one JSON string | see below |
-| `boxes` | float32 `[n, 4]`, optional | stored boxes: the detections come from the caller, not the detector (reprocess) |
+| `boxes` | float64 `[n, 4]`, optional | stored boxes: the detections come from the caller, not the detector (reprocess); float64 because the stored `bbox_norm` values are Python floats and float32 could move a rounded pixel edge of the cut |
 
 `plan` fields: `branches` (from `detect`, `embed_frame`, `embed_crops`, `faces`, `face_embed`,
 `ocr`); `detector` (model name, input size, letterbox fill); `embed` (model name and preprocessing
@@ -182,8 +182,8 @@ thumbnail: longest side and quality).
 
 | Output | Present when | Content |
 |---|---|---|
-| `status`, `decode_route` | always | `ok` or the reason the image failed; which decoder produced the pixels |
-| `branch_status` | always | per requested branch: `ok`, `error` with a reason, or `not_run` (condition false) |
+| `status`, `decode_route` | always | `ok` or the reason the image failed; which decoder produced the pixels (`gpu`, or `none` when nothing decoded) |
+| `branch_status` | always | one JSON string, one entry per requested branch: `ok`, `error` with a reason, or `not_run` (condition false); the schema is in `src/domain/frame_engine_wire.py` |
 | `size` | decoded | width and height after orientation |
 | `det_boxes`, `det_scores`, `det_classes`, `letterbox` | `detect` | as today |
 | `whole_embedding` | `embed_frame` | one vector |

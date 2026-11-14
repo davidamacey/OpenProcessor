@@ -527,7 +527,7 @@ exclude_lines = [
 
 [tool.mypy]
 python_version = "3.12"
-files = ["src", "scripts", "docker", "export", "tests"]
+files = ["src", "scripts", "docker", "export", "frame_engine", "tests"]
 plugins = ["pydantic.mypy"]
 warn_return_any = true
 warn_unused_configs = true

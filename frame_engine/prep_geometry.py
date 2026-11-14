@@ -1,11 +1,10 @@
 """Host-side logic of the GPU decode: header routing, geometry and resampling weights.
 
-Numpy only, so the offline test suite covers it (``tests/models/test_gpu_image_prep_geometry.py``).
+Numpy only, so the offline test suite covers it (``tests/frame_engine/test_prep_geometry.py``).
 Every function reproduces the arithmetic of the CPU ingest path it stands in for.
 
-The letterbox, whole-square, un-map and crop-rectangle arithmetic is ``image_geometry.py``, a
-byte-identical copy of ``src/domain/image_geometry.py`` (``tests/test_geometry_copy_identical.py``).
-Here:
+The letterbox, whole-square, un-map and crop-rectangle arithmetic is ``src/domain/image_geometry.py``,
+the module the CPU paths use. Here:
 
 * :func:`stored_box_rects`  the embed pass's ``crop_pil`` of a stored ``bbox_norm`` (#259)
 * :func:`blur_rect`  ``crop_quality.crop_lap_var``'s clamped rectangle
@@ -19,13 +18,16 @@ import struct
 from typing import NamedTuple
 
 import numpy as np
-from image_geometry import crop_rect
 
-
-_SOF_MARKERS = {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF}
-_PROGRESSIVE = {0xC2, 0xC6, 0xCA, 0xCE}
-_LOSSLESS = {0xC3, 0xC7, 0xCB, 0xCF}
-_STANDALONE = {0x01, *range(0xD0, 0xD8)}
+from src.domain.image_geometry import crop_rect
+from src.domain.jpeg_markers import (
+    LOSSLESS,
+    PROGRESSIVE,
+    SOF_MARKERS,
+    STANDALONE,
+    exif_orientation,
+    header_segments,
+)
 
 
 class JpegHeader(NamedTuple):
@@ -42,55 +44,21 @@ class JpegHeader(NamedTuple):
     end: int = 0  # bytes of the image proper, EOI included (set by route)
 
 
-def _exif_orientation(payload: bytes) -> int:
-    tiff = payload[6:]
-    if len(tiff) < 8 or tiff[:2] not in (b'II', b'MM'):
-        return 1
-    end = '<' if tiff[:2] == b'II' else '>'
-    (ifd,) = struct.unpack(end + 'I', tiff[4:8])
-    if ifd + 2 > len(tiff):
-        return 1
-    (count,) = struct.unpack(end + 'H', tiff[ifd : ifd + 2])
-    for k in range(count):
-        entry = tiff[ifd + 2 + 12 * k : ifd + 14 + 12 * k]
-        if len(entry) < 12:
-            break
-        tag, _typ, _n = struct.unpack(end + 'HHI', entry[:8])
-        if tag == 0x0112:
-            (value,) = struct.unpack(end + 'H', entry[8:10])
-            return value if 1 <= value <= 8 else 1
-    return 1
-
-
 def jpeg_header(data: bytes) -> JpegHeader:
     """Parse ``data``'s markers up to the first frame header; ``kind`` is ``jpeg``, ``corrupt``
     (a JPEG start marker but no readable frame header) or ``other``."""
     if data[:2] != b'\xff\xd8':
         return JpegHeader('other', 0, 0, 0, 0, False, 1, False)
-    orientation, i = 1, 2
-    while i + 4 <= len(data):
-        if data[i] != 0xFF:
-            break
-        marker = data[i + 1]
-        if marker == 0xFF:
-            i += 1
-            continue
-        if marker in _STANDALONE:
-            i += 2
-            continue
-        (length,) = struct.unpack('>H', data[i + 2 : i + 4])
-        payload = data[i + 4 : i + 2 + length]
+    orientation = 1
+    for marker, payload in header_segments(data):
         if marker == 0xE1 and payload[:6] == b'Exif\x00\x00':
-            orientation = _exif_orientation(payload)
-        elif marker in _SOF_MARKERS and len(payload) >= 6:
+            orientation = exif_orientation(payload)
+        elif marker in SOF_MARKERS and len(payload) >= 6:
             precision, height, width, comps = struct.unpack('>BHHB', payload[:6])
             return JpegHeader(
-                'jpeg', width, height, comps, precision, marker in _PROGRESSIVE, orientation,
-                marker in _LOSSLESS,
+                'jpeg', width, height, comps, precision, marker in PROGRESSIVE, orientation,
+                marker in LOSSLESS,
             )  # fmt: skip
-        elif marker == 0xDA:
-            break
-        i += 2 + length
     return JpegHeader('corrupt', 0, 0, 0, 0, False, orientation, False)
 
 
@@ -100,13 +68,14 @@ def _scan_markers(data: bytes) -> np.ndarray:
     Inside a scan ``0xFF`` is stuffed (``FF00``), starts a restart marker (``FFD0``..``FFD7``) or
     is a fill byte before another ``0xFF``; an ``0xFF`` followed by any other byte is a marker
     that ends the scan. One vectorised pass (numpy releases the interpreter lock in it): the prep
-    model calls this from every worker thread, and a per-byte interpreter loop over a 7 MB photo
+    engine calls this from every worker thread, and a per-byte interpreter loop over a 7 MB photo
     held the lock for about 80 ms, which capped one process at about 7 photos per second.
     """
     a = np.frombuffer(data, np.uint8)
     ff = np.flatnonzero(a[:-1] == 0xFF)
     nxt = a[ff + 1]
-    return ff[(nxt != 0x00) & (nxt != 0xFF) & ((nxt < 0xD0) | (nxt > 0xD7))] + 1
+    ends: np.ndarray = ff[(nxt != 0x00) & (nxt != 0xFF) & ((nxt < 0xD0) | (nxt > 0xD7))] + 1
+    return ends
 
 
 def jpeg_end(data: bytes) -> int | None:
@@ -138,7 +107,7 @@ def jpeg_end(data: bytes) -> int | None:
             marker, i = data[i], i + 1
         if marker == 0xD9:
             return i
-        if marker in _STANDALONE:
+        if marker in STANDALONE:
             continue
         if i + 2 > n:
             return None
