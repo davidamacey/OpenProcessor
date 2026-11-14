@@ -20,9 +20,12 @@ class CursorError(ValueError):
     """The cursor is garbage or belongs to a different sort."""
 
 
-def encode_cursor(sort_id: str, after: list[Any]) -> str:
-    raw = json.dumps({'sort': sort_id, 'after': after}, separators=(',', ':')).encode()
-    return base64.urlsafe_b64encode(raw).decode()
+def encode_cursor(sort_id: str, after: list[Any], carry: dict[str, Any] | None = None) -> str:
+    """``carry`` is whatever the first page computed once (totals) so later pages do not recount."""
+    body: dict[str, Any] = {'sort': sort_id, 'after': after}
+    if carry is not None:
+        body['carry'] = carry
+    return base64.urlsafe_b64encode(json.dumps(body, separators=(',', ':')).encode()).decode()
 
 
 def decode_cursor(cursor: str, *, sort_id: str) -> list[Any]:
@@ -37,6 +40,14 @@ def decode_cursor(cursor: str, *, sort_id: str) -> list[Any]:
         msg = 'cursor belongs to a different sort'
         raise CursorError(msg)
     return after
+
+
+def cursor_carry(cursor: str, *, sort_id: str) -> dict[str, Any] | None:
+    """What the cursor carries from the first page, or ``None`` for a cursor minted without it
+    (a locate cursor), whose page must count for itself."""
+    decode_cursor(cursor, sort_id=sort_id)
+    carry = json.loads(base64.urlsafe_b64decode(cursor.encode())).get('carry')
+    return carry if isinstance(carry, dict) else None
 
 
 def with_tiebreak(sort: list[dict[str, Any]], tiebreak: str) -> list[dict[str, Any]]:
@@ -65,10 +76,10 @@ def page_body(
 
 
 def split_page(
-    hits: list[dict[str, Any]], *, sort_id: str, limit: int
+    hits: list[dict[str, Any]], *, sort_id: str, limit: int, carry: dict[str, Any] | None = None
 ) -> tuple[list[dict[str, Any]], str | None]:
     """The hits to serve and the cursor of the next page, or ``None`` on the last page."""
     kept = hits[:limit]
     if len(hits) > limit and kept:
-        return kept, encode_cursor(sort_id, kept[-1]['sort'])
+        return kept, encode_cursor(sort_id, kept[-1]['sort'], carry)
     return kept, None

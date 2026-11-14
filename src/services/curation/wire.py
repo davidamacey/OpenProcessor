@@ -24,7 +24,7 @@ from src.config.region_fields import RegionFields, get_region_fields
 from src.domain.audit_math import AUDIT_FIELDS
 from src.domain.item_labels import clarity_label, rank_label
 from src.domain.item_text import ITEM_TEXT_LINES_FIELD, item_text_lines_to_wire
-from src.domain.region_boxes import region_box_display_name
+from src.domain.region_boxes import read_boxes, region_box_display_name
 from src.services.curation.assist.item_wire import assist_to_wire
 from src.services.curation.capture_wire import item_capture_to_wire
 from src.services.curation.class_sources import (
@@ -84,6 +84,9 @@ def region_wire_key(attr: str) -> str:
 
 
 REGION_WIRE_KEYS: tuple[str, ...] = tuple(region_wire_key(a) for a in REGION_WIRE_ATTRS)
+_REGION_WIRE_PAIRS: tuple[tuple[str, str], ...] = tuple(
+    zip(REGION_WIRE_ATTRS, REGION_WIRE_KEYS, strict=True)
+)
 
 
 def item_source_excludes(vector_excludes: Sequence[str]) -> list[str]:
@@ -119,7 +122,7 @@ def region_to_wire(src: dict[str, Any], storage: RegionFields | None = None) -> 
     """Read every wire region attribute from a stored doc, keyed by its
     fixed wire name."""
     f = storage or get_region_fields()
-    return {region_wire_key(a): src.get(getattr(f, a)) for a in REGION_WIRE_ATTRS}
+    return {key: src.get(getattr(f, attr)) for attr, key in _REGION_WIRE_PAIRS}
 
 
 def parse_xyxy(value: Any) -> tuple[float, float, float, float] | None:
@@ -199,16 +202,22 @@ def item_display_name(src: dict[str, Any]) -> dict[str, str]:
     return display_name_of(src, proposed['proposed_class_name'])
 
 
-def region_box_name(box: RegionBox, ordinal: int) -> str:
-    """``region_box_display_name`` with the slot label of the active region profile (``Region``
-    when it names none), looked up only for a box that has no read text."""
-    if box.text:
-        return box.text
+def slot_label() -> str:
+    """The slot label of the active region profile (``Region`` when it names none)."""
     from src.services.detection.profile_registry import get_active_region_profile
 
     profile = get_active_region_profile()
-    label = (profile.display_name_singular if profile else '') or DEFAULT_SLOT_LABEL
-    return region_box_display_name(box, slot_label=label, ordinal=ordinal)
+    return (profile.display_name_singular if profile else '') or DEFAULT_SLOT_LABEL
+
+
+def region_box_name(box: RegionBox, ordinal: int, label: str | None = None) -> str:
+    """``region_box_display_name`` with the active profile's slot label, looked up only for a box
+    that has no read text; a caller naming many boxes passes the ``label`` it looked up once."""
+    if box.text:
+        return box.text
+    return region_box_display_name(
+        box, slot_label=slot_label() if label is None else label, ordinal=ordinal
+    )
 
 
 def cluster_object(src: dict[str, Any]) -> dict[str, Any] | None:
@@ -283,8 +292,12 @@ def serialize_item(
     state_fields: Mapping[str, str],
     storage: RegionFields | None = None,
     api_prefix: str | None = None,
+    label: str | None = None,
 ) -> dict[str, Any]:
     """Project one stored items-index document onto the wire item.
+
+    ``label`` is the region profile's slot label (:func:`slot_label`) when the caller serves many
+    items and looked it up once; without it a box with no read text looks it up itself.
 
     ``state_fields`` maps each live item space's key to its state field
     (``item_state_fields()``); ``embedding_states`` reports the stored state of each. ``storage`` is the ``RegionFields`` instance the document was written
@@ -293,6 +306,7 @@ def serialize_item(
     """
     f = storage or get_region_fields()
     prefix = _api_prefix() if api_prefix is None else api_prefix
+    boxes = read_boxes(src, f)
     crop_id = src.get('crop_id') or fallback_id
     image_path = src.get('image_path', '')
     vlm_class_id, vlm_class_name = vlm_suggestion(src)
@@ -372,7 +386,7 @@ def serialize_item(
         # Server-computed lock rule (src.clients.occ_locks.is_locked_item): a
         # human- or import-owned label, box or verdict that no automated
         # writer will touch. The client never re-derives it.
-        'label_locked': is_locked_item(src, f),
+        'label_locked': is_locked_item(src, f, boxes),
         # Dataset-import provenance.
         'import_ids': list(src.get('import_ids') or []),
         'dataset_split': src.get('dataset_split'),
@@ -460,11 +474,25 @@ def serialize_item(
     # The accuracy audit's state (drawn or not, the machine label it carried, the verdict).
     item.update({key: src.get(key) for key in AUDIT_FIELDS})
     item.update(region_to_wire(src, f))
-    item.update(region_boxes_to_wire(src, f, crop_id=crop_id, prefix=prefix))
+    item.update(
+        region_boxes_to_wire(src, f, crop_id=crop_id, prefix=prefix, label=label, boxes=boxes)
+    )
     # The VLM's suggestions (class answer, pack attributes), apart from the labels.
     item['capture'] = item_capture_to_wire(src)
     item['assist'] = assist_to_wire(src.get('assist'), {b['box_id'] for b in item['region_boxes']})
     return item
+
+
+def serialize_items(
+    rows: Sequence[tuple[str, dict[str, Any]]], *, state_fields: Mapping[str, str]
+) -> list[dict[str, Any]]:
+    """:func:`serialize_item` over ``(fallback id, document)`` rows with the project base and the
+    region slot label looked up once for the page, not once per row."""
+    prefix, label = _api_prefix(), slot_label()
+    return [
+        serialize_item(src, fid, state_fields=state_fields, api_prefix=prefix, label=label)
+        for fid, src in rows
+    ]
 
 
 def box_thumbnail_url(prefix: str, crop_id: str, box_id: str) -> str:
@@ -484,6 +512,7 @@ def region_box_to_wire(
     crop_id: str = '',
     prefix: str = '',
     ordinal: int = 1,
+    label: str | None = None,
 ) -> dict[str, Any]:
     """One ``RegionBoxWire`` element: the stored box plus the server-derived
     ``locked``, ``bbox_in_parent`` (item-crop frame, relative to ``src``'s
@@ -494,7 +523,7 @@ def region_box_to_wire(
     for key in STORAGE_ONLY_BOX_KEYS:
         del doc[key]
     doc['locked'] = is_locked_box(box)
-    doc['display_name'] = region_box_name(box, ordinal)
+    doc['display_name'] = region_box_name(box, ordinal, label)
     doc['bbox_in_parent'] = _source_to_parent(src, box.bbox_norm)
     doc['thumbnail_url'] = box_thumbnail_url(prefix, crop_id, box.box_id) if crop_id else None
     return doc
@@ -506,21 +535,25 @@ def region_boxes_to_wire(
     *,
     crop_id: str = '',
     prefix: str = '',
+    label: str | None = None,
+    boxes: Sequence[RegionBox] | None = None,
 ) -> dict[str, Any]:
     """The per-item box list plus its item-level summary fields.
     Each ``RegionBoxWire`` element also carries
     ``bbox_in_parent`` (the item-crop frame, derived; ``None`` with no
     usable item box) and ``thumbnail_url`` (``crop_id`` unset -> both
     keys omitted, e.g. a bare doc with no crop identity)."""
-    from src.domain.region_boxes import read_boxes
-
     f = storage or get_region_fields()
-    boxes = [
-        region_box_to_wire(src, box, crop_id=crop_id, prefix=prefix, ordinal=n)
-        for n, box in enumerate(read_boxes(src, f), start=1)
+    stored = read_boxes(src, f) if boxes is None else boxes
+    # A profile lookup only for an item with an unread box, and not at all when the caller passed it.
+    if label is None and any(not b.text for b in stored):
+        label = slot_label()
+    wired = [
+        region_box_to_wire(src, box, crop_id=crop_id, prefix=prefix, ordinal=n, label=label)
+        for n, box in enumerate(stored, start=1)
     ]
     return {
-        'region_boxes': boxes,
+        'region_boxes': wired,
         'region_count': int(src.get(f.count) or 0),
         'region_rejected_count': int(src.get(f.rejected_count) or 0),
         'region_max_score': src.get(f.max_score),
