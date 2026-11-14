@@ -1136,7 +1136,8 @@ Errors for the box routes:
 | `404` | unknown crop |
 | `409 region_conflict` | stale `expected_region_revision`; the body carries `current_region_revision`, `current_box_ids` and the current `item` |
 | `409` | no region profile is active |
-| `422 too_many_boxes` | more elements than `limits.max_boxes_per_write` (`OP_REGION_MAX_BOXES_PER_WRITE`, default 500; served on `GET /health` and `GET /regions/vocabulary`) |
+| `422 too_many_boxes` | more elements than `limits.max_boxes_per_write` (`OP_REGION_MAX_BOXES_PER_WRITE`, default and ceiling 74, lowered to 49 or 37 when the project has a second or third box space; served on `GET /health` and `GET /regions/vocabulary`) |
+| `422 item_over_nested_limit` | the write would take the item to 150 nested documents (boxes, their vectors, assist attributes), or the item already holds that many and the write is not a box-list write that brings it under the limit; the body carries `limit`, `nested_docs`, `boxes` and `crop_id`. See [the schema design](../opensearch_schema_design.md) |
 | `422 region_text_disabled` | a `text` element on a profile whose `text_reader` is `none` |
 | `422` | a `state` not allowed on that route, an out-of-range or degenerate box, a new box without `bbox_norm`, a duplicate or unknown `box_id`, `no_region_visible` together with boxes, `detected` with no accepted or confirmable box |
 
