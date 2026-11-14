@@ -10,7 +10,7 @@ from urllib.parse import unquote
 import httpx
 from opensearchpy.exceptions import NotFoundError
 
-from curation.query_fakes import _aggregate, matches
+from curation.query_fakes import _aggregate, _docvalues, matches
 
 
 if TYPE_CHECKING:
@@ -172,6 +172,18 @@ class _FakeTransport:
         if spec.get('sort'):
             # a sorted search answers each hit's sort values; the document id stands in for them
             hits = [{**h, 'sort': [h['_id']]} for h in hits]
+        if spec.get('docvalue_fields'):  # the vector reader asks for vectors this way
+            hits = [
+                {
+                    **{
+                        k: v
+                        for k, v in h.items()
+                        if k != '_source' or spec.get('_source') is not False
+                    },
+                    'fields': {f: _docvalues(h['_source'], f) for f in spec['docvalue_fields']},
+                }
+                for h in hits
+            ]
         size = spec.get('size', 10)
         resp: dict[str, Any] = {
             'hits': {

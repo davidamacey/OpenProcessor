@@ -24,8 +24,8 @@ In the `model-export` image (the `export` target of the root `Dockerfile`), neve
 | `build_pe_trt.sh` | PE-Core ONNX → TensorRT engine (Path 1) | TensorRT engine |
 | `build_pe_ort_fallback.sh` | PE-Core ONNX served by Triton's ORT backend (Path 2) | ONNX model dir |
 | `export_pe_text_encoder.py` | PE-Core-L14-336 text encoder (semantic-search queries), parity-gated | ONNX, then the TensorRT FP16 plan (default) or the ORT fallback model dir |
-| `export_paddleocr_det.py` | PP-OCRv6 text detection | TensorRT engine |
-| `export_paddleocr_rec.py` | PP-OCRv6 text recognition | TensorRT engine |
+| `export_paddleocr_det.py` | PP-OCRv6 text detection; `--uint8` builds `paddleocr_det_trt_uint8` for the frame engine | TensorRT engine |
+| `export_paddleocr_rec.py` | PP-OCRv6 text recognition; `--uint8` builds `paddleocr_rec_trt_uint8` (uint8 input, the arg-max over the character probabilities in the graph, `ocr_graph.py`) for the frame engine | TensorRT engine |
 | `download_face_models.py` | Download pre-trained face models | PyTorch weights |
 | `download_paddleocr.py` | Download PP-OCRv6 models | ONNX models |
 | `download_pytorch_models.py` | Download YOLO11 PyTorch models | PyTorch weights |
@@ -82,6 +82,8 @@ models/
 ├── paddleocr_rec_trt/                  # PP-OCRv6 recognition
 │   ├── 1/model.plan
 │   └── config.pbtxt
+├── paddleocr_det_trt_uint8/            # frame engine's detector (uint8 `x`, `--uint8`)
+├── paddleocr_rec_trt_uint8/            # frame engine's recogniser (uint8 `x`, arg-max in the graph, `--uint8`)
 └── ocr_pipeline/                       # OCR BLS pipeline (calls the two above)
     └── config.pbtxt
 ```
@@ -337,6 +339,10 @@ docker compose run --rm model-export python /app/export/download_paddleocr.py
 # Export detection and recognition
 docker compose run --rm model-export python /app/export/export_paddleocr_det.py
 docker compose run --rm model-export python /app/export/export_paddleocr_rec.py
+
+# The frame engine's builds (uint8 input; the recogniser answers indices and scores)
+docker compose run --rm model-export python /app/export/export_paddleocr_det.py --uint8
+docker compose run --rm model-export python /app/export/export_paddleocr_rec.py --uint8
 ```
 
 ## Model Specifications

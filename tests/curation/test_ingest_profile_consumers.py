@@ -51,6 +51,7 @@ def world(monkeypatch: pytest.MonkeyPatch, tmp_path: Any, labels: str) -> Any:
     )
     pool = Pool()
     monkeypatch.setattr('src.app.resources.get_async_triton_pool', lambda: pool)
+    monkeypatch.setattr('src.app.resources.get_frame_engine_pool', lambda: pool)
     from _curation_app import mount_curation_routers
 
     from src.routers.curation import _raw_opensearch_dep, router as curation_router

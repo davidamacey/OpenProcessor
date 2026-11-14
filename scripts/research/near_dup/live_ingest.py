@@ -112,11 +112,12 @@ def ingest_pe(
 ) -> tuple[np.ndarray, np.ndarray, dict[str, int]]:
     import tritonclient.grpc as grpcclient
 
+    from src.config.settings import TritonModelConfig
     from src.domain import frame_engine_wire as wire
 
     client = grpcclient.InferenceServerClient(grpc_url)
     plan = wire.EnginePlan(
-        branches=('embed_frame',), embed=wire.EmbedSpec('pe_image_encoder', 336, 32)
+        branches=('embed_frame',), embed=wire.EmbedSpec(TritonModelConfig.PE_IMAGE_MODEL, 336, 32)
     ).to_json()
     vec = np.zeros((len(rows), 1024), dtype=np.float32)
     have = np.zeros(len(rows), dtype=bool)

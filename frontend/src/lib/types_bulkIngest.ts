@@ -171,6 +171,8 @@ export interface BulkIngestRun {
   options: BulkOptions;
   progress: BulkIngestProgress;
   stage_s?: Record<string, number>;
+  /** Photos per decode route (`gpu`, or `cpu_<reason>` for a photo that took the CPU path). */
+  decode_routes?: Record<string, number>;
   attempts?: number;
   /** What the run allows now (served): cancel while live, resume once stopped with work left. */
   can_cancel: boolean;

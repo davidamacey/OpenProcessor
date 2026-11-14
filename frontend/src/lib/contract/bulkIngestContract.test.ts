@@ -143,6 +143,7 @@ describe('bulk ingest contract', () => {
         'options',
         'progress',
         'stage_s',
+        'decode_routes',
         'attempts',
         'can_cancel',
         'can_resume',

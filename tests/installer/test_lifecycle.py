@@ -38,6 +38,8 @@ PLAN_FILES = [
     'arcface_w600k_r50_uint8/1/model.plan',
     'paddleocr_det_trt/1/model.plan',
     'paddleocr_rec_trt/1/model.plan',
+    'paddleocr_det_trt_uint8/1/model.plan',
+    'paddleocr_rec_trt_uint8/1/model.plan',
 ]
 
 
@@ -86,6 +88,8 @@ ONNX_OF_ENGINE = {
     'arcface_w600k_r50_uint8': 'pytorch_models/arcface_w600k_r50.onnx',
     'paddleocr_det_trt': 'pytorch_models/paddleocr/ppocr_det_v5_mobile.onnx',
     'paddleocr_rec_trt': 'pytorch_models/paddleocr/ppocrv6_rec_small.onnx',
+    'paddleocr_det_trt_uint8': 'pytorch_models/paddleocr/ppocr_det_v5_mobile.onnx',
+    'paddleocr_rec_trt_uint8': 'pytorch_models/paddleocr/ppocrv6_rec_small.onnx',
 }
 
 

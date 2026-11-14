@@ -73,14 +73,12 @@ async def project_delete(ctx: JobContext) -> dict[str, Any]:
 
 async def open_vocab_drain(ctx: JobContext) -> dict[str, Any]:
     """Run the active open-vocabulary set over every ``pending`` image of the project."""
-    from src.services.classes.registry import get_class_registry
-    from src.services.curation.ingest_service_factory import get_ingest_service
     from src.services.curation.open_vocab_ingest import drain_pending
     from src.services.detection.segmenter_http import segment_image_http
 
     with await bound_project(ctx):
         opensearch = await ctx.client('opensearch')
-        service = await get_ingest_service(opensearch, get_class_registry())
+        service = await (await ctx.client('ingest')).service(opensearch)
 
         async def batch_done(tried: int) -> None:
             await ctx.progress(tried, None, 'drain')
@@ -221,8 +219,18 @@ async def source_poll(ctx: JobContext) -> dict[str, Any]:
         return {'pending': counts['pending'], 'run_started': started}
 
 
+async def _ingest() -> Any:
+    from src.tasks import jobs_a_support
+
+    return await jobs_a_support.worker_ingest()
+
+
 register_job('project_delete', project_delete, client_factories={'opensearch': _opensearch})
-register_job('open_vocab_drain', open_vocab_drain, client_factories={'opensearch': _opensearch})
+register_job(
+    'open_vocab_drain',
+    open_vocab_drain,
+    client_factories={'opensearch': _opensearch, 'ingest': _ingest},
+)
 register_job(
     'directory_ingest', directory_ingest, client_factories={'opensearch_client': _search_service}
 )

@@ -14,7 +14,9 @@ from __future__ import annotations
 
 import json
 import socket
+import time
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -155,15 +157,28 @@ async def test_liveness_is_refreshed_on_a_timer_without_new_fetches(
     monkeypatch.setattr(fairness, 'write_liveness', _recording_write)
     monkeypatch.setattr(fairness, 'is_project_paused', lambda _p: False)
     stop = asyncio.Event()
-    task = asyncio.create_task(
-        fairness.liveness_loop(lambda: [alpha, beta], lambda: {'alpha': 3}, stop, interval_s=0.01)
-    )
-    await asyncio.sleep(0.08)
-    stop.set()
-    await task
+    clock = {'now': 0.0, 'waits': 0}
 
-    assert writes.count(('alpha', 3)) >= 3
-    assert ('beta', 0) in writes
+    # The loop's only waits are its poll timeouts: stand in for them with a fake clock so the
+    # count of refreshes depends on the loop's logic, not on how loaded the host is.
+    async def _poll_wait(_awaitable: Any, timeout: float) -> None:
+        _awaitable.close()
+        clock['now'] += timeout
+        clock['waits'] += 1
+        if clock['waits'] == 8:
+            stop.set()
+
+    monkeypatch.setattr(
+        fairness, 'time', SimpleNamespace(monotonic=lambda: clock['now'], time=time.time)
+    )
+    monkeypatch.setattr(fairness, 'asyncio', SimpleNamespace(wait_for=_poll_wait))
+    await fairness.liveness_loop(
+        lambda: [alpha, beta], lambda: {'alpha': 3}, stop, interval_s=1.0, poll_s=1.0
+    )
+
+    # one write per interval tick, 8 ticks, for each project
+    assert writes.count(('alpha', 3)) == 8
+    assert writes.count(('beta', 0)) == 8
     doc = read_liveness(alpha)
     assert doc is not None
     assert doc['inflight'] == 3

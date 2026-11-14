@@ -82,6 +82,7 @@ describe('BulkIngestPanel', () => {
         elapsed_s: 5,
       }),
       stage_s: { embed: 40.2, batch_requests: 12.5 },
+      decode_routes: { gpu: 90, cpu_small: 8, cpu_corrupt: 2 },
     });
     const { ctl } = controller(run);
     await render(ctl);
@@ -91,6 +92,9 @@ describe('BulkIngestPanel', () => {
     expect(byId('bulk-eta')?.textContent).toContain('2m 05s');
     expect(byId('bulk-counts')?.textContent).toContain('100 of 400+ (still scanning)');
     expect(byId('bulk-stages')?.textContent).toContain('embed');
+    expect(byId('bulk-decode-routes')?.textContent).toMatch(
+      /gpu\s*90.*cpu_small\s*8.*cpu_corrupt\s*2/,
+    );
     expect(byId('bulk-cancel')).toBeTruthy();
     expect(byId('bulk-resume')).toBeNull();
     expect((byId('bulk-path') as HTMLInputElement).disabled).toBe(true);

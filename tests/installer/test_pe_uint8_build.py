@@ -207,6 +207,8 @@ UINT8_BUILDERS = {
     'yolo26_small_trt': ['export/yolo_trt_build.py'],
     'scrfd_10g_bnkps_uint8': ['export/scrfd_triton.py'],
     'arcface_w600k_r50_uint8': ['export/export_face_recognition.py'],
+    'paddleocr_det_trt_uint8': ['export/export_paddleocr_det.py'],
+    'paddleocr_rec_trt_uint8': ['export/export_paddleocr_rec.py'],
 }
 
 

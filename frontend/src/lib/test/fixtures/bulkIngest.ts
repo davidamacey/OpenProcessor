@@ -136,6 +136,7 @@ export function runFixture(over: Partial<BulkIngestRun> = {}): BulkIngestRun {
     options: { source_tag: 'bulk_ingest', batch_size: 16, concurrency: 8 },
     progress: progressFixture(),
     stage_s: {},
+    decode_routes: {},
     attempts: 1,
     can_cancel: live,
     can_resume: false,

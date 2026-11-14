@@ -217,7 +217,8 @@ class _Transport:
 def m_needs_cupy(name: str) -> bool:
     """The engine modules that import CuPy at load (re-imported against the stand-in)."""
     return name in ('frame_engine.engine', 'frame_engine.nvjpeg_lanes', 'frame_engine.prep_kernels',
-                    'frame_engine.faces.kernels') or name.startswith('frame_engine.branches')  # fmt: skip
+                    'frame_engine.faces.kernels', 'frame_engine.ocr.kernels'
+                    ) or name.startswith('frame_engine.branches')  # fmt: skip
 
 
 @pytest.fixture
@@ -231,6 +232,7 @@ def eng(monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setattr(mod, 'NvJpegLanes', _Lanes)
     monkeypatch.setattr(mod, 'PrepKernels', _Kernels)
     monkeypatch.setattr(mod, 'WarpKernel', _Warp)
+    monkeypatch.setattr(mod, 'LineWarp', object)
     _Lanes.fail_with = None
     _Lanes.seen_streams = []
     _Kernels.fail_on_call = None
@@ -412,21 +414,6 @@ def test_stored_boxes_replace_the_detector(eng: Any) -> None:
     assert {s for s, n in _seen(engine).items() if n} == {
         'queue', 'budget', 'decode', 'embed_frame', 'embed_crops', 'embed_pe',
     }  # fmt: skip
-
-
-def test_unbuilt_branches_answer_unsupported_and_the_rest_runs(eng: Any) -> None:
-    engine = eng()
-    plan = _plan(['detect', 'ocr'], embed=None, crops='none',
-                 derivatives=[{'name': 'thumb'}])  # fmt: skip
-    r = _run(engine, plan)
-    assert r.status == 'ok'
-    assert r.branches == {
-        'detect': ('ok', ''),
-        'ocr': ('error', 'unsupported_branch'),
-        'derivatives': ('error', 'unsupported_branch'),
-    }
-    assert engine.transport.models() == ['det']
-    assert not {'ocr_texts', 'derivative_jpegs'} & set(r.outputs)
 
 
 def test_every_reported_name_has_exactly_one_branch_status_entry(eng: Any) -> None:
@@ -994,3 +981,27 @@ def test_an_unknown_stage_is_refused() -> None:
 
     with pytest.raises(ValueError, match='unknown frame engine stage'):
         StageClock().add('typo', 1.0)
+
+
+def test_renditions_are_jpegs_in_plan_order_never_enlarged(eng: Any) -> None:
+    import cv2
+
+    engine = eng()
+    plan = _plan(['embed_frame'], detector=None, crops='none',
+                 derivatives=[{'name': 'a', 'side': 32}, {'name': 'b', 'side': 200, 'quality': 60}])  # fmt: skip
+    r = _run(engine, plan)
+    assert r.branches == {'embed_frame': ('ok', ''), 'derivatives': ('ok', '')}
+    decoded = [cv2.imdecode(np.frombuffer(j, np.uint8), cv2.IMREAD_COLOR)
+               for j in r.outputs['derivative_jpegs']]  # fmt: skip
+    sizes = [d.shape[:2] for d in decoded if d is not None]
+    assert len(decoded) == 2
+    assert sizes == [(21, 32), (H, W)]  # 96 x 64 fits 32 as 32 x 21; 200 is larger than the photo
+    assert {s for s, n in _seen(engine).items() if n} >= {'derivative_render', 'derivative_jpeg'}
+
+
+def test_a_plan_without_renditions_pays_nothing_for_them(eng: Any) -> None:
+    engine = eng()
+    r = _run(engine, _plan(['embed_frame'], detector=None, crops='none'))
+    assert 'derivative_jpegs' not in r.outputs
+    assert 'derivatives' not in r.branches
+    assert not {'derivative_render', 'derivative_jpeg'} & {s for s, n in _seen(engine).items() if n}

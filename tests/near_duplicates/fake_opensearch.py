@@ -2,16 +2,19 @@
 
 Documents are ``{index: {id: source}}``. It answers ``mget`` (with ``_source_includes``),
 ``msearch`` k-NN queries (exact cosine over the stored vectors, with a ``terms`` pre-filter),
-the scroll calls the page reader falls back to when no point in time can be opened, ``bulk``
+point-in-time searches (a snapshot at create time, ``search_after``, ``slice``, ``docvalue_fields``), ``bulk``
 partial updates and ``update_by_query`` field removal.
 """
 
 from __future__ import annotations
 
+import base64
 import copy
+import zlib
 from typing import Any
 
 import numpy as np
+from opensearchpy.exceptions import NotFoundError
 
 
 FIELDS = (
@@ -23,10 +26,20 @@ FIELDS = (
 )
 
 
+def _docvalues(source: dict[str, Any], field: str) -> list[Any]:
+    """A ``knn_vector`` through ``docvalue_fields``: one base64 little-endian float32 string (3.7)."""
+    value = source[field]
+    if isinstance(value, list) and value and all(isinstance(v, float) for v in value):
+        return [base64.b64encode(np.asarray(value, dtype='<f4').tobytes()).decode('ascii')]
+    return [value]
+
+
 class FakeNearDupOpenSearch:
     def __init__(self, docs: dict[str, dict[str, dict[str, Any]]]) -> None:
         self.docs = docs
         self.bulk_ops = 0
+        self.pits: dict[str, dict[str, dict[str, Any]]] = {}
+        self._pit_seq = 0
 
     # -- reads -----------------------------------------------------------------------------
     async def mget(self, *, index: str, body: dict[str, Any], **kw: Any) -> dict[str, Any]:
@@ -69,24 +82,47 @@ class FakeNearDupOpenSearch:
             hits.append({'_id': doc_id, '_score': score, '_source': copy.deepcopy(source)})
         return {'hits': {'hits': hits}}
 
-    async def create_pit(self, **_kw: Any) -> dict[str, Any]:
-        raise RuntimeError('no point in time in the stand-in')
+    # -- point in time ---------------------------------------------------------------------
+    # OpenSearch 3.x: POST /{index}/_search/point_in_time creates a view of the index as it is
+    # now; a search body with ``pit`` (and no index) reads that view, ``sort: _shard_doc`` pages
+    # it with ``search_after`` and ``slice`` splits it into disjoint parts; DELETE
+    # /_search/point_in_time frees it, and a search on a freed one is refused.
+    async def create_pit(self, *, index: str, **_kw: Any) -> dict[str, Any]:
+        self._pit_seq += 1
+        pit_id = f'pit-{self._pit_seq}'
+        self.pits[pit_id] = copy.deepcopy(self.docs.get(index, {}))
+        return {'pit_id': pit_id}
 
-    async def search(self, *, index: str, body: dict[str, Any], **_kw: Any) -> dict[str, Any]:
-        query = body['query']
+    async def delete_pit(self, *, body: dict[str, Any], **_kw: Any) -> dict[str, Any]:
+        for pit_id in body['pit_id']:
+            self.pits.pop(pit_id)
+        return {}
+
+    async def search(self, *, body: dict[str, Any], **_kw: Any) -> dict[str, Any]:
+        pit_id = body['pit']['id']
+        if pit_id not in self.pits:
+            raise NotFoundError(404, 'search_context_missing_exception', pit_id)
+        view = self.pits[pit_id]
+        sliced = body.get('slice')
+        after = (body.get('search_after') or [-1])[0]
+        wanted = body['_source']
+        fields = body.get('docvalue_fields', [])
         hits = []
-        for doc_id, source in sorted(self.docs.get(index, {}).items()):
-            if self._matches(query, source):
-                kept = {k: v for k, v in source.items() if k in body['_source']}
-                hits.append({'_id': doc_id, '_source': copy.deepcopy(kept)})
-        self._pending = [hits, []]
-        return {'_scroll_id': 's', 'hits': {'hits': self._pending.pop(0)}}
-
-    async def scroll(self, **_kw: Any) -> dict[str, Any]:
-        return {'_scroll_id': 's', 'hits': {'hits': self._pending.pop(0) if self._pending else []}}
-
-    async def clear_scroll(self, **_kw: Any) -> None:
-        return None
+        for position, doc_id in enumerate(sorted(view)):
+            source = view[doc_id]
+            if position <= after or not self._matches(body['query'], source):
+                continue
+            if sliced and zlib.crc32(doc_id.encode()) % sliced['max'] != sliced['id']:
+                continue
+            hit: dict[str, Any] = {'_id': doc_id, 'sort': [position]}
+            if wanted is not False:
+                hit['_source'] = {k: copy.deepcopy(v) for k, v in source.items() if k in wanted}
+            if fields:
+                hit['fields'] = {f: _docvalues(source, f) for f in fields if f in source}
+            hits.append(hit)
+            if len(hits) == body['size']:
+                break
+        return {'hits': {'hits': hits}}
 
     @staticmethod
     def _matches(query: dict[str, Any], source: dict[str, Any]) -> bool:

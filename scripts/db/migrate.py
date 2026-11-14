@@ -86,19 +86,21 @@ def _owner_connection(settings: DatabaseSettings) -> Connection:
 def upgrade(settings: DatabaseSettings, *, super_user: str = SUPER_USER) -> None:
     super_password = settings.password('super')
     # Roles belong to the cluster, and an advisory lock belongs to one database, so they are
-    # created from the maintenance database every cluster has.
+    # created from the maintenance database every cluster has. The ``ALTER SCHEMA`` / ``GRANT`` of
+    # ``prepare_database`` update catalog rows that two concurrent runners also share (PostgreSQL
+    # answers "tuple concurrently updated"), so they run under the same lock.
     with psycopg.connect(
         _conninfo(settings, super_user, super_password, MAINTENANCE_DATABASE), autocommit=True
     ) as bootstrap:
         bootstrap.execute('SELECT pg_advisory_lock(%s, %s)', ROLES_LOCK)
         try:
             roles.ensure_roles(bootstrap, settings)
+            with psycopg.connect(
+                _conninfo(settings, super_user, super_password), autocommit=True
+            ) as target:
+                roles.prepare_database(target, settings)
         finally:
             bootstrap.execute('SELECT pg_advisory_unlock(%s, %s)', ROLES_LOCK)
-    with psycopg.connect(
-        _conninfo(settings, super_user, super_password), autocommit=True
-    ) as target:
-        roles.prepare_database(target, settings)
 
     with _owner_connection(settings) as conn:
         conn.execute(

@@ -64,6 +64,13 @@ FACE_BLUR_SUMS = 'face_blur_sums'
 FACE_OVERFLOW = 'face_overflow'
 FACE_EMBEDDINGS = 'face_embeddings'
 FACE_EMBEDDED = 'face_embedded'
+OCR_QUADS = 'ocr_quads'
+OCR_TEXTS = 'ocr_texts'
+OCR_SCORES = 'ocr_scores'
+OCR_CHAR_MIN = 'ocr_char_min'
+OCR_DET_SCORES = 'ocr_det_scores'
+OCR_OVERFLOW = 'ocr_overflow'
+DERIVATIVE_JPEGS = 'derivative_jpegs'
 
 INPUT_DATATYPES: Mapping[str, str] = {IMAGE: 'BYTES', PLAN: 'BYTES', BOXES: 'FP64'}
 OUTPUT_DATATYPES: Mapping[str, str] = {
@@ -87,6 +94,13 @@ OUTPUT_DATATYPES: Mapping[str, str] = {
     FACE_OVERFLOW: 'INT32',
     FACE_EMBEDDINGS: 'FP32',
     FACE_EMBEDDED: 'BOOL',
+    OCR_QUADS: 'FP32',
+    OCR_TEXTS: 'BYTES',
+    OCR_SCORES: 'FP32',
+    OCR_CHAR_MIN: 'FP32',
+    OCR_DET_SCORES: 'FP32',
+    OCR_OVERFLOW: 'INT32',
+    DERIVATIVE_JPEGS: 'BYTES',
 }
 
 #: ``status``: ``ok`` or one of :data:`src.domain.decode_route.PREP_STATUSES`.
@@ -104,7 +118,7 @@ ENGINE_BRANCHES: tuple[EngineBranch, ...] = cast(
 )
 #: Branches this engine runs; the others in the plan vocabulary answer ``unsupported_branch``.
 BUILT_BRANCHES: frozenset[str] = frozenset(
-    {'detect', 'embed_frame', 'embed_crops', 'faces', 'face_embed'}
+    {'detect', 'embed_frame', 'embed_crops', 'faces', 'face_embed', 'derivatives', 'ocr'}
 )
 DERIVATIVES = 'derivatives'
 
@@ -117,6 +131,12 @@ BRANCH_OUTPUTS: Mapping[str, tuple[str, ...]] = {
     'faces': (FACE_BOXES, FACE_SCORES, FACE_LANDMARKS, FACE_BLUR_SUMS, FACE_OVERFLOW),
     # vectors [m, dim] of the faces marked in ``face_embedded`` [n] (a degenerate landmark set is not)
     'face_embed': (FACE_EMBEDDINGS, FACE_EMBEDDED),
+    # One row per text line, in reading order: ``ocr_quads`` [n, 8] (x, y of the top-left,
+    # top-right, bottom-right, bottom-left corner, pixels of the oriented frame), ``ocr_texts`` [n],
+    # ``ocr_scores`` [n] (mean probability of the decoded characters), ``ocr_char_min`` [n] (the
+    # lowest), ``ocr_det_scores`` [n] (the detector's mean map value in the box); ``ocr_overflow``
+    # [1]: lines past ``max_lines`` that were detected and dropped (the lowest detector scores).
+    'ocr': (OCR_QUADS, OCR_TEXTS, OCR_SCORES, OCR_CHAR_MIN, OCR_DET_SCORES, OCR_OVERFLOW),
 }
 CROPS_OUTPUTS: tuple[str, ...] = (CROP_JPEGS,)
 
@@ -157,10 +177,34 @@ _TOP_FIELDS = frozenset(
         'embed_classes',
         'if_detected',
         'faces',
+        'ocr',
         'crops',
         DERIVATIVES,
     }
 )
+
+
+RENDITION_FORMATS = ('jpeg',)
+RENDITION_SIDE_RANGE = (16, 4096)
+DEFAULT_RENDITION_QUALITY = 85
+
+
+@dataclass(frozen=True)
+class RenditionSpec:
+    """One stored rendition: the long side fits ``side`` (Pillow ``thumbnail``, never enlarged)."""
+
+    name: str
+    side: int
+    quality: int = DEFAULT_RENDITION_QUALITY
+    format: str = RENDITION_FORMATS[0]
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            'name': self.name,
+            'side': self.side,
+            'quality': self.quality,
+            'format': self.format,
+        }
 
 
 class EnginePlanError(ValueError):
@@ -212,6 +256,35 @@ class FaceSpec:
 
 
 @dataclass(frozen=True)
+class OcrSpec:
+    """The ``ocr`` branch: a detector build (uint8 BGR ``x``, normalisation in the graph, map
+    ``fetch_name_0``) and a recogniser build (uint8 BGR ``x``, arg-max in the graph, ``indices`` and
+    ``scores``), by model name.
+
+    The detector reads the frame resized as PaddleX ``DetResizeForTest`` does: ``det_limit`` ``min``
+    raises the shorter side to ``det_side`` (never shrinks), ``max`` caps the longer side at
+    ``det_side`` (never enlarges); both end at ``det_max_side`` and a multiple of 32.
+    ``det_antialias`` filters the shrink (the reference's ``cv2.resize`` does not). ``thresh``,
+    ``box_thresh`` and ``unclip_ratio`` are the DB post-process's. Lines are recognised in batches of
+    ``batch`` by PaddleOCR's recipe, each line sampled ``taps`` x ``taps`` times per recogniser pixel
+    at most (1 reads the pixel centre, as ``cv2.resize`` does); at most ``max_lines`` are kept.
+    """
+
+    detector: str
+    recogniser: str
+    batch: int
+    max_lines: int
+    det_side: int
+    det_limit: str
+    det_max_side: int
+    det_antialias: bool
+    thresh: float
+    box_thresh: float
+    unclip_ratio: float
+    taps: int
+
+
+@dataclass(frozen=True)
 class EnginePlan:
     branches: tuple[EngineBranch, ...]
     detector: DetectorSpec | None = None
@@ -221,7 +294,8 @@ class EnginePlan:
     crops: CropsMode = 'none'
     if_detected: Mapping[str, tuple[int, ...]] = field(default_factory=dict)
     faces: FaceSpec | None = None
-    derivatives: tuple[Any, ...] = ()
+    ocr: OcrSpec | None = None
+    derivatives: tuple[RenditionSpec, ...] = ()
 
     def runs(self, branch: str) -> bool:
         return branch in self.branches
@@ -274,8 +348,24 @@ class EnginePlan:
                 'tile_side': f.tile_side,
                 'overlap': f.overlap,
             }
+        if self.ocr is not None:
+            o = self.ocr
+            body['ocr'] = {
+                'detector': o.detector,
+                'recogniser': o.recogniser,
+                'batch': o.batch,
+                'max_lines': o.max_lines,
+                'det_side': o.det_side,
+                'det_limit': o.det_limit,
+                'det_max_side': o.det_max_side,
+                'det_antialias': o.det_antialias,
+                'thresh': o.thresh,
+                'box_thresh': o.box_thresh,
+                'unclip_ratio': o.unclip_ratio,
+                'taps': o.taps,
+            }
         if self.derivatives:
-            body[DERIVATIVES] = list(self.derivatives)
+            body[DERIVATIVES] = [r.to_json() for r in self.derivatives]
         return json.dumps(body, sort_keys=True)
 
 
@@ -310,6 +400,31 @@ def _need(body: dict[str, Any], key: str, name: str) -> Any:
     if key not in body:
         raise EnginePlanError('missing_field', name)
     return body[key]
+
+
+def _renditions(raw: list[Any]) -> tuple[RenditionSpec, ...]:
+    specs: list[RenditionSpec] = []
+    for i, entry in enumerate(raw):
+        where = f'{DERIVATIVES}[{i}]'
+        r = _obj(entry, where, frozenset({'name', 'side', 'quality', 'format'}))
+        name = _str(_need(r, 'name', f'{where}.name'), f'{where}.name')
+        if name in {s.name for s in specs}:
+            raise EnginePlanError('bad_field', f'{where}.name')
+        specs.append(
+            RenditionSpec(
+                name=name,
+                side=_int(
+                    _need(r, 'side', f'{where}.side'), f'{where}.side', *RENDITION_SIDE_RANGE
+                ),
+                quality=_int(
+                    r.get('quality', DEFAULT_RENDITION_QUALITY), f'{where}.quality', 1, 100
+                ),
+                format=_str(
+                    r.get('format', RENDITION_FORMATS[0]), f'{where}.format', RENDITION_FORMATS
+                ),
+            )
+        )
+    return tuple(specs)
 
 
 def _detector(raw: Any) -> DetectorSpec:
@@ -366,6 +481,40 @@ def _faces(raw: Any) -> FaceSpec:
     )
 
 
+_OCR_FIELDS = frozenset(
+    {'detector', 'recogniser', 'batch', 'max_lines', 'det_side', 'det_limit', 'det_max_side',
+     'det_antialias', 'thresh', 'box_thresh', 'unclip_ratio', 'taps'}
+)  # fmt: skip
+DET_LIMITS = ('min', 'max')
+# The limits of the two engines' optimisation profiles (export_paddleocr_rec.py, export_paddleocr_det.py;
+# a test pins them): a plan the wire accepts is a call the engines accept.
+OCR_MAX_BATCH = 16
+OCR_MAX_DET_SIDE = 1920
+
+
+def _ocr(raw: Any) -> OcrSpec:
+    o = _obj(raw, 'ocr', _OCR_FIELDS)
+    antialias = o.get('det_antialias', False)
+    if not isinstance(antialias, bool):
+        raise EnginePlanError('bad_field', 'ocr.det_antialias')
+    return OcrSpec(
+        detector=_str(_need(o, 'detector', 'ocr.detector'), 'ocr.detector'),
+        recogniser=_str(_need(o, 'recogniser', 'ocr.recogniser'), 'ocr.recogniser'),
+        batch=_int(_need(o, 'batch', 'ocr.batch'), 'ocr.batch', 1, OCR_MAX_BATCH),
+        max_lines=_int(_need(o, 'max_lines', 'ocr.max_lines'), 'ocr.max_lines', 1, 10_000),
+        det_side=_int(_need(o, 'det_side', 'ocr.det_side'), 'ocr.det_side', 32, 4096),
+        det_limit=_str(o.get('det_limit', 'max'), 'ocr.det_limit', DET_LIMITS),
+        det_max_side=_int(
+            o.get('det_max_side', OCR_MAX_DET_SIDE), 'ocr.det_max_side', 32, OCR_MAX_DET_SIDE
+        ),
+        det_antialias=antialias,
+        thresh=_float(o.get('thresh', 0.2), 'ocr.thresh', 0.0, 1.0),
+        box_thresh=_float(o.get('box_thresh', 0.45), 'ocr.box_thresh', 0.0, 1.0),
+        unclip_ratio=_float(o.get('unclip_ratio', 1.4), 'ocr.unclip_ratio', 0.0, 10.0),
+        taps=_int(o.get('taps', 1), 'ocr.taps', 1, 8),
+    )
+
+
 def _class_ids(raw: Any, name: str) -> tuple[int, ...]:
     if not isinstance(raw, list):
         raise EnginePlanError('bad_field', name)
@@ -385,6 +534,14 @@ def _branches(raw: Any) -> tuple[EngineBranch, ...]:
     return tuple(b for b in ENGINE_BRANCHES if b in raw)
 
 
+def _check_settings(plan: EnginePlan, branch: str, settings: object) -> None:
+    """A branch's settings object comes with the branch and only with it."""
+    if plan.runs(branch) and settings is None:
+        raise EnginePlanError('missing_field', branch)
+    if settings is not None and not plan.runs(branch):
+        raise EnginePlanError('bad_field', branch)
+
+
 def _check_dependencies(plan: EnginePlan, *, has_boxes: bool) -> None:
     runs = plan.runs
     if has_boxes and runs('detect'):
@@ -398,10 +555,8 @@ def _check_dependencies(plan: EnginePlan, *, has_boxes: bool) -> None:
         raise EnginePlanError('missing_dependency', 'detect')
     if runs('face_embed') and not runs('faces'):
         raise EnginePlanError('missing_dependency', 'faces')
-    if runs('faces') and plan.faces is None:
-        raise EnginePlanError('missing_field', 'faces')
-    if plan.faces is not None and not runs('faces'):
-        raise EnginePlanError('bad_field', 'faces')
+    _check_settings(plan, 'faces', plan.faces)
+    _check_settings(plan, 'ocr', plan.ocr)
     if runs('detect') and plan.detector is None:
         raise EnginePlanError('missing_field', 'detector')
     if (runs('embed_frame') or runs('embed_crops')) and plan.embed is None:
@@ -411,10 +566,9 @@ def _check_dependencies(plan: EnginePlan, *, has_boxes: bool) -> None:
     for name in plan.if_detected:
         if name not in CONDITIONAL or not runs(name):
             raise EnginePlanError('condition_on_unconditional', name)
-        if name in BUILT_BRANCHES:  # no conditional path in the engine yet: fail closed
-            raise EnginePlanError('bad_field', f'if_detected.{name}')
-        if not runs('detect'):
-            raise EnginePlanError('missing_dependency', 'detect')
+        # Every conditional branch is built and the engine has no conditional path yet: a
+        # condition would be ignored, so it is refused (fail closed).
+        raise EnginePlanError('bad_field', f'if_detected.{name}')
 
 
 def parse_plan(text: str | bytes, *, has_boxes: bool) -> EnginePlan:
@@ -449,7 +603,8 @@ def parse_plan(text: str | bytes, *, has_boxes: bool) -> EnginePlan:
         crops=cast('CropsMode', crops),
         if_detected={str(k): _class_ids(v, f'if_detected.{k}') for k, v in raw_cond.items()},
         faces=_faces(body['faces']) if 'faces' in body else None,
-        derivatives=tuple(derivatives),
+        ocr=_ocr(body['ocr']) if 'ocr' in body else None,
+        derivatives=_renditions(derivatives),
     )
     _check_dependencies(plan, has_boxes=has_boxes)
     return plan
@@ -484,6 +639,8 @@ def expected_outputs(plan: EnginePlan) -> tuple[str, ...]:
         names.extend(BRANCH_OUTPUTS.get(branch, ()))
     if plan.crops == 'inline':
         names.extend(CROPS_OUTPUTS)
+    if plan.derivatives:
+        names.append(DERIVATIVE_JPEGS)
     return tuple(names)
 
 
@@ -498,6 +655,8 @@ __all__ = [
     'EnginePlan',
     'EnginePlanError',
     'FaceSpec',
+    'OcrSpec',
+    'RenditionSpec',
     'decode_branch_status',
     'encode_branch_status',
     'expected_outputs',

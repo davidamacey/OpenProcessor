@@ -28,9 +28,10 @@ generate_yolo_detection_config() {
     return 0
 }
 
-# The frame engine's uint8 face builds: export_scrfd.py / export_face_recognition.py --uint8
-# write the config with the engine, from the engine's own tensors; a profile only tunes it.
-generate_face_uint8_config() {
+# The frame engine's uint8 builds (faces: export_scrfd.py / export_face_recognition.py --uint8; OCR:
+# export_paddleocr_det.py / export_paddleocr_rec.py --uint8) write the config with the engine, from the
+# engine's own tensors; a profile only tunes it.
+generate_uint8_engine_config() {
     local config_file="$1"
     local profile="$2"
     local gpu_id="$3"
@@ -39,7 +40,7 @@ generate_face_uint8_config() {
         update_config_profile_settings "$config_file" "$profile" "$gpu_id"
         return $?
     fi
-    log_info "No uint8 face config.pbtxt yet: the exporter's --uint8 build writes it with the engine"
+    log_info "No uint8 config.pbtxt yet: the exporter's --uint8 build writes it with the engine"
     return 0
 }
 

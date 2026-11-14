@@ -39,6 +39,8 @@ ENGINES: dict[str, dict[str, tuple[str, str]]] = {
     'ocr': {
         'paddleocr_det_trt': ('pytorch_models/paddleocr/ppocrv6_det_small.onnx', 'fp32'),
         'paddleocr_rec_trt': ('pytorch_models/paddleocr/ppocrv6_rec_small.onnx', 'fp32'),
+        'paddleocr_det_trt_uint8': ('pytorch_models/paddleocr/ppocrv6_det_small.onnx', 'fp32'),
+        'paddleocr_rec_trt_uint8': ('pytorch_models/paddleocr/ppocrv6_rec_small.onnx', 'fp32'),
     },
 }
 GROUP_MODELS = {
@@ -50,7 +52,13 @@ GROUP_MODELS = {
         'scrfd_10g_bnkps_uint8',
         'arcface_w600k_r50_uint8',
     ],
-    'ocr': ['paddleocr_det_trt', 'paddleocr_rec_trt', 'ocr_pipeline'],
+    'ocr': [
+        'paddleocr_det_trt',
+        'paddleocr_rec_trt',
+        'ocr_pipeline',
+        'paddleocr_det_trt_uint8',
+        'paddleocr_rec_trt_uint8',
+    ],
 }
 PLANS = {
     'yolo': ['yolov11_small_trt_end2end'],
@@ -61,7 +69,12 @@ PLANS = {
         'scrfd_10g_bnkps_uint8',
         'arcface_w600k_r50_uint8',
     ],
-    'ocr': ['paddleocr_det_trt', 'paddleocr_rec_trt'],
+    'ocr': [
+        'paddleocr_det_trt',
+        'paddleocr_rec_trt',
+        'paddleocr_det_trt_uint8',
+        'paddleocr_rec_trt_uint8',
+    ],
 }
 GROUPS = list(ENGINES)
 # Groups whose unstamped engines can be adopted: the detector's cannot (no recipe is provable).
