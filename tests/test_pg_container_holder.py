@@ -10,13 +10,17 @@ from __future__ import annotations
 
 import sys
 import types
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-from fixtures.postgres import _ContainerHolder
-
-
-if TYPE_CHECKING:
-    import pytest
+import pytest
+from fixtures.postgres import (
+    URL_ENV,
+    DatabaseUnavailable,
+    _ContainerHolder,
+    _holder,
+    _selects_db,
+    pg_server,
+)
 
 
 class _FailingContainer:
@@ -46,3 +50,35 @@ def test_a_container_that_fails_to_start_is_stopped(monkeypatch: pytest.MonkeyPa
     assert holder.error is not None
     assert 'readiness wait timed out' in holder.error
     assert [c.stopped for c in _FailingContainer.instances] == [1]
+
+
+@pytest.mark.parametrize(
+    ('markexpr', 'selected'),
+    [
+        ('', True),
+        ('db', True),
+        ('not live and not families', True),  # a db test carries neither mark: it runs
+        ('db or live', True),
+        ('not db', False),
+        ('live', False),
+        ('not live and not db', False),
+    ],
+)
+def test_the_db_tier_is_selected_by_evaluating_the_mark_expression(
+    markexpr: str, selected: bool
+) -> None:
+    assert _selects_db(markexpr) is selected
+
+
+def test_a_worker_without_the_controllers_server_does_not_start_its_own(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(URL_ENV, raising=False)
+    started: list[int] = []
+    monkeypatch.setattr(_holder, 'start', lambda: started.append(1))
+    request = types.SimpleNamespace(config=types.SimpleNamespace(workerinput={}))
+
+    with pytest.raises(DatabaseUnavailable, match='controller'):
+        pg_server.__wrapped__(request)
+
+    assert started == []

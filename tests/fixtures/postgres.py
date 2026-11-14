@@ -15,13 +15,13 @@ from __future__ import annotations
 
 import itertools
 import os
-import re
 import uuid
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 import psycopg
 import pytest
+from _pytest.mark.expression import Expression
 from psycopg import sql
 from sqlalchemy import create_engine
 from sqlalchemy.engine import URL, make_url
@@ -126,7 +126,11 @@ _holder = _ContainerHolder()
 
 
 def _selects_db(markexpr: str) -> bool:
-    return bool(re.search(r'(?<!not )\bdb\b', markexpr)) or not markexpr.strip()
+    """Whether ``-m markexpr`` can select a test marked ``db`` (evaluated as pytest does: a test
+    with only that mark; ``not live and not families`` therefore selects it)."""
+    if not markexpr.strip():
+        return True
+    return Expression.compile(markexpr).evaluate(lambda name, /, **_kw: name == 'db')
 
 
 def _server_from_url(url: str) -> PgServer:
@@ -170,6 +174,10 @@ def pg_server(request: pytest.FixtureRequest) -> PgServer:
         server = PgServer(**worker_input['op_db_server'])
     elif os.environ.get(URL_ENV):
         server = _server_from_url(os.environ[URL_ENV])
+    elif hasattr(request.config, 'workerinput'):
+        # A worker never starts a server: only the controller's pytest_unconfigure removes one.
+        msg = 'the controller did not start a test PostgreSQL for this worker'
+        raise DatabaseUnavailable(msg)
     else:
         # A single process starts its own server, once, on first use.
         if _holder.server is None and _holder.error is None:
