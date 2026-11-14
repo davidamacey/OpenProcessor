@@ -32,7 +32,7 @@ ordinary `pytest tests/` never touches any of this.
 
 | Service | Host port | Role |
 |---|---|---|
-| `opensearch` | 14702 | OpenSearch 3.7, single node, 512 MB heap |
+| `opensearch` | 14702 | OpenSearch 3.9, single node, 512 MB heap |
 | `api` | 14701 | this repo's API image, `--workers=1` |
 | `fake-vlm` | 14704 | ~200-line stdlib OpenAI-compatible chat endpoint |
 | `fake-triton` | — | answers Triton's liveness and readiness (the API refuses to start without a live Triton), lists its models in the repository index, and serves deterministic models over gRPC (KServe v2 protocol, tensor names and shapes from `models/<name>/config.pbtxt`): the fused detector `yolov11_small_trt_end2end` (one box per picture), `pe_image_encoder` (a vector from the picture's coarse colour layout), `pe_text_encoder` (a vector from the token ids), `scrfd_10g_bnkps` (one face with five landmarks), `arcface_w600k_r50` (a 512-d vector from the aligned crop), `mobileclip2_s2_image_encoder` and `mobileclip2_s2_text_encoder` (512-d) and `ocr_pipeline` (one fixed line, `FAKE-PLATE-0042`). A model a promote wrote under `verify-data/triton_models` is listed once loaded and answers like the detector, over gRPC and the HTTP infer call of the promote warm-up. Every other model call is unimplemented (`docker/test/fake_triton.py`) |

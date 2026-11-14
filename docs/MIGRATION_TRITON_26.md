@@ -104,8 +104,8 @@ handled transparently (adapter resolved from Triton model metadata).
 | Service | Image |
 |---|---|
 | triton-server | `nvcr.io/nvidia/tritonserver:26.10-py3` (via `Dockerfile.triton`) |
-| opensearch | `opensearchproject/opensearch:3.7.0` |
-| opensearch-dashboards | `opensearchproject/opensearch-dashboards:3.7.0` |
+| opensearch | `opensearchproject/opensearch:3.9.0` |
+| opensearch-dashboards | `opensearchproject/opensearch-dashboards:3.9.0` |
 | prometheus | `prom/prometheus:v3.12.0` |
 | grafana | `grafana/grafana:13.1.0` |
 | loki | `grafana/loki:3.6.12` (non-root) |
@@ -113,5 +113,5 @@ handled transparently (adapter resolved from Triton model metadata).
 | node-exporter | `prom/node-exporter:v1.10.2` |
 | dcgm-exporter | `nvcr.io/nvidia/k8s/dcgm-exporter:3.3.5-3.4.0-ubuntu22.04` |
 
-OpenSearch 3.3 → 3.7 is a same-major upgrade; existing indices roll
+OpenSearch 3.3 → 3.9 is a same-major upgrade; existing indices roll
 forward in place. Take a snapshot first if the data matters.
