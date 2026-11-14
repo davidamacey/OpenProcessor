@@ -6,6 +6,12 @@ from trt_build_settings import max_batch
 
 
 TRITON_MODEL_NAME = 'scrfd_10g_bnkps'
+#: The frame engine's build (``--uint8``): uint8 input ``images`` (what the engine sends), the
+#: reference's ``(x - 127.5) / 128`` in the graph (InsightFace ``SCRFD`` input_mean / input_std).
+UINT8_MODEL_NAME = 'scrfd_10g_bnkps_uint8'
+UINT8_INPUT_NAME = 'images'
+UINT8_MEAN = (0.5, 0.5, 0.5)
+UINT8_STD = (128 / 255, 128 / 255, 128 / 255)
 INPUT_SIZE = 640
 MAX_BATCH_SIZE = max_batch(TRITON_MODEL_NAME, 64)  # Must match the max profile's max_batch_size
 
