@@ -15,7 +15,8 @@ SHELL := /bin/bash
 # checkout, so it always adds that overlay -- detected by src/main.py
 # existing next to the compose file (same check scripts/setup.sh and
 # scripts/openprocessor.sh use).
-DEV_DEV_COMPOSE := docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.gpu-arbiter.yml --profile curation --profile segmenter --profile vlm --profile training
+# Recursive (=): OP_DATA_DIR comes from the `-include .env` further down.
+DEV_COMPOSE = docker compose -f docker-compose.yml -f docker-compose.dev.yml$(if $(OP_DATA_DIR), -f docker-compose.data-dir.yml) -f docker-compose.gpu-arbiter.yml --profile curation --profile segmenter --profile vlm --profile training
 # The curation services `curation-up SERVICES=...` accepts (the evaluator is on demand).
 CURATION_SERVICES := curation-detection-worker curation-vlm-worker curation-auto-label-worker curation-assist-loop-worker curation-evaluator
 # Recursive (=): OP_FACES_ENABLED comes from the `-include .env` further down.
