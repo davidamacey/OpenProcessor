@@ -21,7 +21,9 @@ from curation.ingest_fakes import _jpeg_bytes, _make_service
 from curation.occ_fakes import FakeIngestOpenSearch
 from curation.test_ingest_concurrent_duplicates import _hold_writes_until_lookups
 from curation.test_ingest_whole_photo import PATH, TWO_BOXES, _image_id, _old, _writes_done
+from src.clients.image_counts_dirty import CountsMarkError
 from src.config import get_curation_config
+from src.services.curation import ingest_writer
 from src.services.curation.ingest_writer import REPAIR_AFTER_S, IngestWriter, RepairTarget
 from src.services.curation.item_delete import delete_items
 from src.services.near_duplicates.content_key import content_imohash
@@ -346,3 +348,75 @@ async def test_an_item_written_a_moment_ago_and_not_listed_is_matched_too() -> N
 
     assert 'drawn-1' in os_fake.items
     assert len(os_fake.items) == 2, 'the drawn box stands for its object; the other is created'
+
+
+@pytest.mark.asyncio
+async def test_a_counts_mark_error_after_the_items_exist_does_not_fail_the_photo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The items are stored; only the note that the image's counts need a recount could not be
+    written (Valkey and the images index both refused). The photo is whole, so it answers
+    ``success`` (the error is logged); failing it would turn it into a ``duplicate`` on the retry
+    and lose its events and crop cache."""
+    svc, os_fake, _ = _make_service(detections=TWO_BOXES)
+    data = _jpeg_bytes(seed=71)
+    image_id, _, _ = await _incomplete(svc, os_fake, data, keep=0)
+
+    async def refuse(*_a: Any, **_k: Any) -> None:
+        raise CountsMarkError('neither Valkey nor the images index took the mark')
+
+    monkeypatch.setattr(ingest_writer, 'mark_items_created', refuse)
+
+    assert (await svc.ingest_one(data, PATH)).status == 'success'
+    await _writes_done(svc)
+
+    assert len(os_fake.items) == 2
+    assert not os_fake.images[image_id].get('repair_started_at'), 'the lease went back'
+
+
+@pytest.mark.asyncio
+async def test_an_unexpected_error_in_a_repair_gives_the_lease_back_and_marks_the_photo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    svc, os_fake, _ = _make_service(detections=TWO_BOXES)
+    data = _jpeg_bytes(seed=72)
+    image_id, _, _ = await _incomplete(svc, os_fake, data, keep=0)
+    real = IngestWriter._create_missing
+
+    async def boom(*_a: Any, **_k: Any) -> None:
+        raise RuntimeError('a bug in the create step')
+
+    monkeypatch.setattr(IngestWriter, '_create_missing', boom)
+
+    failed = await svc.ingest_one(data, PATH)  # the error reaches the photo as a failed answer
+    await _writes_done(svc)
+
+    assert (failed.status, failed.error_kind) == ('failed', 'bulk_index')
+
+    doc = os_fake.images[image_id]
+    assert not doc.get('repair_started_at'), 'the lease is not held for the repair age'
+    assert doc['ingest_incomplete'] is True
+    monkeypatch.setattr(IngestWriter, '_create_missing', real)
+    assert (await svc.ingest_one(data, PATH)).status == 'success', 'the retry need not wait'
+
+
+@pytest.mark.asyncio
+async def test_an_unexpected_error_before_the_lease_marks_the_photo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    svc, os_fake, _ = _make_service(detections=TWO_BOXES)
+    data = _jpeg_bytes(seed=73)
+    image_id, _, _ = await _incomplete(svc, os_fake, data, keep=0)
+
+    async def boom(*_a: Any, **_k: Any) -> None:
+        raise KeyError('a bug in the match')
+
+    monkeypatch.setattr(ingest_writer, 'plan_repair', boom)
+
+    failed = await svc.ingest_one(data, PATH)
+    await _writes_done(svc)
+
+    assert (failed.status, failed.error_kind) == ('failed', 'bulk_index')
+
+    assert os_fake.images[image_id]['ingest_incomplete'] is True
+    assert not os_fake.images[image_id].get('repair_started_at')

@@ -63,7 +63,7 @@ from typing import Any
 from opensearchpy.exceptions import OpenSearchException
 from sqlalchemy.exc import SQLAlchemyError
 
-from src.clients.image_counts_dirty import mark_items_created
+from src.clients.image_counts_dirty import CountsMarkError, mark_items_created
 from src.clients.occ_upsert import DocOutcome, occ_upsert_bulk
 from src.core.logging import get_logger
 from src.domain.image_completeness import ITEM_IDS_FIELD, STATE_FIELDS, listed_item_ids
@@ -379,34 +379,49 @@ class IngestWriter:
 
     async def _write_group(self, units: list[_Unit]) -> None:
         results = {id(u): UnitResult() for u in units}
-        if await self._attempt(units, results, self._write_images(units, results)):
-            repairs = [u for u in units if u.repair is not None]
-            began = [u for u in repairs if await self._begin_repair(u, results[id(u)])]
-            plain = [u for u in units if u.repair is None]
-            await self._attempt(plain, results, self._write_items(plain, results))
-            await self._attempt(began, results, self._create_missing(began, results))
-            for unit in began:
-                if not self._failed(results[id(unit)]):
-                    results[id(unit)].repaired = True
-                    await finish_repair(
-                        self._client, unit.images_index, str(unit.image_id), str(unit.lease)
-                    )
+        answered = False
+        try:
+            await self._write_steps(units, results)
+            self._answer(units, results)
+            answered = True
+        finally:
+            # The answers are out (or, on an error nobody expected, every future is about to get
+            # that error): a photo that failed and whose images doc exists is noted, and a repair
+            # gives its lease back, together and best effort, whatever ended the flush.
+            await run_all(
+                [
+                    mark_incomplete(self._client, u.images_index, str(u.image_id), u.lease)
+                    for u in units
+                    if (not answered or self._failed(results[id(u)]))
+                    and (_stored_image(u, results[id(u)]) or u.lease is not None)
+                ]
+            )
+
+    async def _write_steps(self, units: list[_Unit], results: dict[int, UnitResult]) -> None:
+        if not await self._attempt(units, results, self._write_images(units, results)):
+            return
+        repairs = [u for u in units if u.repair is not None]
+        began = [u for u in repairs if await self._begin_repair(u, results[id(u)])]
+        plain = [u for u in units if u.repair is None]
+        await self._attempt(plain, results, self._write_items(plain, results))
+        await self._attempt(began, results, self._create_missing(began, results))
+        for unit in began:
+            if not self._failed(results[id(unit)]):
+                results[id(unit)].repaired = True
+                await finish_repair(
+                    self._client, unit.images_index, str(unit.image_id), str(unit.lease)
+                )
+
+    @staticmethod
+    def _answer(units: list[_Unit], results: dict[int, UnitResult]) -> None:
         for unit in units:
             result = results[id(unit)]
             if unit.follows is not None:
                 won = results[id(unit.follows)]
-                result.duplicate = not self._failed(won)
+                result.duplicate = not (won.failure or won.refused)
                 result.incomplete = not result.duplicate
             if not unit.future.done():
                 unit.future.set_result(result)
-        # The answers are out; the notes on photos that failed are written together, best effort.
-        await run_all(
-            [
-                mark_incomplete(self._client, u.images_index, str(u.image_id), u.lease)
-                for u in units
-                if self._failed(results[id(u)]) and _stored_image(u, results[id(u)])
-            ]
-        )
 
     @staticmethod
     def _failed(result: UnitResult) -> bool:
@@ -630,7 +645,15 @@ class IngestWriter:
             todo = retry
             if todo:
                 await asyncio.sleep(pause or 0)
-        await mark_items_created(self._client, index, list(created_by_image))
+        try:
+            await mark_items_created(self._client, index, list(created_by_image))
+        except (CountsMarkError, OpenSearchException) as exc:
+            # The items exist, so the photo is whole and answers ``success`` (failing it would
+            # make the resend a duplicate and lose its events and crop cache). Only the note that
+            # the image's counts need a recount is lost; it is logged at error level.
+            logger.error(
+                'ingest_repair_counts_mark_failed', error=str(exc), n=len(created_by_image)
+            )
 
     @staticmethod
     def _settle(unit: _Unit, result: UnitResult, outcomes: dict[str, DocOutcome]) -> None:
