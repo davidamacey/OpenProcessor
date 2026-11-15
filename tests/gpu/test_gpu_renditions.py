@@ -3,8 +3,8 @@
 Run like ``test_gpu_decode_parity.py`` (GPU tier; ``OP_TEST_FRAME_ENGINE_GRPC`` names an engine whose
 Triton has ``pe_image_encoder``). The reference is ``ImageOps.exif_transpose`` + ``Image.thumbnail``
 (LANCZOS) from the original file; the pixels transformed by the inverse of each EXIF op make the
-upright source the second, independent truth. Greyscale, CMYK and progressive files that the GPU
-route refuses answer ``image_failed`` for every requested name, derivatives included.
+upright source the second, independent truth. Greyscale, CMYK and progressive files are decoded on the
+host (``frame_engine/host_decode.py``) and get the same renditions from the same kernels.
 """
 
 from __future__ import annotations
@@ -122,7 +122,7 @@ def test_rendition_shows_the_upright_photo_like_pillow(engine: Any, orientation:
 
 
 @pytest.mark.parametrize('kind', ['grey', 'cmyk', 'progressive'])
-def test_the_files_the_gpu_route_refuses_get_a_status_not_a_rendition(
+def test_the_files_nvjpeg_does_not_take_get_their_renditions_from_the_host_decoded_frame(
     engine: Any, kind: str
 ) -> None:
     img = Image.open(SAMPLE).convert('RGB')
@@ -134,10 +134,12 @@ def test_the_files_the_gpu_route_refuses_get_a_status_not_a_rendition(
     else:
         img.save(buf, 'JPEG', progressive=True)
     status, branches, jpegs = _ask(engine, buf.getvalue())
-    if kind == 'grey':
-        assert status == 'ok'
-        assert len(jpegs) == len(SIDES)
-    else:
-        assert status != 'ok'
-        assert branches['derivatives'] == {'status': 'error', 'reason': 'image_failed'}
-        assert jpegs == []
+    assert status == 'ok'
+    assert branches['derivatives'] == {'status': 'ok'}
+    assert len(jpegs) == len(SIDES)
+    ref_img = ImageOps.exif_transpose(Image.open(io.BytesIO(buf.getvalue())))
+    for side, jpeg in zip(SIDES, jpegs, strict=True):
+        got = np.asarray(Image.open(io.BytesIO(jpeg)).convert('RGB'))
+        ref = _ref(ref_img, side)
+        assert got.shape == ref.shape
+        assert _psnr(got, ref) > 28

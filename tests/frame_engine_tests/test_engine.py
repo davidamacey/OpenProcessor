@@ -37,11 +37,20 @@ FACES = {'detector': 'scrfd', 'input_size': 640, 'recogniser': 'arc', 'batch': 3
          'score_min': 0.5, 'nms': 0.4, 'max_faces': 128}  # fmt: skip
 
 
+#: What the stand-in CuPy saw, in order: ``('alloc', stream, nbytes)``, ``('set', stream)`` (a host
+#: to device copy) and ``('sync', stream)``. Cleared by the ``eng`` fixture.
+EVENTS: list[tuple[Any, ...]] = []
+
+
 class _Dev(np.ndarray):
-    """A host array that answers ``.get()`` like a CuPy array."""
+    """A host array that answers ``.get()`` and ``.set()`` like a CuPy array."""
 
     def get(self) -> np.ndarray:
         return np.asarray(self)
+
+    def set(self, arr: Any, stream: Any = None) -> None:
+        EVENTS.append(('set', stream))
+        self[...] = arr
 
 
 def _dev(a: Any) -> _Dev:
@@ -67,13 +76,39 @@ def _fake_cupy() -> types.ModuleType:
         def synchronize(self) -> None:
             cp.syncs += 1
 
+    class _Stream:
+        """A stream that knows it is the current one on its thread (``with stream:``)."""
+
+        local = threading.local()
+        default: _Stream
+
+        def __init__(self, *_a: Any, **_k: Any) -> None:
+            pass
+
+        def __enter__(self) -> _Stream:
+            _Stream.local.stack = [*getattr(_Stream.local, 'stack', []), self]
+            return self
+
+        def __exit__(self, *_a: Any) -> None:
+            _Stream.local.stack = _Stream.local.stack[:-1]
+
+        def synchronize(self) -> None:
+            cp.syncs += 1
+            EVENTS.append(('sync', self))
+
+        @staticmethod
+        def current() -> _Stream:
+            stack = getattr(_Stream.local, 'stack', None)
+            return stack[-1] if stack else _Stream.default
+
+    _Stream.default = _Stream()
     cp.syncs = 0
     cp.uint8 = np.uint8
     out_of_memory = type('OutOfMemoryError', (RuntimeError,), {})
     cp.cuda = types.SimpleNamespace(
         Device=_Ctx,
-        Stream=_Ctx,
-        get_current_stream=_Ctx,
+        Stream=_Stream,
+        get_current_stream=_Stream.current,
         memory=types.SimpleNamespace(OutOfMemoryError=out_of_memory),
         runtime=types.SimpleNamespace(
             CUDARuntimeError=type('CUDARuntimeError', (RuntimeError,), {}),
@@ -88,6 +123,7 @@ def _fake_cupy() -> types.ModuleType:
         if cp.alloc_limit is not None and n > cp.alloc_limit:
             raise out_of_memory(f'Out of memory allocating {n} bytes')
         cp.allocated.append(n)
+        EVENTS.append(('alloc', cp.cuda.get_current_stream(), n))
         return _dev(np.zeros(shape, dt))
 
     cp.empty = _empty
@@ -253,6 +289,7 @@ def eng(monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setattr(mod, 'PrepKernels', _Kernels)
     monkeypatch.setattr(mod, 'WarpKernel', _Warp)
     monkeypatch.setattr(mod, 'LineWarp', object)
+    EVENTS.clear()
     _Lanes.fail_with = None
     _Lanes.seen_streams = []
     _Kernels.fail_on_call = None
@@ -837,14 +874,15 @@ def test_the_request_shows_the_stage_it_is_in(eng: Any) -> None:
 # ------------------------------------------------------------------ statuses and memory
 
 
-def test_an_image_the_gpu_route_does_not_take_answers_its_reason(eng: Any) -> None:
+def test_a_file_no_decoder_reads_answers_decoder_and_decodes_nothing(eng: Any) -> None:
     engine = eng()
     r = _run(engine, data=b'not a jpeg at all')
-    assert (r.status, r.decode_route) == ('not_jpeg', 'none')
+    assert (r.status, r.decode_route) == ('decoder', 'none')
     assert r.outputs == {}
     assert set(r.branches.values()) == {('error', 'image_failed')}
     assert {s for s, n in _seen(engine).items() if n} == {'queue', 'decode'}
     assert engine.transport.calls == []
+    assert engine.budget.in_use == 0
 
 
 def test_a_failed_decode_allocation_answers_gpu_memory_not_decoder(eng: Any) -> None:

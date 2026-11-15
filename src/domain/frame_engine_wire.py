@@ -106,8 +106,9 @@ OUTPUT_DATATYPES: Mapping[str, str] = {
 #: ``status``: ``ok`` or one of :data:`src.domain.decode_route.PREP_STATUSES`.
 STATUS_OK = 'ok'
 
-#: ``decode_route``: the GPU decoder produced the pixels, or nothing was decoded. The vocabulary
-#: grows when the engine also decodes on the CPU (the images the GPU route does not take).
+#: ``decode_route``: ``gpu`` (nvJPEG produced the pixels), ``cpu_<reason>`` (the engine decoded on
+#: the host an image nvJPEG does not take; ``reason`` is one of
+#: :data:`src.domain.decode_route.CPU_REASONS`) or ``none`` (nothing was decoded).
 DECODED_GPU = GPU
 DECODED_NONE = 'none'
 

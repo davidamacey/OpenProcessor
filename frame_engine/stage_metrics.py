@@ -13,7 +13,8 @@ names are the ones the Triton prep model published, so the baseline tables stay 
 
 ``queue``        wait for a worker thread (gRPC receipt to the first stage)
 ``budget``       wait for device memory (``prep_budget``); only photos that route to the GPU
-``decode``       header routing, nvJPEG decode, EXIF orientation
+``decode``       header routing, then nvJPEG decode and EXIF orientation, or the host decode and
+                 the upload of its frame
 ``letterbox``    detector letterbox canvas (and the wait for room in the region)
 ``detect``       round 1's one stream wait and sends, the wait for the detector's answer, boxes
 ``embed_frame``  whole-frame square for the encoder (and the wait for room)

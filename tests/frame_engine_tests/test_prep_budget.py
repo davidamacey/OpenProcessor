@@ -37,6 +37,19 @@ def test_a_grey_photo_is_still_charged_the_three_channel_output(pb: Any) -> None
     assert pb.need_bytes(grey) == 100 * 50 * 3
 
 
+def test_a_host_decoded_frame_is_charged_the_same_frame_bytes_as_a_gpu_one(pb: Any) -> None:
+    gpu = pb.need_bytes(_header(5472, 3648))
+    assert pb.host_need_bytes(5472, 3648) == gpu == 5472 * 3648 * 3
+
+
+def test_a_host_frame_has_no_oriented_copy_but_keeps_the_rendition_scratch(pb: Any) -> None:
+    """It arrives upright, so a rotated photo's second copy is never on the device."""
+    assert pb.host_need_bytes(3000, 4000) == pb.need_bytes(_header(4000, 3000, 1))
+    assert pb.host_need_bytes(3000, 4000) < pb.need_bytes(_header(4000, 3000, 6))
+    frame = 6240 * 4160 * 3
+    assert pb.host_need_bytes(6240, 4160, (256, 512)) == frame + 4160 * 512 * 12
+
+
 def test_acquire_and_release_track_the_bytes_in_use(pb: Any) -> None:
     budget = pb.ByteBudget(100)
     assert budget.acquire(60, timeout=0.1)

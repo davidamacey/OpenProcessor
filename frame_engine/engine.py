@@ -7,11 +7,16 @@ in Triton. This module is the orchestrator: routing, the device-memory budget, t
 rounds of model calls and the mapping of failures. The branches themselves live in
 :mod:`frame_engine.branches` (contract in its docstring). Per image:
 
-1. Route by header (JPEG, 8-bit, 1 or 3 components, baseline, end-of-image marker present, size
-   gate); anything else answers with a status (the API decodes that image on the CPU, counted).
-2. Reserve the frame's bytes (``prep_budget``, a bounded wait), nvJPEG decode (GPU Huffman lanes),
-   EXIF orientation applied on the GPU, then the embedded colour profile (``colour``: the frame
-   every branch reads is sRGB).
+1. Route by header (``prep_geometry.route``): a JPEG nvJPEG takes (8-bit, 1 or 3 components,
+   baseline, end-of-image marker present, size gate) goes to the GPU; every other readable image
+   (PNG, WebP, progressive or CMYK JPEG, a small JPEG) is decoded on the host
+   (``host_decode``); what no decoder reads, and an image above ``OP_FRAME_ENGINE_MAX_MEGAPIXELS``
+   (its size is read from the header first), answers with a status and decodes nothing.
+2. Reserve the frame's bytes (``prep_budget``, a bounded wait). GPU route: nvJPEG decode (GPU
+   Huffman lanes), EXIF orientation applied on the GPU, then the embedded colour profile
+   (``colour``). Host route: ``decode_image`` of the API gives the upright frame already in sRGB
+   (the same rule), uploaded as it is: no orientation and no colour step runs on it. Either way
+   the frame every branch reads is upright sRGB, and ``decode_route`` says which route made it.
 3. Round 1: every requested branch that needs only the frame stages its input and its call (the
    detector letterbox, the whole-frame encoder square); one wait for the stream, then all those
    calls go out at once. The caller's stored ``boxes`` (the embed pass) stand in for the detector.
@@ -30,10 +35,14 @@ The kernels, their order and the JPEG settings are those of the Triton prep mode
 replaces, so the outputs are bit-identical for the photos it decoded. Model inputs travel through
 :mod:`frame_engine.transport`.
 
-Device memory: a request reserves its frame's bytes from the budget before it decodes; frames and
-orientation copies are allocated on one dedicated stream (``alloc_stream``), so a block freed by
-one worker serves any other. That is only safe if no kernel of the freeing worker still reads the
-block: every path that drops a frame waits for its worker stream first. An allocation that fails
+Device memory: a request reserves its frame's bytes from the budget before it decodes (a host
+frame counts like a GPU one); frames and orientation copies are allocated on one dedicated stream
+(``alloc_stream``), so a block freed by one worker serves any other. That is only safe if no
+kernel of the freeing worker still reads the block: every path that drops a frame waits for its
+worker stream first. A host-decoded frame is allocated on ``alloc_stream`` like an nvJPEG frame,
+copied in on the worker's own stream (the one every branch reads it on), and that stream is
+waited for before the host array is dropped and before any branch starts; it is freed by the same
+wait-then-drop in ``_process``. An allocation that fails
 anyway answers ``gpu_memory``; a photo larger than the whole budget answers ``over_budget``; a
 budget wait that times out raises :class:`~frame_engine.transport.OverloadError`. The region
 bytes one photo holds with calls in flight are bounded by its fair share of the region
@@ -50,11 +59,13 @@ import logging
 import threading
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import cupy as cp
 import numpy as np
 
+from frame_engine import host_decode
 from frame_engine.branches.base import Branch, DependencyFailedError, Photo, PhotoCalls
 from frame_engine.branches.crops import CropJpegs
 from frame_engine.branches.derivatives import Derivatives
@@ -69,19 +80,20 @@ from frame_engine.messages import EngineRequest, EngineResult
 from frame_engine.nvjpeg_lanes import NvJpegError, NvJpegLanes
 from frame_engine.ocr.ctc import CtcDecoder
 from frame_engine.ocr.kernels import LineWarp
-from frame_engine.prep_budget import ByteBudget, is_memory_error, need_bytes
+from frame_engine.prep_budget import ByteBudget, host_need_bytes, is_memory_error, need_bytes
 from frame_engine.prep_geometry import oriented_size, route, stored_box_rects
 from frame_engine.prep_kernels import PrepKernels
 from frame_engine.slab import SlabTooLargeError
 from frame_engine.stage_metrics import StageClock
 from frame_engine.transport import ModelCallError, OverloadError
 from src.domain import frame_engine_wire as wire
+from src.domain.decode_route import cpu_reason_route
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
-    from frame_engine.prep_geometry import JpegHeader
+    from frame_engine.prep_geometry import JpegHeader, Route
     from frame_engine.settings import EngineSettings
     from frame_engine.stage_metrics import EngineMetrics
     from frame_engine.transport import BodyTransport, CudaShmTransport
@@ -89,6 +101,18 @@ if TYPE_CHECKING:
 
 MIB = 1024 * 1024
 logger = logging.getLogger('frame_engine')
+
+
+@dataclass(frozen=True)
+class _Source:
+    """What one request decodes: the device bytes it reserves, how, and the route it reports."""
+
+    need: int
+    decode_route: str
+    #: Pixels the decoded frame must have (the header's claim); ``None`` for the GPU route, which
+    #: checks the oriented size itself.
+    pixels: int | None
+    decode: Callable[[], Any]
 
 
 def _orient(frame: Any, orientation: int, alloc_stream: Any) -> Any:
@@ -243,14 +267,43 @@ class FrameEngine:
                 exc, self.region_events,
             )  # fmt: skip
 
+    def _source(self, request: EngineRequest, decision: Route) -> _Source | str:
+        """How the request decodes, or the status of an image that is refused before any decode."""
+        sides = tuple(r.side for r in request.plan.derivatives)
+        header = decision.header
+        if decision.kind == 'gpu':
+            data = request.data[: header.end]
+            return _Source(
+                need_bytes(header, sides),
+                wire.DECODED_GPU,
+                None,
+                lambda: self._decode(data, header),
+            )
+        try:
+            width, height = host_decode.probe(request.data)
+        except host_decode.TooLargeError:
+            return 'huge'
+        except host_decode.HostDecodeError:
+            return 'decoder'
+        if width * height / 1e6 > self.s.max_megapixels:
+            return 'huge'
+        return _Source(
+            host_need_bytes(width, height, sides),
+            cpu_reason_route(decision.reason),
+            width * height,
+            lambda: self._decode_host(request.data, width * height),
+        )
+
     def _process(self, request: EngineRequest, clock: StageClock) -> EngineResult:
         plan = request.plan
         with clock.stage('decode'):
-            reason, header = route(request.data, self.s.min_megapixels, self.s.max_megapixels)
-        if reason != 'gpu':
-            return self._failed(plan, reason)
-        data = request.data[: header.end]
-        need = need_bytes(header, tuple(r.side for r in plan.derivatives))
+            decision = route(request.data, self.s.min_megapixels, self.s.max_megapixels)
+            source = (
+                decision.reason if decision.kind == 'refused' else self._source(request, decision)
+            )
+        if isinstance(source, str):
+            return self._failed(plan, source)
+        need = source.need
         if need > self.budget.total:
             return self._failed(plan, 'over_budget')
         with clock.stage('budget'):
@@ -263,16 +316,16 @@ class FrameEngine:
         photo: Photo | None = None
         try:
             with clock.stage('decode'):
-                decoded = self._decode(data, header)
+                decoded = source.decode()
             if isinstance(decoded, str):
                 return self._failed(plan, decoded)
             # the photo is the frame's one holder: cleared below, never pinned by a traceback
             calls = PhotoCalls(self.transport, clock, request.deadline, self.window, _sync_stream)
-            size = oriented_size(header)
+            size = (int(decoded.shape[1]), int(decoded.shape[0]))
             photo = Photo(plan, decoded, size, calls, clock, self.kernels,
                           {wire.SIZE: np.array(size, np.int32)})  # fmt: skip
             del decoded
-            return self._branches(request, photo)
+            return self._branches(request, photo, source.decode_route)
         except (cp.cuda.memory.OutOfMemoryError, cp.cuda.runtime.CUDARuntimeError) as exc:
             if not is_memory_error(exc):
                 raise
@@ -311,6 +364,35 @@ class FrameEngine:
         else:
             outcome = 'ignored' if header.icc else 'srgb'
         self.metrics.colour.labels(outcome).inc()
+        return frame
+
+    def _decode_host(self, data: bytes, pixels: int) -> Any:
+        """The upright sRGB frame decoded on the host and copied to the device, or the status that
+        says why there is none.
+
+        Placement, as the nvJPEG route's: the block is allocated on ``alloc_stream`` (the one arena
+        every frame comes from, so a block freed by any worker serves any other), the copy is
+        queued on THIS worker's stream, which is the stream every branch reads the frame on, and
+        the stream is waited for before the host array goes (a pageable source is not safe to drop
+        before the copy completed) and before the frame is used. Nothing but this worker's stream
+        ever touches the block; the same worker waits for that stream again before the block is
+        returned to the arena (``_process``). The decode does not touch ``colour``: the host
+        decode converts an RGB profile itself, and a second conversion would move the colours
+        twice.
+        """
+        try:
+            host = host_decode.decode(data)
+        except host_decode.HostDecodeError:
+            return 'decoder'
+        if int(host.shape[0]) * int(host.shape[1]) != pixels:
+            return (
+                'decoder'  # the header and the pixels disagree: refuse, the budget is for this size
+            )
+        stream = cp.cuda.get_current_stream()
+        with self.alloc_stream:
+            frame = cp.empty(host.shape, cp.uint8)
+        frame.set(host, stream=stream)
+        stream.synchronize()
         return frame
 
     def _check_context(self, exc: BaseException) -> None:
@@ -363,7 +445,7 @@ class FrameEngine:
             out.append(CropJpegs(self.encode_pool, self.s.jpeg_quality, self.s.crop_max_side))
         return out
 
-    def _branches(self, request: EngineRequest, photo: Photo) -> EngineResult:
+    def _branches(self, request: EngineRequest, photo: Photo, decode_route: str) -> EngineResult:
         plan = request.plan
         states = self._initial_states(plan)
         if request.boxes is not None:
@@ -376,7 +458,7 @@ class FrameEngine:
             for branch in rounds.branches:
                 branch.close(photo)
         return EngineResult(
-            wire.STATUS_OK, wire.DECODED_GPU, _ordered(plan, rounds.finished()),
+            wire.STATUS_OK, decode_route, _ordered(plan, rounds.finished()),
             _ordered_outputs(plan, photo.out),
         )  # fmt: skip
 
