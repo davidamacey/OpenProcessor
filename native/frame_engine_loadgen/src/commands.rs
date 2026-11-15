@@ -16,11 +16,14 @@ use crate::list::PhotoList;
 use crate::measure::{Gpu, Setup, measure};
 use crate::plan::PlanFile;
 use crate::row::{EngineEvidence, Row};
+use crate::z_mode;
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Measure an engine at an address: a closed loop of photos in flight, protocol version 1.
     Engine(Box<EngineArgs>),
+    /// Measure the models alone: the same model calls with inputs already resident.
+    Z(Box<ZArgs>),
     /// Exit 0 when the engine answers ServerReady and ModelReady for `frame_engine`.
     Ready(ReadyArgs),
 }
@@ -86,6 +89,27 @@ pub struct EngineArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct ZArgs {
+    #[command(flatten)]
+    pub common: Common,
+    /// Each photo's crop count as a parity run recorded it (required when the plan embeds crops).
+    #[arg(long)]
+    pub crop_counts: Option<PathBuf>,
+    /// The card as this process's CUDA numbers it (`CUDA_VISIBLE_DEVICES` applies).
+    #[arg(long, default_value_t = 0)]
+    pub cuda_device: usize,
+    /// The same card as the model server numbers it.
+    #[arg(long, default_value_t = 0)]
+    pub server_device_id: i64,
+    /// Region size in MiB; by default what the in-flight photos need.
+    #[arg(long)]
+    pub region_mib: Option<usize>,
+    /// Channels to the model server.
+    #[arg(long, default_value_t = 4)]
+    pub channels: usize,
+}
+
+#[derive(Debug, Args)]
 pub struct ReadyArgs {
     #[arg(long)]
     pub url: String,
@@ -107,6 +131,7 @@ pub fn secs(label: &str, v: f64) -> Result<Duration, Failure> {
 pub async fn run(command: Command, argv: Vec<String>) -> Result<ExitCode, Failure> {
     match command {
         Command::Engine(a) => engine(*a, argv).await,
+        Command::Z(a) => z_mode::run(*a, argv).await,
         Command::Ready(a) => ready(&a).await,
     }
 }

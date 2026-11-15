@@ -11,6 +11,8 @@
 //! | [`host`] | load, CPU model, clock |
 //! | [`list`], [`plan`] | the photos and the plan, with their SHA-256 |
 //! | [`exchange`] | one photo's round trip and the closed loop around it |
+//! | [`client`], [`statistics`] | protocol version 1 as a client; the model server's counters |
+//! | [`z_plan`], [`z_mode`] | the models alone: which calls a photo makes, and making them |
 
 pub mod arith;
 pub mod cgroup;
@@ -25,3 +27,5 @@ pub mod plan;
 pub mod proto;
 pub mod row;
 pub mod statistics;
+pub mod z_mode;
+pub mod z_plan;
