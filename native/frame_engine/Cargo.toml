@@ -13,9 +13,18 @@ name = "op-frame-engine"
 path = "src/main.rs"
 
 [dependencies]
-bytes = "=1.12.1"
+bytes = { workspace = true }
+prost = { workspace = true }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.154", features = ["arbitrary_precision", "preserve_order"] }
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tonic = { workspace = true, features = ["codegen", "server"] }
+tonic-prost = { workspace = true }
+
+[build-dependencies]
+prost-types = "=0.14.6"
+protox = { workspace = true }
+tonic-prost-build = { workspace = true }
 
 [lints]
 workspace = true

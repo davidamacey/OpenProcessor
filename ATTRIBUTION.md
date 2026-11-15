@@ -313,7 +313,7 @@ The following repositories were used as **reference only** (no code directly cop
 ### 3. NVIDIA Triton Inference Server
 - **URL:** https://github.com/triton-inference-server/server
 - **Documentation:** https://docs.nvidia.com/deeplearning/triton-inference-server/
-- **Usage:** Official Triton documentation and examples
+- **Usage:** Official Triton documentation and examples. `native/gpu_frame/proto/grpc_service.proto` and `model_config.proto` are Triton's (tag r26.10, from `triton-inference-server/common`), unchanged but for one header line naming the tag; the native frame engine generates its KServe server and its model-server client from them
 - **License:** BSD 3-Clause License
 
 ### 4. hiennguyen9874/triton-face-recognition

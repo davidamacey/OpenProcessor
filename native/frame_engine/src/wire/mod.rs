@@ -12,6 +12,7 @@ pub mod bytes_tensor;
 pub mod contract;
 pub mod json;
 pub mod plan;
+pub mod request;
 
 pub use contract::contract;
 pub use plan::{EnginePlan, PlanError, parse_plan};
