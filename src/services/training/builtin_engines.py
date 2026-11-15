@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -84,7 +84,7 @@ def _embedding(dim: int) -> EngineOutputContract:
     return EngineOutputContract(kind='embedding', shapes=[[dim]], dtypes=['fp32'])
 
 
-SHIPPED: tuple[Shipped, ...] = (
+_FP32_BUILDS: tuple[Shipped, ...] = (
     Shipped(
         'yolov11_small_trt_end2end',
         'yolo11',
@@ -239,6 +239,54 @@ SHIPPED: tuple[Shipped, ...] = (
             interpolation='bilinear',
         ),
         EngineOutputContract(kind='ctc_logits', shapes=[[-1, 18710]], dtypes=['fp32']),
+    ),
+)
+
+
+def _uint8_build(
+    base: Shipped,
+    name: str,
+    *,
+    color: Literal['RGB', 'BGR'] | None = None,
+    output_contract: EngineOutputContract | None = None,
+) -> Shipped:
+    """The frame engine's uint8 build of ``base``: the same geometry, with the normalisation in
+    the graph (each ``models/<name>/config.pbtxt`` says what the graph reads)."""
+    assert isinstance(base.input_contract, EngineInputContract)
+    contract = EngineInputContract.model_validate(
+        {
+            **base.input_contract.model_dump(mode='json'),
+            'dtype': 'uint8',
+            'normalize': 'in_graph',
+            **({} if color is None else {'color': color}),
+        }
+    )
+    return replace(
+        base,
+        name=name,
+        input_contract=contract,
+        output_contract=output_contract or base.output_contract,
+    )
+
+
+_BY_NAME = {shipped.name: shipped for shipped in _FP32_BUILDS}
+SHIPPED: tuple[Shipped, ...] = (
+    *_FP32_BUILDS,
+    _uint8_build(
+        _BY_NAME[TritonModelConfig.FACE_DETECT_MODEL],
+        f'{TritonModelConfig.FACE_DETECT_MODEL}_uint8',
+    ),
+    _uint8_build(
+        _BY_NAME[TritonModelConfig.ARCFACE_MODEL], f'{TritonModelConfig.ARCFACE_MODEL}_uint8'
+    ),
+    _uint8_build(_BY_NAME['paddleocr_det_trt'], 'paddleocr_det_trt_uint8', color='BGR'),
+    _uint8_build(
+        _BY_NAME['paddleocr_rec_trt'],
+        'paddleocr_rec_trt_uint8',
+        color='BGR',
+        output_contract=EngineOutputContract(
+            kind='ctc_argmax', shapes=[[-1], [-1]], dtypes=['int32', 'fp32']
+        ),
     ),
 )
 
