@@ -1,0 +1,10 @@
+//! The product part of the native frame engine: the KServe front of protocol version 1, the plan
+//! vocabulary and its parser, settings, metrics, geometry and routing (plan 17 section 2.0).
+//! Every CUDA or nvJPEG call goes through `gpu_frame`.
+//!
+//! The binary (`main.rs`) only wires these modules; they live in a library so that the contract
+//! and golden tests can reach them.
+
+pub mod cores;
+pub mod pyfmt;
+pub mod settings;

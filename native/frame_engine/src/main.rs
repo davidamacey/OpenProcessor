@@ -1,5 +1,4 @@
-//! The product part of the native frame engine: kernels, branches, the KServe front of protocol
-//! version 1 (plan 17 section 2.0). Every CUDA or nvJPEG call goes through `gpu_frame`.
+//! `op-frame-engine`: the frame engine process (plan 17 section 5 N0).
 
 fn main() {}
 
