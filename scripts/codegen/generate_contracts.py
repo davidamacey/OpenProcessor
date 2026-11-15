@@ -6,7 +6,8 @@ Runs, in order:
 * ``export_region_status_to_ts.py`` -> ``contracts/ts/regionStatus.ts``
 * ``export_api_contracts.py``       -> ``contracts/json/item_wire.json``,
   ``contracts/ts/itemWire.ts``, ``contracts/ts/classSources.ts``,
-  ``contracts/openapi/curation.json``
+  ``contracts/openapi/curation.json``, ``contracts/json/frame_engine_v1.json``,
+  ``contracts/json/frame_engine_plan_cases.json``
 
 Usage:
 

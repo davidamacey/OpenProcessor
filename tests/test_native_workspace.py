@@ -163,3 +163,18 @@ def test_deny_allows_only_licences_that_fit_an_agpl_repository() -> None:
 def test_build_output_is_not_tracked_or_sent_to_a_docker_build() -> None:
     assert '/native/target/' in (ROOT / '.gitignore').read_text(encoding='utf-8').splitlines()
     assert 'native/target/' in (ROOT / '.dockerignore').read_text(encoding='utf-8').splitlines()
+
+
+@pytest.mark.parametrize(
+    'path',
+    [
+        'contracts/json/frame_engine_v1.json',
+        'contracts/json/frame_engine_plan_cases.json',
+        'src/domain/frame_engine_wire.py',
+        'scripts/codegen/frame_engine_contract.py',
+        'scripts/codegen/frame_engine_plan_cases.py',
+    ],
+)
+def test_the_contract_drift_hook_runs_when_a_frame_engine_contract_input_changes(path: str) -> None:
+    pattern = _hooks()['api-contracts-drift']['files']
+    assert re.search(pattern, path), path

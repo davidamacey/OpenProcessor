@@ -1,0 +1,494 @@
+{
+  "always_present_outputs": [
+    "status",
+    "decode_route",
+    "branch_status"
+  ],
+  "boxes_zero_rows_allowed": true,
+  "branch_error_reasons": [
+    "unsupported_branch",
+    "model_error",
+    "dependency_failed",
+    "image_failed"
+  ],
+  "branch_outputs": {
+    "detect": [
+      "det_boxes",
+      "det_scores",
+      "det_classes",
+      "letterbox",
+      "blur_sums"
+    ],
+    "embed_crops": [
+      "crop_embeddings",
+      "crop_embedded"
+    ],
+    "embed_frame": [
+      "whole_embedding"
+    ],
+    "face_embed": [
+      "face_embeddings",
+      "face_embedded"
+    ],
+    "faces": [
+      "face_boxes",
+      "face_scores",
+      "face_landmarks",
+      "face_blur_sums",
+      "face_overflow"
+    ],
+    "ocr": [
+      "ocr_quads",
+      "ocr_texts",
+      "ocr_scores",
+      "ocr_char_min",
+      "ocr_det_scores",
+      "ocr_overflow"
+    ]
+  },
+  "branch_states": [
+    "ok",
+    "error",
+    "not_run"
+  ],
+  "branches": [
+    "detect",
+    "embed_frame",
+    "embed_crops",
+    "faces",
+    "face_embed",
+    "ocr"
+  ],
+  "built_branches": [
+    "derivatives",
+    "detect",
+    "embed_crops",
+    "embed_frame",
+    "face_embed",
+    "faces",
+    "ocr"
+  ],
+  "check_order": [
+    {
+      "check": "unknown_model",
+      "status": "NOT_FOUND"
+    },
+    {
+      "check": "request_and_plan",
+      "status": "INVALID_ARGUMENT"
+    },
+    {
+      "check": "not_ready",
+      "status": "UNAVAILABLE"
+    },
+    {
+      "check": "in_flight_cap",
+      "status": "RESOURCE_EXHAUSTED"
+    }
+  ],
+  "crops_inline_outputs": [
+    "crop_jpegs"
+  ],
+  "decode_routes": [
+    "gpu",
+    "cpu_not_jpeg",
+    "cpu_precision",
+    "cpu_components",
+    "cpu_progressive",
+    "cpu_truncated",
+    "cpu_small",
+    "none"
+  ],
+  "derivatives": {
+    "default_quality": 85,
+    "field": "derivatives",
+    "formats": [
+      "jpeg"
+    ],
+    "output": "derivative_jpegs",
+    "side_range": [
+      16,
+      4096
+    ]
+  },
+  "failure_statuses": [
+    {
+      "failure": "overload",
+      "status": "RESOURCE_EXHAUSTED"
+    },
+    {
+      "failure": "model_server_unavailable",
+      "status": "UNAVAILABLE"
+    },
+    {
+      "failure": "cuda_context_lost",
+      "status": "UNAVAILABLE"
+    },
+    {
+      "failure": "request_deadline",
+      "status": "DEADLINE_EXCEEDED"
+    },
+    {
+      "failure": "engine_error",
+      "status": "INTERNAL"
+    }
+  ],
+  "generated_by": "scripts/codegen/export_api_contracts.py",
+  "implemented_calls": [
+    "ModelInfer",
+    "ModelMetadata",
+    "ModelReady",
+    "ServerLive",
+    "ServerReady"
+  ],
+  "inputs": [
+    {
+      "datatype": "BYTES",
+      "name": "image",
+      "required": true,
+      "shape": [
+        1
+      ]
+    },
+    {
+      "datatype": "BYTES",
+      "name": "plan",
+      "required": true,
+      "shape": [
+        1
+      ]
+    },
+    {
+      "datatype": "FP64",
+      "name": "boxes",
+      "required": false,
+      "shape": [
+        -1,
+        4
+      ]
+    }
+  ],
+  "model": {
+    "engine_error_prefix": "frame engine: ",
+    "name": "frame_engine",
+    "platform": "frame_engine",
+    "protocol_version": 1,
+    "version": "1"
+  },
+  "model_ready": {
+    "false_when": [
+      "unknown_model",
+      "unknown_version",
+      "not_ready",
+      "draining"
+    ],
+    "versions_accepted": [
+      "",
+      "1"
+    ]
+  },
+  "outputs": [
+    {
+      "datatype": "BYTES",
+      "name": "status",
+      "shape": [
+        1
+      ]
+    },
+    {
+      "datatype": "BYTES",
+      "name": "decode_route",
+      "shape": [
+        1
+      ]
+    },
+    {
+      "datatype": "BYTES",
+      "name": "branch_status",
+      "shape": [
+        1
+      ]
+    },
+    {
+      "datatype": "INT32",
+      "name": "size",
+      "shape": [
+        2
+      ]
+    },
+    {
+      "datatype": "FP32",
+      "name": "det_boxes",
+      "shape": [
+        -1,
+        4
+      ]
+    },
+    {
+      "datatype": "FP32",
+      "name": "det_scores",
+      "shape": [
+        -1
+      ]
+    },
+    {
+      "datatype": "INT32",
+      "name": "det_classes",
+      "shape": [
+        -1
+      ]
+    },
+    {
+      "datatype": "FP64",
+      "name": "letterbox",
+      "shape": [
+        3
+      ]
+    },
+    {
+      "datatype": "FP32",
+      "name": "whole_embedding",
+      "shape": [
+        -1
+      ]
+    },
+    {
+      "datatype": "FP32",
+      "name": "crop_embeddings",
+      "shape": [
+        -1,
+        -1
+      ]
+    },
+    {
+      "datatype": "BOOL",
+      "name": "crop_embedded",
+      "shape": [
+        -1
+      ]
+    },
+    {
+      "datatype": "INT64",
+      "name": "blur_sums",
+      "shape": [
+        -1,
+        3
+      ]
+    },
+    {
+      "datatype": "BYTES",
+      "name": "crop_jpegs",
+      "shape": [
+        -1
+      ]
+    },
+    {
+      "datatype": "FP32",
+      "name": "face_boxes",
+      "shape": [
+        -1,
+        4
+      ]
+    },
+    {
+      "datatype": "FP32",
+      "name": "face_scores",
+      "shape": [
+        -1
+      ]
+    },
+    {
+      "datatype": "FP32",
+      "name": "face_landmarks",
+      "shape": [
+        -1,
+        10
+      ]
+    },
+    {
+      "datatype": "INT64",
+      "name": "face_blur_sums",
+      "shape": [
+        -1,
+        3
+      ]
+    },
+    {
+      "datatype": "INT32",
+      "name": "face_overflow",
+      "shape": [
+        1
+      ]
+    },
+    {
+      "datatype": "FP32",
+      "name": "face_embeddings",
+      "shape": [
+        -1,
+        -1
+      ]
+    },
+    {
+      "datatype": "BOOL",
+      "name": "face_embedded",
+      "shape": [
+        -1
+      ]
+    },
+    {
+      "datatype": "FP32",
+      "name": "ocr_quads",
+      "shape": [
+        -1,
+        8
+      ]
+    },
+    {
+      "datatype": "BYTES",
+      "name": "ocr_texts",
+      "shape": [
+        -1
+      ]
+    },
+    {
+      "datatype": "FP32",
+      "name": "ocr_scores",
+      "shape": [
+        -1
+      ]
+    },
+    {
+      "datatype": "FP32",
+      "name": "ocr_char_min",
+      "shape": [
+        -1
+      ]
+    },
+    {
+      "datatype": "FP32",
+      "name": "ocr_det_scores",
+      "shape": [
+        -1
+      ]
+    },
+    {
+      "datatype": "INT32",
+      "name": "ocr_overflow",
+      "shape": [
+        1
+      ]
+    },
+    {
+      "datatype": "BYTES",
+      "name": "derivative_jpegs",
+      "shape": [
+        -1
+      ]
+    }
+  ],
+  "outputs_filter": {
+    "applies_to_every_output": true,
+    "empty_request_means_all": true
+  },
+  "photo_statuses": [
+    "ok",
+    "corrupt",
+    "huge",
+    "over_budget",
+    "gpu_memory",
+    "decoder"
+  ],
+  "ping_policy": {
+    "client_keepalive_time_ms": 30000,
+    "client_pings_without_calls": true,
+    "server_min_ping_interval_ms": 10000,
+    "server_permits_pings_without_calls": true,
+    "server_sends_goaway_too_many_pings": false
+  },
+  "plan": {
+    "crop_fill_default": 128,
+    "crop_recipes": [
+      "letterbox"
+    ],
+    "crops_modes": [
+      "inline",
+      "none"
+    ],
+    "faults": [
+      "bad_json",
+      "bad_version",
+      "unknown_field",
+      "missing_field",
+      "bad_field",
+      "empty_plan",
+      "unknown_branch",
+      "duplicate_branch",
+      "missing_dependency",
+      "condition_on_unconditional",
+      "boxes_with_detect",
+      "unused_boxes"
+    ],
+    "frame_recipes": [
+      "whole_frame"
+    ],
+    "json_rules": {
+      "duplicate_keys": "bad_json",
+      "nan_and_infinity_literals": "bad_json",
+      "version_is_the_integer": 1,
+      "version_other_than_the_integer": "bad_version"
+    },
+    "ocr_det_limits": [
+      "min",
+      "max"
+    ],
+    "ocr_max_batch": 16,
+    "ocr_max_det_side": 1920
+  },
+  "request_rules": [
+    {
+      "id": "raw_contents_count",
+      "message": "every input must travel in raw_input_contents"
+    },
+    {
+      "id": "unknown_input",
+      "message": "unknown input '{name}'"
+    },
+    {
+      "id": "missing_input",
+      "message": "missing input '{name}'"
+    },
+    {
+      "id": "bytes_input_shape",
+      "message": "{name} must be BYTES [1]"
+    },
+    {
+      "id": "bytes_input_one_element",
+      "message": "{name} must hold one element"
+    },
+    {
+      "id": "bytes_length_prefix",
+      "message": "BYTES tensor ends inside a length prefix"
+    },
+    {
+      "id": "bytes_element_overrun",
+      "message": "BYTES tensor element runs past the end"
+    },
+    {
+      "id": "boxes_datatype_shape",
+      "message": "boxes must be FP64 [n, 4]"
+    },
+    {
+      "id": "boxes_byte_size",
+      "message": "boxes byte size does not match its shape"
+    }
+  ],
+  "size_output": "size",
+  "sources": [
+    "src/domain/frame_engine_wire.py",
+    "src/domain/decode_route.py",
+    "src/clients/frame_engine.py",
+    "frame_engine/front.py",
+    "scripts/codegen/frame_engine_plan_cases.py"
+  ],
+  "unimplemented_calls_status": "UNIMPLEMENTED"
+}

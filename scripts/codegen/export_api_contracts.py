@@ -12,6 +12,9 @@ Writes, under ``contracts/`` (or ``--out-dir``):
 * ``ts/classNames.ts`` — the one class-name equality rule (``normalize_class_name``).
 * ``openapi/curation.json`` — ``app.openapi()`` filtered to paths under
   ``CurationConfig.api_prefix`` plus only the components they reference.
+* ``json/frame_engine_v1.json`` and ``json/frame_engine_plan_cases.json`` — the frame engine's
+  protocol version 1 and every plan text with the answer of ``parse_plan``
+  (``frame_engine_contract.py``); the native engine is held to both.
 
 These need the app import, so the script re-runs itself under the
 project interpreter with a whitelisted environment (see
@@ -38,6 +41,7 @@ from typing import TYPE_CHECKING, Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _contract_runtime
+import frame_engine_contract
 
 
 if TYPE_CHECKING:
@@ -56,6 +60,8 @@ CLASS_SOURCES_TS = Path('ts/classSources.ts')
 CLASS_NAMES_TS = Path('ts/classNames.ts')
 OPENAPI_JSON = Path('openapi/curation.json')
 KEYMAP_ACTIONS_JSON = Path('json/keymap_actions.json')
+FRAME_ENGINE_JSON = Path('json/frame_engine_v1.json')
+FRAME_ENGINE_CASES_JSON = Path('json/frame_engine_plan_cases.json')
 
 
 def _ts_header(source: str) -> str:
@@ -385,6 +391,10 @@ GENERATORS: dict[str, Callable[[], dict[Path, str]]] = {
     'class-names': lambda: {CLASS_NAMES_TS: render_class_names_ts()},
     'openapi': lambda: {OPENAPI_JSON: render_openapi_json()},
     'keymap-actions': lambda: {KEYMAP_ACTIONS_JSON: render_keymap_actions_json()},
+    'frame-engine': lambda: {
+        FRAME_ENGINE_JSON: frame_engine_contract.render_protocol_json(),
+        FRAME_ENGINE_CASES_JSON: frame_engine_contract.render_plan_cases_json(),
+    },
 }
 
 

@@ -352,3 +352,52 @@ def test_rendition_names_are_unique() -> None:
             has_boxes=False,
         )
     assert err.value.fault == 'bad_field'
+
+
+_INGEST_TEXT = (
+    '{"branches": ["detect", "embed_frame"], "crops": "none", '
+    '"detector": {"input_size": 640, "letterbox_fill": 114, "model": "det"}, '
+    '"embed": {"model": "pe", "size": 336}, "version": 1}'
+)
+
+
+def test_the_same_key_in_different_objects_is_not_a_duplicate() -> None:
+    # the text the quirk cases below are edited from has "model" in both detector and embed
+    plan = wire.parse_plan(_INGEST_TEXT, has_boxes=False)
+    assert plan.branches == ('detect', 'embed_frame')
+
+
+@pytest.mark.parametrize('version', ['true', '1.0', '1e0', '1.00', 'false', '"1"', 'null'])
+def test_a_version_that_is_not_the_integer_one_is_refused(version: str) -> None:
+    text = _INGEST_TEXT.replace('"version": 1', f'"version": {version}')
+    with pytest.raises(wire.EnginePlanError) as err:
+        wire.parse_plan(text, has_boxes=False)
+    assert err.value.fault == 'bad_version'
+
+
+@pytest.mark.parametrize('literal', ['NaN', 'Infinity', '-Infinity'])
+@pytest.mark.parametrize(
+    'old',
+    ['"size": 336', '"letterbox_fill": 114', '"version": 1', '"crops": "none"'],
+)
+def test_a_nan_or_infinity_literal_is_bad_json_wherever_it_stands(old: str, literal: str) -> None:
+    key = old.split(':', maxsplit=1)[0]
+    text = _INGEST_TEXT.replace(old, f'{key}: {literal}')
+    with pytest.raises(wire.EnginePlanError) as err:
+        wire.parse_plan(text, has_boxes=False)
+    assert err.value.fault == 'bad_json'
+
+
+@pytest.mark.parametrize(
+    'text',
+    [
+        _INGEST_TEXT.replace('"version": 1', '"version": 1, "version": 1'),
+        _INGEST_TEXT.replace('"crops": "none"', '"crops": "none", "crops": "inline"'),
+        _INGEST_TEXT.replace('"size": 336', '"size": 336, "size": 224'),
+        _INGEST_TEXT.replace('"model": "det"', '"model": "det", "model": "other"'),
+    ],
+)
+def test_a_duplicate_key_is_bad_json_at_every_depth_even_when_the_values_agree(text: str) -> None:
+    with pytest.raises(wire.EnginePlanError) as err:
+        wire.parse_plan(text, has_boxes=False)
+    assert err.value.fault == 'bad_json'
