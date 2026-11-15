@@ -2906,6 +2906,9 @@ do_install() {
     # shellcheck disable=SC2034
     API_PORT="$(read_env_var "$ENV_FILE" API_PORT || echo 4603)"
     OP_HEALTH_HOST="$(_health_host)"
+    # The crop encoder's input size: the shell's value beats .env (as for the API).
+    PE_CROP_SIZE="${PE_CROP_SIZE:-$(read_env_var "$ENV_FILE" PE_CROP_SIZE || true)}"
+    export PE_CROP_SIZE
     # shellcheck disable=SC2034
     MODEL_SETUP_TRITON_DIGEST="$TRITON_DIGEST"
     # shellcheck disable=SC2034

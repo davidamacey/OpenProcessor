@@ -678,12 +678,12 @@ pe-build-trt: ## PE-Core: image ONNX -> TensorRT plan in models/pe_image_encoder
 	ONNX_PATH=./pytorch_models/pe_image_encoder.onnx bash export/build_pe_trt.sh
 
 .PHONY: pe-export-crop
-pe-export-crop: ## PE-Core: crop encoder (the same weights at a 224 input) -> pytorch_models/pe_crop_encoder.onnx (+ config.pbtxt)
-	$(EXPORT_RUN) python /app/export/export_pe_image_encoder.py --crop
+pe-export-crop: ## PE-Core: crop encoder (the same weights at PE_CROP_SIZE 224 (default) or 336) -> pytorch_models/pe_crop_encoder.onnx (+ config.pbtxt)
+	$(COMPOSE) run --rm --no-deps -T $(if $(PE_CROP_SIZE),-e PE_CROP_SIZE=$(PE_CROP_SIZE)) model-export python /app/export/export_pe_image_encoder.py --crop
 
 .PHONY: pe-build-crop-trt
 pe-build-crop-trt: ## PE-Core: crop ONNX -> TensorRT plan in models/pe_crop_encoder
-	PE_ROLE=crop bash export/build_pe_trt.sh
+	PE_ROLE=crop $(if $(PE_CROP_SIZE),PE_CROP_SIZE=$(PE_CROP_SIZE)) bash export/build_pe_trt.sh
 
 .PHONY: pe-build-ort
 pe-build-ort: ## PE-Core: serve the image ONNX via Triton onnxruntime instead (Path 2 fallback)

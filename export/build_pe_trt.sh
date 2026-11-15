@@ -9,7 +9,7 @@
 #         config.pbtxt (platform: tensorrt_plan).
 #
 # Two models come from the same weights: the frame encoder pe_image_encoder (336 input) and the
-# crop encoder pe_crop_encoder (224 input, the encoder of object crops). PE_ROLE=crop builds the
+# crop encoder pe_crop_encoder (224 or 336 input, the encoder of object crops). PE_ROLE=crop builds the
 # second (its ONNX comes from `export_pe_image_encoder.py --crop`).
 #
 # If the engine build fails -- PE's attention pooling has hit ops that some
@@ -28,7 +28,8 @@
 #                    into (default: <repo>/models)
 #   MAX_BATCH        Engine + config max batch size (default: 32; halved on the small target)
 #   OPT_BATCH        Engine optimization-profile opt batch (default: 8)
-#   IMAGE_SIZE       Input resolution (default: 336, or 224 for PE_ROLE=crop)
+#   PE_CROP_SIZE     PE_ROLE=crop only: 224 (default) or 336, the crop encoder's input (anything else exits 2)
+#   IMAGE_SIZE       Input resolution (default: 336, or PE_CROP_SIZE for PE_ROLE=crop)
 #   WORKSPACE        trtexec workspace memory pool (default: trt_workspace_gb, 8G; 2G on the small target)
 #   PYTHON           Interpreter used to render config.pbtxt (default:
 #                    <repo>/.venv/bin/python if present, else python3)
@@ -46,7 +47,11 @@ REPO_DIR="$(dirname "$SCRIPT_DIR")"
 PE_ROLE="${PE_ROLE:-frame}"
 case "$PE_ROLE" in
     frame) MODEL_NAME="pe_image_encoder"; DEFAULT_IMAGE_SIZE=336; EXPORT_ARGS=() ;;
-    crop)  MODEL_NAME="pe_crop_encoder";  DEFAULT_IMAGE_SIZE=224; EXPORT_ARGS=(--crop) ;;
+    crop)  MODEL_NAME="pe_crop_encoder";  DEFAULT_IMAGE_SIZE="${PE_CROP_SIZE:-224}"; EXPORT_ARGS=(--crop)
+           case "$DEFAULT_IMAGE_SIZE" in
+               224|336) ;;
+               *) echo "[ERROR] PE_CROP_SIZE must be 224 or 336, got '$DEFAULT_IMAGE_SIZE'" >&2; exit 2 ;;
+           esac ;;
     *) echo "[ERROR] PE_ROLE must be frame or crop, got '$PE_ROLE'" >&2; exit 2 ;;
 esac
 ONNX_PATH="${ONNX_PATH:-$REPO_DIR/pytorch_models/$MODEL_NAME.onnx}"

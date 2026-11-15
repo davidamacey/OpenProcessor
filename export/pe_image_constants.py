@@ -3,6 +3,7 @@
 The tensor and model names are a hard contract with ``src/clients/pe_encoder.py``.
 """
 
+import os
 from pathlib import Path
 
 from trt_build_settings import max_batch
@@ -22,9 +23,30 @@ IMAGE_SIZE = 336
 # interpolates the absolute position embedding and rebuilds the RoPE grid for another input size:
 # core/vision_encoder/pe.py ``_sample_abs_posemb``, ``rope.update_grid``), 2.1 times the images per
 # second of the 336 build at equal crop quality, fed each box letterboxed whole. Its name and size
-# are the API's ``PE_CROP_MODEL`` / ``PE_CROP_SIZE`` (a test keeps them equal).
+# are the API's ``PE_CROP_MODEL`` / ``PE_CROP_SIZE`` (a test keeps them equal). The input can also be
+# 336 (the owner's choice for classes that differ in fine detail); the export tree cannot import
+# ``src`` (importing ``src.config`` loads the whole settings module, and the host build runs
+# without it), so the sizes are listed here and a test keeps them equal to ``CROP_ENCODERS``.
 CROP_TRITON_MODEL_NAME = 'pe_crop_encoder'
-CROP_IMAGE_SIZE = 224
+CROP_IMAGE_SIZES = (224, 336)
+DEFAULT_CROP_IMAGE_SIZE = 224
+
+
+def crop_image_size(environ: dict[str, str] | None = None) -> int:
+    """The crop encoder's input size: ``PE_CROP_SIZE`` (224 or 336), 224 when unset or blank.
+
+    Anything else raises, as the API does at start-up: a build must never pick a size by guessing.
+    """
+    raw = (os.environ if environ is None else environ).get('PE_CROP_SIZE', '').strip()
+    if not raw:
+        return DEFAULT_CROP_IMAGE_SIZE
+    if raw not in {str(s) for s in CROP_IMAGE_SIZES}:
+        raise ValueError(
+            f'PE_CROP_SIZE must be one of {", ".join(map(str, CROP_IMAGE_SIZES))}, got {raw!r}'
+        )
+    return int(raw)
+
+
 EMBEDDING_DIM = 1024
 
 # opset 17 is the floor for clean LayerNorm + dynamic-batch handling in the
