@@ -14,6 +14,7 @@ Run the suite with::
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import subprocess  # nosec B404 - drives the harness's own compose project
@@ -308,6 +309,20 @@ def _is_internal_index(name: str) -> bool:
     return name.startswith(_INTERNAL_INDEX_PREFIXES)
 
 
+@pytest.hookimpl(tryfirst=True)
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Mark every live test whose module is not classified isolated ``live_serial``.
+
+    ``-m 'live and not live_serial'`` is the part that may run on several xdist workers; see
+    ``_classes.py``. Runs first so the ``-m`` expression sees the marker.
+    """
+    from tests.live._classes import ISOLATED
+
+    for item in items:
+        if Path(str(item.path)).parent == Path(__file__).parent and item.path.stem not in ISOLATED:
+            item.add_marker(pytest.mark.live_serial)
+
+
 @pytest.fixture(scope='session', autouse=True)
 def harness_safety_guard() -> None:
     """Refuse to touch anything that is not the disposable harness."""
@@ -400,9 +415,8 @@ def fake_vlm(harness_safety_guard: None) -> Any:
         client.post('/__reset')
 
 
-@pytest.fixture(scope='session', autouse=True)
-def seeded(api: Any, opensearch: Any) -> dict[str, Any]:
-    """Wipe + reseed the harness once per session, inside the API container.
+def _seed_harness(api: Any, opensearch: Any) -> dict[str, Any]:
+    """Wipe + reseed the harness, inside the API container.
 
     Running the seeder in-container (rather than from the host) keeps a
     single source of truth for every configured path: the item docs record
@@ -446,6 +460,29 @@ def seeded(api: Any, opensearch: Any) -> dict[str, Any]:
     assert activated.status_code == 200, activated.text
     probe_vlm_endpoint(api, 'env')
     return {'items': count, 'stdout': proc.stdout}
+
+
+@pytest.fixture(scope='session', autouse=True)
+def seeded(api: Any, opensearch: Any, tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
+    """Wipe + reseed the harness once per run, also when pytest-xdist runs several workers.
+
+    A session fixture runs once in every xdist worker, and a second wipe would delete what the
+    others already use. The first worker to take the lock seeds and records the answer; the others
+    wait for the lock and read it (the recipe of
+    https://pytest-xdist.readthedocs.io/en/stable/how-to.html, "Making session-scoped fixtures
+    execute only once", with the standard library's ``fcntl`` instead of a lock package).
+    """
+    if os.environ.get('PYTEST_XDIST_WORKER') is None:
+        return _seed_harness(api, opensearch)
+    shared = tmp_path_factory.getbasetemp().parent
+    with (shared / 'seeded.lock').open('w') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        done = shared / 'seeded.json'
+        if done.exists():
+            return json.loads(done.read_text())
+        result = _seed_harness(api, opensearch)
+        done.write_text(json.dumps(result))
+        return result
 
 
 @pytest.fixture(scope='session')
