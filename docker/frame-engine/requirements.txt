@@ -10,8 +10,12 @@ nvidia-cuda-runtime==13.2.86
 nvidia-nvjpeg==13.2.3.58
 opencv-python-headless==5.0.0.93
 # littleCMS (bundled in the wheel) builds the profile-to-sRGB tables (frame_engine/colour.py); the
-# API pin, so both decode routes convert with the same lcms2 build.
+# API pin, so both decode routes convert with the same lcms2 build. Pillow and simplejpeg are also
+# the host decode of the images nvJPEG does not take (frame_engine/host_decode.py ->
+# src/utils/image_decode.py); both at the API's pins (requirements.txt), so the engine decodes
+# exactly the pixels the API decodes.
 pillow==13.0.0
+simplejpeg==1.9.0
 pyclipper==1.4.0
 numpy==2.5.4
 tritonclient[grpc]==2.74.0

@@ -17,6 +17,7 @@
 #   CUDA runtime     13.2 (cupy runtimeGetVersion 13020)             nvidia-cuda-runtime 13.2.86
 #   CuPy / cuda-bindings / OpenCV (JPEG encode) / NumPy              14.2.0 / 13.4.4 / 5.0.0.93 / 2.5.4
 #   pyclipper (the ocr branch's box unclip, as PaddleOCR's DB post-process)   1.4.0 (as the Triton image)
+#   Pillow / simplejpeg (host decode of what nvJPEG does not take; the API's pins)   13.0.0 / 1.9.0
 #
 # The driver (libcuda) is mounted by the NVIDIA container toolkit. The Python minor version is the
 # API image's (python:3.13-slim-trixie, same digest), because the engine imports src/domain.
@@ -45,9 +46,10 @@ RUN apt-get update && apt-get upgrade -y \
 
 COPY --from=builder --chown=engine:engine /root/.local /home/engine/.local
 # The engine's code and the parts of src/ it imports (the wire module, the decode-route
-# vocabulary and the geometry the CPU paths share; the colour-profile rule of both decode routes).
+# vocabulary and the geometry the CPU paths share; the colour-profile rule of both decode routes;
+# the API's own image decode, which the host route runs).
 COPY src/domain /app/src/domain
-COPY src/utils/__init__.py src/utils/icc_srgb.py /app/src/utils/
+COPY src/utils/__init__.py src/utils/icc_srgb.py src/utils/image_decode.py /app/src/utils/
 COPY frame_engine /app/frame_engine
 # The recogniser's character dictionary, the one copy the Triton pipeline model also reads.
 COPY models/paddleocr_rec_trt/ppocrv6_dict.txt /app/ocr/ppocrv6_dict.txt
