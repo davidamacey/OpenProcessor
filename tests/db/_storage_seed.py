@@ -161,8 +161,10 @@ def seed_world(conn: Any, slug: str) -> dict[str, Any]:
         'VALUES (%s, %s, %s, %s, %s::real[], %s::real[], 0.9) RETURNING face_key',
         (project, ph, wire(project, 'f1'), det, BOX, '{' + ','.join(['0.5'] * 10) + '}'),
     ).fetchone()[0]
+    # A model version is deployment-wide and unique on (model_key, version): one per call, keyed by
+    # the project's id (a prefix of the slug repeats between slugs, 'storage-a' and 'storage-b').
     space = make_space(
-        conn, project, make_model_version(conn, f'm{slug[:8]}'.replace('-', '_')), 'pe_core_v1'
+        conn, project, make_model_version(conn, f'm{project.hex[:10]}'), 'pe_core_v1'
     )
     conn.execute(
         "INSERT INTO vector_gaps (space_id, project_id, subject_key, reason) VALUES (%s, %s, %s, 'failed')",
