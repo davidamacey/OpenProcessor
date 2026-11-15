@@ -8,8 +8,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from celery.signals import beat_init, worker_init, worker_process_shutdown
+from celery.signals import beat_init, worker_init, worker_process_init, worker_process_shutdown
 
+from src.config.queue import TaskQueues
 from src.config.retired_env import reject_retired_env
 from src.tasks import beat_lock, queue_hooks, queue_liveness, worker_metrics
 from src.tasks.beat_schedule import apply_schedule
@@ -69,6 +70,18 @@ def _on_beat_init(**_: Any) -> None:
 
 
 beat_init.connect(beat_lock.hold_single_beat, weak=False)
+
+
+@worker_process_init.connect(weak=False, dispatch_uid='op.exiftool_pool_start')
+def _on_worker_process_init(**_: Any) -> None:
+    """A pool child of a worker that runs ingest tasks starts its ExifTool processes before its
+    first task opens a gRPC channel (``worker_process_init`` runs once in each child, before any
+    task, https://docs.celeryq.dev/en/stable/userguide/signals.html#worker-process-init). Only
+    the ``jobs`` queue's tasks read capture metadata."""
+    if TaskQueues.JOBS in app.amqp.queues.consume_from:
+        from src.services.curation.capture_read import start_capture_pool
+
+        start_capture_pool()
 
 
 @worker_process_shutdown.connect(weak=False)

@@ -8,7 +8,7 @@ stayed full for its bounded wait, or too many requests in flight) with gRPC
 ``RESOURCE_EXHAUSTED``. A photo is a unit of work that waits its turn: the overload is retried
 with a jittered exponential backoff until the photo's deadline (``DEADLINE_SECONDS``; tenacity
 ``stop_after_delay`` and ``wait_exponential_jitter``,
-https://tenacity.readthedocs.io/en/stable/#stopping), an UNAVAILABLE engine ``RETRIES`` times.
+https://tenacity.readthedocs.io/en/stable/#stopping), an UNAVAILABLE engine or a call lost in transit ``RETRIES`` times.
 The pool's own retry is off (``retries=0``): its 10 ms steps do not outlast a busy card. What is
 left is an :class:`EngineCallError`, whose ``overloaded`` says whether the last answer was the
 overload status.
@@ -22,7 +22,16 @@ from typing import TYPE_CHECKING, Any
 
 import grpc
 import numpy as np
-from tenacity import AsyncRetrying, RetryCallState, stop_after_delay, wait_exponential_jitter
+from prometheus_client import Counter
+from tenacity import (
+    AsyncRetrying,
+    RetryCallState,
+    retry_if_exception_type,
+    stop_after_attempt,
+    stop_after_delay,
+    wait_exponential,
+    wait_exponential_jitter,
+)
 
 from src.config.env import env_str
 from src.domain import frame_engine_wire as wire
@@ -33,10 +42,19 @@ if TYPE_CHECKING:
     from src.clients.triton_pool_core import AsyncTritonPool
 
 
+OP_ENGINE_CALL_FAILURES_TOTAL = Counter(
+    'op_engine_call_failures_total',
+    "Failed attempts of the API's frame-engine calls, by gRPC code (UNAVAILABLE, INTERNAL, "
+    'RESOURCE_EXHAUSTED, ...; NOT_GRPC for a socket or timeout error) and outcome: retried (the '
+    'call was sent again) or exhausted (it was not, and the photo failed).',
+    labelnames=('code', 'outcome'),
+)
+
 FRAME_ENGINE_URL_ENV = 'OP_FRAME_ENGINE_URL'
 DEFAULT_URL = 'frame-engine:8001'
-#: Retries of an UNAVAILABLE engine after the first try (a restarting engine is the caller's to
-#: wait out: the bulk run's 503 backoff); an overload is not counted, the deadline ends it.
+#: Retries of an UNAVAILABLE engine or a call lost in transit after the first try (a restarting
+#: engine is the caller's to wait out: the bulk run's 503 backoff); an overload is not counted,
+#: the deadline ends it.
 RETRIES = 3
 #: One photo's whole pipeline (decode, detector, encoder, crop JPEGs) plus the engine's waits: the
 #: timeout of one try.
@@ -44,9 +62,41 @@ TIMEOUT_SECONDS = 120.0
 #: How long a photo waits for the engine across overload retries.
 DEADLINE_SECONDS = 120.0
 RETRY_SLEEP = asyncio.sleep
+MIB = 1024 * 1024
+#: The API's channels to the engine, defined here and nowhere else (the engine's own server side is
+#: ``frame_engine.front.SERVER_OPTIONS``; ``tests/frame_engine_tests/test_keepalive.py`` pins the
+#: two to agree). gRPC keepalive guide and the C-core keepalive document
+#: (https://github.com/grpc/grpc/blob/master/doc/keepalive.md): a client that pings while no call
+#: is in flight needs ``keepalive_permit_without_calls`` on the server too, and its
+#: ``keepalive_time_ms`` may not be below the server's
+#: ``http2.min_ping_interval_without_data_ms`` (the document's "Received a GOAWAY with
+#: ENHANCE_YOUR_CALM" answers); a client that gets that GOAWAY doubles its keepalive time
+#: (gRFC A8). ``http2.max_pings_without_data`` is 0 (no limit): at its default of 2 an idle
+#: channel stops pinging after two pings, so a dead engine is not noticed until the next call.
+ENGINE_KEEPALIVE_TIME_MS = 30000
+ENGINE_KEEPALIVE_TIMEOUT_MS = 10000
+ENGINE_CHANNEL_OPTIONS: tuple[tuple[str, int], ...] = (
+    ('grpc.keepalive_time_ms', ENGINE_KEEPALIVE_TIME_MS),
+    ('grpc.keepalive_timeout_ms', ENGINE_KEEPALIVE_TIMEOUT_MS),
+    ('grpc.keepalive_permit_without_calls', 1),
+    ('grpc.http2.max_pings_without_data', 0),
+    # a photo and its crop JPEGs, far under this
+    ('grpc.max_send_message_length', 512 * MIB),
+    ('grpc.max_receive_message_length', 512 * MIB),
+    # a restarted engine is reached within about the reconnect cap (gRPC connection backoff:
+    # the default delay grows towards 120 s) and its recreated address is found again at once
+    ('grpc.initial_reconnect_backoff_ms', 250),
+    ('grpc.min_reconnect_backoff_ms', 250),
+    ('grpc.max_reconnect_backoff_ms', 3000),
+    ('grpc.dns_min_time_between_resolutions_ms', 1000),
+    ('grpc.http2.initial_stream_window_size', 1 * MIB),
+    ('grpc.http2.initial_connection_window_size', 2 * MIB),
+    ('grpc.http2.bdp_probe', 0),
+)
 _BACKOFF = wait_exponential_jitter(multiplier=0.05, max=2.0, jitter=0.2)
 _OVERLOAD = str(grpc.StatusCode.RESOURCE_EXHAUSTED)
 _UNAVAILABLE = str(grpc.StatusCode.UNAVAILABLE)
+_INTERNAL = str(grpc.StatusCode.INTERNAL)
 #: The pool also raises RuntimeError: not initialized, or no server for the model.
 _CALL_ERRORS: tuple[type[Exception], ...] = (*TRITON_CALL_ERRORS, RuntimeError)
 
@@ -60,18 +110,90 @@ async def open_pool(*, pool_size: int, max_concurrent: int) -> AsyncTritonPool:
     from src.clients.triton_pool_core import AsyncTritonPool
 
     pool = AsyncTritonPool(
-        url=frame_engine_url(), pool_size=pool_size, max_concurrent=max_concurrent
+        url=frame_engine_url(),
+        pool_size=pool_size,
+        max_concurrent=max_concurrent,
+        channel_options=ENGINE_CHANNEL_OPTIONS,
     )
     await pool.initialize()
     return pool
+
+
+#: The readiness probe's budget. A probe the transport refuses (a GOAWAY on its channel, a reset
+#: connection) is not the engine saying "not ready": it is asked again, on the next channel, up to
+#: ``PROBE_ATTEMPTS`` times, ``wait_exponential`` apart (0.1 s, 0.2 s; tenacity,
+#: https://tenacity.readthedocs.io/en/stable/#waiting-before-retrying). An engine that refuses
+#: connections is judged in about 0.3 s; one that accepts and never answers in at most
+#: ``PROBE_ATTEMPTS * PROBE_TIMEOUT_S`` plus the waits, 6.3 s.
+PROBE_ATTEMPTS = 3
+PROBE_TIMEOUT_S = 2.0
+_PROBE_WAIT = wait_exponential(multiplier=0.1, max=0.5)
+_PROBE_UNDELIVERED: tuple[type[Exception], ...] = TRITON_CALL_ERRORS
+
+PROBE_READY = 'ready'
+#: Ready on a later attempt, after the transport refused an earlier one.
+PROBE_RECOVERED = 'recovered'
+#: The engine answered, and the answer was "not ready".
+PROBE_NOT_READY = 'not_ready'
+#: No attempt got an answer: the engine could not be asked.
+PROBE_UNDELIVERED = 'undelivered'
+
+
+@dataclass(frozen=True)
+class Readiness:
+    """What a readiness probe learned: ``outcome`` is one of the ``PROBE_*`` values, ``attempts``
+    how many calls it took, ``code`` and ``error`` the last transport failure (empty when every
+    attempt was answered)."""
+
+    outcome: str
+    attempts: int
+    code: str = ''
+    error: str = ''
+
+    @property
+    def ready(self) -> bool:
+        return self.outcome in (PROBE_READY, PROBE_RECOVERED)
+
+
+async def probe_ready(pool: AsyncTritonPool) -> Readiness:
+    """Whether the engine says it is ready, asked until it answers or the budget is spent."""
+    attempts = 0
+    answered = False
+    failure: BaseException | None = None
+    try:
+        async for attempt in AsyncRetrying(
+            retry=retry_if_exception_type(_PROBE_UNDELIVERED),
+            wait=_PROBE_WAIT,
+            stop=stop_after_attempt(PROBE_ATTEMPTS),
+            sleep=RETRY_SLEEP,
+            reraise=True,
+        ):
+            with attempt:
+                attempts = attempt.retry_state.attempt_number
+                answered = await pool.probe_model_ready(
+                    wire.MODEL_NAME, channel=attempts - 1, timeout=PROBE_TIMEOUT_S
+                )
+    except _CALL_ERRORS as exc:  # RuntimeError among them: the pool is not open
+        failure = exc
+    if failure is not None:
+        return Readiness(PROBE_UNDELIVERED, attempts, _status(failure) or '', str(failure))
+    if not answered:
+        return Readiness(PROBE_NOT_READY, attempts)
+    return Readiness(PROBE_READY if attempts == 1 else PROBE_RECOVERED, attempts)
 
 
 class EngineCallError(Exception):
     """The engine gave no answer for the image: down, failed, or still overloaded after the
     retries (``overloaded``)."""
 
-    def __init__(self, message: str, *, overloaded: bool) -> None:
+    def __init__(
+        self, message: str, *, overloaded: bool, code: str = 'NOT_GRPC', attempts: int = 1
+    ) -> None:
         self.overloaded = overloaded
+        #: The last attempt's gRPC code (``UNAVAILABLE``, ``INTERNAL``, ...), and how many attempts
+        #: were made.
+        self.code = code
+        self.attempts = attempts
         super().__init__(message)
 
 
@@ -138,13 +260,48 @@ def _status(exc: BaseException | None) -> str | None:
     return exc.status() if isinstance(exc, InferenceServerException) else None
 
 
-def _retry_again(state: RetryCallState) -> bool:
-    """Retry an overload (the deadline ends it) and an UNAVAILABLE engine ``RETRIES`` times."""
+def _code(exc: BaseException | None) -> str:
+    status = _status(exc)
+    return status.removeprefix('StatusCode.') if status else 'NOT_GRPC'
+
+
+def _count_retried(state: RetryCallState) -> None:
     outcome = state.outcome
-    status = _status(outcome.exception() if outcome is not None else None)
+    OP_ENGINE_CALL_FAILURES_TOTAL.labels(
+        code=_code(outcome.exception() if outcome is not None else None), outcome='retried'
+    ).inc()
+
+
+def _lost_in_transit(exc: BaseException | None) -> bool:
+    """An ``INTERNAL`` the transport or the gRPC library made (``Stream removed``, ``Received
+    RST_STREAM with error code 1``, a flow-control violation): the call or its answer was lost
+    with the stream, whatever the engine did with the photo. The engine's own ``INTERNAL``
+    (the photo's failure) starts with :data:`wire.ENGINE_ERROR_PREFIX` and is not one."""
+    from tritonclient.utils import InferenceServerException
+
+    return (
+        isinstance(exc, InferenceServerException)
+        and exc.status() == _INTERNAL
+        and not (exc.message() or '').startswith(wire.ENGINE_ERROR_PREFIX)
+    )
+
+
+def _retry_again(state: RetryCallState) -> bool:
+    """Retry an overload (the deadline ends it), and ``RETRIES`` times an UNAVAILABLE engine or a
+    call lost in transit.
+
+    gRPC status-code guide (https://grpc.io/docs/guides/status-codes/): UNAVAILABLE "is most
+    likely a transient condition, which can be corrected by retrying with a backoff" and "it is
+    not always safe to retry non-idempotent operations"; this call is a pure function of the
+    photo and the plan (nothing is stored by the engine), so any repeat is safe. INTERNAL is "for
+    serious errors" and the engine's own is deterministic for the photo, so only the transport's
+    is repeated (:func:`_lost_in_transit`)."""
+    outcome = state.outcome
+    exc = outcome.exception() if outcome is not None else None
+    status = _status(exc)
     if status == _OVERLOAD:
         return True
-    return status == _UNAVAILABLE and state.attempt_number <= RETRIES
+    return (status == _UNAVAILABLE or _lost_in_transit(exc)) and state.attempt_number <= RETRIES
 
 
 async def process(
@@ -159,32 +316,49 @@ async def process(
     inputs = [_bytes_input(wire.IMAGE, data), _bytes_input(wire.PLAN, plan.to_json().encode())]
     if boxes is not None:
         inputs.append(_boxes_input(boxes))
+    attempts = 0
     try:
         async for attempt in AsyncRetrying(
             retry=_retry_again,
             wait=_BACKOFF,
             stop=stop_after_delay(DEADLINE_SECONDS),
             sleep=RETRY_SLEEP,
+            before_sleep=_count_retried,
             reraise=True,
         ):
             with attempt:
+                attempts = attempt.retry_state.attempt_number
                 result = await pool.infer(
                     wire.MODEL_NAME, inputs, [], timeout=TIMEOUT_SECONDS, retries=0
                 )
                 return _answer(result, plan)
     except _CALL_ERRORS as exc:
-        raise EngineCallError(str(exc), overloaded=_status(exc) == _OVERLOAD) from exc
+        code = _code(exc)
+        OP_ENGINE_CALL_FAILURES_TOTAL.labels(code=code, outcome='exhausted').inc()
+        raise EngineCallError(
+            str(exc), overloaded=_status(exc) == _OVERLOAD, code=code, attempts=attempts
+        ) from exc
     raise AssertionError('unreachable')  # pragma: no cover - AsyncRetrying always yields
 
 
 __all__ = [
     'DEADLINE_SECONDS',
     'DEFAULT_URL',
+    'ENGINE_CHANNEL_OPTIONS',
+    'ENGINE_KEEPALIVE_TIME_MS',
     'FRAME_ENGINE_URL_ENV',
+    'PROBE_ATTEMPTS',
+    'PROBE_NOT_READY',
+    'PROBE_READY',
+    'PROBE_RECOVERED',
+    'PROBE_TIMEOUT_S',
+    'PROBE_UNDELIVERED',
     'RETRIES',
     'EngineAnswer',
     'EngineCallError',
+    'Readiness',
     'frame_engine_url',
     'open_pool',
+    'probe_ready',
     'process',
 ]

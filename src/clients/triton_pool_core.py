@@ -17,6 +17,7 @@ Usage:
 import asyncio
 import logging
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -194,6 +195,7 @@ class AsyncTritonPool:
         max_concurrent: int = 64,
         verbose: bool = False,
         router: TritonRouter | None = None,
+        channel_options: Sequence[tuple[str, Any]] | None = None,
     ):
         """
         Initialize the async Triton connection pool.
@@ -205,12 +207,18 @@ class AsyncTritonPool:
             verbose: Enable verbose Triton client logging
             router: Picks the server of each call; ``pool_size`` channels are opened to every
                 server it knows. None is the single server at ``url``, as before routing.
+            channel_options: The gRPC channel arguments of every channel; None is
+                :data:`GRPC_CHANNEL_OPTIONS`, the model server's. A pool to another kind of server
+                passes the options that server's ping policy agrees with.
         """
         self.url = url
         self.router = router or TritonRouter.single(url)
         self.pool_size = pool_size
         self.max_concurrent = max_concurrent
         self.verbose = verbose
+        self._channel_options = tuple(
+            GRPC_CHANNEL_OPTIONS if channel_options is None else channel_options
+        )
 
         self._servers: dict[str, list[grpcclient_aio.InferenceServerClient]] = {}
         self._indexes: dict[str, int] = {}
@@ -263,7 +271,7 @@ class AsyncTritonPool:
         for i in range(self.pool_size):
             # CRITICAL: Different user-agent forces separate TCP connections
             channel_args = [
-                *GRPC_CHANNEL_OPTIONS,
+                *self._channel_options,
                 ('grpc.primary_user_agent', f'triton-pool-{i}'),
             ]
             client = grpcclient_aio.InferenceServerClient(
@@ -535,6 +543,28 @@ class AsyncTritonPool:
         except (InferenceServerException, OSError) as e:
             logger.warning(f'is_model_ready({model_name!r}) failed: {e}')
             return False
+
+    async def probe_model_ready(
+        self, model_name: str, *, channel: int = 0, timeout: float | None = None
+    ) -> bool:
+        """Ask one channel of the first server whether ``model_name`` is READY.
+
+        Unlike :meth:`is_model_ready`, a call that could not be delivered (a refused or reset
+        connection, a GOAWAY, a timeout) raises: "the server answered not ready" and "the server
+        could not be asked" are different facts, and the caller decides what each one costs.
+        ``channel`` picks the channel (modulo the pool size), so a retry can use another one.
+
+        Raises:
+            RuntimeError: the pool is not initialized.
+            InferenceServerException: the call failed (``status()`` is the gRPC code).
+            OSError: the socket failed.
+        """
+        if not self._initialized:
+            raise RuntimeError('AsyncTritonPool not initialized. Call initialize() first.')
+        clients = self._servers[self.router.urls()[0]]
+        return bool(
+            await clients[channel % len(clients)].is_model_ready(model_name, client_timeout=timeout)
+        )
 
     async def load_model(self, model_name: str) -> None:
         """Ask the server (explicit model control) to load ``model_name``; raises on failure."""

@@ -105,6 +105,10 @@ OUTPUT_DATATYPES: Mapping[str, str] = {
 
 #: ``status``: ``ok`` or one of :data:`src.domain.decode_route.PREP_STATUSES`.
 STATUS_OK = 'ok'
+#: What the engine's gRPC front puts in front of the details of an ``INTERNAL`` it raised itself
+#: (the photo's own failure). An ``INTERNAL`` without it was made by the transport or the gRPC
+#: library (a reset or removed stream, a flow-control violation): the call may be sent again.
+ENGINE_ERROR_PREFIX = 'frame engine: '
 
 #: ``decode_route``: ``gpu`` (nvJPEG produced the pixels), ``cpu_<reason>`` (the engine decoded on
 #: the host an image nvJPEG does not take; ``reason`` is one of
@@ -647,6 +651,7 @@ def expected_outputs(plan: EnginePlan) -> tuple[str, ...]:
 __all__ = [
     'BUILT_BRANCHES',
     'ENGINE_BRANCHES',
+    'ENGINE_ERROR_PREFIX',
     'MODEL_NAME',
     'PROTOCOL_VERSION',
     'Branch',

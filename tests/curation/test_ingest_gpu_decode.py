@@ -443,3 +443,68 @@ async def test_a_duplicate_has_no_route_and_the_doc_keeps_its_first_route(tmp_pa
     assert again.summary.decode_routes == {}
     [doc] = list(os_fake.images.values())
     assert doc['decode_route'] == 'gpu'
+
+
+def _probe_count(outcome: str) -> float:
+    from prometheus_client import REGISTRY
+
+    return REGISTRY.get_sample_value('op_engine_probe_total', {'outcome': outcome}) or 0.0
+
+
+@pytest.fixture
+def _no_probe_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def no_wait(_s: float) -> None:
+        return None
+
+    monkeypatch.setattr(frame_engine, 'RETRY_SLEEP', no_wait)
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures('_no_probe_wait')
+async def test_a_probe_the_transport_refuses_is_asked_again_before_the_503(tmp_path) -> None:
+    """A GOAWAY or a reset on the probe's channel is not the engine saying "not ready"."""
+    svc, _os, _triton, engine, _sizes = engine_service(tmp_path)
+    engine.probe_errors = [
+        InferenceServerException('Too many pings', status=str(grpc.StatusCode.UNAVAILABLE))
+    ]
+    before = _probe_count('recovered')
+    assert await ingest_gpu_decode.engine_ready(svc) is True
+    assert engine.readiness_probes == 2
+    assert _probe_count('recovered') == before + 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures('_no_probe_wait')
+async def test_a_probe_that_is_never_delivered_is_counted_and_logged_apart(tmp_path) -> None:
+    from structlog.testing import capture_logs
+
+    svc, _os, _triton, engine, _sizes = engine_service(tmp_path)
+    refusal = InferenceServerException(
+        'connection refused', status=str(grpc.StatusCode.UNAVAILABLE)
+    )
+    engine.probe_errors = [refusal] * frame_engine.PROBE_ATTEMPTS
+    before = _probe_count('undelivered')
+    with capture_logs() as logs:
+        assert await ingest_gpu_decode.engine_ready(svc) is False
+    assert engine.readiness_probes == frame_engine.PROBE_ATTEMPTS
+    assert _probe_count('undelivered') == before + 1
+    [line] = [x for x in logs if x['event'] == 'ingest_engine_probe_undelivered']
+    assert line['attempts'] == frame_engine.PROBE_ATTEMPTS
+    assert line['code'] == 'StatusCode.UNAVAILABLE'
+    assert not [x for x in logs if x['event'] == 'ingest_engine_not_ready']
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures('_no_probe_wait')
+async def test_an_engine_that_answers_not_ready_is_believed_at_once(tmp_path) -> None:
+    from structlog.testing import capture_logs
+
+    svc, _os, _triton, engine, _sizes = engine_service(tmp_path)
+    engine.ready = False
+    before = _probe_count('not_ready')
+    with capture_logs() as logs:
+        assert await ingest_gpu_decode.engine_ready(svc) is False
+    assert engine.readiness_probes == 1  # an answer is not retried
+    assert _probe_count('not_ready') == before + 1
+    assert [x for x in logs if x['event'] == 'ingest_engine_not_ready']
+    assert not [x for x in logs if x['event'] == 'ingest_engine_probe_undelivered']

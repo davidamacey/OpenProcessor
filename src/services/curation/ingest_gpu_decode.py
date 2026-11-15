@@ -43,7 +43,7 @@ from src.services.curation.ingest_models import (
     ERROR_KIND_DETECTOR_INFER,
     ERROR_KIND_ENGINE_UNAVAILABLE,
 )
-from src.services.curation.ops_metrics import count_decode_route
+from src.services.curation.ops_metrics import count_decode_route, count_engine_probe
 from src.services.detection.crop_quality import variance_from_sums
 from src.utils.class_names import normalize_class_name
 from src.utils.pe_preprocess import PE_SIZE
@@ -187,11 +187,23 @@ async def engine_ready(service: CurationIngestService) -> bool:
     verdict = _READY.get(key)
     if verdict is not None and time.monotonic() - verdict < READY_TTL_S:
         return True
+    readiness = await frame_engine.probe_ready(service.frame_engine)
+    count_engine_probe(readiness.outcome)
+    if readiness.outcome == frame_engine.PROBE_NOT_READY:
+        logger.warning('ingest_engine_not_ready')
+    elif readiness.outcome == frame_engine.PROBE_UNDELIVERED:
+        logger.warning(
+            'ingest_engine_probe_undelivered',
+            attempts=readiness.attempts,
+            code=readiness.code,
+            error=readiness.error,
+        )
+    elif readiness.outcome == frame_engine.PROBE_RECOVERED:
+        logger.info('ingest_engine_probe_recovered', attempts=readiness.attempts)
+    if not readiness.ready:
+        _READY.pop(key, None)
+        return False
     try:
-        if not await service.frame_engine.is_model_ready(wire.MODEL_NAME):
-            logger.warning('ingest_engine_not_ready')
-            _READY.pop(key, None)
-            return False
         for model in (det.model, PE_IMAGE_MODEL):
             if not await service.triton_pool.is_model_ready(model):
                 await service.triton_pool.load_model(model)
@@ -213,7 +225,12 @@ async def call_engine(
     except frame_engine.EngineCallError as exc:
         _READY.clear()  # the next batch asks the engine again
         logger.warning(
-            'frame_engine_call_failed', caller=caller, overloaded=exc.overloaded, error=str(exc)
+            'frame_engine_call_failed',
+            caller=caller,
+            overloaded=exc.overloaded,
+            code=exc.code,
+            attempts=exc.attempts,
+            error=str(exc),
         )
         return EngineFailure(OVERLOADED if exc.overloaded else CALL_FAILED, str(exc))
     if answer.status != wire.STATUS_OK:

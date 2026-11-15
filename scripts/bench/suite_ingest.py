@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
-from scripts.bench.baseline_report import metrics_delta, percentile
+from scripts.bench.baseline_report import failed_photos, metrics_delta, percentile
 from scripts.bench.run_baseline import API_METRIC_PREFIXES, JOB_TERMINAL, map_path
 from scripts.bench.suite_lib import (
     storage_summary,
@@ -70,8 +70,16 @@ def post_batch(
     else:
         items = [{'path': map_path(str(p), source_map), 'source': 'baseline'} for p in files]
         resp = client.post(f'{base}/ingest/batch', json={'items': items})
-    resp.raise_for_status()
-    return resp.json()['summary'], time.monotonic() - started
+    if resp.is_error:
+        raise RuntimeError(
+            f'{mode} request answered {resp.status_code} for {len(files)} photos (first '
+            f'{files[0].name}, request id {resp.headers.get("x-request-id", "-")}): '
+            f'{resp.text[:300]}'
+        )
+    body = resp.json()
+    summary = body['summary']
+    summary['failed_photos'] = list(failed_photos(body.get('results', [])))
+    return summary, time.monotonic() - started
 
 
 def settle_and_count(client: httpx.Client, os_url: str, indexes: list[str]) -> dict[str, Any]:
@@ -296,6 +304,7 @@ def ingest_rep(
         'stages': stages,
         'triton': delta,
         'triton_wire_bytes': triton_wire_bytes(delta, configs),
+        'failed_photos': [f for s, _ in results for f in s['failed_photos']],
         'cluster': cluster,
         'storage': {**summary, 'merge_rounds': store['merge_rounds']},
         **gauges.result(),

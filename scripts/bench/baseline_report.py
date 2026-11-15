@@ -9,9 +9,13 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from prometheus_client.parser import text_string_to_metric_families
+
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 SCHEMA = 1
@@ -148,6 +152,24 @@ class BatchOutcome:
     items: int
     embedded: int
     seconds: float
+    #: Each photo the batch answered ``failed`` (:func:`failed_photos`): a count alone cannot say
+    #: which photo or why.
+    failures: tuple[dict[str, str], ...] = ()
+
+
+def failed_photos(results: Sequence[dict[str, Any]]) -> tuple[dict[str, str], ...]:
+    """The photos of one ``/ingest/batch`` or ``/ingest/upload`` response that failed: the name
+    (``image_path``, or the client's ``source_identifier`` for an upload), the machine
+    ``error_kind`` and the message ``error``."""
+    return tuple(
+        {
+            'name': str(r.get('source_identifier') or r.get('image_path') or ''),
+            'error_kind': str(r.get('error_kind') or ''),
+            'error': str(r.get('error') or ''),
+        }
+        for r in results
+        if r.get('status') == 'failed'
+    )
 
 
 def ingest_summary(

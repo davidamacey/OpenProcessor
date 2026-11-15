@@ -101,6 +101,7 @@ class Engine:
         self.calls: list[dict[str, Any]] = []
         self.ready = True
         self.readiness_probes = 0
+        self.probe_errors: list[Exception] = []  # raised by the next probes, in order
         self.failed_branch: str | None = None
         self.raises: Exception | None = None
         self.route = 'gpu'
@@ -112,9 +113,13 @@ class Engine:
         self.embed_dim = 3
         self.det_class = 1
 
-    async def is_model_ready(self, model: str) -> bool:
+    async def probe_model_ready(
+        self, model: str, *, channel: int = 0, timeout: float | None = None
+    ) -> bool:
         assert model == wire.MODEL_NAME
         self.readiness_probes += 1
+        if self.probe_errors:
+            raise self.probe_errors.pop(0)
         return self.ready
 
     async def infer(self, model: str, inputs: list, outputs: list, **_k: Any) -> _Result:

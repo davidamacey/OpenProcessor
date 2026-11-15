@@ -13,7 +13,9 @@ answer, an engine that is not ready or is draining, and one whose CUDA context w
 INVALID_ARGUMENT; an unknown model is NOT_FOUND; a request still running at
 ``OP_FRAME_ENGINE_REQUEST_DEADLINE_SECONDS`` is DEADLINE_EXCEEDED (logged and counted with the
 stage it was in; the photo goes on to release what it holds, every wait in it being bounded);
-anything else is INTERNAL. The API's retry helper (``src/utils/retry.py``) retries the first two.
+anything else is INTERNAL, its details starting with ``wire.ENGINE_ERROR_PREFIX`` (an INTERNAL
+without it came from the transport; the API retries only that one, ``src/clients/frame_engine.py``).
+The API's retry helper (``src/utils/retry.py``) retries the first two.
 
 The handler stays on the event loop only to unpack and pack tensors; the photo runs on the
 engine's worker threads (``engine.submit``), awaited through ``asyncio.wrap_future``. The in-flight
@@ -279,7 +281,7 @@ class FrontService(service_pb2_grpc.GRPCInferenceServiceServicer):
             failure = grpc.StatusCode.UNAVAILABLE, f'frame engine restarting: {exc}'
         except Exception as exc:
             logger.exception('frame engine request failed')
-            failure = grpc.StatusCode.INTERNAL, f'frame engine: {exc}'
+            failure = grpc.StatusCode.INTERNAL, f'{wire.ENGINE_ERROR_PREFIX}{exc}'
         finally:
             self.in_flight -= 1
             self.metrics.in_flight.set(self.in_flight)
@@ -303,14 +305,33 @@ class FrontService(service_pb2_grpc.GRPCInferenceServiceServicer):
         raise RuntimeError('context.abort returned')  # grpc.aio documents that it raises
 
 
+#: The engine's ping policy, defined here and nowhere else (the API's channels are
+#: ``src.clients.frame_engine.ENGINE_CHANNEL_OPTIONS``; ``tests/frame_engine_tests/test_keepalive.py``
+#: pins the two to agree). gRPC keepalive guide (https://grpc.io/docs/guides/keepalive/) and the C-core
+#: keepalive document (https://github.com/grpc/grpc/blob/master/doc/keepalive.md): the defaults
+#: refuse a ping with no call in flight and any ping sooner than 5 minutes after the last, and a
+#: server that gets more of them than ``http2.max_ping_strikes`` (2) ends the connection with GOAWAY
+#: ``too_many_pings``. The API's channels ping every 30 s, idle or not, so the server permits pings
+#: without calls and accepts them 10 s apart (a third of the client's period).
+SERVER_OPTIONS: tuple[tuple[str, int], ...] = (
+    ('grpc.keepalive_permit_without_calls', 1),
+    ('grpc.http2.min_ping_interval_without_data_ms', 10000),
+)
+
+
 def make_server(
-    service: FrontService, *, address: str, max_message_bytes: int
+    service: FrontService,
+    *,
+    address: str,
+    max_message_bytes: int,
+    options: tuple[tuple[str, int], ...] = SERVER_OPTIONS,
 ) -> tuple[grpc.aio.Server, int]:
     """The unstarted server and the port it bound (``address`` may ask for port 0)."""
     server = grpc.aio.server(
         options=[
             ('grpc.max_send_message_length', max_message_bytes),
             ('grpc.max_receive_message_length', max_message_bytes),
+            *options,
         ]
     )
     service_pb2_grpc.add_GRPCInferenceServiceServicer_to_server(service, server)

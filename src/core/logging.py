@@ -9,6 +9,7 @@ Provides:
 """
 
 import logging
+import os
 import re
 import sys
 import time
@@ -44,6 +45,16 @@ def add_request_id(
     request_id = request_id_ctx.get()
     if request_id and 'request_id' not in event_dict:
         event_dict['request_id'] = request_id
+    return event_dict
+
+
+def add_process_id(
+    _logger: Any, _method: str, event_dict: structlog.typing.EventDict
+) -> structlog.typing.EventDict:
+    """Write the OS process id into every event: eight API workers and every pool child of a job
+    worker log to the same stream, and a failure must be traceable to the process that had it
+    (its channels, its ExifTool processes, its in-flight calls)."""
+    event_dict.setdefault('pid', os.getpid())
     return event_dict
 
 
@@ -137,6 +148,7 @@ def configure_logging(json_logs: bool = True, log_level: str = 'INFO') -> None:
         # other processor inspects it.
         structlog.contextvars.merge_contextvars,
         add_request_id,
+        add_process_id,
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
         structlog.processors.TimeStamper(fmt='iso'),

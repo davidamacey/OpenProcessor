@@ -14,6 +14,21 @@ short-lived thread writes the bytes into the pipe and ends quietly when ExifTool
 (``-fast`` stops after the metadata segments, which closes the pipe early); every wait of that
 thread is bounded by the same ``timeout_s`` and the same watchdog.
 
+The process is started without ``preexec_fn`` (:class:`_ExifToolHelper`). PyExifTool passes
+``preexec_fn`` to ``subprocess.Popen`` to arm the parent-death signal, and the Python
+documentation (https://docs.python.org/3/library/subprocess.html, ``preexec_fn``) warns it "is NOT
+SAFE to use in the presence of threads" and forces a real ``fork()``; gRPC does not support
+``fork()`` while its threads have calls in flight (gRPC Python fork support,
+https://github.com/grpc/grpc/blob/master/doc/fork_support.md), and a start-up between two engine
+calls corrupted the connection of a call in flight in the 2026-11-13 speed chain. Without it,
+``Popen`` uses ``vfork()`` on Linux "when it is safe to do so" (same page, "Disable use of
+posix_spawn()"), which runs no fork handlers. The parent-death signal comes from ``setpriv
+--pdeathsig TERM`` (util-linux, setpriv(1)), which sets it and executes ExifTool in place; it is
+needed because ExifTool does not exit when its standard input closes. The pool starts its
+processes before the process opens any gRPC channel
+(:func:`src.services.curation.capture_read.start_capture_pool`); a process that is replaced later
+is started the same way.
+
 Every read is bounded by ``timeout_s``. PyExifTool has no timeout of its own and keeps reading a
 dead pipe forever, so a watchdog kills the process on expiry and replaces the pipe it reads with a
 descriptor that cannot be read, which ends the read with an ``OSError``.
@@ -32,21 +47,22 @@ import functools
 import os
 import select
 import shutil
+import subprocess
 import tempfile
 import threading
 import time
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
 from exiftool import ExifToolHelper
-from exiftool.exceptions import ExifToolException
+from exiftool.exceptions import ExifToolException, ExifToolVersionError
 
 from src.core.logging import get_logger
 from src.domain.capture_metadata import EXIFTOOL_TAGS, FILE_ERROR_KEY
 
 
 if TYPE_CHECKING:
-    import subprocess
     from collections.abc import Callable
 
 logger = get_logger(__name__)
@@ -59,6 +75,48 @@ _PIPE_CHUNK: Final = 1 << 20
 #: end of the read it serves.
 _PIPE_POLL_S: Final = 0.002
 _FEED_JOIN_S: Final = 5.0
+
+
+#: The process ExifTool runs under: it sets the parent-death signal, then executes ExifTool in
+#: place (``setpriv --pdeathsig <signal> <program>``, setpriv(1): "set or clear parent death
+#: signal"), so the signal arrives when the thread that started the process ends.
+_PDEATHSIG: Final = ('setpriv', '--pdeathsig', 'TERM', '--')
+
+
+class _ExifToolHelper(ExifToolHelper):
+    """PyExifTool's helper with its own process start: no ``preexec_fn`` (see the module doc).
+
+    PyExifTool 0.5.6 (the newest release) has no switch for the ``preexec_fn`` its ``run`` passes;
+    this ``run`` is that method's body with the same arguments, the same start-up check and the
+    same exceptions, minus the hook. ``tests/curation/test_exiftool_spawn.py`` runs it against
+    the real ExifTool, so a PyExifTool change that breaks the pieces it reads fails there."""
+
+    def run(self) -> None:
+        if self.running:
+            warnings.warn('ExifTool already running; doing nothing.', UserWarning, stacklevel=2)
+            return
+        launcher = shutil.which(_PDEATHSIG[0])
+        if launcher is None:
+            msg = f'{_PDEATHSIG[0]} (util-linux) is not installed'
+            raise FileNotFoundError(msg)
+        argv = [launcher, *_PDEATHSIG[1:], str(self._executable), '-stay_open', 'True', '-@', '-']
+        if self._common_args:
+            argv += ['-common_args', *self._common_args]
+        process = subprocess.Popen(  # nosec B603  fixed argv, no shell
+            argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        self._process = process
+        if process.poll() is not None:
+            self._process = None  # type: ignore[assignment]  # PyExifTool types it as always set
+            msg = 'exiftool did not execute successfully'
+            raise RuntimeError(msg)
+        self._running = True
+        try:
+            self._parse_ver()  # answers or raises: proves the process is ExifTool 12.15+
+        except ValueError as exc:
+            self.terminate()
+            msg = 'exiftool did not answer its version: is it ExifTool 12.15 or newer?'
+            raise ExifToolVersionError(msg) from exc
 
 
 class ExifToolError(RuntimeError):
@@ -153,12 +211,26 @@ class ExifToolClient:
         # -n: numeric values, GPS as signed decimals; -G: group-prefixed keys. The same two
         # arguments PyExifTool's default common_args carry, spelled out because the parser reads
         # those key names (https://exiftool.org/exiftool_pod.html).
-        helper = ExifToolHelper(
+        helper = _ExifToolHelper(
             executable=self._executable, common_args=['-G', '-n'], check_execute=False
         )
         self._helper = helper
         helper.run()
         return helper
+
+    def start(self) -> None:
+        """Start the process now (a no-op when it runs). Call it from a thread that lives as long
+        as the process, before any gRPC channel is opened (module doc). Raises
+        :class:`ExifToolError` when it cannot start."""
+        with self._lock:
+            if self._helper is not None and self._helper.running:
+                return
+            try:
+                self._start()
+            except (ExifToolException, OSError, ValueError, RuntimeError) as exc:
+                self._reset()
+                msg = f'exiftool failed to start ({type(exc).__name__})'
+                raise ExifToolError(msg) from exc
 
     def _run_once(self, path: str) -> dict[str, Any]:
         self._aborted.clear()
