@@ -481,11 +481,12 @@ def test_core_only_install_does_not_require_the_pe_encoder(shimmed: Shimmed) -> 
     assert env_value(inst / '.env', 'OP_REQUIRED_MODELS') == CORE_REQUIRED_MODELS
 
 
-def test_curation_install_requires_the_pe_image_encoder_too(shimmed: Shimmed) -> None:
+def test_curation_install_requires_the_pe_frame_and_crop_encoders_too(shimmed: Shimmed) -> None:
     assert install(shimmed, '--no-start', '--tiers', 'core,curation').returncode == 0
     inst = shimmed.root / 'inst'
     assert (
-        env_value(inst / '.env', 'OP_REQUIRED_MODELS') == f'{CORE_REQUIRED_MODELS},pe_image_encoder'
+        env_value(inst / '.env', 'OP_REQUIRED_MODELS')
+        == f'{CORE_REQUIRED_MODELS},pe_image_encoder,pe_crop_encoder'
     )
 
 
