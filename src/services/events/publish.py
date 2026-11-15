@@ -18,7 +18,7 @@ from sqlalchemy import event
 from sqlalchemy.orm import Session
 
 from src.config.project_context import current_project
-from src.db.repos.events import insert_event, insert_event_async
+from src.db.repos.events import insert_event, insert_event_async, insert_events_async
 from src.db.session import (
     async_session_factory,
     deployment_tx,
@@ -96,9 +96,9 @@ async def _write_async(
     target: uuid.UUID | str | None, events: Sequence[tuple[str, dict[str, Any]]]
 ) -> None:
     async with async_session_factory()() as session, deployment_tx(session, 'event publish'):
-        for event_type, body in events:
-            inserted = await insert_event_async(session, target, event_type, body)
-            _pend_wake(session.sync_session, inserted.project_id)
+        inserted = await insert_events_async(session, target, events)
+        for project_id in {row.project_id for row in inserted}:
+            _pend_wake(session.sync_session, project_id)
 
 
 class PublishInEventLoopError(RuntimeError):
