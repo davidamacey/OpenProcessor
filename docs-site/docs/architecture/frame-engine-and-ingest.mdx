@@ -58,7 +58,8 @@ has a deadline (`OP_FRAME_ENGINE_TRITON_TIMEOUT_SECONDS`) and every request one
 `src/clients/frame_engine.py` is the client (one request per photo through the shared Triton pool
 code, no pool retry; an overload answer is retried three times). `src/services/curation/ingest_gpu_decode.py`
 builds the plan and maps the answer to items; `engine_ready` keeps a readiness verdict for 5 s
-per detector shape per process and drops it on the first failed call.
+per detector shape per process and drops it on the first failed call; a probe the transport refuses is
+asked again on another channel before it counts as a verdict (`probe_ready`).
 
 `engine_stage_applies` decides engine or host stage: the host stage (`ingest_stage.py`, the API
 decodes) runs only for `OP_INGEST_GPU_DECODE=0`, a project with a secondary detector, a

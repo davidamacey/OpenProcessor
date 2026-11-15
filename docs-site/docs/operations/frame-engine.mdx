@@ -46,6 +46,15 @@ attempt. When only some photos of a request meet the engine's trouble, those pho
 `failed` with the same code and the rest are stored; resend the failed ones. A photo is stored
 whole or not at all.
 
+Before a batch the API asks the engine whether it is ready. If the call itself is refused by the
+transport (a connection reset, a `GOAWAY`), the probe is asked again on another channel, up to
+3 times, 0.1 s and 0.2 s apart and 2 s each; only an answer counts as a verdict. An engine that
+refuses connections is judged in about 0.3 s, one that accepts and never answers in at most 6.3 s.
+The log tells the two causes of a 503 apart: `ingest_engine_not_ready` (the engine answered "not
+ready") and `ingest_engine_probe_undelivered` (it could not be asked; it names the gRPC code), and
+`op_engine_probe_total{outcome}` counts `ready`, `recovered`, `not_ready` and `undelivered`
+([Monitoring](./monitoring.mdx)).
+
 A file the engine cannot read answers `decode_failed` (not transient, it uses an attempt), and one
 larger than `OP_FRAME_ENGINE_MAX_MEGAPIXELS` is refused from its header before any decode.
 

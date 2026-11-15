@@ -88,6 +88,20 @@ def count_decode_route(route: str, path: str) -> None:
     OP_DECODE_ROUTE_TOTAL.labels(route=check_route(route), path=path).inc()
 
 
+OP_ENGINE_PROBE_TOTAL = Counter(
+    'op_engine_probe_total',
+    'Readiness probes of the frame engine before an ingest request, by outcome: ready, recovered '
+    '(ready on a later attempt after the transport refused an earlier one), not_ready (the '
+    'engine answered "not ready": the request is refused with 503), undelivered (no attempt got '
+    'an answer: the engine could not be asked, the request is refused with 503).',
+    labelnames=('outcome',),
+)
+
+
+def count_engine_probe(outcome: str) -> None:
+    OP_ENGINE_PROBE_TOTAL.labels(outcome=outcome).inc()
+
+
 OP_INGEST_ITEMS_TOTAL = Counter(
     'op_ingest_items_total',
     'Items (crops) indexed by ingest, by project.',

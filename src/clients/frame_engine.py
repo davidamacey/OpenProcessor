@@ -22,7 +22,15 @@ from typing import TYPE_CHECKING, Any
 
 import grpc
 import numpy as np
-from tenacity import AsyncRetrying, RetryCallState, stop_after_delay, wait_exponential_jitter
+from tenacity import (
+    AsyncRetrying,
+    RetryCallState,
+    retry_if_exception_type,
+    stop_after_attempt,
+    stop_after_delay,
+    wait_exponential,
+    wait_exponential_jitter,
+)
 
 from src.config.env import env_str
 from src.domain import frame_engine_wire as wire
@@ -98,6 +106,69 @@ async def open_pool(*, pool_size: int, max_concurrent: int) -> AsyncTritonPool:
     )
     await pool.initialize()
     return pool
+
+
+#: The readiness probe's budget. A probe the transport refuses (a GOAWAY on its channel, a reset
+#: connection) is not the engine saying "not ready": it is asked again, on the next channel, up to
+#: ``PROBE_ATTEMPTS`` times, ``wait_exponential`` apart (0.1 s, 0.2 s; tenacity,
+#: https://tenacity.readthedocs.io/en/stable/#waiting-before-retrying). An engine that refuses
+#: connections is judged in about 0.3 s; one that accepts and never answers in at most
+#: ``PROBE_ATTEMPTS * PROBE_TIMEOUT_S`` plus the waits, 6.3 s.
+PROBE_ATTEMPTS = 3
+PROBE_TIMEOUT_S = 2.0
+_PROBE_WAIT = wait_exponential(multiplier=0.1, max=0.5)
+_PROBE_UNDELIVERED: tuple[type[Exception], ...] = TRITON_CALL_ERRORS
+
+PROBE_READY = 'ready'
+#: Ready on a later attempt, after the transport refused an earlier one.
+PROBE_RECOVERED = 'recovered'
+#: The engine answered, and the answer was "not ready".
+PROBE_NOT_READY = 'not_ready'
+#: No attempt got an answer: the engine could not be asked.
+PROBE_UNDELIVERED = 'undelivered'
+
+
+@dataclass(frozen=True)
+class Readiness:
+    """What a readiness probe learned: ``outcome`` is one of the ``PROBE_*`` values, ``attempts``
+    how many calls it took, ``code`` and ``error`` the last transport failure (empty when every
+    attempt was answered)."""
+
+    outcome: str
+    attempts: int
+    code: str = ''
+    error: str = ''
+
+    @property
+    def ready(self) -> bool:
+        return self.outcome in (PROBE_READY, PROBE_RECOVERED)
+
+
+async def probe_ready(pool: AsyncTritonPool) -> Readiness:
+    """Whether the engine says it is ready, asked until it answers or the budget is spent."""
+    attempts = 0
+    answered = False
+    failure: BaseException | None = None
+    try:
+        async for attempt in AsyncRetrying(
+            retry=retry_if_exception_type(_PROBE_UNDELIVERED),
+            wait=_PROBE_WAIT,
+            stop=stop_after_attempt(PROBE_ATTEMPTS),
+            sleep=RETRY_SLEEP,
+            reraise=True,
+        ):
+            with attempt:
+                attempts = attempt.retry_state.attempt_number
+                answered = await pool.probe_model_ready(
+                    wire.MODEL_NAME, channel=attempts - 1, timeout=PROBE_TIMEOUT_S
+                )
+    except _CALL_ERRORS as exc:  # RuntimeError among them: the pool is not open
+        failure = exc
+    if failure is not None:
+        return Readiness(PROBE_UNDELIVERED, attempts, _status(failure) or '', str(failure))
+    if not answered:
+        return Readiness(PROBE_NOT_READY, attempts)
+    return Readiness(PROBE_READY if attempts == 1 else PROBE_RECOVERED, attempts)
 
 
 class EngineCallError(Exception):
@@ -217,10 +288,18 @@ __all__ = [
     'ENGINE_CHANNEL_OPTIONS',
     'ENGINE_KEEPALIVE_TIME_MS',
     'FRAME_ENGINE_URL_ENV',
+    'PROBE_ATTEMPTS',
+    'PROBE_NOT_READY',
+    'PROBE_READY',
+    'PROBE_RECOVERED',
+    'PROBE_TIMEOUT_S',
+    'PROBE_UNDELIVERED',
     'RETRIES',
     'EngineAnswer',
     'EngineCallError',
+    'Readiness',
     'frame_engine_url',
     'open_pool',
+    'probe_ready',
     'process',
 ]

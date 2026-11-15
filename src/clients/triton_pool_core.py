@@ -544,6 +544,28 @@ class AsyncTritonPool:
             logger.warning(f'is_model_ready({model_name!r}) failed: {e}')
             return False
 
+    async def probe_model_ready(
+        self, model_name: str, *, channel: int = 0, timeout: float | None = None
+    ) -> bool:
+        """Ask one channel of the first server whether ``model_name`` is READY.
+
+        Unlike :meth:`is_model_ready`, a call that could not be delivered (a refused or reset
+        connection, a GOAWAY, a timeout) raises: "the server answered not ready" and "the server
+        could not be asked" are different facts, and the caller decides what each one costs.
+        ``channel`` picks the channel (modulo the pool size), so a retry can use another one.
+
+        Raises:
+            RuntimeError: the pool is not initialized.
+            InferenceServerException: the call failed (``status()`` is the gRPC code).
+            OSError: the socket failed.
+        """
+        if not self._initialized:
+            raise RuntimeError('AsyncTritonPool not initialized. Call initialize() first.')
+        clients = self._servers[self.router.urls()[0]]
+        return bool(
+            await clients[channel % len(clients)].is_model_ready(model_name, client_timeout=timeout)
+        )
+
     async def load_model(self, model_name: str) -> None:
         """Ask the server (explicit model control) to load ``model_name``; raises on failure."""
         if not self._initialized:

@@ -78,7 +78,7 @@ class Engine:
         self.rows_short = False
         self.ready = True
 
-    async def is_model_ready(self, model: str) -> bool:
+    async def probe_model_ready(self, model: str, **_k: Any) -> bool:
         return model == wire.MODEL_NAME and self.ready
 
     async def infer(self, model: str, inputs: list, outputs: list, **_k: Any) -> _Result:
