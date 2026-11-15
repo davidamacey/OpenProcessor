@@ -190,6 +190,26 @@ of being dropped as a duplicate. Images written before this
 rule keep their path-and-hash ids; the lookup still finds them, so they need no
 migration. A combine target names its images by target path and hash instead.
 
+A photo is stored whole or not at all. The images doc is written before its items, so it
+lists them: `item_ids` (the unit's crop ids, sorted; stored, not indexed; `[]` for a photo with
+no detections) is written with the doc, and a stored image is a `duplicate` only when every
+listed item exists (one real-time `mget` on the items index, in the content lookup and in the
+writer's answer to a 409). The list only names items that exist: the one place items are deleted
+(`item_delete.delete_items`: a re-detection, an open-vocabulary run, an import undo) takes the
+ids off it first, and a combine does not copy it. A doc without `item_ids` is legacy and counts
+as whole, always (`scripts/curation/backfill_item_ids.py` lists the items of those docs; it
+cannot tell an old broken photo from one with no detections and does not try). An incomplete
+image is completed by the next ingest of the same bytes when no live writer can still be writing
+it: the writer that saw its own write fail set `ingest_incomplete` (stored, not indexed), or the
+doc is older than `REPAIR_AFTER_S` (`src/services/curation/ingest_writer.py`, derived from the
+OpenSearch client's timeout and retries). The repair writes the items (the same OCC upsert, human
+guards included), then sets `item_ids` and clears the mark in one OCC update; it never replaces
+the images doc, and the stale items the old list named are deleted only when no person or import
+validated them and they are not in the test holdout. A stored image that is incomplete and may
+still be written is answered `failed` with `error_kind` `incomplete_write` (send it again later).
+`scripts/bench/ingest_consistency.py` audits a project: every listed item exists, every item has
+its images doc, every exact-content row has its images doc.
+
 ### `items`
 
 One document per crop. Field groups:

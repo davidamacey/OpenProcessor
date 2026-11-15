@@ -102,7 +102,10 @@ already-labeled dataset, use [Dataset import](#dataset-import).
 Each image result carries `status` (`success` / `duplicate` / `failed`),
 `image_id`, `n_crops`, `n_regions`, and on failure an `error_kind`
 (`empty`, `unservable_path`, `unsupported_type`, `decode_failed`,
-`detector_infer`, `bulk_index`, `blur_failed`, ...). A blur computation that fails now fails the
+`detector_infer`, `bulk_index`, `blur_failed`, `incomplete_write`, ...). A photo is stored whole or
+it is not reported stored: a refused document answers `bulk_index`, and a photo whose image is stored
+without some of its items (a writer died) answers `incomplete_write` until it is completed; send it again
+and it is stored whole, never answered `duplicate`. A blur computation that fails now fails the
 image (`blur_failed`, nothing written, a bulk run retries it); it used to store the crop with a blur of 0.0.
 Byte-identical files are
 deduplicated within a batch as well as against the index.
