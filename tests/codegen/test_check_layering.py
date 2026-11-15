@@ -205,3 +205,10 @@ def test_a_syntax_error_in_a_scanned_file_fails_closed(scratch_repo: ScratchRepo
 
 def test_the_real_repo_passes() -> None:
     assert guard.main([]) == 0
+
+
+def test_only_the_harness_engine_stand_in_may_import_the_engine(scratch_repo: ScratchRepo) -> None:
+    scratch_repo.write('docker/test/fake_frame_engine.py', 'from frame_engine.front import F\n')
+    assert run(scratch_repo) == 0
+    scratch_repo.write('docker/test/fake_other.py', 'from frame_engine.front import F\n')
+    assert run(scratch_repo) == 1
