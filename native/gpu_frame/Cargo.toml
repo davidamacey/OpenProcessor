@@ -10,3 +10,20 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+bytes.workspace = true
+crossbeam-channel.workspace = true
+cudarc.workspace = true
+libloading.workspace = true
+prost.workspace = true
+tokio = { workspace = true, features = ["macros", "sync", "time"] }
+tonic = { workspace = true, features = ["transport", "codegen"] }
+tonic-prost.workspace = true
+
+[build-dependencies]
+protox.workspace = true
+tonic-prost-build.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "test-util"] }

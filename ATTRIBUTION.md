@@ -214,6 +214,20 @@ used only for code, ids, hashes and paths.
 
 ---
 
+## Native frame engine (`native/gpu_frame`)
+
+### nvJPEG bindings
+- **File:** `native/gpu_frame/src/nvjpeg/ffi.rs`
+- **Source:** the nvJPEG part of `src/decode/nvjpeg/ffi.rs` in ortloom, the owner's Rust
+  serving project, at commit `59fbb42` (Copyright (c) 2026 David Macey)
+- **License:** MIT OR Apache-2.0; used here under MIT, whose notice the file carries
+- **Taken:** the run-time symbol table (`libloading`), the status names, the decoupled decode
+  sequence, drop order. **Changed:** V2 counting allocators, per-state buffers, no CUDA runtime
+  or NVRTC table (cudarc provides them). nvJPEG itself is NVIDIA's, under the CUDA EULA, loaded
+  at run time and not redistributed here.
+
+---
+
 ## ICC colour profiles (test fixtures)
 
 Three small profiles in `tests/fixtures/icc/` test the conversion of tagged photos to sRGB
@@ -313,7 +327,7 @@ The following repositories were used as **reference only** (no code directly cop
 ### 3. NVIDIA Triton Inference Server
 - **URL:** https://github.com/triton-inference-server/server
 - **Documentation:** https://docs.nvidia.com/deeplearning/triton-inference-server/
-- **Usage:** Official Triton documentation and examples
+- **Usage:** Official Triton documentation and examples. `native/gpu_frame/proto/grpc_service.proto` and `model_config.proto` are Triton's (tag r26.10, from `triton-inference-server/common`), unchanged but for one header line naming the tag; the native frame engine generates its KServe server and its model-server client from them
 - **License:** BSD 3-Clause License
 
 ### 4. hiennguyen9874/triton-face-recognition

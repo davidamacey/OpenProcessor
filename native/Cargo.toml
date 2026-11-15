@@ -12,6 +12,20 @@ license = "AGPL-3.0-or-later"
 repository = "https://github.com/davidamacey/OpenProcessor"
 publish = false
 
+# Exact pins (plan 17 section 3); features are chosen by each member. One entry per line,
+# alphabetical, so the two crates' additions merge cleanly.
+[workspace.dependencies]
+bytes = "=1.12.1"
+crossbeam-channel = "=0.5.17"
+cudarc = { version = "=0.19.10", default-features = false, features = ["std", "driver", "nvrtc", "cuda-13020", "dynamic-loading"] }
+libloading = "=0.9.1"
+prost = "=0.14.6"
+protox = "=0.10.0"
+tokio = { version = "=1.54.1", default-features = false }
+tonic = { version = "=0.14.9", default-features = false }
+tonic-prost = "=0.14.9"
+tonic-prost-build = "=0.14.9"
+
 # Lint levels for every member (`[lints] workspace = true`); the clippy names are in
 # https://rust-lang.github.io/rust-clippy/stable/index.html. `unwrap` stays allowed inside
 # tests through `allow-unwrap-in-tests` in clippy.toml.
