@@ -32,6 +32,9 @@ tonic-prost = { workspace = true }
 tower = { version = "=0.5.3", default-features = false, features = ["util"] }
 tracing = "=0.1.44"
 tracing-subscriber = { version = "=0.3.23", default-features = false, features = ["fmt", "std"] }
+# libjpeg-turbo built from the crate's source unless TURBOJPEG_SOURCE=explicit points at the
+# image's 3.1.2 build (plan 17 section 3); SIMD required, as the plan asks.
+turbojpeg = { workspace = true, features = ["cmake", "require-simd"] }
 
 [dev-dependencies]
 base64 = "=0.22.1"

@@ -6,6 +6,7 @@
 //! and golden tests can reach them.
 
 pub mod admission;
+pub mod branches;
 pub mod cores;
 pub mod fault;
 pub mod front;

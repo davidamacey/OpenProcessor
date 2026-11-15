@@ -305,6 +305,11 @@ jobs:
           rustc --version
           cargo --version
 
+      # libjpeg-turbo, built from turbojpeg-sys's source for the crop JPEGs, requires its SIMD
+      # code, which nasm assembles (plan 17 section 3, "Host JPEG").
+      - name: Install nasm
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends nasm
+
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"

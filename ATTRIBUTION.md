@@ -226,6 +226,13 @@ used only for code, ids, hashes and paths.
   or NVRTC table (cudarc provides them). nvJPEG itself is NVIDIA's, under the CUDA EULA, loaded
   at run time and not redistributed here.
 
+### libjpeg-turbo (crop JPEGs of `native/frame_engine`)
+- **Source:** https://libjpeg-turbo.org, through the `turbojpeg` 1.5.1 and `turbojpeg-sys` 1.2.0
+  crates (Unlicense OR MIT): built from the crate's bundled source, or from the release tarball
+  the engine's image builds (`TURBOJPEG_SOURCE=explicit`), and linked statically
+- **License:** IJG License, Modified (3-clause) BSD License and zlib License, as the library's
+  `LICENSE.md` sets out; the binary carries the library unmodified
+
 ---
 
 ## ICC colour profiles (test fixtures)
