@@ -109,6 +109,7 @@ models, bringing the core loadout to roughly **16-17 GB**.
 | `scrfd_10g_bnkps_uint8`, `arcface_w600k_r50_uint8` | 1 | plans 9.1 MiB and 84.1 MiB | The frame engine's uint8 builds of the two face models, loaded beside the FP32 pair (faces off drops all four) |
 | `mobileclip2_s2_text_encoder` | 1 | 0.7 GB | |
 | YOLO11 / PE / OCR (remaining core models) | as shipped | ~11.65 GB combined | No per-model breakdown measured yet |
+| `pe_crop_encoder` | 1 per listed card | at most ~1.5 GB (an upper bound from the frame encoder, not a measurement; see plan 13b section 7) | The crop vectors; part of the "PE" share above on the primary card, and planned beside the frame encoder on every other `TRITON_GPU_ID` card |
 | `pe_text_encoder` | 1, `KIND_CPU` | 0 GB | Host RAM only |
 
 Raise instance counts in `config.pbtxt` (or re-export) on a card with

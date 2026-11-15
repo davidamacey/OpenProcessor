@@ -410,8 +410,9 @@ Rules, all enforced:
   numbered in host order, so the **lowest id is the primary card**: the
   detector, face, MobileCLIP and OCR models stay there (their configs pin
   `gpus: [ 0 ]`), and `API_GPU_ID` should name it. Every other listed card runs
-  only the encoder, one instance of about 1.5 GB (`GPU_MIB_PER_INSTANCE` in
-  `models/pe_image_encoder/config.pbtxt`).
+  only the two encoders (the frame encoder and the crop encoder), one instance
+  of each, about 1.5 GB each (`GPU_MIB_PER_INSTANCE` in
+  `models/pe_image_encoder/config.pbtxt` and `models/pe_crop_encoder/config.pbtxt`).
 - One Triton, one dynamic-batcher queue: whichever card is free takes the next
   batch, so a slower card simply takes fewer. The API and its clients are
   unchanged.

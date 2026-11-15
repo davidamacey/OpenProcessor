@@ -145,3 +145,5 @@ spaces), the frame vector is unchanged (cosine to today's 0.999995 minimum on 20
 
 Open: the antialiased crop resample (one argument in the engine kernel call and `cv2.INTER_AREA` on the host); the installer group that builds `pe_crop_encoder`; a start-up check that a project's
 primary item and box spaces name the configured crop model.
+
+Pending (installer lane): the crop model's 1,536 MiB per instance (`GPU_MIB_PER_INSTANCE`, `openprocessor gpu plan`) is the frame encoder's measured figure used as an upper bound, not a measurement of the crop model; the installer's `pe_need` (2 GB) and the profile budgets are unchanged until the crop model's device memory is measured on the model server, and the 10 GB-card decision follows from that number.
