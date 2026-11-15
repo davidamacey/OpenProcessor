@@ -44,6 +44,37 @@ TIMEOUT_SECONDS = 120.0
 #: How long a photo waits for the engine across overload retries.
 DEADLINE_SECONDS = 120.0
 RETRY_SLEEP = asyncio.sleep
+MIB = 1024 * 1024
+#: The API's channels to the engine, defined here and nowhere else (the engine's own server side is
+#: ``frame_engine.front.SERVER_OPTIONS``; ``tests/frame_engine_tests/test_keepalive.py`` pins the
+#: two to agree). gRPC keepalive guide and the C-core keepalive document
+#: (https://github.com/grpc/grpc/blob/master/doc/keepalive.md): a client that pings while no call
+#: is in flight needs ``keepalive_permit_without_calls`` on the server too, and its
+#: ``keepalive_time_ms`` may not be below the server's
+#: ``http2.min_ping_interval_without_data_ms`` (the document's "Received a GOAWAY with
+#: ENHANCE_YOUR_CALM" answers); a client that gets that GOAWAY doubles its keepalive time
+#: (gRFC A8). ``http2.max_pings_without_data`` is 0 (no limit): at its default of 2 an idle
+#: channel stops pinging after two pings, so a dead engine is not noticed until the next call.
+ENGINE_KEEPALIVE_TIME_MS = 30000
+ENGINE_KEEPALIVE_TIMEOUT_MS = 10000
+ENGINE_CHANNEL_OPTIONS: tuple[tuple[str, int], ...] = (
+    ('grpc.keepalive_time_ms', ENGINE_KEEPALIVE_TIME_MS),
+    ('grpc.keepalive_timeout_ms', ENGINE_KEEPALIVE_TIMEOUT_MS),
+    ('grpc.keepalive_permit_without_calls', 1),
+    ('grpc.http2.max_pings_without_data', 0),
+    # a photo and its crop JPEGs, far under this
+    ('grpc.max_send_message_length', 512 * MIB),
+    ('grpc.max_receive_message_length', 512 * MIB),
+    # a restarted engine is reached within about the reconnect cap (gRPC connection backoff:
+    # the default delay grows towards 120 s) and its recreated address is found again at once
+    ('grpc.initial_reconnect_backoff_ms', 250),
+    ('grpc.min_reconnect_backoff_ms', 250),
+    ('grpc.max_reconnect_backoff_ms', 3000),
+    ('grpc.dns_min_time_between_resolutions_ms', 1000),
+    ('grpc.http2.initial_stream_window_size', 1 * MIB),
+    ('grpc.http2.initial_connection_window_size', 2 * MIB),
+    ('grpc.http2.bdp_probe', 0),
+)
 _BACKOFF = wait_exponential_jitter(multiplier=0.05, max=2.0, jitter=0.2)
 _OVERLOAD = str(grpc.StatusCode.RESOURCE_EXHAUSTED)
 _UNAVAILABLE = str(grpc.StatusCode.UNAVAILABLE)
@@ -60,7 +91,10 @@ async def open_pool(*, pool_size: int, max_concurrent: int) -> AsyncTritonPool:
     from src.clients.triton_pool_core import AsyncTritonPool
 
     pool = AsyncTritonPool(
-        url=frame_engine_url(), pool_size=pool_size, max_concurrent=max_concurrent
+        url=frame_engine_url(),
+        pool_size=pool_size,
+        max_concurrent=max_concurrent,
+        channel_options=ENGINE_CHANNEL_OPTIONS,
     )
     await pool.initialize()
     return pool
@@ -180,6 +214,8 @@ async def process(
 __all__ = [
     'DEADLINE_SECONDS',
     'DEFAULT_URL',
+    'ENGINE_CHANNEL_OPTIONS',
+    'ENGINE_KEEPALIVE_TIME_MS',
     'FRAME_ENGINE_URL_ENV',
     'RETRIES',
     'EngineAnswer',

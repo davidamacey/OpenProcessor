@@ -17,6 +17,7 @@ Usage:
 import asyncio
 import logging
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -194,6 +195,7 @@ class AsyncTritonPool:
         max_concurrent: int = 64,
         verbose: bool = False,
         router: TritonRouter | None = None,
+        channel_options: Sequence[tuple[str, Any]] | None = None,
     ):
         """
         Initialize the async Triton connection pool.
@@ -205,12 +207,18 @@ class AsyncTritonPool:
             verbose: Enable verbose Triton client logging
             router: Picks the server of each call; ``pool_size`` channels are opened to every
                 server it knows. None is the single server at ``url``, as before routing.
+            channel_options: The gRPC channel arguments of every channel; None is
+                :data:`GRPC_CHANNEL_OPTIONS`, the model server's. A pool to another kind of server
+                passes the options that server's ping policy agrees with.
         """
         self.url = url
         self.router = router or TritonRouter.single(url)
         self.pool_size = pool_size
         self.max_concurrent = max_concurrent
         self.verbose = verbose
+        self._channel_options = tuple(
+            GRPC_CHANNEL_OPTIONS if channel_options is None else channel_options
+        )
 
         self._servers: dict[str, list[grpcclient_aio.InferenceServerClient]] = {}
         self._indexes: dict[str, int] = {}
@@ -263,7 +271,7 @@ class AsyncTritonPool:
         for i in range(self.pool_size):
             # CRITICAL: Different user-agent forces separate TCP connections
             channel_args = [
-                *GRPC_CHANNEL_OPTIONS,
+                *self._channel_options,
                 ('grpc.primary_user_agent', f'triton-pool-{i}'),
             ]
             client = grpcclient_aio.InferenceServerClient(
