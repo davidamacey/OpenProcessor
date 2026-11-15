@@ -1,0 +1,67 @@
+---
+sidebar_position: 2
+title: Measured performance
+---
+
+# Measured performance
+
+This is the one page for speed numbers. Every row was **measured on the development host** (a
+shared machine, one NVIDIA card per model server), not promised for yours. Your photos, your card and your storage move every figure; measure your own
+with the trial in [Ingest a large folder](../guides/ingest-large-folder.mdx). Data is public
+(COCO, Open Images, Objects365, Stanford Cars, LFW) unless a row says "set P", a private set of
+20 MP camera photos reported as numbers only. The plan these come from, with the method and the
+rejected options, is `docs/design/v070_rebuild/13_backend_speed_plan.md` section 10.
+
+## Ingest throughput
+
+Photos in to photos stored and findable, 4 clients, batches of 32 photos, 0 failed in every row.
+Code at commit `267c89f03`, before the per-photo flow of plan 13a.
+
+| Photos | Storage of the databases | Photos per second |
+|---|---|---|
+| 4,000-image mix (public sets plus set P) | spinning-disk array | 24.0 and 25.3 |
+| 4,000-image mix | solid-state | 26.4 and 24.8 |
+| Set P, 1,000 photos of 20 MP | array / solid-state | 30.3 / 29.1 |
+| COCO, 2,000 photos | array / solid-state | 20.4 / 20.4 |
+
+One client, solid-state storage: COCO 9.9, 12 MP JPEG 16.5, 20 MP 14.4 photos per second.
+
+What it means: with fast storage the image encoder binds, about 27 photos per second per card on
+COCO. Put the PostgreSQL, OpenSearch and Valkey data on solid-state
+storage ([Storage and sizing](../deployment/sizing-and-storage.mdx)): the same code ran 1.4 to
+2.0 times faster on solid-state storage than on the array (mix 29.3 and 30.7 against 18.1 and
+19.2 photos per second).
+
+| Row | Measured |
+|---|---|
+| **Final ingest numbers of this release (per-photo flow, every photo through the engine)** | **after sweep 1115a** |
+
+## Model and engine speed
+
+| What | Conditions | Measured |
+|---|---|---|
+| PE image encoder ceiling | `perf_analyzer`, FP16 engine, one instance, synthetic input | 225 inferences per second, 4.4 ms per image, compute-bound; batch above 8 or concurrency above 2 adds nothing |
+| Detector ceiling | `perf_analyzer`, two instances, batch 16, synthetic input | 1,037 images per second, not saturated |
+| One 20 MP photo through the engine | one photo in flight, set P | p50 about 205 to 210 ms: about 73 ms decode, 44 ms detector call, 69 ms encoding crop JPEGs on the host |
+| One card, 20 MP photos, every branch | set P, 32 in flight, direct to the model server | 44 to 47 photos per second; the card is 84 to 93 percent busy |
+| Text search tower | engine side, batch 1, synthetic tokens | TensorRT FP16 1.37 ms p50; ONNX Runtime CPU 46.1 ms p50 |
+| Engine memory when idle | 40 GB-profile sizes / smallest sizes | 3,340 MiB / 348 MiB |
+| Colour conversion to sRGB | 14.6 MP frame | 0.46 ms on the GPU; 48 MiB per distinct profile (2 kept) |
+
+## Results and robustness of the engine
+
+| What | Conditions | Measured |
+|---|---|---|
+| Same results as the model it replaced | 434 photos, public sets and set P | detections identical on 424 of 424 decoded photos, 1,959 of 1,959 crop JPEGs byte-identical, vector cosine at least 0.999889 |
+| Engine killed under load | 50 of 50 kills, then 16 of 16 for the fan-out build | all survived, the model server untouched |
+| Model server restart | stopped and started under a running stack | gRPC back after 16.6 s, API healthy 12.5 s later, engine ready 13.0 s after gRPC without a restart; 12 of 12 following photos went through the engine |
+| First good call after the model server moved to a new address | unit tier, dummy server | 0.5 to 0.9 s; it was 21.5 to 22.9 s before the reconnect bound |
+| Face branch | LFW, CALFW, CPLFW 10-fold accuracy | 0.9985, 0.9592, 0.9592 (the previous path: 0.9965, 0.9575, 0.9558) |
+| Text branch | COCO-Text v1.3, 400 photos | strict F1 0.238, spotted words 0.495 (the previous path: 0.185 and 0.425) |
+
+## Pending
+
+| Row | Measured |
+|---|---|
+| Ingest rows on the final build, array and solid-state, 1 and 4 clients | after sweep 1115a |
+| Request-level search and text-tower latency through the model server | after sweep 1115a |

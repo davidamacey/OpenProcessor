@@ -210,19 +210,14 @@ curl -s "$B/<run_id>/failures?offset=0&limit=100"
 ## 6. Time and disk
 
 `hours = images / (images_per_second x 3600)`; use the rate from your trial.
-Measured on an RTX A6000 (`docs/PERFORMANCE.md`):
-
-| What | Rate |
-|---|---|
-| Public COCO frames, one card | about 29 images/s |
-| 12 to 24 MP photos, CPU decode | 27 images/s |
-| The same, GPU decode | 35 images/s |
-| 100,000 camera-original 20 MP JPEGs from a NAS, stopped and resumed once | 21 images/s |
+Measured rates, with their conditions, are on
+[Measured performance](../reference/performance.mdx); yours depend on your photos, your card
+and above all on whether the databases sit on solid-state storage.
 
 **GPU decode.** `OP_INGEST_GPU_DECODE` (code default on; the installer writes `1` for the
 `full` profile, `0` for `minimal` and `standard`) sends every photo to the frame engine,
 which decodes baseline JPEGs on the GPU and everything else on the CPU inside the engine.
-It needs about 8.5 GB more VRAM on the Triton card. While the engine is down a batch is
+It needs about 6 GB more VRAM on the Triton card at the `full` sizes. While the engine is down a batch is
 answered 503 with `Retry-After`; a bulk run waits and resumes, it does not fail files.
 Check with `./openprocessor gpu plan`; change in `.env` and recreate.
 

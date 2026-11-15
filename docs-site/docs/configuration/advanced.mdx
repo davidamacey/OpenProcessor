@@ -110,6 +110,8 @@ ingest answers 503 with `Retry-After`. Off, the API decodes and detects each
 photo itself (the host stage), as it does for a project with a secondary
 detector. There is no size gate in the API; the engine's own gates are
 `OP_FRAME_ENGINE_MIN_MEGAPIXELS` and `OP_FRAME_ENGINE_MAX_MEGAPIXELS`.
+Every engine setting, what the 503 `engine_unavailable` answer means and what to look at when
+ingest is slow: [The frame engine](../operations/frame-engine.mdx).
 
 ## Ingest sources (S3 and triggers)
 

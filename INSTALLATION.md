@@ -392,7 +392,7 @@ upgrade to another release.
 ### Spreading the PE encoder over GPUs
 
 The PE image encoder is about 99 percent of the GPU work of `/ingest`, and one
-card tops out near 23 images per second on 640 x 480 frames. A second (or third)
+card is bound by it (rates: [Measured performance](docs-site/docs/reference/performance.mdx)). A second (or third)
 card runs a second (third) copy of the encoder: list the cards in
 `TRITON_GPU_ID`.
 
@@ -552,6 +552,11 @@ Common cases:
   `./openprocessor start` and `./openprocessor export all`. Compare the driver
   (`nvidia-smi`) with the container's
   (`docker compose -p <project> exec triton-server nvidia-smi`).
+- **Photo ingest answers 503 `engine_unavailable`**: the frame engine (the service that
+  decodes photos) is down, not ready or overloaded and nothing of the request was stored. Send it
+  again after `Retry-After`; a bulk run does this itself. `./openprocessor status` and
+  `./openprocessor logs frame-engine` show why:
+  [The frame engine](docs-site/docs/operations/frame-engine.mdx).
 - **Triton shows "UNAVAILABLE" for models**: `./openprocessor export status`
   shows which exports exist, `./openprocessor logs triton-server` the reason,
   and `ls -la models/*/config.pbtxt` confirms the configs are there.

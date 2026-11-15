@@ -148,7 +148,7 @@ in front of PostgreSQL.
   Triton as a client. The API never decodes the photo; while the engine is down the
   ingest answers 503 with `Retry-After`. Each photo moves on its own from the engine's
   answer to its write; the database work runs in at most three commit groups per request.
-  Details and numbers: [PERFORMANCE.md](PERFORMANCE.md).
+  Flow, failure table and rules: [the frame engine and the ingest flow](../docs-site/docs/architecture/frame-engine-and-ingest.mdx); numbers: [Measured performance](../docs-site/docs/reference/performance.mdx).
 - **Thread safety.** Ultralytics model objects keep internal state. The code
   creates a thin client wrapper per request rather than sharing one instance
   across threads. The wrapper is only a gRPC front, not a loaded model.

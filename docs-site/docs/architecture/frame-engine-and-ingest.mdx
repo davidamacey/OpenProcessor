@@ -1,0 +1,147 @@
+---
+sidebar_position: 2
+title: Frame engine and the ingest flow
+---
+
+# Frame engine and the ingest flow
+
+For developers. How one photo goes from a request to its stored, findable form, and the rules a
+change to it must keep. The user view is [The frame engine](../operations/frame-engine.mdx); the
+numbers are on [Measured performance](../reference/performance.mdx). What is **planned** (more
+branches, derivatives for the library, storage changes) is in the roadmap,
+[`14_roadmap.md`](https://github.com/davidamacey/OpenProcessor/blob/main/docs/design/v070_rebuild/14_roadmap.md),
+and the plans 13, 13a and 15 beside it. This page describes what is merged.
+
+## The engine
+
+`frame_engine/` is a separate process (service `frame-engine`, image
+`openprocessor-frame-engine`, `docker/frame-engine/`). It is a KServe v2 gRPC server (model name
+`frame_engine`, protocol version 1, wire constants in `src/domain/frame_engine_wire.py`) and a
+Triton **client**: a fault in decode or kernels never reaches the model server.
+
+One request is one photo and a **plan** (`EnginePlan`): which branches to run, the detector and
+encoder to call, optional stored boxes. Per photo (`frame_engine/engine.py`):
+
+1. **Route by header** (`prep_geometry.route`): a baseline 8-bit JPEG goes to nvJPEG on the GPU;
+   any other readable image (PNG, WebP, progressive or CMYK JPEG, a JPEG under
+   `OP_FRAME_ENGINE_MIN_MEGAPIXELS`) is decoded on the host inside the engine
+   (`host_decode.py`, the API's `decode_image`); an unreadable file or one over
+   `OP_FRAME_ENGINE_MAX_MEGAPIXELS` answers with a status and decodes nothing.
+2. **Reserve the frame's bytes** from the device budget (`prep_budget.py`, bounded wait; a
+   timeout is the overload answer).
+3. **Decode once**; EXIF orientation and the embedded colour profile are applied on the card
+   (`colour.py`): every branch reads an upright sRGB frame. The `decode_route` of the answer says
+   which route made it (`src/domain/decode_route.py`).
+4. **Round 1**: branches that need only the frame stage their inputs and all calls go out after
+   one stream wait (detector letterbox, whole-frame square). **Settle**: the detector's boxes
+   become frame rectangles. **Round 2**: calls cut from those (crop squares, faces, text lines)
+   are all submitted before any is collected, then host work (crop JPEGs) overlaps them.
+5. **Finish**: blur sums, outputs. A branch fails on its own (`model_error`,
+   `dependency_failed`); the photo is answered `ok` with per-branch states.
+
+Branches live in `frame_engine/branches/` (`detect`, `embed`, `crops`, `derivatives`, `faces`,
+`ocr`); a branch can be conditional on detected classes (`if_detected`). Model inputs travel as
+slices of one CUDA shared-memory region registered with this card's Triton
+(`transport.py`, `slab.py`), so no pixels cross the host. `OP_FRAME_ENGINE_TRANSPORT=body` sends
+them in the request instead.
+
+**Readiness and reconnect.** Ready means Triton answers and the region is registered
+(`front.py`). A model-server restart is survived without an engine restart: a call that finds the
+region missing re-registers once and is resent, and the health check re-registers too. A failed
+call asks for a health probe; readiness follows the probe, not the failed call. A lost CUDA
+context refuses work as retryable, turns readiness false and exits for a restart. Every model call
+has a deadline (`OP_FRAME_ENGINE_TRITON_TIMEOUT_SECONDS`) and every request one
+(`OP_FRAME_ENGINE_REQUEST_DEADLINE_SECONDS`); the API client's call timeout (120 s) is longer.
+
+## The API side
+
+`src/clients/frame_engine.py` is the client (one request per photo through the shared Triton pool
+code, no pool retry; an overload answer is retried three times). `src/services/curation/ingest_gpu_decode.py`
+builds the plan and maps the answer to items; `engine_ready` keeps a readiness verdict for 5 s
+per detector shape per process and drops it on the first failed call.
+
+`engine_stage_applies` decides engine or host stage: the host stage (`ingest_stage.py`, the API
+decodes) runs only for `OP_INGEST_GPU_DECODE=0`, a project with a secondary detector, a
+letterbox fill that is not one grey, and dataset import. **A photo the engine cannot answer is
+decoded nowhere**: it fails with a kind (`engine_unavailable`, `decode_failed`,
+`detector_infer`). The embed reprocess pass is the one place that still falls back per photo.
+
+## The ingest flow
+
+`ingest_batch.py` takes a request, drops duplicates by content, and checks engine readiness. When
+every new photo ended `engine_unavailable`, nothing was stored and the request answers **503**
+with `Retry-After` and `code: engine_unavailable` (`src/core/error_handlers.py`).
+`ingest_finish.finish_photos` then runs the photos as a pipeline, not barrier phases:
+
+```
+todo queue -> K stage workers -> inbox -> one committer -> commit groups (at most 3)
+              (one photo each:           (classes, group transaction,
+               engine or host stage)      then the writes, one group at a time)
+```
+
+`K = min(OP_MAX_INGEST_CONCURRENCY, photos)`. A photo failure is a value, never an exception that
+cancels the others. The committer takes a group when `ceil(photos / 3)` wait, or when every
+worker ended; the next group starts when the last is written, while the workers keep the GPU
+busy.
+
+**What is stored when.** Per group: (1) registry classes of its items are resolved (a label new
+to the project is one class transaction); (2) the group transaction places the photos in their
+partitions, claims their content and marks them pending (`ingest_index.commit_group`); (3) the
+images document, which **lists its item ids**, is written first, then the items
+(`write_group`, `ingest_writer.py`); (4) once per request, in a `finally` that survives
+cancellation, claims are released and every stored photo is announced in **one** statement. A
+photo is stored whole or not at all: a failure or kill between the images document and its items
+leaves a document the next ingest recognises as incomplete (`incomplete_write`) and repairs, only
+creating missing items, under a lease.
+
+| Failure point | The photo ends |
+|---|---|
+| Engine call fails | `failed`: `engine_unavailable` (down, overloaded past its deadline), `decode_failed`, `detector_infer` (a branch errored) |
+| Class create fails | the photos with that class `failed` (`detector_infer`) |
+| Content claim held by another image | `duplicate` of the holder (`incomplete_write` if the holder is not whole) |
+| Group 1: pool timeout | the request fails 503, nothing stored |
+| Group 2 or 3: the same | stored photos keep `success`; that group and the rest answer `failed` / `database_busy` |
+| OpenSearch write fails | `failed` (`bulk_index`) |
+| Publish fails | the request fails; documents and claims stay |
+
+In a bulk run (`src/services/curation/bulk_ingest/`) the transient kinds (`engine_unavailable`,
+`database_busy`, `incomplete_write`, `busy`) wait 10 to 300 s and are sent again **without using
+an attempt**; a `Retry-After` can lengthen the wait.
+
+## Where the code is
+
+| Area | Path |
+|---|---|
+| Engine process, entry, settings | `frame_engine/__main__.py`, `settings.py` (every `OP_FRAME_ENGINE_*`) |
+| Per-photo pipeline, branches | `frame_engine/engine.py`, `branches/`, `faces/`, `ocr/` |
+| GPU kernels, geometry, budget | `prep_kernels.py`, `prep_geometry.py`, `prep_budget.py`, `nvjpeg_*.py`, `colour.py` |
+| Transport, front, metrics | `transport.py`, `slab.py`, `front.py`, `stage_metrics.py` |
+| Wire and routes | `src/domain/frame_engine_wire.py`, `src/domain/decode_route.py` |
+| API client and ingest | `src/clients/frame_engine.py`, `src/services/curation/ingest_*.py` |
+| Image and compose | `docker/frame-engine/`, `docker-compose.yml` (service `frame-engine`) |
+
+## Tests
+
+```bash
+# Offline: geometry, budget, transport, settings, branches (no GPU, no Docker); about 70 s
+.venv/bin/python -m pytest tests/frame_engine_tests -q --no-cov
+# Ingest flow: tests/curation/ (unit); database tier: make test-db
+# GPU parity against a running Triton and engine (docker/test/README.md): -m gpu
+OP_TEST_TRITON_GRPC=127.0.0.1:4601 OP_TEST_FRAME_ENGINE_GRPC=127.0.0.1:<port> \
+    .venv/bin/python -m pytest tests/gpu -q --no-cov -m gpu
+```
+
+## Rules a change must keep
+
+- **Decode once.** One decode per photo; every branch reads the resident frame. A new model input
+  is a new branch, not a second decode.
+- **No host pixels in the API.** The API sends encoded bytes and a plan and reads boxes, vectors,
+  sums and JPEGs. It never decodes an ingest photo; a failure is a value, not a fallback decode.
+- **Fail closed.** An engine that is not ready, a lost CUDA context or an ambiguous state refuses
+  retryably; never answer a guess. A photo is stored whole or reported not stored.
+- **Class identity is the name.** Detector classes cross the engine boundary and every later one
+  by name, never by index.
+- **Every call has a deadline**, and a branch failure never fails the others.
+- **Settings are read once** in `frame_engine/settings.py`; a malformed value refuses startup.
+- A run that waits for a transient cause must not use an attempt; do not add file locks or
+  in-process locks for shared state (leases, OCC, the database).

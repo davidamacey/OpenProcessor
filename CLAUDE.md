@@ -89,7 +89,7 @@ connection pooler for PostgreSQL.
 | Service | Profile | Port | Role |
 |---|---|---|---|
 | `triton-server` | none | 4600 HTTP, 4601 gRPC, 4602 metrics | TensorRT models, explicit model control |
-| `frame-engine` | none | 4613 metrics (gRPC internal) | GPU decode and prep: decodes each photo once, calls the Triton models as a client (`frame_engine/`) |
+| `frame-engine` | none | 4613 metrics (gRPC internal) | Decodes each photo once on the GPU and runs every model branch from that frame, calling the Triton models as a client (`frame_engine/`); must share Triton's card (`FRAME_ENGINE_GPU_ID`); ingest answers 503 `engine_unavailable` while it is down |
 | `api` | none | 4603 | FastAPI, all routes |
 | `opensearch` | none | 4607 | k-NN store for items, images and vectors (control data is in PostgreSQL) |
 | `postgres`, `valkey` | none | | PostgreSQL 18 (projects, classes, configs, jobs, events, spaces, partitions) and the Valkey 9 task broker; internal only, passwords from `secrets/` |
@@ -219,6 +219,13 @@ body. The core route list is in [README.md](README.md#api-endpoints).
 - **Config store.** Prompt packs, region profiles and the VLM activation are
   revisioned documents (`src/services/config_store/`). The VLM endpoint
   registry is deployment-wide; activation is per project.
+- **Frame engine.** Ingest sends each photo to `frame-engine`, which decodes it once;
+  the API never decodes an ingest photo and has no fallback decode (the host stage runs only
+  for `OP_INGEST_GPU_DECODE=0`, a secondary detector or a dataset import). Each photo moves
+  on its own to its write, in at most three commit groups; a photo is stored whole or not at
+  all; transient failures (`engine_unavailable`, `database_busy`) use no bulk-run attempt.
+  A loaded Triton model is unloaded, awaited and then loaded, never reloaded in place.
+  Flow, tests and rules: `docs-site/docs/architecture/frame-engine-and-ingest.mdx`.
 - **Wire contract.** One serializer (`src/services/curation/wire.py`) maps
   storage to the fixed wire names. After changing a route or model run
   `make contracts` and commit `contracts/` in the same commit; a pre-commit

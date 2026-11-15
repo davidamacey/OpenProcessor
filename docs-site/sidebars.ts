@@ -16,6 +16,7 @@ const sidebars: SidebarsConfig = {
       ],
     },
     'architecture/overview',
+    'architecture/frame-engine-and-ingest',
     {
       type: 'category',
       label: 'Guides',
@@ -95,6 +96,7 @@ const sidebars: SidebarsConfig = {
         'operations/jobs',
         'operations/scale-out',
         'operations/workers',
+        'operations/frame-engine',
         'operations/ingest-load-profile',
         'operations/exports-and-retention',
         'operations/training-and-promote',
@@ -115,6 +117,7 @@ const sidebars: SidebarsConfig = {
       label: 'Reference',
       items: [
         'reference/licenses',
+        'reference/performance',
         'developer-guide/screenshots',
         'developer-guide/restart-after-update',
       ],
