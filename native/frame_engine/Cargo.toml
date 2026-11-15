@@ -14,6 +14,7 @@ path = "src/main.rs"
 
 [dependencies]
 bytes = { workspace = true }
+clap = { version = "=4.6.7", default-features = false, features = ["derive", "error-context", "help", "std", "usage"] }
 http-body-util = "=0.1.5"
 hyper = { version = "=1.12.0", features = ["http1", "server"] }
 hyper-util = { version = "=0.1.21", features = ["tokio"] }
@@ -28,6 +29,7 @@ tonic = { workspace = true, features = ["codegen", "router", "server"] }
 tonic-prost = { workspace = true }
 tower = { version = "=0.5.3", default-features = false, features = ["util"] }
 tracing = "=0.1.44"
+tracing-subscriber = { version = "=0.3.23", default-features = false, features = ["fmt", "std"] }
 
 [build-dependencies]
 prost-types = "=0.14.6"
