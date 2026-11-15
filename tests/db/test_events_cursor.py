@@ -107,6 +107,36 @@ async def test_paging_resumes_exactly_after_the_cursor(pg_env) -> None:
     assert head == (rest[-1].xid, rest[-1].id)
 
 
+def _insert_at(conn, project, xid: int) -> int:
+    row = conn.execute(
+        'INSERT INTO events (xid, project_id, type, payload) '
+        "VALUES (CAST(%s AS xid8), %s, %s, '{}'::jsonb) RETURNING id",
+        (str(xid), project, f'x{xid}'),
+    ).fetchone()
+    assert row is not None
+    return int(row[0])
+
+
+@pytest.mark.asyncio
+async def test_the_cursor_orders_by_the_number_not_by_its_text_across_a_digit_boundary(
+    pg_env,
+) -> None:
+    """The statements select ``xid::text AS xid``; an ORDER BY on the bare name sorts that text,
+    in which '10' comes before '9'. The live stream hit it at xid 9998 -> 10003: the head and the
+    oldest row were wrong and a resume was refused as ``cursor_expired``."""
+    project = _new_project(pg_env)
+    with psycopg.connect(pg_env.conninfo('super'), autocommit=True) as conn:
+        ids = {xid: _insert_at(conn, project, xid) for xid in (10, 9)}
+        # the higher xid is written first: id order and text order are both the wrong order
+    async with async_session_factory()() as session, project_tx(session, project):
+        rows = await repo.fetch_after(session, project, 0, 0)
+        oldest = await repo.oldest_cursor(session, project)
+        head = await repo.head_cursor(session, project)
+    assert [(r.xid, r.id) for r in rows] == [(9, ids[9]), (10, ids[10])]
+    assert oldest == (9, ids[9])
+    assert head == (10, ids[10])
+
+
 def test_both_cursor_queries_use_their_index(pg_env) -> None:
     project = _new_project(pg_env)
     with psycopg.connect(pg_env.conninfo('super'), autocommit=True) as conn:
