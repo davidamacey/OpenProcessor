@@ -22,7 +22,7 @@ from src.services.curation.ingest_policy import (
     awaits_class_by_name,
     registry_name_index,
 )
-from src.services.curation.ingest_writer import get_ingest_writer
+from src.services.curation.ingest_writer import IngestWriteError, RepairTarget, get_ingest_writer
 from src.services.curation.ops_metrics import count_batch_fallback
 from src.services.detection.geometry import letterbox_params
 from src.utils.class_names import class_name_deprecation_index, normalize_class_name
@@ -94,15 +94,25 @@ class IngestItemsMixin:
         created_ids: list[str] | None = None,
         *,
         seed_region: bool = True,
+        repair: RepairTarget | None = None,
+        stale_ids: list[str] | None = None,
     ) -> dict[str, int]:
         """Write 1 images doc (create) + N items docs (OCC upsert) through the process's
         coalescing writer (:mod:`~src.services.curation.ingest_writer`), which batches them
         with other images' documents and answers for this image alone. ``duplicate`` is 1
-        when the images doc already existed: then nothing was written.
+        when the images doc already existed and is whole: then nothing was written;
+        ``incomplete`` is 1 when it exists and misses items a live writer may still be
+        writing: nothing was written either.
 
-        ``created_ids`` (optional out-list) receives the crop_id of every
-        items doc this call newly created. A flush that fails as a whole
-        raises, as the per-image path did.
+        ``repair`` completes an image already stored incomplete: its items are written and its
+        list set (``image_doc`` is then None); ``repaired`` is 1 when this call completed one,
+        also when a 409 on the create found an incomplete doc nobody is writing.
+
+        ``created_ids`` (optional out-list) receives the crop_id of every items doc this call
+        newly created; ``stale_ids`` the items a repair's old list named that the new one no
+        longer does. A unit with any document refused, or whose flush failed, raises
+        :class:`~src.services.curation.ingest_writer.IngestWriteError`: a photo is reported
+        stored only when all of it is.
         """
         seeding = seed_region and self.region_seed_status is not None
         with stage_timer('opensearch_write'):
@@ -113,11 +123,16 @@ class IngestItemsMixin:
                 items_index=self.config.items_index,
                 guards=self._CROP_HUMAN_FIELD_GUARDS,
                 fill_if_absent=(get_region_fields().status,) if seeding else (),
+                repair=repair,
             )
-        if unit.refused:
-            logger.warning('ingest_bulk_partial_errors', refused=unit.refused[:3])
+        if unit.refused or unit.failure:
+            logger.warning('ingest_bulk_failed', refused=unit.refused[:3], failure=unit.failure)
+            reason = '; '.join(unit.refused[:3]) or str(unit.failure)
+            raise IngestWriteError(reason, release_claim=unit.image_absent)
         if created_ids is not None:
             created_ids.extend(unit.created_ids)
+        if stale_ids is not None:
+            stale_ids.extend(unit.stale_ids)
         queued = 0
         if seeding:
             status_field = get_region_fields().status
@@ -125,6 +140,8 @@ class IngestItemsMixin:
             queued = len(seeded.intersection(unit.created_ids)) + unit.filled_absent
         return {
             'duplicate': int(unit.duplicate),
+            'incomplete': int(unit.incomplete),
+            'repaired': int(unit.repaired),
             'images_indexed': unit.images_indexed,
             'crops_created': unit.created,
             'crops_updated': unit.updated,

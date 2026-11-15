@@ -67,6 +67,22 @@ def count_batch_fallback(stage: str, exc: BaseException) -> None:
     OP_INGEST_BATCH_FALLBACK_TOTAL.labels(stage=stage, reason=type(exc).__name__).inc()
 
 
+OP_INGEST_WHOLE_TOTAL = Counter(
+    'op_ingest_whole_total',
+    'Photos stored incomplete (an images doc whose listed items are not all there) and what '
+    'ingest did: repaired (rewritten whole by a later ingest), held_back (answered '
+    'incomplete_write: a writer may still be writing it), marked (a failed writer noted its '
+    'photo as repairable), mark_failed (that note could not be written; the repair age covers it).',
+    labelnames=('event',),
+)
+
+
+def count_whole_event(event: str) -> None:
+    """Count one ``repaired`` / ``held_back`` / ``marked`` / ``mark_failed`` event on
+    ``op_ingest_whole_total``."""
+    OP_INGEST_WHOLE_TOTAL.labels(event=event).inc()
+
+
 def count_decode_route(route: str, path: str) -> None:
     """Count one photo on ``op_decode_route_total``; a route outside the closed list raises."""
     OP_DECODE_ROUTE_TOTAL.labels(route=check_route(route), path=path).inc()

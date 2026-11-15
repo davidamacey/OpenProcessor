@@ -25,6 +25,12 @@ ERROR_KIND_DECODE_FAILED = 'decode_failed'
 ERROR_KIND_DETECTOR_INFER = 'detector_infer'
 ERROR_KIND_BULK_INDEX = 'bulk_index'
 ERROR_KIND_BLUR = 'blur_failed'
+# The photo is stored incomplete (an item its images doc lists is missing) and a writer may still be
+# writing it; sending it again later stores it whole.
+ERROR_KIND_INCOMPLETE_WRITE = 'incomplete_write'
+
+# Failures a retry can fix without the file changing: a bulk run must not count them as attempts.
+TRANSIENT_ERROR_KINDS = frozenset({ERROR_KIND_INCOMPLETE_WRITE})
 
 
 class IngestSummary(BaseModel):
@@ -98,4 +104,10 @@ class BatchIngestResult(BaseModel):
     results: list[IngestResult] = Field(default_factory=list)
 
 
-__all__ = ['BatchIngestResult', 'IngestResult', 'IngestSummary']
+__all__ = [
+    'ERROR_KIND_INCOMPLETE_WRITE',
+    'TRANSIENT_ERROR_KINDS',
+    'BatchIngestResult',
+    'IngestResult',
+    'IngestSummary',
+]

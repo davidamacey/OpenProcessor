@@ -51,6 +51,7 @@ from typing import TYPE_CHECKING, Literal
 
 from src.core.logging import get_logger
 from src.domain.decode_route import CPU_GPU_OFF, CPU_NOT_IMAGE, CPU_SMALL, GPU, prep_status_route
+from src.services.curation.ingest_dedup import held_back_result
 from src.services.curation.ingest_finish import PhotoJob
 from src.services.curation.ingest_models import BatchIngestResult, IngestResult, IngestSummary
 from src.services.curation.ops_metrics import record_ingest_result
@@ -285,7 +286,21 @@ async def run_ingest_batch(
     summary = IngestSummary()
     hashes = [content_imohash(b) for b in images]
     resolved = await service.resolve_contents(list(zip(hashes, images, strict=True)))
-    existing_ids = [r.existing['image_id'] if r.existing is not None else None for r in resolved]
+    # A stored image that misses items is no duplicate: one nobody is writing is ingested again
+    # (it completes the image), one a writer may still be writing is answered at once.
+    existing_ids = [
+        r.existing['image_id'] if r.existing is not None and r.completeness != 'repair' else None
+        for r in resolved
+    ]
+    stored: dict[int, IngestResult] = {
+        i: record_ingest_result(
+            held_back_result(
+                r, image_paths[i], hashes[i], source_identifiers[i] if source_identifiers else None
+            )
+        )
+        for i, r in enumerate(resolved)
+        if r.completeness == 'in_flight'
+    }
 
     batch_dup_of, non_dup = _group_batch(hashes, images, existing_ids)
 
@@ -326,7 +341,6 @@ async def run_ingest_batch(
                 resolved=looked_up,
             )
 
-        stored: dict[int, IngestResult] = {}
         for n, wave in enumerate(_rounds(non_dup, hashes)):
             # The first wave's files were resolved above, before anything of this batch was
             # stored; a later wave resolves again, now that the earlier file it waited for is.

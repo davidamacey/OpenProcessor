@@ -28,6 +28,7 @@ from src.clients.curation_opensearch.open_vocab_fields import (
 )
 from src.clients.curation_opensearch.text_analysis import ITEMS_ANALYSIS, NORMALIZER_NAME
 from src.config.vlm_class_attempt import VLM_CLASS_ATTEMPT_MAPPING
+from src.domain.image_completeness import INCOMPLETE_MARK_FIELD, ITEM_IDS_FIELD
 from src.domain.item_text import ITEM_TEXT_MAPPING
 
 
@@ -78,10 +79,14 @@ _ITEMS_IMPORT_MAPPING: dict[str, Any] = {
 }
 
 
-# The ingest writer's per-write id (src/services/curation/ingest_writer.py): read
-# back from _source only, to tell its own retried create from another copy's (#375).
-IMAGES_WRITE_ID_MAPPING: dict[str, Any] = {
+# What the ingest writer stores on an images doc and only ever reads back from _source:
+# its per-write id, to tell its own retried create from another copy's (#375); the ids of the
+# items the doc must have (src/domain/image_completeness.py), so a photo stored without them is
+# found out; and the note a writer leaves on a photo it saw fail.
+IMAGES_INGEST_WRITE_MAPPING: dict[str, Any] = {
     'ingest_write_id': {'type': 'keyword', 'index': False, 'doc_values': False},
+    ITEM_IDS_FIELD: {'type': 'keyword', 'index': False, 'doc_values': False},
+    INCOMPLETE_MARK_FIELD: {'type': 'boolean', 'index': False, 'doc_values': False},
 }
 
 
@@ -101,7 +106,7 @@ def _images_body() -> dict[str, Any]:
                 'ingest_run_id': {'type': 'keyword'},
                 # How the pixels were decoded (src/domain/decode_route.py); set at create only.
                 'decode_route': {'type': 'keyword'},
-                **IMAGES_WRITE_ID_MAPPING,
+                **IMAGES_INGEST_WRITE_MAPPING,
                 'source': {'type': 'keyword'},
                 'width': {'type': 'integer'},
                 'height': {'type': 'integer'},

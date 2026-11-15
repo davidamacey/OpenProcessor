@@ -74,7 +74,7 @@ from src.config import get_curation_config
 from src.core.logging import get_logger
 from src.domain.capture_metadata import unknown_capture
 from src.domain.decode_route import CPU_SINGLE, GPU
-from src.services.curation.ingest_dedup import IngestDedupMixin, Resolved
+from src.services.curation.ingest_dedup import IngestDedupMixin, Resolved, held_back_result
 from src.services.curation.ingest_detect import (
     SECONDARY_IOU_MATCH,
     SecondaryOutput,
@@ -92,6 +92,7 @@ from src.services.curation.ingest_models import (
     IngestSummary,
 )
 from src.services.curation.ingest_policy import IngestPolicy
+from src.services.curation.ingest_writer import RepairTarget
 from src.services.curation.item_doc import DetectedItem, region_seed_status
 from src.services.events.publish import apublish_crops_created
 from src.services.near_duplicates.content_key import content_image_id, content_imohash
@@ -198,7 +199,10 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
         ``adopt_existing=True`` (a dataset import, which must attach
         labels to an already-indexed image) turns a duplicate into a
         context with ``created=False`` carrying the existing doc's
-        ``image_id`` and ``image_path``.
+        ``image_id`` and ``image_path``; it never repairs an incomplete image.
+        Without it, a stored image that misses items is answered ``incomplete_write`` while a
+        writer may still be writing it, and otherwise comes back as a context with ``created``
+        False and ``repair`` set: the ingest completes the image.
         """
         if not image_bytes:
             return IngestResult(
@@ -243,14 +247,18 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
             )
         existing = resolved.existing
         if existing is not None and not adopt_existing:
-            return IngestResult(
-                status='duplicate',
-                image_id=existing['image_id'],
-                image_path=image_path,
-                source_identifier=source_identifier,
-                imohash=image_hash,
-            )
+            if resolved.completeness == 'in_flight':
+                return held_back_result(resolved, image_path, image_hash, source_identifier)
+            if resolved.completeness == 'complete':
+                return IngestResult(
+                    status='duplicate',
+                    image_id=existing['image_id'],
+                    image_path=image_path,
+                    source_identifier=source_identifier,
+                    imohash=image_hash,
+                )
         capture: CaptureMetadata | None = None
+        repair: RepairTarget | None = None
         if existing is None:
             image_id = content_image_id(resolved.key)
             resolved_path = image_path
@@ -259,6 +267,10 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
         else:
             image_id = existing['image_id']
             resolved_path = existing.get('image_path') or image_path
+            if (
+                not adopt_existing
+            ):  # an incomplete image nobody is writing: this ingest completes it
+                repair = RepairTarget(image_id, resolved.listed)
         return ImageContext(
             image_id=image_id,
             image_path=resolved_path,
@@ -276,6 +288,7 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
             source_identifier=source_identifier,
             ingest_run_id=ingest_run_id,
             capture=capture,
+            repair=repair,
         )
 
     async def read_capture(self, image_bytes: bytes) -> CaptureMetadata:

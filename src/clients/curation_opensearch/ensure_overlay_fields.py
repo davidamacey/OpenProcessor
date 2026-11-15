@@ -8,7 +8,10 @@ from typing import TYPE_CHECKING, Any
 from opensearchpy.exceptions import OpenSearchException
 
 from src.clients.curation_opensearch.base import config, logger
-from src.clients.curation_opensearch.bodies_core import IMAGES_WRITE_ID_MAPPING, ITEMS_VIZ_MAPPING
+from src.clients.curation_opensearch.bodies_core import (
+    IMAGES_INGEST_WRITE_MAPPING,
+    ITEMS_VIZ_MAPPING,
+)
 from src.clients.curation_opensearch.mapping_put import put_properties
 from src.clients.curation_opensearch.near_dup_fields import NEAR_DUP_MAPPING
 
@@ -76,7 +79,7 @@ async def ensure_images_upload_fields(
 ) -> dict[str, Any]:
     """PUT the BA-1/BA-4 ``source_identifier`` / ``ingest_run_id`` keyword
     fields, the ``decode_route`` keyword, the ``imohash`` exact key, the near-duplicate projection fields and the
-    ingest write id onto the existing images mapping.
+    ingest write id, the item list and the failure note onto the existing images mapping.
 
     Additive ``PUT <index>/_mapping`` — idempotent.
     """
@@ -88,7 +91,7 @@ async def ensure_images_upload_fields(
             'decode_route': {'type': 'keyword'},
             'imohash': {'type': 'keyword'},
             **NEAR_DUP_MAPPING,
-            **IMAGES_WRITE_ID_MAPPING,
+            **IMAGES_INGEST_WRITE_MAPPING,
         }
     }
     list(body['properties'])
