@@ -151,7 +151,8 @@ class UnitResult:
     """What one image's documents did; ``refused`` lists the reasons for any the store refused.
 
     ``duplicate``: the images doc already existed, written by another copy of the content
-    (its write id is not this unit's), and is whole, so nothing of this unit was written.
+    (its write id is not this unit's), and is whole, so nothing of this unit was written; a repair
+    that took the lease after another repair finished finds it whole in the same way.
     ``incomplete``: the same, but the doc misses items and a writer may still be writing it, so
     nothing was written and the photo is not reported stored (also: another repair of it is in
     progress). ``repaired``: the doc existed incomplete with no live writer, and this unit created
