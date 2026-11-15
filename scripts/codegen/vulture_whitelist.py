@@ -101,6 +101,12 @@ _.photos_needing  # src/db/repos/analysers.py; wired by storage steps 2 to 4; en
 _.live_claims_of_operation  # src/db/repos/claims.py; wired by storage steps 2 to 4; entry removed by that lane
 _.insert_items  # src/db/repos/items.py; wired by storage steps 2 to 4; entry removed by that lane
 _.item_keys_by_crop_id  # src/db/repos/items.py; wired by storage steps 2 to 4; entry removed by that lane
+_.create_statements  # src/db/vector_ddl.py; wired by storage steps 2 to 4; entry removed by that lane
+_.drop_statement  # src/db/vector_ddl.py; wired by storage steps 2 to 4; entry removed by that lane
+_.row_security_flags  # src/db/vector_ddl.py; wired by storage steps 2 to 4; entry removed by that lane
+_.role_grants  # src/db/vector_ddl.py; wired by storage steps 2 to 4; entry removed by that lane
+_.ROLE_ATTRIBUTES  # src/db/vector_ddl.py; wired by storage steps 2 to 4; entry removed by that lane
+_.ROLE_SETTINGS  # src/db/vector_ddl.py; wired by storage steps 2 to 4; entry removed by that lane
 
 # Registered or read by a framework through a name, a decorator or a protocol
 _._on_worker_init  # src/tasks/app.py; connected to Celery's worker_init signal by decorator
