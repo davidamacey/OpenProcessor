@@ -25,6 +25,15 @@ services:
   fake-triton:
     image: op-local/openprocessor-api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
 
+  fake-frame-engine:
+    image: op-local/openprocessor-api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
+    volumes: !override
+      - ./fake_frame_engine.py:/fake/fake_frame_engine.py:ro
+      - ./fake_triton.py:/fake/fake_triton.py:ro
+      - ../../tests/curation/engine_answer.py:/fake/engine_answer.py:ro
+      - ../../frame_engine:/app/frame_engine:ro
+      - ${VERIFY_DATA_DIR:-./verify-data}:/verify-data:ro
+
   api:
     image: op-local/openprocessor-api:${OP_TEST_IMAGE_TAG:?set OP_TEST_IMAGE_TAG}
     build: !reset null

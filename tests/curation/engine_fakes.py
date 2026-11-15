@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import dataclasses
 import io
-import json
 import struct
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from PIL import Image
 
+from curation.engine_answer import engine_answer, failed_answer
 from curation.ingest_fakes import _make_service
 from src.domain import frame_engine_wire as wire
 
@@ -30,10 +30,6 @@ class _Result:
 
     def as_numpy(self, name: str) -> np.ndarray | None:
         return self.outputs.get(name)
-
-
-def _text(value: str) -> np.ndarray:
-    return np.array([value.encode()], dtype=np.object_)
 
 
 def _one_bytes(inp: Any) -> bytes:
@@ -51,10 +47,8 @@ def _decoded_size(data: bytes) -> tuple[int, int] | None:
         return None
 
 
-def _axis(dim: int, index: int, value: float) -> np.ndarray:
-    out = np.zeros(dim, np.float32)
-    out[index] = value
-    return out
+def _text(value: str) -> np.ndarray:
+    return np.array([value.encode()], dtype=np.object_)
 
 
 def engine_result(
@@ -68,42 +62,34 @@ def engine_result(
     det_class: int = 1,
     embed_dim: int = 3,
 ) -> _Result:
-    if status != 'ok':
-        failed = {b: {'status': 'error', 'reason': 'image_failed'} for b in plan.branches}
-        return _Result(
-            {
-                'status': _text(status),
-                'decode_route': _text('none'),
-                'branch_status': _text(json.dumps(failed)),
-            }
+    """The tensors of one answer as the client reads them (the text ones as one BYTES element)."""
+    answer = (
+        failed_answer(plan, status)
+        if status != 'ok'
+        else engine_answer(
+            plan,
+            width,
+            height,
+            jpeg=jpeg,
+            failed_branch=failed_branch,
+            route=route,
+            det_class=det_class,
+            embed_dim=embed_dim,
         )
-    branches: dict[str, dict[str, str]] = {b: {'status': 'ok'} for b in plan.branches}
-    if failed_branch is not None:
-        branches[failed_branch] = {'status': 'error', 'reason': 'model_error'}
-    scale = min(320 / width, 320 / height)
-    new_w, new_h = round(width * scale), round(height * scale)
-    out = {
-        'status': _text('ok'),
-        'decode_route': _text(route),
-        'branch_status': _text(json.dumps(branches)),
-        'size': np.array([width, height], np.int32),
-        'letterbox': np.array([scale, (320 - new_w) // 2, (320 - new_h) // 2], np.float64),
-        'det_boxes': np.array([[16.0, 16.0, 192.0, 192.0]], np.float32),
-        'det_scores': np.array([0.9], np.float32),
-        'det_classes': np.array([det_class], np.int32),
-        'whole_embedding': _axis(embed_dim, embed_dim - 1, 2.0),
-        # frame: n=100, sum=0, squares=500 -> 5.0 ; box: n=10, sum=10, squares=30 -> 2.0
-        'blur_sums': np.array([[100, 0, 500], [10, 10, 30]], np.int64),
-        'crop_jpegs': np.array([jpeg], dtype=np.object_),
-    }
-    if plan.runs('embed_crops'):
-        # as the engine does: only the picked detections are embedded, their rows come first
-        picked = plan.embed_classes is None or det_class in plan.embed_classes
-        out['crop_embeddings'] = np.array(
-            [_axis(embed_dim, 1, 3.0)] if picked else [], np.float32
-        ).reshape(-1, embed_dim)
-        out['crop_embedded'] = np.array([picked])
-    return _Result(out)
+    )
+    return _Result(
+        {
+            wire.STATUS: _text(answer.status),
+            wire.DECODE_ROUTE: _text(answer.decode_route),
+            wire.BRANCH_STATUS: _text(wire.encode_branch_status(answer.branches)),
+            **{
+                name: np.array(value, dtype=np.object_)
+                if name == wire.CROP_JPEGS
+                else np.asarray(value)
+                for name, value in answer.outputs.items()
+            },
+        }
+    )
 
 
 class Engine:
