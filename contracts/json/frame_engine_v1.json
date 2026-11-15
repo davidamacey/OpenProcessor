@@ -168,6 +168,141 @@
       ]
     }
   ],
+  "metrics": [
+    {
+      "labels": [
+        "stage"
+      ],
+      "name": "op_frame_engine_stage_seconds",
+      "type": "counter"
+    },
+    {
+      "labels": [
+        "stage"
+      ],
+      "name": "op_frame_engine_stage_observations",
+      "type": "counter"
+    },
+    {
+      "labels": [],
+      "name": "op_frame_engine_in_flight",
+      "type": "gauge"
+    },
+    {
+      "labels": [],
+      "name": "op_frame_engine_slab_in_use_bytes",
+      "type": "gauge"
+    },
+    {
+      "labels": [],
+      "name": "op_frame_engine_slab_peak_bytes",
+      "type": "gauge"
+    },
+    {
+      "labels": [],
+      "name": "op_frame_engine_slab_waits",
+      "type": "gauge"
+    },
+    {
+      "labels": [],
+      "name": "op_frame_engine_budget_in_use_bytes",
+      "type": "gauge"
+    },
+    {
+      "labels": [
+        "outcome"
+      ],
+      "name": "op_frame_engine_budget_waits",
+      "type": "counter"
+    },
+    {
+      "labels": [
+        "cause"
+      ],
+      "name": "op_frame_engine_region_registrations",
+      "type": "counter"
+    },
+    {
+      "labels": [
+        "model",
+        "code",
+        "reason"
+      ],
+      "name": "op_frame_engine_triton_call_errors",
+      "type": "counter"
+    },
+    {
+      "labels": [
+        "stage"
+      ],
+      "name": "op_frame_engine_request_deadlines",
+      "type": "counter"
+    },
+    {
+      "labels": [
+        "status",
+        "decode_route"
+      ],
+      "name": "op_frame_engine_images",
+      "type": "counter"
+    },
+    {
+      "labels": [
+        "code"
+      ],
+      "name": "op_frame_engine_context_lost",
+      "type": "counter"
+    },
+    {
+      "labels": [
+        "cause"
+      ],
+      "name": "op_frame_engine_overloads",
+      "type": "counter"
+    },
+    {
+      "labels": [
+        "outcome"
+      ],
+      "name": "op_frame_engine_colour",
+      "type": "counter"
+    },
+    {
+      "labels": [],
+      "name": "op_frame_engine_colour_table_bytes",
+      "type": "gauge"
+    },
+    {
+      "labels": [],
+      "name": "process_virtual_memory_bytes",
+      "type": "gauge"
+    },
+    {
+      "labels": [],
+      "name": "process_resident_memory_bytes",
+      "type": "gauge"
+    },
+    {
+      "labels": [],
+      "name": "process_start_time_seconds",
+      "type": "gauge"
+    },
+    {
+      "labels": [],
+      "name": "process_cpu_seconds",
+      "type": "counter"
+    },
+    {
+      "labels": [],
+      "name": "process_open_fds",
+      "type": "gauge"
+    },
+    {
+      "labels": [],
+      "name": "process_max_fds",
+      "type": "gauge"
+    }
+  ],
   "model": {
     "engine_error_prefix": "frame engine: ",
     "name": "frame_engine",
@@ -493,6 +628,32 @@
     "src/clients/frame_engine.py",
     "frame_engine/front.py",
     "scripts/codegen/frame_engine_plan_cases.py"
+  ],
+  "stages": [
+    "queue",
+    "budget",
+    "decode",
+    "letterbox",
+    "detect",
+    "embed_frame",
+    "embed_crops",
+    "embed_pe",
+    "crop_copy",
+    "crop_jpeg",
+    "blur",
+    "face_letterbox",
+    "face_detect",
+    "face_align",
+    "face_embed",
+    "face_blur",
+    "ocr_prep",
+    "ocr_detect",
+    "ocr_boxes",
+    "ocr_crops",
+    "ocr_rec",
+    "ocr_decode",
+    "derivative_render",
+    "derivative_jpeg"
   ],
   "unimplemented_calls_status": "UNIMPLEMENTED"
 }

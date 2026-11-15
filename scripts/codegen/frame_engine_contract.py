@@ -105,6 +105,45 @@ REQUEST_RULES: list[dict[str, str]] = [
 #: apart, a third of the API's period.
 SERVER_MIN_PING_INTERVAL_MS = 10000
 
+#: The stages a request's seconds are counted in (``frame_engine.stage_metrics.STAGES``, and the
+#: label values of ``op_frame_engine_stage_seconds_total``). Pinned by
+#: ``tests/test_frame_engine_contract.py``.
+STAGES: list[str] = [
+    'queue', 'budget', 'decode', 'letterbox', 'detect', 'embed_frame', 'embed_crops', 'embed_pe',
+    'crop_copy', 'crop_jpeg', 'blur', 'face_letterbox', 'face_detect', 'face_align', 'face_embed',
+    'face_blur', 'ocr_prep', 'ocr_detect', 'ocr_boxes', 'ocr_crops', 'ocr_rec', 'ocr_decode',
+    'derivative_render', 'derivative_jpeg',
+]  # fmt: skip
+
+#: Every series of the engine's metrics endpoint (``frame_engine.stage_metrics.EngineMetrics``):
+#: the family name (a counter's exposition adds ``_total``), its kind and its labels. The release
+#: acceptance and the dashboards read these names. Pinned by ``tests/test_frame_engine_contract.py``.
+METRICS: list[dict[str, Any]] = [
+    {'name': 'op_frame_engine_stage_seconds', 'type': 'counter', 'labels': ['stage']},
+    {'name': 'op_frame_engine_stage_observations', 'type': 'counter', 'labels': ['stage']},
+    {'name': 'op_frame_engine_in_flight', 'type': 'gauge', 'labels': []},
+    {'name': 'op_frame_engine_slab_in_use_bytes', 'type': 'gauge', 'labels': []},
+    {'name': 'op_frame_engine_slab_peak_bytes', 'type': 'gauge', 'labels': []},
+    {'name': 'op_frame_engine_slab_waits', 'type': 'gauge', 'labels': []},
+    {'name': 'op_frame_engine_budget_in_use_bytes', 'type': 'gauge', 'labels': []},
+    {'name': 'op_frame_engine_budget_waits', 'type': 'counter', 'labels': ['outcome']},
+    {'name': 'op_frame_engine_region_registrations', 'type': 'counter', 'labels': ['cause']},
+    {'name': 'op_frame_engine_triton_call_errors', 'type': 'counter',
+     'labels': ['model', 'code', 'reason']},
+    {'name': 'op_frame_engine_request_deadlines', 'type': 'counter', 'labels': ['stage']},
+    {'name': 'op_frame_engine_images', 'type': 'counter', 'labels': ['status', 'decode_route']},
+    {'name': 'op_frame_engine_context_lost', 'type': 'counter', 'labels': ['code']},
+    {'name': 'op_frame_engine_overloads', 'type': 'counter', 'labels': ['cause']},
+    {'name': 'op_frame_engine_colour', 'type': 'counter', 'labels': ['outcome']},
+    {'name': 'op_frame_engine_colour_table_bytes', 'type': 'gauge', 'labels': []},
+    {'name': 'process_virtual_memory_bytes', 'type': 'gauge', 'labels': []},
+    {'name': 'process_resident_memory_bytes', 'type': 'gauge', 'labels': []},
+    {'name': 'process_start_time_seconds', 'type': 'gauge', 'labels': []},
+    {'name': 'process_cpu_seconds', 'type': 'counter', 'labels': []},
+    {'name': 'process_open_fds', 'type': 'gauge', 'labels': []},
+    {'name': 'process_max_fds', 'type': 'gauge', 'labels': []},
+]  # fmt: skip
+
 #: How engine failures map to gRPC statuses (``FrontService.ModelInfer``).
 FAILURE_STATUSES: list[dict[str, str]] = [
     {'failure': 'overload', 'status': 'RESOURCE_EXHAUSTED'},
@@ -160,6 +199,8 @@ def render_protocol() -> dict[str, Any]:
         'request_rules': REQUEST_RULES,
         'boxes_zero_rows_allowed': True,
         'failure_statuses': FAILURE_STATUSES,
+        'stages': STAGES,
+        'metrics': METRICS,
         'photo_statuses': [wire.STATUS_OK, *decode_route.PREP_STATUSES],
         'decode_routes': [
             wire.DECODED_GPU,
