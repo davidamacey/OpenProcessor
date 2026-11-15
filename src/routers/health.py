@@ -32,7 +32,11 @@ from src.core import disk_space
 from src.core.metrics import render_metrics
 from src.db.schema_check import ProbeFailed
 from src.services.face_privacy import FaceDataCounts, stored_face_counts, stored_summary
-from src.services.models.model_readiness import models_not_ready, required_model_names
+from src.services.models.model_readiness import (
+    crop_input_problem,
+    models_not_ready,
+    required_model_names,
+)
 from src.services.models.triton_control import TritonControlService
 from src.utils.upstream_errors import UpstreamError
 
@@ -157,6 +161,18 @@ async def _probe_required_models() -> tuple[bool, str, list[dict[str, str]]]:
     if bad:
         names = ', '.join(f'{b["name"]} ({b["state"]})' for b in bad)
         return False, f'required models not READY: {names}', bad
+    settings = get_settings().models
+    if settings.PE_CROP_MODEL in required:
+        # The engine's built size is what the API letterboxes crops to: a mismatch would send
+        # the server shapes it rejects, or vectors of a size the space was not built at.
+        problem = crop_input_problem(
+            await TritonControlService().get_model_config(settings.PE_CROP_MODEL),
+            settings.PE_CROP_MODEL,
+            settings.PE_CROP_SIZE,
+        )
+        if problem:
+            bad = [{'name': settings.PE_CROP_MODEL, 'state': 'MISCONFIGURED', 'reason': problem}]
+            return False, problem, bad
     return True, f'{len(required)} required models READY', []
 
 

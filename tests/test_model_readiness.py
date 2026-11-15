@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import pytest
 
 from src.services.models import model_readiness as mr
-
-
-if TYPE_CHECKING:
-    import pytest
 
 
 def _entry(name: str, state: str, reason: str = '', version: str = '1') -> dict[str, str]:
@@ -91,3 +87,78 @@ def test_faces_off_drops_the_face_models_from_an_explicit_list(
         'scrfd_10g_bnkps_uint8,arcface_w600k_r50_uint8',
     )
     assert mr.required_model_names() == ['yolov11_small_trt_end2end']
+
+
+# ---- the crop encoder's built size is checked against the configured one ----
+
+
+def _config(dims: list[object], name: str = 'images') -> dict[str, object]:
+    """``GET /v2/models/<m>/config``: protobuf JSON, so int64 dims arrive as strings."""
+    return {
+        'name': 'pe_crop_encoder',
+        'max_batch_size': 32,
+        'input': [{'name': name, 'dims': dims}],
+    }
+
+
+def test_a_crop_engine_built_at_the_configured_size_passes() -> None:
+    assert mr.crop_input_problem(_config(['3', '224', '224']), 'pe_crop_encoder', 224) is None
+    assert mr.crop_input_problem(_config([3, 224, 224]), 'pe_crop_encoder', 224) is None
+
+
+def test_a_crop_engine_built_at_another_size_is_named_with_both_sizes() -> None:
+    why = mr.crop_input_problem(_config(['3', '336', '336']), 'pe_crop_encoder', 224)
+    assert why is not None
+    for part in ('pe_crop_encoder', '336', '224', 'PE_CROP_SIZE'):
+        assert part in why
+
+
+@pytest.mark.parametrize(
+    'config',
+    [None, {}, {'input': []}, _config(['3', '224', '224'], name='pixels'), _config(['3', '224'])],
+)
+def test_a_config_that_cannot_be_read_is_a_problem_not_a_pass(config: object) -> None:
+    assert mr.crop_input_problem(config, 'pe_crop_encoder', 224) is not None  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+async def test_readiness_refuses_a_crop_engine_of_the_wrong_size(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.routers import health
+    from src.services.models import triton_control
+
+    monkeypatch.setenv('OP_REQUIRED_MODELS', 'pe_crop_encoder')
+
+    async def index(_self: object) -> list[dict[str, str]]:
+        return [_entry('pe_crop_encoder', 'READY')]
+
+    async def config(_self: object, _name: str) -> dict[str, object]:
+        return _config(['3', '336', '336'])
+
+    monkeypatch.setattr(triton_control.TritonControlService, 'get_repository_index', index)
+    monkeypatch.setattr(triton_control.TritonControlService, 'get_model_config', config)
+    ok, detail, bad = await health._probe_required_models()
+    assert ok is False
+    assert 'PE_CROP_SIZE' in detail
+    assert bad[0]['name'] == 'pe_crop_encoder'
+
+
+@pytest.mark.asyncio
+async def test_readiness_passes_a_crop_engine_of_the_configured_size(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from src.routers import health
+    from src.services.models import triton_control
+
+    monkeypatch.setenv('OP_REQUIRED_MODELS', 'pe_crop_encoder')
+
+    async def index(_self: object) -> list[dict[str, str]]:
+        return [_entry('pe_crop_encoder', 'READY')]
+
+    async def config(_self: object, _name: str) -> dict[str, object]:
+        return _config(['3', '224', '224'])
+
+    monkeypatch.setattr(triton_control.TritonControlService, 'get_repository_index', index)
+    monkeypatch.setattr(triton_control.TritonControlService, 'get_model_config', config)
+    assert (await health._probe_required_models())[0] is True
