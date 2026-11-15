@@ -73,6 +73,19 @@ RESULT_SPECS: dict[str, ResultSpec] = {
 }
 _ORDER = {name: n for n, name in enumerate(RESULT_SPECS)}
 
+# Whether a write to the table can change the rank of an item among its photo's items: only a detection
+# (a box, or an item appearing or going). Every table of RESULT_SPECS is in exactly one of the two sets:
+# a table added without a classification fails tests/storage/test_apply_offline.py.
+RANK_CHANGING_TABLES = frozenset({'detections'})
+RANK_NEUTRAL_TABLES = frozenset(
+    {
+        'photo_capture', 'class_opinions', 'raw_label_clusters', 'item_region_results',
+        'region_boxes', 'box_texts', 'probe_predictions', 'item_scores', 'item_projections',
+        'assist_answers', 'faces', 'entity_edges', 'photo_derivatives', 'photo_signals',
+        'photo_places',
+    }
+)  # fmt: skip
+
 _BOX_KEYS = text(
     """
     SELECT r.item_key, r.box_id, r.box_key

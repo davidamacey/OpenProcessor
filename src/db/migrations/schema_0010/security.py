@@ -143,6 +143,11 @@ def ensure_extensions() -> None:
     non-superuser schema owner cannot create it: a superuser must run ``CREATE EXTENSION vector`` in
     this database once, or the image's bootstrap must. Nothing in this revision uses the extension, so
     a missing one is a warning here and an error in the job that makes the first vector table.
+
+    Deviation 1 (accepted): this is a warning only until the deploy lane ships the image with pgvector,
+    the ``op_vector`` role and its secret. From then on the migration must FAIL without the extension
+    instead of warning: change the ``RAISE WARNING`` below to ``RAISE EXCEPTION`` in the revision that
+    lane writes, and make its bootstrap create the extension as the superuser first.
     """
     for extension, needed_for in _EXTENSION_NEEDS.items():
         op.execute(_EXTENSION_BLOCK.replace('@EXT@', extension).replace('@NEEDED@', needed_for))

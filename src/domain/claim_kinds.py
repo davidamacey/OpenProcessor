@@ -139,5 +139,40 @@ CLASS_DECIDING_KINDS = frozenset(
 PINNING_KINDS = frozenset(k for k, info in KINDS.items() if info.pins_geometry)
 
 
+# Whether a claim of the kind can change the rank of any item among its photo's items (rank is the
+# order of box areas, ``fold.rank_items``). One entry per kind, so a kind added to the catalogue and
+# not classified here fails ``tests/domain/test_claim_kind_rank_effect.py``. The writer of the record
+# (``src.services.record.apply``) locks and folds only the named items when no input can change rank, and
+# every sibling of the photo when one can. A drawn item and a geometry claim change an area, an exclusion
+# or restore is treated as changing rank (the wire counts an excluded item out of its photo's order), and
+# a withdraw can undo any of those, so the kind alone cannot say: it is rank changing.
+RANK_EFFECT: dict[ClaimKind, bool] = {
+    ClaimKind.ITEM_DRAWN: True,
+    ClaimKind.GEOMETRY_SET: True,
+    ClaimKind.CLASS_SET: False,
+    ClaimKind.CLASS_CLEARED: False,
+    ClaimKind.CLASS_MOVED: False,
+    ClaimKind.HOLDOUT_FROZEN: False,
+    ClaimKind.EXCLUDED: True,
+    ClaimKind.RESTORED: True,
+    ClaimKind.REVIEW_DISMISSED: False,
+    ClaimKind.REVIEW_RESTORED: False,
+    ClaimKind.VLM_DISMISSED: False,
+    ClaimKind.PROBE_DISMISSED: False,
+    ClaimKind.NEEDS_NEW_CLASS: False,
+    ClaimKind.AUDIT_SAMPLED: False,
+    ClaimKind.COMBINE_CONFLICT: False,
+    ClaimKind.REGION_STATUS_SET: False,
+    ClaimKind.BOX_CREATED: False,
+    ClaimKind.BOX_MOVED: False,
+    ClaimKind.BOX_STATE_SET: False,
+    ClaimKind.BOX_TEXT_SET: False,
+    ClaimKind.BOX_DELETED: False,
+    ClaimKind.DUPLICATE_VERDICT: False,
+    ClaimKind.WITHDRAW: True,
+}
+RANK_CHANGING_KINDS = frozenset(k for k, changes in RANK_EFFECT.items() if changes)
+
+
 def actor_rank(actor_kind: ActorKind) -> int:
     return ACTOR_RANK[actor_kind]

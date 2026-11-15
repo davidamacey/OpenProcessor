@@ -10,10 +10,19 @@ from __future__ import annotations
 import asyncio
 import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
+import pytest
+from sqlalchemy.dialects import postgresql
+
+from src.db.repos import items as items_repo
 from src.db.repos.fold_load import LoadedItem
-from src.db.repos.results import ResultWrite
+from src.db.repos.results import (
+    RANK_CHANGING_TABLES,
+    RANK_NEUTRAL_TABLES,
+    RESULT_SPECS,
+    ResultWrite,
+)
 from src.domain import claim_builders
 from src.domain.claim_kinds import ActorKind, ClaimKind
 from src.domain.claims import ClaimDraft, commit
@@ -30,10 +39,6 @@ from src.services.record import apply as apply_module
 from src.services.record.apply import FoldContext, apply
 
 
-if TYPE_CHECKING:
-    import pytest
-
-
 PROJECT = uuid.UUID('00000000-0000-4000-8000-000000000001')
 OP = str(uuid.UUID('00000000-0000-4000-8000-0000000000aa'))
 T0 = datetime(2026, 1, 1, tzinfo=UTC)
@@ -43,7 +48,11 @@ CONTEXT = FoldContext(FoldSettings('primary', DEFAULT_PRECEDENCE), lambda _readi
 
 
 def _loaded(
-    key: int, box: tuple[float, float, float, float], *, claims: tuple[Any, ...] = ()
+    key: int,
+    box: tuple[float, float, float, float],
+    *,
+    claims: tuple[Any, ...] = (),
+    photo: int = 7,
 ) -> LoadedItem:
     crop = f'{key:032x}'
     detection = DetectionResult(
@@ -51,7 +60,7 @@ def _loaded(
     )
     return LoadedItem(
         ItemInputs(
-            item=ItemRow(crop_id=crop, photo_key=7, created_at=T0),
+            item=ItemRow(crop_id=crop, photo_key=photo, created_at=T0),
             frame=1,
             detections=(detection,),
             claims=claims,
@@ -64,8 +73,13 @@ class Recorder:
     """Stands in for every repository call ``apply`` makes."""
 
     def __init__(
-        self, monkeypatch: pytest.MonkeyPatch, *, existing: tuple[int, ...] = (1, 2)
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        *,
+        existing: tuple[int, ...] = (1, 2),
+        ranks: dict[int, int] | None = None,
     ) -> None:
+        self.ranks = ranks or {}  # the stored state rows: none, an item new to the fold
         self.calls: list[str] = []
         self.locked_with: list[list[int]] = []
         self.states: dict[int, Any] = {}
@@ -83,6 +97,7 @@ class Recorder:
             'upsert_item_states': self.upsert_item_states,
             'upsert_box_states': self.upsert_box_states,
             'delete_states': self.delete_states,
+            'load_ranks': self.load_ranks,
         }.items():
             monkeypatch.setattr(apply_module, name, fn)
 
@@ -125,6 +140,10 @@ class Recorder:
     async def upsert_box_states(self, _s: Any, _p: Any, folds: Any, _keys: Any) -> int:
         self.calls.append('upsert_box_states')
         return 0
+
+    async def load_ranks(self, _s: Any, keys: Any) -> dict[int, int]:
+        self.calls.append('load_ranks')
+        return {k: self.ranks[k] for k in keys if k in self.ranks}
 
     async def delete_states(self, _s: Any, keys: Any) -> int:
         self.calls.append('delete_states')
@@ -232,3 +251,120 @@ def test_a_lost_import_claim_is_reported_as_a_conflict(monkeypatch: pytest.Monke
     rec.loaded[1] = _loaded(1, SMALL, claims=claims)
     out = run(item_keys=[1])
     assert [c.kind for c in out.conflicts] == ['locked_conflict']
+
+
+# --- the scope of one apply ---------------------------------------------------------------------
+
+
+def test_every_result_table_is_classified_for_its_effect_on_rank() -> None:
+    assert RANK_CHANGING_TABLES.isdisjoint(RANK_NEUTRAL_TABLES)
+    assert set(RESULT_SPECS) == RANK_CHANGING_TABLES | RANK_NEUTRAL_TABLES
+
+
+def _bulk(rec: Recorder, n: int, photos: int) -> tuple[list[int], list[ClaimDraft]]:
+    """N items spread over M photos, each with a state row, and one label claim per item."""
+    keys = list(range(1, n + 1))
+    drafts: list[ClaimDraft] = []
+    for k in keys:
+        photo = 100 + k % photos
+        rec.loaded[k] = _loaded(k, SMALL, photo=photo)
+        rec.ranks[k] = 1
+        view = claim_builders.ItemView(f'{k:032x}', photo, 1, SMALL, SMALL)
+        drafts += claim_builders.label(view, class_name='car', class_id_hint=1, op_id=OP)
+    rec.existing = tuple(keys)
+    return keys, drafts
+
+
+def test_a_plain_bulk_label_locks_exactly_the_named_items_and_reads_no_sibling(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rec = Recorder(monkeypatch)
+    keys, drafts = _bulk(rec, 12, 4)
+    out = run(claims=drafts, item_keys=list(reversed(keys)))
+    assert rec.locked_with == [keys]  # one lock statement, exactly N rows, ascending
+    assert 'photos_of_items' not in rec.calls
+    assert 'items_of_photos' not in rec.calls
+    assert out.locked == tuple(keys)
+    assert out.ranked_together is False
+    assert sorted(rec.states) == keys
+
+
+def test_the_lock_statement_of_a_plain_bulk_label_names_exactly_the_n_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The SQL the real ``lock_items`` sends, read from a recording session."""
+    from _fakes import FakeResult, FakeSession, Row
+
+    rec = Recorder(monkeypatch)
+    keys, drafts = _bulk(rec, 9, 3)
+    session = FakeSession(FakeResult([Row(item_key=k) for k in keys]))
+
+    async def real_lock(_s: Any, wanted: Any) -> list[int]:
+        return await items_repo.lock_items(session, wanted)
+
+    monkeypatch.setattr(apply_module, 'lock_items', real_lock)
+    run(claims=drafts, item_keys=keys)
+    assert len(session.calls) == 1
+    assert session.sql().endswith('FOR UPDATE')
+    bound = next(iter(session.calls[0][0].compile(dialect=postgresql.dialect()).params.values()))
+    assert list(bound) == keys
+
+
+def test_an_item_with_no_state_row_is_ranked_with_its_photo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rec = Recorder(monkeypatch, ranks={1: 2})  # item 2 has none
+    out = run(claims=_draft(), item_keys=[1, 2])
+    assert out.ranked_together is True
+    assert 'items_of_photos' in rec.calls
+
+
+@pytest.mark.parametrize(
+    'make',
+    [
+        pytest.param(lambda v: claim_builders.exclude(v, reason='blurry', op_id=OP), id='exclude'),
+        pytest.param(lambda v: claim_builders.restore(v, op_id=OP), id='restore'),
+        pytest.param(lambda v: [claim_builders.withdraw(5, v, op_id=OP)], id='withdraw'),
+    ],
+)
+def test_a_claim_that_can_change_rank_takes_the_photo_scope(
+    monkeypatch: pytest.MonkeyPatch, make: Any
+) -> None:
+    rec = Recorder(monkeypatch, ranks={1: 2, 2: 1})
+    view = claim_builders.ItemView(f'{1:032x}', 7, 1, SMALL, SMALL)
+    out = run(claims=make(view), item_keys=[1])
+    assert out.ranked_together is True
+    assert out.locked == (1, 2)
+    assert rec.locked_with == [[1, 2]]
+
+
+def test_a_detection_result_or_a_photo_scope_asked_for_takes_the_photo_scope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rec = Recorder(monkeypatch, ranks={1: 2, 2: 1})
+    detections = [ResultWrite('detections', [{'item_key': 1}])]
+    assert run(results=detections, item_keys=[1]).ranked_together is True
+    assert run(item_keys=[1], photo_scope=True).ranked_together is True
+    neutral = [ResultWrite('class_opinions', [{'item_key': 1}])]
+    assert run(results=neutral, item_keys=[1]).ranked_together is False
+    assert rec.locked_with == [[1, 2], [1, 2], [1]]
+
+
+def test_the_named_scope_keeps_each_items_stored_rank_and_equals_the_photo_scope_for_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The differential: a plain label folded alone gives the state the photo-wide path gives it."""
+    ranks = {1: 2, 2: 1}  # the small item is second, as its area says
+    rec = Recorder(monkeypatch, ranks=dict(ranks))
+    view = claim_builders.ItemView(f'{1:032x}', 7, 1, SMALL, SMALL)
+    label = claim_builders.label(view, class_name='car', class_id_hint=1, op_id=OP)
+    rec.loaded[1] = _loaded(
+        1, SMALL, claims=tuple(commit(d, claim_id=n, at=T0) for n, d in enumerate(label, 1))
+    )
+    named = run(claims=label, item_keys=[1])
+    named_state = rec.states[1].state
+    together = run(claims=label, item_keys=[1], photo_scope=True)
+    assert (named.ranked_together, together.ranked_together) == (False, True)
+    assert named_state == rec.states[1].state
+    assert named_state.rank == ranks[1]
+    assert named_state.class_validated is True

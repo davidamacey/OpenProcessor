@@ -355,3 +355,45 @@ async def test_one_hundred_thousand_claims_are_appended_and_the_rate_is_printed(
     seconds = time.perf_counter() - started
     assert len(ids) == 100_000
     print(f'claims appended: {len(ids)} in {seconds:.1f} s = {len(ids) / seconds:,.0f} claims/s')
+
+
+async def test_two_writers_labelling_different_items_of_one_photo_do_not_wait_for_each_other(
+    world: World, pg: PgDatabase
+) -> None:
+    """A plain label locks only the item it names (``ranked_together`` false), so while one writer holds
+    its transaction open another labels the sibling. ``op_app`` has a 5 s ``lock_timeout``: a wait ends in
+    an error here, not a hang."""
+    with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
+        sibling = item(conn, world.project, world.photos[0], 'i0b')
+        detection(conn, world.project, world.photos[0], sibling, analyser(conn, name='primary'))
+    first = world.items[0]
+    sibling_view = claim_builders.ItemView(
+        wire(world.project, 'i0b').hex, world.photos[0], 1, BOX, BOX
+    )
+    # the first fold has no state rows yet, so it ranks the photo together
+    started = await tx_apply(world, item_keys=[first, sibling])
+    assert started.ranked_together
+
+    async with async_session_factory()() as holder, project_tx(holder, world.project):
+        held = await apply(
+            holder,
+            world.project,
+            claims=_label(world, 0, 'car', uuid.uuid4()),
+            item_keys=[first],
+            context=CONTEXT,
+        )
+        assert held.ranked_together is False
+        assert held.locked == (first,)
+        other = await asyncio.wait_for(
+            tx_apply(
+                world,
+                claims=claim_builders.label(
+                    sibling_view, class_name='truck', class_id_hint=None, op_id=str(uuid.uuid4())
+                ),
+                item_keys=[sibling],
+            ),
+            timeout=10,
+        )
+        assert other.ranked_together is False
+        assert other.locked == (sibling,)
+    await assert_state_is_a_fresh_fold(world, [first, sibling])

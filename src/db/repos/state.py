@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import ARRAY, BigInteger, Text, bindparam, delete, text
+from sqlalchemy import ARRAY, BigInteger, Text, bindparam, delete, select, text
 
 from src.db.models.item_state import BoxStateRow, ItemStateRow
 from src.db.repos.upserts import any_of, upsert_distinct
@@ -158,6 +158,18 @@ async def upsert_box_states(
         },
     )
     return changed + int(gone.rowcount)  # type: ignore[attr-defined]
+
+
+async def load_ranks(session: AsyncSession, item_keys: Sequence[int]) -> dict[int, int]:
+    """The stored rank of each item that has a state row."""
+    if not item_keys:
+        return {}
+    rows = await session.execute(
+        select(ItemStateRow.item_key, ItemStateRow.rank).where(
+            any_of(ItemStateRow.item_key, item_keys)
+        )
+    )
+    return {r.item_key: r.rank for r in rows}
 
 
 async def delete_states(session: AsyncSession, item_keys: Sequence[int]) -> int:

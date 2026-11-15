@@ -111,6 +111,7 @@ _.cascade_tables  # src/services/erasure/catalogue.py; wired by storage steps 2 
 _.vector_delete_statement  # src/services/erasure/catalogue.py; wired by storage steps 2 to 4; entry removed by that lane
 _.NOT_ERASED  # src/services/erasure/catalogue.py; wired by storage steps 2 to 4; entry removed by that lane
 _.DOCUMENT_REFERENCES  # src/services/erasure/catalogue.py; wired by storage steps 2 to 4; entry removed by that lane
+_.RANK_NEUTRAL_TABLES  # src/db/repos/results.py; read by tests/storage/test_apply_offline.py: with RANK_CHANGING_TABLES it must cover every result table, so a new table cannot go unclassified
 
 # Registered or read by a framework through a name, a decorator or a protocol
 _._on_worker_init  # src/tasks/app.py; connected to Celery's worker_init signal by decorator
