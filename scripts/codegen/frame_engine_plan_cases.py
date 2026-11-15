@@ -369,6 +369,78 @@ def _faults() -> list[tuple[str, str, bool]]:
     ]
 
 
+def _set(text: str, path: tuple[str | int, ...], value: Any) -> str:
+    """``text`` with the JSON value at ``path`` replaced."""
+    body = json.loads(text)
+    node = body
+    for key in path[:-1]:
+        node = node[key]
+    node[path[-1]] = value
+    return json.dumps(body)
+
+
+def _boundaries() -> list[tuple[str, str, bool]]:
+    """Each numeric plan field at, just below and just above both ends of its range, so the native
+    parser's ranges are held to the Python ones without a table of its own to trust: the generator
+    writes only the inputs, the recorded answers are ``parse_plan``'s."""
+    ingest = _plan()
+    faces = _plan(branches=['faces'], detector=None, embed=None, crops='none', faces=FACES)
+    ocr = _plan(branches=['ocr'], detector=None, embed=None, crops='none', ocr=OCR)
+    renditions = _plan(derivatives=[{'name': 't', 'side': 64, 'quality': 85}])
+    classes = _plan(embed_classes=[0])
+    conditional = _plan(
+        branches=['detect', 'ocr'], embed=None, crops='none', ocr=OCR, if_detected={'ocr': [2]}
+    )
+    ints: list[tuple[str, str, tuple[str | int, ...], int, int]] = [
+        ('detector_input_size', ingest, ('detector', 'input_size'), 32, 4096),
+        ('detector_fill', ingest, ('detector', 'letterbox_fill'), 0, 255),
+        ('embed_size', ingest, ('embed', 'size'), 16, 4096),
+        ('crop_size', ingest, ('crop_embed', 'size'), 16, 4096),
+        ('crop_batch', ingest, ('crop_embed', 'batch'), 1, 1024),
+        ('crop_fill', ingest, ('crop_embed', 'fill'), 0, 255),
+        ('faces_input_size', faces, ('faces', 'input_size'), 32, 4096),
+        ('faces_batch', faces, ('faces', 'batch'), 1, 1024),
+        ('faces_max', faces, ('faces', 'max_faces'), 1, 100_000),
+        ('faces_coarse', faces, ('faces', 'coarse'), 0, 640),
+        ('faces_tile', faces, ('faces', 'tile_side'), 0, 65_535),
+        ('faces_overlap', faces, ('faces', 'overlap'), 0, 639),
+        ('ocr_batch', ocr, ('ocr', 'batch'), 1, 16),
+        ('ocr_lines', ocr, ('ocr', 'max_lines'), 1, 10_000),
+        ('ocr_side', ocr, ('ocr', 'det_side'), 32, 4096),
+        ('ocr_max_side', ocr, ('ocr', 'det_max_side'), 32, 1920),
+        ('ocr_taps', ocr, ('ocr', 'taps'), 1, 8),
+        ('rendition_side', renditions, ('derivatives', 0, 'side'), 16, 4096),
+        ('rendition_quality', renditions, ('derivatives', 0, 'quality'), 1, 100),
+        ('embed_class_id', classes, ('embed_classes', 0), 0, 1_000_000),
+        ('if_detected_id', conditional, ('if_detected', 'ocr', 0), 0, 1_000_000),
+    ]
+    floats: list[tuple[str, str, tuple[str | int, ...], float, float]] = [
+        ('faces_score_min', faces, ('faces', 'score_min'), 0.0, 1.0),
+        ('faces_nms', faces, ('faces', 'nms'), 0.0, 1.0),
+        ('ocr_thresh', ocr, ('ocr', 'thresh'), 0.0, 1.0),
+        ('ocr_box_thresh', ocr, ('ocr', 'box_thresh'), 0.0, 1.0),
+        ('ocr_unclip', ocr, ('ocr', 'unclip_ratio'), 0.0, 10.0),
+    ]
+    cases: list[tuple[str, str, bool]] = []
+    for name, base, path, lo, hi in ints:
+        for label, value in (('lo', lo), ('below', lo - 1), ('hi', hi), ('above', hi + 1)):
+            cases.append((f'range_{name}_{label}', _set(base, path, value), False))
+    for fname, fbase, fpath, lo_f, hi_f in floats:
+        for label, fvalue in (
+            ('lo', lo_f),
+            ('below', lo_f - 0.5),
+            ('hi', hi_f),
+            ('above', hi_f + 0.5),
+        ):
+            cases.append((f'range_{fname}_{label}', _set(fbase, fpath, fvalue), False))
+    # an integer where a float is allowed, and the huge and the exponent spellings
+    cases.append(('range_faces_score_min_integer', _set(faces, ('faces', 'score_min'), 1), False))
+    cases.append(('range_big_integer', _set(ingest, ('detector', 'input_size'), 10**30), False))
+    cases.append(('range_big_version', _set(ingest, ('version',), 10**30), False))
+    cases.append(('range_float_version_text', _edit('"version": 1', '"version": 1.50'), False))
+    return cases
+
+
 def _quirks() -> list[tuple[str, str, bool]]:
     """The four ways Python's ``json`` and ``==`` accept what another parser would not (plan 17,
     review finding m4). The API never sends one."""
@@ -414,7 +486,7 @@ def _quirks() -> list[tuple[str, str, bool]]:
 
 def plan_cases() -> list[tuple[str, str, bool]]:
     """``(id, plan text, has_boxes)`` for every case, in a fixed order; ids are unique."""
-    cases = [*_valid(), *_faults(), *_quirks()]
+    cases = [*_valid(), *_faults(), *_boundaries(), *_quirks()]
     ids = [c[0] for c in cases]
     if len(ids) != len(set(ids)):
         raise ValueError('duplicate case id')

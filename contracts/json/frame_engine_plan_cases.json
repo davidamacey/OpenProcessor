@@ -1013,6 +1013,1885 @@
       "plan": "{\"version\": 1, \"branches\": [\"embed_frame\", \"embed_crops\"], \"crops\": \"none\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
     },
     {
+      "has_boxes": false,
+      "id": "range_detector_input_size_lo",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "inline",
+        "detector": {
+          "input_size": 32,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 32, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_detector_input_size_below",
+      "message": "bad_field: detector.input_size",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 31, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_detector_input_size_hi",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "inline",
+        "detector": {
+          "input_size": 4096,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 4096, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_detector_input_size_above",
+      "message": "bad_field: detector.input_size",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 4097, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_detector_fill_lo",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "inline",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 0,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 0}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_detector_fill_below",
+      "message": "bad_field: detector.letterbox_fill",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": -1}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_detector_fill_hi",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "inline",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 255,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 255}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_detector_fill_above",
+      "message": "bad_field: detector.letterbox_fill",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 256}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_embed_size_lo",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "inline",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 16
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 16}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_embed_size_below",
+      "message": "bad_field: embed.size",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 15}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_embed_size_hi",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "inline",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 4096
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 4096}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_embed_size_above",
+      "message": "bad_field: embed.size",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 4097}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_crop_size_lo",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "pe_crop",
+          "size": 16
+        },
+        "crops": "inline",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 16, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_crop_size_below",
+      "message": "bad_field: crop_embed.size",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 15, \"batch\": 32}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_crop_size_hi",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "pe_crop",
+          "size": 4096
+        },
+        "crops": "inline",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 4096, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_crop_size_above",
+      "message": "bad_field: crop_embed.size",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 4097, \"batch\": 32}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_crop_batch_lo",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 1,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "inline",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 1}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_crop_batch_below",
+      "message": "bad_field: crop_embed.batch",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 0}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_crop_batch_hi",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 1024,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "inline",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 1024}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_crop_batch_above",
+      "message": "bad_field: crop_embed.batch",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 1025}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_crop_fill_lo",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 0,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "inline",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32, \"fill\": 0}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_crop_fill_below",
+      "message": "bad_field: crop_embed.fill",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32, \"fill\": -1}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_crop_fill_hi",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 255,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "inline",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32, \"fill\": 255}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_crop_fill_above",
+      "message": "bad_field: crop_embed.fill",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32, \"fill\": 256}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_faces_input_size_lo",
+      "parsed": {
+        "branches": [
+          "faces"
+        ],
+        "crops": "none",
+        "faces": {
+          "batch": 32,
+          "coarse": 0,
+          "detector": "scrfd",
+          "input_size": 32,
+          "max_faces": 128,
+          "nms": 0.4,
+          "overlap": 0,
+          "recogniser": "arcface",
+          "score_min": 0.5,
+          "tile_side": 0
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 32, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_faces_input_size_below",
+      "message": "bad_field: faces.input_size",
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 31, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_faces_input_size_hi",
+      "parsed": {
+        "branches": [
+          "faces"
+        ],
+        "crops": "none",
+        "faces": {
+          "batch": 32,
+          "coarse": 0,
+          "detector": "scrfd",
+          "input_size": 4096,
+          "max_faces": 128,
+          "nms": 0.4,
+          "overlap": 0,
+          "recogniser": "arcface",
+          "score_min": 0.5,
+          "tile_side": 0
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 4096, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_faces_input_size_above",
+      "message": "bad_field: faces.input_size",
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 4097, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_faces_batch_lo",
+      "parsed": {
+        "branches": [
+          "faces"
+        ],
+        "crops": "none",
+        "faces": {
+          "batch": 1,
+          "coarse": 0,
+          "detector": "scrfd",
+          "input_size": 640,
+          "max_faces": 128,
+          "nms": 0.4,
+          "overlap": 0,
+          "recogniser": "arcface",
+          "score_min": 0.5,
+          "tile_side": 0
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 1, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_faces_batch_below",
+      "message": "bad_field: faces.batch",
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 0, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_faces_batch_hi",
+      "parsed": {
+        "branches": [
+          "faces"
+        ],
+        "crops": "none",
+        "faces": {
+          "batch": 1024,
+          "coarse": 0,
+          "detector": "scrfd",
+          "input_size": 640,
+          "max_faces": 128,
+          "nms": 0.4,
+          "overlap": 0,
+          "recogniser": "arcface",
+          "score_min": 0.5,
+          "tile_side": 0
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 1024, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_faces_batch_above",
+      "message": "bad_field: faces.batch",
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 1025, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_faces_max_lo",
+      "parsed": {
+        "branches": [
+          "faces"
+        ],
+        "crops": "none",
+        "faces": {
+          "batch": 32,
+          "coarse": 0,
+          "detector": "scrfd",
+          "input_size": 640,
+          "max_faces": 1,
+          "nms": 0.4,
+          "overlap": 0,
+          "recogniser": "arcface",
+          "score_min": 0.5,
+          "tile_side": 0
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 1}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_faces_max_below",
+      "message": "bad_field: faces.max_faces",
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 0}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_faces_max_hi",
+      "parsed": {
+        "branches": [
+          "faces"
+        ],
+        "crops": "none",
+        "faces": {
+          "batch": 32,
+          "coarse": 0,
+          "detector": "scrfd",
+          "input_size": 640,
+          "max_faces": 100000,
+          "nms": 0.4,
+          "overlap": 0,
+          "recogniser": "arcface",
+          "score_min": 0.5,
+          "tile_side": 0
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 100000}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_faces_max_above",
+      "message": "bad_field: faces.max_faces",
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 100001}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_faces_coarse_lo",
+      "parsed": {
+        "branches": [
+          "faces"
+        ],
+        "crops": "none",
+        "faces": {
+          "batch": 32,
+          "coarse": 0,
+          "detector": "scrfd",
+          "input_size": 640,
+          "max_faces": 128,
+          "nms": 0.4,
+          "overlap": 0,
+          "recogniser": "arcface",
+          "score_min": 0.5,
+          "tile_side": 0
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128, \"coarse\": 0}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_faces_coarse_below",
+      "message": "bad_field: faces.coarse",
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128, \"coarse\": -1}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_faces_coarse_hi",
+      "parsed": {
+        "branches": [
+          "faces"
+        ],
+        "crops": "none",
+        "faces": {
+          "batch": 32,
+          "coarse": 640,
+          "detector": "scrfd",
+          "input_size": 640,
+          "max_faces": 128,
+          "nms": 0.4,
+          "overlap": 0,
+          "recogniser": "arcface",
+          "score_min": 0.5,
+          "tile_side": 0
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128, \"coarse\": 640}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_faces_coarse_above",
+      "message": "bad_field: faces.coarse",
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128, \"coarse\": 641}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_faces_tile_lo",
+      "parsed": {
+        "branches": [
+          "faces"
+        ],
+        "crops": "none",
+        "faces": {
+          "batch": 32,
+          "coarse": 0,
+          "detector": "scrfd",
+          "input_size": 640,
+          "max_faces": 128,
+          "nms": 0.4,
+          "overlap": 0,
+          "recogniser": "arcface",
+          "score_min": 0.5,
+          "tile_side": 0
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128, \"tile_side\": 0}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_faces_tile_below",
+      "message": "bad_field: faces.tile_side",
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128, \"tile_side\": -1}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_faces_tile_hi",
+      "parsed": {
+        "branches": [
+          "faces"
+        ],
+        "crops": "none",
+        "faces": {
+          "batch": 32,
+          "coarse": 0,
+          "detector": "scrfd",
+          "input_size": 640,
+          "max_faces": 128,
+          "nms": 0.4,
+          "overlap": 0,
+          "recogniser": "arcface",
+          "score_min": 0.5,
+          "tile_side": 65535
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128, \"tile_side\": 65535}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_faces_tile_above",
+      "message": "bad_field: faces.tile_side",
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128, \"tile_side\": 65536}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_faces_overlap_lo",
+      "parsed": {
+        "branches": [
+          "faces"
+        ],
+        "crops": "none",
+        "faces": {
+          "batch": 32,
+          "coarse": 0,
+          "detector": "scrfd",
+          "input_size": 640,
+          "max_faces": 128,
+          "nms": 0.4,
+          "overlap": 0,
+          "recogniser": "arcface",
+          "score_min": 0.5,
+          "tile_side": 0
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128, \"overlap\": 0}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_faces_overlap_below",
+      "message": "bad_field: faces.overlap",
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128, \"overlap\": -1}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_faces_overlap_hi",
+      "parsed": {
+        "branches": [
+          "faces"
+        ],
+        "crops": "none",
+        "faces": {
+          "batch": 32,
+          "coarse": 0,
+          "detector": "scrfd",
+          "input_size": 640,
+          "max_faces": 128,
+          "nms": 0.4,
+          "overlap": 639,
+          "recogniser": "arcface",
+          "score_min": 0.5,
+          "tile_side": 0
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128, \"overlap\": 639}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_faces_overlap_above",
+      "message": "bad_field: faces.overlap",
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128, \"overlap\": 640}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_ocr_batch_lo",
+      "parsed": {
+        "branches": [
+          "ocr"
+        ],
+        "crops": "none",
+        "ocr": {
+          "batch": 1,
+          "box_thresh": 0.45,
+          "det_antialias": false,
+          "det_limit": "max",
+          "det_max_side": 1920,
+          "det_side": 960,
+          "detector": "ocr_det",
+          "max_lines": 128,
+          "recogniser": "ocr_rec",
+          "taps": 1,
+          "thresh": 0.2,
+          "unclip_ratio": 1.4
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 1, \"max_lines\": 128, \"det_side\": 960}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_ocr_batch_below",
+      "message": "bad_field: ocr.batch",
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 0, \"max_lines\": 128, \"det_side\": 960}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_ocr_batch_hi",
+      "parsed": {
+        "branches": [
+          "ocr"
+        ],
+        "crops": "none",
+        "ocr": {
+          "batch": 16,
+          "box_thresh": 0.45,
+          "det_antialias": false,
+          "det_limit": "max",
+          "det_max_side": 1920,
+          "det_side": 960,
+          "detector": "ocr_det",
+          "max_lines": 128,
+          "recogniser": "ocr_rec",
+          "taps": 1,
+          "thresh": 0.2,
+          "unclip_ratio": 1.4
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_ocr_batch_above",
+      "message": "bad_field: ocr.batch",
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 17, \"max_lines\": 128, \"det_side\": 960}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_ocr_lines_lo",
+      "parsed": {
+        "branches": [
+          "ocr"
+        ],
+        "crops": "none",
+        "ocr": {
+          "batch": 16,
+          "box_thresh": 0.45,
+          "det_antialias": false,
+          "det_limit": "max",
+          "det_max_side": 1920,
+          "det_side": 960,
+          "detector": "ocr_det",
+          "max_lines": 1,
+          "recogniser": "ocr_rec",
+          "taps": 1,
+          "thresh": 0.2,
+          "unclip_ratio": 1.4
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 1, \"det_side\": 960}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_ocr_lines_below",
+      "message": "bad_field: ocr.max_lines",
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 0, \"det_side\": 960}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_ocr_lines_hi",
+      "parsed": {
+        "branches": [
+          "ocr"
+        ],
+        "crops": "none",
+        "ocr": {
+          "batch": 16,
+          "box_thresh": 0.45,
+          "det_antialias": false,
+          "det_limit": "max",
+          "det_max_side": 1920,
+          "det_side": 960,
+          "detector": "ocr_det",
+          "max_lines": 10000,
+          "recogniser": "ocr_rec",
+          "taps": 1,
+          "thresh": 0.2,
+          "unclip_ratio": 1.4
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 10000, \"det_side\": 960}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_ocr_lines_above",
+      "message": "bad_field: ocr.max_lines",
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 10001, \"det_side\": 960}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_ocr_side_lo",
+      "parsed": {
+        "branches": [
+          "ocr"
+        ],
+        "crops": "none",
+        "ocr": {
+          "batch": 16,
+          "box_thresh": 0.45,
+          "det_antialias": false,
+          "det_limit": "max",
+          "det_max_side": 1920,
+          "det_side": 32,
+          "detector": "ocr_det",
+          "max_lines": 128,
+          "recogniser": "ocr_rec",
+          "taps": 1,
+          "thresh": 0.2,
+          "unclip_ratio": 1.4
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_ocr_side_below",
+      "message": "bad_field: ocr.det_side",
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 31}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_ocr_side_hi",
+      "parsed": {
+        "branches": [
+          "ocr"
+        ],
+        "crops": "none",
+        "ocr": {
+          "batch": 16,
+          "box_thresh": 0.45,
+          "det_antialias": false,
+          "det_limit": "max",
+          "det_max_side": 1920,
+          "det_side": 4096,
+          "detector": "ocr_det",
+          "max_lines": 128,
+          "recogniser": "ocr_rec",
+          "taps": 1,
+          "thresh": 0.2,
+          "unclip_ratio": 1.4
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 4096}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_ocr_side_above",
+      "message": "bad_field: ocr.det_side",
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 4097}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_ocr_max_side_lo",
+      "parsed": {
+        "branches": [
+          "ocr"
+        ],
+        "crops": "none",
+        "ocr": {
+          "batch": 16,
+          "box_thresh": 0.45,
+          "det_antialias": false,
+          "det_limit": "max",
+          "det_max_side": 32,
+          "det_side": 960,
+          "detector": "ocr_det",
+          "max_lines": 128,
+          "recogniser": "ocr_rec",
+          "taps": 1,
+          "thresh": 0.2,
+          "unclip_ratio": 1.4
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960, \"det_max_side\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_ocr_max_side_below",
+      "message": "bad_field: ocr.det_max_side",
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960, \"det_max_side\": 31}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_ocr_max_side_hi",
+      "parsed": {
+        "branches": [
+          "ocr"
+        ],
+        "crops": "none",
+        "ocr": {
+          "batch": 16,
+          "box_thresh": 0.45,
+          "det_antialias": false,
+          "det_limit": "max",
+          "det_max_side": 1920,
+          "det_side": 960,
+          "detector": "ocr_det",
+          "max_lines": 128,
+          "recogniser": "ocr_rec",
+          "taps": 1,
+          "thresh": 0.2,
+          "unclip_ratio": 1.4
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960, \"det_max_side\": 1920}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_ocr_max_side_above",
+      "message": "bad_field: ocr.det_max_side",
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960, \"det_max_side\": 1921}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_ocr_taps_lo",
+      "parsed": {
+        "branches": [
+          "ocr"
+        ],
+        "crops": "none",
+        "ocr": {
+          "batch": 16,
+          "box_thresh": 0.45,
+          "det_antialias": false,
+          "det_limit": "max",
+          "det_max_side": 1920,
+          "det_side": 960,
+          "detector": "ocr_det",
+          "max_lines": 128,
+          "recogniser": "ocr_rec",
+          "taps": 1,
+          "thresh": 0.2,
+          "unclip_ratio": 1.4
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960, \"taps\": 1}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_ocr_taps_below",
+      "message": "bad_field: ocr.taps",
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960, \"taps\": 0}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_ocr_taps_hi",
+      "parsed": {
+        "branches": [
+          "ocr"
+        ],
+        "crops": "none",
+        "ocr": {
+          "batch": 16,
+          "box_thresh": 0.45,
+          "det_antialias": false,
+          "det_limit": "max",
+          "det_max_side": 1920,
+          "det_side": 960,
+          "detector": "ocr_det",
+          "max_lines": 128,
+          "recogniser": "ocr_rec",
+          "taps": 8,
+          "thresh": 0.2,
+          "unclip_ratio": 1.4
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960, \"taps\": 8}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_ocr_taps_above",
+      "message": "bad_field: ocr.taps",
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960, \"taps\": 9}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_rendition_side_lo",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "inline",
+        "derivatives": [
+          {
+            "format": "jpeg",
+            "name": "t",
+            "quality": 85,
+            "side": 16
+          }
+        ],
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"derivatives\": [{\"name\": \"t\", \"side\": 16, \"quality\": 85}], \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_rendition_side_below",
+      "message": "bad_field: derivatives[0].side",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"derivatives\": [{\"name\": \"t\", \"side\": 15, \"quality\": 85}], \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_rendition_side_hi",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "inline",
+        "derivatives": [
+          {
+            "format": "jpeg",
+            "name": "t",
+            "quality": 85,
+            "side": 4096
+          }
+        ],
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"derivatives\": [{\"name\": \"t\", \"side\": 4096, \"quality\": 85}], \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_rendition_side_above",
+      "message": "bad_field: derivatives[0].side",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"derivatives\": [{\"name\": \"t\", \"side\": 4097, \"quality\": 85}], \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_rendition_quality_lo",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "inline",
+        "derivatives": [
+          {
+            "format": "jpeg",
+            "name": "t",
+            "quality": 1,
+            "side": 64
+          }
+        ],
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"derivatives\": [{\"name\": \"t\", \"side\": 64, \"quality\": 1}], \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_rendition_quality_below",
+      "message": "bad_field: derivatives[0].quality",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"derivatives\": [{\"name\": \"t\", \"side\": 64, \"quality\": 0}], \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_rendition_quality_hi",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "inline",
+        "derivatives": [
+          {
+            "format": "jpeg",
+            "name": "t",
+            "quality": 100,
+            "side": 64
+          }
+        ],
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"derivatives\": [{\"name\": \"t\", \"side\": 64, \"quality\": 100}], \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_rendition_quality_above",
+      "message": "bad_field: derivatives[0].quality",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"derivatives\": [{\"name\": \"t\", \"side\": 64, \"quality\": 101}], \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_embed_class_id_lo",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "inline",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "embed_classes": [
+          0
+        ],
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed_classes\": [0], \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_embed_class_id_below",
+      "message": "bad_field: embed_classes",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed_classes\": [-1], \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_embed_class_id_hi",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "inline",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "embed_classes": [
+          1000000
+        ],
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed_classes\": [1000000], \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_embed_class_id_above",
+      "message": "bad_field: embed_classes",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed_classes\": [1000001], \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_if_detected_id_lo",
+      "parsed": {
+        "branches": [
+          "detect",
+          "ocr"
+        ],
+        "crops": "none",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "if_detected": {
+          "ocr": [
+            0
+          ]
+        },
+        "ocr": {
+          "batch": 16,
+          "box_thresh": 0.45,
+          "det_antialias": false,
+          "det_limit": "max",
+          "det_max_side": 1920,
+          "det_side": 960,
+          "detector": "ocr_det",
+          "max_lines": 128,
+          "recogniser": "ocr_rec",
+          "taps": 1,
+          "thresh": 0.2,
+          "unclip_ratio": 1.4
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"ocr\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960}, \"if_detected\": {\"ocr\": [0]}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_if_detected_id_below",
+      "message": "bad_field: if_detected.ocr",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"ocr\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960}, \"if_detected\": {\"ocr\": [-1]}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_if_detected_id_hi",
+      "parsed": {
+        "branches": [
+          "detect",
+          "ocr"
+        ],
+        "crops": "none",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "if_detected": {
+          "ocr": [
+            1000000
+          ]
+        },
+        "ocr": {
+          "batch": 16,
+          "box_thresh": 0.45,
+          "det_antialias": false,
+          "det_limit": "max",
+          "det_max_side": 1920,
+          "det_side": 960,
+          "detector": "ocr_det",
+          "max_lines": 128,
+          "recogniser": "ocr_rec",
+          "taps": 1,
+          "thresh": 0.2,
+          "unclip_ratio": 1.4
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"ocr\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960}, \"if_detected\": {\"ocr\": [1000000]}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_if_detected_id_above",
+      "message": "bad_field: if_detected.ocr",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"ocr\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960}, \"if_detected\": {\"ocr\": [1000001]}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_faces_score_min_lo",
+      "parsed": {
+        "branches": [
+          "faces"
+        ],
+        "crops": "none",
+        "faces": {
+          "batch": 32,
+          "coarse": 0,
+          "detector": "scrfd",
+          "input_size": 640,
+          "max_faces": 128,
+          "nms": 0.4,
+          "overlap": 0,
+          "recogniser": "arcface",
+          "score_min": 0.0,
+          "tile_side": 0
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.0, \"nms\": 0.4, \"max_faces\": 128}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_faces_score_min_below",
+      "message": "bad_field: faces.score_min",
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": -0.5, \"nms\": 0.4, \"max_faces\": 128}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_faces_score_min_hi",
+      "parsed": {
+        "branches": [
+          "faces"
+        ],
+        "crops": "none",
+        "faces": {
+          "batch": 32,
+          "coarse": 0,
+          "detector": "scrfd",
+          "input_size": 640,
+          "max_faces": 128,
+          "nms": 0.4,
+          "overlap": 0,
+          "recogniser": "arcface",
+          "score_min": 1.0,
+          "tile_side": 0
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 1.0, \"nms\": 0.4, \"max_faces\": 128}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_faces_score_min_above",
+      "message": "bad_field: faces.score_min",
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 1.5, \"nms\": 0.4, \"max_faces\": 128}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_faces_nms_lo",
+      "parsed": {
+        "branches": [
+          "faces"
+        ],
+        "crops": "none",
+        "faces": {
+          "batch": 32,
+          "coarse": 0,
+          "detector": "scrfd",
+          "input_size": 640,
+          "max_faces": 128,
+          "nms": 0.0,
+          "overlap": 0,
+          "recogniser": "arcface",
+          "score_min": 0.5,
+          "tile_side": 0
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.0, \"max_faces\": 128}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_faces_nms_below",
+      "message": "bad_field: faces.nms",
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": -0.5, \"max_faces\": 128}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_faces_nms_hi",
+      "parsed": {
+        "branches": [
+          "faces"
+        ],
+        "crops": "none",
+        "faces": {
+          "batch": 32,
+          "coarse": 0,
+          "detector": "scrfd",
+          "input_size": 640,
+          "max_faces": 128,
+          "nms": 1.0,
+          "overlap": 0,
+          "recogniser": "arcface",
+          "score_min": 0.5,
+          "tile_side": 0
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 1.0, \"max_faces\": 128}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_faces_nms_above",
+      "message": "bad_field: faces.nms",
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 1.5, \"max_faces\": 128}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_ocr_thresh_lo",
+      "parsed": {
+        "branches": [
+          "ocr"
+        ],
+        "crops": "none",
+        "ocr": {
+          "batch": 16,
+          "box_thresh": 0.45,
+          "det_antialias": false,
+          "det_limit": "max",
+          "det_max_side": 1920,
+          "det_side": 960,
+          "detector": "ocr_det",
+          "max_lines": 128,
+          "recogniser": "ocr_rec",
+          "taps": 1,
+          "thresh": 0.0,
+          "unclip_ratio": 1.4
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960, \"thresh\": 0.0}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_ocr_thresh_below",
+      "message": "bad_field: ocr.thresh",
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960, \"thresh\": -0.5}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_ocr_thresh_hi",
+      "parsed": {
+        "branches": [
+          "ocr"
+        ],
+        "crops": "none",
+        "ocr": {
+          "batch": 16,
+          "box_thresh": 0.45,
+          "det_antialias": false,
+          "det_limit": "max",
+          "det_max_side": 1920,
+          "det_side": 960,
+          "detector": "ocr_det",
+          "max_lines": 128,
+          "recogniser": "ocr_rec",
+          "taps": 1,
+          "thresh": 1.0,
+          "unclip_ratio": 1.4
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960, \"thresh\": 1.0}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_ocr_thresh_above",
+      "message": "bad_field: ocr.thresh",
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960, \"thresh\": 1.5}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_ocr_box_thresh_lo",
+      "parsed": {
+        "branches": [
+          "ocr"
+        ],
+        "crops": "none",
+        "ocr": {
+          "batch": 16,
+          "box_thresh": 0.0,
+          "det_antialias": false,
+          "det_limit": "max",
+          "det_max_side": 1920,
+          "det_side": 960,
+          "detector": "ocr_det",
+          "max_lines": 128,
+          "recogniser": "ocr_rec",
+          "taps": 1,
+          "thresh": 0.2,
+          "unclip_ratio": 1.4
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960, \"box_thresh\": 0.0}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_ocr_box_thresh_below",
+      "message": "bad_field: ocr.box_thresh",
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960, \"box_thresh\": -0.5}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_ocr_box_thresh_hi",
+      "parsed": {
+        "branches": [
+          "ocr"
+        ],
+        "crops": "none",
+        "ocr": {
+          "batch": 16,
+          "box_thresh": 1.0,
+          "det_antialias": false,
+          "det_limit": "max",
+          "det_max_side": 1920,
+          "det_side": 960,
+          "detector": "ocr_det",
+          "max_lines": 128,
+          "recogniser": "ocr_rec",
+          "taps": 1,
+          "thresh": 0.2,
+          "unclip_ratio": 1.4
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960, \"box_thresh\": 1.0}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_ocr_box_thresh_above",
+      "message": "bad_field: ocr.box_thresh",
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960, \"box_thresh\": 1.5}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_ocr_unclip_lo",
+      "parsed": {
+        "branches": [
+          "ocr"
+        ],
+        "crops": "none",
+        "ocr": {
+          "batch": 16,
+          "box_thresh": 0.45,
+          "det_antialias": false,
+          "det_limit": "max",
+          "det_max_side": 1920,
+          "det_side": 960,
+          "detector": "ocr_det",
+          "max_lines": 128,
+          "recogniser": "ocr_rec",
+          "taps": 1,
+          "thresh": 0.2,
+          "unclip_ratio": 0.0
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960, \"unclip_ratio\": 0.0}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_ocr_unclip_below",
+      "message": "bad_field: ocr.unclip_ratio",
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960, \"unclip_ratio\": -0.5}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_ocr_unclip_hi",
+      "parsed": {
+        "branches": [
+          "ocr"
+        ],
+        "crops": "none",
+        "ocr": {
+          "batch": 16,
+          "box_thresh": 0.45,
+          "det_antialias": false,
+          "det_limit": "max",
+          "det_max_side": 1920,
+          "det_side": 960,
+          "detector": "ocr_det",
+          "max_lines": 128,
+          "recogniser": "ocr_rec",
+          "taps": 1,
+          "thresh": 0.2,
+          "unclip_ratio": 10.0
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960, \"unclip_ratio\": 10.0}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_ocr_unclip_above",
+      "message": "bad_field: ocr.unclip_ratio",
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960, \"unclip_ratio\": 10.5}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "range_faces_score_min_integer",
+      "parsed": {
+        "branches": [
+          "faces"
+        ],
+        "crops": "none",
+        "faces": {
+          "batch": 32,
+          "coarse": 0,
+          "detector": "scrfd",
+          "input_size": 640,
+          "max_faces": 128,
+          "nms": 0.4,
+          "overlap": 0,
+          "recogniser": "arcface",
+          "score_min": 1.0,
+          "tile_side": 0
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 1, \"nms\": 0.4, \"max_faces\": 128}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "range_big_integer",
+      "message": "bad_field: detector.input_size",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 1000000000000000000000000000000, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_version",
+      "has_boxes": false,
+      "id": "range_big_version",
+      "message": "bad_version: 1000000000000000000000000000000",
+      "plan": "{\"version\": 1000000000000000000000000000000, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_version",
+      "has_boxes": false,
+      "id": "range_float_version_text",
+      "message": "bad_version: 1.5",
+      "plan": "{\"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"crop_embed\": {\"batch\": 32, \"model\": \"pe_crop\", \"size\": 224}, \"crops\": \"inline\", \"detector\": {\"input_size\": 640, \"letterbox_fill\": 114, \"model\": \"det\"}, \"embed\": {\"model\": \"pe\", \"size\": 336}, \"version\": 1.50}"
+    },
+    {
       "fault": "bad_version",
       "has_boxes": false,
       "id": "quirk_version_true",
