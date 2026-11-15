@@ -19,6 +19,7 @@ from _storage_render import (
     statements,
     upgrade_sql,
 )
+from sqlalchemy.dialects import postgresql
 
 from src.db.base import Base
 from src.domain.claim_kinds import KINDS
@@ -260,3 +261,44 @@ def test_the_existing_tables_gain_only_the_planned_columns() -> None:
     )
     # nothing that exists is dropped or altered in place
     assert not re.search(r'DROP (TABLE|COLUMN)|ALTER COLUMN|RENAME', sql)
+
+
+_TYPES = {
+    'timestamptz': 'TIMESTAMP WITH TIME ZONE', 'timestamp': 'TIMESTAMP WITHOUT TIME ZONE',
+    'double precision': 'DOUBLE PRECISION', 'boolean': 'BOOLEAN', 'integer': 'INTEGER',
+    'bigint': 'BIGINT', 'smallint': 'SMALLINT', 'real': 'REAL', 'text': 'TEXT', 'uuid': 'UUID',
+    'bytea': 'BYTEA', 'jsonb': 'JSONB', 'numeric': 'NUMERIC', 'real[]': 'REAL[]',
+    'text[]': 'TEXT[]', 'uuid[]': 'UUID[]', 'bigint[]': 'BIGINT[]',
+}  # fmt: skip
+
+
+def _ddl_columns(statement: str) -> dict[str, tuple[str, bool]]:
+    """Column name to (type, not null) as the DDL says; a primary key and an identity are not null."""
+    body = statement[statement.index('(') + 1 : statement.rindex(')')]
+    depth, start, parts = 0, 0, []
+    for i, ch in enumerate(body):
+        depth += ch == '('
+        depth -= ch == ')'
+        if ch == ',' and depth == 0:
+            parts.append(body[start:i])
+            start = i + 1
+    parts.append(body[start:])
+    key = set(re.findall(r'PRIMARY KEY \(([^)]*)\)', statement)[0].replace(' ', '').split(','))
+    out = {}
+    for part in (p.strip() for p in parts):
+        name, rest = part.split(None, 1)
+        if name == 'CONSTRAINT':
+            continue
+        kind = re.match(r'double precision|timestamptz|timestamp|[a-z]+\[\]|[a-z0-9_]+', rest)
+        assert kind
+        out[name] = (kind.group(0), 'NOT NULL' in rest or 'IDENTITY' in rest or name in key)
+    return out
+
+
+@pytest.mark.parametrize('table', sorted(plan.TABLES))
+def test_model_column_types_and_nullability_equal_the_migrations(table: str) -> None:
+    ddl = _ddl_columns(create_tables(upgrade_sql())[table])
+    for column in Base.metadata.tables[table].columns:
+        kind, not_null = ddl[column.name]
+        assert column.type.compile(dialect=postgresql.dialect()) == _TYPES[kind], column.name
+        assert (not column.nullable) == not_null, column.name
