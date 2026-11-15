@@ -20,7 +20,7 @@ from prometheus_client import CollectorRegistry
 from tritonclient.grpc import service_pb2, service_pb2_grpc
 
 from frame_engine import front
-from frame_engine.stage_metrics import EngineMetrics
+from frame_engine.stage_metrics import STAGES, EngineMetrics
 from src.domain import frame_engine_wire as wire
 
 
@@ -231,6 +231,10 @@ def test_every_plan_fault_has_a_case_and_every_case_is_what_parse_plan_answers()
             with pytest.raises(wire.EnginePlanError) as err:
                 wire.parse_plan(case['plan'], has_boxes=case['has_boxes'])
             assert err.value.fault == case['fault'], case['id']
+            if case['fault'] == 'bad_json':
+                assert 'message' not in case, case['id']
+            else:
+                assert str(err.value) == case['message'], case['id']
         else:
             plan = wire.parse_plan(case['plan'], has_boxes=case['has_boxes'])
             assert case['parsed'] == json.loads(plan.to_json()), case['id']
@@ -279,3 +283,14 @@ def test_the_ping_policy_is_what_the_front_and_the_api_channels_are_set_to() -> 
 
 def test_the_model_version_is_the_protocol_version() -> None:
     assert PROTOCOL['model']['version'] == front.MODEL_VERSION == str(wire.PROTOCOL_VERSION)
+
+
+def test_the_stages_and_the_metric_families_are_the_engines() -> None:
+    assert PROTOCOL['stages'] == list(STAGES)
+    registry = EngineMetrics(CollectorRegistry()).registry
+    made = {f.name: f.type for f in registry.collect()}
+    assert made == {m['name']: m['type'] for m in PROTOCOL['metrics']}
+    collectors = {c._name: c for c in registry._collector_to_names if hasattr(c, '_name')}
+    for metric in PROTOCOL['metrics']:
+        collector = collectors.get(metric['name'])
+        assert metric['labels'] == list(getattr(collector, '_labelnames', ())), metric['name']

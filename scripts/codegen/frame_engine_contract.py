@@ -10,7 +10,8 @@ Two files under ``contracts/json/``, read by the native engine and by its contra
   request validation messages, the server's ping interval) is written out here, each pinned to
   the front's behaviour by ``tests/test_frame_engine_contract.py``.
 * ``frame_engine_plan_cases.json``: every plan text of ``frame_engine_plan_cases.py`` with the
-  answer ``parse_plan`` gives (the parsed plan, or the fault).
+  answer ``parse_plan`` gives (the parsed plan, or the fault and, but for ``bad_json``, the message
+  the front sends as the status details).
 
 ``src/domain/frame_engine_wire.py`` stays the one definition. The native parser is compared with it
 on every case.
@@ -104,6 +105,45 @@ REQUEST_RULES: list[dict[str, str]] = [
 #: apart, a third of the API's period.
 SERVER_MIN_PING_INTERVAL_MS = 10000
 
+#: The stages a request's seconds are counted in (``frame_engine.stage_metrics.STAGES``, and the
+#: label values of ``op_frame_engine_stage_seconds_total``). Pinned by
+#: ``tests/test_frame_engine_contract.py``.
+STAGES: list[str] = [
+    'queue', 'budget', 'decode', 'letterbox', 'detect', 'embed_frame', 'embed_crops', 'embed_pe',
+    'crop_copy', 'crop_jpeg', 'blur', 'face_letterbox', 'face_detect', 'face_align', 'face_embed',
+    'face_blur', 'ocr_prep', 'ocr_detect', 'ocr_boxes', 'ocr_crops', 'ocr_rec', 'ocr_decode',
+    'derivative_render', 'derivative_jpeg',
+]  # fmt: skip
+
+#: Every series of the engine's metrics endpoint (``frame_engine.stage_metrics.EngineMetrics``):
+#: the family name (a counter's exposition adds ``_total``), its kind and its labels. The release
+#: acceptance and the dashboards read these names. Pinned by ``tests/test_frame_engine_contract.py``.
+METRICS: list[dict[str, Any]] = [
+    {'name': 'op_frame_engine_stage_seconds', 'type': 'counter', 'labels': ['stage']},
+    {'name': 'op_frame_engine_stage_observations', 'type': 'counter', 'labels': ['stage']},
+    {'name': 'op_frame_engine_in_flight', 'type': 'gauge', 'labels': []},
+    {'name': 'op_frame_engine_slab_in_use_bytes', 'type': 'gauge', 'labels': []},
+    {'name': 'op_frame_engine_slab_peak_bytes', 'type': 'gauge', 'labels': []},
+    {'name': 'op_frame_engine_slab_waits', 'type': 'gauge', 'labels': []},
+    {'name': 'op_frame_engine_budget_in_use_bytes', 'type': 'gauge', 'labels': []},
+    {'name': 'op_frame_engine_budget_waits', 'type': 'counter', 'labels': ['outcome']},
+    {'name': 'op_frame_engine_region_registrations', 'type': 'counter', 'labels': ['cause']},
+    {'name': 'op_frame_engine_triton_call_errors', 'type': 'counter',
+     'labels': ['model', 'code', 'reason']},
+    {'name': 'op_frame_engine_request_deadlines', 'type': 'counter', 'labels': ['stage']},
+    {'name': 'op_frame_engine_images', 'type': 'counter', 'labels': ['status', 'decode_route']},
+    {'name': 'op_frame_engine_context_lost', 'type': 'counter', 'labels': ['code']},
+    {'name': 'op_frame_engine_overloads', 'type': 'counter', 'labels': ['cause']},
+    {'name': 'op_frame_engine_colour', 'type': 'counter', 'labels': ['outcome']},
+    {'name': 'op_frame_engine_colour_table_bytes', 'type': 'gauge', 'labels': []},
+    {'name': 'process_virtual_memory_bytes', 'type': 'gauge', 'labels': []},
+    {'name': 'process_resident_memory_bytes', 'type': 'gauge', 'labels': []},
+    {'name': 'process_start_time_seconds', 'type': 'gauge', 'labels': []},
+    {'name': 'process_cpu_seconds', 'type': 'counter', 'labels': []},
+    {'name': 'process_open_fds', 'type': 'gauge', 'labels': []},
+    {'name': 'process_max_fds', 'type': 'gauge', 'labels': []},
+]  # fmt: skip
+
 #: How engine failures map to gRPC statuses (``FrontService.ModelInfer``).
 FAILURE_STATUSES: list[dict[str, str]] = [
     {'failure': 'overload', 'status': 'RESOURCE_EXHAUSTED'},
@@ -126,6 +166,7 @@ def render_protocol() -> dict[str, Any]:
     from src.clients import frame_engine as client
     from src.domain import decode_route, frame_engine_wire as wire
     from src.domain.image_geometry import CROP_FILL
+    from src.domain.processing_plan import CONDITIONAL
 
     model_version = str(wire.PROTOCOL_VERSION)
     input_tensors = _tensors(wire.INPUT_DATATYPES)
@@ -158,6 +199,8 @@ def render_protocol() -> dict[str, Any]:
         'request_rules': REQUEST_RULES,
         'boxes_zero_rows_allowed': True,
         'failure_statuses': FAILURE_STATUSES,
+        'stages': STAGES,
+        'metrics': METRICS,
         'photo_statuses': [wire.STATUS_OK, *decode_route.PREP_STATUSES],
         'decode_routes': [
             wire.DECODED_GPU,
@@ -191,6 +234,7 @@ def render_protocol() -> dict[str, Any]:
             'ocr_det_limits': list(wire.DET_LIMITS),
             'ocr_max_batch': wire.OCR_MAX_BATCH,
             'ocr_max_det_side': wire.OCR_MAX_DET_SIDE,
+            'conditional_branches': sorted(CONDITIONAL),
             'json_rules': {
                 'version_is_the_integer': wire.PROTOCOL_VERSION,
                 'nan_and_infinity_literals': 'bad_json',
@@ -218,6 +262,9 @@ def render_plan_cases() -> dict[str, Any]:
             plan = wire.parse_plan(text, has_boxes=has_boxes)
         except wire.EnginePlanError as exc:
             case['fault'] = exc.fault
+            if exc.fault != 'bad_json':
+                # the text of a malformed document is the Python JSON decoder's own wording
+                case['message'] = str(exc)
         else:
             case['parsed'] = json.loads(plan.to_json())
         cases.append(case)
