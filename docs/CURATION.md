@@ -231,7 +231,10 @@ audit.
 ### Bulk ingest
 
 A folder or manifest of thousands of images runs as a background job that goes through
-`POST /curation/projects/{project}/ingest/batch`. Use `scripts/curation/bulk_ingest.py`
+`POST /curation/projects/{project}/ingest/batch`. Every new photo goes to the frame engine, which
+decodes it; while the engine is not ready the route answers `503` with `Retry-After`, and the run
+waits and resumes instead of failing files. Within a request each photo moves on its own from the
+engine's answer to its write, and the database work runs in at most three commit groups. Use `scripts/curation/bulk_ingest.py`
 inside the `api` container, which listens on port 8000 there:
 
 ```bash
