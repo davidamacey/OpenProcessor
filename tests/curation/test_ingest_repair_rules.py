@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import dataclasses
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -322,6 +323,12 @@ async def test_a_holder_found_at_claim_time_is_a_duplicate_only_when_it_is_whole
     assert (await svc.ingest_one(data, PATH)).status == 'duplicate'
 
 
+def _cache_in(svc: Any, tmp_path: Any) -> Any:
+    cache = tmp_path / 'crops'
+    svc.config = dataclasses.replace(svc.config, crop_cache_dir=cache)
+    return cache / 'default'
+
+
 @pytest.mark.asyncio
 async def test_an_item_written_a_moment_ago_and_not_listed_is_matched_too() -> None:
     """A person drew a box over an object a second before the repair: the search that finds the
@@ -420,3 +427,38 @@ async def test_an_unexpected_error_before_the_lease_marks_the_photo(
 
     assert os_fake.images[image_id]['ingest_incomplete'] is True
     assert not os_fake.images[image_id].get('repair_started_at')
+
+
+@pytest.mark.asyncio
+async def test_a_repair_that_matched_everything_reports_and_caches_nothing(tmp_path: Any) -> None:
+    svc, os_fake, _ = _make_service(detections=TWO_BOXES)
+    cache = _cache_in(svc, tmp_path)
+    data = _jpeg_bytes(seed=74)
+    await svc.ingest_one(data, PATH)
+    image_id = _image_id(data)
+    os_fake.images[image_id]['item_ids'] = [*os_fake.images[image_id]['item_ids'], 'never-written']
+    _old(os_fake, image_id)
+    for path in cache.glob('*.jpg'):
+        path.unlink()
+
+    result = await svc.ingest_one(data, PATH)
+
+    assert result.status == 'success'
+    assert (result.n_crops, result.crops_created) == (0, 0)
+    assert list(cache.glob('*.jpg')) == [], 'no crop file for an id that has no item'
+
+
+@pytest.mark.asyncio
+async def test_a_repair_reports_and_caches_the_items_it_created(tmp_path: Any) -> None:
+    svc, os_fake, _ = _make_service(detections=TWO_BOXES)
+    cache = _cache_in(svc, tmp_path)
+    data = _jpeg_bytes(seed=75)
+    _, (survivor,), (lost,) = await _incomplete(svc, os_fake, data)
+    for path in cache.glob('*.jpg'):
+        path.unlink()
+
+    result = await svc.ingest_one(data, PATH)
+
+    assert (result.n_crops, result.crops_created) == (1, 1)
+    assert {p.stem for p in cache.glob('*.jpg')} == {lost}
+    assert survivor in os_fake.items

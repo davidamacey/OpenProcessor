@@ -565,10 +565,18 @@ async def write_prepared(
                 imohash=ctx.imohash,
             )
         )
+    cids, crops, items = p.cids, p.crops, p.items
     if bulk_result.get('repaired'):
         count_whole_event('repaired')
-    await _cache_crops(service, p.cids, p.crops)
-    items = p.items
+        # A repair stores only the detections no item stood for: the rest are items that exist.
+        made = set(created_ids)
+        keep = [i for i, cid in enumerate(cids) if cid in made]
+        cids, crops, items = (
+            [cids[i] for i in keep],
+            [crops[i] for i in keep],
+            [items[i] for i in keep],
+        )
+    await _cache_crops(service, cids, crops)
     return IndexOutcome(
         result=IngestResult(
             status='success',
@@ -576,7 +584,7 @@ async def write_prepared(
             image_path=ctx.image_path,
             source_identifier=ctx.source_identifier,
             imohash=ctx.imohash,
-            n_crops=len(docs.crop_docs),
+            n_crops=len(cids),
             n_embedded=sum(it.embedding_state == EMBEDDED for it in items),
             n_not_embedded=sum(it.embedding_state != EMBEDDED for it in items),
             n_embed_failed=sum(it.embedding_state == FAILED for it in items),
@@ -587,7 +595,7 @@ async def write_prepared(
             n_region_queued=bulk_result.get('region_queued', 0),
             secondary_detector_error=p.secondary_detector_error,
         ),
-        crop_ids=p.cids,
+        crop_ids=cids,
         created_ids=created_ids,
     )
 
