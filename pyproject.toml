@@ -499,6 +499,7 @@ markers = [
     "events_server: db tests of the event cursor, set on every test that uses `pg_events`; with OP_TEST_EVENTS_DATABASE_URL they run alone: -m events_server -p no:xdist (the xdist tier uses -m 'db and not events_server')",
     "db: tests that need a PostgreSQL database (testcontainers or OP_TEST_DATABASE_URL); run with -m db",
     "native: tests that drive the release binary of the native frame engine (native/, tests/native/; CI job `native`, no GPU); run with -m native",
+    "slow: a test that waits out real time for more than a minute (an idle channel's keepalive pings); with -m native it runs once",
 ]
 
 # =============================================================================
