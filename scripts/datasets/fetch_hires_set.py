@@ -14,6 +14,15 @@ COCO pin calls ``flickr_url``) and license, and a ``manifest_sha256`` over the r
 lists the category, samples, downloads and writes the pin; a later run downloads exactly the
 pinned files and checks every hash, so the set does not depend on the category staying the same.
 
+Files already under ``--out`` are verified against the pin and not downloaded again, so a copy kept
+on disk (the operator's data directory) is the normal case and the network the exception.
+Public files do disappear: a pinned file the server answers 404 or 410 for is recorded (in
+``missing_upstream.txt`` under ``--out``) and the fetch goes on. The end report lists them. The exit
+code is 1 when a file is corrupt or failed, when ``--strict`` is given and any file is missing, or
+when more than ``--max-missing-share`` (default 0.10) of the pinned files are missing; otherwise 0.
+Rate limits (HTTP 429, RFC 6585) are retried after the server's ``Retry-After`` (RFC 9110 section
+10.2.3). ``--verify-only`` hashes what is on disk and never uses the network.
+
     fetch_hires_set.py --out data/samples/hires_500 --n 500 --seed 20261010 \\
         --manifest scripts/datasets/manifests/commons_hires_500.json
 
@@ -47,6 +56,7 @@ if str(_REPO_ROOT) not in sys.path:
 from scripts.datasets._common import (
     USER_AGENT,
     FetchError,
+    MissingUpstreamError,
     download,
     require_basename,
     seeded_sample,
@@ -54,7 +64,7 @@ from scripts.datasets._common import (
     write_csv,
     write_json,
 )
-from scripts.datasets.bench_set import build_pin, load_pin, verify_images
+from scripts.datasets.bench_set import build_pin, load_pin
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -64,6 +74,8 @@ API_URL = 'https://commons.wikimedia.org/w/api.php'
 CATEGORY = 'Category:Featured_pictures_on_Wikimedia_Commons'
 ALLOWED_LICENSE = re.compile(r'^(CC0|Public domain|PD\b|CC BY(-SA)?(\s|$))', re.IGNORECASE)
 DOWNLOAD_THREADS = 4  # Commons asks for polite clients
+MAX_MISSING_SHARE = 0.10  # a set short by a tenth is still a usable comparison set
+MISSING_FILE = 'missing_upstream.txt'
 
 
 def api_get(url: str, attempts: int = 8) -> dict[str, Any]:
@@ -172,25 +184,90 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument('--min-pixels', type=int, default=12_000_000)
     p.add_argument('--max-pixels', type=int, default=24_000_000)
     p.add_argument('--category', default=CATEGORY)
+    p.add_argument('--verify-only', action='store_true', help='hash the files on disk, no network')
+    p.add_argument('--strict', action='store_true', help='fail when any pinned file is missing')
+    p.add_argument(
+        '--max-missing-share',
+        type=float,
+        default=MAX_MISSING_SHARE,
+        help='fail when more than this share of the pinned files is missing upstream',
+    )
     return p
 
 
-def run(args: argparse.Namespace) -> dict[str, Any]:
+STATUSES = ('present', 'missing_upstream', 'not_downloaded', 'corrupt', 'failed')
+
+
+def settle_row(
+    row: dict[str, Any], images_dir: Path, recorded_missing: set[str], *, offline: bool
+) -> str:
+    """One pinned file: ``present`` (on disk and matching the pin, downloaded only if it was not),
+    ``missing_upstream`` (the server answers 404 or 410, or an earlier run recorded that),
+    ``not_downloaded`` (offline and absent), ``corrupt`` (on disk or downloaded, not the pin's
+    bytes) or ``failed`` (the download did not complete)."""
+    name = require_basename(row['file_name'])
+    path = images_dir / name
+    if path.is_file() and path.stat().st_size > 0:
+        if path.stat().st_size == row['bytes'] and sha256_file(path) == row['sha256']:
+            return 'present'
+        if offline:
+            return 'corrupt'
+    elif offline:
+        return 'missing_upstream' if name in recorded_missing else 'not_downloaded'
+    try:
+        download(row['flickr_url'], path, expected_sha256=row['sha256'], retries=5)
+    except MissingUpstreamError as exc:
+        logger.warning('%s', exc)
+        path.unlink(missing_ok=True)
+        return 'missing_upstream'
+    except FetchError as exc:
+        logger.error('%s: %s', name, exc)
+        return 'failed'
+    return 'present' if path.stat().st_size == row['bytes'] else 'corrupt'
+
+
+def settle_pin(pin: dict[str, Any], out: Path, *, offline: bool) -> dict[str, list[str]]:
+    """Settle every pinned file; the names by status. Online runs rewrite ``missing_upstream.txt``."""
+    images_dir = out / 'images'
+    record = out / MISSING_FILE
+    recorded = set(record.read_text().split()) if record.is_file() else set()
+    found: dict[str, list[str]] = {s: [] for s in STATUSES}
+    for row in pin['images']:
+        found[settle_row(row, images_dir, recorded, offline=offline)].append(row['file_name'])
+    if not offline:
+        record.write_text(''.join(f'{n}\n' for n in found['missing_upstream']))
+    return found
+
+
+def report(found: dict[str, list[str]], total: int) -> None:
+    counts = ', '.join(f'{s.replace("_", " ")} {len(found[s])}' for s in STATUSES)
+    logger.info('%d pinned files: %s', total, counts)
+    for status in STATUSES[1:]:
+        if found[status]:
+            logger.warning('%s: %s', status.replace('_', ' '), ' '.join(found[status]))
+
+
+def exit_code(found: dict[str, list[str]], total: int, args: argparse.Namespace) -> int:
+    """1 for a corrupt or failed file, for any missing file under ``--strict`` and for a missing
+    share over ``--max-missing-share``; else 0."""
+    if found['corrupt'] or found['failed']:
+        return 1
+    missing = len(found['missing_upstream']) + len(found['not_downloaded'])
+    if missing and args.strict:
+        return 1
+    return 1 if total and missing / total > args.max_missing_share else 0
+
+
+def run(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, list[str]]]:
+    """The pin and the files by status (the first run, which makes the pin, finds all present)."""
+    if args.verify_only and not args.manifest.is_file():
+        raise FetchError(f'--verify-only needs the pin, {args.manifest} does not exist')
     images_dir = args.out / 'images'
-    images_dir.mkdir(parents=True, exist_ok=True)
+    if not args.verify_only:
+        images_dir.mkdir(parents=True, exist_ok=True)
     if args.manifest.is_file():
         pin = load_pin(args.manifest)
-        for row in pin['images']:
-            download(
-                row['flickr_url'],
-                images_dir / require_basename(row['file_name']),
-                expected_sha256=row['sha256'],
-                retries=5,
-            )
-        problems = verify_images(pin, images_dir)
-        if problems:
-            raise FetchError('; '.join(problems[:5]))
-        return pin
+        return pin, settle_pin(pin, args.out, offline=args.verify_only)
     cands = candidate_rows(api_pages(args.category), args.min_pixels, args.max_pixels)
     logger.info('%d candidates in the size and license window', len(cands))
     chosen = sorted(seeded_sample(cands, args.n, args.seed), key=lambda r: r['page_id'])
@@ -202,6 +279,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
                     annotations_sha256='n/a')  # fmt: skip
     pin['source'] = f'Wikimedia Commons {args.category}, original files'
     pin['pixel_window'] = [args.min_pixels, args.max_pixels]
+    found: dict[str, list[str]] = {s: [] for s in STATUSES}
+    found['present'] = [r['file_name'] for r in rows]
     write_json(args.manifest, pin)
     write_csv(
         args.out / 'ATTRIBUTION.csv',
@@ -217,17 +296,19 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         ),
         ('page_id', 'title', 'author', 'license', 'description_url'),
     )
-    return pin
+    return pin, found
 
 
 def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
     try:
-        pin = run(build_parser().parse_args(argv))
+        pin, found = run(args)
     except FetchError as exc:
         logger.error('%s', exc)
         return 1
-    logger.info('pinned %d images, manifest sha256 %s', pin['count'], pin['manifest_sha256'])
-    return 0
+    report(found, pin['count'])
+    logger.info('pin: %d images, manifest sha256 %s', pin['count'], pin['manifest_sha256'])
+    return exit_code(found, pin['count'], args)
 
 
 if __name__ == '__main__':

@@ -61,6 +61,16 @@ docker compose -p op-n0 -f docker/frame-engine-native/compose.n0.yml build
 docker compose -p op-n0 -f docker/frame-engine-native/compose.n0.yml up -d
 ```
 
+The pinned public sets are kept on disk under the data directory you name with `--out` and are
+verified against the pin, not downloaded again, when they are already there; only absent or
+changed files are fetched. Public files do disappear: a file the server answers 404 for is
+recorded in `missing_upstream.txt` beside the images, the rest still download, and the end report
+lists the missing ones. The fetch fails (exit 1) on a corrupt file, on any missing file with
+`--strict`, or when more than `--max-missing-share` (default 0.10) of the pinned files is missing.
+`--verify-only` hashes what is on disk without the network and reports the present, missing
+upstream, not downloaded and corrupt counts apart. A list built over an incomplete set is not the
+pinned list: the report of the run says so.
+
 Always pass `-p op-n0`: the default project name is the live stack.
 
 ## Holds
