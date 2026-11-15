@@ -202,11 +202,20 @@ cannot tell an old broken photo from one with no detections and does not try). A
 image is completed by the next ingest of the same bytes when no live writer can still be writing
 it: the writer that saw its own write fail set `ingest_incomplete` (stored, not indexed), or the
 doc is older than `REPAIR_AFTER_S` (`src/services/curation/ingest_writer.py`, derived from the
-OpenSearch client's timeout and retries). The repair writes the items (the same OCC upsert, human
-guards included), then sets `item_ids` and clears the mark in one OCC update; it never replaces
-the images doc, and the stale items the old list named are deleted only when no person or import
-validated them and they are not in the test holdout. A stored image that is incomplete and may
-still be written is answered `failed` with `error_kind` `incomplete_write` (send it again later).
+OpenSearch client's timeout and retries), and no repair of it is running. A repair is a writer:
+it sets `repair_started_at` (a lease, stored, not indexed) in one OCC update together with the
+list (the listed items that still exist plus the items it is about to create) before it creates
+anything, and gives it back when it ends; while the lease is younger than `REPAIR_AFTER_S` no
+second repair starts. The repair only CREATES items (a 409 leaves a stored item untouched, a
+person's box and the holdout included) and only those no item of the image stands for: its
+detections are matched to the image's items by IoU
+(`services/curation/proposal_merge.py`, the rule of a re-detection), because a crop id hashes the
+box to 6 decimals and the detector is not bit-stable (the engine route and the API CPU route
+also give different crop ids for the same photo: about 3% of letterbox pixels differ by one level
+between the two resamplers, measured on 1,680 public photos). It never replaces the images doc and
+deletes nothing. A stored image that is incomplete and may still be written is answered `failed`
+with `error_kind` `incomplete_write` (send it again later); the same answer goes to a copy whose
+content claim finds a holder that is not whole.
 `scripts/bench/ingest_consistency.py` audits a project: every listed item exists, every item has
 its images doc, every exact-content row has its images doc.
 

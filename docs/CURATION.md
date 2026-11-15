@@ -215,6 +215,19 @@ and bulk indexing. Routes for one image, a batch, an upload, and a folder or man
 run are in the [API reference](../docs-site/docs/api-reference/curation.mdx).
 Cropwright steps: [Ingest](../docs-site/docs/cropwright/user-guide/ingest.md).
 
+A photo is stored whole or it is not reported stored. A `duplicate` answer means the stored image
+of those bytes has every item it was written with; a photo stored without some of them (an
+ingest that failed or was killed between its two writes) answers `incomplete_write` while its
+writer may still be writing it, and the next ingest of the same bytes completes it (it creates the
+missing items and touches no item that exists). **Upgrade rule:** every API and worker container
+must run the new code before ingest resumes (a normal `docker compose` update recreates them
+together). An old container that deletes items leaves the image listing an item that is gone, and
+the next ingest of the same bytes then creates that item again; an old combine copies the source's
+item list, so every combined image looks incomplete. Run
+`scripts/curation/backfill_item_ids.py --project <slug> --apply` once afterwards (optional: images
+without the list count as whole) and `scripts/bench/ingest_consistency.py --project <slug>` to
+audit.
+
 ### Bulk ingest
 
 A folder or manifest of thousands of images runs as a background job that goes through
