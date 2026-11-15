@@ -395,15 +395,16 @@ docker compose run --rm model-export python /app/export/export_paddleocr_rec.py 
   the 2-D RoPE grid for another input size (`core/vision_encoder/pe.py` `_sample_abs_posemb`, `rope.py`
   `update_grid`); the rotary-layout pass is told the 257 tokens of a 224 input
   (`pe_rope_layout.Geometry.for_input`).
-- Input: `images` `[B, 3, 224, 224]` UINT8 RGB: the **whole** box scaled to fit the square, aspect
+- Input: `images` `[B, 3, S, S]` UINT8 RGB, `S` = `PE_CROP_SIZE` (224 by default, or 336: `make pe-export-crop` and `make pe-build-crop-trt` read it, as does the installer; any other value exits 2): the **whole** box scaled to fit the square, aspect
   kept (antialiased when the box is larger than 224 px, plain bilinear when smaller: Pillow
   `BILINEAR`, the rule beside `letterbox_geometry` in `src/domain/image_geometry.py`), on a square of grey 128 (`src/utils/pe_preprocess.py` `letterbox_crop_rgb`; the frame engine
   cuts the same square on the GPU, `frame_engine/branches/embed.py`). 128 is the value that stays at
   the normalized zero: PE's transform has no pad (it squashes the image,
   `core.vision_encoder.transforms.get_image_transform`) and normalizes with mean 0.5, std 0.5.
 - Output: `image_embeddings` `[B, 1024]` FP32, L2-normalized; dynamic batching 1-32
-- Its vectors are a space of their own (`pe_core_l14_crop224` in `examples/embedding/catalog.tsv`), not
-  comparable with the frame encoder's. The API reads the model name and size from `PE_CROP_MODEL` and
+- Its vectors are a space of their own per size (`pe_core_l14_crop224` or `pe_core_l14_crop336` in
+  `examples/embedding/catalog.tsv`), not comparable with the frame encoder's or with each other; the
+  planning figure `GPU_MIB_PER_INSTANCE` is 768 at 224 and 1024 at 336 (`export/pe_image_constants.py`). The API reads the model name and size from `PE_CROP_MODEL` and
   `PE_CROP_SIZE` and sends them in the engine plan (`crop_embed`); a smaller dedicated crop encoder
   later is a model, a size and those two settings.
 

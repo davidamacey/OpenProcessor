@@ -88,7 +88,7 @@ PE-Core-L14-336. Semantic search, near-duplicate detection, residual
 clustering and the embedding plot all run on it. The Triton model names
 are `pe_image_encoder` (TensorRT, input `images [B,3,336,336]`,
 output `image_embeddings [B,1024]`, the vector of a whole frame), `pe_crop_encoder` (the same weights at
-`images [B,3,224,224]`, the vector of each object crop; `PE_CROP_MODEL` and `PE_CROP_SIZE`) and `pe_text_encoder` (a TensorRT
+`images [B,3,224,224]` by default or `[B,3,336,336]` with `PE_CROP_SIZE=336`, the vector of each object crop; `PE_CROP_MODEL` and `PE_CROP_SIZE`) and `pe_text_encoder` (a TensorRT
 FP16 plan, one GPU instance, about 0.7 GB of GPU memory). Both are already in Triton's
 `--load-model` list in `docker-compose.yml`.
 
