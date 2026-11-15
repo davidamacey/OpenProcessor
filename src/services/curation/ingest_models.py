@@ -29,9 +29,6 @@ ERROR_KIND_BLUR = 'blur_failed'
 # writing it; sending it again later stores it whole.
 ERROR_KIND_INCOMPLETE_WRITE = 'incomplete_write'
 
-# Failures a retry can fix without the file changing: a bulk run must not count them as attempts.
-TRANSIENT_ERROR_KINDS = frozenset({ERROR_KIND_INCOMPLETE_WRITE})
-
 
 class IngestSummary(BaseModel):
     successful: int = 0
@@ -106,7 +103,6 @@ class BatchIngestResult(BaseModel):
 
 __all__ = [
     'ERROR_KIND_INCOMPLETE_WRITE',
-    'TRANSIENT_ERROR_KINDS',
     'BatchIngestResult',
     'IngestResult',
     'IngestSummary',
