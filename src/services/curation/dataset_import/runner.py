@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol
 
 from src.core.logging import get_logger
+from src.domain.embedding_spaces import EmbeddingSpaceError
 from src.services.curation.dataset_import import limits
 from src.services.curation.dataset_import.chunk import import_chunk
 from src.services.curation.dataset_import.prepare import (
@@ -244,6 +245,15 @@ async def run_import_job(
             chunk_report = await import_chunk(
                 ctx, [by_key[c.key] for c in batch], {c.key: c.prior for c in batch}
             )
+        except EmbeddingSpaceError as refusal:
+            # The same refusal would end every chunk: stop now and keep its whole text (the
+            # remedy is its last words) as the job's error.
+            logger.error('dataset_import_refused', chunk=number, error=refusal.detail)
+            outcome.issues.append({'code': refusal.code, 'chunk': number, 'error': refusal.detail})
+            outcome.failed_chunks.append(number)
+            await ledger.save_report(report, issues=outcome.issues)
+            outcome.error = refusal.detail
+            return outcome
         except Exception as exc:
             logger.error('dataset_import_chunk_failed', chunk=number, error=str(exc))
             outcome.issues.append(
