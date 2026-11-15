@@ -180,7 +180,7 @@ async def test_indexes_from_before_the_marker_are_migrated_then_stamped(
     await index_bootstrap.ensure_indexes(cluster)
     for idx in cluster.indexes.values():
         idx['_meta'] = {}
-        for field in ('ingest_write_id', 'item_ids', 'ingest_incomplete'):
+        for field in ('ingest_write_id', 'item_ids', 'ingest_incomplete', 'repair_started_at'):
             idx['properties'].pop(field, None)
     cluster.calls.clear()
     _new_process(monkeypatch)
@@ -193,6 +193,7 @@ async def test_indexes_from_before_the_marker_are_migrated_then_stamped(
     # stored in _source only: the list and the failure note are never queried
     assert props['item_ids'] == {'type': 'keyword', 'index': False, 'doc_values': False}
     assert props['ingest_incomplete'] == {'type': 'boolean', 'index': False, 'doc_values': False}
+    assert props['repair_started_at'] == {'type': 'date', 'index': False, 'doc_values': False}
     assert 'ingest_write_id' in props
     assert _marker(cluster, images) == index_bootstrap.schema_fingerprint()
 

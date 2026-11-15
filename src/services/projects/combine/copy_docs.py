@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from src.clients.curation_opensearch.capture_fields import block_within_policy
 from src.clients.curation_opensearch.cluster_fields import CLUSTER_PARTITION_MAPPING
 from src.domain.embedding_state import DEFERRED
-from src.domain.image_completeness import INCOMPLETE_MARK_FIELD, ITEM_IDS_FIELD
+from src.domain.image_completeness import INCOMPLETE_MARK_FIELD, ITEM_IDS_FIELD, REPAIR_LEASE_FIELD
 from src.services.detection.geometry import crop_id as make_crop_id
 
 
@@ -216,6 +216,7 @@ def transform_image(
         'negative_for',
         ITEM_IDS_FIELD,
         INCOMPLETE_MARK_FIELD,
+        REPAIR_LEASE_FIELD,
         'ingest_write_id',
     ):
         doc.pop(name, None)
