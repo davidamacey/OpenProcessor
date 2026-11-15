@@ -21,9 +21,10 @@ use frame_engine_loadgen::proto::grpc_inference_service_server::{
 };
 use frame_engine_loadgen::proto::model_infer_response::InferOutputTensor;
 use frame_engine_loadgen::proto::{
-    InferStatistics, ModelInferRequest, ModelInferResponse, ModelReadyRequest, ModelReadyResponse,
-    ModelStatistics, ModelStatisticsRequest, ModelStatisticsResponse, ServerLiveRequest,
-    ServerLiveResponse, ServerReadyRequest, ServerReadyResponse, StatisticDuration,
+    CudaSharedMemoryStatusRequest, CudaSharedMemoryStatusResponse, InferStatistics,
+    ModelInferRequest, ModelInferResponse, ModelReadyRequest, ModelReadyResponse, ModelStatistics,
+    ModelStatisticsRequest, ModelStatisticsResponse, ServerLiveRequest, ServerLiveResponse,
+    ServerReadyRequest, ServerReadyResponse, StatisticDuration,
 };
 use tokio::net::TcpListener;
 use tokio_stream::wrappers::TcpListenerStream;
@@ -113,6 +114,16 @@ impl GrpcInferenceService for Shared {
             outputs: outputs.iter().map(|(o, _)| o.clone()).collect(),
             raw_output_contents: outputs.into_iter().map(|(_, b)| b).collect(),
             ..Default::default()
+        }))
+    }
+
+    async fn cuda_shared_memory_status(
+        &self,
+        _: Request<CudaSharedMemoryStatusRequest>,
+    ) -> Result<Response<CudaSharedMemoryStatusResponse>, Status> {
+        let region = |name: &str| (name.to_string(), Default::default());
+        Ok(Response::new(CudaSharedMemoryStatusResponse {
+            regions: [region("op-fe-1234"), region("other-region")].into(),
         }))
     }
 
@@ -230,16 +241,34 @@ async fn each_kind_of_answer_has_its_own_failure_key() {
 }
 
 #[tokio::test]
-async fn readiness_is_server_and_model() {
+async fn readiness_is_server_and_the_named_model() {
     let address = serve(Arc::new(FakeEngine::default())).await;
     let mut clients = client::connect(&address, 1, Duration::from_secs(5))
         .await
         .unwrap();
+    let five = Duration::from_secs(5);
     assert!(
-        client::is_ready(&mut clients[0], Duration::from_secs(5))
+        client::is_ready(&mut clients[0], MODEL, five)
             .await
             .unwrap()
     );
+    assert!(
+        !client::is_ready(&mut clients[0], "another_model", five)
+            .await
+            .unwrap()
+    );
+}
+
+#[tokio::test]
+async fn the_regions_the_server_holds_are_listed_by_name() {
+    let address = serve(Arc::new(FakeEngine::default())).await;
+    let mut clients = client::connect(&address, 1, Duration::from_secs(5))
+        .await
+        .unwrap();
+    let names = client::cuda_regions(&mut clients[0], Duration::from_secs(5))
+        .await
+        .unwrap();
+    assert_eq!(names, ["op-fe-1234", "other-region"]);
 }
 
 #[tokio::test]

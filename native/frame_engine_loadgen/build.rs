@@ -11,12 +11,13 @@
 //! The client is written against the protocol, not against the engine's own crate, so a defect in
 //! the engine's wire code cannot hide in the instrument that measures it.
 
-const USED: [&str; 5] = [
+const USED: [&str; 6] = [
     "ServerLive",
     "ServerReady",
     "ModelReady",
     "ModelInfer",
     "ModelStatistics",
+    "CudaSharedMemoryStatus",
 ];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

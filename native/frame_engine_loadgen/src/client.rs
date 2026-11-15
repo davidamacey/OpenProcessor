@@ -20,7 +20,10 @@ use tonic::transport::{Channel, Endpoint};
 use crate::exchange::{Exchange, Outcome};
 use crate::proto::grpc_inference_service_client::GrpcInferenceServiceClient;
 use crate::proto::model_infer_request::InferInputTensor;
-use crate::proto::{ModelInferRequest, ModelInferResponse, ModelReadyRequest, ServerReadyRequest};
+use crate::proto::{
+    CudaSharedMemoryStatusRequest, ModelInferRequest, ModelInferResponse, ModelReadyRequest,
+    ServerReadyRequest,
+};
 
 pub type Client = GrpcInferenceServiceClient<Channel>;
 
@@ -216,9 +219,9 @@ impl Exchange for EngineClient {
     }
 }
 
-/// Whether the engine answers `ServerReady` and `ModelReady` for `frame_engine`: the gate before
-/// any row.
-pub async fn is_ready(client: &mut Client, timeout: Duration) -> Result<bool, String> {
+/// Whether the server answers `ServerReady` and `ModelReady` for `model` (`frame_engine` for an
+/// engine; a model's own name for the model server): the gate before any row.
+pub async fn is_ready(client: &mut Client, model: &str, timeout: Duration) -> Result<bool, String> {
     let mut server = tonic::Request::new(ServerReadyRequest {});
     server.set_timeout(timeout);
     let server = client
@@ -228,7 +231,7 @@ pub async fn is_ready(client: &mut Client, timeout: Duration) -> Result<bool, St
         .into_inner()
         .ready;
     let mut model = tonic::Request::new(ModelReadyRequest {
-        name: MODEL.to_string(),
+        name: model.to_string(),
         version: String::new(),
     });
     model.set_timeout(timeout);
@@ -239,4 +242,19 @@ pub async fn is_ready(client: &mut Client, timeout: Duration) -> Result<bool, St
         .into_inner()
         .ready;
     Ok(server && model)
+}
+
+/// The names of the CUDA shared-memory regions the model server holds, from its status call
+/// (the shared-memory extension: an empty name asks for every region).
+pub async fn cuda_regions(client: &mut Client, timeout: Duration) -> Result<Vec<String>, String> {
+    let mut request = tonic::Request::new(CudaSharedMemoryStatusRequest::default());
+    request.set_timeout(timeout);
+    let response = client
+        .cuda_shared_memory_status(request)
+        .await
+        .map_err(|e| format!("CudaSharedMemoryStatus: {e}"))?
+        .into_inner();
+    let mut names: Vec<String> = response.regions.into_keys().collect();
+    names.sort();
+    Ok(names)
 }

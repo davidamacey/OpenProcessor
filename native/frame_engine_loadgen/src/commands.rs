@@ -24,8 +24,10 @@ pub enum Command {
     Engine(Box<EngineArgs>),
     /// Measure the models alone: the same model calls with inputs already resident.
     Z(Box<ZArgs>),
-    /// Exit 0 when the engine answers ServerReady and ModelReady for `frame_engine`.
+    /// Exit 0 when the server answers ServerReady and ModelReady for a model.
     Ready(ReadyArgs),
+    /// List the model server's CUDA shared-memory regions; exit 0 when one carries the prefix.
+    Regions(RegionsArgs),
 }
 
 /// Arguments of every measured row.
@@ -113,6 +115,21 @@ pub struct ZArgs {
 pub struct ReadyArgs {
     #[arg(long)]
     pub url: String,
+    /// The model asked after: `frame_engine` for an engine, a model's name for the model server.
+    #[arg(long, default_value = client::MODEL)]
+    pub model: String,
+    #[arg(long, default_value_t = 5.0)]
+    pub timeout_s: f64,
+}
+
+#[derive(Debug, Args)]
+pub struct RegionsArgs {
+    /// The model server's gRPC address.
+    #[arg(long)]
+    pub url: String,
+    /// The prefix of the engine's regions (`op-fe-`).
+    #[arg(long, default_value = "op-fe-")]
+    pub prefix: String,
     #[arg(long, default_value_t = 5.0)]
     pub timeout_s: f64,
 }
@@ -133,15 +150,35 @@ pub async fn run(command: Command, argv: Vec<String>) -> Result<ExitCode, Failur
         Command::Engine(a) => engine(*a, argv).await,
         Command::Z(a) => z_mode::run(*a, argv).await,
         Command::Ready(a) => ready(&a).await,
+        Command::Regions(a) => regions(&a).await,
     }
 }
 
 async fn ready(a: &ReadyArgs) -> Result<ExitCode, Failure> {
     let timeout = secs("--timeout-s", a.timeout_s)?;
     let mut clients = client::connect(&a.url, 1, timeout).await?;
-    let ready = client::is_ready(&mut clients[0], timeout).await?;
+    let ready = client::is_ready(&mut clients[0], &a.model, timeout).await?;
     println!("{}", if ready { "ready" } else { "not ready" });
     Ok(if ready {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    })
+}
+
+/// Whether any of `names` carries `prefix` (an empty prefix matches nothing).
+pub fn holds_prefix(names: &[String], prefix: &str) -> bool {
+    !prefix.is_empty() && names.iter().any(|n| n.starts_with(prefix))
+}
+
+async fn regions(a: &RegionsArgs) -> Result<ExitCode, Failure> {
+    let timeout = secs("--timeout-s", a.timeout_s)?;
+    let mut clients = client::connect(&a.url, 1, timeout).await?;
+    let names = client::cuda_regions(&mut clients[0], timeout).await?;
+    for name in &names {
+        println!("{name}");
+    }
+    Ok(if holds_prefix(&names, &a.prefix) {
         ExitCode::SUCCESS
     } else {
         ExitCode::FAILURE
@@ -199,7 +236,7 @@ async fn engine(a: EngineArgs, argv: Vec<String>) -> Result<ExitCode, Failure> {
     let timeout = secs("--timeout-s", a.timeout_s)?;
     let p = prepare(&a.common).await?;
     let mut clients = client::connect(&a.url, a.channels, timeout).await?;
-    if !client::is_ready(&mut clients[0], Duration::from_secs(5)).await? {
+    if !client::is_ready(&mut clients[0], client::MODEL, Duration::from_secs(5)).await? {
         return Err(format!("{} is not ready: nothing measured", a.url));
     }
     let exchange = Arc::new(EngineClient::new(
@@ -254,4 +291,26 @@ pub fn finish(c: &Common, row: Row) -> Result<ExitCode, Failure> {
     } else {
         ExitCode::from(3)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_region_is_the_engines_when_its_name_starts_with_the_prefix() {
+        let names = ["op-fe-4242".to_string(), "other".to_string()];
+        assert!(holds_prefix(&names, "op-fe-"));
+        assert!(!holds_prefix(&names, "op-fz-"));
+        assert!(!holds_prefix(&names, ""), "an empty prefix matches nothing");
+        assert!(!holds_prefix(&[], "op-fe-"));
+    }
+
+    #[test]
+    fn a_duration_must_be_a_positive_number_of_seconds() {
+        assert_eq!(secs("x", 1.5).unwrap(), Duration::from_millis(1500));
+        assert!(secs("x", 0.0).is_err());
+        assert!(secs("x", -1.0).is_err());
+        assert!(secs("x", f64::NAN).is_err());
+    }
 }
