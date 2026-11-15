@@ -86,37 +86,44 @@ async def backfill(
         counts.scanned += len(page)
         legacy = [h['_id'] for h in page if ITEM_IDS_FIELD not in (h.get('_source') or {})]
         counts.already_listed += len(page) - len(legacy)
+        if max_images is not None:  # bounds a dry run as well: the images it would stamp
+            legacy = legacy[: max(0, max_images - counts.legacy)]
         counts.legacy += len(legacy)
-        if max_images is not None:
-            legacy = legacy[: max(0, max_images - counts.stamped - counts.failed)]
-        if not legacy:
-            if max_images is not None and counts.stamped + counts.failed >= max_images:
-                break
-            continue
-        owned: dict[str, list[str]] = {i: [] for i in legacy}
-        for crop_id, source in await items_by_terms(
-            client, 'image_id', legacy, index=items_index, includes=['image_id']
-        ):
-            owned[str(source['image_id'])].append(crop_id)
-        if not apply:
-            continue
-        status = await occ_update_bulk(
-            client,
-            index=images_index,
-            ids=legacy,
-            merge_fn=functools.partial(_stamp, owned),
-            vector_excludes=excludes,
-        )
-        for image_id in legacy:
-            outcome = status.get(image_id)
-            if outcome == 'updated':
-                counts.stamped += 1
-                counts.stamped_empty += 0 if owned[image_id] else 1
-            elif outcome != 'not-found':  # deleted since the page was read: nothing to stamp
-                counts.failed += 1
-        if max_images is not None and counts.stamped + counts.failed >= max_images:
+        if apply and legacy:
+            owned: dict[str, list[str]] = {i: [] for i in legacy}
+            for crop_id, source in await items_by_terms(
+                client, 'image_id', legacy, index=items_index, includes=['image_id']
+            ):
+                owned[str(source['image_id'])].append(crop_id)
+            await stamp_page(client, images_index, legacy, owned, counts, excludes)
+        if max_images is not None and counts.legacy >= max_images:
             break
     return counts
+
+
+async def stamp_page(
+    client: Any,
+    images_index: str,
+    legacy: list[str],
+    owned: dict[str, list[str]],
+    counts: Counts,
+    excludes: list[str],
+) -> None:
+    """One OCC bulk update of the page's legacy docs (the field is set only while absent)."""
+    status = await occ_update_bulk(
+        client,
+        index=images_index,
+        ids=legacy,
+        merge_fn=functools.partial(_stamp, owned),
+        vector_excludes=excludes,
+    )
+    for image_id in legacy:
+        outcome = status.get(image_id)
+        if outcome == 'updated':
+            counts.stamped += 1
+            counts.stamped_empty += 0 if owned[image_id] else 1
+        elif outcome != 'not-found':  # deleted since the page was read: nothing to stamp
+            counts.failed += 1
 
 
 async def amain(args: argparse.Namespace) -> int:

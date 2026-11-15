@@ -156,3 +156,20 @@ async def test_a_backfilled_project_passes_the_audit() -> None:
 
     assert report.inconsistencies == 0
     assert report.images_without_list == 0
+
+
+@pytest.mark.asyncio
+async def test_max_images_bounds_a_dry_run_and_an_apply() -> None:
+    images_index, items_index = _indexes()
+    client = _store({f'i{n}': {'image_id': f'i{n}'} for n in range(5)}, {})
+
+    dry = await backfill.backfill(
+        client, images_index=images_index, items_index=items_index, apply=False, max_images=2
+    )
+    assert (dry.legacy, dry.stamped) == (2, 0)
+
+    done = await backfill.backfill(
+        client, images_index=images_index, items_index=items_index, apply=True, max_images=2
+    )
+    assert (done.legacy, done.stamped) == (2, 2)
+    assert sum('item_ids' in d for d in client.docs(images_index).values()) == 2
