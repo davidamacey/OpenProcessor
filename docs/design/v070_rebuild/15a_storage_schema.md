@@ -235,6 +235,9 @@ CREATE TABLE items (                         -- identity of every item; stable a
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (project_id, crop_id)
 );                                           -- the counters are not indexed: their updates can be HOT
+-- 0011 adds sort_area real NOT NULL, sort_rank smallint NOT NULL: copies of item_state.area and rank,
+-- written by state.store_states only when they change (geometry, exclusion, attach), so the sort
+-- indexes X29 and X30 live where a label writes nothing (2.6; 15b section 7)
 CREATE TABLE detections (                    -- one detector box; replaced when the detector re-runs
   detection_key bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, PROJECT,
   photo_key bigint NOT NULL REFERENCES photos(photo_key) ON DELETE CASCADE,
@@ -404,8 +407,11 @@ CREATE TABLE item_state (                    -- one narrow row per item (plan 15
   region_seen_seq integer NOT NULL DEFAULT 0,   -- fold output (Q9): the machine-box generation the fold shows; the claim writer stores it as a claim's region_seq
   geometry_pinned boolean NOT NULL DEFAULT false,   -- fold output (Q11): bbox is the box a person saw, exactly while today's is_locked_item holds
   moved_partition_id uuid NULL, moved_cluster_uid uuid NULL,   -- a live class_moved (layer 5): read only while that partition serves
-  created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL   -- updated_at moves only when the effective state changes
+  created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL   -- updated_at: see the write rules below
 );  -- no UNIQUE (project_id, crop_id): items holds it, the copy here is for sort order only (m3)
+-- 0011 adds fold outputs that summary keys and review tabs count (15b 6.2), not indexed:
+--   detector_class_name text NULL, detector_confidence real NULL   (the detection used for machine geometry, 3.4 step 6)
+--   vlm_confidence text NULL, vlm_class_empty boolean NOT NULL DEFAULT false   (the live VLM opinion)
 CREATE INDEX ix_item_state_class_op ON item_state (class_op_id) WHERE class_op_id IS NOT NULL;
   -- shape 46 (M8): an operation's current count is one index range count; class_op_id changes only with the deciding claim
 ALTER TABLE item_state SET (autovacuum_vacuum_scale_factor = 0.01, autovacuum_vacuum_threshold = 1000,
@@ -428,7 +434,12 @@ ALTER TABLE claims SET (autovacuum_vacuum_insert_scale_factor = 0.01);   -- appe
 ```
 
 Write rules (M5): the fold writes `UPDATE ... WHERE item_key = :k AND (cols) IS DISTINCT FROM (new)`,
-so a no-op writes no tuple; `updated_at` changes only with another column. An update is HOT when "no
+so a no-op writes no tuple. `updated_at` moves only when a fact a person sees on the item changes
+(class, validation, exclusion, holdout, geometry, review dismissal, a person's region or box
+verdict), not for region-worker, VLM-opinion or count-only columns, so those writes touch no indexed
+column and can stay HOT, and machine churn does not reorder "Recently updated" (review of 15b m6;
+owner confirmation: 15b section 11 question 8). Every state write goes through
+`state.store_states`, which also emits the summary deltas (15b 6.2). An update is HOT when "no
 columns referenced by the table's indexes" change and the page has room
 ([HOT](https://www.postgresql.org/docs/18/storage-hot.html)): the target, checked in the gate A sweep
 from `pg_stat_user_tables.n_tup_hot_upd / n_tup_upd`, is at most 5 B-trees on `item_state` and a
@@ -534,7 +545,8 @@ Sizes: empty in phase 2; at 3 M photos `photo_state` ≈ 3 M x 130 / 8,168 = 0.5
 
 ### 2.6 From gate A: indexes, summary tables, fillfactors
 
-Filled 2026-11-15 from the gate A measurement (`artifacts_local/speed_1113/v2_read_shapes/`,
+Filled 2026-11-15 from the gate A measurement, revised the same day by the review of 15b and 15c
+(appendix A, "Reads and slices review") (`artifacts_local/speed_1113/v2_read_shapes/`,
 `notes.md` section 3 for the spike's index set) and the read map
 [15b_storage_reads.md](15b_storage_reads.md), which gives the query each index serves (its section
 3, shape numbers of the storage inventory). Rules applied: one composite index per read in the
@@ -550,9 +562,9 @@ writer (15b section 6). "Spike" names the gate A index the row comes from (`note
 | # | Table | Columns in order (direction) | Partial predicate | Serves (shapes) | From | Size at 10 M (estimate) |
 |---|---|---|---|---|---|---|
 | X1 | `item_state` | `project_id, updated_at DESC, crop_id DESC` | | 1, 3-5, 37, 50 (default sort, locate, keyset walks) | spike `o_upd` | 10 M x 52 B / (8,192 x 0.9) ≈ 0.6 GB |
-| X2 | `item_state` | `project_id, class_id, updated_at DESC, crop_id DESC` | | 1, 3-5 with a class filter (also class plus flags, filtered on the heap), 53, 66 (merge walk) | spike `o_class_upd` (`s1a_deep` 1.3 / 2) | 0.65 GB |
+| X2 | `item_state` | `project_id, class_id, class_validated, updated_at DESC, crop_id DESC` | | 1, 3-5 with a class filter (one range per class and validated value; several classes are `UNION ALL` branches, 15b P1), 53, 66 (merge walk) | spike `o_class_upd` (`s1a_deep` 1.3 / 2), validated key from `o_class_flags` (`s1c_deep` 1.4 / 2) | 0.7 GB |
 | X3 | `item_state` | `photo_key, rank, crop_id` | | 25, 29, 80 (a photo's items by rank) | spike `o_image` (`s7` 3.1 / 5) | 0.5 GB |
-| X4 | `item_state` | `project_id, class_confidence, crop_id` | `NOT class_validated AND NOT excluded AND NOT holdout` | 2 (`check_machine`, confidence tabs), 1 (`confidence` sort on open lists) | spike `o_review_conf`, re-keyed: new | 6 M rows x 52 B ≈ 0.35 GB |
+| X4 | `item_state` | `project_id, class_confidence, crop_id` | `NOT class_validated AND NOT excluded AND review_dismissed_at IS NULL` (the rows that need review; it shrinks as the queue drains) | 2 (every queue's capped count and its sort path, `check_machine`), 1 (`confidence` sort on review-predicate lists) | spike `o_review_conf`, re-keyed: new | at most 7 M rows x 52 B ≈ 0.4 GB |
 | X5 | `item_state` | `class_op_id` | `class_op_id IS NOT NULL` | 46 (section 2.4, `0010`) | `0010`, kept | ≈ 0.1 GB |
 | X6 | `box_state` | `project_id, state, detector, item_key DESC` | | 6 (box rows, 15b section 9), 52 | new | 5 M x 60 B ≈ 0.3 GB |
 | X7 | `box_state` | GIN `text_fold gin_trgm_ops` | `text_fold IS NOT NULL` | 2, 6 and 1 text predicates, 53 (15b section 8) | spike `b_text_trgm` (`pg_ext`, 10 M pending) | ≈ 0.1 GB |
@@ -561,7 +573,7 @@ writer (15b section 6). "Spike" names the gate A index the row comes from (`note
 | X10 | `photos` | BRIN `created_at` | | 31d (ingest status, 14 days), 79 (new photos since) | new ([BRIN](https://www.postgresql.org/docs/18/brin-intro.html): insert-ordered time) | < 1 MB |
 | X11 | `photos` | `project_id, source_identifier` | `source_identifier IS NOT NULL` | 31a | 2.6 revision 0 candidate | small |
 | X12 | `photos` | `project_id, storage_key, photo_key` | | 31b, 31c, 24 (`file_name` sort) | new | 3 M x 100 B ≈ 0.4 GB |
-| X13 | `photo_capture` | `project_id, taken_utc DESC NULLS LAST, photo_key DESC` | | 24 (`taken_at` sorts) | spike `i_taken` (`s7_deep` 3.7 / 6) | 0.15 GB |
+| X13 | `photo_capture` | `project_id, taken_local DESC NULLS LAST, photo_key DESC` | | 24 (`taken_at` sorts, today on `capture.taken_local`, `image_view.py:65`) | spike `i_taken` (`s7_deep` 3.7 / 6) | 0.15 GB |
 | X14 | `photo_capture` | GiST `point(lon, lat)` | `lat IS NOT NULL` | 30, 24 (geo filter) | spike `i_loc` (`s11_map` 18.0 / 171) | ≈ 0.05 GB |
 | X15 | `item_region_results` | `project_id, item_key` | `status IN ('pending_detection', 'pending_verification')` | 49 (worker poll) | new | transient, small |
 | X16 | `analysis_ledger` | `project_id, kind, photo_key` | `state <> 'done'` | 55, 79, failed and pending re-runs (P14); the full work list is `analysers.photos_needing` over X9 and the ledger key | new | small |
@@ -570,30 +582,40 @@ writer (15b section 6). "Spike" names the gate A index the row comes from (`note
 | X19 | `class_opinions` | `project_id, proposed_class` | `outcome = 'new_class_pending'` | 17, 19 | new | small |
 | X20 | `item_scores` | `project_id, kind, score DESC, item_key DESC` | | `mistakenness_score`, `uniqueness_score` sorts | new | 20 M x 44 B ≈ 1.1 GB |
 | X21 | `probe_predictions` | `project_id, entropy, item_key` | | 2 (`disagreements` default), 56 | new | 0.5 GB |
-| X22 | `cluster_memberships` | `partition_id, cluster_uid, score DESC NULLS LAST, subject_key` | | 1 cluster filter, 10 rebuild, 12, 13, 41, 77, 6 inside a box cluster; replaces 02d `ix_cluster_memberships_cluster` | spike `pl_cluster` (`pg_pl` pending) | per retained partition 10 M x 44 B ≈ 0.5 GB |
+| X22 | `cluster_memberships` | `partition_id, cluster_uid, score DESC NULLS LAST, subject_key DESC` (one direction: a backward scan serves the ascending form, 15b P8) | | 1 cluster filter, 10 rebuild, 12, 13, 41, 77, 6 inside a box cluster; replaces 02d `ix_cluster_memberships_cluster` | spike `pl_cluster` (`pg_pl` pending) | per retained partition 10 M x 44 B ≈ 0.5 GB |
 | X23 | `cluster_memberships` | `partition_id, score, subject_key` | | 2 (cluster-fit sorts), 8 (`core_first`) | spike `pl_score` (`pg_pl` pending) | ≈ 0.45 GB per partition |
 | X24 | `photo_counts` | `project_id, unlabeled DESC, photo_key DESC` | | 24 (`unlabeled_count` sorts, `label_state` filter) | new | 0.15 GB |
 | X25 | `text_lines` | GIN `lower(text) gin_trgm_ops` | `item_key IS NOT NULL` | item text predicate of 1 and 2 (15b section 8) | new | small |
+| X26 | `box_state` | `project_id, state, item_key DESC` | | 6 with a state and no detector | new (review M6) | 0.25 GB |
+| X27 | `box_state` | `project_id, detector, item_key DESC` | | 6 with a detector and no state | new (review M6) | 0.25 GB |
+| X28 | `items` | `project_id, created_at DESC, crop_id DESC` | | `created_at` sorts | new (review M3) | 0.6 GB |
+| X29 | `items` | `project_id, sort_area, crop_id` | | `crop_area_norm` sorts | new (review M3) | 0.5 GB |
+| X30 | `items` | `project_id, sort_rank, crop_id` | | `crop_rank_in_image` sorts | new (review M3) | 0.45 GB |
+| X31 | `detections` | `project_id, analyser_id, blur_lap_ratio, item_key` | | `blur_lap_ratio` sorts | new (review M3) | 0.5 GB |
+| X32 | `detections` | `project_id, analyser_id, class_name, item_key` | | `detector_class_name` sorts | new (review M3) | 0.55 GB |
 
-**`item_state` holds exactly five B-trees besides its key** (X1 to X5). The foreign-key index
+**`item_state` holds exactly five B-trees besides its key** (X1 to X5). Sort values a label never
+changes live on `items` and `detections` and are indexed there (X8, X28 to X32), where a label
+writes nothing (review of 15b M3; 15b section 7). The foreign-key index
 `ix_item_state_project_id` that `0010` created is dropped: X1 and X2 lead with `project_id` and are
 not partial, so they serve the lookup a project delete's cascade needs ("it is often a good idea to
 index the referencing columns", [foreign keys](https://www.postgresql.org/docs/18/ddl-constraints.html#DDL-CONSTRAINTS-FK)),
 and the schema test asserts the replacement instead of the plain index. No sixth index: the spike's
-`o_class_flags` (class plus the three flags) is served by X2 with the flags checked on the heap (to
-be measured: a class whose rows are mostly validated makes the walk longer); the spike's
+`o_class_flags` is X2 with `class_validated` as a key (excluded and holdout checked on the heap; the
+end-game queue is the partial X4); the spike's
 `o_cluster_*` and `o_review` move to the membership table (X22, X23) with the placement; its
 `o_cluster_cov` and `o_cls_src` are replaced by the summary tables. `updated_at` is in X1 and X2, so
-every effective change of a state row is a non-HOT update and inserts one entry into each index
-([HOT](https://www.postgresql.org/docs/18/storage-hot.html) needs "no indexed column modified"):
-the price of the default "Recently updated" order, measured in the write-under-read run.
+every person-visible change of a state row is a non-HOT update and inserts one entry into each
+index ([HOT](https://www.postgresql.org/docs/18/storage-hot.html) needs "no indexed column
+modified"): the price of the default "Recently updated" order; machine-only changes do not move
+`updated_at` (2.4) and can stay HOT. Measured before `0011` is written (15b section 13 item M5).
 
-**Summary tables**: DDL, upkeep and rebuild in 15b section 6. `sum_items`, `sum_region`, `sum_box`,
-`sum_photos` and `photo_counts` are created by `0011`; `sum_cluster`, `sum_cluster_class`,
-`sum_cluster_review`, `sum_cluster_dup` with X22 and X23 by `0016_cluster_cutover`, because they need
-`cluster_memberships.subject_key` (section 2.3), which the clustering slice changes. The summary rows
-and the project's tally advisory lock are **rank 8** of the lock order in section 7, after `faces`:
-taken last, rows in key order.
+**Summary tables**: base rows, the insert-only delta log `sum_deltas`, the `_now` views, the
+compactor and the rebuild are in 15b section 6. `sum_items`, `sum_review`, `sum_region`, `sum_box`,
+`sum_photos`, `photo_counts`, `sum_deltas` and their views are created by `0011`; `sum_cluster`,
+`sum_cluster_class`, `sum_cluster_review`, `sum_cluster_dup` with X22 and X23 by
+`0016_cluster_cutover`, because they need `cluster_memberships.subject_key` (section 2.3). Writers
+only insert delta rows, so no summary row and no advisory lock enters the lock order of section 7.
 
 **Planner statistics**: `CREATE STATISTICS st_item_state_class (dependencies, mcv) ON class_id,
 class_source, class_validated, excluded, holdout FROM item_state` (the flags follow the class source)
@@ -603,24 +625,27 @@ classes in the most-common-values list) ([CREATE STATISTICS](https://www.postgre
 
 | Table | fillfactor | autovacuum | Reason |
 |---|---|---|---|
-| `item_state` | 100 | `0010`'s: scale factor 0.01, threshold 1,000, cost limit 2,000 | every effective change moves `updated_at` (X1, X2), so no update is HOT and free space would only waste pages; the dead versions of non-HOT updates arrive at label rate, hence vacuum at 1 % with ten times the default work ([autovacuum](https://www.postgresql.org/docs/18/runtime-config-vacuum.html)). Confirmed or revised by the HOT ratio of the write-under-read run |
+| `item_state` | 100 until 15b section 13 M5 | `0010`'s: scale factor 0.01, threshold 1,000, cost limit 2,000 | a person-visible change moves `updated_at` (X1, X2) and is never HOT; machine-only changes can be HOT (2.4) only with free space on the page, so S1a-i sets the fillfactor from M5's HOT share; dead versions arrive at label rate, hence vacuum at 1 % with ten times the default work ([autovacuum](https://www.postgresql.org/docs/18/runtime-config-vacuum.html)) |
 | `box_state` | 90 | `0010`'s | a region re-run that moves a box or changes its score without a state, detector or text change touches no indexed column and can stay HOT |
 | `class_opinions`, `item_region_results`, `probe_predictions`, `item_scores`, `item_projections`, `assist_answers` | 90 | default | a re-run replaces values that no index holds (status leaves X15 only when pending ends) |
 | `analysis_ledger` | 90 | default | `updated_at`, `reason`, `analyser_id` change on re-runs; `state` leaves X16 when done |
 | `items` | 90 | default | `box_seq`, `geometry_seq`, `region_seq` are not indexed (section 2.3): HOT |
-| `sum_*` | 50 | `autovacuum_vacuum_scale_factor = 0`, `autovacuum_vacuum_threshold = 2000` | small, hot rows whose counter is not indexed: HOT needs room on the page (the spike's 50); a percentage of a tiny table would never trigger, so vacuum by count |
+| `sum_*` base tables | 50 | `autovacuum_vacuum_scale_factor = 0`, `autovacuum_vacuum_threshold = 2000` | small rows updated only by the compactor, counter not indexed: HOT needs room on the page (the spike's 50); a percentage of a tiny table would never trigger, so vacuum by count |
+| `sum_deltas` | 100 | scale factor 0, threshold = the compactor batch (15b 6.1, section 13 M3) | an insert-then-delete queue |
 | `photo_counts` | 90 | default | `unlabeled` is in X24, so a label is not HOT here; 90 keeps the new version on the page |
 | `claims`, `photos`, `detections`, `text_lines`, vector tables | 100 | `claims` insert scale factor 0.01 (`0010`) | insert-mostly |
 
-**Migration `0011_storage_indexes`** (slice S1a, 15c): X1 to X21, X24, X25; the drop of
-`ix_item_state_project_id`; the five summary tables above with RLS(02a); the statistics object and
-the column target; the fillfactor and autovacuum settings. The tables are empty when it runs (the
+**Migration `0011_storage_indexes`** (slice S1a-i, 15c): X1 to X21, X24 to X32; the drop of
+`ix_item_state_project_id`; the `items` and `item_state` columns of 2.3 and 2.4; the summary tables,
+`sum_deltas` and views above with RLS(02a); the statistics object and the column target; the
+fillfactor and autovacuum settings. The tables are empty when it runs (the
 data is wiped and re-ingested after the cut-over), so the indexes are built in the migration's
 transaction; an index added later on a filled table uses `CREATE INDEX CONCURRENTLY` in an
 autocommit block, which "cannot be executed inside a transaction block"
 ([CREATE INDEX](https://www.postgresql.org/docs/18/sql-createindex.html)). With this revision the
-cut-over revision ids of section 9 move: `0012_ingest_cutover` (S1a: drops `image_contents`),
-`0013_claims_cutover` (S2), `0014_vector_cutover` (S3: the `embedding_spaces` change of 6.3),
+cut-over revision ids of section 9 move: `0012_ingest_cutover` (S1a-ii: `image_contents` keeps
+only the core API's rows, `project_id IS NULL`, fenced by a `CHECK`; the table goes with the core
+routes in phase 3), `0013_claims_cutover` (S2a), `0014_vector_cutover` (S3: the `embedding_spaces` change of 6.3),
 `0015_near_dup_cutover` (S5), `0016_cluster_cutover` (S6), `0017_import_cutover` (S7),
 `0018_reads_cutover` (S9: drops `project_indexes` and `search_projection_tasks`); 15c section 1
 owns that list.
@@ -1258,7 +1283,7 @@ writer that needs a lower rank rolls the chunk back and retries with it taken fi
 
 | Writer | First lock | Then | Zero rows |
 |---|---|---|---|
-| Ingest commit group (13a L4) | (3) imohash locks of the group's files, sorted (class creation runs before, 13a barrier B3) | probe `photos` by `image_id` (3.4); confirm by SHA-256 on a match, an id from SHA-256 on a collision (`content_key.py:8-13`); insert photos, items, detections, opinions, capture, ledger, vectors, state rows, events | n/a: new rows; a duplicate is reported as today |
+| Ingest commit group (13a L4) | (3) imohash locks of the group's files, sorted (class creation runs before, 13a barrier B3) | probe `photos` by `image_id` (3.4); confirm by SHA-256 on a match, an id from SHA-256 on a collision (`content_key.py:8-13`); insert photos, items, detections, opinions, capture, ledger, vectors, state rows with their deltas, events | n/a: new rows; a duplicate is reported as today |
 | Human act on existing items (label, discard, exclude, restore, dismiss, flag, move, resolve, accept machine, geometry, box edit, region verdict) | (1) its new op row | (6) items; box edit compares `region_revision` with `expected_region_revision` (409 `region_revision_conflict`) and bumps `box_seq`; insert claims, fold, update state, events | re-read by `crop_id`, else 404 |
 | Bulk human act (batch label, bulk accept, holdout freeze, audit start, batch box state) | (1) op row (`writing`) | chunks of 1,000: (6) items, claims `ON CONFLICT DO NOTHING` (M4), fold, one `UPDATE ... FROM (VALUES ...)`; op `written` or `failed` with the count | skip, count |
 | Undo of an operation (3.5) | (1) the undone op row, `FOR UPDATE`, set `undoing` | chunks: (6) items, withdraws, fold, in one transaction; `undone` after the last | withdraws still written; nothing to fold |
@@ -1272,22 +1297,28 @@ writer that needs a lower rank rolls the chunk back and retries with it taken fi
 | Near-duplicate run activation; duplicate verdict | the run row (OCC on `near_dup_runs`, 09d) | a verdict is one claim with no fold of items; a holdout closure is a bulk human act | n/a |
 | Cluster activation | the `cluster_activations` row (OCC: `revision = :expected`, 02d 2.2) | nothing: readers join the serving partition (M6) | 409 on a stale revision |
 | Class create, rename | (2) registry row | `project_classes` row | n/a |
-| Class merge (M16) | (2) registry row | `project_classes.merged_into`; commit. Lists and counts are right from this commit because readers filter `class_id = ANY(family)` and group by the merge root. Then a job: chunks of (6) items with the source class, `UPDATE item_state SET class_id = :target`; a fold racing it resolves through `merged_into` too. A source class with frozen holdout items is refused (409, `classes_merge.py:74`) | skip |
-| `fold.rebuild` (M11) | the job lease | chunks of (6) items in key order; upsert differing state rows, delete state rows without identity | skip |
+| Class merge (M16) | (2) registry row | `project_classes.merged_into`; commit. Lists and counts are right from this commit because readers filter `class_id = ANY(family)` and group by the merge root. Then a job: chunks of (6) items with the source class through `apply()` with no new input (the fold resolves `merged_into`; `store_states` emits the deltas, 15b 6.2); a fold racing it resolves the same way; at the end the family drops the source id (15b P1). A source class with frozen holdout items is refused (409, `classes_merge.py:74`) | skip |
+| `fold.rebuild` (M11) | the job lease | chunks of (6) items in key order; `state.store_states` writes differing state rows, deletes rows without identity and emits their deltas | skip |
+| Summary compactor (15b 6.5) | the job lease | one statement: `DELETE` a batch of `sum_deltas` (`FOR UPDATE SKIP LOCKED`) `RETURNING` it, upsert the sums into the base rows | locked deltas skipped |
+| Summary rebuild, partition or run fill (15b 6.6, 6.7) | the job lease (fill: after the `cluster_activations` OCC write) | one `REPEATABLE READ` snapshot; insert correcting deltas; no lock | n/a |
 | Photo or media claims (phase 5) | (1) op row | (5) the photo; claim; `fold_photo`; `photo_state` | 404 |
 | Entity and face claims (phase 5) | (1) op row | (4) entities, (7) faces; claims; `fold_entity`; `entity_state`, `membership_state`, `face_state` | 404 or skip |
-| Erasure (section 8) | (1) the `erasure_jobs` row | (4) entity, (5) photos `FOR UPDATE` in key order; catalogue deletes | already erased: skip |
+| Erasure (section 8), project delete | (1) the `erasure_jobs` row | (4) entity, (5) photos `FOR UPDATE` in key order, (6) their items; `state.store_states(delete_photos=...)` (deltas, 15b 6.2); catalogue deletes | already erased: skip |
 | Single-label op pruning (3.5) | none | `DELETE` of old `label_operations` rows; claims untouched | n/a |
 
 No path locks `items` and then a `photos` row, and no path writes `item_state` or `box_state` rows
-without first holding the matching `items` lock, so the order is total.
+without first holding the matching `items` lock, so the order is total. Summary upkeep adds no
+rank: writers only insert `sum_deltas` rows with fresh keys, which wait on nothing (15b 6.3), and
+the compactor is the only writer of base summary rows.
 
 ## 8. Erasure
 
 The one path that deletes claims (plan 15 R3, section 14 answer 4; B5). `src/services/erasure/` runs
 one job per subject: a **photo** (also emptying the trash), a **person** ("forget this person",
 photo_library 15 section 2.1), a **project** (today's `project_delete`, 02a 1.2). It inserts an
-`erasure_jobs` row, sets the transaction-local guard `op.erasure_job` in each chunk, deletes through
+`erasure_jobs` row, sets the transaction-local guard `op.erasure_job` in each chunk, removes the
+chunk's counted rows through `state.store_states(delete_photos=...)` so every summary loses them in
+the same transaction (15b 6.2; a cascade alone would leave the summaries high), deletes through
 the catalogue, deletes the files, writes a counts-only `privacy_purges` row, and at `done` nulls the
 subject columns.
 
@@ -1469,3 +1500,36 @@ failed at `CREATE SCHEMA vec` (`permission denied for database`).
 |---|---|---|
 | Placement of the privileged steps | the owner role has no `CREATE` on the database, so the superuser bootstrap (`src/db/roles.py`: `ensure_roles`, `prepare_database`) creates the role `op_vector` (secret `OP_DB_VECTOR_PASSWORD_FILE`), installs `pg_trgm` and, when the image offers it, `vector`, and creates the schema `vec` owned by `op_owner`; `apply_grants` (as the owner) gives `op_vector` `USAGE, CREATE` on `vec` and `REFERENCES (id)` on `projects`; the migration creates none of them, checks them, and fails naming the bootstrap step | 6.1; 12 `0010_storage_record` step 1; 02a 1.5 |
 | `vec` outlives a downgrade | the schema belongs to the bootstrap, so `downgrade()` no longer drops it | 6.1 |
+
+### Reads and slices review
+
+The review of 15b and 15c (2026-11-15) with the coordinator's decisions; one row per finding.
+
+| Finding | Answered in |
+|---|---|
+| B1 `image_contents` used by core ingest | 2.6 migration paragraph (`0012` fences it, no drop); 15c S1a-ii, section 8 |
+| B2 exclusive rebuild lock | 2.6 summary paragraph; section 7 (rebuild and fill rows, no lock); 15b 6.6, 6.7 |
+| B3 summary rows held to commit | 2.6 summary paragraph (no rank 8); section 7 closing paragraph; 15b 6.3 |
+| M1 class family on X2 | 2.6 X2; 15b P1 |
+| M2 drained queue | 2.6 X2 (`class_validated` key), X4 (review partial index); 15b section 5 |
+| M3 index per sort | 2.3 `items.sort_area`, `sort_rank`; 2.6 X28 to X32; 15b section 7 |
+| M4 drift | 2.4 write rules; section 7 class merge, `fold.rebuild`, erasure rows; section 8; 15b 6.2 |
+| M5 capped counts as guards | 15b section 5 |
+| M6 box rows | 2.6 X26, X27; 15b section 9 |
+| M7 dropped reader behaviours | 2.6 X13 on `taken_local`; 15b P1, P15, sections 7 and 8 |
+| M8 attach owner | 15c S1a-ii |
+| M9 deletion order | 15c section 8 |
+| M10 red by file | 15c section 9 |
+| M11 slice size | 15c sections 1 and 3 |
+| M12 round trips per label | 15b 6.9, section 13 M1 |
+| m1 P6 short page | 15b P6 |
+| m2 X22 direction | 2.6 X22 |
+| m3 upsert order | 15b 6.5 |
+| m4 advisory key space | section 7 (no tally lock remains) |
+| m5 P4 heap fetches | 15b section 5 rule 8 |
+| m6 machine churn | 2.4 `updated_at` rule; 2.6 HOT paragraph |
+| m7 GIN `fastupdate` | 15b section 8; 15c S4, S5 |
+| m8 one filter file | 15b P1 |
+| m9 `photo_counts` per photo | 15b 6.1, 6.2 |
+| m10 mixed-direction sorts | 15b sections 4 and 7 |
+| m11 capped-total classification | 15b section 5 |
