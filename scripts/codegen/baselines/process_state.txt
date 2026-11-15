@@ -51,3 +51,5 @@ src/utils/cpu_pool.py (module container)	2	per-process CPU thread pool and in-fl
 src/utils/cpu_pool.py (module lock)	1	per-process CPU thread pool and in-flight gate; pools are sized per process from totals (src/config/api_pools.py)
 src/utils/file_read.py (module container)	1	per-process file-read thread pool; sized per process
 src/utils/file_read.py (module lock)	1	per-process file-read thread pool; sized per process
+src/utils/icc_srgb.py (module container)	1	per-process memo of an embedded profile's class keyed by the profile bytes; a pure function of them, so never stale
+src/utils/icc_srgb.py (module lock)	1	guards only the memo's bookkeeping in this process; a profile is classified outside it, once per profile (single flight)

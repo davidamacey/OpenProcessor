@@ -63,10 +63,10 @@ def test_the_wire_module_imports_without_the_api_config() -> None:
     code = (
         'import sys, src.domain.frame_engine_wire, src.domain.image_geometry,'
         ' frame_engine.front, frame_engine.transport, frame_engine.prep_geometry,'
-        ' src.utils.icc_srgb;'
+        ' src.utils.icc_srgb, src.utils.icc_curves;'
         "bad = [m for m in sys.modules if m.startswith(('pydantic', 'fastapi'))"
         " or (m.startswith('src.') and not m.startswith('src.domain')"
-        " and m not in ('src.utils', 'src.utils.icc_srgb'))];"
+        " and m not in ('src.utils', 'src.utils.icc_srgb', 'src.utils.icc_curves'))];"
         'print(bad); raise SystemExit(1 if bad else 0)'
     )
     run = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True, check=False)

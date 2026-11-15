@@ -49,7 +49,7 @@ COPY --from=builder --chown=engine:engine /root/.local /home/engine/.local
 # vocabulary and the geometry the CPU paths share; the colour-profile rule of both decode routes;
 # the API's own image decode, which the host route runs).
 COPY src/domain /app/src/domain
-COPY src/utils/__init__.py src/utils/icc_srgb.py src/utils/image_decode.py /app/src/utils/
+COPY src/utils/__init__.py src/utils/icc_curves.py src/utils/icc_srgb.py src/utils/image_decode.py /app/src/utils/
 COPY frame_engine /app/frame_engine
 # The recogniser's character dictionary, the one copy the Triton pipeline model also reads.
 COPY models/paddleocr_rec_trt/ppocrv6_dict.txt /app/ocr/ppocrv6_dict.txt
