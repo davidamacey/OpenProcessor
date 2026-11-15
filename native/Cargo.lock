@@ -278,6 +278,7 @@ dependencies = [
  "base64",
  "bytes",
  "clap",
+ "gpu_frame",
  "http",
  "http-body-util",
  "hyper",

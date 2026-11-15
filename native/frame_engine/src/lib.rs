@@ -7,10 +7,12 @@
 
 pub mod admission;
 pub mod cores;
+pub mod fault;
 pub mod front;
 pub mod geometry;
 pub mod health;
 pub mod jpeg_header;
+pub mod kernels;
 pub mod metrics;
 pub mod pipeline;
 pub mod proto;
