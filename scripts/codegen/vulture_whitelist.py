@@ -118,3 +118,31 @@ _.__qualname__  # src/tasks/runtime/register.py; assigned so Celery names the ta
 _.registry_sha  # src/services/training/jobs.py; stored in training_runs.spec, read by name in docker/trainer/job_manifest.py
 _.tb  # src/utils/stage_timing.py; the __exit__ signature of the context manager protocol
 _.nvtx_verbosity  # scripts/research/gpu_pipeline/trt_runner.py; a TensorRT IExecutionContext property the runtime reads, assigned to drop per-layer NVTX ranges
+
+# Storage redesign, step 1 (plan 15 section 10): pure domain code whose only callers are its tests
+# until the lanes that wire it land
+_.fold_item  # the fold and its readers: wired by storage steps 2 to 4; entry removed by that lane
+_.moved_placement  # the fold and its readers: wired by storage steps 2 to 4; entry removed by that lane
+_.rank_items  # the fold and its readers: wired by storage steps 2 to 4; entry removed by that lane
+_.freeze_machine_class  # the fold and its readers: wired by storage steps 2 to 4; entry removed by that lane
+_.match_items  # claim matching: wired by storage steps 2 to 4; entry removed by that lane
+_.parse_payload  # claim payload and replay helpers: wired by storage steps 2 to 4; entry removed by that lane
+_.payload_json  # claim payload and replay helpers: wired by storage steps 2 to 4; entry removed by that lane
+_.without_replays  # claim payload and replay helpers: wired by storage steps 2 to 4; entry removed by that lane
+_.accept_machine  # human write path builders: wired by storage steps 2 to 4; entry removed by that lane
+_.accept_machine_eligible  # human write path builders: wired by storage steps 2 to 4; entry removed by that lane
+_.duplicate_verdict  # human write path builders: wired by storage steps 2 to 4; entry removed by that lane
+_.flag_new_class  # human write path builders: wired by storage steps 2 to 4; entry removed by that lane
+_.move_to_cluster  # human write path builders: wired by storage steps 2 to 4; entry removed by that lane
+_.probe_dismiss  # human write path builders: wired by storage steps 2 to 4; entry removed by that lane
+_.resolve_new_class  # human write path builders: wired by storage steps 2 to 4; entry removed by that lane
+_.unlabel  # human write path builders: wired by storage steps 2 to 4; entry removed by that lane
+_.vlm_dismiss  # human write path builders: wired by storage steps 2 to 4; entry removed by that lane
+_.combine_label  # import and combine claim builders: wired by storage steps 2 to 4; entry removed by that lane
+_.import_box  # import and combine claim builders: wired by storage steps 2 to 4; entry removed by that lane
+_.import_item  # import and combine claim builders: wired by storage steps 2 to 4; entry removed by that lane
+_.DEFAULT_PRECEDENCE  # the machine class precedence order: wired by storage steps 2 to 4; entry removed by that lane
+_.GEOMETRY_KINDS  # claim kind sets: read by the fold commit that follows; entry removed there
+_.PINNING_KINDS  # claim kind sets: read by the fold commit that follows; entry removed there
+_.CLASS_DECIDING_KINDS  # claim kind sets: read by the fold commit that follows; entry removed there
+_.actor_rank  # claim ranking: read by the claim row; entry removed with the fold commit
