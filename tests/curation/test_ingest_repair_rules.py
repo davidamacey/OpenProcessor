@@ -255,7 +255,7 @@ async def test_one_units_failed_repair_does_not_fail_a_whole_photo_of_its_flush(
 
     whole, broken = await asyncio.gather(
         writer.write({'image_id': 'a'}, [_doc('a1', 'a')], **_kw()),
-        writer.write(None, [_doc('b1', 'b')], repair=RepairTarget('b', ('b0',)), **_kw()),
+        writer.write(None, [_doc('b1', 'b')], repair=RepairTarget('b'), **_kw()),
     )
 
     assert whole.failure is None
@@ -540,3 +540,58 @@ async def test_a_holder_that_claimed_and_died_without_writing_is_stored_by_the_r
     assert stored.status == 'success', 'the lookup released the claim of a doc that never came'
     assert set(os_fake.images) == {image_id}
     assert len(os_fake.items) == 2
+
+
+@pytest.mark.asyncio
+async def test_a_repair_that_planned_before_another_finished_does_not_repair_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The dangerous point of two repairs of one image: the second reads the image (nothing
+    exists yet), the first then takes the lease, creates its items and gives the lease back, and
+    only then the second reaches the lease. A lease that excludes only overlapping repairs lets
+    the second one through with a plan made from a state that is gone, and it creates a second set
+    of items under other crop ids (the detector is not bit-stable), one more item per object."""
+    old = (datetime.now(UTC) - timedelta(seconds=REPAIR_AFTER_S + 60)).isoformat()
+    os_fake = FakeIngestOpenSearch(
+        images={'a': {'image_id': 'a', 'item_ids': ['a0', 'a1'], 'indexed_at': old}}
+    )
+    first_done = asyncio.Event()
+    real_plan = ingest_writer.plan_repair
+
+    async def plan(
+        client: Any, items_index: str, image_id: str, listed: Any, crop_docs: Any
+    ) -> Any:
+        planned = await real_plan(client, items_index, image_id, listed, crop_docs)
+        if crop_docs[0]['crop_id'].startswith('second'):
+            await asyncio.wait_for(first_done.wait(), 10)
+        return planned
+
+    monkeypatch.setattr(ingest_writer, 'plan_repair', plan)
+
+    def docs(prefix: str, by: float) -> list[dict[str, Any]]:
+        return [
+            {**_doc(f'{prefix}-{n}', 'a'), 'bbox_norm': [0.1 + n * 0.4 + by, 0.1, 0.4 + n * 0.4, 0.4]}
+            for n in range(2)
+        ]  # fmt: skip
+
+    target = RepairTarget('a')
+    first_writer, second_writer = IngestWriter(os_fake), IngestWriter(os_fake)
+    first = asyncio.create_task(
+        first_writer.write(None, docs('first', 0.0), repair=target, **_kw())
+    )
+    first.add_done_callback(lambda _t: first_done.set())
+    second = asyncio.create_task(
+        second_writer.write(None, docs('second', 2e-5), repair=target, **_kw())
+    )
+
+    results = [await first, await second]
+    await first_writer.close()
+    await second_writer.close()
+
+    created = [r for r in results if r.created]
+    assert len(created) == 1, 'exactly one repair creates items'
+    (other,) = [r for r in results if r is not created[0]]
+    assert other.incomplete or other.duplicate, 'the other one answers, it does not create'
+    assert len(os_fake.items) == 2, 'one item per object, not one set per repairer'
+    assert sorted(os_fake.items) == os_fake.images['a']['item_ids']
+    assert not os_fake.images['a'].get('repair_started_at'), 'the lease went back'

@@ -55,8 +55,8 @@ STATES = ('pending', 'claimed', 'done', 'failed', 'dead')
 # - a batch that outlived the sender's retries (about 2.5 minutes of backoff) means a longer
 #   outage: 60 s on top of that;
 # - an incomplete photo is repaired by the next ingest once its image is older than
-#   ``ingest_writer.REPAIR_AFTER_S`` (5,047 s) or its writer marked the failure; each retry is one
-#   lookup, so the longest pause (about 17 tries at most) costs little: 300 s.
+#   ``ingest_writer.REPAIR_AFTER_S`` (6,727.7 s) or its writer marked the failure; each retry is one
+#   lookup, so the longest pause (about 23 tries at most) costs little: 300 s.
 # The ``Retry-After`` the API sent raises a pause, and no pause passes ``MAX_RETRY_PAUSE_S``.
 RETRY_PAUSE_S = {
     ERROR_KIND_ENGINE_UNAVAILABLE: 30.0,

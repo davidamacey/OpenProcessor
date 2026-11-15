@@ -1,8 +1,10 @@
 """Shared pieces of the live ingest, search and OCR tests: a throwaway project and public-free pictures.
 
-The harness's fake Triton (``docker/test/fake_triton.py``) answers the fused detector, the PE image
-and text encoders and the OCR pipeline with deterministic outputs, so the pictures only need to
-differ from each other: solid colour blocks on a plain ground, generated here (no photograph).
+The harness's fake frame engine (``docker/test/fake_frame_engine.py``) answers every photo of an
+ingest, and its fake Triton (``docker/test/fake_triton.py``) the PE encoders, the OCR pipeline and
+the host stage, with deterministic outputs, so the pictures only need to differ from each other:
+solid colour blocks on a plain ground, generated here (no photograph). A project made here has a
+primary-only ingest profile, so its photos take the engine stage (plan 13a, section 3).
 """
 
 from __future__ import annotations

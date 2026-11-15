@@ -357,6 +357,16 @@ def harness_safety_guard() -> None:
 
 
 @pytest.fixture(scope='session', autouse=True)
+def engine_normal_for_the_run(harness_safety_guard: None) -> Any:
+    """A run that died inside ``engine_refuses`` must not leave the engine refusing for this one."""
+    from tests.live._engine import engine_normal
+
+    engine_normal()
+    yield
+    engine_normal()
+
+
+@pytest.fixture(scope='session', autouse=True)
 def stack_restored_after_scale_overlay(harness_safety_guard: None) -> Any:
     """A run that used the scale overlay leaves the stack unscaled for the next run on it."""
     yield

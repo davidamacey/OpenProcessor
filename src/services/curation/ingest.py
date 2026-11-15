@@ -261,7 +261,7 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
             image_id = existing['image_id']
             resolved_path = existing.get('image_path') or image_path
             if not identity.adopt_existing:  # an incomplete image nobody is writing: complete it
-                repair = RepairTarget(image_id, resolved.listed)
+                repair = RepairTarget(image_id)
         return ImageContext(
             image_id=image_id,
             image_path=resolved_path,

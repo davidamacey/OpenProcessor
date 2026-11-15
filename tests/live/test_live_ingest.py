@@ -1,8 +1,11 @@
-"""Live: the ingest routes against a real OpenSearch, with the harness's fake Triton.
+"""Live: the ingest routes against a real OpenSearch, with the harness's fake frame engine.
 
-``docker/test/fake_triton.py`` serves the fused detector (one box per picture) and the PE image
-encoder, so every route runs its whole path: decode, detect, embed, dedup by content hash, write
-the images and items documents and report counts. A fresh project has no region profile, which is
+Every photo of an ingest goes to the frame engine (plan 13a, section 3: no API-side decode for a
+project whose profile has no secondary detector), here ``docker/test/fake_frame_engine.py``: one
+box per picture and a vector from the picture's colour layout, the same ones ``fake_triton.py``
+gives the host path. So every route runs its whole path: the engine call, dedup by content hash,
+write the images and items documents and report counts. An engine that refuses is
+``test_live_engine_unavailable.py``. A fresh project has no region profile, which is
 what a user's first upload meets. The routes covered:
 
 * ``POST /ingest/upload`` (multipart bytes, content dedup, an unsupported type),

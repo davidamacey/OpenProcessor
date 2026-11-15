@@ -63,9 +63,13 @@ x-process-env: &process-env
   OP_VLM_URL: http://fake-vlm:8000/v1
   OP_VLM_MODEL: fake-vlm
   OP_VLM_API_KEY: EMPTY
-  # A configured secondary classifier is what makes `secondary_model` a
-  # classifier class_source (the seeded cls* rows carry it); no model is
-  # ever called.
+  # The frame engine every photo of an ingest goes to (plan 13a): the CPU stand-in below.
+  OP_FRAME_ENGINE_URL: fake-frame-engine:8001
+  # The deployment's secondary classifier. It is what makes `secondary_model` a classifier
+  # class_source (the seeded cls* rows carry it) and what a project WITHOUT an active ingest
+  # profile (`default`) uses, which then takes the host stage (`engine_stage_applies`). A project
+  # with an active ingest profile takes its secondary from the profile, none in the harness's
+  # `harness_detector`, so it takes the engine stage. No secondary model is ever called.
   OP_INGEST_SECONDARY_DETECTOR_MODEL: seeded_classifier
   # A bulk-ingest run in the jobs worker sends its batches to the API over HTTP at this address
   # (as docker-compose.yml sets for the real worker).
@@ -233,6 +237,38 @@ services:
     networks:
       - verify_net
 
+  # The frame engine (frame_engine/) as a CPU process, on the engine's real gRPC front: the API's
+  # client, the 503 `engine_unavailable` mapping, the bulk run's retries and the whole-photo writes
+  # run against it. Detections and vectors are fake-triton's (fake_frame_engine.py says what it
+  # proves and what it does not). A test makes it refuse by writing a mode into
+  # verify-data/fake_engine_mode (tests/live/_engine.py); no file is normal operation.
+  fake-frame-engine:
+    image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-api:latest
+    command: ["python", "-u", "/fake/fake_frame_engine.py"]
+    environment:
+      PYTHONPATH: /app:/fake
+    volumes:
+      - ./fake_frame_engine.py:/fake/fake_frame_engine.py:ro
+      - ./fake_triton.py:/fake/fake_triton.py:ro
+      - ../../tests/curation/engine_answer.py:/fake/engine_answer.py:ro
+      - ../../frame_engine:/app/frame_engine:ro
+      - ../../src:/app/src:ro
+      - ${VERIFY_DATA_DIR:-./verify-data}:/verify-data:ro
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import tritonclient.grpc as g; assert g.InferenceServerClient('localhost:8001').is_server_live()"
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    depends_on:
+      verify-data-init:
+        condition: service_completed_successfully
+    networks:
+      - verify_net
+
   fake-vlm:
     build:
       context: .
@@ -304,6 +340,8 @@ services:
       fake-vlm:
         condition: service_healthy
       fake-triton:
+        condition: service_healthy
+      fake-frame-engine:
         condition: service_healthy
       verify-data-init:
         condition: service_completed_successfully

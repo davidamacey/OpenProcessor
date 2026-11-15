@@ -23,7 +23,8 @@ function bodies). Contracts:
 8. ``frame_engine/`` (its own image) imports from ``src`` only ``src.domain`` and ``src.utils``,
    the two packages its image carries; nothing in ``src``, ``scripts``, ``docker`` or ``export``
    imports ``frame_engine`` (the API reaches it over gRPC, through the shared wire module
-   ``src/domain/frame_engine_wire.py``).
+   ``src/domain/frame_engine_wire.py``); the one exception is the live harness's engine
+   stand-in (:data:`_ENGINE_STAND_IN`), which runs the engine's own gRPC front.
 
 There is no baseline: a violation fails. The one permanent exception is
 :data:`PERMANENT_EXCEPTIONS`, with its reason; an exception whose import is gone
@@ -95,6 +96,10 @@ CONTRACTS: tuple[tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]], ...] 
 _RUNTIME_MAY_IMPORT = ('src.db', 'src.config', 'src.domain', 'src.utils', 'src.tasks.runtime')
 # The only ``src`` packages ``frame_engine/`` may import (what its image copies).
 _ENGINE_MAY_IMPORT = ('src.domain', 'src.utils')
+# The one file outside ``frame_engine/`` that imports it: the live harness's engine stand-in runs
+# the engine's own gRPC front, so the wire handling it answers with is the engine's, not a copy
+# that drifts. A test fixture, never part of the API.
+_ENGINE_STAND_IN = 'docker/test/fake_frame_engine.py'
 
 
 def tracked_python(repo_root: Path) -> list[str]:
@@ -141,7 +146,7 @@ def _breaks_engine_boundary(rel: str, module: str) -> bool:
         return _matches(module, 'src') and not any(
             _matches(module, ok) for ok in _ENGINE_MAY_IMPORT
         )
-    return _matches(module, 'frame_engine')
+    return rel != _ENGINE_STAND_IN and _matches(module, 'frame_engine')
 
 
 def violated(rel: str, module: str) -> bool:

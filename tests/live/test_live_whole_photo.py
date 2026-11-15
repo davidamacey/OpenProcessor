@@ -45,7 +45,7 @@ from src.config.curation_accessors import images_index, items_index
 from src.services.projects.script_binding import abind_script_project
 from src.services.projects.guard import make_script_opensearch
 from src.services.curation.ingest_writer import IngestWriter, RepairTarget
-from src.services.curation.image_completeness import missing_items, set_item_ids
+from src.services.curation.image_completeness import missing_items
 from src.services.curation.item_delete import delete_items
 
 req = json.loads(sys.stdin.read())
@@ -76,7 +76,9 @@ async def main():
         out['first'] = {'failure': first.failure, 'images_indexed': first.images_indexed}
         out['missing_after_failure'] = await missing_items(
             client, items_index(), {image_id: req['crops']})
-        repaired = await writer.write(None, crop_docs, repair=RepairTarget(image_id, tuple(req['crops'])), **kw)
+        await writer.close()  # the failure mark is written after the answer: let it land first
+        writer = IngestWriter(client)
+        repaired = await writer.write(None, crop_docs, repair=RepairTarget(image_id), **kw)
         out['repaired'] = {'failure': repaired.failure, 'repaired': repaired.repaired,
                            'created': repaired.created}
         out['missing_after_repair'] = await missing_items(
@@ -185,14 +187,15 @@ async def main():
             out['failure'] = unit.failure
         elif req['op'] == 'repair':
             # the same objects as another detector run sees them: new crop ids, boxes a hair apart
-            target = RepairTarget(image_id, tuple(crops))
+            target = RepairTarget(image_id)
             writers = [IngestWriter(client) for _ in range(req['repairers'])]
             units = await asyncio.gather(*[
                 w.write(None, docs([f'{c}-r{n}' for c in crops], boxes, 2e-5 * (n + 1)),
                         repair=target, **kw)
                 for n, w in enumerate(writers)])
             out['units'] = [{'repaired': u.repaired, 'incomplete': u.incomplete,
-                             'failure': u.failure, 'created': u.created} for u in units]
+                             'duplicate': u.duplicate, 'failure': u.failure,
+                             'created': u.created} for u in units]
             for w in writers:
                 await w.close()
         elif req['op'] == 'race':
@@ -215,7 +218,7 @@ async def main():
             client.bulk = bulk
             w = IngestWriter(client)
             unit = await w.write(None, docs([f'{c}-r' for c in crops], boxes, 2e-5),
-                                 repair=RepairTarget(image_id, tuple(crops)), **kw)
+                                 repair=RepairTarget(image_id), **kw)
             await w.close()
             client.bulk = real_bulk
             out['failure'] = unit.failure
@@ -323,7 +326,10 @@ def test_live_two_repairs_of_one_image_leave_one_item_per_object(
 
     out = _repair(image_id, crops, boxes, template, repairers=2)
 
-    assert sorted(u['incomplete'] for u in out['units']) == [False, True], out
+    created = [u for u in out['units'] if u['created']]
+    assert len(created) == 1, f'exactly one repair creates items: {out}'
+    (other,) = [u for u in out['units'] if u is not created[0]]
+    assert other['incomplete'] or other['duplicate'], f'the other one only answers: {out}'
     items = _items_of(opensearch, image_id)
     assert len(items) == 3, 'one item per object, not one set per repairer'
     image = get_doc(opensearch, INDEXES['images'], image_id)['_source']
