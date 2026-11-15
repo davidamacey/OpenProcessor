@@ -107,7 +107,7 @@ def photo(request: pytest.FixtureRequest) -> bytes:
 PLAN = wire.EnginePlan(
     branches=('detect', 'embed_frame'),
     detector=wire.DetectorSpec(DETECTOR, NET_SIZE, 114),
-    embed=wire.EmbedSpec(PE_MODEL, 336, 32),
+    embed=wire.EmbedSpec(PE_MODEL, 336),
 )
 
 

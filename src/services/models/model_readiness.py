@@ -42,6 +42,7 @@ def _configured_or_default() -> list[str]:
         models.CLIP_IMAGE_MODEL,
         models.CLIP_TEXT_MODEL,
         models.PE_IMAGE_MODEL,
+        models.PE_CROP_MODEL,
     ]
 
 

@@ -3,8 +3,8 @@
 ``encode`` resolves each document to its image file, groups the documents by image, and calls the
 reprocess embed path (``reprocess_embed._target_vectors``: servable-path check, GPU decode for
 large photos, CPU decode otherwise, then the shared ``PEEncoder`` on Triton), so there is no
-second Triton client and no second decode. Only the model the shared ``PEEncoder`` serves can be
-built here; a space of any other model is refused (fail closed) until its encoder is registered.
+second Triton client and no second decode. Only the models the shared ``PEEncoder`` serves can be
+built here (the frame encoder for a frame space, the crop encoder for an item or box space); a space of any other model is refused (fail closed) until its encoder is registered.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import asyncio
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
-from src.clients.pe_encoder import PE_IMAGE_MODEL
+from src.clients.pe_encoder import image_model_for
 from src.config import get_curation_config
 from src.db.repos import embedding_spaces as repo
 from src.db.session import async_session_factory, project_tx
@@ -47,7 +47,7 @@ class ReindexEncoder(Encoder):
         self._pe = pe
         self._gpu = gpu
         self._gate = new_image_gate()
-        self._checked: set[Any] = set()
+        self._checked: set[tuple[Any, Target]] = set()
 
     async def aclose(self) -> None:
         """Close what the factory handed over (the job wrapper closes the client it built)."""
@@ -56,17 +56,19 @@ class ReindexEncoder(Encoder):
             await closer()
 
     async def _check_model(self, space: repo.SpaceRow) -> None:
-        if space.model_version_id in self._checked:
+        if (space.model_version_id, space.target) in self._checked:
             return
         async with async_session_factory()() as session, project_tx(session, space.project_id):
             version = await repo.get_model_version_by_id(session, space.model_version_id)
-        if version is None or version.triton_image_model != PE_IMAGE_MODEL:
+        served = image_model_for(space.target)
+        if version is None or version.triton_image_model != served:
             name = version.triton_image_model if version else None
             raise EmbeddingSpaceError(
                 'embedding_model_unavailable',
-                f'{space.space_key} needs {name!r}; this worker encodes {PE_IMAGE_MODEL!r} only',
+                f'{space.space_key} needs {name!r}; this worker encodes {served!r} for '
+                f'{space.target.value} vectors',
             )
-        self._checked.add(space.model_version_id)
+        self._checked.add((space.model_version_id, space.target))
 
     async def _image_ids(self, space: repo.SpaceRow, docs: Sequence[DocRef]) -> dict[str, str]:
         """``{document id: image id}``; a frame document is its own image."""

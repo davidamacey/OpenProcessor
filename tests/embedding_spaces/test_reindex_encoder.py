@@ -56,7 +56,7 @@ class FakeOS:
 
 @pytest.fixture
 def wired(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    state: dict[str, Any] = {'decodes': [], 'model': mod.PE_IMAGE_MODEL}
+    state: dict[str, Any] = {'decodes': [], 'model': mod.image_model_for(Target.ITEM)}
 
     @asynccontextmanager
     async def fake_session():
@@ -108,10 +108,29 @@ async def test_box_documents_use_the_region_slots(wired: dict[str, Any]) -> None
 
 
 async def test_frame_document_is_its_own_image(wired: dict[str, Any]) -> None:
+    wired['model'] = mod.image_model_for(Target.FRAME)
     got = await mod.ReindexEncoder(FakeOS(), pe=object()).encode(
         _space(Target.FRAME), [DocRef('img1')]
     )
     assert got == {'img1': [1.0, 0.0]}
+
+
+@pytest.mark.parametrize(
+    ('target', 'wrong'),
+    [(Target.ITEM, Target.FRAME), (Target.BOX, Target.FRAME), (Target.FRAME, Target.ITEM)],
+)
+async def test_each_target_is_built_by_its_own_encoder_only(
+    wired: dict[str, Any], target: Target, wrong: Target
+) -> None:
+    """Frame vectors come from the frame encoder, item and box vectors from the crop encoder: a
+    space of one is refused the other's model (a vector of the wrong space is never written)."""
+    assert mod.image_model_for(target) != mod.image_model_for(wrong)
+    wired['model'] = mod.image_model_for(wrong)
+    with pytest.raises(EmbeddingSpaceError) as exc:
+        await mod.ReindexEncoder(FakeOS(), pe=object()).encode(
+            _space(target), [DocRef('a', (0, 0, 1, 1))]
+        )
+    assert exc.value.code == 'embedding_model_unavailable'
 
 
 async def test_another_model_is_refused(wired: dict[str, Any]) -> None:

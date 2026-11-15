@@ -23,6 +23,7 @@ def test_default_required_models_cover_core_and_pe_image(monkeypatch: pytest.Mon
     assert 'arcface_w600k_r50' in required
     assert 'mobileclip2_s2_image_encoder' in required
     assert 'pe_image_encoder' in required
+    assert 'pe_crop_encoder' in required
     # OCR is skipped by the minimal profile, so it is not required by default.
     assert 'paddleocr_det_trt' not in required
 

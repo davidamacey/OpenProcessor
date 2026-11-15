@@ -9,8 +9,8 @@ an item accepted before the stage existed, a box whose vector went stale
 because it was moved (:func:`~src.services.curation.region_box_embeddings.
 missing_boxes`). It crops each such box (``accepted`` or ``false_positive``;
 a false-positive box is the FP matcher's input) out of its source image,
-encodes it through the same ``pe_image_encoder`` Triton model the rest of
-the curation stack uses (:class:`~src.clients.pe_encoder.PEEncoder`), and
+encodes it through the same crop encoder (``pe_crop_encoder``, the box letterboxed
+whole) the rest of the curation stack uses (:class:`~src.clients.pe_encoder.PEEncoder`), and
 writes the vectors back with
 :func:`~src.services.curation.region_box_embeddings.write_box_embeddings`,
 which never touches the box list.

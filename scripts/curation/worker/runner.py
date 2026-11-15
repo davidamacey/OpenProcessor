@@ -100,10 +100,10 @@ async def _build_region_embedder(pool: AsyncTritonPool) -> Any:
         'false',
         'no',
     ):
-        from src.clients.pe_encoder import PE_IMAGE_MODEL, PEEncoder
+        from src.clients.pe_encoder import PE_CROP_MODEL, PEEncoder
 
         try:
-            model_ready = bool(await pool.is_model_ready(PE_IMAGE_MODEL))
+            model_ready = bool(await pool.is_model_ready(PE_CROP_MODEL))
         except TRITON_CALL_ERRORS as exc:
             logger.warning('region_embed_readiness_probe_failed', error=str(exc))
             model_ready = False
@@ -112,7 +112,7 @@ async def _build_region_embedder(pool: AsyncTritonPool) -> Any:
         else:
             logger.warning(
                 'region_embed_disabled_model_not_ready',
-                model=PE_IMAGE_MODEL,
+                model=PE_CROP_MODEL,
                 detail='box vectors will not be written this run',
             )
     return region_embed_pe

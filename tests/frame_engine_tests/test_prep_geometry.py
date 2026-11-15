@@ -24,7 +24,7 @@ from src.domain.jpeg_markers import ICC_TAG, join_icc_chunks
 from src.services.curation.ingest_index import crop_pil
 from src.services.detection.crop_quality import crop_lap_var, variance_from_sums
 from src.services.detection.geometry import letterbox_to_square
-from src.utils.pe_preprocess import resize_crop_rgb, whole_frame_rgb_from_image
+from src.utils.pe_preprocess import letterbox_crop_rgb, whole_frame_rgb_from_image
 
 
 #: CC0 profiles (``tests/fixtures/icc``, ATTRIBUTION.md).
@@ -334,10 +334,10 @@ class TestWeights:
         self, size: tuple[int, int]
     ) -> None:
         rgb = np.random.default_rng(size[1]).integers(0, 256, (size[1], size[0], 3), dtype=np.uint8)
-        g = whole_square_geometry(*size, 336)
-        full = _resample(rgb, g.new_w, g.new_h, antialias=False)
-        ours = full[g.top : g.top + 336, g.left : g.left + 336]
-        ref = resize_crop_rgb(rgb)
+        g = letterbox_geometry(*size, 336)
+        ours = _resample(rgb, g.new_w, g.new_h, antialias=False)
+        ref = letterbox_crop_rgb(rgb, 336)[g.top : g.top + g.new_h, g.left : g.left + g.new_w]
+        assert ours.shape == ref.shape
         assert np.abs(ours.astype(int) - ref).max() <= 1
 
     def test_weights_are_normalized(self) -> None:

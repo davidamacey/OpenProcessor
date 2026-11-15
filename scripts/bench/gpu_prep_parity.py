@@ -56,7 +56,7 @@ def ingest_plan(detector: str, net_size: int, fill: int) -> str:
     return wire.EnginePlan(
         branches=('detect', 'embed_frame', 'embed_crops'),
         detector=wire.DetectorSpec(detector, net_size, fill),
-        embed=wire.EmbedSpec(TritonModelConfig.PE_IMAGE_MODEL, 336, 32),
+        embed=wire.EmbedSpec(TritonModelConfig.PE_IMAGE_MODEL, 336),
         crops='inline',
     ).to_json()
 

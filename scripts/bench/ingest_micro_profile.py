@@ -35,8 +35,9 @@ if _HERE.is_file():  # piped through stdin inside the API container there is no 
 sys.path.insert(0, '/app')
 
 
+from src.clients.pe_encoder import PE_CROP_SIZE
 from src.services.detection.geometry import letterbox_to_square
-from src.utils.pe_preprocess import resize_crop_rgb, to_chw, whole_frame_chw_from_bytes
+from src.utils.pe_preprocess import letterbox_crop_rgb, to_chw, whole_frame_chw_from_bytes
 
 
 OPERATIONS = (
@@ -74,7 +75,7 @@ def profile_image(path: Path) -> dict[str, float]:
     crop = img.crop((w // 4, h // 4, w // 4 + w // 3, h // 4 + h // 3))
     arr = np.asarray(crop)
     lap()
-    to_chw(resize_crop_rgb(arr))
+    to_chw(letterbox_crop_rgb(arr, PE_CROP_SIZE))
     lap()
     crop.save(io.BytesIO(), format='JPEG', quality=85)
     lap()

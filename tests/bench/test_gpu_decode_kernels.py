@@ -17,7 +17,6 @@ from src.domain.image_geometry import crop_rect, letterbox_geometry
 from src.services.curation.ingest_index import crop_pil
 from src.services.detection.crop_quality import crop_lap_var, image_lap_var
 from src.services.detection.geometry import letterbox_to_square
-from src.utils.pe_preprocess import resize_crop_rgb
 
 
 torch = pytest.importorskip('torch')
@@ -57,7 +56,7 @@ def test_letterbox_matches_product_geometry_and_passes_t(size: tuple[int, int]) 
 @pytest.mark.parametrize('size', [(400, 300), (90, 1200), (2000, 1500), (12, 7)])
 def test_pe_square_matches_cv2_linear(size: tuple[int, int]) -> None:
     rgb = _photo(*size, seed=2)
-    ref = resize_crop_rgb(rgb)
+    ref = lib.centre_square_reference(rgb)
     got = k.pe_square_u8(torch.from_numpy(rgb)).numpy()
     assert got.shape == ref.shape == (336, 336, 3)
     d = lib.tensor_diff(ref, got)
@@ -122,7 +121,7 @@ def test_dct8_whole_frame_tracks_the_reduced_decode() -> None:
     whole frame (Pillow ``BILINEAR`` from the full frame)."""
     from PIL import Image
 
-    from src.utils.pe_preprocess import resize_crop_rgb, whole_frame_rgb_from_image
+    from src.utils.pe_preprocess import whole_frame_rgb_from_image
 
     rgb = _photo(480, 640, seed=5)
     ok, enc = cv2.imencode(
@@ -132,7 +131,7 @@ def test_dct8_whole_frame_tracks_the_reduced_decode() -> None:
     data = np.frombuffer(enc.tobytes(), np.uint8)
     decoded = cv2.cvtColor(cv2.imdecode(data, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)  # type: ignore[arg-type]
     reduced = cv2.cvtColor(cv2.imdecode(data, cv2.IMREAD_REDUCED_COLOR_8), cv2.COLOR_BGR2RGB)  # type: ignore[arg-type]
-    old = resize_crop_rgb(reduced)
+    old = lib.centre_square_reference(reduced)
     new = whole_frame_rgb_from_image(Image.fromarray(decoded))
     dct8 = k.whole_frame_u8(torch.from_numpy(decoded), mode='dct8').numpy()
     aa = k.whole_frame_u8(torch.from_numpy(decoded), mode='antialias').numpy()

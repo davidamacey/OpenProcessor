@@ -29,7 +29,7 @@ from src.clients.triton_pool_core import AsyncTritonPool
 from src.domain import frame_engine_wire as wire
 
 
-PLAN = wire.EnginePlan(branches=('embed_frame',), embed=wire.EmbedSpec('pe', 336, 32), crops='none')
+PLAN = wire.EnginePlan(branches=('embed_frame',), embed=wire.EmbedSpec('pe', 336), crops='none')
 TRANSPORT_TEXTS = (
     'Stream removed',
     'Received RST_STREAM with error code 1',

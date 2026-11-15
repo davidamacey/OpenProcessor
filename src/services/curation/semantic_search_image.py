@@ -19,7 +19,7 @@ import numpy as np
 from opensearchpy.exceptions import NotFoundError
 from PIL import Image
 
-from src.clients.pe_encoder import PE_IMAGE_MODEL
+from src.clients.pe_encoder import PE_CROP_MODEL
 from src.config import CurationConfig, get_curation_config
 from src.config.region_fields import RegionFields, get_region_fields
 from src.core.logging import get_logger
@@ -173,11 +173,11 @@ async def semantic_image_search(
     spaces = await resolve_search_spaces(target, space_key, fuse)
 
     async def vector_for(space: ResolvedSpace) -> QueryVector:
-        if space.triton_image_model != PE_IMAGE_MODEL:
+        if space.triton_image_model != PE_CROP_MODEL:
             raise EmbeddingSpaceError(
                 'embedding_model_unavailable',
                 f'space {space.space_key} needs the image model {space.triton_image_model!r}; '
-                f'this API encodes pictures with {PE_IMAGE_MODEL!r}',
+                f'this API encodes pictures with {PE_CROP_MODEL!r}',
                 status=422,
             )
         try:

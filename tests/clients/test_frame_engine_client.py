@@ -20,7 +20,7 @@ from src.domain import frame_engine_wire as wire
 PLAN = wire.EnginePlan(
     branches=('detect', 'embed_frame'),
     detector=wire.DetectorSpec('det', 640, 114),
-    embed=wire.EmbedSpec('pe', 336, 32),
+    embed=wire.EmbedSpec('pe', 336),
     crops='inline',
 )
 

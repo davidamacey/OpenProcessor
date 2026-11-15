@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.clients.pe_encoder import PE_IMAGE_MODEL
+from src.clients.pe_encoder import PE_CROP_MODEL, PE_IMAGE_MODEL
 from src.config.curation_accessors import get_curation_config
 from src.config.settings import TritonModelConfig
 from src.services.curation.ingest_detector import project_ingest_profiles
@@ -108,8 +108,16 @@ def _core_models() -> tuple[tuple[str, str, str, str], ...]:
         (
             PE_IMAGE_MODEL,
             'PE-Core-L14-336 Image Encoder',
-            'Generates 1024-d unit-norm embeddings for semantic search.',
+            'Generates 1024-d unit-norm embeddings of whole frames.',
             'ONNX Runtime encoder',
+        )
+    )
+    entries.append(
+        (
+            PE_CROP_MODEL,
+            'PE-Core Crop Encoder',
+            'Generates 1024-d unit-norm embeddings of object crops (letterboxed).',
+            'TensorRT encoder',
         )
     )
     return tuple(entries)

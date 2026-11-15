@@ -79,7 +79,8 @@ async def test_the_plan_names_the_profile_detector_the_pe_encoder_and_inline_cro
     plan = call['plan']
     assert plan.branches == ('detect', 'embed_frame', 'embed_crops')
     assert plan.detector == wire.DetectorSpec('primary_end2end', 320, 114)
-    assert plan.embed == wire.EmbedSpec('pe_image_encoder', 336, 32)
+    assert plan.embed == wire.EmbedSpec('pe_image_encoder', 336)
+    assert plan.crop_embed == wire.CropEmbedSpec('pe_crop_encoder', 224, 32)  # a model of its own
     assert plan.crops == 'inline'
     assert plan.embed_classes is None  # no class list restricts the crops: every detection
 

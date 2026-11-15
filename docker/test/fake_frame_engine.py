@@ -51,7 +51,7 @@ from frame_engine.stage_metrics import EngineMetrics
 from frame_engine.transport import OverloadError, TritonUnavailableError
 from src.domain.image_geometry import crop_rect, undo_letterbox
 from src.utils.image_decode import ImageDecodeError, decode_image
-from src.utils.pe_preprocess import resize_crop_rgb, to_chw, whole_frame_rgb_from_image
+from src.utils.pe_preprocess import letterbox_crop_rgb, to_chw, whole_frame_rgb_from_image
 
 
 if TYPE_CHECKING:
@@ -95,6 +95,7 @@ def process(request: EngineRequest) -> EngineResult:
     width, height = image.size
     canvas = plan.detector.input_size if plan.detector is not None else 640
     size = plan.embed.size if plan.embed is not None else 336
+    crop_size = plan.crop_embed.size if plan.crop_embed is not None else size
     detections = None
     if request.boxes is not None:
         rects = [
@@ -112,7 +113,7 @@ def process(request: EngineRequest) -> EngineResult:
     whole = _vectors(to_chw(whole_frame_rgb_from_image(image, size))[None])[0]
     crops = [np.asarray(image.crop(rect)) for rect in rects]
     crop_vectors = (
-        _vectors(np.stack([to_chw(resize_crop_rgb(c, size)) for c in crops]))
+        _vectors(np.stack([to_chw(letterbox_crop_rgb(c, crop_size)) for c in crops]))
         if crops
         else np.zeros((0, whole.shape[0]), np.float32)
     )

@@ -30,6 +30,7 @@ from sqlalchemy import select
 
 from src.config.settings import TritonModelConfig
 from src.db.models.training import Model, ModelEngine
+from src.domain.image_geometry import CROP_FILL
 from src.domain.storage_keys import make_key
 from src.schemas.models import EngineInputContract, EngineOutputContract, NormalizeSpec, SizeRange
 
@@ -194,6 +195,24 @@ _FP32_BUILDS: tuple[Shipped, ...] = (
             normalize='in_graph',
             resize='short_edge_center_crop',
             interpolation='pil_bilinear',
+        ),
+        _embedding(1024),
+    ),
+    Shipped(
+        TritonModelConfig.PE_CROP_MODEL,
+        'pe_core',
+        'image_embed',
+        'fp16',
+        TritonModelConfig.PE_CROP_SIZE,
+        EngineInputContract(
+            dtype='uint8',
+            layout='NCHW',
+            size=(TritonModelConfig.PE_CROP_SIZE, TritonModelConfig.PE_CROP_SIZE),
+            color='RGB',
+            normalize='in_graph',
+            resize='letterbox',
+            interpolation='bilinear',
+            fill=CROP_FILL,
         ),
         _embedding(1024),
     ),
