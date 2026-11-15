@@ -95,6 +95,23 @@ _.to_request  # ProcessingPlan.to_request; the route that parses the plan, docs/
 _.crop_key  # src/domain/storage_keys.py; docs/design/v070_rebuild/03a_stage1_foundation.md 1E-4 (crop sizing work); only tests/clients/storage/test_crop_key_variant.py calls it today
 _.replace_groups  # src/db/repos/region_text.py; the consensus job of docs/design/v070_rebuild/06e_w5e_plate_text.md lane w5e/region-text-jobs; only tests/db/test_region_text_repo.py calls it today
 _.groups_for_boxes  # src/db/repos/region_text.py; the region-text wire and review lanes of 06e_w5e_plate_text.md; only tests/db/test_region_text_repo.py calls it today
+_.get_or_create_analyser  # src/db/repos/analysers.py; wired by storage steps 2 to 4; entry removed by that lane
+_.record_ledger  # src/db/repos/analysers.py; wired by storage steps 2 to 4; entry removed by that lane
+_.photos_needing  # src/db/repos/analysers.py; wired by storage steps 2 to 4; entry removed by that lane
+_.live_claims_of_operation  # src/db/repos/claims.py; wired by storage steps 2 to 4; entry removed by that lane
+_.insert_items  # src/db/repos/items.py; wired by storage steps 2 to 4; entry removed by that lane
+_.item_keys_by_crop_id  # src/db/repos/items.py; wired by storage steps 2 to 4; entry removed by that lane
+_.create_statements  # src/db/vector_ddl.py; wired by storage steps 2 to 4; entry removed by that lane
+_.drop_statement  # src/db/vector_ddl.py; wired by storage steps 2 to 4; entry removed by that lane
+_.row_security_flags  # src/db/vector_ddl.py; wired by storage steps 2 to 4; entry removed by that lane
+_.role_grants  # src/db/vector_ddl.py; wired by storage steps 2 to 4; entry removed by that lane
+_.ROLE_ATTRIBUTES  # src/db/vector_ddl.py; wired by storage steps 2 to 4; entry removed by that lane
+_.ROLE_SETTINGS  # src/db/vector_ddl.py; wired by storage steps 2 to 4; entry removed by that lane
+_.cascade_tables  # src/services/erasure/catalogue.py; wired by storage steps 2 to 4; entry removed by that lane
+_.vector_delete_statement  # src/services/erasure/catalogue.py; wired by storage steps 2 to 4; entry removed by that lane
+_.NOT_ERASED  # src/services/erasure/catalogue.py; wired by storage steps 2 to 4; entry removed by that lane
+_.DOCUMENT_REFERENCES  # src/services/erasure/catalogue.py; wired by storage steps 2 to 4; entry removed by that lane
+_.RANK_NEUTRAL_TABLES  # src/db/repos/results.py; read by tests/storage/test_apply_offline.py: with RANK_CHANGING_TABLES it must cover every result table, so a new table cannot go unclassified
 
 # Registered or read by a framework through a name, a decorator or a protocol
 _._on_worker_init  # src/tasks/app.py; connected to Celery's worker_init signal by decorator

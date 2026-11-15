@@ -12,7 +12,7 @@ from src.db.base import Base
 
 pytestmark = pytest.mark.db
 
-HEAD = '0009_ingest_retry_at'
+HEAD = '0010_storage_record'
 
 
 def test_there_is_exactly_one_head() -> None:

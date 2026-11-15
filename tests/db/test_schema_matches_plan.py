@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 import _near_dup_plan as near_dup
 import _region_text_plan as region_text
 import _research_plan as research
+import _storage_plan as storage
 import psycopg
 import pytest
 
@@ -197,6 +198,16 @@ NAMED_CHECKS |= region_text.NAMED_CHECKS
 POLICIES |= region_text.POLICIES
 UNPROTECTED |= region_text.UNPROTECTED
 FOREIGN_KEYS |= region_text.FOREIGN_KEYS
+TABLES |= storage.TABLES
+UNIQUE_CONSTRAINTS |= storage.UNIQUE_CONSTRAINTS
+PARTIAL_INDEXES |= storage.ALL_PARTIAL_INDEXES
+PLAIN_INDEXES |= storage.ALL_PLAIN_INDEXES
+NULLS_NOT_DISTINCT |= storage.NULLS_NOT_DISTINCT
+FUNCTIONS |= storage.FUNCTIONS
+TRIGGERS |= storage.TRIGGERS
+POLICIES |= storage.POLICIES
+UNPROTECTED |= storage.UNPROTECTED
+FOREIGN_KEYS |= storage.ALL_FOREIGN_KEYS
 
 
 @pytest.fixture(scope='module')
