@@ -5,8 +5,10 @@
 //! The binary (`main.rs`) only wires these modules; they live in a library so that the contract
 //! and golden tests can reach them.
 
+pub mod admission;
 pub mod cores;
 pub mod metrics;
+pub mod pipeline;
 pub mod proto;
 pub mod pyfmt;
 pub mod settings;
