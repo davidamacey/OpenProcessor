@@ -534,37 +534,96 @@ Sizes: empty in phase 2; at 3 M photos `photo_state` ≈ 3 M x 130 / 8,168 = 0.5
 
 ### 2.6 From gate A: indexes, summary tables, fillfactors
 
-Not designed on paper (M5, M7). The gate A spike tuned and timed queries and indexes at 1 and 10
-million rows; a short pass copies its measured indexes, summary tables and fillfactors here, one per
-read below (storage inventory shape numbers), and re-computes index sizes. Rules for that pass: one
-composite index per read in the read's order (equality columns, sort column in its direction,
-tiebreak last); keyset pages use one row comparison `(sort, crop_id) < (:s, :c)` with both keys in
-one direction, since a row comparison has one direction
-([row comparisons](https://www.postgresql.org/docs/18/functions-comparisons.html)); the tiebreak is
-`crop_id`, as today (`list_cursor.py`); at most 5 B-trees on `item_state`; whole-project counts and
-aggregates cannot be index-only on a table every label rewrites, so they start as summary-table
-candidates.
+Filled 2026-11-15 from the gate A measurement (`artifacts_local/speed_1113/v2_read_shapes/`,
+`notes.md` section 3 for the spike's index set) and the read map
+[15b_storage_reads.md](15b_storage_reads.md), which gives the query each index serves (its section
+3, shape numbers of the storage inventory). Rules applied: one composite index per read in the
+read's order (equality columns, the sort column in its direction, the tiebreak last); keyset pages
+use one row comparison with the tiebreak in the sort's direction (15b section 4, M7, [row-wise
+comparison](https://www.postgresql.org/docs/18/functions-comparisons.html#ROW-WISE-COMPARISON)); the
+tiebreak is `crop_id` on `item_state` sorts, `photo_key` on photo sorts and `item_key`
+(`subject_key`) on sorts whose key lives in a result or membership table; at most 5 B-trees on
+`item_state` besides its key; whole-project counts and aggregates read summary tables kept by the
+writer (15b section 6). "Spike" names the gate A index the row comes from (`notes.md` section 3);
+"new" rows are to be measured in the first wave sweep after the slice that uses them (15b 1.3).
 
-| Read (inventory shape) | Table | Needs | Revision 0 candidate, replaced by the measured one |
+| # | Table | Columns in order (direction) | Partial predicate | Serves (shapes) | From | Size at 10 M (estimate) |
+|---|---|---|---|---|---|---|
+| X1 | `item_state` | `project_id, updated_at DESC, crop_id DESC` | | 1, 3-5, 37, 50 (default sort, locate, keyset walks) | spike `o_upd` | 10 M x 52 B / (8,192 x 0.9) ≈ 0.6 GB |
+| X2 | `item_state` | `project_id, class_id, updated_at DESC, crop_id DESC` | | 1, 3-5 with a class filter (also class plus flags, filtered on the heap), 53, 66 (merge walk) | spike `o_class_upd` (`s1a_deep` 1.3 / 2) | 0.65 GB |
+| X3 | `item_state` | `photo_key, rank, crop_id` | | 25, 29, 80 (a photo's items by rank) | spike `o_image` (`s7` 3.1 / 5) | 0.5 GB |
+| X4 | `item_state` | `project_id, class_confidence, crop_id` | `NOT class_validated AND NOT excluded AND NOT holdout` | 2 (`check_machine`, confidence tabs), 1 (`confidence` sort on open lists) | spike `o_review_conf`, re-keyed: new | 6 M rows x 52 B ≈ 0.35 GB |
+| X5 | `item_state` | `class_op_id` | `class_op_id IS NOT NULL` | 46 (section 2.4, `0010`) | `0010`, kept | ≈ 0.1 GB |
+| X6 | `box_state` | `project_id, state, detector, item_key DESC` | | 6 (box rows, 15b section 9), 52 | new | 5 M x 60 B ≈ 0.3 GB |
+| X7 | `box_state` | GIN `text_fold gin_trgm_ops` | `text_fold IS NOT NULL` | 2, 6 and 1 text predicates, 53 (15b section 8) | spike `b_text_trgm` (`pg_ext`, 10 M pending) | ≈ 0.1 GB |
+| X8 | `detections` | `project_id, analyser_id, confidence DESC NULLS LAST, item_key DESC` | | `detector_confidence` sort, `to_label` default (15b section 7) | new | 10 M x 48 B ≈ 0.55 GB |
+| X9 | `photos` | `project_id, photo_key` | | 24 (`indexed_at` sorts as insert order), 51, 55, 58 and every photo walk (`analysers.photos_needing`) | new | 3 M x 36 B ≈ 0.15 GB |
+| X10 | `photos` | BRIN `created_at` | | 31d (ingest status, 14 days), 79 (new photos since) | new ([BRIN](https://www.postgresql.org/docs/18/brin-intro.html): insert-ordered time) | < 1 MB |
+| X11 | `photos` | `project_id, source_identifier` | `source_identifier IS NOT NULL` | 31a | 2.6 revision 0 candidate | small |
+| X12 | `photos` | `project_id, storage_key, photo_key` | | 31b, 31c, 24 (`file_name` sort) | new | 3 M x 100 B ≈ 0.4 GB |
+| X13 | `photo_capture` | `project_id, taken_utc DESC NULLS LAST, photo_key DESC` | | 24 (`taken_at` sorts) | spike `i_taken` (`s7_deep` 3.7 / 6) | 0.15 GB |
+| X14 | `photo_capture` | GiST `point(lon, lat)` | `lat IS NOT NULL` | 30, 24 (geo filter) | spike `i_loc` (`s11_map` 18.0 / 171) | ≈ 0.05 GB |
+| X15 | `item_region_results` | `project_id, item_key` | `status IN ('pending_detection', 'pending_verification')` | 49 (worker poll) | new | transient, small |
+| X16 | `analysis_ledger` | `project_id, kind, photo_key` | `state <> 'done'` | 55, 79, failed and pending re-runs (P14); the full work list is `analysers.photos_needing` over X9 and the ledger key | new | small |
+| X17 | `class_opinions` | `op_id` | `op_id IS NOT NULL` | undo of an adoption or a propagation (3.5) | 2.6 revision 0 candidate | small |
+| X18 | `class_opinions` | `project_id, raw_label` | `raw_label IS NOT NULL` | 18 | 2.6 revision 0 candidate | ≈ 0.2 GB |
+| X19 | `class_opinions` | `project_id, proposed_class` | `outcome = 'new_class_pending'` | 17, 19 | new | small |
+| X20 | `item_scores` | `project_id, kind, score DESC, item_key DESC` | | `mistakenness_score`, `uniqueness_score` sorts | new | 20 M x 44 B ≈ 1.1 GB |
+| X21 | `probe_predictions` | `project_id, entropy, item_key` | | 2 (`disagreements` default), 56 | new | 0.5 GB |
+| X22 | `cluster_memberships` | `partition_id, cluster_uid, score DESC NULLS LAST, subject_key` | | 1 cluster filter, 10 rebuild, 12, 13, 41, 77, 6 inside a box cluster; replaces 02d `ix_cluster_memberships_cluster` | spike `pl_cluster` (`pg_pl` pending) | per retained partition 10 M x 44 B ≈ 0.5 GB |
+| X23 | `cluster_memberships` | `partition_id, score, subject_key` | | 2 (cluster-fit sorts), 8 (`core_first`) | spike `pl_score` (`pg_pl` pending) | ≈ 0.45 GB per partition |
+| X24 | `photo_counts` | `project_id, unlabeled DESC, photo_key DESC` | | 24 (`unlabeled_count` sorts, `label_state` filter) | new | 0.15 GB |
+| X25 | `text_lines` | GIN `lower(text) gin_trgm_ops` | `item_key IS NOT NULL` | item text predicate of 1 and 2 (15b section 8) | new | small |
+
+**`item_state` holds exactly five B-trees besides its key** (X1 to X5). The foreign-key index
+`ix_item_state_project_id` that `0010` created is dropped: X1 and X2 lead with `project_id` and are
+not partial, so they serve the lookup a project delete's cascade needs ("it is often a good idea to
+index the referencing columns", [foreign keys](https://www.postgresql.org/docs/18/ddl-constraints.html#DDL-CONSTRAINTS-FK)),
+and the schema test asserts the replacement instead of the plain index. No sixth index: the spike's
+`o_class_flags` (class plus the three flags) is served by X2 with the flags checked on the heap (to
+be measured: a class whose rows are mostly validated makes the walk longer); the spike's
+`o_cluster_*` and `o_review` move to the membership table (X22, X23) with the placement; its
+`o_cluster_cov` and `o_cls_src` are replaced by the summary tables. `updated_at` is in X1 and X2, so
+every effective change of a state row is a non-HOT update and inserts one entry into each index
+([HOT](https://www.postgresql.org/docs/18/storage-hot.html) needs "no indexed column modified"):
+the price of the default "Recently updated" order, measured in the write-under-read run.
+
+**Summary tables**: DDL, upkeep and rebuild in 15b section 6. `sum_items`, `sum_region`, `sum_box`,
+`sum_photos` and `photo_counts` are created by `0011`; `sum_cluster`, `sum_cluster_class`,
+`sum_cluster_review`, `sum_cluster_dup` with X22 and X23 by `0016_cluster_cutover`, because they need
+`cluster_memberships.subject_key` (section 2.3), which the clustering slice changes. The summary rows
+and the project's tally advisory lock are **rank 8** of the lock order in section 7, after `faces`:
+taken last, rows in key order.
+
+**Planner statistics**: `CREATE STATISTICS st_item_state_class (dependencies, mcv) ON class_id,
+class_source, class_validated, excluded, holdout FROM item_state` (the flags follow the class source)
+and `ALTER TABLE item_state ALTER COLUMN class_id SET STATISTICS 1000` (a registry of up to 1,000
+classes in the most-common-values list) ([CREATE STATISTICS](https://www.postgresql.org/docs/18/sql-createstatistics.html),
+[ALTER TABLE](https://www.postgresql.org/docs/18/sql-altertable.html)).
+
+| Table | fillfactor | autovacuum | Reason |
 |---|---|---|---|
-| 1 object list, default sort and class filter; 3-5 locate | `item_state` | composite per sort and filter, keyset | `(project_id, updated_at DESC, item_key)`, `(project_id, class_id, class_validated)` |
-| 2 review tabs, sorts by cluster score, probe entropy, confidence; its total | `item_state` + score tables | partial index per tab and sort; total: summary candidate | `(project_id, class_source, class_validated)` partial |
-| 6, 15, 52 box rows, region counts, requeue | `box_state` | `(state, detector)` with the page order | `(project_id, state, detector)` |
-| 10, 11, 12, 13 cluster cards, representatives, facets | `cluster_memberships` joined to `item_state` | the join's index; summary candidate (10, 13) | 02d `ix_cluster_memberships_cluster` |
-| 15, 16, 47 dataset stats, class counts, census | `item_state` | summary candidates; class family filter (M16) | `(project_id, class_id, class_validated)` |
-| 18 raw-label aggregations | `class_opinions` | `raw_label` | `(project_id, raw_label)` partial |
-| 2 (wildcard), 70 text search | `box_state.text_fold`, `text_lines.text` | trigram GIN | `gin (text_fold gin_trgm_ops)`, `gin (lower(text) gin_trgm_ops)` |
-| 24, 31d image list by time and by ingest order | `photo_capture`, `photos` | sort keys | `(project_id, taken_utc, photo_key)`, `(project_id, created_at, photo_key)` |
-| 24, 30 map | `photo_capture` or `photo_state` | spatial form (the spike used GiST) | `(project_id, lat, lon)` partial |
-| 25, 29 photo card facts, photo detail | `item_state` | photo and rank | `(photo_key, rank)` |
-| 31a ingest lookups by source identifier | `photos` | `source_identifier` | `(project_id, source_identifier)` partial |
-| 42, 49 region drain, worker poll | `item_region_results` | `status` | `(project_id, status)` |
-| 46 label-op list, newest first | `label_operations` | creation order | none (the count is decided: section 2.4) |
-| audit report, holdout stats, history routes (38, 45) | `claims` | `(kind, at)` | `(project_id, kind, at)` |
-| undo of an adoption or a propagation (3.5) | `class_opinions` | `op_id` | `(op_id)` partial |
-| re-run work lists (49, 50, 79) | `analysis_ledger` | `(kind, analyser_id, state)` | `(project_id, kind, analyser_id, state)` |
-| gallery timeline, persons, albums; erasure by subject | `photo_state`, `entity_edges`, `membership_state` | timeline sort; subject direction | `(project_id, taken_utc DESC, photo_key)` partial; `(project_id, subject_kind, subject_key)` |
-| fillfactor | `item_state`, `box_state`, `items`, `class_opinions`, `item_region_results`, `analysis_ledger`, `entity_state`, `face_state`, `photo_state` | measured HOT ratio | 80-90 |
+| `item_state` | 100 | `0010`'s: scale factor 0.01, threshold 1,000, cost limit 2,000 | every effective change moves `updated_at` (X1, X2), so no update is HOT and free space would only waste pages; the dead versions of non-HOT updates arrive at label rate, hence vacuum at 1 % with ten times the default work ([autovacuum](https://www.postgresql.org/docs/18/runtime-config-vacuum.html)). Confirmed or revised by the HOT ratio of the write-under-read run |
+| `box_state` | 90 | `0010`'s | a region re-run that moves a box or changes its score without a state, detector or text change touches no indexed column and can stay HOT |
+| `class_opinions`, `item_region_results`, `probe_predictions`, `item_scores`, `item_projections`, `assist_answers` | 90 | default | a re-run replaces values that no index holds (status leaves X15 only when pending ends) |
+| `analysis_ledger` | 90 | default | `updated_at`, `reason`, `analyser_id` change on re-runs; `state` leaves X16 when done |
+| `items` | 90 | default | `box_seq`, `geometry_seq`, `region_seq` are not indexed (section 2.3): HOT |
+| `sum_*` | 50 | `autovacuum_vacuum_scale_factor = 0`, `autovacuum_vacuum_threshold = 2000` | small, hot rows whose counter is not indexed: HOT needs room on the page (the spike's 50); a percentage of a tiny table would never trigger, so vacuum by count |
+| `photo_counts` | 90 | default | `unlabeled` is in X24, so a label is not HOT here; 90 keeps the new version on the page |
+| `claims`, `photos`, `detections`, `text_lines`, vector tables | 100 | `claims` insert scale factor 0.01 (`0010`) | insert-mostly |
+
+**Migration `0011_storage_indexes`** (slice S1a, 15c): X1 to X21, X24, X25; the drop of
+`ix_item_state_project_id`; the five summary tables above with RLS(02a); the statistics object and
+the column target; the fillfactor and autovacuum settings. The tables are empty when it runs (the
+data is wiped and re-ingested after the cut-over), so the indexes are built in the migration's
+transaction; an index added later on a filled table uses `CREATE INDEX CONCURRENTLY` in an
+autocommit block, which "cannot be executed inside a transaction block"
+([CREATE INDEX](https://www.postgresql.org/docs/18/sql-createindex.html)). With this revision the
+cut-over revision ids of section 9 move: `0012_ingest_cutover` (S1a: drops `image_contents`),
+`0013_claims_cutover` (S2), `0014_vector_cutover` (S3: the `embedding_spaces` change of 6.3),
+`0015_near_dup_cutover` (S5), `0016_cluster_cutover` (S6), `0017_import_cutover` (S7),
+`0018_reads_cutover` (S9: drops `project_indexes` and `search_projection_tasks`); 15c section 1
+owns that list.
 
 The vector reads (20-23, 59-65) are gate B's (section 6.4).
 
