@@ -36,6 +36,7 @@ from sqlalchemy.orm import Session
 from src.db.engine import bind_async_engine, get_sync_engine, new_task_async_engine
 from src.db.repos import job_events, jobs as repo
 from src.domain import job_perf, job_states as js, job_timing
+from src.domain.embedding_spaces import EmbeddingSpaceError
 from src.domain.job_failure import JobFailedError
 from src.tasks.runtime import hooks, job_metrics
 from src.tasks.runtime.context import JobContext, JobResult, Paused, Yield
@@ -295,7 +296,9 @@ def _write_terminal(
     if ran.how == 'cancelled':
         return repo.finish(session, job.id, token, status=js.CANCELLED, outcome='cancelled'), False
     if ran.how == 'error':
-        if isinstance(ran.error, JobFailedError):
+        # Both carry their own stable code; a refusal of the project's space cannot succeed on a
+        # retry, so it ends the job like any other failure of the handler: once.
+        if isinstance(ran.error, JobFailedError | EmbeddingSpaceError):
             return _fail(
                 session, job, ran.error.code, str(ran.error)[:_MESSAGE_CHARS], 'failed'
             ), False

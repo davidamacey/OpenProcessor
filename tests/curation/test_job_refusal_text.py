@@ -24,9 +24,10 @@ from src.domain.embedding_spaces import (
     Target,
     encoder_mismatch_message,
 )
+from src.domain.job_failure import JobFailedError
 from src.services.curation import reprocess_images
 from src.services.curation.dataset_import import runner
-from src.services.curation.dataset_import.job import ImportRunError, finish
+from src.services.curation.dataset_import.job import finish
 from src.services.curation.dataset_import.report import ImportReport
 from src.services.curation.reprocess_embed_spec import EmbedSpec
 from src.tasks.runtime import job_task
@@ -69,6 +70,7 @@ def _record(monkeypatch: pytest.MonkeyPatch, error: BaseException) -> dict[str, 
 
 def _assert_the_person_reads_the_remedy(written: dict[str, Any]) -> None:
     assert written['status'] == js.FAILED
+    assert written['error_code'] == 'embedding_model_unavailable'  # the refusal's own code
     message = written['error_message']
     assert REMEDY in message  # the last words of the refusal, not cut off
     assert 'cars' in message
@@ -175,7 +177,7 @@ async def test_an_import_refused_by_the_space_stops_at_once_and_fails_with_the_w
     assert outcome.issues[0]['code'] == 'embedding_model_unavailable'
     assert REMEDY in outcome.issues[0]['error']
 
-    with pytest.raises(ImportRunError) as ended:
+    with pytest.raises(JobFailedError) as ended:
         await finish(
             None,  # type: ignore[arg-type]
             SimpleNamespace(freeze_test=False),  # type: ignore[arg-type]

@@ -103,6 +103,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Fixed
 
+- A job refused by the wrong-space guard (reprocess, re-index, dataset import) ends `failed` with `error_code` `embedding_model_unavailable` and the whole refusal text (project, space, both builds, the remedy) as its error. The embed reprocess used to count every image failed with no reason, and the dataset import retried the refusal on six chunks and cut the text to 300 characters.
 - The ExifTool pool removes its `op-exiftool-*` temporary directory when it ends (close, garbage collection, interpreter exit, Celery pool-child shutdown); it was left in `/tmp` before.
 
 - **A bulk run whose files waited and were then stored ends `completed`.** The run's `failed` count and its `completed_with_errors` status counted every failure it had seen, so files that waited for an engine that was refusing and were stored after it came back still ended the run with errors, and `processed` counted each of them twice. A transient failure is now reported as `waiting`, not `failed`, and a file stored by a later pass leaves the failed count: `failed` is what is still failed at the end.
