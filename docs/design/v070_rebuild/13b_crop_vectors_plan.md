@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | decision and lane plan, revision 1 (2026-11-15), by the coordinator: the frame vector comes from the same letterbox pass (section 2a) |
+| Status | revision 2 (2026-11-15), by the coordinator: the pooled design of revisions 0 and 1 is REJECTED by its own high-resolution gate (section 5); sections 2 to 4 are kept as the record of what was tried; the decision in force is section 6 |
 | Refines | [13_backend_speed_plan.md](13_backend_speed_plan.md) track T3 (encoder cost) and item E3; [14_roadmap.md](14_roadmap.md) phase 1b |
 | Not in scope | faces, text reading, the vector index (plan 15) |
 
@@ -74,3 +74,56 @@ way it is tested against the reference head.
 | GPU cost | at most 6 ms of GPU per photo for the frame and every crop vector at 1, 3, 10 and 50 boxes, measured from the model server's counters and the engine's stage timers |
 | Rate, engine alone, 32 in flight | COCO at least 60 photos per second (25.9 today); the 20 MP set at least 60 (46 to 48 today); the bound that remains is named with its evidence |
 | Memory | device memory per photo in flight stated; the 12 GB profile still fits the full plan |
+
+## 5. What the engine lane measured (revisions 0 and 1 rejected)
+
+The pooled branch was built in the engine on a lane branch and measured through it.
+
+| Gate | Result |
+|---|---|
+| Export check | pass: minimum cosine 0.999995 against today's frame vector |
+| Public quality | pass: COCO crop R@1 0.704, NMI 0.623; Cars 0.922, 0.938; text to crop mAP 0.780 |
+| High resolution: objects of 32 to 512 px placed in 12 to 22 megapixel photos, cluster NMI, pooled against a call per crop | MISS by far: COCO classes 0.214 / 0.233 / 0.276 / 0.361 / 0.612 against 0.736 / 0.760 / 0.760 / 0.760 / 0.766; car models 0.584 / 0.578 / 0.573 / 0.582 / 0.641 against 0.848 / 0.915 / 0.929 / 0.924 / 0.924. A pass at 448 does not close it |
+| Letterbox frame vector | text to image R@1 0.558 (bar 0.548: pass); copy detection R@1 0.865 against 0.882 (miss) |
+| GPU cost | 6.3 to 6.6 ms per photo from the model server's counters (bar 6: miss by 5 to 10%) |
+| Rate, engine alone, 32 in flight | COCO 68.8 to 70.3 photos per second (pass); the 20 MP set 46.6 to 48.2 (miss); the bound is the engine's network loop thread and the interpreter lock (held in 0.78 of samples), GPU 55 to 60% busy |
+
+Why it fails: an object that is small against the photo covers one or two encoder patches, so its
+pooled vector is the scene around it. That helps to tell COCO classes apart and carries nothing to
+tell two car models apart. A pass zoomed so that the object spans at least 12 patches per side
+restores the quality of a call per crop (and no less than 12 does), but then costs about as much;
+and vectors of one object taken at different zooms are no closer to each other (cosine 0.82 to
+0.84) than two different cars of one class, so zoom levels cannot be mixed in one cluster space.
+
+The lane branch is kept unmerged as a record. Nothing of it is in the product.
+
+## 6. Decision in force (revision 2)
+
+What the labelling loop needs from a crop vector is to tell objects of ONE detector class apart
+(clusters are computed within a detector class), at every object size. So:
+
+1. A call per crop stays. The crop is letterboxed to the encoder's input (the centre-crop rule,
+   which keeps about half of a wide box, is deleted): measured +4 points of retrieval on COCO and on
+   Cars, and 0.85 to 0.93 cluster NMI on car models from 32 to 512 px objects in large photos.
+2. The crop encoder becomes a named model of its own in the engine's plan: its own input size, its
+   own preprocessing, its own vector space, independent of the frame encoder. First filling, no new
+   weights: today's encoder at a 224 input for crops, measured at 2.1 times the images per second
+   with equal crop quality (COCO crop R@1 0.663 against 0.674, NMI equal; Cars 0.955 against 0.954).
+3. Whether a smaller dedicated crop encoder replaces it is decided by a measurement on fine-grained
+   ground truth with the letterbox rule, at controlled object sizes, on at least three public
+   fine-grained sets and on set P's labelled vehicle classes (numbers only): today's encoder at 336
+   and 224, PE-Core-B/16, SigLIP 2 B/16 (2,217 images per second, the best car-model clusters on
+   whole photos so far, its own text tower). The bar: fine-grained cluster NMI not below today's
+   encoder with the letterbox rule by more than 1 point on any set or size; text-to-crop search
+   reported. The engine change of point 2 makes the swap a model and a setting, not a rewrite.
+4. The frame vector does not change (the centre square stays): the letterbox frame vector gained
+   on text search and lost on copy detection.
+5. After the crop cost falls, the engine's own front is the next bound (about 70 photos per second
+   on small photos, about 47 on 20 megapixel ones, with the GPU half idle). That is the input to
+   the engine's native rewrite (plan 14 section 4), not to this plan.
+
+| Lane | Work | Gates, through the engine |
+|---|---|---|
+| C1 (engine and API) | the crop encoder as its own named model with input size and letterbox preprocessing; the 224 build of today's encoder through the documented export path; the centre-crop rule deleted; the crop space registered as new | COCO crop R@1 and NMI not below the 336 letterbox numbers by more than 1.5 points; Cars and the placed-object sets at 32 to 512 px likewise; text to crop mAP reported; GPU ms per crop from the model server; rate at 32 in flight on COCO and the 20 MP set with the named bound |
+| C2 (measurement) | point 3 | its bar |
+
