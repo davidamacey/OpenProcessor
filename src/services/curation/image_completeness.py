@@ -3,10 +3,12 @@
 The rule is :mod:`src.domain.image_completeness`: the images doc lists its items, and a photo is
 whole when every listed item exists. This module reads the items (:func:`missing_items`, used
 by the content lookup and by the writer's 409 answer, so one rule decides a ``duplicate``) and
-makes the edits of the list, each an OCC write on the images doc through
+makes the three edits of the list, each an OCC write on the images doc through
 :func:`~src.clients.occ_bulk.occ_update_bulk` (read, merge, conditional write with
 ``if_seq_no`` / ``if_primary_term``, a 409 re-read):
 
+* :func:`forget_items` takes the ids of items about to be deleted off their images' lists, so a
+  deleted item never makes its image look incomplete;
 * :func:`set_item_ids` is the repair's last write, which also clears the failure mark;
 * :func:`mark_incomplete` is the writer's best-effort note on a photo it saw fail.
 
@@ -29,13 +31,13 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from src.clients.occ_bulk import occ_update_bulk
 from src.core.logging import get_logger
-from src.domain.image_completeness import INCOMPLETE_MARK_FIELD, ITEM_IDS_FIELD
+from src.domain.image_completeness import INCOMPLETE_MARK_FIELD, ITEM_IDS_FIELD, listed_item_ids
 from src.services.curation.ops_metrics import count_whole_event
 from src.services.embedding_spaces.readers import vector_source_excludes
 
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Collection, Mapping, Sequence
 
 
 logger = get_logger(__name__)
@@ -63,6 +65,36 @@ async def missing_items(
         found.update(d['_id'] for d in resp.get('docs') or [] if d.get('found'))
     gaps = {image_id: [i for i in ids if i not in found] for image_id, ids in listed.items()}
     return {image_id: gap for image_id, gap in gaps.items() if gap}
+
+
+async def forget_items(
+    client: Any, images_index: str, by_image: Mapping[str, Collection[str]]
+) -> None:
+    """Take ``by_image`` ``{image_id: item ids}`` off the lists of the images docs, in one bulk
+    OCC update for all images; call it BEFORE the items are deleted (a crash in between leaves
+    an item the list no longer names, which keeps the list true). An image without the field
+    (legacy) or whose list names none of the ids is not written. Raises when a doc could not be
+    updated: the delete must not go on."""
+    status = await occ_update_bulk(
+        client,
+        index=images_index,
+        ids=list(by_image),
+        merge_fn=lambda image_id, source: _without(source, by_image[image_id]),
+        vector_excludes=await vector_source_excludes('images'),
+    )
+    failed = {i: s for i, s in status.items() if s not in ('updated', 'not-found')}
+    if failed:
+        msg = (
+            f'item_ids of {len(failed)} image(s) could not be updated: {sorted(failed.items())[:3]}'
+        )
+        raise OpenSearchException(msg)
+
+
+def _without(source: dict[str, Any], gone: Collection[str]) -> dict[str, Any]:
+    listed = listed_item_ids(source)
+    if listed is None or not gone or not set(listed) & set(gone):
+        return {}
+    return {ITEM_IDS_FIELD: [i for i in listed if i not in set(gone)]}
 
 
 async def set_item_ids(client: Any, images_index: str, image_id: str, item_ids: list[str]) -> None:
@@ -114,4 +146,4 @@ async def mark_incomplete(client: Any, images_index: str, image_id: str) -> None
         count_whole_event('mark_failed')
 
 
-__all__ = ['mark_incomplete', 'missing_items', 'set_item_ids']
+__all__ = ['forget_items', 'mark_incomplete', 'missing_items', 'set_item_ids']

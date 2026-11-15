@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from src.clients.curation_opensearch.capture_fields import block_within_policy
 from src.clients.curation_opensearch.cluster_fields import CLUSTER_PARTITION_MAPPING
 from src.domain.embedding_state import DEFERRED
+from src.domain.image_completeness import INCOMPLETE_MARK_FIELD, ITEM_IDS_FIELD
 from src.services.detection.geometry import crop_id as make_crop_id
 
 
@@ -207,7 +208,16 @@ def transform_image(
     ``negative_for`` is the reviewed-negative class list already mapped to
     target class names (``None`` when the source image is not a negative)."""
     doc = copy.deepcopy(image_doc)
-    for name in ('import_ids', 'negative_for'):
+    # ``item_ids`` names the SOURCE's items and ``ingest_write_id`` its writer: neither is true of
+    # the target (its items have ids of its own), and a list naming items the target lacks would
+    # make every copied image look incomplete. Without the field the image counts as whole.
+    for name in (
+        'import_ids',
+        'negative_for',
+        ITEM_IDS_FIELD,
+        INCOMPLETE_MARK_FIELD,
+        'ingest_write_id',
+    ):
         doc.pop(name, None)
     if isinstance(doc.get('capture'), dict):
         # Capture is copied as it is, except for a position the target's policy does not keep.
