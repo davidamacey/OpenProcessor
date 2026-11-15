@@ -523,9 +523,11 @@ def test_an_unready_engine_keeps_the_placeholder_hash(tmp_path: Path, bash) -> N
 
 
 def _curl(rc: int, code: str) -> str:
-    """A curl double: the /load POST exits RC and prints CODE; anything else is not READY."""
+    """A curl double: the /load POST exits RC and prints CODE; the pre-load state check (-w) says
+    not loaded; anything else is not READY."""
     return (
-        f'curl() {{ if [[ "$*" == */load* ]]; then printf %s {code}; return {rc}; fi; return 22; }}; '
+        f'curl() {{ if [[ "$*" == */ready* && "$*" == *-w* ]]; then printf 400; return 0; fi; '
+        f'if [[ "$*" == */load* ]]; then printf %s {code}; return {rc}; fi; return 22; }}; '
         'sleep() { :; }; '
     )
 
@@ -543,7 +545,8 @@ def test_strict_load_tells_triton_down_from_a_refused_load(bash) -> None:
 def test_a_slow_load_is_waited_for_not_called_unreachable(bash) -> None:
     script = (
         f'source {LIB}; log_warn() {{ :; }}; sleep() {{ :; }}; n=0; '
-        'curl() { if [[ "$*" == */load* ]]; then printf 000; return 28; fi; '
+        'curl() { if [[ "$*" == */ready* && "$*" == *-w* ]]; then printf 400; return 0; fi; '
+        'if [[ "$*" == */load* ]]; then printf 000; return 28; fi; '
         '(( ++n > 2 )) && return 0; return 22; }; '
         'triton_load_and_wait m 20 strict; echo "rc=$?"'
     )

@@ -11,6 +11,9 @@
 [[ -n "${_PADDLEOCR_OPS_SH_LOADED:-}" ]] && return 0
 _PADDLEOCR_OPS_SH_LOADED=1
 
+# shellcheck source=scripts/lib/triton_load.sh
+source "${BASH_SOURCE[0]%/*}/triton_load.sh"
+
 # =============================================================================
 # Control Functions
 # =============================================================================
@@ -28,6 +31,10 @@ reload_models() {
 
     for model in "${models[@]}"; do
         log_info "Loading $model..."
+        if ! triton_unload_if_ready "http://localhost:${TRITON_HTTP_PORT}" "$model"; then
+            log_warn "$model did not unload cleanly; not loading it again"
+            continue
+        fi
         curl -s -X POST "localhost:${TRITON_HTTP_PORT}/v2/repository/models/${model}/load" > /dev/null 2>&1 || true
     done
 

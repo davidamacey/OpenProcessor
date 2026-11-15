@@ -172,6 +172,9 @@ retry_step() {
 # -----------------------------------------------------------------------------
 # Triton load + READY wait (section 4.2)
 # -----------------------------------------------------------------------------
+# shellcheck source=scripts/lib/triton_load.sh
+source "${BASH_SOURCE[0]%/*}/triton_load.sh"
+
 _ms_triton_url() {
     printf 'http://%s:%s' "${OP_HEALTH_HOST:-127.0.0.1}" "${TRITON_HTTP_PORT:-4600}"
 }
@@ -189,6 +192,12 @@ triton_model_ready() {
 # running: it is waited for like in the default mode.
 triton_load_and_wait() {
     local name="$1" timeout="${2:-120}" strict="${3:-}" waited=0 code rc=0
+    triton_unload_if_ready "$(_ms_triton_url)" "$name" || {
+        rc=$?
+        log_warn "${name} is loaded and did not unload cleanly (rc ${rc}); not loading it again"
+        [[ "$strict" == strict ]] && return "$rc"
+        return 1
+    }
     code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 60 -X POST \
         "$(_ms_triton_url)/v2/repository/models/${name}/load" 2>/dev/null)" || rc=$?
     if (( rc != 0 || code >= 400 )); then

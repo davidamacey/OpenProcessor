@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 import httpx
 
 from src.core.logging import get_logger
+from src.services.models.triton_control import ModelReloadError, load_model_safely
 from src.services.training.promote_errors import TritonLoadError
 from src.services.training.triton_repo import set_explicitly_unloaded
 
@@ -91,11 +92,10 @@ class TritonHttpControl:
         isn't enabled — a follow-up manual ``model load`` will pick up
         the files we just wrote).
         """
-        url = f'{self.triton_http_url}/v2/repository/models/{triton_name}/load'
         try:
             async with httpx.AsyncClient(timeout=self.http_timeout) as client:
-                resp = await client.post(url)
-        except httpx.HTTPError as exc:
+                resp = await load_model_safely(client, self.triton_http_url, triton_name)
+        except (httpx.HTTPError, ModelReloadError) as exc:
             logger.warning(
                 'train_promote_triton_load_unreachable',
                 triton_name=triton_name,
