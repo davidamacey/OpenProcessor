@@ -5,7 +5,8 @@
 //!
 //! The service keeps the five calls the engine answers (protocol version 1). Every other call of
 //! the model server's service is left out of the generated router, so a client that sends one
-//! gets gRPC `UNIMPLEMENTED` from the router, as it does from the Python engine's front.
+//! gets gRPC `UNIMPLEMENTED` from the router, as it does from the Python engine's front. The
+//! client of the same five calls is what `op-frame-engine health` asks the running engine with.
 
 const ANSWERED: [&str; 5] = [
     "ServerLive",
@@ -26,7 +27,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     tonic_prost_build::configure()
-        .build_client(false)
+        .build_client(true)
+        .build_transport(false)
         .build_server(true)
         // Inputs arrive as reference-counted slices of the request buffer, and outputs leave as
         // slices of the engine's buffers, not copies.

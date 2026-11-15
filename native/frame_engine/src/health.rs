@@ -3,11 +3,18 @@
 //! re-registration), so readiness follows the model server coming and going without traffic. A
 //! lost CUDA context ends the tick, and with it the process: a lost context does not recover, the
 //! restart policy starts a fresh one.
+//!
+//! [`probe`] is the other side, for `op-frame-engine health` (the container's health check): it
+//! asks a running engine `ModelReady` for the model `frame_engine`, as the API does before every
+//! photo under the ingest load profile.
 
 use std::future::Future;
 use std::time::Duration;
 
 use crate::pipeline::Pipeline;
+use crate::proto::ModelReadyRequest;
+use crate::proto::grpc_inference_service_client::GrpcInferenceServiceClient;
+use crate::wire::contract::contract;
 
 /// Why the tick ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,6 +43,27 @@ pub async fn run<P: Pipeline>(
             () = tokio::time::sleep(every) => {}
         }
     }
+}
+
+/// Whether the engine listening on `127.0.0.1:port` answers `ModelReady` true, within `timeout`
+/// for the connection and again for the call.
+pub async fn probe(port: u16, timeout: Duration) -> Result<bool, String> {
+    let channel = tonic::transport::Endpoint::from_shared(format!("http://127.0.0.1:{port}"))
+        .map_err(|e| e.to_string())?
+        .connect_timeout(timeout)
+        .timeout(timeout)
+        .connect()
+        .await
+        .map_err(|e| format!("no engine on port {port}: {e}"))?;
+    let model = &contract().model;
+    let answer = GrpcInferenceServiceClient::new(channel)
+        .model_ready(ModelReadyRequest {
+            name: model.name.clone(),
+            version: model.version.clone(),
+        })
+        .await
+        .map_err(|e| format!("ModelReady: {e}"))?;
+    Ok(answer.into_inner().ready)
 }
 
 #[cfg(test)]
@@ -114,5 +142,14 @@ mod tests {
         let ended = run(&p, Duration::from_secs(60), std::future::pending()).await;
         assert_eq!(ended, Ended::ContextLost);
         assert_eq!(p.checks.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn the_probe_fails_when_no_engine_listens() {
+        let free = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = free.local_addr().expect("addr").port();
+        drop(free);
+        let answer = probe(port, Duration::from_millis(500)).await;
+        assert!(answer.expect_err("nothing there").contains("no engine"));
     }
 }

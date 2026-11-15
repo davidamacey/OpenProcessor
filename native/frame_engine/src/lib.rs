@@ -20,6 +20,7 @@ pub mod photo;
 pub mod pipeline;
 pub mod proto;
 pub mod pyfmt;
+pub mod self_check;
 pub mod settings;
 pub mod stub;
 pub mod wire;
