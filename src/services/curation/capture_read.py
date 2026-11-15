@@ -9,7 +9,11 @@ never with an invented position, and the capture backfill reads it again (it car
 stamp). A read that takes longer than :data:`READ_BOUND_S` in all (waiting for a thread included)
 answers the same.
 
-The pool lives per OS process and is closed with the application's lifespan.
+The pool lives per OS process and is closed with the application's lifespan. Its processes are
+started by :func:`start_capture_pool` before the process opens a gRPC channel (the API's lifespan,
+a job worker's pool child), never lazily between two engine calls
+(:mod:`src.clients.exiftool_client`, "without ``preexec_fn``"); a read that finds the process
+dead starts a replacement, which is the same safe start.
 """
 
 from __future__ import annotations
@@ -49,21 +53,39 @@ def _new_client() -> ExifToolClient:
 
 
 class _CapturePool:
-    """Worker threads that each own one ExifTool client (started on the thread's first read)."""
+    """Worker threads that each own one ExifTool client: one the pool started (:meth:`start`) or,
+    when none is left, one started on the thread's first read."""
 
     def __init__(self, size: int, name: str) -> None:
+        self.size = size
         self.executor = ThreadPoolExecutor(max_workers=size, thread_name_prefix=name)
         self._local = threading.local()
         self.lock = threading.Lock()
         self.clients: list[ExifToolClient] = []
+        self._unclaimed: list[ExifToolClient] = []
+
+    def start(self) -> None:
+        """Start every process now, from the calling thread. A process that will not start is
+        logged and left to the thread's first read (which answers unknown capture on an outage)."""
+        for _ in range(self.size - len(self.clients)):
+            client = _new_client()
+            with self.lock:
+                self.clients.append(client)
+                self._unclaimed.append(client)
+            try:
+                client.start()
+            except ExifToolError as exc:
+                logger.warning('exiftool_start_failed', error=str(exc))
 
     def _client(self) -> ExifToolClient:
         client: ExifToolClient | None = getattr(self._local, 'client', None)
         if client is None:
-            client = _new_client()
-            self._local.client = client
             with self.lock:
-                self.clients.append(client)
+                client = self._unclaimed.pop() if self._unclaimed else None
+                if client is None:
+                    client = _new_client()
+                    self.clients.append(client)
+            self._local.client = client
         return client
 
     def read(self, data: bytes) -> CaptureMetadata:
@@ -98,6 +120,11 @@ def live_processes() -> list[int]:
     with pool.lock:
         clients = list(pool.clients)
     return [pid for c in clients if (pid := c.pid()) is not None]
+
+
+def start_capture_pool() -> None:
+    """Start this OS process's ExifTool processes now (see the module doc for when)."""
+    _pool().start()
 
 
 def shutdown_capture_pool() -> None:
@@ -140,4 +167,5 @@ __all__ = [
     'read_capture',
     'read_capture_file',
     'shutdown_capture_pool',
+    'start_capture_pool',
 ]

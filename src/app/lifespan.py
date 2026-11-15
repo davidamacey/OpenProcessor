@@ -18,7 +18,7 @@ from src.config.api_pools import executor_threads, triton_channels, triton_infli
 from src.core.dependencies import OpenSearchClientFactory, TritonClientFactory
 from src.core.logging import get_logger
 from src.db.engine import dispose_engines
-from src.services.curation.capture_read import shutdown_capture_pool
+from src.services.curation.capture_read import shutdown_capture_pool, start_capture_pool
 from src.utils.cpu_pool import shutdown_cpu_executor
 from src.utils.file_read import shutdown_read_executor
 from src.utils.metrics_processes import forget_process
@@ -312,6 +312,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info('startup_begin', phase='initialization')
 
     _preflight()
+    # Before the first gRPC channel (the control-plane probe opens one): the ExifTool processes
+    # are started while nothing is in flight (src/clients/exiftool_client.py).
+    start_capture_pool()
     await startup_gate.require_control_plane(settings)
     await _start_pools(settings)
     await _start_background_tasks()

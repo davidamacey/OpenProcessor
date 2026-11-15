@@ -36,6 +36,8 @@ FROM python:3.13-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d981
 # postgresql-client -> pg_dump, used by the periodic worker's db_backup tick (src/services/periodic/db_backup.py)
 # libimage-exiftool-perl -> exiftool, the capture-metadata reader of every ingest path and the lossless
 # GPS strip of a `drop` project's exports (src/clients/exiftool_client.py; https://exiftool.org/)
+# util-linux -> setpriv, which arms the parent-death signal of each ExifTool process without a
+# preexec_fn (src/clients/exiftool_client.py); Debian installs it already, named so it stays
 RUN apt-get update && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
     curl \
@@ -46,6 +48,7 @@ RUN apt-get update && apt-get upgrade -y \
     libgomp1 \
     libpq5 \
     libimage-exiftool-perl \
+    util-linux \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
