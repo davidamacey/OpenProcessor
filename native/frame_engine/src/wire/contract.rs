@@ -27,6 +27,17 @@ pub struct Contract {
     pub decode_routes: Vec<String>,
     pub photo_statuses: Vec<String>,
     pub plan: PlanRules,
+    pub stages: Vec<String>,
+    pub metrics: Vec<MetricFamily>,
+}
+
+/// One series family of the metrics endpoint.
+#[derive(Debug, Deserialize)]
+pub struct MetricFamily {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub labels: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]

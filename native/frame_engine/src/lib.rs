@@ -6,6 +6,7 @@
 //! and golden tests can reach them.
 
 pub mod cores;
+pub mod metrics;
 pub mod proto;
 pub mod pyfmt;
 pub mod settings;
