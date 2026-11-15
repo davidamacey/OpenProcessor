@@ -140,7 +140,9 @@ def main() -> int:
         stream=sys.stdout,
         format='%(asctime)s %(levelname)s %(name)s %(message)s',
     )
-    return asyncio.run(serve(EngineSettings.from_env()))
+    settings = EngineSettings.from_env()
+    settings.apply_to_interpreter()
+    return asyncio.run(serve(settings))
 
 
 if __name__ == '__main__':

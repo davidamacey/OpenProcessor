@@ -22,6 +22,7 @@ import queue
 from typing import Any
 
 import cupy as cp
+import numpy as np
 
 
 _BACKEND = {'hybrid': 1, 'gpu_hybrid': 2}
@@ -104,23 +105,32 @@ class NvJpegLanes:
         for _ in range(lanes):
             self.pool.put(_Lane(self.lib, self.handle, self.decoders))
 
-    def decode(self, data: bytes, alloc_stream: Any = None) -> tuple[Any, str]:
-        """``alloc_stream`` is the stream whose memory-pool arena holds the frame; the default is
-        the lane's own, so the frame cannot be reused by another worker."""
+    def decode(
+        self, data: bytes | memoryview, length: int, alloc_stream: Any = None
+    ) -> tuple[Any, str]:
+        """Decode the first ``length`` bytes of ``data`` (no copy of them is made). ``alloc_stream``
+        is the stream whose memory-pool arena holds the frame; the default is the lane's own, so
+        the frame cannot be reused by another worker."""
         lane = self.pool.get()
         try:
-            return self._decode_on(lane, data, alloc_stream or lane.stream)
+            return self._decode_on(lane, data, length, alloc_stream or lane.stream)
         finally:
             self.pool.put(lane)
 
-    def _decode_on(self, lane: _Lane, data: bytes, alloc_stream: Any) -> tuple[Any, str]:
+    def _decode_on(
+        self, lane: _Lane, data: bytes | memoryview, length: int, alloc_stream: Any
+    ) -> tuple[Any, str]:
         lib = self.lib
+        # a zero-copy numpy view of ``data`` (bytes or memoryview) for its address; it keeps the
+        # buffer alive for the call
+        view = np.frombuffer(data, np.uint8, count=length)
         _check(
             lib.nvjpegJpegStreamParse(
-                self.handle, ctypes.c_char_p(data), ctypes.c_size_t(len(data)), 0, 0, lane.jstream
+                self.handle, ctypes.c_void_p(view.ctypes.data), ctypes.c_size_t(length), 0, 0,
+                lane.jstream,
             ),
             'JpegStreamParse',
-        )
+        )  # fmt: skip
         w, h = ctypes.c_uint(), ctypes.c_uint()
         _check(
             lib.nvjpegJpegStreamGetFrameDimensions(lane.jstream, ctypes.byref(w), ctypes.byref(h)),

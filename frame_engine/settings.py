@@ -8,6 +8,7 @@ module is not imported because the engine image carries no ``src.config``).
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
 from typing import Literal
 
@@ -94,6 +95,9 @@ class EngineSettings:
     crop_max_side: int = 0
     #: Wait for the stream at the end of a kernel stage so its GPU time lands there (attribution).
     stage_sync: bool = False
+    #: Interpreter thread-switch interval in ms (0 = leave Python's default, 5 ms), see
+    #: :meth:`apply_to_interpreter`.
+    switch_interval_ms: float = 0.1
     #: The recogniser's character dictionary: baked into the image from ``models/paddleocr_rec_trt``
     #: (no environment variable: it belongs to the model build, not to a deployment).
     ocr_dictionary: str = '/app/ocr/ppocrv6_dict.txt'
@@ -102,6 +106,15 @@ class EngineSettings:
     max_message_mib: int = 256
     drain_seconds: float = 30.0
     health_seconds: float = 2.0
+
+    def apply_to_interpreter(self) -> None:
+        """Process-wide interpreter settings. 32 worker threads and the gRPC loop thread share one
+        interpreter lock; a thread that wants it waits up to the switch interval (Python's default
+        is 5 ms) before the holder is asked to release it, so the loop thread, which needs the lock
+        several times per photo, queued behind busy workers
+        (https://docs.python.org/3/library/sys.html#sys.setswitchinterval)."""
+        if self.switch_interval_ms > 0:
+            sys.setswitchinterval(self.switch_interval_ms / 1000)
 
     @classmethod
     def from_env(cls) -> EngineSettings:
@@ -147,6 +160,9 @@ class EngineSettings:
             jpeg_quality=env_int('OP_FRAME_ENGINE_JPEG_QUALITY', d.jpeg_quality, 1, 100),
             crop_max_side=env_int('OP_FRAME_ENGINE_CROP_MAX_SIDE', d.crop_max_side, 0, 65_535),
             stage_sync=env_bool('OP_FRAME_ENGINE_STAGE_SYNC', d.stage_sync),
+            switch_interval_ms=env_float(
+                'OP_FRAME_ENGINE_SWITCH_INTERVAL_MS', d.switch_interval_ms, 0, 100
+            ),
             port=env_int('OP_FRAME_ENGINE_PORT', d.port, 1, 65_535),
             metrics_port=env_int('OP_FRAME_ENGINE_METRICS_PORT', d.metrics_port, 1, 65_535),
             max_message_mib=env_int('OP_FRAME_ENGINE_MAX_MESSAGE_MIB', d.max_message_mib, 1, 2047),

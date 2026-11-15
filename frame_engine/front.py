@@ -96,9 +96,15 @@ class BadRequestError(ValueError):
     pass
 
 
-def unpack_bytes(raw: bytes) -> list[bytes]:
-    """KServe BYTES tensor contents: each element is a 4-byte little-endian length and the bytes."""
-    out: list[bytes] = []
+def unpack_bytes(raw: bytes) -> list[memoryview]:
+    """KServe BYTES tensor contents: each element is a 4-byte little-endian length and the bytes.
+
+    The elements are views of ``raw``, not copies: a photo is up to tens of MB, and a copy is a
+    memcpy made while holding the interpreter lock (a ``bytes`` slice copies; a ``memoryview``
+    slice does not, https://docs.python.org/3/library/stdtypes.html#memoryview).
+    """
+    out: list[memoryview] = []
+    view = memoryview(raw)
     i, n = 0, len(raw)
     while i < n:
         if i + 4 > n:
@@ -107,7 +113,7 @@ def unpack_bytes(raw: bytes) -> list[bytes]:
         i += 4
         if i + size > n:
             raise BadRequestError('BYTES tensor element runs past the end')
-        out.append(raw[i : i + size])
+        out.append(view[i : i + size])
         i += size
     return out
 
@@ -116,7 +122,7 @@ def pack_bytes(items: list[bytes]) -> bytes:
     return b''.join(struct.pack('<I', len(x)) + x for x in items)
 
 
-def _one_bytes(tensor: Any, raw: bytes) -> bytes:
+def _one_element(tensor: Any, raw: bytes) -> memoryview:
     if tensor.datatype != 'BYTES' or list(tensor.shape) != [1]:
         raise BadRequestError(f'{tensor.name} must be BYTES [1]')
     items = unpack_bytes(raw)
@@ -125,7 +131,7 @@ def _one_bytes(tensor: Any, raw: bytes) -> bytes:
     return items[0]
 
 
-def parse_request(request: Any) -> tuple[bytes, wire.EnginePlan, np.ndarray | None]:
+def parse_request(request: Any) -> tuple[memoryview, wire.EnginePlan, np.ndarray | None]:
     """The image, the validated plan and the stored boxes of one ``ModelInferRequest``.
 
     Raises:
@@ -141,8 +147,8 @@ def parse_request(request: Any) -> tuple[bytes, wire.EnginePlan, np.ndarray | No
     for name in (wire.IMAGE, wire.PLAN):
         if name not in raw:
             raise BadRequestError(f'missing input {name!r}')
-    image = _one_bytes(*raw[wire.IMAGE])
-    plan_text = _one_bytes(*raw[wire.PLAN])
+    image = _one_element(*raw[wire.IMAGE])
+    plan_text = bytes(_one_element(*raw[wire.PLAN]))
     boxes = None
     if wire.BOXES in raw:
         tensor, data = raw[wire.BOXES]

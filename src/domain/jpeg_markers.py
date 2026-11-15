@@ -60,7 +60,7 @@ def exif_orientation(payload: bytes) -> int:
     return 1
 
 
-def header_segments(data: bytes) -> Iterator[tuple[int, bytes]]:
+def header_segments(data: bytes | memoryview) -> Iterator[tuple[int, bytes]]:
     """``(marker, payload)`` of each length-carrying segment after the start marker, up to the
     first scan (``SOS``) or the first byte that is not a marker. Fill bytes and standalone markers
     are skipped."""
@@ -78,5 +78,8 @@ def header_segments(data: bytes) -> Iterator[tuple[int, bytes]]:
         if marker == 0xDA:
             return
         (length,) = struct.unpack('>H', data[i + 2 : i + 4])
-        yield marker, data[i + 4 : i + 2 + length]
+        yield (
+            marker,
+            bytes(data[i + 4 : i + 2 + length]),
+        )  # bytes, also for a view: chunks are sorted
         i += 2 + length
