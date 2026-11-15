@@ -66,7 +66,9 @@ def _index(policy: IngestPolicy, tmp_path: Any) -> tuple[_Encoder, list[dict[str
     encoder = _Encoder()
     indexed: dict[str, Any] = {}
 
-    async def _bulk_index(image_doc, crop_docs, created_ids, *, seed_region=True):
+    async def _bulk_index(
+        image_doc, crop_docs, created_ids, *, seed_region=True, repair=None, stale_ids=None
+    ):
         indexed.update(image=image_doc, crops=crop_docs)
         return {'crops_created': len(crop_docs)}
 

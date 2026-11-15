@@ -378,50 +378,100 @@ that they exist.**
 | `stored_at` on the PostgreSQL content row | yes | yes | one more statement per request | the row and the index disagree after a kill anyway; still needs a liveness rule |
 | **The images doc carries `item_ids`; `duplicate` requires every listed item to exist (realtime `mget`); an incomplete image is repaired by the next attempt** | yes | yes | none (one `mget` only when a lookup or a `create` finds a stored image) | chosen: one rule at the two places a duplicate is decided, no extra write |
 
-Rules:
+Built (lane L0; this replaces the rules of revision 2 where they differ, and says why):
 
-1. The writer adds `item_ids` (the unit's crop ids, sorted) to the images doc it creates; the
-   field is mapped like `ingest_write_id` (`keyword`, `index: false`, `doc_values: false`,
-   `bodies_core.py:84`) and added to existing indexes through the mapping-ensure path. Existing
-   images docs get it from a backfill in the same lane (the item ids of each image, read by an
-   items query); after the backfill a doc without the field counts as incomplete.
-2. A unit fails as a whole when any of its item docs is refused (F19): `failed`, `bulk_index`.
-3. A unit whose images doc this unit created keeps its content claim when it fails; only a unit
-   whose images doc was not created releases it (`write_prepared`).
-4. `resolve_contents` (`ingest_dedup.py`): for every holder it already reads, check `item_ids`
-   with one realtime `mget` on the items index (`_source: false`) for the whole batch. All found:
-   `duplicate` as today. One missing, and the images doc older than `REPAIR_AFTER_S`: `Resolved`
-   marks the photo **repair** (the stored doc's `_seq_no`, `_primary_term` and `item_ids`). Younger:
-   `failed`, `incomplete_write` (a writer may still be writing; the bulk run retries later).
-   `REPAIR_AFTER_S` is above the longest a flush can take (the OpenSearch client timeout times its
-   tries plus the 429 pauses, `ingest_writer.py:61`); the lane reads the client's timeout and
-   writes the value with that derivation. The age is the images doc's `indexed_at`.
-5. A repair photo is ingested normally; its claim is `ContentClaim(..., repair=True)` and
-   `claim_in_session` treats the row of its own image id as its own (stored, not held). The
-   writer writes its images doc with `index` and `if_seq_no`/`if_primary_term` (OpenSearch
-   optimistic concurrency: the write succeeds only if the document has not changed since it was
-   read, else 409;
-   <https://docs.opensearch.org/latest/api-reference/document-apis/index-document/>), then its
-   items as usual (OCC upsert with the human-field guards), then deletes the stale ids (old
-   `item_ids` minus new) that carry no human or import-validated field (`class_write_locked`). A
-   409 on the repair write: re-check; complete answers `duplicate`, otherwise `incomplete_write`.
-6. `_settle_conflicts` (a 409 on a plain `create` with another write id): `duplicate` only when the
-   stored image is complete; otherwise `failed`, `incomplete_write`.
-7. A content row whose images doc is missing is still released by the lookup (orphan,
-   `ingest_dedup.py:74-77`); the images-doc `create` stays the second guard.
+1. **The list.** The writer puts `item_ids` (the unit's crop ids, sorted; `[]` for a photo with no
+   detections) on every images doc it creates, before the items. The field is mapped like
+   `ingest_write_id` (`keyword`, `index: false`, `doc_values: false`) in the index body and the
+   mapping migration (`bodies_core.py`, `ensure_images_upload_fields`). Invariant: **every id listed
+   is an existing item** (the list may be a subset of the image's items). The writers that change
+   items keep it: ingest and an import that creates an image write the list; an addition (reprocess,
+   open-vocabulary run, import onto a stored image, a drawn box) leaves it alone; every deletion goes
+   through `item_delete.delete_items`, which takes the ids off the owning docs first (one bulk OCC
+   update per round), then deletes; a combine does not copy the source's list
+   (`copy_docs.transform_image`). **Before and after the backfill, a doc without the field is legacy
+   and complete** (a duplicate, never repaired): a doc written by an older writer, copied by a
+   combine or not reached by the backfill must not be re-detected and rewritten by a re-upload, and a
+   photo with no detections cannot be told from a broken one. `scripts/curation/backfill_item_ids.py`
+   (dry run by default, `--apply`, idempotent, OCC) lists the items of legacy docs so the audit and
+   every later delete cover them; it reports how many it stamped `[]`.
+2. **A unit fails as a whole** when any of its documents is refused or its flush fails
+   (`IngestWriteError`): `failed`, `bulk_index`. This includes a refused images doc, which answered
+   `success` before. Failures are attributed per unit (a lease, list or create step failing fails
+   that unit only), and every unit's answer is set before any failure mark is written.
+3. **The claim.** It is released only when the images doc is known absent (the store refused the
+   create). Every other failure keeps it: the doc may exist, and the claim is what sends the retry
+   to the repair. A claim without a doc is released by the next lookup as before. A holder a claim
+   finds at claim time is a `duplicate` only when it is whole (the same `classify` as the lookup);
+   a holder that has claimed and not written yet, or misses items, answers `incomplete_write`.
+4. **The decision.** `resolve_contents` reads each holder's doc (`item_ids`, `indexed_at`,
+   `ingest_incomplete`, `repair_started_at`) and, for the docs with a non-empty list, one realtime
+   `mget` on the items index (`_source: false`, `image_completeness.classify`). All found:
+   `duplicate`. One missing: **repairable** when no repair of the image is running (a lease
+   younger than `REPAIR_AFTER_S`) and the doc carries the failure mark or is older than
+   `REPAIR_AFTER_S`, otherwise `failed`, `incomplete_write`. `REPAIR_AFTER_S` is the requests
+   one unit makes in a row (the longer of a new photo's path and a repair's) times the longest one
+   request can take (4 attempts x the slowest client timeout, 60 s) plus the 429 pauses: 22 requests
+   (a repair's) x 4 x 60 + 7.7 = 5,287.7 s, 88 minutes; the
+   derivation sits next to the constant (`ingest_writer.py`) and `test_ingest_repair_age.py` pins
+   every input against the real client and settings.
+5. **The failure mark.** A unit that saw its own write fail, on a doc that exists, sets
+   `ingest_incomplete` by one best-effort OCC update, written after the answers are out (never
+   raises; counted in `op_ingest_whole_total{event=marked|mark_failed}`), and gives back its repair
+   lease in the same write, so its retry repairs at once instead of waiting for the age. A kill
+   leaves no mark: the age covers it.
+6. **The repair creates, it never rewrites** (revision 2 said `index` with `if_seq_no`, then an
+   upsert of every item; both overwrite what a person, an import or a machine added to an item
+   after the first ingest, and the upsert guards only class fields). The repair adopts the stored
+   image (`ImageContext.created` False, `repair` set; no new frame vector, no capture read, no
+   claim) and: (a) matches its detections to the items the image has (the listed ones by a realtime
+   `mget`, the others by a search) with `proposal_merge.merge_item_proposals`, the rule of a
+   re-detection and an import's propose mode (IoU 0.5, a person-moved box also owns the detector's
+   original spot; labels are not compared, as there), and creates only the unmatched detections (never
+   by id: the detector is not bit-stable and the engine and CPU routes give different crop ids for
+   one photo, about 3% of letterbox pixels differ by one level between the two resamplers);
+   (b) takes a lease and sets the list in one OCC update (`repair_started_at`; the list becomes the
+   listed items that still exist plus the items about to be created, computed on the fresh source,
+   so an id a delete took off the list since stays off); a second repairer that finds the lease
+   younger than `REPAIR_AFTER_S` answers `incomplete_write`; (c) creates the items with `create`
+   (a 409 leaves a stored item as it is); (d) gives the lease back and clears the mark. Nothing is
+   deleted: an item of the first attempt the detector no longer sees stays (and stays listed).
+   `adopt_existing` callers (a dataset import, a reprocess) never repair: they answer as before.
+7. **A 409 on a plain `create`** (another copy's doc): complete is `duplicate`; incomplete and
+   repairable is repaired by the unit that met it (rule 6); incomplete and possibly live, or being
+   repaired, is `incomplete` (`failed`, `incomplete_write`, claim kept). A winner created by a unit
+   of the same flush decides its follower after the winner's items are written.
+8. A content row whose images doc is missing is still released by the lookup (orphan,
+   `ingest_dedup.py`); the images-doc `create` stays the second guard.
+9. **Mixed fleet.** There is no switch: every API and worker container must run this code before
+   ingest resumes (a normal compose update recreates them together; stated in the CHANGELOG
+   upgrade note and `docs/CURATION.md`). An old container that deletes items leaves a list naming
+   a missing item, which the next ingest of the same bytes repairs by creating it again; an old
+   combine copies the source's list, so every combined image looks incomplete.
 
 Red-first tests (unit level, `tests/curation/ingest_fakes.py` fakes):
 
-- the items step raises after the images doc was created: the claim is kept; the next ingest of
-  the same bytes writes every item and answers `success` (today: `duplicate`, no items);
-- the writer stops between the two bulks (fake kill: images doc, no items, claim held): the next
-  ingest, past `REPAIR_AFTER_S`, repairs it; before it, answers `failed`/`incomplete_write`;
-- one item doc refused: the photo answers `failed`, `bulk_index` (today `success`);
-- a repair deletes a stale machine item and keeps a stale item with a human class;
-- request A claims, request B looks up before A's images doc exists (B releases A's row as an
-  orphan), then A writes: one images doc, its items complete, B answers `duplicate` or
-  `incomplete_write`, never a second image;
-- a complete stored image answers `duplicate` with one extra `mget` and no write.
+- `test_ingest_whole_photo.py`: the items step raises after the images doc was created (claim kept;
+  the retry writes every item and answers `success`; before: `duplicate`, no items); the writer stops
+  between the two bulks (young: `failed`/`incomplete_write`; past the age: repaired; before:
+  `duplicate`); one item or the images doc refused (`failed`, `bulk_index`; before: `success`); a
+  marked photo is repaired at once and the mark goes; a mark that cannot be written changes no
+  answer; a complete image is a `duplicate` with one more `mget` and no write; a legacy doc is a
+  duplicate; a repair deletes nothing and lists what exists and what it creates; an adopted image
+  is not repaired; a 409 on an incomplete young/old doc; request A claims, B's lookup releases A's
+  row as an orphan, A writes: one images doc, whole.
+- `test_ingest_repair_rules.py`: a repair rewrites no item that exists (a holdout item without a
+  class, a person's moved box and its vector, a machine item's labels); a detection that differs in
+  the sixth decimal creates no second item; two repairs at once leave one item per object; a lease
+  holds the image even when it is marked and runs out; a failed repair gives the lease back and
+  marks; an item deleted while it is repaired is not listed again; one unit's failed repair fails
+  that unit only; a hanging mark does not hold the answers; a holder found at claim time is a
+  duplicate only when whole.
+- `test_image_item_ids.py`: `delete_items` takes ids off the lists (one bulk for all images, nothing
+  deleted when the list write fails); an item removed on purpose does not make a re-upload repair;
+  a batch answers each photo by its stored image; the lease rule.
+- `test_combine_item_ids.py`, `test_ingest_repair_age.py`, `test_ingest_consistency_scripts.py`.
+- Live (pending wave run): `tests/live/test_live_whole_photo.py`.
 
 Sweep additions (pending wave run): after every kill and outage test, run
 `scripts/bench/ingest_consistency.py --project <slug>`: for every images doc, every `item_ids`

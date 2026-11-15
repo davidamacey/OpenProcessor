@@ -259,6 +259,21 @@ async def recorded_images(
     return {r.image_id for r in rows}
 
 
+async def image_ids_after(
+    session: AsyncSession, project_id: uuid.UUID | None, after_id: int, limit: int
+) -> tuple[int, list[str]]:
+    """One page of the project's content rows in insert order, for a read-only audit: the id of
+    the last row (the next call's ``after_id``) and the image ids; ``(after_id, [])`` at the end."""
+    rows = await session.execute(
+        select(ImageContent.id, ImageContent.image_id)
+        .where(_owner(project_id), ImageContent.id > after_id)
+        .order_by(ImageContent.id)
+        .limit(limit)
+    )
+    page = rows.all()
+    return (page[-1].id if page else after_id), [r.image_id for r in page]
+
+
 async def release_contents(
     session: AsyncSession, project_id: uuid.UUID | None, image_ids: Iterable[str]
 ) -> int:

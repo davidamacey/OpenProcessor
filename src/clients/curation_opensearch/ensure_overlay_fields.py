@@ -8,8 +8,11 @@ from typing import TYPE_CHECKING, Any
 from opensearchpy.exceptions import OpenSearchException
 
 from src.clients.curation_opensearch.base import config, logger
-from src.clients.curation_opensearch.bodies_core import IMAGES_WRITE_ID_MAPPING, ITEMS_VIZ_MAPPING
-from src.clients.curation_opensearch.mapping_put import put_properties
+from src.clients.curation_opensearch.bodies_core import (
+    IMAGES_INGEST_WRITE_MAPPING,
+    ITEMS_VIZ_MAPPING,
+)
+from src.clients.curation_opensearch.mapping_put import put_properties, put_properties_one_by_one
 from src.clients.curation_opensearch.near_dup_fields import NEAR_DUP_MAPPING
 
 
@@ -75,8 +78,10 @@ async def ensure_images_upload_fields(
     client: AsyncOpenSearch,
 ) -> dict[str, Any]:
     """PUT the BA-1/BA-4 ``source_identifier`` / ``ingest_run_id`` keyword
-    fields, the ``decode_route`` keyword, the ``imohash`` exact key, the near-duplicate projection fields and the
-    ingest write id onto the existing images mapping.
+    fields, the ``decode_route`` keyword, the ``imohash`` exact key and the near-duplicate
+    projection fields onto the existing images mapping, then the ingest writer's own fields
+    (the write id, the item list, the failure note, the repair lease) one PUT each: an index
+    that already holds a dynamic mapping for one of them must not lose the others.
 
     Additive ``PUT <index>/_mapping`` — idempotent.
     """
@@ -88,11 +93,15 @@ async def ensure_images_upload_fields(
             'decode_route': {'type': 'keyword'},
             'imohash': {'type': 'keyword'},
             **NEAR_DUP_MAPPING,
-            **IMAGES_WRITE_ID_MAPPING,
         }
     }
-    list(body['properties'])
-    return await put_properties(client, index, body['properties'])
+    first = await put_properties(client, index, body['properties'])
+    second = await put_properties_one_by_one(client, index, IMAGES_INGEST_WRITE_MAPPING)
+    return {
+        **first,
+        'fields_added': [*first['fields_added'], *second['fields_added']],
+        'acknowledged': bool(first['acknowledged'] and second['acknowledged']),
+    }
 
 
 async def _put_items_keyword_field(client: AsyncOpenSearch, field: str) -> dict[str, Any]:

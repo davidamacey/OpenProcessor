@@ -25,6 +25,9 @@ ERROR_KIND_DECODE_FAILED = 'decode_failed'
 ERROR_KIND_DETECTOR_INFER = 'detector_infer'
 ERROR_KIND_BULK_INDEX = 'bulk_index'
 ERROR_KIND_BLUR = 'blur_failed'
+# The photo is stored incomplete (an item its images doc lists is missing) and a writer may still be
+# writing it; sending it again later stores it whole.
+ERROR_KIND_INCOMPLETE_WRITE = 'incomplete_write'
 
 
 class IngestSummary(BaseModel):
@@ -98,4 +101,9 @@ class BatchIngestResult(BaseModel):
     results: list[IngestResult] = Field(default_factory=list)
 
 
-__all__ = ['BatchIngestResult', 'IngestResult', 'IngestSummary']
+__all__ = [
+    'ERROR_KIND_INCOMPLETE_WRITE',
+    'BatchIngestResult',
+    'IngestResult',
+    'IngestSummary',
+]

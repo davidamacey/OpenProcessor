@@ -1879,8 +1879,15 @@ under `store_coarse` cells are at most precision 15 and markers are rounded to 0
   configured secondary detector call failed; the image still ingests on the
   primary detector's output).
 - `error_kind` is one of `empty`, `unservable_path`, `unsupported_type`,
-  `decode_failed`, `detector_infer`, `bulk_index`, `blur_failed`. It is present with `error`
-  when `status` is `failed`.
+  `decode_failed`, `detector_infer`, `bulk_index`, `blur_failed`, `incomplete_write`. It is
+  present with `error` when `status` is `failed`. `bulk_index`: a document the store refused
+  or a write that failed, so the photo is not stored whole (before, a refused item still answered
+  `success`). `incomplete_write` is transient: the image of these bytes is stored without some of
+  its items and a writer may still be writing it; send the file again later and it is stored
+  whole (a bulk run does the same on resume).
+- `status: duplicate` means the stored image of these bytes is whole: every item its images doc
+  lists exists. An image stored incomplete by a failed or killed ingest is completed by the next
+  ingest of the same bytes (`success`) and never answered `duplicate`.
 - `BatchIngestResponse`: `status` (`success`, `partial`, `error`),
   `summary` (`successful`, `duplicates`, `failed`, `crops_indexed`,
   `secondary_detector_failures`, `decode_routes`) and `results[]`.

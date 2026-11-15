@@ -19,21 +19,30 @@ from typing import TYPE_CHECKING, Any
 
 import cv2
 import numpy as np
+from opensearchpy.exceptions import OpenSearchException
 
 from src.clients.curation_opensearch.capture_fields import capture_image_block, capture_item_fields
 from src.core.logging import get_logger, get_request_id
 from src.domain.embedding_state import EMBEDDED, FAILED
 from src.domain.image_geometry import crop_rect
 from src.domain.location_policy import apply_location_policy
+from src.services.curation.image_completeness import holders_completeness
 from src.services.curation.ingest_gpu_decode import GpuDecodeFrame
-from src.services.curation.ingest_models import ERROR_KIND_BLUR, ERROR_KIND_BULK_INDEX, IngestResult
+from src.services.curation.ingest_models import (
+    ERROR_KIND_BLUR,
+    ERROR_KIND_BULK_INDEX,
+    ERROR_KIND_INCOMPLETE_WRITE,
+    IngestResult,
+)
 from src.services.curation.ingest_policy import select_for_embedding
+from src.services.curation.ingest_writer import REPAIR_AFTER_S, IngestWriteError, RepairTarget
 from src.services.curation.item_doc import (
     DetectedItem,
     build_image_doc,
     build_item_doc,
     region_seed_status,
 )
+from src.services.curation.ops_metrics import count_whole_event
 from src.services.curation.source_image_cache import project_crop_cache_dir, write_crop_cache
 from src.services.detection.crop_quality import blur_ratio, crop_lap_var, image_lap_var
 from src.services.detection.geometry import bbox_norm as _bbox_norm_fn, crop_id as _crop_id
@@ -99,6 +108,10 @@ class ImageContext:
     capture: CaptureMetadata | None = None
     """The file's capture metadata as read, location included (``repr`` hides it); ``None`` for
     an image that already has a doc, whose capture is already stored."""
+    repair: RepairTarget | None = None
+    """The stored image this ingest completes (``created`` is False: its doc exists, written
+    incomplete by an ingest that failed or was killed). Its items are written and its list set;
+    no other field of the doc is written."""
 
     def require_pil(self) -> Image.Image:
         """The host-side frame; raises when the GPU decode kept the pixels on the device."""
@@ -269,14 +282,38 @@ async def _whole_frame_vector(service: CurationIngestService, ctx: ImageContext)
         return None
 
 
-def _held_elsewhere(ctx: ImageContext, holder: str) -> IngestResult:
-    """Another copy stored this content first: nothing of this one is written."""
-    return IngestResult(
-        status='duplicate',
-        image_id=holder,
-        image_path=ctx.image_path,
-        source_identifier=ctx.source_identifier,
-        imohash=ctx.imohash,
+async def _held_elsewhere(
+    service: CurationIngestService, ctx: ImageContext, holder: str
+) -> IndexOutcome:
+    """Another copy claimed this content first: nothing of this one is written. The answer is
+    ``duplicate`` only when that image is whole (the rule of the content lookup, the same
+    function); a holder that has claimed and not written yet, or whose items are not all there,
+    is ``incomplete_write``: send the file again later."""
+    try:
+        state = (
+            await holders_completeness(
+                service.opensearch,
+                service.config.images_index,
+                service.config.items_index,
+                [holder],
+                repair_after_s=REPAIR_AFTER_S,
+            )
+        )[holder]
+    except OpenSearchException as exc:
+        logger.error('ingest_holder_check_failed', path=ctx.image_path, error=str(exc))
+        return _failed_write(ctx, exc, ERROR_KIND_BULK_INDEX)
+    if state != 'complete':
+        count_whole_event('held_back')
+        msg = f'image {holder} holds these bytes and is not stored whole yet; retry later'
+        return _failed_write(ctx, ValueError(msg), ERROR_KIND_INCOMPLETE_WRITE)
+    return IndexOutcome(
+        result=IngestResult(
+            status='duplicate',
+            image_id=holder,
+            image_path=ctx.image_path,
+            source_identifier=ctx.source_identifier,
+            imohash=ctx.imohash,
+        )
     )
 
 
@@ -459,6 +496,19 @@ def build_documents(
     return BuiltDocuments(image_doc, crop_docs)
 
 
+def _failed_write(ctx: ImageContext, exc: Exception, kind: str) -> IndexOutcome:
+    return IndexOutcome(
+        result=IngestResult(
+            status='failed',
+            image_path=ctx.image_path,
+            source_identifier=ctx.source_identifier,
+            imohash=ctx.imohash,
+            error=str(exc),
+            error_kind=kind,
+        )
+    )
+
+
 async def write_prepared(
     service: CurationIngestService,
     p: PreparedImage,
@@ -468,33 +518,41 @@ async def write_prepared(
 ) -> IndexOutcome:
     """Write one photo's documents after its claim, the crop cache after them.
 
-    The terminal result when another copy holds the content, the claim was refused or the bulk
-    write fails. A claim this photo took is appended to ``unclaimed`` when the write fails, so the
-    batch releases it and a later attempt can store the content."""
+    The terminal result when another copy holds the content, the claim was refused or the write
+    fails: a photo is ``success`` only when all of its documents were stored. A claim this photo
+    took is appended to ``unclaimed`` only when the store refused its images doc (it is known
+    absent), so the batch releases it and a later attempt can store the content. Every other
+    failure keeps the claim: the images doc may exist, and the claim is what sends the next
+    ingest of the same bytes to the repair of it (a claim without a doc is released by that
+    lookup)."""
     ctx = p.ctx
     if claim.holder is not None:
-        return IndexOutcome(result=_held_elsewhere(ctx, claim.holder))
+        return await _held_elsewhere(service, ctx, claim.holder)
     created_ids: list[str] = []
     try:
         if claim.error is not None:
             raise claim.error
         bulk_result = await service._bulk_index(
-            docs.image_doc, docs.crop_docs, created_ids, seed_region=p.seed_region
+            docs.image_doc,
+            docs.crop_docs,
+            created_ids,
+            seed_region=p.seed_region,
+            repair=ctx.repair,
         )
+    except IngestWriteError as exc:
+        logger.error('ingest_bulk_index_failed', path=ctx.image_path, error=str(exc))
+        if exc.release_claim and docs.image_doc is not None:
+            unclaimed.append(ctx.image_id)
+        return _failed_write(ctx, exc, ERROR_KIND_BULK_INDEX)
     except Exception as exc:
         logger.error('ingest_bulk_index_failed', path=ctx.image_path, error=str(exc))
-        if docs.image_doc is not None and claim.error is None:
-            unclaimed.append(ctx.image_id)
-        return IndexOutcome(
-            result=IngestResult(
-                status='failed',
-                image_path=ctx.image_path,
-                source_identifier=ctx.source_identifier,
-                imohash=ctx.imohash,
-                error=str(exc),
-                error_kind=ERROR_KIND_BULK_INDEX,
-            )
-        )
+        return _failed_write(ctx, exc, ERROR_KIND_BULK_INDEX)
+    if bulk_result.get('incomplete'):
+        # Another copy's doc misses items and its writer may still be writing: nothing was
+        # written, the photo is not stored yet, and a later attempt decides.
+        count_whole_event('held_back')
+        msg = f'image {ctx.image_id} is stored incomplete and may still be written; retry later'
+        return _failed_write(ctx, ValueError(msg), ERROR_KIND_INCOMPLETE_WRITE)
     if bulk_result.get('duplicate'):
         # Another copy of this content created the images doc first (#358): this copy
         # wrote nothing, so it answers as the dedup lookup would have.
@@ -507,8 +565,18 @@ async def write_prepared(
                 imohash=ctx.imohash,
             )
         )
-    await _cache_crops(service, p.cids, p.crops)
-    items = p.items
+    cids, crops, items = p.cids, p.crops, p.items
+    if bulk_result.get('repaired'):
+        count_whole_event('repaired')
+        # A repair stores only the detections no item stood for: the rest are items that exist.
+        made = set(created_ids)
+        keep = [i for i, cid in enumerate(cids) if cid in made]
+        cids, crops, items = (
+            [cids[i] for i in keep],
+            [crops[i] for i in keep],
+            [items[i] for i in keep],
+        )
+    await _cache_crops(service, cids, crops)
     return IndexOutcome(
         result=IngestResult(
             status='success',
@@ -516,7 +584,7 @@ async def write_prepared(
             image_path=ctx.image_path,
             source_identifier=ctx.source_identifier,
             imohash=ctx.imohash,
-            n_crops=len(docs.crop_docs),
+            n_crops=len(cids),
             n_embedded=sum(it.embedding_state == EMBEDDED for it in items),
             n_not_embedded=sum(it.embedding_state != EMBEDDED for it in items),
             n_embed_failed=sum(it.embedding_state == FAILED for it in items),
@@ -527,7 +595,7 @@ async def write_prepared(
             n_region_queued=bulk_result.get('region_queued', 0),
             secondary_detector_error=p.secondary_detector_error,
         ),
-        crop_ids=p.cids,
+        crop_ids=cids,
         created_ids=created_ids,
     )
 

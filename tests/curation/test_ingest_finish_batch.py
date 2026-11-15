@@ -32,6 +32,7 @@ from src.services.clustering import assign
 from src.services.curation import ingest_index
 from src.services.curation.ingest import CurationIngestService
 from src.services.curation.ingest_policy import IngestPolicy
+from src.services.curation.ingest_writer import IngestWriteError
 from src.services.events import publish as publish_module
 from src.services.near_duplicates import content_key, ingest_claim, pending
 from src.services.near_duplicates.content_key import content_image_id, content_imohash
@@ -350,7 +351,7 @@ async def test_a_failed_write_releases_its_claim_and_keeps_its_pending_rows(
 
     async def bulk(image_doc: Any, crop_docs: Any, *a: Any, **k: Any) -> Any:
         if image_doc is not None and image_doc['image_path'] == '/p/1.jpg':
-            raise RuntimeError('write refused')
+            raise IngestWriteError('write refused', release_claim=True)
         return await real_bulk(image_doc, crop_docs, *a, **k)
 
     monkeypatch.setattr(svc, '_bulk_index', bulk)

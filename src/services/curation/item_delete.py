@@ -9,6 +9,11 @@ place a delete is made: it re-reads every document fresh, asks the caller's
 ``deletable`` predicate about the fresh source, and deletes with
 ``if_seq_no`` / ``if_primary_term`` so an edit that lands after the re-read
 turns the delete into a conflict that is re-read, never a lost edit.
+
+An images doc lists its items (``item_ids``, :mod:`src.domain.image_completeness`) and an image
+whose items were removed on purpose must never look incomplete, so before an item is deleted its
+id is taken off the owning images doc's list (one bulk OCC update for all images of a round).
+This is the only place items are deleted, so it is the only place that keeps the lists true.
 """
 
 from __future__ import annotations
@@ -18,7 +23,9 @@ from typing import TYPE_CHECKING, Any
 
 from opensearchpy.exceptions import OpenSearchException
 
+from src.config.curation_accessors import images_index
 from src.core.logging import get_logger
+from src.services.curation.image_completeness import forget_items
 from src.services.curation.image_counts_refresh import enqueue_image_counts
 from src.services.curation.source_image_cache import evict_crop_cache
 from src.services.embedding_spaces.readers import vector_source_excludes
@@ -127,6 +134,14 @@ async def _delete_round(
     try:
         level = near_dup_pending.level_of_index(index)
         await near_dup_pending.enqueue_pending_bound(level, targets, 'deleted')
+        if level == 'item':
+            # The images docs list their items; a listed item is never deleted first (a crash in
+            # between leaves an unlisted extra item, which keeps every list true).
+            by_image: dict[str, list[str]] = {}
+            for cid in targets:
+                by_image.setdefault(str(fresh[cid][0].get('image_id') or ''), []).append(cid)
+            by_image.pop('', None)
+            await forget_items(opensearch, images_index(), by_image)
         resp = await opensearch.bulk(body=body, refresh=False)
     except Exception as exc:
         errors.extend({'crop_id': cid, 'error': str(exc)} for cid in targets)

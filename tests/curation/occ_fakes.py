@@ -12,6 +12,7 @@ on ``src.clients.occ``.
 
 from __future__ import annotations
 
+import copy
 from typing import Any
 
 
@@ -143,11 +144,14 @@ class FakeOccOpenSearch:
 class FakeIndicesApi:
     """The ``indices`` namespace ingest refresh and export readiness call."""
 
-    def __init__(self) -> None:
+    def __init__(self, parent: FakeIngestOpenSearch | None = None) -> None:
         self.refresh_calls: list[str] = []
+        self._parent = parent
 
     async def refresh(self, *, index: str) -> dict[str, Any]:
         self.refresh_calls.append(index)
+        if self._parent is not None:
+            self._parent.make_searchable()
         return {'_shards': {'failed': 0}}
 
     async def get_settings(self, *, index: str) -> dict[str, Any]:
@@ -172,24 +176,42 @@ class FakeIngestOpenSearch:
         images: dict[str, dict[str, Any]] | None = None,
         items: dict[str, dict[str, Any]] | None = None,
         create_conflict_ids: set[str] | None = None,
+        near_real_time_search: bool = False,
     ) -> None:
         self.images: dict[str, dict[str, Any]] = dict(images or {})
         self.items: dict[str, dict[str, Any]] = dict(items or {})
         self._seq: dict[str, int] = dict.fromkeys(self.items, 1)
+        self._image_seq: dict[str, int] = dict.fromkeys(self.images, 1)
+        self.mget_calls: list[list[str]] = []
         # Ids that should 409 on their FIRST bulk `create` attempt, to
         # exercise occ_upsert_bulk's create-conflict -> refetch -> OCC
         # update fallback path.
         self._create_conflict_pending: set[str] = set(create_conflict_ids or set())
-        self.indices = FakeIndicesApi()
+        self.indices = FakeIndicesApi(self)
+        # With ``near_real_time_search`` a search sees only what an index refresh has published
+        # (a get and an mget always see the latest write, as OpenSearch's do).
+        self.near_real_time_search = near_real_time_search
+        self._searchable: dict[str, dict[str, dict[str, Any]]] = {}
+        self.make_searchable()
         self.bulk_calls: list[list[dict[str, Any]]] = []
         self.update_calls: list[dict[str, Any]] = []
+
+    def make_searchable(self) -> None:
+        """What an index refresh does: the writes so far become visible to a search."""
+        self._searchable = {
+            'items': copy.deepcopy(self.items),
+            'images': copy.deepcopy(self.images),
+        }
 
     async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         from src.config import get_curation_config
 
-        store = self.items if index == get_curation_config().items_index else self.images
+        is_items = index == get_curation_config().items_index
+        role = 'items' if is_items else 'images'
+        store = self._searchable[role] if self.near_real_time_search else getattr(self, role)
         hits = [
-            {'_id': doc.get('image_id', doc_id), '_source': doc} for doc_id, doc in store.items()
+            {'_id': doc_id if is_items else doc.get('image_id', doc_id), '_source': doc}
+            for doc_id, doc in store.items()
         ]
         return {'hits': {'hits': hits[: body.get('size', len(hits))]}}
 
@@ -198,47 +220,41 @@ class FakeIngestOpenSearch:
         *,
         body: dict[str, Any],
         index: str | None = None,
+        _source: bool | None = None,
         _source_excludes: list[str] | None = None,
         _source_includes: list[str] | None = None,
     ) -> dict[str, Any]:
-        # Two shapes land here: occ_upsert_bulk's own {'ids': [...]} calls,
-        # and mget_crops' {'docs': [{'_id':..., '_index':...}, ...]} shape
-        # (occ_update_bulk). An ``index`` other than the items index reads the
-        # images docs (the ingest writer settling a create conflict).
+        # Two shapes land here: {'ids': [...]} (with an ``index``) and mget_crops'
+        # {'docs': [{'_id':..., '_index':...}, ...]}, whose docs name their index. A doc of
+        # any index other than the items index is an images doc.
         from src.config import get_curation_config
 
-        ids = body['ids'] if 'ids' in body else [d['_id'] for d in body['docs']]
-        if index is not None and index != get_curation_config().items_index:
-            return {
-                'docs': [
-                    {
-                        '_id': i,
-                        'found': True,
-                        '_source': {
-                            k: v
-                            for k, v in self.images[i].items()
-                            if _source_includes is None or k in _source_includes
-                        },
-                    }
-                    if i in self.images
-                    else {'_id': i, 'found': False}
-                    for i in ids
-                ]
-            }
+        items_index = get_curation_config().items_index
+        entries = (
+            [(i, index) for i in body['ids']]
+            if 'ids' in body
+            else [(d['_id'], d.get('_index', index)) for d in body['docs']]
+        )
+        self.mget_calls.append([i for i, _ in entries])
         docs = []
-        for doc_id in ids:
-            if doc_id in self.items:
-                docs.append(
-                    {
-                        '_id': doc_id,
-                        'found': True,
-                        '_source': self.items[doc_id],
-                        '_seq_no': self._seq.get(doc_id, 1),
-                        '_primary_term': 1,
-                    }
-                )
-            else:
+        for doc_id, doc_index in entries:
+            in_images = doc_index is not None and doc_index != items_index
+            store = self.images if in_images else self.items
+            if doc_id not in store:
                 docs.append({'_id': doc_id, 'found': False})
+                continue
+            source = store[doc_id]
+            if in_images and _source_includes is not None:
+                source = {k: v for k, v in source.items() if k in _source_includes}
+            doc: dict[str, Any] = {
+                '_id': doc_id,
+                'found': True,
+                '_seq_no': (self._image_seq if in_images else self._seq).get(doc_id, 1),
+                '_primary_term': 1,
+            }
+            if _source is not False:
+                doc['_source'] = source
+            docs.append(doc)
         return {'docs': docs}
 
     async def bulk(
@@ -252,7 +268,25 @@ class FakeIngestOpenSearch:
         items_index = get_curation_config().items_index
         self.bulk_calls.append(body)
         items: list[dict[str, Any]] = []
-        for action, doc in zip(body[0::2], body[1::2], strict=True):
+        actions = list(body)
+        pairs: list[tuple[dict[str, Any], dict[str, Any]]] = []
+        while actions:  # a delete action has no source line
+            action = actions.pop(0)
+            pairs.append((action, {} if 'delete' in action else actions.pop(0)))
+        for action, doc in pairs:
+            if 'delete' in action:
+                meta = action['delete']
+                doc_id = meta['_id']
+                target = self.images if meta['_index'] != items_index else self.items
+                seqs = self._image_seq if target is self.images else self._seq
+                if doc_id not in target:
+                    items.append({'delete': {'_id': doc_id, 'status': 404}})
+                elif meta.get('if_seq_no') not in (None, seqs.get(doc_id, 1)):
+                    items.append({'delete': {'_id': doc_id, 'status': 409}})
+                else:
+                    del target[doc_id]
+                    items.append({'delete': {'_id': doc_id, 'status': 200}})
+                continue
             if 'index' in action:
                 meta = action['index']
                 doc_id = meta['_id']
@@ -284,8 +318,13 @@ class FakeIngestOpenSearch:
                 meta = action['update']
                 doc_id = meta['_id']
                 target = self.images if meta['_index'] != items_index else self.items
-                if doc_id in target:
+                seqs = self._image_seq if target is self.images else self._seq
+                expected = meta.get('if_seq_no')
+                if doc_id in target and expected is not None and expected != seqs.get(doc_id, 1):
+                    items.append({'update': {'_id': doc_id, 'status': 409}})
+                elif doc_id in target:
                     target[doc_id].update(doc.get('doc', {}))
+                    seqs[doc_id] = seqs.get(doc_id, 1) + 1
                     items.append({'update': {'_id': doc_id, 'status': 200}})
                 else:
                     items.append({'update': {'_id': doc_id, 'status': 404}})

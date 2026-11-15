@@ -89,14 +89,20 @@ async def test_same_content_in_two_concurrent_batches_is_stored_once(
     assert len(os_fake.items) == 3
     results = [*batch_a.results, *batch_b.results]
     assert batch_a.summary.successful + batch_b.summary.successful == 3
-    assert batch_a.summary.duplicates + batch_b.summary.duplicates == 1
     assert batch_a.summary.crops_indexed + batch_b.summary.crops_indexed == 3
-    assert {batch_a.status, batch_b.status} == {'success'}
-    (dup,) = [r for r in results if r.status == 'duplicate']
-    (kept,) = [r for r in results if r.status == 'success' and r.imohash == dup.imohash]
-    assert dup.image_id == kept.image_id
-    assert dup.image_id in os_fake.images
-    assert (dup.n_crops, dup.crops_created) == (0, 0)
+    # The losing copy met a holder that had claimed and not written yet: it is not told
+    # ``duplicate`` of an image that may not exist, it is told to come back (``incomplete_write``),
+    # and the file sent again is the duplicate it is.
+    (loser,) = [r for r in results if r.status == 'failed']
+    assert loser.error_kind == 'incomplete_write'
+    (kept,) = [r for r in results if r.status == 'success' and r.imohash == loser.imohash]
+    assert {batch_a.summary.failed + batch_b.summary.failed} == {1}
+    del os_fake.bulk  # the gate on the writes is over
+    again = await svc.ingest_batch([shared], ['/c/copy.jpg'])
+    assert [r.status for r in again.results] == ['duplicate']
+    assert again.results[0].image_id == kept.image_id
+    assert kept.image_id in os_fake.images
+    assert len(os_fake.images) == 3
 
 
 @pytest.mark.asyncio
@@ -122,12 +128,16 @@ async def test_a_losing_copy_with_other_boxes_leaves_no_items_or_crops(
         svc.ingest_one(data, '/a/copy.jpg'), svc.ingest_one(data, '/b/copy.jpg')
     )
 
-    assert sorted([first.status, second.status]) == ['duplicate', 'success']
+    assert sorted([first.status, second.status]) == ['failed', 'success']
     winner = first if first.status == 'success' else second
+    loser = second if winner is first else first
+    assert loser.error_kind == 'incomplete_write'  # sent again, it is the duplicate it is
     assert len(os_fake.images) == 1
     assert len(os_fake.items) == 1
     assert winner.crops_created == 1
     _assert_stored_once(os_fake, cache)
+    del os_fake.bulk  # the gate on the writes is over
+    assert (await svc.ingest_one(data, '/b/copy.jpg')).status == 'duplicate'
 
 
 @pytest.mark.asyncio

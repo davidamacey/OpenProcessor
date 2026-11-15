@@ -131,7 +131,9 @@ def test_index_items_embeds_the_whole_frame_from_the_decoded_frame(tmp_path) -> 
             seen.append(img)
             return np.ones(1024, dtype=np.float32)
 
-    async def _bulk_index(image_doc, crop_docs, created_ids, *, seed_region=True):
+    async def _bulk_index(
+        image_doc, crop_docs, created_ids, *, seed_region=True, repair=None, stale_ids=None
+    ):
         return {'crops_created': len(crop_docs)}
 
     service = SimpleNamespace(
