@@ -101,6 +101,14 @@ SPECS: tuple[Spec, ...] = (
 )  # fmt: skip
 
 
+def model_names(kind: Literal['null', 'capture']) -> dict[str, str]:
+    """The stand-ins' names by the role they play in a plan: the detector, the frame encoder
+    (336) and the crop encoder (224)."""
+    pick = (lambda sp: sp.null_name) if kind == 'null' else (lambda sp: sp.capture_name)
+    detector, frame, crop = (pick(sp) for sp in SPECS)
+    return {'detector': detector, 'frame': frame, 'crop': crop}
+
+
 def null_names() -> list[str]:
     return [s.null_name for s in SPECS]
 
