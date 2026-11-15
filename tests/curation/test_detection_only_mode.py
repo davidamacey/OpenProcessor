@@ -124,7 +124,7 @@ def test_no_automatic_clustering_places_no_item(
     async def _boom(*_a: Any, **_k: Any) -> Any:
         raise AssertionError('the serving partition must not be consulted')
 
-    monkeypatch.setattr(ix, 'place_vectors', _boom)
+    monkeypatch.setattr(ix, 'place_new', _boom)
     policy = IngestPolicy(clustering={'automatic': False})
     _encoder, crops, _image = _index(policy, tmp_path)
     assert 'cluster_uid' not in crops[0]

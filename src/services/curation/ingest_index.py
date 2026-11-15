@@ -20,12 +20,16 @@ from typing import TYPE_CHECKING, Any
 import cv2
 import numpy as np
 from opensearchpy.exceptions import OpenSearchException
+from sqlalchemy.exc import SQLAlchemyError, TimeoutError as PoolTimeoutError
 
 from src.clients.curation_opensearch.capture_fields import capture_image_block, capture_item_fields
 from src.core.logging import get_logger, get_request_id
+from src.db.session import async_session_factory, project_tx
 from src.domain.embedding_state import EMBEDDED, FAILED
 from src.domain.image_geometry import crop_rect
 from src.domain.location_policy import apply_location_policy
+from src.services.clustering.assign import place_new
+from src.services.config_store.bound_project import bound_project_id
 from src.services.curation.image_completeness import holders_completeness
 from src.services.curation.ingest_gpu_decode import GpuDecodeFrame
 from src.services.curation.ingest_models import (
@@ -42,13 +46,14 @@ from src.services.curation.item_doc import (
     build_item_doc,
     region_seed_status,
 )
-from src.services.curation.ops_metrics import count_whole_event
+from src.services.curation.ops_metrics import count_batch_fallback, count_whole_event
 from src.services.curation.source_image_cache import project_crop_cache_dir, write_crop_cache
 from src.services.detection.crop_quality import blur_ratio, crop_lap_var, image_lap_var
 from src.services.detection.geometry import bbox_norm as _bbox_norm_fn, crop_id as _crop_id
 from src.services.embedding_spaces.readers import WriteFields, frame_vector_field, item_write_fields
 from src.services.near_duplicates import content_key, ingest_claim
 from src.services.near_duplicates.content_key import ClaimOutcome, ContentClaim
+from src.services.near_duplicates.ingest_claim import PhotoWrite
 from src.utils.cpu_pool import run_cpu
 from src.utils.retry import TRITON_CALL_ERRORS
 from src.utils.stage_timing import stage_timer
@@ -60,9 +65,11 @@ BLUR_ERRORS = (cv2.error, ValueError, ArithmeticError)
 
 
 if TYPE_CHECKING:
+    import uuid
     from collections.abc import Sequence
 
     from PIL import Image
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     from src.domain.capture_metadata import CaptureMetadata
     from src.services.clustering.assign import Placement
@@ -166,13 +173,11 @@ def _box_blurs(
 
 
 async def place_vectors(item_ids: Sequence[str], vectors: np.ndarray) -> list[Placement]:
-    """Place new items by the serving partition's prototypes (4F ``assign.place_new``); empty when
-    the project has no serving partition for the item target. A failure of the read refuses the
-    call: a placement that silently vanished would leave an item looking unclustered."""
-    from src.db.session import async_session_factory, project_tx
-    from src.services.clustering.assign import place_new
-    from src.services.config_store.bound_project import bound_project_id
-
+    """Place items by the serving partition's prototypes (4F ``assign.place_new``) in a read of
+    their own; empty when the project has no serving partition for the item target. A failure of
+    the read refuses the call: a placement that silently vanished would leave an item looking
+    unclustered. Ingest places inside its group transaction (:func:`place_prepared`); this is
+    the re-embed pass's read."""
     project = await bound_project_id()
     async with async_session_factory()() as session, project_tx(session, project):
         return await place_new(
@@ -180,12 +185,19 @@ async def place_vectors(item_ids: Sequence[str], vectors: np.ndarray) -> list[Pl
         )
 
 
-async def place_prepared(service: CurationIngestService, prepared: Sequence[PreparedImage]) -> None:
-    """Stamp every embedded item of the batch with its place in the serving partition, all in one
-    read (:func:`place_vectors`): the prototypes are read once, not once per photo.
+async def place_prepared(
+    service: CurationIngestService,
+    prepared: Sequence[PreparedImage],
+    session: AsyncSession,
+    project: uuid.UUID,
+) -> None:
+    """Stamp every embedded item of the group with its place in the serving partition, all in one
+    read in the caller's transaction: the prototypes are read once, not once per photo.
 
     Nothing is written for an item without a vector, and for all of them when the project has no
-    serving partition for the item target (an unclustered project behaves as before).
+    serving partition for the item target (an unclustered project behaves as before). A failure
+    of the read raises: a placement that silently vanished would leave an item looking
+    unclustered.
     """
     if not service.policy.clustering.automatic:
         return
@@ -198,9 +210,12 @@ async def place_prepared(service: CurationIngestService, prepared: Sequence[Prep
     if not owners:
         return
     with stage_timer('placement'):
-        placements = await place_vectors(
-            [item_id for item_id, _ in owners],
-            np.asarray([item.pe_embedding for _, item in owners], dtype=np.float32),
+        placements = await place_new(
+            session,
+            project=project,
+            target='item',
+            item_ids=[item_id for item_id, _ in owners],
+            vectors=np.asarray([item.pe_embedding for _, item in owners], dtype=np.float32),
         )
     if not placements:
         return
@@ -600,57 +615,133 @@ async def write_prepared(
     )
 
 
-async def commit_prepared(
-    service: CurationIngestService, prepared: Sequence[PreparedImage]
-) -> list[IndexOutcome]:
-    """Place, claim, write and announce a batch of prepared images: the per-batch database steps
-    run once for the batch (placement, the claim with the pending rows, the release of failed
-    claims, the ``crop.created`` events), and the documents go through the coalescing writer
-    photo by photo.
+@dataclass(frozen=True)
+class GroupOutcome:
+    """What a commit group's transaction decided for one photo."""
 
-    What a photo ends with at each failure point is the table in
-    :mod:`~src.services.curation.ingest_finish`. The batch's claim transaction, if it fails as a
-    whole, runs photo by photo (:mod:`~src.services.near_duplicates.ingest_claim`).
+    claim: ClaimOutcome
+    """Stored now (no holder, no error), held by another image, or refused for this photo alone."""
+
+
+async def commit_group(
+    service: CurationIngestService, prepared: Sequence[PreparedImage]
+) -> list[GroupOutcome]:
+    """The database work a group of prepared photos needs before its documents exist, in ONE
+    transaction of the bound project: the placement read, the content claims and the pending
+    rows. One outcome per photo, in order.
+
+    The caller resolved the group's classes first (the documents are built after this call from
+    the stamped items) and reads :func:`doc_context` before it, outside the transaction. The
+    transaction awaits nothing but PostgreSQL (the claim reads a stored file on an ``imohash``
+    match), never OpenSearch or the engine. A transaction that fails as a whole after the
+    placement was read is rolled back and the group's claims run photo by photo
+    (:func:`~src.services.near_duplicates.ingest_claim.claim_and_mark_each`; counted in
+    ``op_ingest_batch_fallback_total{stage="claim"}``). A pool timeout and a failed placement
+    raise: a retry per photo would wait the pool timeout again for every photo, and an item must
+    never lose its placement unseen. Photos of one group have distinct ``imohash`` values.
     """
     if not prepared:
         return []
-    await place_prepared(service, prepared)
-    shared = await doc_context(service, prepared)
-    built = [build_documents(service, p, shared) for p in prepared]
-    claims = await ingest_claim.claim_and_mark(
-        [
-            ingest_claim.PhotoWrite(
-                item_ids=p.cids,
-                claim=ContentClaim(p.ctx.imohash, p.ctx.image_id, p.ctx.image_path, p.ctx.content)
-                if docs.image_doc is not None
-                else None,
+    project = await bound_project_id()  # before the session: never two connections held at once
+    photos = [
+        PhotoWrite(
+            item_ids=p.cids,
+            claim=ContentClaim(p.ctx.imohash, p.ctx.image_id, p.ctx.image_path, p.ctx.content)
+            if p.ctx.created
+            else None,
+        )
+        for p in prepared
+    ]
+    placed = False
+    with stage_timer('claim'):  # the placement read is inside the group transaction
+        try:
+            async with async_session_factory()() as session, project_tx(session, project):
+                await place_prepared(service, prepared, session, project)
+                placed = True
+                claims = await ingest_claim.claim_and_mark_in_session(session, project, photos)
+        except PoolTimeoutError:
+            raise
+        except (SQLAlchemyError, OSError) as exc:
+            if not placed:
+                raise
+            count_batch_fallback('claim', exc)
+            logger.warning(
+                'ingest_batch_claim_fell_back', n_photos=len(photos), error=type(exc).__name__
             )
-            for p, docs in zip(prepared, built, strict=True)
-        ]
-    )
-    unclaimed: list[str] = []
-    written: dict[int, IndexOutcome] = {}
+            claims = await ingest_claim.claim_and_mark_each(photos)
+    return [GroupOutcome(claim) for claim in claims]
+
+
+async def write_group(
+    service: CurationIngestService,
+    prepared: Sequence[PreparedImage],
+    group: Sequence[GroupOutcome],
+    shared: DocContext,
+    written: list[IndexOutcome],
+    unclaimed: list[str],
+) -> list[IndexOutcome]:
+    """Build the group's documents (classes and placement are on the items) and write the photos
+    together through the coalescing writer, :func:`write_prepared` each.
+
+    Every photo that finished is appended to ``written`` the moment it does, so a failure of a
+    sibling still leaves the stored ones for :func:`finish_commit`; a claim to release goes to
+    ``unclaimed``. The caller awaits this before it starts the next group.
+    """
+    built = [build_documents(service, p, shared) for p in prepared]
 
     async def write(i: int) -> IndexOutcome:
-        written[i] = await write_prepared(service, prepared[i], built[i], claims[i], unclaimed)
-        return written[i]
+        outcome = await write_prepared(service, prepared[i], built[i], group[i].claim, unclaimed)
+        written.append(outcome)
+        return outcome
 
+    return await run_all([write(i) for i in range(len(prepared))])
+
+
+async def finish_commit(
+    service: CurationIngestService, written: Sequence[IndexOutcome], unclaimed: list[str]
+) -> None:
+    """Release the claims that must be released, then announce every stored photo in one
+    transaction. Call it in a ``finally`` once per request: a photo stored before a failure or a
+    cancellation is still announced, and a failed release does not skip the announcement (the
+    release error then arrives as the context of a publish error, or alone).
+
+    Only ids the writer confirmed as created are announced (``IndexOutcome.created_ids``).
+    """
     try:
-        outcomes = await run_all([write(i) for i in range(len(prepared))])
-    finally:
         if unclaimed:
             with stage_timer('release'):
                 await content_key.release_bound(unclaimed)
-        # Photos stored before a failure are announced too, as when each ran alone.
+    finally:
         announced = [
-            (crop_id, prepared[i].ctx.image_path)
-            for i, outcome in sorted(written.items())
+            (crop_id, outcome.result.image_path)
+            for outcome in written
             for crop_id in outcome.created_ids
         ]
         if announced:
             with stage_timer('publish'):
                 await service._publish_created(announced)
-    return outcomes
+
+
+async def commit_batch(
+    service: CurationIngestService, prepared: Sequence[PreparedImage]
+) -> list[IndexOutcome]:
+    """A batch committed as one group: :func:`commit_group`, :func:`write_group`, then
+    :func:`finish_commit` in a ``finally``. What :func:`index_items` runs for its one image and
+    what ``finish_photos`` runs for a whole batch.
+
+    What a photo ends with at each failure point is the table in
+    :mod:`~src.services.curation.ingest_finish`.
+    """
+    if not prepared:
+        return []
+    shared = await doc_context(service, prepared)
+    group = await commit_group(service, prepared)
+    written: list[IndexOutcome] = []
+    unclaimed: list[str] = []
+    try:
+        return await write_group(service, prepared, group, shared, written, unclaimed)
+    finally:
+        await finish_commit(service, written, unclaimed)
 
 
 async def index_items(
@@ -667,7 +758,7 @@ async def index_items(
     ``seed_region`` False writes no ``pending_detection`` seed even under an
     active region profile (a ``processing: none`` import: the items are
     validated labels the region worker must never see). A batch of one through the same steps
-    :func:`commit_prepared` runs for a whole batch.
+    :func:`commit_batch` runs for a whole batch.
     """
     prepared = await prepare_image(
         service,
@@ -678,17 +769,25 @@ async def index_items(
     )
     if isinstance(prepared, IndexOutcome):
         return prepared
-    [outcome] = await commit_prepared(service, [prepared])
+    [outcome] = await commit_batch(service, [prepared])
     return outcome
 
 
 __all__ = [
+    'DocContext',
+    'GroupOutcome',
     'ImageContext',
     'IndexOutcome',
     'PreparedImage',
-    'commit_prepared',
+    'commit_batch',
+    'commit_group',
     'crop_pil',
+    'doc_context',
+    'finish_commit',
     'index_items',
+    'place_prepared',
     'place_vectors',
     'prepare_image',
+    'write_group',
+    'write_prepared',
 ]

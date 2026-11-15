@@ -42,7 +42,6 @@ def bound(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         return state['project']
 
     monkeypatch.setattr(content_key, 'bound_project_id', project_id)
-    monkeypatch.setattr(ingest_claim, 'bound_project_id', project_id)
     return state
 
 
@@ -59,6 +58,12 @@ def _photo(directory: Path, tag: str, n: int) -> ingest_claim.PhotoWrite:
     )
 
 
+async def _claim_and_mark(project: uuid.UUID, photos: list[ingest_claim.PhotoWrite]) -> Any:
+    """One group transaction of the claim step, as ``commit_group`` opens it."""
+    async with async_session_factory()() as session, project_tx(session, project):
+        return await ingest_claim.claim_and_mark_in_session(session, project, photos)
+
+
 async def _count(project: uuid.UUID, model: Any, *where: Any) -> int:
     async with async_session_factory()() as session, project_tx(session, project):
         return (
@@ -72,12 +77,12 @@ async def test_a_batch_marks_pending_rows_for_the_stored_photos_only(
 ) -> None:
     bound['project'] = project = await make_project()
     first = [_photo(tmp_path, 'a', n) for n in range(3)]
-    assert [o.holder for o in await ingest_claim.claim_and_mark_bound(first)] == [None] * 3
+    assert [o.holder for o in await _claim_and_mark(project, first)] == [None] * 3
 
     # the same three contents again plus two new ones, and an image that already has its document
     again = [*first, _photo(tmp_path, 'b', 0), _photo(tmp_path, 'b', 1)]
     existing = ingest_claim.PhotoWrite(item_ids=['kept-item'], claim=None)
-    outcomes = await ingest_claim.claim_and_mark_bound([*again, existing])
+    outcomes = await _claim_and_mark(project, [*again, existing])
 
     assert [o.holder for o in outcomes[:3]] == [p.claim.image_id for p in first if p.claim]
     assert [o.holder for o in outcomes[3:]] == [None, None, None]
@@ -97,8 +102,8 @@ async def test_two_batches_of_the_same_contents_in_opposite_order_do_not_deadloc
         forward, backward = photos, list(reversed(photos))
         got_forward, got_backward = await asyncio.wait_for(
             asyncio.gather(
-                ingest_claim.claim_and_mark_bound(forward),
-                ingest_claim.claim_and_mark_bound(backward),
+                _claim_and_mark(project, forward),
+                _claim_and_mark(project, backward),
             ),
             timeout=60,
         )
@@ -122,7 +127,7 @@ async def test_two_batches_of_the_same_contents_in_opposite_order_do_not_deadloc
 async def test_a_batch_and_a_claim_of_one_of_its_contents_store_it_once(
     pg_registry: Any, bound: dict[str, Any], tmp_path: Path
 ) -> None:
-    bound['project'] = await make_project()
+    bound['project'] = project = await make_project()
     photos = [_photo(tmp_path, 'm', n) for n in range(10)]
     single = photos[3].claim
     assert single is not None
@@ -131,7 +136,7 @@ async def test_a_batch_and_a_claim_of_one_of_its_contents_store_it_once(
             content_key.claim_bound(
                 single.imohash, single.image_id, single.image_path, single.data
             ),
-            ingest_claim.claim_and_mark_bound(photos),
+            _claim_and_mark(project, photos),
         ),
         timeout=60,
     )
@@ -213,7 +218,7 @@ async def test_a_batch_takes_its_content_locks_in_sorted_order_whatever_its_own_
         await repo.lock_imohash(holder, project, keys[2])
 
         async with asyncio.TaskGroup() as group:
-            task = group.create_task(ingest_claim.claim_and_mark_bound(batch))
+            task = group.create_task(_claim_and_mark(project, batch))
             await _wait_until_one_lock_waits()
             # sorted: it holds the two keys below the contended one, not the largest
             assert [await _is_held(project, k) for k in (keys[0], keys[1], keys[3])] == [

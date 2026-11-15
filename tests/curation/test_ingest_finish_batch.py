@@ -14,150 +14,33 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
-import sys
 import uuid
-from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pytest
 
-import src.db.session as db_session
 from curation.ingest_fakes import FakePEEncoder, FakeTritonPool, _jpeg_bytes
+from curation.ingest_session_fakes import Sessions, count_sessions
 from curation.occ_fakes import FakeIngestOpenSearch
 from src.config import CurationConfig, DetectionProfile
-from src.db.repos import image_contents as contents_repo, near_dup_pending as pending_repo
 from src.services.clustering import assign
 from src.services.curation import ingest_index
 from src.services.curation.ingest import CurationIngestService
 from src.services.curation.ingest_policy import IngestPolicy
 from src.services.curation.ingest_writer import IngestWriteError
-from src.services.events import publish as publish_module
-from src.services.near_duplicates import content_key, ingest_claim, pending
+from src.services.near_duplicates import content_key, ingest_claim
 from src.services.near_duplicates.content_key import content_image_id, content_imohash
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from pathlib import Path
-
-# The offline conftest swaps these for in-memory fakes per test; keep the real ones.
-_REAL = {
-    (content_key, 'resolve_many_bound'): content_key.resolve_many_bound,
-    (content_key, 'claim_bound'): content_key.claim_bound,
-    (content_key, 'release_bound'): content_key.release_bound,
-    (ingest_claim, 'claim_and_mark_bound'): ingest_claim.claim_and_mark_bound,
-    (pending, 'enqueue_pending_bound'): pending.enqueue_pending_bound,
-    (ingest_index, 'place_vectors'): ingest_index.place_vectors,
-    (publish_module, 'apublish_many'): publish_module.apublish_many,
-}
-_REAL_FACTORY = db_session.async_session_factory
-
-
-@dataclasses.dataclass
-class Sessions:
-    """Sessions opened (pool checkouts; each is one transaction and one COMMIT)."""
-
-    opened: int = 0
-    peak: int = 0
-    open_now: int = 0
-
-
-class _Session:
-    def __init__(self, counts: Sessions) -> None:
-        self._counts = counts
-        self.sync_session = SimpleNamespace(info={})
-
-    async def __aenter__(self) -> _Session:
-        self._counts.opened += 1
-        self._counts.open_now += 1
-        self._counts.peak = max(self._counts.peak, self._counts.open_now)
-        await asyncio.sleep(0)
-        return self
-
-    async def __aexit__(self, *_exc: object) -> None:
-        self._counts.open_now -= 1
-
-    def in_transaction(self) -> bool:
-        return False
 
 
 @pytest.fixture
 def sessions(monkeypatch: pytest.MonkeyPatch) -> Sessions:
-    counts = Sessions()
-    project = uuid.uuid4()
-
-    def factory() -> Callable[[], _Session]:
-        return lambda: _Session(counts)
-
-    for module in list(sys.modules.values()):
-        if getattr(module, 'async_session_factory', None) is _REAL_FACTORY:
-            monkeypatch.setattr(module, 'async_session_factory', factory)
-        if hasattr(module, 'bound_project_id') and module.__name__.startswith('src.'):
-
-            async def bound() -> uuid.UUID:
-                return project
-
-            monkeypatch.setattr(module, 'bound_project_id', bound)
-
-    @asynccontextmanager
-    async def tx(session: Any, _project: Any) -> Any:
-        yield session
-
-    for module in (content_key, pending, ingest_claim, ingest_index):
-        monkeypatch.setattr(module, 'project_tx', lambda s, p: tx(s, p), raising=False)
-    monkeypatch.setattr(db_session, 'project_tx', lambda s, p: tx(s, p))
-
-    async def rows(_session: Any, _project: Any, hashes: Any) -> Any:
-        hashes = sorted(set(hashes))
-        return {h: [] for h in hashes}
-
-    async def none(*_a: Any, **_k: Any) -> None:
-        return None
-
-    async def known(*_a: Any, **_k: Any) -> set[str]:
-        return set()
-
-    async def enqueue(*_a: Any, **_k: Any) -> int:
-        return 1
-
-    async def insert_contents(_s: Any, _p: Any, new: Any) -> set[str]:
-        return {r.image_id for r in new}
-
-    async def place(*_a: Any, **_k: Any) -> list[Any]:
-        return []
-
-    async def no_rows(*_a: Any, **_k: Any) -> list[Any]:
-        return []
-
-    async def deleted(*_a: Any, **_k: Any) -> int:
-        return 1
-
-    # Names of both the per-photo code and the batch code; whichever exists is stubbed.
-    for name, stub in {
-        'lock_imohash': none,
-        'lock_imohashes': none,
-        'rows_for_imohash': no_rows,
-        'rows_for_imohashes': rows,
-        'imohashes_with_rows': known,
-        'insert_content': none,
-        'insert_contents': insert_contents,
-        'release_contents': deleted,
-    }.items():
-        monkeypatch.setattr(contents_repo, name, stub, raising=False)
-    monkeypatch.setattr(pending_repo, 'enqueue_pending', enqueue)
-    monkeypatch.setattr(assign, 'place_new', place)
-
-    async def inserted(_session: Any, _target: Any, events: Any) -> Any:
-        return [SimpleNamespace(project_id=None) for _ in events]
-
-    monkeypatch.setattr(publish_module, 'insert_events_async', inserted)
-    monkeypatch.setattr(publish_module, '_pend_wake', lambda *_a, **_k: None)
-    monkeypatch.setattr(publish_module, 'deployment_tx', lambda s, _r: tx(s, None))
-    for (module, name), real in _REAL.items():
-        monkeypatch.setattr(module, name, real, raising=False)
-    return counts
+    return count_sessions(monkeypatch)
 
 
 class _Ensurer:
@@ -232,9 +115,10 @@ async def test_sessions_per_batch_do_not_grow_with_the_photos(
     result, os_fake = await _ingest(tmp_path, 32)
     assert len(os_fake.images) == 32
     assert sum(r.n_crops for r in result.results) == 64
-    # the batch's lookup, placement, claim with the pending rows, and the events: once each
+    # the batch's lookup, its one group transaction (placement, claims, pending rows), and the
+    # events: once each
     assert sessions.opened == small
-    assert sessions.opened <= 5
+    assert sessions.opened <= 3
     assert sessions.peak == 1  # one connection at a time, not one per photo
 
 
@@ -269,17 +153,17 @@ async def test_a_failed_batch_claim_falls_back_to_one_transaction_per_photo(
 
     from src.services.curation import ops_metrics
 
-    async def boom(_photos: Any) -> Any:
+    async def boom(*_args: Any) -> Any:
         raise OperationalError('claim', {}, Exception('server closed the connection'))
 
-    monkeypatch.setattr(ingest_claim, 'claim_and_mark_bound', boom)
+    monkeypatch.setattr(ingest_claim, 'claim_and_mark_in_session', boom)
     counted: list[tuple[str, str]] = []
     monkeypatch.setattr(
         ops_metrics,
         'count_batch_fallback',
         lambda stage, exc: counted.append((stage, type(exc).__name__)),
     )
-    monkeypatch.setattr(ingest_claim, 'count_batch_fallback', ops_metrics.count_batch_fallback)
+    monkeypatch.setattr(ingest_index, 'count_batch_fallback', ops_metrics.count_batch_fallback)
 
     refused = content_key.ContentKeyChangedError('refused')
     real_claim = content_key.claim_bound
@@ -318,7 +202,7 @@ async def test_a_pool_timeout_of_the_batch_claim_is_not_retried_per_photo(
 ) -> None:
     from sqlalchemy.exc import TimeoutError as PoolTimeoutError
 
-    async def busy(_photos: Any) -> Any:
+    async def busy(*_args: Any) -> Any:
         raise PoolTimeoutError('QueuePool limit reached')
 
     each: list[int] = []
@@ -327,7 +211,7 @@ async def test_a_pool_timeout_of_the_batch_claim_is_not_retried_per_photo(
         each.append(len(photos))
         return []
 
-    monkeypatch.setattr(ingest_claim, 'claim_and_mark_bound', busy)
+    monkeypatch.setattr(ingest_claim, 'claim_and_mark_in_session', busy)
     monkeypatch.setattr(ingest_claim, 'claim_and_mark_each', claim_each)
     svc, _ = _service(tmp_path)
     with pytest.raises(PoolTimeoutError):
@@ -394,15 +278,16 @@ async def test_the_batch_places_all_its_items_in_one_call(
 
     calls: list[list[str]] = []
 
-    async def place(item_ids: Any, vectors: Any) -> list[Placement]:
+    async def place(_session: Any, *, item_ids: Any, **_k: Any) -> list[Placement]:
         calls.append(list(item_ids))
         return [
             Placement(i, uuid.UUID(int=1), uuid.UUID(int=n), 'assigned', 0.9, 0.5)
             for n, i in enumerate(item_ids)
         ]
 
-    monkeypatch.setattr(ingest_index, 'place_vectors', place)
-    service = SimpleNamespace(policy=IngestPolicy())
+    monkeypatch.setattr(ingest_index, 'place_new', place)
+    service: Any = SimpleNamespace(policy=IngestPolicy())
+    session: Any = object()
 
     def prepared(ids: list[str]) -> Any:
         items = [DetectedItem(bbox_pixel=(0, 0, 5, 5), score=0.9) for _ in ids]
@@ -411,7 +296,7 @@ async def test_the_batch_places_all_its_items_in_one_call(
         return SimpleNamespace(items=items, cids=ids)
 
     first, second = prepared(['a', 'b']), prepared(['c'])
-    await ingest_index.place_prepared(service, [first, second])  # type: ignore[arg-type]
+    await ingest_index.place_prepared(service, [first, second], session, uuid.uuid4())
     assert calls == [['a', 'b', 'c']]
     assert [i.placement.item_id for i in [*first.items, *second.items]] == ['a', 'b', 'c']
 

@@ -9,9 +9,9 @@ once for the whole batch:
 2. once: the registry classes the detector labels need, created in one transaction
    (:meth:`CurationIngestService.resolve_classes`);
 3. per photo: crops, embeddings, blur, ids (:func:`~src.services.curation.ingest_index.prepare_image`);
-4. once each, for the batch (:func:`~src.services.curation.ingest_index.commit_prepared`): placement,
-   the content claims with the pending rows, the writes through the coalescing OpenSearch writer,
-   the release of failed claims, the ``crop.created`` events.
+4. once each, for the batch as one commit group (:func:`~src.services.curation.ingest_index.commit_batch`):
+   placement, the content claims with the pending rows (one transaction), the writes through the
+   coalescing OpenSearch writer, the release of failed claims, the ``crop.created`` events.
 
 A photo of a batch used to run all of this alone, with four or more PostgreSQL transactions of its
 own, each ending in a COMMIT that waits for the WAL. ``ingest_one`` and a dataset import's
@@ -71,7 +71,7 @@ from src.services.curation.ingest_index import (
     ImageContext,
     IndexOutcome,
     PreparedImage,
-    commit_prepared,
+    commit_batch,
     prepare_image,
 )
 from src.services.curation.ingest_models import ERROR_KIND_DETECTOR_INFER, IngestResult
@@ -196,7 +196,7 @@ async def finish_photos(
         else:
             ready.append((i, p))
     for (i, _), outcome in zip(
-        ready, await commit_prepared(service, [p for _, p in ready]), strict=True
+        ready, await commit_batch(service, [p for _, p in ready]), strict=True
     ):
         finished[i] = outcome
     for i, s in live:

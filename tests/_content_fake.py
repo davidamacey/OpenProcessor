@@ -62,8 +62,10 @@ class ContentRows:
         self.files[image_id] = data
         return None
 
-    async def claim_and_mark_bound(self, photos: Sequence[PhotoWrite]) -> list[ClaimOutcome]:
-        """The batch step: each photo claims, then its pending rows are recorded (the per-photo
+    async def claim_and_mark_in_session(
+        self, _session: object, _project_id: object, photos: Sequence[PhotoWrite]
+    ) -> list[ClaimOutcome]:
+        """The group step: each photo claims, then its pending rows are recorded (the per-photo
         calls the pending fake counts)."""
         from src.services.near_duplicates import pending
 
