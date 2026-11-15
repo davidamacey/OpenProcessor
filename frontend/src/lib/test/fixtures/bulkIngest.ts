@@ -20,7 +20,6 @@ export function configFixture(over: Partial<BulkIngestConfig> = {}): BulkIngestC
       max_seconds: 60,
       header_sample: 300,
       gpu_decode: true,
-      gpu_min_megapixels: 3,
       rates: [
         {
           route: 'cpu_small',
@@ -75,8 +74,6 @@ export function previewFixture(over: Partial<BulkPreview> = {}): BulkPreview {
       sampled: 300,
       unreadable: 0,
       histogram: { '<1': 300 },
-      gate_megapixels: 3,
-      share_at_or_above_gate: 0,
     },
     estimate: {
       basis: 'megapixel_sample',

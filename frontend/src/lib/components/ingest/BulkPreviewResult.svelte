@@ -72,12 +72,6 @@
     <p class="text-fg-2" data-testid="bulk-preview-sizes">
       Image sizes (headers of {preview.megapixels.sampled} files, megapixels):
       {#each sizes as [label, n], i (label)}{i > 0 ? ' · ' : ' '}{label}: {n}{/each}.
-      {#if preview.megapixels.share_at_or_above_gate != null}
-        {Math.round(preview.megapixels.share_at_or_above_gate * 100)}% at or above
-        {preview.megapixels.gate_megapixels} MP, the GPU-decode gate ({preview.gpu_decode
-          ? 'on'
-          : 'off'}).
-      {/if}
       {#if preview.megapixels.unreadable > 0}
         {preview.megapixels.unreadable} headers could not be read.
       {/if}

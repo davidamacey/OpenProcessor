@@ -35,7 +35,6 @@ export interface BulkPreviewConfig {
   max_seconds: number;
   header_sample: number;
   gpu_decode: boolean;
-  gpu_min_megapixels: number;
   rates: PreviewRate[];
   embeddings_per_image: PreviewMeasured;
   opensearch_bytes_per_image: PreviewMeasured;
@@ -76,8 +75,6 @@ export interface PreviewMegapixels {
   unreadable: number;
   /** Bucket label (`<1`, `1-3`, `3-8`, `8-16`, `16-24`, `24+` megapixels) to count. */
   histogram: Record<string, number>;
-  gate_megapixels: number;
-  share_at_or_above_gate?: number | null;
 }
 
 export interface PreviewEstimate {

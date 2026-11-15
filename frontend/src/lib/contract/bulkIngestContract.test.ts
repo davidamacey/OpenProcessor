@@ -82,7 +82,6 @@ describe('bulk ingest contract', () => {
         'max_seconds',
         'header_sample',
         'gpu_decode',
-        'gpu_min_megapixels',
         'rates',
         'embeddings_per_image',
         'opensearch_bytes_per_image',
@@ -123,7 +122,7 @@ describe('bulk ingest contract', () => {
     );
     pin<PreviewExtension>(['files', 'bytes'], 'PreviewExtensionWire');
     pin<PreviewMegapixels>(
-      ['sampled', 'unreadable', 'histogram', 'gate_megapixels', 'share_at_or_above_gate'],
+      ['sampled', 'unreadable', 'histogram'],
       'PreviewMegapixelsWire',
     );
     pin<PreviewEstimate>(
