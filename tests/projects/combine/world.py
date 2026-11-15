@@ -61,6 +61,7 @@ def legacy_space(target: Target, key: str = DEFAULT_KEY, dim: int = DIM) -> Reso
         triton_image_model=None,
         triton_text_model=None,
         knn_method=default_knn_spec(),
+        input_size=None,
     )
 
 

@@ -46,12 +46,18 @@ _ms_build_flags() {
     printf 'target=%s workspace=%sG%s' "$target" "$ws" "${recipe:+ recipe=$recipe}"
 }
 
-# _ms_pe_size MODEL: the square input of a PE engine, the dims of models/MODEL/config.pbtxt
-# (export/build_pe_trt.sh holds the same two numbers; a test keeps all three equal).
+# _ms_pe_size MODEL: the square input of a PE engine. The frame engine is 336; the crop engine
+# is PE_CROP_SIZE (224 when unset, else exactly 224 or 336: the sizes of CROP_ENCODERS in
+# src/config/crop_encoder.py, which a test keeps equal). export/build_pe_trt.sh holds the same
+# numbers; a test keeps all of them equal to the dims of models/MODEL/config.pbtxt.
 _ms_pe_size() {
     case "$1" in
         pe_image_encoder) echo 336 ;;
-        pe_crop_encoder) echo 224 ;;
+        pe_crop_encoder)
+            case "${PE_CROP_SIZE:-224}" in
+                224|336) echo "${PE_CROP_SIZE:-224}" ;;
+                *) log_error "PE_CROP_SIZE must be 224 or 336, got '${PE_CROP_SIZE}'" >&2; return 1 ;;
+            esac ;;
         *) return 1 ;;
     esac
 }
@@ -140,17 +146,28 @@ model_setup_stamp_report() {
     awk -F'\t' -v OFS='\t' '$4 != "" { print $1, $2, $4, $5, substr($6, 1, 12) }' "$f"
 }
 
-# _ms_flags_stale MODEL FLAGS: prints why and returns 0 when the build target or
-# workspace recorded in FLAGS is not what this host would build now. A stamp without
+# _ms_flags_stale MODEL FLAGS: prints why and returns 0 when the build target, workspace or (a PE
+# engine) input size recorded in FLAGS is not what this host would build now. A stamp without
 # the fields (written before #42) was built with the default target and workspace, so it
-# stays current under those and is never rebuilt just for lacking them.
+# stays current under those and is never rebuilt just for lacking them (the same holds for the
+# size token of a PE stamp: only a size that is recorded and differs makes it stale).
 _ms_flags_stale() {
-    local model="$1" flags=" $2 " want_target want_ws want_recipe have
+    local model="$1" flags=" $2 " want_target want_ws want_recipe want_size have
     want_recipe="$(_ms_recipe "$model")"
     if [[ -n "$want_recipe" && "$flags" != *" recipe=${want_recipe} "* ]]; then
         have="$(sed -n -E 's/.* recipe=([^ ]+) .*/\1/p' <<< "$flags")"
         echo "exported by recipe ${have:-none}, now ${want_recipe}"
         return 0
+    fi
+    if _ms_is_pe_engine "$model"; then
+        # The ONNX hash cannot tell sizes apart: the other size's ONNX is still on disk when
+        # this runs, so the stamp's own size token decides.
+        want_size="$(_ms_pe_size "$model" 2>/dev/null)" || { echo "invalid PE_CROP_SIZE"; return 0; }
+        have="$(sed -n -E 's/.* ([0-9]+x[0-9]+) .*/\1/p' <<< "$flags")"
+        if [[ -n "$have" && "$have" != "${want_size}x${want_size}" ]]; then
+            echo "built at input ${have}, now ${want_size}x${want_size}"
+            return 0
+        fi
     fi
     want_target="$(trt_target)" || { echo "invalid OP_TRT_BUILD_TARGET"; return 0; }
     want_ws="$(trt_workspace_gb "$model")" || { echo "invalid OP_TRT_WORKSPACE_GB"; return 0; }

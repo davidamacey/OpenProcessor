@@ -293,6 +293,7 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "tests/test_ocr_argmax_graph.py" = ["E402"]
 "tests/test_ocr_uint8_configs.py" = ["E402"]
 "tests/frame_engine_tests/test_ocr_ctc.py" = ["E402"]
+"tests/test_pe_data_parallel.py" = ["E402"]
 "tests/test_pe_download_weights.py" = ["E402"]
 "tests/test_pe_image_encoder_export.py" = ["E402"]
 "tests/test_pe_rearrange_shim.py" = ["E402"]

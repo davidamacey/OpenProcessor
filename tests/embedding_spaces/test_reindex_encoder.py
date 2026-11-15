@@ -12,7 +12,14 @@ import numpy as np
 import pytest
 
 from src.db.repos import embedding_spaces as repo
-from src.domain.embedding_spaces import EmbeddingSpaceError, KnnMethodSpec, Role, Status, Target
+from src.domain.embedding_spaces import (
+    EmbeddingSpaceError,
+    EncoderBuild,
+    KnnMethodSpec,
+    Role,
+    Status,
+    Target,
+)
 from src.services.embedding_spaces import reindex_encoder as mod
 from src.services.embedding_spaces.reindex import DocRef
 
@@ -56,14 +63,17 @@ class FakeOS:
 
 @pytest.fixture
 def wired(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    state: dict[str, Any] = {'decodes': [], 'model': mod.image_model_for(Target.ITEM)}
+    state: dict[str, Any] = {'decodes': [], 'build': mod.served_encoder_for(Target.ITEM)}
 
     @asynccontextmanager
     async def fake_session():
         yield object()
 
     async def fake_version(_s: Any, _id: Any) -> Any:
-        return SimpleNamespace(triton_image_model=state['model'])
+        build = state['build']
+        return SimpleNamespace(
+            triton_image_model=build.model, input_spec={'image': {'size': [build.size, build.size]}}
+        )
 
     async def fake_images(_os: Any, ids: list[str], *, index: str) -> dict[str, Any]:
         return {i: {'image_path': f'/p/{i}.jpg'} for i in ids}
@@ -108,7 +118,7 @@ async def test_box_documents_use_the_region_slots(wired: dict[str, Any]) -> None
 
 
 async def test_frame_document_is_its_own_image(wired: dict[str, Any]) -> None:
-    wired['model'] = mod.image_model_for(Target.FRAME)
+    wired['build'] = mod.served_encoder_for(Target.FRAME)
     got = await mod.ReindexEncoder(FakeOS(), pe=object()).encode(
         _space(Target.FRAME), [DocRef('img1')]
     )
@@ -124,8 +134,8 @@ async def test_each_target_is_built_by_its_own_encoder_only(
 ) -> None:
     """Frame vectors come from the frame encoder, item and box vectors from the crop encoder: a
     space of one is refused the other's model (a vector of the wrong space is never written)."""
-    assert mod.image_model_for(target) != mod.image_model_for(wrong)
-    wired['model'] = mod.image_model_for(wrong)
+    assert mod.served_encoder_for(target) != mod.served_encoder_for(wrong)
+    wired['build'] = mod.served_encoder_for(wrong)
     with pytest.raises(EmbeddingSpaceError) as exc:
         await mod.ReindexEncoder(FakeOS(), pe=object()).encode(
             _space(target), [DocRef('a', (0, 0, 1, 1))]
@@ -134,12 +144,28 @@ async def test_each_target_is_built_by_its_own_encoder_only(
 
 
 async def test_another_model_is_refused(wired: dict[str, Any]) -> None:
-    wired['model'] = 'some_other_encoder'
+    wired['build'] = EncoderBuild('some_other_encoder', 224)
     with pytest.raises(EmbeddingSpaceError) as exc:
         await mod.ReindexEncoder(FakeOS(), pe=object()).encode(
             _space(), [DocRef('a', (0, 0, 1, 1))]
         )
     assert exc.value.code == 'embedding_model_unavailable'
+
+
+@pytest.mark.parametrize('target', [Target.ITEM, Target.BOX])
+async def test_the_same_model_built_at_another_size_is_refused(
+    wired: dict[str, Any], target: Target
+) -> None:
+    """Vectors of one set of weights at two input sizes cannot be compared: the space was built
+    at the size the deployment serves, the version row says another."""
+    served = mod.served_encoder_for(target)
+    wired['build'] = EncoderBuild(served.model, 336 if served.size != 336 else 224)
+    with pytest.raises(EmbeddingSpaceError) as exc:
+        await mod.ReindexEncoder(FakeOS(), pe=object()).encode(
+            _space(target), [DocRef('a', (0, 0, 1, 1))]
+        )
+    assert exc.value.code == 'embedding_model_unavailable'
+    assert str(served.size) in exc.value.detail
 
 
 async def test_a_document_without_an_image_is_absent(wired: dict[str, Any]) -> None:

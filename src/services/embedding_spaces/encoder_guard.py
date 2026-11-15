@@ -1,9 +1,10 @@
 """The check every vector writer makes: the bound project's space is the encoder's space.
 
 ``item`` and ``box`` vectors are made by the crop encoder, ``frame`` vectors by the frame encoder
-(:func:`~src.clients.pe_encoder.image_model_for`). A writer calls :func:`require_encoder_for` with
-the targets it writes before it encodes, so a project of another encoder (one created before the
-crop encoder) is refused rather than given vectors of a space it does not have. The comparison is
+(:func:`~src.clients.pe_encoder.served_encoder_for`: the model and its input size). A writer calls
+:func:`require_encoder_for` with the targets it writes before it encodes, so a project of another
+encoder (one created before the crop encoder, or at the other crop input size) is refused rather
+than given vectors of a space it does not have. The comparison is
 :func:`~src.domain.embedding_spaces.encoder_mismatch_message`, the same one the re-index job and
 search by picture make; :func:`encoder_mismatch_of` serves the same finding for a project record.
 """
@@ -12,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from src.clients.pe_encoder import image_model_for
+from src.clients.pe_encoder import served_encoder_for
 from src.config.project_context import current_project
 from src.domain.embedding_spaces import (
     EmbeddingSpaceError,
@@ -33,8 +34,8 @@ async def require_encoder_for(*targets: Target) -> None:
             project=project,
             space_key=space.space_key,
             target=target,
-            space_model=space.triton_image_model,
-            served_model=image_model_for(target),
+            space_build=space.encoder_build,
+            served_build=served_encoder_for(target),
         )
 
 
@@ -68,18 +69,22 @@ async def encoder_mismatch_of(slug: str) -> EncoderMismatch | None:
     for space in spaces:
         if space.target not in (Target.ITEM, Target.BOX):
             continue
-        served = image_model_for(space.target)
+        served = served_encoder_for(space.target)
         message = encoder_mismatch_message(
             project=slug,
             space_key=space.space_key,
             target=space.target,
-            space_model=space.triton_image_model,
-            served_model=served,
+            space_build=space.encoder_build,
+            served_build=served,
         )
         if message is not None:
             found.append(
                 SpaceMismatch(
-                    space.target.value, space.space_key, space.triton_image_model, served, message
+                    space.target.value,
+                    space.space_key,
+                    space.triton_image_model,
+                    served.model,
+                    message,
                 )
             )
     if not found:

@@ -131,6 +131,21 @@ def test_box_target_reports_the_matched_box(client):
     assert 'nested' in _knn_body(client)['query']['bool']['must'][0]
 
 
+def test_a_project_built_at_the_other_crop_size_is_refused_before_encoding(
+    client, monkeypatch: pytest.MonkeyPatch
+):
+    """A picture encoded at 336 cannot be ranked against vectors made at 224 (and the reverse)."""
+    from src.clients import pe_encoder
+
+    monkeypatch.setattr(pe_encoder, 'PE_CROP_SIZE', 336)  # the default project's spaces are 224
+    resp = _post(client, _image())
+    assert resp.status_code == 422
+    message = resp.json()['detail']['message']
+    assert '224x224' in message
+    assert '336x336' in message
+    client.encoder.embed_crops.assert_not_called()
+
+
 def test_unknown_target_is_422(client):
     assert _post(client, _image(), params={'target': 'frame'}).status_code == 422
 

@@ -97,7 +97,6 @@ import sys
 from pathlib import Path
 
 from pe_image_constants import (
-    CROP_IMAGE_SIZE,
     CROP_TRITON_MODEL_NAME,
     DEFAULT_MAX_BATCH,
     EMBEDDING_DIM,
@@ -111,6 +110,7 @@ from pe_image_constants import (
     PLATFORMS,
     TRITON_MODEL_NAME,
     TRT_PLATFORM,
+    crop_image_size,
 )
 from pe_image_onnx_export import export_via_optimum, export_via_perception_models
 from pe_image_triton_config import PETritonConfig, write_triton_config
@@ -194,7 +194,7 @@ def build_parser() -> argparse.ArgumentParser:
         '--crop',
         action='store_true',
         help=f'Export the crop encoder: the Triton name defaults to {CROP_TRITON_MODEL_NAME}, '
-        f'the input size to {CROP_IMAGE_SIZE} and the ONNX to '
+        f'the input size to PE_CROP_SIZE (224 or 336, default 224) and the ONNX to '
         f'{EXPORT_DIR / f"{CROP_TRITON_MODEL_NAME}.onnx"}',
     )
     parser.add_argument(
@@ -232,7 +232,7 @@ def build_parser() -> argparse.ArgumentParser:
         '--image-size',
         type=int,
         default=None,
-        help=f'Input resolution (default {IMAGE_SIZE}, or {CROP_IMAGE_SIZE} with --crop)',
+        help=f'Input resolution (default {IMAGE_SIZE}, or PE_CROP_SIZE with --crop)',
     )
     parser.add_argument(
         '--embedding-dim',
@@ -279,7 +279,9 @@ def resolve_role(args: argparse.Namespace) -> None:
     """Fill the Triton name, the input size and the ONNX path the caller left out: the frame
     encoder's, or the crop encoder's with ``--crop``."""
     name, size = (
-        (CROP_TRITON_MODEL_NAME, CROP_IMAGE_SIZE) if args.crop else (TRITON_MODEL_NAME, IMAGE_SIZE)
+        (CROP_TRITON_MODEL_NAME, crop_image_size())
+        if args.crop
+        else (TRITON_MODEL_NAME, IMAGE_SIZE)
     )
     args.triton_name = args.triton_name or name
     args.image_size = args.image_size or size

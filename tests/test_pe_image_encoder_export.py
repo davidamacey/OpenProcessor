@@ -210,6 +210,32 @@ class TestCli:
         explicit = pe_export.build_parser().parse_args(['--crop', '--image-size', '280'])
         assert pe_export.config_from_args(explicit).image_size == 280
 
+    def test_the_crop_size_follows_pe_crop_size(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        for raw, want in (('', 224), ('224', 224), ('336', 336)):
+            monkeypatch.setenv('PE_CROP_SIZE', raw)
+            args = pe_export.build_parser().parse_args(['--crop'])
+            assert pe_export.config_from_args(args).image_size == want
+        monkeypatch.setenv('PE_CROP_SIZE', '336')
+        frame = pe_export.build_parser().parse_args([])
+        assert pe_export.config_from_args(frame).image_size == pe_image_constants.IMAGE_SIZE
+
+    @pytest.mark.parametrize('bad', ['300', '448', 'abc'])
+    def test_an_unsupported_crop_size_is_refused(
+        self, monkeypatch: pytest.MonkeyPatch, bad: str
+    ) -> None:
+        monkeypatch.setenv('PE_CROP_SIZE', bad)
+        args = pe_export.build_parser().parse_args(['--crop'])
+        with pytest.raises(ValueError, match='PE_CROP_SIZE'):
+            pe_export.config_from_args(args)
+
+    def test_the_export_sizes_are_the_api_sizes(self) -> None:
+        """The export tree cannot import ``src`` (the host build runs without it): one rule, two
+        readers, kept equal here."""
+        from src.config.crop_encoder import CROP_ENCODERS, DEFAULT_CROP_SIZE
+
+        assert set(pe_image_constants.CROP_IMAGE_SIZES) == set(CROP_ENCODERS)
+        assert pe_image_constants.DEFAULT_CROP_IMAGE_SIZE == DEFAULT_CROP_SIZE
+
     def test_the_crop_config_describes_the_letterbox_square(self, tmp_path: Path) -> None:
         rc = pe_export.main(['--crop', '--config-only', '--models-dir', str(tmp_path)])
         assert rc == 0

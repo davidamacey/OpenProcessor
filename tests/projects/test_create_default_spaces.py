@@ -27,9 +27,16 @@ async def _spaces(project_id):
         return [tuple(r) for r in (await session.execute(_SPACES, {'p': project_id})).all()]
 
 
-def test_a_created_project_has_exactly_three_primary_ready_spaces_crops_from_the_crop_encoder() -> (
-    None
-):
+@pytest.mark.parametrize('size', [224, 336])
+def test_a_created_project_has_exactly_three_primary_ready_spaces_crops_from_the_crop_encoder(
+    size: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The deployment's PE_CROP_SIZE decides which crop space a new project registers."""
+    from src.clients import pe_encoder
+
+    monkeypatch.setattr(pe_encoder, 'PE_CROP_SIZE', size)
+    crop = f'pe_core_l14_crop{size}'
+
     async def _run():
         record = await bootstrap_default_project()
         return await _spaces(record.id)
@@ -37,10 +44,10 @@ def test_a_created_project_has_exactly_three_primary_ready_spaces_crops_from_the
     rows = asyncio.run(_run())
     assert rows == [
         ('box', 'primary', 'ready', 'items', 'region_box_embeddings.embedding',
-         None, 'region_box_embeddings', 'pe_core_l14_crop224', 1),
+         None, 'region_box_embeddings', crop, 1),
         ('frame', 'primary', 'ready', 'images', 'pe_embedding', None, None, 'pe_core_l14_336', 1),
         ('item', 'primary', 'ready', 'items', 'pe_embedding', 'embedding_state', None,
-         'pe_core_l14_crop224', 1),
+         crop, 1),
     ]  # fmt: skip
 
 

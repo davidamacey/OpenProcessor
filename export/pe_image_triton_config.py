@@ -84,8 +84,9 @@ def render_config(cfg: PETritonConfig) -> str:
         if cfg.gpu_ids is not None
         else ''
     )
+    # A crop size outside the table (an explicit --image-size) is planned at the largest figure.
     gpu_mib = (
-        PE_CROP_GPU_MIB_PER_INSTANCE
+        PE_CROP_GPU_MIB_PER_INSTANCE.get(cfg.image_size, max(PE_CROP_GPU_MIB_PER_INSTANCE.values()))
         if cfg.model_name == CROP_TRITON_MODEL_NAME
         else PE_GPU_MIB_PER_INSTANCE
     )
@@ -110,8 +111,9 @@ def render_config(cfg: PETritonConfig) -> str:
             f'# {PE_VARIANT} crop encoder — one vector per object box, a model of its own.\n#\n'
             '# Consumed by src/clients/pe_encoder.py (PEEncoder.embed_crops) and the frame engine\n'
             '# (plan.crop_embed); the vector is stored as the item and box vectors of the crop\n'
-            '# space (examples/embedding/catalog.tsv, pe_core_l14_crop224). The same weights as\n'
-            '# pe_image_encoder built at this input size; its vectors are not comparable with it.\n'
+            '# space (examples/embedding/catalog.tsv: pe_core_l14_crop224, or _crop336 at a 336\n'
+            '# input). The same weights as pe_image_encoder built at this input size; its vectors\n'
+            '# are not comparable with it.\n'
             '# The tensor names below are a contract with that client.'
         )
         pixels = (
@@ -179,8 +181,9 @@ instance_group [
 # Budget accounting for `openprocessor gpu plan` and the installer: GPU memory
 # of one warm instance, recorded with headroom. Measured for the frame encoder at
 # max batch 32 (1312 MiB resident on an RTX 3080 Ti, the same on an RTX A6000). The
-# crop encoder (224 input) measured 750 MiB on the model server (NVML, one instance,
-# max batch 32, dynamic batching 4/8/16/32), planned at 768.
+# crop encoder at a 224 input measured 750 MiB on the model server (NVML, one instance,
+# max batch 32, dynamic batching 4/8/16/32), planned at 768; at 336 it is planned at 1024 (an
+# upper estimate; docs/design/v070_rebuild/13b_crop_vectors_plan.md section 9).
 parameters: {{
   key: "GPU_MIB_PER_INSTANCE"
   value: {{ string_value: "{gpu_mib}" }}

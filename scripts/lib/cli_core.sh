@@ -107,6 +107,7 @@ cmd_models_install() {
     # A flag beats .env; .env (what the model-export-worker also reads) beats the profile.
     OP_TRT_BUILD_TARGET="${OP_TRT_BUILD_TARGET:-$(_env_value OP_TRT_BUILD_TARGET)}"
     OP_TRT_WORKSPACE_GB="${OP_TRT_WORKSPACE_GB:-$(_env_value OP_TRT_WORKSPACE_GB)}"
+    PE_CROP_SIZE="${PE_CROP_SIZE:-$(_env_value PE_CROP_SIZE)}"
     MODEL_SETUP_TRITON_DIGEST=""
     if [[ -f "$PROJECT_DIR/.install/state.json" ]]; then
         MODEL_SETUP_TRITON_DIGEST="$(sed -n -E 's/^  "triton_image_digest": "([^"]*)",?$/\1/p' "$PROJECT_DIR/.install/state.json" | head -n1)"
@@ -114,7 +115,7 @@ cmd_models_install() {
         log_info "no .install/state.json (a checkout, not an installed directory): every model group is built"
     fi
     export OP_DIR OP_FACES_ENABLED OP_HEALTH_HOST GPU_PROFILE MODEL_SETUP_TRITON_DIGEST \
-        TRITON_GPU_ID API_GPU_ID OP_TRT_BUILD_TARGET OP_TRT_WORKSPACE_GB
+        TRITON_GPU_ID API_GPU_ID OP_TRT_BUILD_TARGET OP_TRT_WORKSPACE_GB PE_CROP_SIZE
     dc up -d triton-server
     if model_setup_run_groups "$tiers" "$only"; then
         log_success "model groups done"

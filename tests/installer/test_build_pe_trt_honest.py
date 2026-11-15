@@ -111,3 +111,37 @@ def test_explicit_opt_in_still_builds_fp32_and_says_so(
     assert done.returncode == 0, done.stderr
     assert (tmp_path / 'models/pe_image_encoder/1/model.plan').exists()
     assert 'FP32' in done.stderr
+
+
+def _crop_run(tmp_path: Path, **env: str) -> tuple[subprocess.CompletedProcess[str], str]:
+    return _run(tmp_path, PE_ROLE='crop', **env)
+
+
+@pytest.mark.parametrize(
+    ('size', 'env'),
+    [('224', {}), ('224', {'PE_CROP_SIZE': '224'}), ('336', {'PE_CROP_SIZE': '336'})],
+)
+def test_the_crop_engine_is_built_at_pe_crop_size(
+    tmp_path: Path, size: str, env: dict[str, str]
+) -> None:
+    onnx = tmp_path / 'pe_crop_encoder.onnx'
+    onnx.write_text('FP32')
+    done, calls = _crop_run(tmp_path, ONNX_PATH=str(onnx), **env)
+    assert done.returncode == 0, done.stderr
+    assert f'x3x{size}x{size}' in calls
+    other = '336' if size == '224' else '224'
+    assert f'x3x{other}x{other}' not in calls
+
+
+@pytest.mark.parametrize('bad', ['300', 'abc'])
+def test_the_crop_build_refuses_another_size_before_building(tmp_path: Path, bad: str) -> None:
+    done, calls = _crop_run(tmp_path, PE_CROP_SIZE=bad)
+    assert done.returncode == 2
+    assert 'PE_CROP_SIZE must be 224 or 336' in done.stderr
+    assert 'trtexec ' not in calls
+
+
+def test_the_frame_build_ignores_pe_crop_size(tmp_path: Path) -> None:
+    done, calls = _run(tmp_path, PE_CROP_SIZE='300')
+    assert done.returncode == 0, done.stderr
+    assert 'x3x336x336' in calls
