@@ -79,7 +79,10 @@ async def get_row(slug: str) -> repo.ProjectRow:
     return await run_repo('read a project', read)
 
 
-DEFAULT_ENCODER = ('pe_core_l14_336', 1)
+#: The encoder version of each default space: the frame vectors, and the vectors of items and boxes
+#: (object crops, a model of their own with its own space).
+FRAME_ENCODER = ('pe_core_l14_336', 1)
+CROP_ENCODER = ('pe_core_l14_crop224', 1)
 
 
 class DefaultEncoderMissingError(RuntimeError):
@@ -89,20 +92,29 @@ class DefaultEncoderMissingError(RuntimeError):
 async def create_with_default_spaces(
     session: AsyncSession, new: repo.NewProject
 ) -> repo.ProjectRow:
-    """The create transaction: every project row, its three primary, ready default spaces and the
-    default near-duplicate profile, active.
+    """The create transaction: every project row, its three primary, ready default spaces (item and
+    box from the crop encoder, frame from the frame encoder) and the default near-duplicate
+    profile, active.
 
     One transaction, so a failure in either leaves nothing behind. ``load_project`` (the upgrade)
     does not call this: the upgrade writes its own spaces, with the knn method of each live index.
     """
     row = await repo.create_project(session, new)
-    model_key, version = DEFAULT_ENCODER
-    encoder = await session.run_sync(lambda s: spaces_repo.get_model_version(s, model_key, version))
-    if encoder is None:
-        msg = f'embedding model {model_key} v{version} is not in embedding_model_versions'
-        raise DefaultEncoderMissingError(msg)
+
+    async def version_of(key: tuple[str, int]) -> spaces_repo.ModelVersionRow:
+        found = await session.run_sync(lambda s: spaces_repo.get_model_version(s, *key))
+        if found is None:
+            msg = f'embedding model {key[0]} v{key[1]} is not in embedding_model_versions'
+            raise DefaultEncoderMissingError(msg)
+        return found
+
+    frame = await version_of(FRAME_ENCODER)
+    crop = await version_of(CROP_ENCODER)
     await spaces_repo.add_spaces(
-        session, embedding_spaces.default_space_rows(row.id, encoder, created_by=new.created_by)
+        session,
+        embedding_spaces.default_space_rows(
+            row.id, frame=frame, crop=crop, created_by=new.created_by
+        ),
     )
     await seed_default_profile(session, row.id)
     return row

@@ -42,9 +42,40 @@ def _version(model_key: str = 'pe_core_l14_336') -> repo.ModelVersionRow:
     )
 
 
-def test_the_shipped_catalog_lists_both_models() -> None:
+def test_the_shipped_catalog_lists_every_model() -> None:
     keys = {(e.model_key, e.version, e.native_dim) for e in load_catalog()}
-    assert keys == {('pe_core_l14_336', 1, 1024), ('mobileclip2_s2', 1, 512)}
+    assert keys == {
+        ('pe_core_l14_336', 1, 1024),
+        ('pe_core_l14_crop224', 1, 1024),
+        ('mobileclip2_s2', 1, 512),
+    }
+
+
+def test_the_default_spaces_are_catalog_versions_and_crops_use_the_crop_encoder() -> None:
+    """A new project's frame space is the frame encoder's and its item and box spaces the crop
+    encoder's: the crop version names the crop model, its configured size and the letterbox rule,
+    and its image contract is the one the shipped engine inventory carries."""
+    from src.clients.pe_encoder import PE_CROP_MODEL, PE_CROP_SIZE, PE_IMAGE_MODEL
+    from src.domain.image_geometry import CROP_FILL
+    from src.services.projects.store import CROP_ENCODER, FRAME_ENCODER
+    from src.services.training import builtin_engines as builtin
+
+    by_key = {(e.model_key, e.version): e for e in load_catalog()}
+    frame, crop = by_key[FRAME_ENCODER], by_key[CROP_ENCODER]
+    assert frame.triton_image_model == PE_IMAGE_MODEL
+    assert crop.triton_image_model == PE_CROP_MODEL
+    assert crop.triton_text_model == frame.triton_text_model  # one text tower for both spaces
+    assert (crop.weights_ref, crop.weights_sha256) == (frame.weights_ref, frame.weights_sha256)
+    image = crop.input_spec['image']
+    assert image['size'] == [PE_CROP_SIZE, PE_CROP_SIZE]
+    assert (image['resize'], image['fill']) == ('letterbox', CROP_FILL)
+    assert crop.input_spec_sha256 != frame.input_spec_sha256  # a space of its own
+    shipped = {e.name: e.input_contract for e in builtin.SHIPPED}
+    contract = shipped[PE_CROP_MODEL].model_dump(mode='json', exclude_none=True)
+    assert contract == image  # what the engine declares is what the version promises
+    assert availability(
+        _version(crop.model_key), {**shipped_engines(), PE_CROP_MODEL: contract}
+    ).available
 
 
 def test_a_row_whose_triton_model_is_missing_is_unavailable() -> None:
@@ -87,7 +118,11 @@ def test_a_malformed_catalog_is_refused(tmp_path: Path) -> None:
 def test_sync_inserts_once_and_refuses_a_drifted_row(pg, tmp_path: Path) -> None:
     with Session(pg.engine('app')) as session:
         first = sync_catalog(session)
-    assert set(first.inserted) == {'pe_core_l14_336_v1', 'mobileclip2_s2_v1'}
+    assert set(first.inserted) == {
+        'pe_core_l14_336_v1',
+        'pe_core_l14_crop224_v1',
+        'mobileclip2_s2_v1',
+    }
     with Session(pg.engine('app')) as session:
         assert sync_catalog(session).inserted == ()
     drifted = tmp_path / 'catalog.tsv'

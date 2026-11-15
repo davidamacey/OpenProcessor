@@ -50,7 +50,7 @@ async def _default_primary(session, project, target=Target.ITEM):
     """The project create's default spaces: ``pe_core_l14_336`` v1, primary and ready."""
     async with project_tx(session, project):
         version = await session.run_sync(lambda s: repo.get_model_version(s, 'pe_core_l14_336', 1))
-        rows = spaces.default_space_rows(project, version, created_by='test')
+        rows = spaces.default_space_rows(project, frame=version, crop=version, created_by='test')
         await repo.add_spaces(session, rows)
 
 
@@ -75,7 +75,7 @@ async def _add_second_primary(session, project) -> None:
     async with project_tx(session, project):
         version = await session.run_sync(lambda s: repo.get_model_version(s, 'mobileclip2_s2', 1))
         row = replace(
-            spaces.default_space_rows(project, version, created_by='test')[0],
+            spaces.default_space_rows(project, frame=version, crop=version, created_by='test')[0],
             space_key='alt_v1',
             vector_field='vec_alt_v1',
             state_field='vec_alt_v1_state',
