@@ -15,6 +15,7 @@ pub mod health;
 pub mod jpeg_header;
 pub mod kernels;
 pub mod metrics;
+pub mod photo;
 pub mod pipeline;
 pub mod proto;
 pub mod pyfmt;
