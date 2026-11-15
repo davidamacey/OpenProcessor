@@ -13,7 +13,8 @@
 #                                                  $SHIM_VLM_ROOT: the vLLM root at /v1/models,
 #                                                  $SHIM_STATE/health_down: refused,
 #                                                  api_not_ready: /health 503 (no Triton), OpenSearch ok,
-#                                                  monitoring_bad: Prometheus has no config)
+#                                                  monitoring_bad: Prometheus has no config;
+#                                                  triton_ready_<model>: loaded by /load, dropped by /unload)
 set -u
 printf 'curl %s\n' "$*" >> "${SHIM_LOG:?}"
 state="${SHIM_STATE:?}"
@@ -55,6 +56,14 @@ case "$url" in
                 if [[ -e "${state}/api_not_ready" ]]; then code=503; os_ok=true; [[ -e "${state}/os_down" ]] && os_ok=false
                     body="{\"status\":\"not_ready\",\"services\":{\"triton\":{\"ok\":false},\"opensearch\":{\"ok\":${os_ok}}}}"
                 else body='{"status": "ready", "loaded": true, "services":{"opensearch":{"ok":true}}}'; fi ;;
+            # Triton's explicit model control: a model is ready from its load until its unload
+            /v2/models/*/ready)
+                m="${path#/v2/models/}"; m="${m%/ready}"
+                [[ -e "${state}/triton_ready_${m}" ]] || code=404 ;;
+            /v2/repository/models/*/load)
+                m="${path#/v2/repository/models/}"; touch "${state}/triton_ready_${m%/load}" ;;
+            /v2/repository/models/*/unload)
+                m="${path#/v2/repository/models/}"; rm -f "${state}/triton_ready_${m%/unload}" ;;
             /curation/health) body='{"status": "ok"}' ;;
             /curation/vlm/local) body="$(cat "${state}/vlm_local.json" 2>/dev/null || echo '{}')" ;;
             /curation/vlm/endpoints/*/probe)
