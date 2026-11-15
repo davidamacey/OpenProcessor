@@ -64,7 +64,11 @@ such as `Stream removed` or `Received RST_STREAM with error code 1`), and for as
 photo's 120 s deadline when the engine answers overloaded. An `INTERNAL` that the engine raised
 for the photo (its text starts with `frame engine:`) is not sent again: it would fail the same
 way, and the photo ends `engine_unavailable` with that text in the API log
-(`frame_engine_call_failed`). See
+(`frame_engine_call_failed`). That line names the gRPC `code`, the number of `attempts`, the
+`request_id` and the `pid` of the API process; every API log line carries `pid`, so the other
+lines of the same process (a `fork_posix.cc` warning, an ExifTool failure) are one filter away.
+`op_engine_call_failures_total{code,outcome}` counts every failed attempt, `retried` or
+`exhausted` ([Monitoring](./monitoring.mdx)). See
 [gRPC status codes](https://grpc.io/docs/guides/status-codes/).
 
 A file the engine cannot read answers `decode_failed` (not transient, it uses an attempt), and one

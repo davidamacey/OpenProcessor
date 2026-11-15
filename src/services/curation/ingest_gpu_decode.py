@@ -225,7 +225,12 @@ async def call_engine(
     except frame_engine.EngineCallError as exc:
         _READY.clear()  # the next batch asks the engine again
         logger.warning(
-            'frame_engine_call_failed', caller=caller, overloaded=exc.overloaded, error=str(exc)
+            'frame_engine_call_failed',
+            caller=caller,
+            overloaded=exc.overloaded,
+            code=exc.code,
+            attempts=exc.attempts,
+            error=str(exc),
         )
         return EngineFailure(OVERLOADED if exc.overloaded else CALL_FAILED, str(exc))
     if answer.status != wire.STATUS_OK:

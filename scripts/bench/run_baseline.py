@@ -55,6 +55,7 @@ from scripts.bench.baseline_report import (
     SCHEMA,
     BatchOutcome,
     compare_reports,
+    failed_photos,
     frame_engine_stages,
     ingest_summary,
     median_range,
@@ -214,9 +215,16 @@ def _ingest_batch(
         _scoped(slug, '/ingest/batch'),
         json={'items': [{'path': p, 'source': 'baseline'} for p in paths]},
     )
-    resp.raise_for_status()
+    if resp.is_error:
+        # a refused request ends the run: say which request and why (raise_for_status names neither)
+        raise RuntimeError(
+            f'/ingest/batch answered {resp.status_code} for {len(paths)} photos '
+            f'(first {paths[0]!r}, request id {resp.headers.get("x-request-id", "-")}): '
+            f'{resp.text[:300]}'
+        )
     elapsed = clock() - started
-    summary = resp.json()['summary']
+    body = resp.json()
+    summary = body['summary']
     return BatchOutcome(
         images=len(paths),
         ok=summary['successful'],
@@ -225,6 +233,7 @@ def _ingest_batch(
         items=summary['crops_indexed'],
         embedded=summary['n_embedded'],
         seconds=elapsed,
+        failures=failed_photos(body.get('results', [])),
     )
 
 
@@ -501,6 +510,7 @@ def run(
             'project': slug,
         },
         'ingest': ingest_summary(measured, wall_s=ingest_wall, input_bytes=measured_bytes),
+        'failed_photos': [f for b in (*batches, *measured) for f in b.failures],
         'stages': stage_wall,
         'storage': storage,
         'gpu': sampler.summary(),

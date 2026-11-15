@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 
 import grpc
 import numpy as np
+from prometheus_client import Counter
 from tenacity import (
     AsyncRetrying,
     RetryCallState,
@@ -40,6 +41,14 @@ from src.utils.retry import TRITON_CALL_ERRORS
 if TYPE_CHECKING:
     from src.clients.triton_pool_core import AsyncTritonPool
 
+
+OP_ENGINE_CALL_FAILURES_TOTAL = Counter(
+    'op_engine_call_failures_total',
+    "Failed attempts of the API's frame-engine calls, by gRPC code (UNAVAILABLE, INTERNAL, "
+    'RESOURCE_EXHAUSTED, ...; NOT_GRPC for a socket or timeout error) and outcome: retried (the '
+    'call was sent again) or exhausted (it was not, and the photo failed).',
+    labelnames=('code', 'outcome'),
+)
 
 FRAME_ENGINE_URL_ENV = 'OP_FRAME_ENGINE_URL'
 DEFAULT_URL = 'frame-engine:8001'
@@ -177,8 +186,14 @@ class EngineCallError(Exception):
     """The engine gave no answer for the image: down, failed, or still overloaded after the
     retries (``overloaded``)."""
 
-    def __init__(self, message: str, *, overloaded: bool) -> None:
+    def __init__(
+        self, message: str, *, overloaded: bool, code: str = 'NOT_GRPC', attempts: int = 1
+    ) -> None:
         self.overloaded = overloaded
+        #: The last attempt's gRPC code (``UNAVAILABLE``, ``INTERNAL``, ...), and how many attempts
+        #: were made.
+        self.code = code
+        self.attempts = attempts
         super().__init__(message)
 
 
@@ -245,6 +260,18 @@ def _status(exc: BaseException | None) -> str | None:
     return exc.status() if isinstance(exc, InferenceServerException) else None
 
 
+def _code(exc: BaseException | None) -> str:
+    status = _status(exc)
+    return status.removeprefix('StatusCode.') if status else 'NOT_GRPC'
+
+
+def _count_retried(state: RetryCallState) -> None:
+    outcome = state.outcome
+    OP_ENGINE_CALL_FAILURES_TOTAL.labels(
+        code=_code(outcome.exception() if outcome is not None else None), outcome='retried'
+    ).inc()
+
+
 def _lost_in_transit(exc: BaseException | None) -> bool:
     """An ``INTERNAL`` the transport or the gRPC library made (``Stream removed``, ``Received
     RST_STREAM with error code 1``, a flow-control violation): the call or its answer was lost
@@ -289,21 +316,28 @@ async def process(
     inputs = [_bytes_input(wire.IMAGE, data), _bytes_input(wire.PLAN, plan.to_json().encode())]
     if boxes is not None:
         inputs.append(_boxes_input(boxes))
+    attempts = 0
     try:
         async for attempt in AsyncRetrying(
             retry=_retry_again,
             wait=_BACKOFF,
             stop=stop_after_delay(DEADLINE_SECONDS),
             sleep=RETRY_SLEEP,
+            before_sleep=_count_retried,
             reraise=True,
         ):
             with attempt:
+                attempts = attempt.retry_state.attempt_number
                 result = await pool.infer(
                     wire.MODEL_NAME, inputs, [], timeout=TIMEOUT_SECONDS, retries=0
                 )
                 return _answer(result, plan)
     except _CALL_ERRORS as exc:
-        raise EngineCallError(str(exc), overloaded=_status(exc) == _OVERLOAD) from exc
+        code = _code(exc)
+        OP_ENGINE_CALL_FAILURES_TOTAL.labels(code=code, outcome='exhausted').inc()
+        raise EngineCallError(
+            str(exc), overloaded=_status(exc) == _OVERLOAD, code=code, attempts=attempts
+        ) from exc
     raise AssertionError('unreachable')  # pragma: no cover - AsyncRetrying always yields
 
 
