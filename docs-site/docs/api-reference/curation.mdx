@@ -37,7 +37,7 @@ The routes outside a project:
 | GET | `/curation/jobs/{job_id}` | One deployment job by id |
 | GET | `/curation/projects` | List projects (`?include_archived=true`), shard capacity, slug limits, display labels |
 | POST | `/curation/projects` | Create a project (`slug`, `display_name`, optional `description`, `clone_settings_from`, `clone_axes`). `202`: the project comes back in status `building` with the `project_create` job in `job_id`; the same `Idempotency-Key` again answers `200` with the first job |
-| GET | `/curation/projects/{project}` | One project: status, revision, counts, resources, flags (`writable`, `deletable`, ...) |
+| GET | `/curation/projects/{project}` | One project: status, revision, counts, resources, flags (`writable`, `deletable`, ...), `encoder_mismatch` (null unless its vectors are of an older encoder) |
 | PATCH | `/curation/projects/{project}` | Edit `display_name` / `description`; needs `expected_revision` |
 | POST | `/curation/projects/{project}/archive` | Archive (read-only). `/unarchive` reverses it |
 | POST | `/curation/projects/{project}/clone_settings` | Copy settings axes from another project |

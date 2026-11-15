@@ -243,12 +243,17 @@ def _triton_index_without_face_models(monkeypatch: pytest.MonkeyPatch) -> None:
         'mobileclip2_s2_image_encoder',
         'mobileclip2_s2_text_encoder',
         'pe_image_encoder',
+        'pe_crop_encoder',
     ]
 
     async def _index(_self: object) -> list[dict[str, str]]:
         return [{'name': n, 'version': '1', 'state': 'READY', 'reason': ''} for n in names]
 
+    async def _config(_self: object, _name: str) -> dict[str, object]:
+        return {'input': [{'name': 'images', 'dims': ['3', '224', '224']}]}
+
     monkeypatch.setattr(triton_control.TritonControlService, 'get_repository_index', _index)
+    monkeypatch.setattr(triton_control.TritonControlService, 'get_model_config', _config)
 
 
 def _patch_infra_only(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -21,9 +21,10 @@ from PIL import Image
 
 from src.clients.pe_encoder import PE_CROP_MODEL
 from src.config import CurationConfig, get_curation_config
+from src.config.project_context import current_project
 from src.config.region_fields import RegionFields, get_region_fields
 from src.core.logging import get_logger
-from src.domain.embedding_spaces import EmbeddingSpaceError, ResolvedSpace
+from src.domain.embedding_spaces import ResolvedSpace, require_encoder
 from src.domain.image_geometry import crop_rect
 from src.schemas.curation.search_target import SearchTarget
 from src.services.curation.semantic_search import _filter_for
@@ -173,13 +174,14 @@ async def semantic_image_search(
     spaces = await resolve_search_spaces(target, space_key, fuse)
 
     async def vector_for(space: ResolvedSpace) -> QueryVector:
-        if space.triton_image_model != PE_CROP_MODEL:
-            raise EmbeddingSpaceError(
-                'embedding_model_unavailable',
-                f'space {space.space_key} needs the image model {space.triton_image_model!r}; '
-                f'this API encodes pictures with {PE_CROP_MODEL!r}',
-                status=422,
-            )
+        require_encoder(
+            project=current_project().record.slug,
+            space_key=space.space_key,
+            target=space.target,
+            space_model=space.triton_image_model,
+            served_model=PE_CROP_MODEL,
+            status=422,
+        )
         try:
             vectors = await pe_encoder.embed_crops([crop])
         except Exception as exc:

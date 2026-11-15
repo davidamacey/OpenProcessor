@@ -46,21 +46,34 @@ _ms_build_flags() {
     printf 'target=%s workspace=%sG%s' "$target" "$ws" "${recipe:+ recipe=$recipe}"
 }
 
-# The PE engine's trtexec profile (_ms_pe_trtexec), recorded in its stamp.
-_ms_pe_flags() {
-    local build
-    build="$(_ms_build_flags pe_image_encoder)" || return 1
-    printf 'min1/opt8/max%s 336x336 %s strongly-typed input=uint8' \
-        "$(trt_max_batch pe_image_encoder 32)" "$build"
+# _ms_pe_size MODEL: the square input of a PE engine, the dims of models/MODEL/config.pbtxt
+# (export/build_pe_trt.sh holds the same two numbers; a test keeps all three equal).
+_ms_pe_size() {
+    case "$1" in
+        pe_image_encoder) echo 336 ;;
+        pe_crop_encoder) echo 224 ;;
+        *) return 1 ;;
+    esac
 }
-_MS_PE_ONNX_REL="pytorch_models/pe_image_encoder.onnx"
+
+# _ms_is_pe_engine MODEL: the PE engines are built by trtexec inside a triton-server container.
+_ms_is_pe_engine() { [[ "${1:-}" == pe_image_encoder || "${1:-}" == pe_crop_encoder ]]; }
+
+# The trtexec profile of a PE engine (_ms_pe_trtexec), recorded in its stamp.
+_ms_pe_flags() {
+    local build size
+    build="$(_ms_build_flags "$1")" || return 1
+    size="$(_ms_pe_size "$1")" || return 1
+    printf 'min1/opt8/max%s %sx%s %s strongly-typed input=uint8' \
+        "$(trt_max_batch "$1" 32)" "$size" "$size" "$build"
+}
 
 # _ms_build_gpu_id MODEL: the card MODEL's engine is built on. The PE trtexec runs in a
 # triton-server container (TRITON_GPU_ID); every other engine is built by the model-export
 # container (API_GPU_ID). Two cards of different architectures must not share one stamp value.
 _ms_build_gpu_id() {
     local id
-    if [[ "${1:-}" == pe_image_encoder ]]; then
+    if _ms_is_pe_engine "${1:-}"; then
         id="${TRITON_GPU_ID:-0}"
     else
         id="${API_GPU_ID:-${TRITON_GPU_ID:-0}}"
@@ -190,7 +203,7 @@ model_setup_stamp_stale() {
 }
 
 # _ms_adopt_unstamped MODEL ONNX_REL PRECISION: writes a build stamp for an engine
-# that has none (every engine except the PE image encoder was built unstamped before
+# that has none (every engine except the PE encoders was built unstamped before
 # per-engine stamps existed), but only when the engine is provably valid for this
 # host; returns 1 otherwise and the caller rebuilds. Proof, all required:
 #   - the engine file exists and is non-empty;
@@ -207,7 +220,7 @@ model_setup_stamp_stale() {
 # replaces it with the real hash the first time the ONNX is seen.
 _ms_adopt_unstamped() {
     local model="$1" onnx_rel="$2" precision="$3" plan dtype cc trt pe pe_trt pe_cc have_onnx
-    [[ "$model" == pe_image_encoder ]] && return 1
+    _ms_is_pe_engine "$model" && return 1
     # No stamp proves no recipe: an engine of a model with a recipe is rebuilt, never adopted.
     [[ -z "$(_ms_recipe "$model")" ]] || return 1
     plan="${OP_DIR:?OP_DIR not set}/models/${model}/1/model.plan"

@@ -24,6 +24,13 @@ Examples assume `API=http://localhost:4603`.
   and `failed` cannot be bound.
 - **Revision.** Every lifecycle change bumps `revision`; PATCH, archive and unarchive need
   `expected_revision`, so two clients cannot overwrite each other.
+- **Encoder mismatch.** A project made before the crop encoder keeps item and box vectors of
+  the older encoder (`pe_core_l14_336`), which cannot be compared with the crop encoder's. Its
+  record then carries `encoder_mismatch` (null for every other project): the spaces, both models
+  and the remedy. Its writers refuse (ingest, import, reprocess, the embedding of a drawn or
+  moved box, which is kept and served `deferred`) and the detection worker writes no box vectors
+  for it, so its boxes are missing from clusters. Nothing is migrated: re-ingest the photos into a
+  new project.
 - **Resources** are fixed at creation:
 
 | Resource | Location |

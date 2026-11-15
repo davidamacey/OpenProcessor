@@ -53,6 +53,7 @@ declare -gA EXPORT_TIMES=(
     # docs/CURATION.md "Models you must supply"), so it must be built
     # before Triton's first start, same as every other model above.
     ["pe_image_encoder"]="12"
+    ["pe_crop_encoder"]="10"
 )
 
 # =============================================================================

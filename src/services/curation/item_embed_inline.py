@@ -16,6 +16,7 @@ from tritonclient.utils import InferenceServerException
 
 from src.config import get_curation_config, get_region_fields
 from src.core.logging import get_logger
+from src.domain.embedding_spaces import EmbeddingSpaceError
 from src.domain.embedding_state import DEFERRED, EmbeddingState
 from src.services.curation.reprocess_embed import EmbedTarget, reembed_items
 from src.services.curation.reprocess_targets import items_by_terms
@@ -73,6 +74,9 @@ async def embed_item_inline(
             for cid, src in rows
         ]
         counts = await reembed_items(opensearch, pe, targets, parts=CROP_PART, only_missing=True)
+    except EmbeddingSpaceError as exc:  # a project of another encoder: the refusal is the message
+        logger.warning('inline_embed_refused', crop_id=crop_id, error=exc.detail)
+        return EmbedOutcome(DEFERRED, f'Saved, but not embedded. {exc.detail}')
     except _EMBED_ERRORS as exc:  # the write stands whatever the encoder or the read does
         logger.warning('inline_embed_failed', crop_id=crop_id, error=str(exc))
         return EmbedOutcome(DEFERRED, EMBED_FAILED_MESSAGE)

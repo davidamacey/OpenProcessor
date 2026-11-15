@@ -19,6 +19,7 @@ from src.clients.occ import occ_skip_on_conflict_bulk
 from src.config import get_region_fields
 from src.config.project_context import project_api_base
 from src.core.logging import get_logger
+from src.domain.embedding_spaces import EmbeddingSpaceError, Target
 from src.domain.nested_limit import NestedLimitError, guard_write
 from src.services.curation.region_box_edits import same_box
 from src.services.curation.region_box_embeddings import entry_for, write_box_embeddings
@@ -28,6 +29,7 @@ from src.services.curation.region_box_pass import (
     worker_stamps,
 )
 from src.services.curation.wire import region_event_payload
+from src.services.embedding_spaces.encoder_guard import require_encoder_for
 from src.services.embedding_spaces.readers import vector_source_excludes
 from src.services.near_duplicates import pending as near_dup_pending
 
@@ -335,7 +337,12 @@ async def _write_box_embeddings(opensearch: AsyncOpenSearch, tasks: list[_ItemTa
     if not by_crop:
         return
     try:
+        await require_encoder_for(Target.BOX)
         await write_box_embeddings(opensearch, index=items_index(), by_crop=by_crop)
+    except EmbeddingSpaceError as exc:
+        # The vectors were made by the crop encoder; this project's box space is another model's.
+        # They are written nowhere (the boxes themselves landed); the refusal says what to do.
+        logger.error('region_box_embeddings_refused', error=exc.detail, n=len(by_crop))
     except OpenSearchException as exc:
         logger.warning('region_box_embeddings_write_failed', error=str(exc), n=len(by_crop))
 

@@ -301,15 +301,16 @@ _MS_TRT_ENV=()
 # Same as PE_NORMALIZE in export/build_pe_trt.sh (a test keeps them equal).
 _MS_PE_NORMALIZE="--mean 0.5 0.5 0.5 --std 0.5 0.5 0.5"
 
-# _ms_pe_uint8_prepare: uint8 input prefix after the FP16 bake (which keeps the I/O
+# _ms_pe_uint8_prepare MODEL: uint8 input prefix after the FP16 bake (which keeps the I/O
 # float32), then fail unless the input datatype is the one config.pbtxt declares.
 _ms_pe_uint8_prepare() {
+    local model="$1"
     # shellcheck disable=SC2086
-    _ms_export python /app/export/uint8_input.py /app/models/pe_image_encoder.build.onnx \
-        /app/models/pe_image_encoder.build.u8.onnx $_MS_PE_NORMALIZE \
+    _ms_export python /app/export/uint8_input.py "/app/models/${model}.build.onnx" \
+        "/app/models/${model}.build.u8.onnx" $_MS_PE_NORMALIZE \
         && _ms_export python /app/export/check_input_dtype.py \
-            /app/models/pe_image_encoder.build.u8.onnx /app/models/pe_image_encoder/config.pbtxt \
-        || { log_error "pe_image_encoder: the engine input would not match config.pbtxt; Triton would refuse to load it"; return 1; }
+            "/app/models/${model}.build.u8.onnx" "/app/models/${model}/config.pbtxt" \
+        || { log_error "${model}: the engine input would not match config.pbtxt; Triton would refuse to load it"; return 1; }
 }
 
 # _ms_config_input_dtype MODEL: the input datatype (UINT8, FP32, ...) the shipped
@@ -320,15 +321,17 @@ _ms_config_input_dtype() {
     awk '/^input[[:space:]]*[\[{]/ {in_in=1} in_in && /data_type:/ {sub(/.*TYPE_/, ""); print $1; exit}' "$cfg"
 }
 
+# _ms_pe_trtexec MODEL ONNX: ONNX is a file name under /models in the triton-server container.
 _ms_pe_trtexec() {
-    local onnx="$1"
+    local model="$1" onnx="$2" size
+    size="$(_ms_pe_size "$model")" || return 1
     _ms_triton trtexec \
         --onnx="/models/${onnx}" \
-        --saveEngine=/models/pe_image_encoder/1/model.plan \
-        --minShapes=images:1x3x336x336 \
-        --optShapes=images:8x3x336x336 \
-        --maxShapes=images:"$(trt_max_batch pe_image_encoder 32)"x3x336x336 \
-        --memPoolSize=workspace:"$(trt_workspace_gb pe_image_encoder)"G \
+        --saveEngine="/models/${model}/1/model.plan" \
+        --minShapes=images:1x3x"${size}"x"${size}" \
+        --optShapes=images:8x3x"${size}"x"${size}" \
+        --maxShapes=images:"$(trt_max_batch "$model" 32)"x3x"${size}"x"${size}" \
+        --memPoolSize=workspace:"$(trt_workspace_gb "$model")"G \
         --skipInference
 }
 
@@ -351,31 +354,29 @@ _ms_warn_if_degraded() {
     return "$degraded"
 }
 
-# _ms_pe_build_engine: FP16-baked ONNX first, FP32 retry (the same
+# _ms_pe_build_engine MODEL: FP16-baked ONNX first, FP32 retry (the same
 # fallback export/build_pe_trt.sh has), entirely inside the containers. The
 # FP32 retry is kept (an FP32 engine beats none) but is recorded in the
 # precision ledger with the FP16 failure reason, never as a clean build.
 _ms_pe_build_engine() {
-    local attempt_log raw reason
+    local model="$1" attempt_log raw reason onnx_rel="pytorch_models/${1}.onnx" build="${1}.build"
     if [[ "${OP_DRY_RUN:-0}" == "1" ]]; then
-        _ms_export python /app/export/trt_utils.py /app/pytorch_models/pe_image_encoder.onnx \
-            /app/models/pe_image_encoder.build.onnx
-        _ms_pe_uint8_prepare
-        _ms_pe_trtexec pe_image_encoder.build.u8.onnx
+        _ms_export python /app/export/trt_utils.py "/app/${onnx_rel}" "/app/models/${build}.onnx"
+        _ms_pe_uint8_prepare "$model"
+        _ms_pe_trtexec "$model" "${build}.u8.onnx"
         return 0
     fi
-    attempt_log="$(_model_setup_logdir)/pe_image_trt.fp16_attempt.log"
+    attempt_log="$(_model_setup_logdir)/${model%_encoder}_trt.fp16_attempt.log"
     raw="$(mktemp "${attempt_log}.XXXXXX")"
-    _ms_export mkdir -p /app/models/pe_image_encoder/1
-    if { _ms_export python /app/export/trt_utils.py /app/pytorch_models/pe_image_encoder.onnx \
-            /app/models/pe_image_encoder.build.onnx \
-        && _ms_pe_uint8_prepare \
-        && _ms_pe_trtexec pe_image_encoder.build.u8.onnx; } >"$raw" 2>&1; then
+    _ms_export mkdir -p "/app/models/${model}/1"
+    if { _ms_export python /app/export/trt_utils.py "/app/${onnx_rel}" "/app/models/${build}.onnx" \
+        && _ms_pe_uint8_prepare "$model" \
+        && _ms_pe_trtexec "$model" "${build}.u8.onnx"; } >"$raw" 2>&1; then
         ( umask 077; model_setup_redact < "$raw" > "$attempt_log" )
         rm -f "$raw"
         cat "$attempt_log"
-        _ms_export rm -f /app/models/pe_image_encoder.build.onnx /app/models/pe_image_encoder.build.u8.onnx
-        _ms_record_precision pe_image_encoder fp16 "" "$_MS_PE_ONNX_REL" "$(_ms_pe_flags)"
+        _ms_export rm -f "/app/models/${build}.onnx" "/app/models/${build}.u8.onnx"
+        _ms_record_precision "$model" fp16 "" "$onnx_rel" "$(_ms_pe_flags "$model")"
         return 0
     fi
     ( umask 077; model_setup_redact < "$raw" > "$attempt_log" )
@@ -384,10 +385,10 @@ _ms_pe_build_engine() {
     reason="$(grep -m1 -E 'bake_fp16_onnx failed|\[E\]|Error' "$attempt_log" | cut -c1-300)"
     reason="${reason:-FP16 build failed, see ${attempt_log}}"
     echo "FP16 engine build failed (${reason}); retrying from the FP32 ONNX"
-    _ms_export cp /app/pytorch_models/pe_image_encoder.onnx /app/models/pe_image_encoder.build.onnx
-    if _ms_pe_uint8_prepare && _ms_pe_trtexec pe_image_encoder.build.u8.onnx; then
-        _ms_export rm -f /app/models/pe_image_encoder.build.onnx /app/models/pe_image_encoder.build.u8.onnx
-        _ms_record_precision pe_image_encoder fp32_fallback "FP16 build failed: ${reason}" "$_MS_PE_ONNX_REL" "$(_ms_pe_flags)"
+    _ms_export cp "/app/${onnx_rel}" "/app/models/${build}.onnx"
+    if _ms_pe_uint8_prepare "$model" && _ms_pe_trtexec "$model" "${build}.u8.onnx"; then
+        _ms_export rm -f "/app/models/${build}.onnx" "/app/models/${build}.u8.onnx"
+        _ms_record_precision "$model" fp32_fallback "FP16 build failed: ${reason}" "$onnx_rel" "$(_ms_pe_flags "$model")"
         return 0
     fi
     return 1
@@ -440,7 +441,9 @@ _ms_run_group_steps() {
         pe)
             "$runner" pe_weights _ms_export python /app/export/download_pe_weights.py || return 1
             "$runner" pe_image_onnx _ms_export python /app/export/export_pe_image_encoder.py || return 1
-            "$runner" pe_image_trt _ms_pe_build_engine || return 1
+            "$runner" pe_image_trt _ms_pe_build_engine pe_image_encoder || return 1
+            "$runner" pe_crop_onnx _ms_export python /app/export/export_pe_image_encoder.py --crop || return 1
+            "$runner" pe_crop_trt _ms_pe_build_engine pe_crop_encoder || return 1
             "$runner" pe_text _ms_export python /app/export/export_pe_text_encoder.py \
                 --install-triton --models-dir /app/models || return 1
             ;;

@@ -382,12 +382,15 @@ def test_a_degraded_group_is_not_skipped_as_up_to_date(tmp_path: Path, bash) -> 
     models = tmp_path / 'models'
     (models / 'pe_image_encoder' / '1').mkdir(parents=True)
     (models / 'pe_image_encoder' / '1' / 'model.plan').write_text('x')
+    (models / 'pe_crop_encoder' / '1').mkdir(parents=True)
+    (models / 'pe_crop_encoder' / '1' / 'model.plan').write_text('x')
     (models / 'pe_text_encoder' / '1').mkdir(parents=True)
     (models / 'pe_text_encoder' / '1' / 'model.plan').write_text('x')
     (tmp_path / '.install').mkdir()
     (tmp_path / '.install' / 'state.json').write_text('{"triton_image_digest": "sha256:abc"}')
     _put_onnx(tmp_path)
-    (tmp_path / '.install' / 'precision.tsv').write_text(_stamp_row())
+    (tmp_path / 'pytorch_models' / 'pe_crop_encoder.onnx').write_bytes(ONNX_BYTES)
+    (tmp_path / '.install' / 'precision.tsv').write_text(_pe_stamps())
     base = (
         f'source {LIB}; OP_DIR="{tmp_path}"; MODEL_SETUP_TRITON_DIGEST=sha256:abc; {STAMP_STUBS}'
         'triton_model_ready() { return 0; }; triton_load_and_wait() { return 0; }; '
@@ -425,7 +428,11 @@ def test_pe_build_records_a_full_stamp(tmp_path: Path, bash) -> None:
 def _installed_pe(tmp_path: Path, *, stamp: str | None) -> str:
     """An installed, READY, up-to-date-looking PE group; returns the bash prelude."""
     models = tmp_path / 'models'
-    for rel in ('pe_image_encoder/1/model.plan', 'pe_text_encoder/1/model.plan'):
+    for rel in (
+        'pe_image_encoder/1/model.plan',
+        'pe_crop_encoder/1/model.plan',
+        'pe_text_encoder/1/model.plan',
+    ):
         (models / rel).parent.mkdir(parents=True, exist_ok=True)
         (models / rel).write_text('x')
     (tmp_path / '.install').mkdir(exist_ok=True)
@@ -434,6 +441,7 @@ def _installed_pe(tmp_path: Path, *, stamp: str | None) -> str:
     if stamp is not None:
         (tmp_path / '.install' / 'precision.tsv').write_text(stamp)
     _put_onnx(tmp_path)
+    (tmp_path / 'pytorch_models' / 'pe_crop_encoder.onnx').write_bytes(ONNX_BYTES)
     return (
         f'source {LIB}; OP_DIR="{tmp_path}"; MODEL_SETUP_TRITON_DIGEST=sha256:abc; {STAMP_STUBS}'
         'triton_model_ready() { return 0; }; triton_load_and_wait() { return 0; }; '
@@ -441,20 +449,32 @@ def _installed_pe(tmp_path: Path, *, stamp: str | None) -> str:
     )
 
 
-def _stamp_row(*, precision: str = 'fp16', cc: str = '8.6', sha: str = ONNX_SHA) -> str:
-    return f'pe_image_encoder\t{precision}\t\tv110100\t{cc}\t{sha}\tflags target=default workspace=8G\n'
+def _stamp_row(
+    *,
+    precision: str = 'fp16',
+    cc: str = '8.6',
+    sha: str = ONNX_SHA,
+    model: str = 'pe_image_encoder',
+) -> str:
+    workspace = 4 if model == 'pe_crop_encoder' else 8  # trt_settings.sh: only the frame PE gets 8
+    return f'{model}\t{precision}\t\tv110100\t{cc}\t{sha}\tflags target=default workspace={workspace}G\n'
+
+
+def _pe_stamps(**kw) -> str:
+    """The stamps of an installed PE group: the frame and the crop encoder."""
+    return _stamp_row(**kw) + _stamp_row(model='pe_crop_encoder', **kw)
 
 
 def test_a_current_stamp_lets_the_group_skip(tmp_path: Path, bash) -> None:
-    prelude = _installed_pe(tmp_path, stamp=_stamp_row())
+    prelude = _installed_pe(tmp_path, stamp=_pe_stamps())
     assert 'up to date, skipped' in bash(prelude + 'model_setup_run_group pe').stdout
 
 
 def test_a_stale_or_missing_stamp_forces_a_rebuild(tmp_path: Path, bash) -> None:
     cases = {
         'no build stamp': None,
-        'compute capability 7.5': _stamp_row(cc='7.5'),
-        'ONNX changed': _stamp_row(sha='0' * 64),
+        'compute capability 7.5': _pe_stamps(cc='7.5'),
+        'ONNX changed': _pe_stamps(sha='0' * 64),
     }
     for reason, stamp in cases.items():
         prelude = _installed_pe(tmp_path, stamp=stamp)

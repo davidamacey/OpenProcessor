@@ -207,8 +207,18 @@ The `ProjectSummary` carries `slug`, `display_name`, `description`, `prefix`
 (the project's API base), `status`, `writable`, `selectable`, `is_default`,
 `deletable`, `archivable`, `unarchivable`, `revision`, `created_at`,
 `updated_at`, `counts` (`images`, `items`, `validated`), `origin` (set for a
-combine target) and `paused`. A client enables buttons from the boolean flags
+combine target), `paused` and `encoder_mismatch`. A client enables buttons from the boolean flags
 and does not recompute them from `status`.
+
+`encoder_mismatch` is null for a project whose item and box spaces are the
+deployment's encoders' (`pe_crop_encoder` for both). For a project made before the
+crop encoder it is `{message, spaces[]}` with one `{target, space_key,
+registered_model, encoder_model, message}` per space of the other model, derived
+at read time from the registered spaces and never stored. That project's writers
+refuse with the same `message` (`409 embedding_model_unavailable`; a drawn or
+moved box is kept and served `embedding_state: deferred` with it) and the
+detection worker writes no box vectors for it. There is no migration: the
+remedy is a new project.
 
 Lifecycle responses carry `warnings[]` (for example `shard_budget_high`) and
 `keymap_clone_conflicts[]` (keymap actions whose combo collides with a class

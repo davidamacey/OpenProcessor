@@ -169,6 +169,52 @@ class EmbeddingSpaceError(Exception):
         self.status = status
 
 
+def encoder_mismatch_message(
+    *,
+    project: str,
+    space_key: str,
+    target: Target,
+    space_model: str | None,
+    served_model: str,
+) -> str | None:
+    """Why a vector of ``served_model`` does not belong in the space registered for
+    ``space_model`` (``None`` when it does): names the project, the space and both models, and the
+    remedy (nothing is migrated between models, so the photos are re-ingested into a new project)."""
+    if space_model == served_model:
+        return None
+    return (
+        f'project {project}: the {target.value} space {space_key} holds vectors of '
+        f'{space_model!r}, but this encoder makes {target.value} vectors with {served_model!r}; '
+        f'they are not comparable and nothing is migrated: re-ingest the photos into a new project'
+    )
+
+
+def require_encoder(
+    *,
+    project: str,
+    space_key: str,
+    target: Target,
+    space_model: str | None,
+    served_model: str,
+    status: int = 409,
+) -> None:
+    """Refuse a vector of ``served_model`` for a space registered for ``space_model``.
+
+    The one check every writer, the re-index job and search by picture make before they put a
+    vector of the encoder they hold next to the vectors of a space; the project record serves the
+    same finding (:func:`encoder_mismatch_message`).
+    """
+    msg = encoder_mismatch_message(
+        project=project,
+        space_key=space_key,
+        target=target,
+        space_model=space_model,
+        served_model=served_model,
+    )
+    if msg is not None:
+        raise EmbeddingSpaceError('embedding_model_unavailable', msg, status=status)
+
+
 class EmbeddingSpaceMismatch(Exception):  # noqa: N818 - names the broken invariant, like the plan
     """A query vector of one space was aimed at another space's field.
 
