@@ -735,3 +735,18 @@ Owner = the slice whose exit removes every part of the id; parts done earlier ar
 
 11 + 21 + 9 = 41 writer ids, each with one owner. Shapes: 15b section 12 (80, each in one slice);
 S1a owns 6, S1b 15, S2 10, S3 10, S4 4, S5 3, S6 8, S7 4, S8 12, S9 8 (kept).
+
+## Coordinator answers (2026-11-15)
+
+| # | Question | Answer |
+|---|---|---|
+| 1 | Seven object sorts have no index | No refusal by size. Every sort the interface offers gets an index on the table that holds its value (a score sorts on its score table, which does not count against the limit on the state table). The read takes one of two paths chosen by the capped count it already has: under the cap, sort the filtered rows; over it, walk the sort's index in order and apply the filter. Both paths are measured in slice S1b at 10 million rows. A sort that misses the page bar on both paths is listed for the owner as a candidate to remove; it is not answered with an error. |
+| 2 | Box rows list the newest object first, not the newest detected box | Accepted; listed in the contract diff. |
+| 3 | The region stage polls its result rows, not the analysis ledger | Accepted: the cascade is a state machine per object. The ledger still records the finished state. |
+| 4 | Review-tab membership would be written twice, in SQL and in Python | One source: a declarative table of tabs and their clauses, read by the SQL builder and by the Python evaluator. A property test holds the two interpreters equal on generated objects. No clause is written by hand in two places. |
+| 5 | Cluster cards filtered by something other than the detector class cannot use the summaries | Measure on the public sets and on set P before limiting any filter; report the numbers. |
+| 6 | Delete the 0.6.0 upgrade path in slice S9 | Planned as proposed, and listed for the owner to confirm before S9 starts: a 0.6.0 installation then moves its work by exporting its labelled datasets and importing them, not by an in-place upgrade. |
+| 7 | Core API data stays on the global search indexes until phase 3 | Confirmed; the reserved core project waits with it. |
+| 8 | Cluster placement at ingest is removed in S1a and returns in S6 as membership rows | Accepted. |
+| 9 | Replace the live bulk conditional-write test with a two-client claim test in S4 | Accepted. |
+
