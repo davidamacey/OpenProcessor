@@ -1,4 +1,4 @@
-"""JPEG marker vocabulary and the EXIF orientation reader, standard library only.
+"""JPEG marker vocabulary, the EXIF orientation reader and the ICC profile joiner, standard library only.
 
 Shared by the frame engine's header routing (``frame_engine/prep_geometry.py``) and the decode
 probes (``scripts/bench/gpu_decode_lib.py``), which read headers without decoding.
@@ -21,6 +21,22 @@ PROGRESSIVE = frozenset({0xC2, 0xC6, 0xCA, 0xCE})
 LOSSLESS = frozenset({0xC3, 0xC7, 0xCB, 0xCF})
 #: Markers with no length field.
 STANDALONE = frozenset({0x01, *range(0xD0, 0xD8)})
+#: An APP2 segment that carries one chunk of the embedded ICC profile (ICC.1 annex B.4).
+ICC_MARKER = 0xE2
+ICC_TAG = b'ICC_PROFILE\x00'
+
+
+def join_icc_chunks(chunks: list[bytes]) -> bytes | None:
+    """The ICC profile split over the APP2 payloads ``chunks`` (each ``ICC_PROFILE\\0``, its
+    sequence number, the chunk count, then its bytes), joined in sequence order; ``None`` when the
+    count does not match. Pillow's ``JpegImagePlugin`` rule, so the GPU and CPU routes see the same
+    profile."""
+    if not chunks or any(len(c) < 14 for c in chunks):
+        return None
+    ordered = sorted(chunks)
+    if ordered[0][13] != len(ordered):
+        return None
+    return b''.join(c[14:] for c in ordered)
 
 
 def exif_orientation(payload: bytes) -> int:

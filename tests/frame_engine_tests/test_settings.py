@@ -26,9 +26,10 @@ def test_values_are_read_and_checked(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv('OP_FRAME_ENGINE_WORKERS', '8')
     monkeypatch.setenv('OP_FRAME_ENGINE_STAGE_SYNC', 'yes')
     monkeypatch.setenv('OP_FRAME_ENGINE_TRITON_URL', 'triton-gpu2:8001')
+    monkeypatch.setenv('OP_FRAME_ENGINE_COLOUR_TABLES', '5')
     s = EngineSettings.from_env()
-    assert (s.transport, s.workers, s.stage_sync, s.triton_url) == (
-        'body', 8, True, 'triton-gpu2:8001',
+    assert (s.transport, s.workers, s.stage_sync, s.triton_url, s.colour_tables) == (
+        'body', 8, True, 'triton-gpu2:8001', 5,
     )  # fmt: skip
 
 
@@ -44,6 +45,8 @@ def test_values_are_read_and_checked(monkeypatch: pytest.MonkeyPatch) -> None:
         ('BUDGET_MIB', '8192'),  # above POOL_MIB
         ('TRITON_TIMEOUT_SECONDS', '90'),  # above REQUEST_DEADLINE_SECONDS
         ('REQUEST_DEADLINE_SECONDS', '0.5'),
+        ('COLOUR_TABLES', '0'),
+        ('COLOUR_TABLES', '65'),
     ],
 )
 def test_a_bad_value_refuses_the_start(
@@ -55,12 +58,15 @@ def test_a_bad_value_refuses_the_start(
 
 
 def test_the_wire_module_imports_without_the_api_config() -> None:
-    """The engine image carries src/domain and nothing else of src (docker/frame-engine)."""
+    """The engine image carries src/domain and, of src/utils, only the colour-profile rule
+    (docker/frame-engine)."""
     code = (
         'import sys, src.domain.frame_engine_wire, src.domain.image_geometry,'
-        ' frame_engine.front, frame_engine.transport, frame_engine.prep_geometry;'
+        ' frame_engine.front, frame_engine.transport, frame_engine.prep_geometry,'
+        ' src.utils.icc_srgb;'
         "bad = [m for m in sys.modules if m.startswith(('pydantic', 'fastapi'))"
-        " or (m.startswith('src.') and not m.startswith('src.domain'))];"
+        " or (m.startswith('src.') and not m.startswith('src.domain')"
+        " and m not in ('src.utils', 'src.utils.icc_srgb'))];"
         'print(bad); raise SystemExit(1 if bad else 0)'
     )
     run = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True, check=False)

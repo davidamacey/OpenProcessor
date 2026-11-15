@@ -148,10 +148,10 @@ def sessions(monkeypatch: pytest.MonkeyPatch) -> Sessions:
     monkeypatch.setattr(pending_repo, 'enqueue_pending', enqueue)
     monkeypatch.setattr(assign, 'place_new', place)
 
-    async def inserted(*_a: Any, **_k: Any) -> Any:
-        return SimpleNamespace(project_id=None)
+    async def inserted(_session: Any, _target: Any, events: Any) -> Any:
+        return [SimpleNamespace(project_id=None) for _ in events]
 
-    monkeypatch.setattr(publish_module, 'insert_event_async', inserted)
+    monkeypatch.setattr(publish_module, 'insert_events_async', inserted)
     monkeypatch.setattr(publish_module, '_pend_wake', lambda *_a, **_k: None)
     monkeypatch.setattr(publish_module, 'deployment_tx', lambda s, _r: tx(s, None))
     for (module, name), real in _REAL.items():

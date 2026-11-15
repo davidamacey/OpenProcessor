@@ -9,6 +9,7 @@ plan leaves out issues no model call and produces no output.
 from __future__ import annotations
 
 import importlib
+import io
 import json
 import sys
 import threading
@@ -92,12 +93,30 @@ def _fake_cupy() -> types.ModuleType:
     cp.empty = _empty
     cp.ascontiguousarray = _dev
     cp.asnumpy = np.asarray
+    cp.asarray = lambda a: _dev(np.asarray(a))
+    cp.gathers = 0
+
+    class _RawKernel:
+        """The colour gather on the host: ``table[r*65536 + g*256 + b]`` per pixel, in place."""
+
+        def __init__(self, _src: str, _name: str) -> None:
+            pass
+
+        def __call__(self, _grid: Any, _block: Any, args: tuple[Any, ...]) -> None:
+            cp.gathers += 1
+            frame, n, table = args
+            px = np.asarray(frame).reshape(int(n), 3)
+            idx = px[:, 0].astype(np.int64) * 65536 + px[:, 1].astype(np.int64) * 256 + px[:, 2]
+            px[...] = np.asarray(table).reshape(-1, 3)[idx]
+
+    cp.RawKernel = _RawKernel
     return cp
 
 
 class _Lanes:
     fail_with: Exception | None = None
     seen_streams: list[Any] = []
+    last: Any = None
 
     def __init__(self, **_k: Any) -> None:
         pass
@@ -107,7 +126,8 @@ class _Lanes:
         if _Lanes.fail_with is not None:
             raise _Lanes.fail_with
         rng = np.random.default_rng(len(data))
-        return _dev(rng.integers(0, 256, (H, W, 3), dtype=np.uint8)), 'fake'
+        _Lanes.last = _dev(rng.integers(0, 256, (H, W, 3), dtype=np.uint8))
+        return _Lanes.last, 'fake'
 
 
 class _Kernels:
@@ -217,7 +237,7 @@ class _Transport:
 def m_needs_cupy(name: str) -> bool:
     """The engine modules that import CuPy at load (re-imported against the stand-in)."""
     return name in ('frame_engine.engine', 'frame_engine.nvjpeg_lanes', 'frame_engine.prep_kernels',
-                    'frame_engine.faces.kernels', 'frame_engine.ocr.kernels'
+                    'frame_engine.colour', 'frame_engine.faces.kernels', 'frame_engine.ocr.kernels'
                     ) or name.startswith('frame_engine.branches')  # fmt: skip
 
 
@@ -1175,3 +1195,64 @@ def test_a_plan_without_renditions_pays_nothing_for_them(eng: Any) -> None:
     assert 'derivative_jpegs' not in r.outputs
     assert 'derivatives' not in r.branches
     assert not {'derivative_render', 'derivative_jpeg'} & {s for s, n in _seen(engine).items() if n}
+
+
+# ------------------------------------------------------------------ colour
+
+
+def _tagged_jpeg(icc_name: str) -> bytes:
+    from pathlib import Path
+
+    from PIL import Image
+
+    icc = (Path(__file__).resolve().parents[1] / 'fixtures' / 'icc' / icc_name).read_bytes()
+    buf = io.BytesIO()
+    Image.new('RGB', (W, H), (10, 20, 30)).save(buf, 'JPEG', quality=85, icc_profile=icc)
+    return buf.getvalue()
+
+
+def _colour_counts(engine: Any) -> dict[str, int]:
+    return {
+        s.labels['outcome']: int(s.value)
+        for metric in engine.metrics.colour.collect()
+        for s in metric.samples
+        if s.name.endswith('_total')
+    }
+
+
+def test_a_p3_photo_is_converted_to_srgb_before_any_branch(eng: Any) -> None:
+    from PIL import Image, ImageCms
+
+    engine = eng()
+    data = _tagged_jpeg('DisplayP3-v4.icc')
+    rng = np.random.default_rng(len(data))
+    raw = rng.integers(0, 256, (H, W, 3), dtype=np.uint8)  # what the stand-in decoder returns
+    ref = np.asarray(ImageCms.profileToProfile(
+        Image.fromarray(raw), ImageCms.ImageCmsProfile(io.BytesIO(_icc(data))),
+        ImageCms.ImageCmsProfile(ImageCms.createProfile('sRGB')), outputMode='RGB',
+    ))  # fmt: skip
+    r = _run(engine, data=data)
+    assert r.status == 'ok'
+    assert np.array_equal(np.asarray(_Lanes.last), ref)
+    assert _colour_counts(engine) == {'converted': 1}
+    assert engine.colour.table_bytes == 3 << 24
+
+
+@pytest.mark.parametrize('icc_name', [None, 'colord-sRGB.icc'])
+def test_untagged_and_srgb_photos_are_not_touched(eng: Any, icc_name: str | None) -> None:
+    engine = eng()
+    data = _tagged_jpeg(icc_name) if icc_name else _jpeg()
+    rng = np.random.default_rng(len(data))
+    raw = rng.integers(0, 256, (H, W, 3), dtype=np.uint8)
+    _run(engine, data=data)
+    assert np.array_equal(np.asarray(_Lanes.last), raw)
+    assert (eng.cp.gathers, engine.colour.table_bytes) == (0, 0)
+    assert _colour_counts(engine) == {'srgb': 1}
+
+
+def _icc(data: bytes) -> bytes:
+    from frame_engine.prep_geometry import jpeg_header
+
+    icc = jpeg_header(data).icc
+    assert icc is not None
+    return icc
