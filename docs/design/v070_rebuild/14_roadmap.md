@@ -275,8 +275,10 @@ throughput, so a port is decided by a table, not an opinion.
 - GPU sizes come from profiles built from measured memory (17 N2, item E4 of 13); the 12 GB card
   starts inside its memory. A second card is either one model server across both cards or one engine
   and model server per card: 17 N2's two-card row decides.
-- Cluster orchestration is not planned. The API has no authentication: nothing is exposed beyond
-  loopback or a LAN with the owner's consent until authentication exists (G14, question 4).
+- Cluster orchestration is not planned. The API has no authentication and gets none in this
+  programme (owner, 2026-11-15: added later, for local or cloud use). A deployment therefore keeps
+  the API on loopback, a LAN or a private network, with the owner's consent; that is a deployment
+  rule, not a feature to build (G14, question 4).
 
 ## 8. How the work runs
 
@@ -303,14 +305,14 @@ throughput, so a port is decided by a table, not an opinion.
   with the reason.
 - In the owner's Rust server: a worktree and branch per lane, hooks on, no push without the owner's yes.
 
-## 9. Open questions for the owner
+## 9. Questions for the owner (all four answered 2026-11-15; none open)
 
-| # | Question | Recommendation |
+| # | Question | The owner's answer |
 |---|---|---|
-| 1 | Delete the 0.6.0 in-place upgrade code (15c, coordinator answer 6)? A 0.6.0 installation would move its work by exporting and importing labelled datasets | yes; it is the entry condition of storage wave C |
-| 2 | A trained model whose training set held a photo erased later: retrain, delete, or keep (15 section 13)? | keep the weights, delete exports and training-data copies holding the subject (the current rule), and say so in the docs |
-| 3 | Which tracks make the 0.7.0 tag: the integration branch as it is, or after N3, or after storage wave G? | tag after N3 (one engine shipped, the paper's table measured); ship the storage rebuild in the next release, since it needs a re-ingest |
-| 4 | Cloud: does a cloud deploy wait for authentication (10 F5), or run only behind an authenticating proxy? | wait for F5, or proxy-only with the API never published |
+| 1 | Delete the 0.6.0 in-place upgrade code (15c, coordinator answer 6)? | Yes. 0.7.0 is a new build for speed; a 0.6.0 installation moves its work by exporting and importing labelled datasets. Storage wave C may start on this |
+| 2 | A trained model whose training set held a photo erased later | Keep the model and record that a photo of its training set is missing. Expected to be rare, since exports are kept |
+| 3 | What makes the 0.7.0 tag | No tag until the whole programme of this roadmap is done: the backend rewrite (engine, storage, the API where measured), the frontend updated for it with the gallery, the features on this map, and the milestone's issues closed as far as possible. Pushes of the integration branch after green sweeps continue; a tag does not |
+| 4 | Authentication before a cloud deploy | Not now. The app runs without a login, locally or in the cloud, and authentication is added later. Speed, processing and the features come first. Until it exists the API stays unpublished beyond loopback, a LAN or a private network of the owner's choosing (section 7) |
 
 Answered since the earlier lists, kept as a record: face tiles on large photos are built as F1
 measured them, and faces are on by default in library projects only (owner, 2026-11-13); the
