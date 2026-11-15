@@ -127,6 +127,7 @@ def render_protocol() -> dict[str, Any]:
     from src.clients import frame_engine as client
     from src.domain import decode_route, frame_engine_wire as wire
     from src.domain.image_geometry import CROP_FILL
+    from src.domain.processing_plan import CONDITIONAL
 
     model_version = str(wire.PROTOCOL_VERSION)
     input_tensors = _tensors(wire.INPUT_DATATYPES)
@@ -192,6 +193,7 @@ def render_protocol() -> dict[str, Any]:
             'ocr_det_limits': list(wire.DET_LIMITS),
             'ocr_max_batch': wire.OCR_MAX_BATCH,
             'ocr_max_det_side': wire.OCR_MAX_DET_SIDE,
+            'conditional_branches': sorted(CONDITIONAL),
             'json_rules': {
                 'version_is_the_integer': wire.PROTOCOL_VERSION,
                 'nan_and_infinity_literals': 'bad_json',

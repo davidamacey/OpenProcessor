@@ -12,5 +12,10 @@ publish.workspace = true
 name = "op-frame-engine"
 path = "src/main.rs"
 
+[dependencies]
+bytes = "=1.12.1"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.154", features = ["arbitrary_precision", "preserve_order"] }
+
 [lints]
 workspace = true

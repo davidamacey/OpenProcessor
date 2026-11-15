@@ -406,6 +406,10 @@
     "server_sends_goaway_too_many_pings": false
   },
   "plan": {
+    "conditional_branches": [
+      "faces",
+      "ocr"
+    ],
     "crop_fill_default": 128,
     "crop_recipes": [
       "letterbox"
