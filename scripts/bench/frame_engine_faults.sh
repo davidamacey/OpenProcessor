@@ -17,10 +17,12 @@
 #   --mem-tolerance-mib N  how far above its baseline the card's memory may be once the engine is
 #                          back (default 64)
 #   --ready-wait-s N       the longest wait for an engine or the server to answer (default 90)
+#   --instance NAME        the engine's OP_FRAME_ENGINE_INSTANCE (default fe-native): its regions are
+#                          the ones counted; the Python engine's are not
 #
 # After each kill, all of: the model server container is the same one that was running (same start
 # time, restart count unchanged); its log holds no CUDA error since the kill; the engine answers
-# ready and holds exactly one region of its prefix (the stale one was purged); the card's memory is
+# ready and holds exactly one region of its own instance (the killed process's was purged); the card's memory is
 # back within the tolerance of the baseline taken with the engine idle before the first kill; a
 # photo goes through the engine. One JSON line per kill (or per restart) is appended to --out.
 # Every command runs under timeout --kill-after; the hold file is taken with flock -o.
@@ -42,7 +44,7 @@ DETECTOR="yolov11_small_trt_end2end"
 MEM_TOLERANCE_MIB=64
 READY_WAIT_S=90
 SETTLE_S=8
-PREFIX="op-fe-"
+INSTANCE="fe-native"
 FAILED=0
 LOOP_PID=""
 BASELINE_MIB=0
@@ -64,6 +66,7 @@ while (($#)); do
     --mem-tolerance-mib) MEM_TOLERANCE_MIB=$2; shift 2 ;;
     --ready-wait-s) READY_WAIT_S=$2; shift 2 ;;
     --settle-s) SETTLE_S=$2; shift 2 ;;
+    --instance) INSTANCE=$2; shift 2 ;;
     -h | --help) sed -n '2,/^set -euo/p' "$SCRIPT" | sed '$d'; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
@@ -96,10 +99,6 @@ wait_ready() { # URL MODEL: ready within READY_WAIT_S, by asking every 2 s
 one_photo() { # a photo goes through the engine: one in flight, failed 0 (exit 3 otherwise)
   run 90 "$LOADGEN" engine --url "$NATIVE_URL" --list "$LIST" --plan-file "$PLAN_FILE" --in-flight 1 \
     --warmup-s 1 --window-s 3 --no-stats --no-gpu --label "faults:next" --out "$OUT.next.jsonl"
-}
-
-region_count() {
-  "$LOADGEN" regions --url "$SERVER_URL" --prefix "$PREFIX" 2>/dev/null | grep -c "^$PREFIX" || true
 }
 
 record() { # a JSON line for one kill or restart
@@ -140,7 +139,7 @@ kill_once() { # N
   ((err == 0)) && cuda=1
   sleep 5
   mem=$(card_memory_mib)
-  regions=$(region_count)
+  regions=$(engine_regions "$INSTANCE")
   one_photo >/dev/null 2>&1 && photo=1
   ((mem - BASELINE_MIB <= MEM_TOLERANCE_MIB)) && within=1
   ((regions == 1)) && one=1
@@ -168,7 +167,7 @@ restart_once() {
   wait_ready "$NATIVE_URL" frame_engine && ready=1
   engine_after=$(container_state "$NATIVE_CONTAINER")
   [[ "$engine_before" == "$engine_after" ]] && same=1
-  (($(region_count) >= 1)) && regions=1
+  (($(engine_regions "$INSTANCE") >= 1)) && regions=1
   one_photo >/dev/null 2>&1 && photo=1
   local checks
   checks=$(jq -nc --argjson same "$same" --argjson ready "$ready" --argjson regions "$regions" --argjson photo "$photo" \

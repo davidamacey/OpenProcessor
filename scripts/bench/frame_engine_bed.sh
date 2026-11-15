@@ -172,6 +172,11 @@ cgroup_stat() { # the cpu.stat file of a container's cgroup (cgroup v2, systemd 
   die "no cgroup v2 cpu.stat for container $name"
 }
 
+engine_regions() { # INSTANCE: how many regions of that engine instance the model server holds
+  # a region is named op-fe-<card>-<instance>-<process>; each engine of the bed has its own instance
+  "$LOADGEN" regions --url "$SERVER_URL" --prefix op-fe- 2>/dev/null | grep -c -e "-$1-" || true
+}
+
 arm_url() {
   case "$1" in
     native) printf '%s' "$NATIVE_URL" ;;

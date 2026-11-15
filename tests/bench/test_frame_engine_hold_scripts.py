@@ -308,3 +308,23 @@ def test_the_scripts_are_shellcheck_clean() -> None:
         capture_output=True, text=True, timeout=60, check=False,
     )  # fmt: skip
     assert done.returncode == 0, done.stdout
+
+
+def test_an_engines_regions_are_counted_by_its_instance_not_by_the_shared_prefix(
+    tmp_path: Path,
+) -> None:
+    """Two engines share the model server: each holds one region, named by its instance."""
+    fake = tmp_path / 'op-fe-loadgen'
+    fake.write_text(
+        '#!/bin/bash\nprintf "op-fe-0000-84-00-0-fe-native-77\nop-fe-0000-84-00-0-fe-python-12\n"\n'
+    )
+    fake.chmod(0o755)
+
+    def count(instance: str) -> str:
+        script = f'source {BENCH}/frame_engine_bed.sh; LOADGEN={fake}; engine_regions {instance}'
+        done = subprocess.run(
+            ['bash', '-c', script], capture_output=True, text=True, timeout=30, check=False
+        )
+        return done.stdout.strip()
+
+    assert (count('fe-native'), count('fe-python'), count('fe-other')) == ('1', '1', '0')
