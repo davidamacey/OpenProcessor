@@ -269,6 +269,44 @@ repos:
         stages: [pre-push]
         files: \.md$|^contracts/|^env\.template$|^docker-compose.*\.yml$
 
+      # The native frame engine (native/, docs/design/v070_rebuild/17_native_engine_plan.md
+      # section 3.1). Scoped to native/ so a Python-only commit pays nothing. `cargo` and
+      # `cargo-deny` come from ~/.cargo/bin; the toolchain is the one native/rust-toolchain.toml
+      # pins. Local hooks: https://pre-commit.com/#repository-local-hooks (`files:` selects when
+      # a hook runs, `pass_filenames: false` because cargo takes the manifest, not file names).
+      - id: cargo-fmt
+        name: cargo fmt --check (native/)
+        entry: bash -c 'export PATH="$HOME/.cargo/bin:$PATH"; exec cargo fmt --manifest-path native/Cargo.toml --all -- --check'
+        language: system
+        pass_filenames: false
+        files: ^native/
+      - id: cargo-clippy
+        name: cargo clippy -D warnings (native/)
+        entry: bash -c 'export PATH="$HOME/.cargo/bin:$PATH"; exec cargo clippy --manifest-path native/Cargo.toml --workspace --all-targets --locked -- -D warnings'
+        language: system
+        pass_filenames: false
+        files: ^native/
+      - id: cargo-test
+        name: cargo test (native/, no GPU, no network)
+        entry: bash -c 'export PATH="$HOME/.cargo/bin:$PATH"; exec cargo test --manifest-path native/Cargo.toml --workspace --locked'
+        language: system
+        pass_filenames: false
+        files: ^native/
+      - id: cargo-deny
+        name: cargo deny licenses, bans, sources (native/)
+        entry: bash -c 'export PATH="$HOME/.cargo/bin:$PATH"; exec cargo deny --manifest-path native/Cargo.toml check licenses bans sources'
+        language: system
+        pass_filenames: false
+        files: ^native/
+      # The RustSec database is fetched from the network, so this one waits for the push.
+      - id: cargo-deny-advisories
+        name: cargo deny advisories (native/, needs network)
+        entry: bash -c 'export PATH="$HOME/.cargo/bin:$PATH"; exec cargo deny --manifest-path native/Cargo.toml check advisories'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        files: ^native/
+
       - id: check-naming-leaks
         name: Ban private-company and domain-vendor naming leaks (naming sweep)
         entry: python3 scripts/codegen/check_naming_leaks.py
@@ -299,7 +337,7 @@ repos:
         entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/codegen/export_api_contracts.py --check'
         language: system
         pass_filenames: false
-        files: ^(src/.*\.py|contracts/json/item_wire\.json|contracts/openapi/curation\.json|contracts/ts/(itemWire|classSources|classNames)\.ts|scripts/codegen/(export_api_contracts|_contract_runtime)\.py)$
+        files: ^(src/.*\.py|contracts/json/(item_wire|frame_engine_v1|frame_engine_plan_cases)\.json|contracts/openapi/curation\.json|contracts/ts/(itemWire|classSources|classNames)\.ts|scripts/codegen/(export_api_contracts|_contract_runtime|frame_engine_contract|frame_engine_plan_cases)\.py)$
 
   # Commit message linting (conventional commits). Scope stays optional.
   - repo: https://github.com/compilerla/conventional-pre-commit

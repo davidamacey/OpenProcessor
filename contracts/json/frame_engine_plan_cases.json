@@ -1,0 +1,1097 @@
+{
+  "cases": [
+    {
+      "has_boxes": false,
+      "id": "ingest_plan_as_the_api_sends_it",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "inline",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"crop_embed\": {\"batch\": 32, \"model\": \"pe_crop\", \"size\": 224}, \"crops\": \"inline\", \"detector\": {\"input_size\": 640, \"letterbox_fill\": 114, \"model\": \"det\"}, \"embed\": {\"model\": \"pe\", \"size\": 336}, \"version\": 1}"
+    },
+    {
+      "has_boxes": false,
+      "id": "ingest_plan_built_here",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "inline",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "frame_plan",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame"
+        ],
+        "crops": "none",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"none\", \"embed\": {\"model\": \"pe\", \"size\": 336}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "frame_plan_with_class_filter",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "inline",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed_classes": [
+          0,
+          2,
+          5
+        ],
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed_classes\": [2, 0, 5], \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "crops_inline_without_embedding",
+      "parsed": {
+        "branches": [
+          "detect"
+        ],
+        "crops": "inline",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\"}"
+    },
+    {
+      "has_boxes": true,
+      "id": "stored_boxes_embedded",
+      "parsed": {
+        "branches": [
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "none",
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"embed_frame\", \"embed_crops\"], \"crops\": \"none\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "has_boxes": true,
+      "id": "stored_boxes_crops_inline",
+      "parsed": {
+        "branches": [
+          "embed_frame"
+        ],
+        "crops": "inline",
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"embed_frame\"], \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "defaults_are_filled_in",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 1,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "c",
+          "size": 224
+        },
+        "crops": "inline",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"c\", \"size\": 224, \"batch\": 1}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "crop_recipe_and_fill_given",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 0,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "inline",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32, \"crop_recipe\": \"letterbox\", \"fill\": 0}, \"embed\": {\"model\": \"pe\", \"size\": 336}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "frame_recipe_given",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "inline",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336, \"frame_recipe\": \"whole_frame\"}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "integers_where_floats_are_allowed",
+      "parsed": {
+        "branches": [
+          "faces"
+        ],
+        "crops": "none",
+        "faces": {
+          "batch": 32,
+          "coarse": 0,
+          "detector": "scrfd",
+          "input_size": 640,
+          "max_faces": 128,
+          "nms": 0.0,
+          "overlap": 0,
+          "recogniser": "arcface",
+          "score_min": 1.0,
+          "tile_side": 0
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 1, \"nms\": 0, \"max_faces\": 128}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "branch_order_is_the_vocabulary_order",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "inline",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"embed_crops\", \"embed_frame\", \"detect\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "faces_with_embedding",
+      "parsed": {
+        "branches": [
+          "faces",
+          "face_embed"
+        ],
+        "crops": "none",
+        "faces": {
+          "batch": 32,
+          "coarse": 0,
+          "detector": "scrfd",
+          "input_size": 640,
+          "max_faces": 128,
+          "nms": 0.4,
+          "overlap": 0,
+          "recogniser": "arcface",
+          "score_min": 0.5,
+          "tile_side": 0
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"faces\", \"face_embed\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "faces_lean_defaults",
+      "parsed": {
+        "branches": [
+          "faces"
+        ],
+        "crops": "none",
+        "faces": {
+          "batch": 32,
+          "coarse": 0,
+          "detector": "scrfd",
+          "input_size": 640,
+          "max_faces": 128,
+          "nms": 0.4,
+          "overlap": 0,
+          "recogniser": "arcface",
+          "score_min": 0.5,
+          "tile_side": 0
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "faces_full",
+      "parsed": {
+        "branches": [
+          "faces",
+          "face_embed"
+        ],
+        "crops": "none",
+        "faces": {
+          "batch": 32,
+          "coarse": 256,
+          "detector": "scrfd",
+          "input_size": 640,
+          "max_faces": 128,
+          "nms": 0.4,
+          "overlap": 160,
+          "recogniser": "arcface",
+          "score_min": 0.5,
+          "tile_side": 1920
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"faces\", \"face_embed\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128, \"coarse\": 256, \"tile_side\": 1920, \"overlap\": 160}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "ocr_lean",
+      "parsed": {
+        "branches": [
+          "ocr"
+        ],
+        "crops": "none",
+        "ocr": {
+          "batch": 16,
+          "box_thresh": 0.45,
+          "det_antialias": false,
+          "det_limit": "max",
+          "det_max_side": 1920,
+          "det_side": 960,
+          "detector": "ocr_det",
+          "max_lines": 128,
+          "recogniser": "ocr_rec",
+          "taps": 1,
+          "thresh": 0.2,
+          "unclip_ratio": 1.4
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "ocr_full",
+      "parsed": {
+        "branches": [
+          "ocr"
+        ],
+        "crops": "none",
+        "ocr": {
+          "batch": 16,
+          "box_thresh": 0.5,
+          "det_antialias": true,
+          "det_limit": "min",
+          "det_max_side": 1920,
+          "det_side": 960,
+          "detector": "ocr_det",
+          "max_lines": 128,
+          "recogniser": "ocr_rec",
+          "taps": 2,
+          "thresh": 0.3,
+          "unclip_ratio": 1.6
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960, \"det_limit\": \"min\", \"det_max_side\": 1920, \"det_antialias\": true, \"thresh\": 0.3, \"box_thresh\": 0.5, \"unclip_ratio\": 1.6, \"taps\": 2}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "conditional_branch_after_detect",
+      "parsed": {
+        "branches": [
+          "detect",
+          "ocr"
+        ],
+        "crops": "none",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "if_detected": {
+          "ocr": [
+            2,
+            7
+          ]
+        },
+        "ocr": {
+          "batch": 16,
+          "box_thresh": 0.45,
+          "det_antialias": false,
+          "det_limit": "max",
+          "det_max_side": 1920,
+          "det_side": 960,
+          "detector": "ocr_det",
+          "max_lines": 128,
+          "recogniser": "ocr_rec",
+          "taps": 1,
+          "thresh": 0.2,
+          "unclip_ratio": 1.4
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"ocr\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960}, \"if_detected\": {\"ocr\": [2, 7]}}"
+    },
+    {
+      "has_boxes": false,
+      "id": "renditions",
+      "parsed": {
+        "branches": [
+          "detect"
+        ],
+        "crops": "none",
+        "derivatives": [
+          {
+            "format": "jpeg",
+            "name": "thumb",
+            "quality": 85,
+            "side": 256
+          },
+          {
+            "format": "jpeg",
+            "name": "preview",
+            "quality": 70,
+            "side": 1024
+          }
+        ],
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"none\", \"derivatives\": [{\"name\": \"thumb\", \"side\": 256}, {\"name\": \"preview\", \"side\": 1024, \"quality\": 70, \"format\": \"jpeg\"}]}"
+    },
+    {
+      "has_boxes": false,
+      "id": "renditions_alone_with_faces",
+      "parsed": {
+        "branches": [
+          "faces"
+        ],
+        "crops": "none",
+        "derivatives": [
+          {
+            "format": "jpeg",
+            "name": "t",
+            "quality": 85,
+            "side": 16
+          }
+        ],
+        "faces": {
+          "batch": 32,
+          "coarse": 0,
+          "detector": "scrfd",
+          "input_size": 640,
+          "max_faces": 128,
+          "nms": 0.4,
+          "overlap": 0,
+          "recogniser": "arcface",
+          "score_min": 0.5,
+          "tile_side": 0
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128}, \"derivatives\": [{\"name\": \"t\", \"side\": 16}]}"
+    },
+    {
+      "has_boxes": false,
+      "id": "bytes_input_is_text_with_unicode_names",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "inline",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "détecteur"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"d\\u00e9tecteur\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_json",
+      "has_boxes": false,
+      "id": "not_json",
+      "plan": "{"
+    },
+    {
+      "fault": "bad_json",
+      "has_boxes": false,
+      "id": "empty_text",
+      "plan": ""
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "not_an_object",
+      "plan": "[]"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "null_plan",
+      "plan": "null"
+    },
+    {
+      "fault": "bad_version",
+      "has_boxes": false,
+      "id": "version_two",
+      "plan": "{\"version\": 2, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_version",
+      "has_boxes": false,
+      "id": "version_missing",
+      "plan": "{\"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_version",
+      "has_boxes": false,
+      "id": "version_string",
+      "plan": "{\"version\": \"1\", \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_version",
+      "has_boxes": false,
+      "id": "version_null",
+      "plan": "{\"version\": null}"
+    },
+    {
+      "fault": "unknown_field",
+      "has_boxes": false,
+      "id": "unknown_top_field",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"extra\": 1, \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "missing_field",
+      "has_boxes": false,
+      "id": "branches_missing",
+      "plan": "{\"version\": 1, \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\"}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "branches_not_a_list",
+      "plan": "{\"version\": 1, \"branches\": \"detect\", \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\"}"
+    },
+    {
+      "fault": "empty_plan",
+      "has_boxes": false,
+      "id": "empty_plan",
+      "plan": "{\"version\": 1, \"branches\": [], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\"}"
+    },
+    {
+      "fault": "unknown_branch",
+      "has_boxes": false,
+      "id": "unknown_branch",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"region\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\"}"
+    },
+    {
+      "fault": "unknown_branch",
+      "has_boxes": false,
+      "id": "unknown_branch_non_string",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", 3], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\"}"
+    },
+    {
+      "fault": "duplicate_branch",
+      "has_boxes": false,
+      "id": "duplicate_branch",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"detect\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\"}"
+    },
+    {
+      "fault": "missing_dependency",
+      "has_boxes": false,
+      "id": "crops_without_detect",
+      "plan": "{\"version\": 1, \"branches\": [\"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"none\", \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "missing_dependency",
+      "has_boxes": false,
+      "id": "crops_inline_without_detect",
+      "plan": "{\"version\": 1, \"branches\": [\"embed_frame\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}}"
+    },
+    {
+      "fault": "missing_dependency",
+      "has_boxes": false,
+      "id": "face_embed_without_faces",
+      "plan": "{\"version\": 1, \"branches\": [\"face_embed\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\"}"
+    },
+    {
+      "fault": "missing_field",
+      "has_boxes": false,
+      "id": "detector_missing",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "missing_field",
+      "has_boxes": false,
+      "id": "embed_missing",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "missing_field",
+      "has_boxes": false,
+      "id": "crop_embed_missing",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}}"
+    },
+    {
+      "fault": "missing_field",
+      "has_boxes": false,
+      "id": "faces_missing",
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\"}"
+    },
+    {
+      "fault": "missing_field",
+      "has_boxes": false,
+      "id": "ocr_missing",
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\"}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "detector_size_zero",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 0, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "detector_fill_over_255",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 256}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "unknown_field",
+      "has_boxes": false,
+      "id": "detector_unknown_field",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114, \"nms\": 1}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "detector_not_an_object",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": \"det\", \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "unknown_field",
+      "has_boxes": false,
+      "id": "embed_unknown_field",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336, \"batch\": 32}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "unknown_field",
+      "has_boxes": false,
+      "id": "embed_crop_recipe_not_allowed",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336, \"crop_recipe\": \"letterbox\"}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "embed_frame_recipe_unknown",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336, \"frame_recipe\": \"centre\"}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "crop_batch_is_a_bool",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": true}, \"embed\": {\"model\": \"pe\", \"size\": 336}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "crop_batch_is_a_float",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32.0}, \"embed\": {\"model\": \"pe\", \"size\": 336}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "crop_size_below_range",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 8, \"batch\": 32}, \"embed\": {\"model\": \"pe\", \"size\": 336}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "crop_fill_over_255",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32, \"fill\": 256}, \"embed\": {\"model\": \"pe\", \"size\": 336}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "crop_recipe_resize_crop",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32, \"crop_recipe\": \"resize_crop\"}, \"embed\": {\"model\": \"pe\", \"size\": 336}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "crop_recipe_centre_crop",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32, \"crop_recipe\": \"centre_crop\"}, \"embed\": {\"model\": \"pe\", \"size\": 336}}"
+    },
+    {
+      "fault": "unknown_field",
+      "has_boxes": false,
+      "id": "crop_embed_unknown_field",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32, \"extra\": 1}, \"embed\": {\"model\": \"pe\", \"size\": 336}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "crop_embed_without_its_branch",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"none\", \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}, \"embed\": {\"model\": \"pe\", \"size\": 336}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "embed_without_its_branch",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "crops_value_unknown",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"thumb\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "crops_value_empty",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "embed_classes_not_a_list",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed_classes\": [\"car\"], \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "embed_classes_not_integers",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed_classes\": [1.5], \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "embed_classes_negative",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed_classes\": [-1], \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "embed_classes_without_crops",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed_classes\": [2], \"embed\": {\"model\": \"pe\", \"size\": 336}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": true,
+      "id": "embed_classes_with_stored_boxes",
+      "plan": "{\"version\": 1, \"branches\": [\"embed_frame\", \"embed_crops\"], \"crops\": \"none\", \"embed_classes\": [1], \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "if_detected_not_an_object",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"if_detected\": [1], \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "condition_on_unconditional",
+      "has_boxes": false,
+      "id": "condition_on_embed_crops",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"if_detected\": {\"embed_crops\": [2]}, \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "condition_on_unconditional",
+      "has_boxes": false,
+      "id": "condition_on_ocr_not_in_plan",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"if_detected\": {\"ocr\": [2]}, \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "missing_dependency",
+      "has_boxes": false,
+      "id": "condition_without_detect",
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960}, \"if_detected\": {\"ocr\": [2]}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "derivatives_not_a_list",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"derivatives\": {\"thumb\": 256}, \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "rendition_side_out_of_range",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"derivatives\": [{\"name\": \"t\", \"side\": 8}], \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "rendition_format_unknown",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"derivatives\": [{\"name\": \"t\", \"side\": 64, \"format\": \"png\"}], \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "faces_input_not_a_multiple_of_32",
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 650, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "faces_score_out_of_range",
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 1.5, \"nms\": 0.4, \"max_faces\": 128}}"
+    },
+    {
+      "fault": "unknown_field",
+      "has_boxes": false,
+      "id": "faces_unknown_field",
+      "plan": "{\"version\": 1, \"branches\": [\"faces\"], \"crops\": \"none\", \"faces\": {\"detector\": \"scrfd\", \"input_size\": 640, \"recogniser\": \"arcface\", \"batch\": 32, \"score_min\": 0.5, \"nms\": 0.4, \"max_faces\": 128, \"x\": 1}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "ocr_batch_over_profile",
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 17, \"max_lines\": 128, \"det_side\": 960}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "ocr_limit_unknown",
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960, \"det_limit\": \"mid\"}}"
+    },
+    {
+      "fault": "bad_field",
+      "has_boxes": false,
+      "id": "ocr_antialias_not_a_bool",
+      "plan": "{\"version\": 1, \"branches\": [\"ocr\"], \"crops\": \"none\", \"ocr\": {\"detector\": \"ocr_det\", \"recogniser\": \"ocr_rec\", \"batch\": 16, \"max_lines\": 128, \"det_side\": 960, \"det_antialias\": 1}}"
+    },
+    {
+      "fault": "boxes_with_detect",
+      "has_boxes": true,
+      "id": "boxes_with_detect",
+      "plan": "{\"version\": 1, \"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"detector\": {\"model\": \"det\", \"input_size\": 640, \"letterbox_fill\": 114}, \"crops\": \"inline\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "unused_boxes",
+      "has_boxes": true,
+      "id": "boxes_unused",
+      "plan": "{\"version\": 1, \"branches\": [\"embed_frame\"], \"crops\": \"none\", \"embed\": {\"model\": \"pe\", \"size\": 336}}"
+    },
+    {
+      "fault": "missing_dependency",
+      "has_boxes": false,
+      "id": "detect_missing_for_crops_with_no_boxes",
+      "plan": "{\"version\": 1, \"branches\": [\"embed_frame\", \"embed_crops\"], \"crops\": \"none\", \"embed\": {\"model\": \"pe\", \"size\": 336}, \"crop_embed\": {\"model\": \"pe_crop\", \"size\": 224, \"batch\": 32}}"
+    },
+    {
+      "fault": "bad_version",
+      "has_boxes": false,
+      "id": "quirk_version_true",
+      "plan": "{\"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"crop_embed\": {\"batch\": 32, \"model\": \"pe_crop\", \"size\": 224}, \"crops\": \"inline\", \"detector\": {\"input_size\": 640, \"letterbox_fill\": 114, \"model\": \"det\"}, \"embed\": {\"model\": \"pe\", \"size\": 336}, \"version\": true}"
+    },
+    {
+      "fault": "bad_version",
+      "has_boxes": false,
+      "id": "quirk_version_one_point_zero",
+      "plan": "{\"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"crop_embed\": {\"batch\": 32, \"model\": \"pe_crop\", \"size\": 224}, \"crops\": \"inline\", \"detector\": {\"input_size\": 640, \"letterbox_fill\": 114, \"model\": \"det\"}, \"embed\": {\"model\": \"pe\", \"size\": 336}, \"version\": 1.0}"
+    },
+    {
+      "fault": "bad_version",
+      "has_boxes": false,
+      "id": "quirk_version_exponent",
+      "plan": "{\"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"crop_embed\": {\"batch\": 32, \"model\": \"pe_crop\", \"size\": 224}, \"crops\": \"inline\", \"detector\": {\"input_size\": 640, \"letterbox_fill\": 114, \"model\": \"det\"}, \"embed\": {\"model\": \"pe\", \"size\": 336}, \"version\": 1e0}"
+    },
+    {
+      "fault": "bad_version",
+      "has_boxes": false,
+      "id": "quirk_version_false",
+      "plan": "{\"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"crop_embed\": {\"batch\": 32, \"model\": \"pe_crop\", \"size\": 224}, \"crops\": \"inline\", \"detector\": {\"input_size\": 640, \"letterbox_fill\": 114, \"model\": \"det\"}, \"embed\": {\"model\": \"pe\", \"size\": 336}, \"version\": false}"
+    },
+    {
+      "fault": "bad_json",
+      "has_boxes": false,
+      "id": "quirk_nan_version",
+      "plan": "{\"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"crop_embed\": {\"batch\": 32, \"model\": \"pe_crop\", \"size\": 224}, \"crops\": \"inline\", \"detector\": {\"input_size\": 640, \"letterbox_fill\": 114, \"model\": \"det\"}, \"embed\": {\"model\": \"pe\", \"size\": 336}, \"version\": NaN}"
+    },
+    {
+      "fault": "bad_json",
+      "has_boxes": false,
+      "id": "quirk_nan_size",
+      "plan": "{\"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"crop_embed\": {\"batch\": 32, \"model\": \"pe_crop\", \"size\": 224}, \"crops\": \"inline\", \"detector\": {\"input_size\": 640, \"letterbox_fill\": 114, \"model\": \"det\"}, \"embed\": {\"model\": \"pe\", \"size\": NaN}, \"version\": 1}"
+    },
+    {
+      "fault": "bad_json",
+      "has_boxes": false,
+      "id": "quirk_nan_fill",
+      "plan": "{\"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"crop_embed\": {\"batch\": 32, \"model\": \"pe_crop\", \"size\": 224}, \"crops\": \"inline\", \"detector\": {\"input_size\": 640, \"letterbox_fill\": NaN, \"model\": \"det\"}, \"embed\": {\"model\": \"pe\", \"size\": 336}, \"version\": 1}"
+    },
+    {
+      "fault": "bad_json",
+      "has_boxes": false,
+      "id": "quirk_infinity_version",
+      "plan": "{\"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"crop_embed\": {\"batch\": 32, \"model\": \"pe_crop\", \"size\": 224}, \"crops\": \"inline\", \"detector\": {\"input_size\": 640, \"letterbox_fill\": 114, \"model\": \"det\"}, \"embed\": {\"model\": \"pe\", \"size\": 336}, \"version\": Infinity}"
+    },
+    {
+      "fault": "bad_json",
+      "has_boxes": false,
+      "id": "quirk_infinity_size",
+      "plan": "{\"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"crop_embed\": {\"batch\": 32, \"model\": \"pe_crop\", \"size\": 224}, \"crops\": \"inline\", \"detector\": {\"input_size\": 640, \"letterbox_fill\": 114, \"model\": \"det\"}, \"embed\": {\"model\": \"pe\", \"size\": Infinity}, \"version\": 1}"
+    },
+    {
+      "fault": "bad_json",
+      "has_boxes": false,
+      "id": "quirk_infinity_fill",
+      "plan": "{\"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"crop_embed\": {\"batch\": 32, \"model\": \"pe_crop\", \"size\": 224}, \"crops\": \"inline\", \"detector\": {\"input_size\": 640, \"letterbox_fill\": Infinity, \"model\": \"det\"}, \"embed\": {\"model\": \"pe\", \"size\": 336}, \"version\": 1}"
+    },
+    {
+      "fault": "bad_json",
+      "has_boxes": false,
+      "id": "quirk_minus_infinity_version",
+      "plan": "{\"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"crop_embed\": {\"batch\": 32, \"model\": \"pe_crop\", \"size\": 224}, \"crops\": \"inline\", \"detector\": {\"input_size\": 640, \"letterbox_fill\": 114, \"model\": \"det\"}, \"embed\": {\"model\": \"pe\", \"size\": 336}, \"version\": -Infinity}"
+    },
+    {
+      "fault": "bad_json",
+      "has_boxes": false,
+      "id": "quirk_minus_infinity_size",
+      "plan": "{\"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"crop_embed\": {\"batch\": 32, \"model\": \"pe_crop\", \"size\": 224}, \"crops\": \"inline\", \"detector\": {\"input_size\": 640, \"letterbox_fill\": 114, \"model\": \"det\"}, \"embed\": {\"model\": \"pe\", \"size\": -Infinity}, \"version\": 1}"
+    },
+    {
+      "fault": "bad_json",
+      "has_boxes": false,
+      "id": "quirk_minus_infinity_fill",
+      "plan": "{\"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"crop_embed\": {\"batch\": 32, \"model\": \"pe_crop\", \"size\": 224}, \"crops\": \"inline\", \"detector\": {\"input_size\": 640, \"letterbox_fill\": -Infinity, \"model\": \"det\"}, \"embed\": {\"model\": \"pe\", \"size\": 336}, \"version\": 1}"
+    },
+    {
+      "fault": "bad_json",
+      "has_boxes": false,
+      "id": "quirk_duplicate_version",
+      "plan": "{\"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"crop_embed\": {\"batch\": 32, \"model\": \"pe_crop\", \"size\": 224}, \"crops\": \"inline\", \"detector\": {\"input_size\": 640, \"letterbox_fill\": 114, \"model\": \"det\"}, \"embed\": {\"model\": \"pe\", \"size\": 336}, \"version\": 1, \"version\": 1}"
+    },
+    {
+      "fault": "bad_json",
+      "has_boxes": false,
+      "id": "quirk_duplicate_crops_differing",
+      "plan": "{\"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"crop_embed\": {\"batch\": 32, \"model\": \"pe_crop\", \"size\": 224}, \"crops\": \"none\", \"crops\": \"inline\", \"detector\": {\"input_size\": 640, \"letterbox_fill\": 114, \"model\": \"det\"}, \"embed\": {\"model\": \"pe\", \"size\": 336}, \"version\": 1}"
+    },
+    {
+      "fault": "bad_json",
+      "has_boxes": false,
+      "id": "quirk_duplicate_nested",
+      "plan": "{\"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"crop_embed\": {\"batch\": 32, \"model\": \"pe_crop\", \"size\": 224}, \"crops\": \"inline\", \"detector\": {\"input_size\": 640, \"letterbox_fill\": 114, \"model\": \"det\"}, \"embed\": {\"model\": \"pe\", \"size\": 336, \"size\": 224}, \"version\": 1}"
+    },
+    {
+      "fault": "bad_json",
+      "has_boxes": false,
+      "id": "quirk_duplicate_in_detector",
+      "plan": "{\"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"crop_embed\": {\"batch\": 32, \"model\": \"pe_crop\", \"size\": 224}, \"crops\": \"inline\", \"detector\": {\"input_size\": 640, \"letterbox_fill\": 114, \"model\": \"det\", \"model\": \"x\"}, \"embed\": {\"model\": \"pe\", \"size\": 336}, \"version\": 1}"
+    },
+    {
+      "has_boxes": false,
+      "id": "same_key_in_different_objects_is_fine",
+      "parsed": {
+        "branches": [
+          "detect",
+          "embed_frame",
+          "embed_crops"
+        ],
+        "crop_embed": {
+          "batch": 32,
+          "crop_recipe": "letterbox",
+          "fill": 128,
+          "model": "pe_crop",
+          "size": 224
+        },
+        "crops": "inline",
+        "detector": {
+          "input_size": 640,
+          "letterbox_fill": 114,
+          "model": "det"
+        },
+        "embed": {
+          "frame_recipe": "whole_frame",
+          "model": "pe",
+          "size": 336
+        },
+        "version": 1
+      },
+      "plan": "{\"branches\": [\"detect\", \"embed_frame\", \"embed_crops\"], \"crop_embed\": {\"batch\": 32, \"model\": \"pe_crop\", \"size\": 224}, \"crops\": \"inline\", \"detector\": {\"input_size\": 640, \"letterbox_fill\": 114, \"model\": \"det\"}, \"embed\": {\"model\": \"pe\", \"size\": 336}, \"version\": 1}"
+    }
+  ],
+  "generated_by": "scripts/codegen/export_api_contracts.py",
+  "sources": [
+    "src/domain/frame_engine_wire.py",
+    "src/domain/decode_route.py",
+    "src/clients/frame_engine.py",
+    "frame_engine/front.py",
+    "scripts/codegen/frame_engine_plan_cases.py"
+  ]
+}

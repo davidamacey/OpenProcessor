@@ -11,6 +11,8 @@ not edit by hand: change the Python source and regenerate.
 | `json/item_wire.json` | The same item contract as JSON: ordered `item_keys`, `region_keys`, `extra_keys`, and the full `ItemDoc` JSON schema (types and nullability) | same as above |
 | `json/keymap_actions.json` | The keymap action table: `actions`, `contexts`, `grammar` | `src/config/keymap_actions.json` |
 | `ts/classSources.ts` | `CLASS_SOURCE_ROLES`, the `ClassSourceRole` union, and the `ClassSourceEntry` shape of `GET {prefix}/class_sources` | `src/services/curation/class_sources.py` |
+| `json/frame_engine_v1.json` | The frame engine's protocol version 1 for the native engine: tensors, datatypes and shapes, the order of the front's checks and their statuses, request rules, statuses and decode routes, branch outputs, plan faults and JSON rules, the ping policy | `src/domain/frame_engine_wire.py`, `src/domain/decode_route.py`, `frame_engine/front.py`, `src/clients/frame_engine.py` (rendered by `scripts/codegen/frame_engine_contract.py`) |
+| `json/frame_engine_plan_cases.json` | Every plan text of `scripts/codegen/frame_engine_plan_cases.py` with what `parse_plan` answers (the parsed plan or the fault); the native parser must give the same on each case | `parse_plan` in `src/domain/frame_engine_wire.py` |
 | `openapi/curation.json` | `app.openapi()` filtered to paths under the curation API prefix (default `/curation`) plus only the components those paths reference. Keys are sorted, and the app version is left out, so diffs show real contract changes only | the FastAPI app (`src/main.py`) |
 
 The generator always runs with default configuration. `OP_*` variables in
@@ -29,7 +31,7 @@ Individual generators (each supports `--check`):
 
 ```bash
 python3 scripts/codegen/export_region_status_to_ts.py [--check]
-python3 scripts/codegen/export_api_contracts.py [--check] [--only item-wire|class-sources|keymap-actions|openapi]
+python3 scripts/codegen/export_api_contracts.py [--check] [--only item-wire|class-sources|keymap-actions|openapi|frame-engine]
 ```
 
 `export_api_contracts.py` imports the app. It re-runs itself under the

@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, NoReturn, cast
 
 from src.domain.decode_route import GPU
 from src.domain.image_geometry import CROP_FILL
@@ -613,6 +613,28 @@ def _check_dependencies(plan: EnginePlan, *, has_boxes: bool) -> None:
             raise EnginePlanError('missing_dependency', 'detect')
 
 
+def _reject_constant(name: str) -> NoReturn:
+    """``NaN``, ``Infinity`` and ``-Infinity`` are no JSON (RFC 8259 section 6); Python's parser
+    takes them unless told not to, and a plan parser in another language must not have to."""
+    raise ValueError(f'{name} is not a JSON value')
+
+
+def _object_without_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """A JSON object whose names are unique (RFC 8259 section 4 says duplicates make the
+    receivers' behaviour unpredictable; Python keeps the last, other parsers the first)."""
+    out: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in out:
+            raise ValueError(f'duplicate key {key!r}')
+        out[key] = value
+    return out
+
+
+def _is_protocol_version(value: Any) -> bool:
+    """The integer ``1``: not ``true`` or ``1.0``, which Python's ``==`` also takes for it."""
+    return isinstance(value, int) and not isinstance(value, bool) and value == PROTOCOL_VERSION
+
+
 def parse_plan(text: str | bytes, *, has_boxes: bool) -> EnginePlan:
     """The plan in ``text`` exactly as written, or :class:`EnginePlanError`.
 
@@ -620,11 +642,13 @@ def parse_plan(text: str | bytes, *, has_boxes: bool) -> EnginePlan:
     the detector and so exclude ``detect``.
     """
     try:
-        body = json.loads(text)
+        body = json.loads(
+            text, parse_constant=_reject_constant, object_pairs_hook=_object_without_duplicates
+        )
     except (ValueError, UnicodeDecodeError) as exc:
         raise EnginePlanError('bad_json', str(exc)) from exc
     body = _obj(body, 'plan', _TOP_FIELDS)
-    if body.get('version') != PROTOCOL_VERSION:
+    if not _is_protocol_version(body.get('version')):
         raise EnginePlanError('bad_version', repr(body.get('version')))
     branches = _branches(_need(body, 'branches', 'branches'))
     crops = _str(body.get('crops', 'none'), 'crops', ('inline', 'none'))

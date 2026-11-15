@@ -1,0 +1,28 @@
+# The native frame engine (docs/design/v070_rebuild/17_native_engine_plan.md).
+# Workspace layout and inheritance: https://doc.rust-lang.org/cargo/reference/workspaces.html
+[workspace]
+members = ["gpu_frame", "frame_engine"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/davidamacey/OpenProcessor"
+publish = false
+
+# Lint levels for every member (`[lints] workspace = true`); the clippy names are in
+# https://rust-lang.github.io/rust-clippy/stable/index.html. `unwrap` stays allowed inside
+# tests through `allow-unwrap-in-tests` in clippy.toml.
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+undocumented_unsafe_blocks = "deny"
+unwrap_used = "deny"
+
+# A panic in one photo's work is caught per job and fails that photo (plan 17 section 1.3),
+# which needs unwinding.
+[profile.release]
+panic = "unwind"

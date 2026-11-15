@@ -197,6 +197,7 @@ services:
         OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
     volumes:
       - ./frame_engine:/app/frame_engine:ro
+      - ./native/frame_engine/kernels:/app/native/frame_engine/kernels:ro
       - ./src/domain:/app/src/domain:ro
 
   curation-trainer:

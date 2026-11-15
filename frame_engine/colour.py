@@ -31,6 +31,7 @@ from typing import Any, Literal
 import cupy as cp
 import numpy as np
 
+from frame_engine.kernel_sources import kernel_source
 from frame_engine.transport import OverloadError
 from src.utils.icc_srgb import ProfileKind, classify
 
@@ -44,17 +45,7 @@ BUILD_WAIT_SECONDS = 30.0
 #: Distinct profiles whose kind is remembered before the memo starts over.
 KINDS = 4096
 
-_SRC = r"""
-extern "C" __global__ void icc_gather(unsigned char* px, long long n, const unsigned char* table)
-{
-    for (long long i = (long long)blockIdx.x * blockDim.x + threadIdx.x; i < n;
-         i += (long long)gridDim.x * blockDim.x) {
-        unsigned char* p = px + i * 3;
-        const unsigned char* t = table + ((size_t)p[0] * 65536 + (size_t)p[1] * 256 + p[2]) * 3;
-        p[0] = t[0]; p[1] = t[1]; p[2] = t[2];
-    }
-}
-"""
+_SRC = kernel_source('colour.cu')
 
 
 def profile_key(icc: bytes) -> str:

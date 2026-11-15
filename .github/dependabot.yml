@@ -93,6 +93,25 @@ updates:
       - dependency-name: "typescript"
         versions: [">=7.0.0"]
 
+  # The native frame engine: one PR; `cargo-deny` keeps the licences and sources in line.
+  - package-ecosystem: "cargo"
+    directory: "/native"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "native"
+    groups:
+      native:
+        applies-to: version-updates
+        patterns:
+          - "*"
+      native-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

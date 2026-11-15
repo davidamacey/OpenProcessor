@@ -4,7 +4,9 @@
 Scope, by kind of file:
 
 * running application code (``src``, ``models``, ``docker`` and ``export`` Python,
-  ``frontend/src`` ``.ts .svelte .js`` except ``*.test.ts``): warn from 700, hard cap 1000;
+  ``frontend/src`` ``.ts .svelte .js`` except ``*.test.ts``, ``native`` ``.rs``): warn from 700,
+  hard cap 1000 (a Rust file keeps its unit tests, so split by concern as for Python; the CUDA
+  ``.cu`` sources and ``Cargo.lock`` are out of scope);
 * test code (``tests``, ``frontend/e2e``, ``*.test.ts``): warn from 700, hard cap 1500;
 * out of scope, naturally long: ``scripts/``, every ``.sh``, the root CLI programs,
   ``frontend/scripts/``, vendored bundles (``src/static/``).
@@ -40,6 +42,8 @@ APP_DIRS = ('src/', 'models/', 'docker/', 'export/', 'frame_engine/')
 APP_SUFFIXES = ('.py',)
 FRONTEND_APP_DIR = 'frontend/src/'
 FRONTEND_APP_SUFFIXES = ('.ts', '.svelte', '.js')
+NATIVE_APP_DIR = 'native/'
+NATIVE_APP_SUFFIXES = ('.rs',)
 TEST_DIRS = ('tests/', 'frontend/e2e/')
 TEST_SUFFIXES = ('.py', '.ts', '.js', '.mjs')
 VENDORED_PREFIXES = ('src/static/',)
@@ -68,6 +72,8 @@ def cap_for(path: str) -> int | None:
     if path.startswith(APP_DIRS) and path.endswith(APP_SUFFIXES):
         return APP_MAX
     if path.startswith(FRONTEND_APP_DIR) and path.endswith(FRONTEND_APP_SUFFIXES):
+        return APP_MAX
+    if path.startswith(NATIVE_APP_DIR) and path.endswith(NATIVE_APP_SUFFIXES):
         return APP_MAX
     return None
 

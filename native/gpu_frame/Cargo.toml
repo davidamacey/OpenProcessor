@@ -1,0 +1,12 @@
+[package]
+name = "gpu_frame"
+description = "General GPU frame engine parts: decode lanes, frame pool, region, admission, kernel loader, model calls"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
