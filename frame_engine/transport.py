@@ -42,8 +42,12 @@ cannot hold a worker, its slices or its budget, and a photo with several calls i
 deadline, not one per call. A call without an answer in time, a channel or server that went away
 (UNAVAILABLE, CANCELLED) and a call the client library itself fails are
 :class:`TritonUnavailableError` (the request is answered UNAVAILABLE, retryable); an error the
-server answered is :class:`ModelCallError` (the branch fails). Each failure is counted with its
-reason in ``op_frame_engine_triton_call_errors_total``; a call the engine cancels itself (a sibling
+server answered is :class:`ModelCallError` (the branch fails). An unavailable call does not
+change readiness: a deadline is evidence about that call, not about the server. It asks for an
+immediate health probe (``on_suspect``) and readiness follows the probe's answer (the KServe
+``ServerReady`` call and the region check, :meth:`CudaShmTransport.check`), as gRPC health
+checking defines health by the health service rather than by failed calls. Each failure is
+counted with its reason in ``op_frame_engine_triton_call_errors_total``; a call the engine cancels itself (a sibling
 failed) is not a model-server failure and is not counted.
 """
 
@@ -85,7 +89,10 @@ RECONNECT_MAX_BACKOFF_MS = 3000
 #: ``--grpc-http2-min-recv-ping-interval-without-data=20000`` and pings without calls permitted),
 #: else the server answers GOAWAY ``too_many_pings``. gRPC connection backoff: the delay between
 #: connect attempts grows towards 120 s by default; capped, a restarted model server is reached
-#: within about ``RECONNECT_MAX_BACKOFF_MS``.
+#: within about ``RECONNECT_MAX_BACKOFF_MS``. A model server recreated on a new address is found
+#: only after the channel re-resolves its name, which gRPC allows at most every 30 s by default
+#: (``grpc.dns_min_time_between_resolutions_ms``); here at most every second, and only while the
+#: connections fail.
 CHANNEL_OPTIONS: tuple[tuple[str, int], ...] = (
     ('grpc.max_send_message_length', 512 * MIB),
     ('grpc.max_receive_message_length', 512 * MIB),
@@ -96,6 +103,7 @@ CHANNEL_OPTIONS: tuple[tuple[str, int], ...] = (
     ('grpc.initial_reconnect_backoff_ms', 250),
     ('grpc.min_reconnect_backoff_ms', 250),
     ('grpc.max_reconnect_backoff_ms', RECONNECT_MAX_BACKOFF_MS),
+    ('grpc.dns_min_time_between_resolutions_ms', 1000),
 )
 
 
@@ -146,6 +154,10 @@ class DeviceRegion(Protocol):
 
     def view(self) -> Any: ...
     def free(self) -> None: ...
+
+
+def _nothing() -> None:
+    return None
 
 
 def region_prefix(card: str, instance: str) -> str:
@@ -246,13 +258,16 @@ class _Base:
         self._rr = itertools.count()
         self.server_ready = False
         self.generation = 0  # bumped by every region registration (the cuda transport)
+        #: Called (from any thread) when a call failed in a way that may mean the server is gone:
+        #: the entry point runs the health check at once (``__main__._health``).
+        self.on_suspect: Callable[[], None] = _nothing
 
     def _client(self) -> Any:
         return self.clients[next(self._rr) % len(self.clients)]
 
     def _unavailable(self, model: str, code: str, reason: str, text: str) -> TritonUnavailableError:
         self.metrics.triton_errors.labels(model, code, reason).inc()
-        self.server_ready = False  # the health check says when the server answers again
+        self.on_suspect()  # readiness follows the probe this asks for, never one call
         return TritonUnavailableError(f'{model}: {code} {text}')
 
     def _failed(self, model: str, exc: InferenceServerException) -> Exception:

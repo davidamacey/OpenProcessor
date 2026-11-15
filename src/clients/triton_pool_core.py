@@ -101,6 +101,10 @@ GRPC_CHANNEL_OPTIONS = [
     ('grpc.initial_reconnect_backoff_ms', 250),
     ('grpc.min_reconnect_backoff_ms', 250),
     ('grpc.max_reconnect_backoff_ms', RECONNECT_MAX_BACKOFF_MS),
+    # Re-resolve the server's name at most once a second while connections fail (gRPC default:
+    # 30 s), so a model server recreated on a new address is found within the reconnect bound.
+    # Lookups only happen while failing, against the local resolver: no storm.
+    ('grpc.dns_min_time_between_resolutions_ms', 1000),
     # Handle large tensors (embeddings, image batches, raw detector heads).
     # The ceiling is dominated by *output* size, not input: a raw
     # (non-end2end) detector head can emit hundreds of MB for a full

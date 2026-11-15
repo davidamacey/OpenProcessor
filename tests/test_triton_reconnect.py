@@ -43,6 +43,9 @@ def test_reconnect_backoff_options_are_bounded() -> None:
     assert options['grpc.max_reconnect_backoff_ms'] == RECONNECT_MAX_BACKOFF_MS <= 5000
     assert options['grpc.initial_reconnect_backoff_ms'] <= options['grpc.max_reconnect_backoff_ms']
     assert options['grpc.min_reconnect_backoff_ms'] <= options['grpc.max_reconnect_backoff_ms']
+    # A model server that comes back on a new address (a recreated container) is found within
+    # the reconnect bound only if the channel may re-resolve its name that often (gRPC: 30 s).
+    assert options['grpc.dns_min_time_between_resolutions_ms'] <= RECONNECT_MAX_BACKOFF_MS
     # channel_args replace tritonclient's defaults, so the ones it sets must stay.
     for key in (
         'grpc.max_send_message_length',
