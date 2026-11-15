@@ -64,7 +64,7 @@ at port 4603.
 | `src/config/` | `CurationConfig`, `RegionFields`, `DetectionProfile`, `RegionStatus`, project records and context, job kinds, task routes, retired-env guard |
 | `src/domain/` | Pure rules and field vocabularies shared by clients and services (`region_boxes`, `history`, `embedding_state`, `item_text`, `audit_math`, `ingest_class_sources`); imports only `config` and `utils` |
 | `src/schemas/` | Wire models (`curation/`, `bakeoff/`, `embed`, `ingest`, ...); routers and services import them, they import neither |
-| `native/` | Rust workspace of the native frame engine: `gpu_frame` (general GPU parts), `frame_engine` (product part). Gates: `cargo fmt/clippy/test/deny` hooks scoped to `^native/`, CI job `native` |
+| `native/` | Rust workspace of the native frame engine: `gpu_frame` (general GPU parts), `frame_engine` (product part); `frame_engine/kernels/*.cu` is the one copy of the CUDA kernel sources, read by this Rust engine and by the Python `frame_engine/`. Gates: `cargo fmt/clippy/test/deny` hooks scoped to `^native/`, CI job `native` |
 | `scripts/curation/` | Worker entry points, ingest walkers, import client, backfills, `bakeoff/` |
 | `scripts/` | `setup.sh`, `lib/` (shell libraries, VLM catalog reader), `release/`, `codegen/`, `datasets/`, `docs/`, `examples/`, `bench/`, `research/`, `validation/` |
 | `openprocessor`, `setup-openprocessor.sh` | Management CLI and the one-line installer (both bash) |
