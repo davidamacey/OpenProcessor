@@ -11,7 +11,8 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from src.config.env import env_int, env_str
+from src.config.crop_encoder import CROP_ENCODERS, DEFAULT_CROP_SIZE
+from src.config.env import env_choice, env_str
 
 
 def _read_version() -> str:
@@ -48,10 +49,13 @@ class TritonModelConfig:
 
     # PE-Core (semantic search / curation embeddings). The frame encoder and the crop encoder are
     # two models: the crop one has its own input size (a square per box, letterboxed) and its own
-    # vector space. PE_CROP_SIZE must be the size the crop engine was built at (export/README.md).
+    # vector space. PE_CROP_SIZE is the size the crop engine was built at (export/README.md): 224 or
+    # 336, each its own space (src/config/crop_encoder.py); anything else refuses start-up.
     PE_IMAGE_MODEL = env_str('PE_IMAGE_MODEL', 'pe_image_encoder')
     PE_CROP_MODEL = env_str('PE_CROP_MODEL', 'pe_crop_encoder')
-    PE_CROP_SIZE = env_int('PE_CROP_SIZE', 224, minimum=16, maximum=4096)
+    PE_CROP_SIZE = int(
+        env_choice('PE_CROP_SIZE', tuple(str(s) for s in CROP_ENCODERS), str(DEFAULT_CROP_SIZE))
+    )
     PE_TEXT_MODEL = env_str('PE_TEXT_MODEL', 'pe_text_encoder')
 
 

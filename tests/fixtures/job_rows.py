@@ -46,13 +46,13 @@ def seed_default_spaces(pg: PgDatabase, project: uuid.UUID) -> None:
     from src.db.repos import embedding_spaces as spaces_repo
     from src.services.embedding_spaces.catalog import sync_catalog
     from src.services.embedding_spaces.spaces import default_space_rows
-    from src.services.projects.store import CROP_ENCODER, FRAME_ENCODER
+    from src.services.projects.store import FRAME_ENCODER, crop_encoder
 
     with Session(pg.engine('app')) as session:
         sync_catalog(session)
     with Session(pg.engine('super')) as session:
         frame = spaces_repo.get_model_version(session, *FRAME_ENCODER)
-        crop = spaces_repo.get_model_version(session, *CROP_ENCODER)
+        crop = spaces_repo.get_model_version(session, *crop_encoder())
     assert frame is not None, 'the shipped catalog carries the frame encoder'
     assert crop is not None, 'the shipped catalog carries the crop encoder'
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:

@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy.orm import Session
 
+from src.config.crop_encoder import CROP_ENCODERS
 from src.db.repos import embedding_spaces as repo
 from src.services.embedding_spaces.catalog import (
     CatalogError,
@@ -47,35 +48,50 @@ def test_the_shipped_catalog_lists_every_model() -> None:
     assert keys == {
         ('pe_core_l14_336', 1, 1024),
         ('pe_core_l14_crop224', 1, 1024),
+        ('pe_core_l14_crop336', 1, 1024),
         ('mobileclip2_s2', 1, 512),
     }
 
 
-def test_the_default_spaces_are_catalog_versions_and_crops_use_the_crop_encoder() -> None:
+@pytest.mark.parametrize('size', sorted(CROP_ENCODERS))
+def test_the_default_spaces_are_catalog_versions_and_crops_use_the_crop_encoder(
+    size: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A new project's frame space is the frame encoder's and its item and box spaces the crop
-    encoder's: the crop version names the crop model, its configured size and the letterbox rule,
-    and its image contract is the one the shipped engine inventory carries."""
-    from src.clients.pe_encoder import PE_CROP_MODEL, PE_CROP_SIZE, PE_IMAGE_MODEL
+    encoder's at the deployment's size: the crop version names the crop model, that size and the
+    letterbox rule, and its image contract is the one the engine of that size declares."""
+    from src.clients import pe_encoder
+    from src.clients.pe_encoder import PE_CROP_MODEL, PE_IMAGE_MODEL
     from src.domain.image_geometry import CROP_FILL
-    from src.services.projects.store import CROP_ENCODER, FRAME_ENCODER
+    from src.services.projects.store import FRAME_ENCODER, crop_encoder
     from src.services.training import builtin_engines as builtin
 
+    monkeypatch.setattr(pe_encoder, 'PE_CROP_SIZE', size)
     by_key = {(e.model_key, e.version): e for e in load_catalog()}
-    frame, crop = by_key[FRAME_ENCODER], by_key[CROP_ENCODER]
+    frame, crop = by_key[FRAME_ENCODER], by_key[crop_encoder()]
+    assert crop.model_key == f'pe_core_l14_crop{size}'
     assert frame.triton_image_model == PE_IMAGE_MODEL
     assert crop.triton_image_model == PE_CROP_MODEL
     assert crop.triton_text_model == frame.triton_text_model  # one text tower for both spaces
     assert (crop.weights_ref, crop.weights_sha256) == (frame.weights_ref, frame.weights_sha256)
     image = crop.input_spec['image']
-    assert image['size'] == [PE_CROP_SIZE, PE_CROP_SIZE]
+    assert image['size'] == [size, size]
     assert (image['resize'], image['fill']) == ('letterbox', CROP_FILL)
     assert crop.input_spec_sha256 != frame.input_spec_sha256  # a space of its own
+    other = by_key[CROP_ENCODERS[336 if size == 224 else 224]]
+    assert crop.input_spec_sha256 != other.input_spec_sha256  # and not the other size's
     shipped = {e.name: e.input_contract for e in builtin.SHIPPED}
     contract = shipped[PE_CROP_MODEL].model_dump(mode='json', exclude_none=True)
-    assert contract == image  # what the engine declares is what the version promises
-    assert availability(
-        _version(crop.model_key), {**shipped_engines(), PE_CROP_MODEL: contract}
-    ).available
+    assert {**contract, 'size': [size, size]} == image  # the engine of this size declares this
+    engines = {**shipped_engines(), PE_CROP_MODEL: {**contract, 'size': [size, size]}}
+    assert availability(_version(crop.model_key), engines).available
+    assert not availability(_version(other.model_key), engines).available
+
+
+def test_every_supported_size_has_a_catalog_row_of_that_size() -> None:
+    by_key = {(e.model_key, e.version): e for e in load_catalog()}
+    for size, key in CROP_ENCODERS.items():
+        assert by_key[key].input_spec['image']['size'] == [size, size]
 
 
 def test_a_row_whose_triton_model_is_missing_is_unavailable() -> None:
