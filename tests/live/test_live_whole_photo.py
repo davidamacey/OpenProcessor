@@ -17,6 +17,7 @@ harness project at the end: 0 inconsistencies.
 
 from __future__ import annotations
 
+import functools
 import json
 import subprocess  # nosec B404 - the harness's own compose project
 import uuid
@@ -31,6 +32,7 @@ from tests.live.conftest import (
     REPO_ROOT,
     get_doc,
     refresh,
+    wait_until,
 )
 
 
@@ -111,15 +113,34 @@ def _run_in_api(request: dict[str, Any]) -> dict[str, Any]:
     return json.loads(done.stdout.strip().splitlines()[-1])
 
 
+DROP_DEADLINE_S = 30.0
+
+
+def _delete_probe_docs(opensearch: Any, role: str, field: str) -> bool:
+    """One pass of the probe's delete; ``True`` when no document was skipped. The beat's counts
+    drain (``op.periodic.image_counts_drain``, every 5 s) is the only writer of ``counts`` and
+    recounts every image its items marked or that was never counted, so it can rewrite a probe's
+    image document between the delete's snapshot and its delete: that document answers a version
+    conflict (``conflicts=proceed`` reports it instead of aborting the rest) and the next pass
+    removes it."""
+    deleted = opensearch.post(
+        f'/{INDEXES[role]}/_delete_by_query',
+        params={'refresh': 'true', 'conflicts': 'proceed'},
+        json={'query': {'prefix': {field: 'whole_probe_'}}},
+    )
+    deleted.raise_for_status()
+    return deleted.json()['version_conflicts'] == 0
+
+
 @pytest.fixture(autouse=True)
 def _drop_probe(opensearch: Any) -> Any:
     yield
     for role, field in (('items', 'crop_id'), ('images', 'image_id')):
-        opensearch.post(
-            f'/{INDEXES[role]}/_delete_by_query',
-            params={'refresh': 'true'},
-            json={'query': {'prefix': {field: 'whole_probe_'}}},
-        ).raise_for_status()
+        assert wait_until(
+            functools.partial(_delete_probe_docs, opensearch, role, field),
+            timeout=DROP_DEADLINE_S,
+            interval=1.0,
+        ), f'a writer kept changing the probe documents of the {role} index'
 
 
 def test_a_failed_items_step_is_found_repaired_and_a_delete_keeps_the_list_true(

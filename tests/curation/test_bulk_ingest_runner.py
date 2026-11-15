@@ -135,8 +135,10 @@ class FakeSender:
         fail_all: bool = False,
         busy_after: float | None = None,
         transient_once: dict[str, str] | None = None,
+        busy_first_calls: int = 0,
     ) -> None:
         self.busy_after = busy_after
+        self.busy_first_calls = busy_first_calls
         self.transient_once = dict(transient_once or {})
         self.calls: list[list[str]] = []
         self.in_flight = 0
@@ -162,6 +164,9 @@ class FakeSender:
             await asyncio.sleep(0.005)
             if self.busy_after is not None:
                 raise sender_mod.BatchBusyError('HTTP 503: engine down', self.busy_after)
+            if self.busy_first_calls > 0:
+                self.busy_first_calls -= 1
+                raise sender_mod.BatchBusyError('HTTP 503: engine down', 0.0)
             if self.fail_all:
                 raise sender_mod.BatchRequestError('HTTP 503: triton down')
             results = []
@@ -468,6 +473,38 @@ def test_a_file_that_failed_transiently_waits_for_its_pause_and_is_then_stored(
     assert waits[0]['waiting'] == 1
     assert reporter.snapshots[-1]['stage'] == 'ingest'
     assert sender.calls[-1] == [_paths(4)[2]]
+
+
+def test_a_file_that_waited_and_was_then_stored_is_not_a_failure_of_the_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = MemoryLedger(_paths(4))
+    _waits(monkeypatch, ledger)
+    sender = FakeSender(transient_once={'002.jpg': 'engine_unavailable'})
+    run, reporter = _run(ledger, sender)
+    result = asyncio.run(run.run())
+
+    assert ledger.count('done') == 4
+    assert result['failed'] == 0  # the run ends `completed`, not `completed_with_errors`
+    assert result['processed'] == 4
+    # while it waited it was waiting, not failed, and the run's remaining count still held it
+    waits = [s for s in reporter.snapshots if s['stage'] == 'retry_wait']
+    assert (waits[0]['failed'], waits[0]['waiting']) == (0, 1)
+    assert all(s['failed'] <= s['discovered'] - s['waiting'] for s in reporter.snapshots)
+
+
+def test_a_batch_whose_503_retries_ran_out_and_was_stored_later_is_not_a_failure_of_the_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = MemoryLedger(_paths(4))
+    _waits(monkeypatch, ledger)
+    run, reporter = _run(ledger, FakeSender(busy_first_calls=1), batch_size=4, concurrency=1)
+    result = asyncio.run(run.run())
+
+    assert ledger.count('done') == 4
+    assert (result['ingested'], result['failed'], result['processed']) == (4, 0, 4)
+    waits = [s for s in reporter.snapshots if s['stage'] == 'retry_wait']
+    assert (waits[0]['failed'], waits[0]['waiting']) == (0, 4)
 
 
 def test_a_resumed_run_that_finds_only_waiting_files_waits_and_stores_them(

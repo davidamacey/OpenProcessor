@@ -40,7 +40,7 @@ from src.services.curation.bulk_ingest.limits import (
     RETRY_WAIT_SLICE_S,
 )
 from src.services.curation.bulk_ingest.sender import BatchBusyError, BatchRequestError
-from src.services.curation.ingest_models import ERROR_KIND_BUSY
+from src.services.curation.ingest_models import ERROR_KIND_BUSY, TRANSIENT_ERROR_KINDS
 
 
 if TYPE_CHECKING:
@@ -171,7 +171,9 @@ class BulkIngestRun:
         # Entries discovery could not queue (see ScanResult); reported, never silently dropped.
         self.unreadable = unreadable
         self.unreadable_samples = list(unreadable_samples)
-        self.failed = 0
+        # Files whose latest outcome is a failure that is not a wait: a file that failed and was
+        # stored by a later pass leaves it, so the run's ``failed`` is what is still failed.
+        self._failed_keys: set[str] = set()
         self.request_s = 0.0
         self.in_flight = 0
         # Totals continue from the earlier attempts of a resumed run (the checkpoint).
@@ -198,6 +200,10 @@ class BulkIngestRun:
         return self._abort is not None or self.reporter.cancelled()
 
     # ----------------------------------------------------------------- progress
+
+    @property
+    def failed(self) -> int:
+        return len(self._failed_keys)
 
     @property
     def processed(self) -> int:
@@ -309,10 +315,15 @@ class BulkIngestRun:
         error_kind: str,
         retry_after_s: float | None = None,
     ) -> None:
-        self.failed += len(batch)
+        self._note_failed([c.file_key for c in batch], error_kind)
         await self.ledger.settle(
             [], [(c.file_key, error[:300], error_kind) for c in batch], retry_after_s
         )
+
+    def _note_failed(self, keys: Sequence[str], error_kind: str) -> None:
+        """A transient failure is a wait (reported as ``waiting``), not a failure of the run."""
+        if error_kind not in TRANSIENT_ERROR_KINDS:
+            self._failed_keys.update(keys)
 
     async def _process(self, batch: list[ClaimedPath]) -> None:
         started = time.perf_counter()
@@ -356,7 +367,9 @@ class BulkIngestRun:
             for c in rows
         )
         await self.ledger.settle(done, failed)
-        self.failed += len(failed)
+        self._failed_keys.difference_update(key for key, _ in done)
+        for key, _, kind in failed:
+            self._note_failed([key], kind)
         summary = body.get('summary', {})
         self.totals['ingested'] += ingested
         self.totals['duplicates'] += duplicates

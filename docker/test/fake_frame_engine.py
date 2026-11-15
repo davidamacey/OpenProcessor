@@ -19,7 +19,7 @@ It decodes on the CPU and says so: the ``decode_route`` is ``cpu_small``, the ro
 takes in the real engine. It proves nothing about nvJPEG, the CUDA kernels, the model server's
 real vectors or the engine's memory budget; those belong to the GPU tier.
 
-Refusals, for the tests: the file ``OP_FAKE_ENGINE_MODE_FILE`` (default
+Refusals, for the tests: the file ``FAKE_ENGINE_MODE_FILE`` (default
 ``/verify-data/fake_engine_mode``) holds the mode, read at every request and probe; no file or
 ``ok`` is normal operation.
 
@@ -59,7 +59,7 @@ if TYPE_CHECKING:
 
     from frame_engine.messages import EngineRequest, EngineResult
 
-MODE_FILE = Path(os.environ.get('OP_FAKE_ENGINE_MODE_FILE', '/verify-data/fake_engine_mode'))
+MODE_FILE = Path(os.environ.get('FAKE_ENGINE_MODE_FILE', '/verify-data/fake_engine_mode'))
 PORT = 8001
 ROUTE = 'cpu_small'
 JPEG_QUALITY = 90
