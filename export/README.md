@@ -29,7 +29,7 @@ In the `model-export` image (the `export` target of the root `Dockerfile`), neve
 | `download_face_models.py` | Download pre-trained face models | PyTorch weights |
 | `download_paddleocr.py` | Download PP-OCRv6 models | ONNX models |
 | `download_pytorch_models.py` | Download YOLO11 PyTorch models | PyTorch weights |
-| `export_worker.py` | The `model-export-worker` service: runs the builds `POST /models/upload` and `POST /models/{model_name}/export` queue as job files under `/jobs/model_export`, then loads the engines into Triton. It runs `ultralytics_export.py` for every head kind (the head kind only names the engine: `{name}_trt` for the NMS-free head of YOLO26 and YOLOv10, `{name}_trt_end2end` for an embedded-NMS head); a job queued by an older version has no head kind and fails with "re-upload the model" | task status files |
+| `export_worker.py` | The `model-export-worker` service: runs the builds `POST /models/upload` and `POST /models/{model_name}/export` queue (a `jobs` row on the `gpu_export` queue; read it at `GET /models/export/{task_id}`), then loads the engines into Triton (a loaded model is unloaded first). It runs `ultralytics_export.py` for every head kind (the head kind only names the engine: `{name}_trt` for the NMS-free head of YOLO26 and YOLOv10, `{name}_trt_end2end` for an embedded-NMS head); a job queued by an older version has no head kind and fails with "re-upload the model" | the job row |
 
 ## Model Directory Structure
 

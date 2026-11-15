@@ -28,6 +28,7 @@ broker, and the shared job volumes are gone. The text below is current:
 | `postgres`, `valkey`, `db-migrate` | Projects, classes, configs, settings, jobs, events; the broker and event wake-ups | [Control plane](../operations/control-plane.mdx) |
 | `jobs-worker`, `interactive-worker`, `periodic-worker`, `open-vocab-worker`, `cluster-worker`, `jobs-beat` | Every long operation is a job row; a reaper recovers dead workers | [Jobs](../operations/jobs.mdx) |
 | API replicas | Stateless processes behind a proxy; SSE resumes with `Last-Event-ID` | [Scale-out](../operations/scale-out.mdx) |
+| `frame-engine` | Decodes each photo once on the GPU and runs every model branch from that frame; ingest moves photo by photo from its answer to its write | [Frame engine and the ingest flow](./frame-engine-and-ingest.mdx) |
 
 The curation parts of these diagrams share three ideas:
 
