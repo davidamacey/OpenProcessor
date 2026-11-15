@@ -400,6 +400,9 @@ CREATE TABLE item_state (                    -- one narrow row per item (plan 15
   region_status text NULL, region_validated boolean NOT NULL DEFAULT false, region_verifier text NULL, region_label_source text NULL,
   region_count smallint NOT NULL DEFAULT 0, region_rejected_count smallint NOT NULL DEFAULT 0, region_max_score real NULL,
   region_revision integer NOT NULL,          -- the editor's OCC token (expected_region_revision)
+  region_set_complete boolean NULL,          -- fold output (Q8): the closed set (4.3 layer 4); NULL while no box claim or machine set decides
+  region_seen_seq integer NOT NULL DEFAULT 0,   -- fold output (Q9): the machine-box generation the fold shows; the claim writer stores it as a claim's region_seq
+  geometry_pinned boolean NOT NULL DEFAULT false,   -- fold output (Q11): bbox is the box a person saw, exactly while today's is_locked_item holds
   moved_partition_id uuid NULL, moved_cluster_uid uuid NULL,   -- a live class_moved (layer 5): read only while that partition serves
   created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL   -- updated_at moves only when the effective state changes
 );  -- no UNIQUE (project_id, crop_id): items holds it, the copy here is for sort order only (m3)
@@ -582,22 +585,32 @@ One list in `src/domain/claim_kinds.py`, equal to the `claim_kinds` rows by test
 | `item_drawn` | item | geometry | yes | yes | `POST /images/{image_id}/items` (`src/routers/curation/image_items.py:21`); an import creating an item (`dataset_import/item_labels.py:179`) |
 | `geometry_set` | item | geometry | yes | yes | `PATCH /crops/{crop_id}/geometry` (`crops_geometry.py:39`) |
 | `class_set` | item | class | yes | yes | `PUT /crops/{crop_id}/label` (`crops_write.py:39`), `PUT /crops/batch_label` (`:108`), `POST /label_ops/accept_machine` (`label_ops.py:151`), `POST /review/new_class_proposals/resolve` (`review_resolve.py:111`), validated import labels |
-| `class_cleared` | item | class | yes | no | `DELETE /crops/{crop_id}/label` with no human label on record, `POST /crops/{crop_id}/discard` with `clear_class` (`label_undo.py:109,:131`) |
+| `class_cleared` | item | class | no | no | `DELETE /crops/{crop_id}/label` with no human label on record, `POST /crops/{crop_id}/discard` with `clear_class` (`label_undo.py:109,:131`) |
 | `class_moved` | item | class | no | no | `POST /crops/move` (`crops_write.py:161`); also gives placement (layer 5) |
 | `holdout_frozen` | item | class | yes | yes | `POST /test_holdout/freeze` (`holdout_freeze.py:19`); import and combine freezes |
-| `excluded`, `restored` | item | flag | no | no | `POST /crops/batch_exclude`, `/crops/batch_unexclude` (`crops_exclude.py:29,:68`) |
+| `excluded`, `restored` | item | flag | `excluded` yes, `restored` no (Q11: the fold pins only a human delete, `not_an_object`) | no | `POST /crops/batch_exclude`, `/crops/batch_unexclude` (`crops_exclude.py:29,:68`) |
 | `review_dismissed`, `review_restored` | item | flag | no | no | `/review_dismiss` (`crops_exclude.py:95`), `/discard` with `dismiss_from_review`, `/review_undismiss` (`label_undo.py:228`) |
 | `vlm_dismissed`, `probe_dismissed`, `needs_new_class` | item | flag | no | no | `/vlm_dismiss` (`label_undo.py:180`), `/probe_dismiss` (`:197`), `POST /crops/flag_new_class` (`crops_write.py:216`) |
 | `audit_sampled`, `combine_conflict` | item | flag | no | no | `POST /audit/start` (`audit.py:23`); the combine job (`projects/combine/*`) |
-| `region_status_set` | item | region | no | no | only the empty-list verdict `no_region_visible` (B3): `PATCH /crops/{crop_id}/region_meta` (`regions_edit.py:118`), `POST /regions/batch_status` (`:272`); every other whole-set status is expanded into box claims (3.3) |
-| `box_created`, `box_moved`, `box_state_set`, `box_text_set` | box | box | no | yes | `PUT /crops/{crop_id}/regions` (`regions_boxes_edit.py:291`, as a diff), `PUT /crops/batch_regions` (`:335`), `PATCH /crops/{crop_id}/regions/{box_id}` (`:368`), `POST /regions/batch_box_state` (`:426`), the whole-set routes above; validated import boxes |
-| `box_deleted` | box | box | no | no | the same routes; never creates a box |
+| `region_status_set` | item | region | yes | no | only the verdict over an empty box list (B3, Q7): `no_region_visible`, or the status the person named (`verify_rejected`, `false_positive`) kept as said: `PATCH /crops/{crop_id}/region_meta` (`regions_edit.py:118`), `POST /regions/batch_status` (`:272`); every other whole-set status is expanded into box claims (3.3) |
+| `box_created`, `box_moved`, `box_state_set`, `box_text_set` | box | box | yes | yes | `PUT /crops/{crop_id}/regions` (`regions_boxes_edit.py:291`, as a diff), `PUT /crops/batch_regions` (`:335`), `PATCH /crops/{crop_id}/regions/{box_id}` (`:368`), `POST /regions/batch_box_state` (`:426`), the whole-set routes above; validated import boxes |
+| `box_deleted` | box | box | yes | no | the same routes; never creates a box |
 | `duplicate_verdict` | pair | pair | no | no | `POST /near_duplicates/decisions` (`near_duplicates.py:110`); the `DELETE` is a `withdraw` |
 | `withdraw` | claim | withdraw | no | no | every undo route: `/label/undo`, `/label/undo_batch`, `/label_ops/{op_id}/undo`, region, geometry, dismiss undos (`label_undo.py:62,:78`, `label_ops.py:49`, `crops_geometry.py:64`, `edit_undo.py:156,:175`), import undo, `forget_holdout_freeze` |
 | phase 5: `favourite_set`, `pick_set`, `hidden_set`, `archived_set`, `trashed`, `untrashed`, `stack_pick_set`, `exclusion_forced`, `exclusion_released` | photo | photo | no | no | the library routes of photo_library 00 section 7 and 20 section 6 |
 | phase 5: `capture_corrected`, `text_set` | media | photo | no | no | the same; a video subject uses `subject_video_key` |
 | phase 5: `entity_created`, `entity_named`, `entity_merged`, `entity_hidden`, `member_added`, `member_removed`, `memory_state_set`, `memory_timeline_set` | entity | entity | no | no | the same; `PUT /persons/{person_id}/name`, `POST /persons/merge` (`src/routers/persons.py`) for the core people |
 | phase 5: `face_confirmed`, `face_rejected` | face | face | no | no | the people routes of photo_library 15 section 3 |
+
+**What pins the item's box (Q11, `claim_kinds.pins_geometry`).** The pin kinds above say which
+claims *can* pin; the fold pins the item's box to the one the person saw exactly while today's
+`is_locked_item` (`occ_locks.py:137`) holds: a person's or validated-import class, a holdout, human
+or import geometry, a human delete (`excluded` with reason `not_an_object`, which today keeps the
+box so a re-detect cannot re-create it), any human-owned box inside the item, or a box set validated
+by a person or an import (`ItemState.geometry_pinned`). Not pinning, as today: a `class_cleared`, the
+dismissals, the flags, a `class_moved`, an `excluded` with another reason. A person's box was drawn
+against the crop they saw, so the item's box must not move under it. The truth table asserts
+`geometry_pinned` equals today's `is_locked_item` on every enumerated history.
 
 Class registry edits (create, rename, deprecate, merge, hotkeys) stay rows of `project_classes` with
 their revision (02a section 3): they are configuration, not a decision about an object. Adoption of
@@ -610,27 +623,32 @@ the detector's class and propagation are not claims: they write not-rebuildable 
 |---|---|---|
 | `item_drawn` | `{bbox, request_id?, standalone_region?: bool, origin?: {project, crop_id, image_id}}` | `subject_crop_id` = `drawn_crop_id(image_id, request_id)`; an import's item uses the detector-style `crop_id` |
 | `geometry_set` | `{bbox}` | `subject_machine_bbox` = the detector box at the time (today `detector_bbox_norm`) |
-| `class_set` | `{class_name, class_id_hint, label_source, via: 'single'\|'batch'\|'bulk_accept'\|'resolve'\|'import'\|'combine', labeler, profile}` | `label_source` is one of `HUMAN_LABEL_SOURCES`, `human_bulk_accept` or `import`; `labeler` and `profile` are the wire `class_labeler`, `class_detector`, `class_detector_version` at write time (`class_label.py:45`, M19) |
-| `class_cleared`, `excluded`, `restored`, `review_*`, `needs_new_class` | `{}`, `{reason}`, `{}`, `{}`, `{note?}` | `excluded.reason` `not_an_object` is a delete; `restored` is the one way back from `excluded` (M2) |
+| `class_set` | `{class_name, class_id_hint, label_source, via: 'single'\|'batch'\|'bulk_accept'\|'resolve'\|'import'\|'combine', labeler, profile: {detector?, detector_version?}}` | `label_source` is one of `HUMAN_LABEL_SOURCES`, `human_bulk_accept` or `import`; `labeler` and `profile` are the wire `class_labeler`, `class_detector`, `class_detector_version` at write time (`class_label.py:45`, M19) |
+| `class_cleared` | `{hidden: [{source, analyser_id}]}` | Q10: every machine opinion and detection present when the person cleared, as (source, analyser) pairs (`source` `detection` for a detection); an opinion is hidden iff its pair is in the list of a live clear, so a re-run of the same analysers leaves the item cleared and a newer model version shows |
+| `excluded`, `restored`, `review_*`, `needs_new_class` | `{reason}`, `{}`, `{}`, `{note?}` | `excluded.reason` `not_an_object` is a delete; `restored` is the one way back from `excluded` (M2) |
 | `class_moved` | `{partition_id, cluster_uid}` | |
 | `vlm_dismissed` | `{class_name?, class_id_hint?}` | the suggestion that was rejected |
 | `probe_dismissed` | `{class_name, probe_analyser_id}` | |
 | `holdout_frozen` | `{freeze_id, machine_class: {class_name, source, confidence} \| null}` | required; `null` = frozen as "no class" (M1): the machine class that would win at the freeze, or none (4.3 layer 2) |
 | `audit_sampled` | `{batch_id, label_name, label_source}` | |
-| `region_status_set` | `{status: 'no_region_visible', label_source, region_seq}` | |
-| `box_created` | `{bbox, state, text?, region_seq}` | `subject_box_id` minted from `items.box_seq` |
-| `box_moved`, `box_state_set`, `box_text_set`, `box_deleted` | `{bbox, bbox_correct?, region_seq}`, `{state, rejection_reason?, region_seq}`, `{text, region_seq}`, `{region_seq}` | an explicit empty text is a reading of "no text" (`region_boxes.py:277`); `subject_bbox` is the box as shown |
+| `region_status_set` | `{status: 'no_region_visible'\|'verify_rejected'\|'false_positive', label_source, region_seq, item_bbox}` | Q7: written over an empty box list only; the status is what the person said |
+| `box_created` | `{bbox, state, text?, region_seq, item_bbox}` | `subject_box_id` minted from `items.box_seq` |
+| `box_moved`, `box_state_set`, `box_text_set`, `box_deleted` | `{bbox, bbox_correct?, region_seq, item_bbox}`, `{state, rejection_reason?, region_seq, item_bbox}`, `{text, region_seq, item_bbox}`, `{region_seq, item_bbox}` | an explicit empty text is a reading of "no text" (`region_boxes.py:277`); `subject_bbox` is the box as shown; `item_bbox` is the item's own box at the write, which the pin (3.2) and matching (3.4 step 3) read |
 | `combine_conflict` | `{origins: [..], merged_origins: [..]}` | |
 | `duplicate_verdict` | `{level, decision: 'same'\|'different'}` | members in `subject_crop_id`/`photo_key` and `subject_pair_id` |
 | `withdraw` | `{}` | the target is `withdraws_claim_id` |
 | phase 5 | one model per kind, e.g. `capture_corrected {taken_local?, offset_minutes?, lat?, lon?, altitude_m?, location_source}`, `entity_named {name, parent_entity_id?}`, `stack_pick_set {group_id}`, `exclusion_forced {rule_id}` | the columns of the photo-library tables they replace |
 
-`region_seq` in every box and region claim is `items.region_seq` read under the item lock: the
-machine boxes the person saw (4.3 layer 4). A whole-set status other than `no_region_visible` is
-expanded at write time, in the same operation, into what `boxes_with_status` computes
-(`region_box_edits.py:254-295`): one `box_state_set` for every box of the resulting list, so a closed
-set is entirely claims; `no_region_visible` writes a `box_deleted` per box and one
-`region_status_set`. A partial per-box act writes claims for the boxes it changed only.
+`region_seq` in every box and region claim is `item_state.region_seen_seq` (Q9), the generation of
+machine boxes the fold showed the person, not `items.region_seq` (a re-run may have replaced the rows
+since; the fold would otherwise show the new rows as the ones the person saw, and a closed set
+would look open). The claim writer reads it from the stored fold output under the item lock. A
+whole-set status other than `no_region_visible` is expanded at write time, in the same operation,
+into what `boxes_with_status` computes (`region_box_edits.py:254-295`): one `box_state_set` for every
+box of the resulting list, so a closed set is entirely claims; over an empty list the verdict is one
+`region_status_set` carrying the named status (Q7), and `no_region_visible` also writes a
+`box_deleted` per box. A partial per-box act writes claims for the boxes it changed only, except
+that an edit which closes the set claims every box.
 
 Class in a claim: by name, with the registry id of that moment as a hint (M20). The hint is used only
 when `project_classes(project, hint).name_key = normalize_class_name(name)` or the hint's class is
@@ -648,8 +666,9 @@ found again by `src/domain/claim_match.py`, shared by the fold, re-detect and im
    `photos.frame` matches nothing, stays dormant and is reported `frame_mismatch` (fail closed).
 2. **Same id**: an item whose `crop_id` is the group's `subject_crop_id` takes the group.
 3. **Else** groups and new detections are matched greedily, best IoU first, ties by `crop_id`: the
-   detection box against the group's effective box (layer 1) or its newest `subject_machine_bbox`,
-   at least **0.5** (`LABEL_IOU_MATCH`, `proposal_merge.py:30`). A new matched item takes the group's
+   detection box against the group's effective box (layer 1), its newest `subject_machine_bbox`, or
+   the `item_bbox` its newest claim saw (Q5: a lone dismissal or delete has no other box to match
+   by), at least **0.5** (`LABEL_IOU_MATCH`, `proposal_merge.py:30`). A new matched item takes the group's
    `crop_id`, so a touched item keeps its wire id across detector versions (`reprocess_detect.py:1-11`).
 4. **No match**: a group with a live asserting claim (`claim_kinds.asserts_object`) creates an item
    from the claims, `geometry_source` `human` or `import`. A group of dormant kinds only (`excluded`
@@ -659,7 +678,11 @@ found again by `src/domain/claim_match.py`, shared by the fold, re-detect and im
    deletes the row and its dormant claims wait for step 2 or 3.
 6. **Machine geometry** with several detections: the newest `detector` analyser; `open_vocab` only
    without a detector row; `import` only without either.
-7. **Boxes**: the same inside the item, on `subject_box_id` then IoU ≥ 0.5. A split (one claimed
+7. **Boxes**: the same inside the item: a claim on a machine box matches on `subject_box_id`, then
+   IoU ≥ 0.5; a box a person created owns its minted id and matches on that id only, never by
+   overlap with an unrelated machine box (Q6). A claim group whose id a re-run replaced joins the
+   machine box another group took by id when it overlaps it at least 0.5: both name one box, so the
+   set never shows a person's old row twice. A split (one claimed
    box, two new boxes each below 0.5) leaves the claimed box and two machine boxes, as today.
 
 ### 3.5 Undo, operations, imports, retention
@@ -681,7 +704,9 @@ found again by `src/domain/claim_match.py`, shared by the fold, re-detect and im
 
   A step-back undo on one item withdraws every live claim of the person's newest live operation on
   it, so a discard (`class_cleared` + `review_dismissed`) or a region edit comes back whole; the walk
-  of `find_undo_snapshot` (`src/domain/history.py:219`) becomes one indexed read. A redo appends
+  of `find_undo_snapshot` (`src/domain/history.py:219`) becomes one indexed read. As today, the walk
+  steps back over label, batch label, move, resolve and discard operations and not over a bulk accept
+  (`HUMAN_LABEL_WRITERS`; Q4). A redo appends
   copies under a new operation; a `withdraw` is never withdrawn; two undos of one claim meet on
   `uq_claims_withdraws` (409 `already_undone`).
 - **Operations**: every human act writes one `label_operations` row (kinds in 2.2) and its claims
@@ -691,7 +716,10 @@ found again by `src/domain/claim_match.py`, shared by the fold, re-detect and im
 - **Import**: a validated label is a `class_set` with `actor_kind = 'import'`, `actor =
   'import:<id>'` and the import operation's `op_id` (naming `dataset_import_id`). It ranks below
   every live human claim (B2); where a person decides, the import reports `locked_conflict` as today
-  (`dataset_import/item_labels.py:30-40`), from `fold.conflicts`. A `label_trust: suggestion` label is
+  (`dataset_import/item_labels.py:30-40`), from `fold.conflicts`. On a held-out item an import or
+  combine class claim written after the freeze does not decide, unless it corrects the class the
+  import itself set (today it is refused, `item_labels.human_owned`; Q3); the writer still reports
+  the conflict. A `label_trust: suggestion` label is
   a `class_opinions` row (`import_suggestion`, `import_id`); its boxes and detections carry
   `import_id` under an `import` analyser. Import undo withdraws the operation's claims and deletes the
   rows with its `import_id`: items only the import created disappear, items a person claimed stay
@@ -760,8 +788,9 @@ the queries that choose which items each writer sees:
 Inside one source there is one row by key. One order is undefined today (whichever of propagation
 and an import suggestion wrote last): rank 3 over 4 here, because an import label is about this item
 and a propagated one is carried over from its cluster (plan 15 section 14, answer 5). The function
-skips every opinion and detection created before a live deciding `class_cleared` (layer 2), and an
-opinion row without a class never displaces one with a class (section 2.3, M17).
+skips every opinion and detection whose (source, analyser) pair a live deciding `class_cleared`
+lists in `hidden` (layer 2, Q10), and an opinion row without a class never displaces one with a class
+(section 2.3, M17).
 
 ### 4.3 The fold, layer by layer
 
@@ -770,31 +799,39 @@ opinion row without a class never displaces one with a class (section 2.3, M17).
 the items where an import or combine claim lost to a human one (`locked_conflict`,
 `combine_conflict`).
 
-1. **Geometry (R3 pin, B1)**: a deciding `item_drawn`/`geometry_set` gives the bbox and
-   `geometry_source` (`human`; `import` for an import or combine actor). Else, with a live pinning
-   claim (`class_set`, `class_cleared`, `holdout_frozen`), the deciding one's `subject_bbox`, the box
-   the person saw, `geometry_source` unchanged. Else the machine geometry (3.4 step 6). Later
+1. **Geometry (R3 pin, B1, Q11)**: a deciding `item_drawn`/`geometry_set` gives the bbox and
+   `geometry_source` (`human`; `import` for an import or combine actor). Else, exactly while today's
+   `is_locked_item` holds (3.2: a person's or validated-import class, holdout, human or import
+   geometry, a human delete, any human-owned box, a set validated by a person or import), the box the
+   person saw: the item's box as shown at the newest live claim that pins (its `subject_bbox`, or the
+   `item_bbox` of a box or region claim), whoever made it; `geometry_source` unchanged and `geometry_pinned` true. A clear, a
+   dismissal, a flag, a move to a cluster and an exclusion for another reason do not pin. Else the machine geometry (3.4 step 6). Later
    detections only add rows. `area`, `rank` (by area, `item_geometry.py:219`) follow.
 2. **Class**: the deciding claim among `class_set`, `class_cleared`, `class_moved`:
    - `class_set` → its class (3.3), `class_source` `human` (`external_label` for import or combine).
      An unresolvable name: `class_id` NULL, `class_unresolved`, same `class_source`, still locked (M17).
-   - `class_cleared` → the machine class of 4.2 over opinions and detections created after its `at`,
-     not validated: earlier class claims are dead, a later opinion shows (M17; `label_undo.py:109-121`).
+   - `class_cleared` → the machine class of 4.2 over the opinions and detections its `hidden` list
+     does not name, not validated: earlier class claims are dead, an opinion from an analyser the
+     person did not see shows (M17, Q10; `label_undo.py:109-121`).
    - `class_moved` → the machine class as a suggestion, not validated (`class_label.py:239-277`).
    - **Holdout (M1)**: while a live `holdout_frozen` exists, a withdraw written after the freeze of a
      class claim written before it is ignored; with no deciding claim the class is the payload's
      `machine_class`, none when `null`, and no opinion applies. A person's class claim newer than
      the freeze still decides (no route refuses it today, `crops_write.py:39`; section 11, question 1).
+     An import or combine class claim written after the freeze decides only when it corrects the
+     class the import itself set (Q3). The freeze payload records what a clear had left, never what
+     it hid.
    - Otherwise `machine_class` of 4.2.
    - `class_validated` = a resolved deciding `class_set` **and not excluded** (M2);
      `class_claim_id`, `class_op_id` (M8), `class_opinion_source`, `class_confidence` name the source.
 3. **Flags**: `excluded*` from the deciding `excluded`/`restored` (unexclude writes `restored`, undo
    withdraws; the same state, because validation is computed: M2); `review_dismissed_at` from
    `review_dismissed`/`review_restored`; `holdout` = a live `holdout_frozen`; `needs_new_class` = a
-   live flag or opinion outcome `new_class_pending` until a later `class_set`;
+   live flag or opinion outcome `new_class_pending` until a later human `class_set` (a plain label too, Q1);
    `vlm_suggestion_dismissed` = a live `vlm_dismissed` naming the current VLM suggestion
    (`class_sources.py:198`); `probe_dismissed_class` from `probe_dismissed`; `audit_*` from
-   `audit_sampled` and the first later `class_set` (`src/domain/audit_math.py`); `combine_conflict` =
+   `audit_sampled` and the latest human class verdict after it (`src/domain/audit_math.py`; today's
+   rule, Q2); `combine_conflict` =
    a live conflict claim with no later `class_set`; `import_ids` from live claims, not-rebuildable
    opinions and detections (M13).
 4. **Boxes (B3)**: per box the deciding claim of each aspect (geometry, state, text) wins over the
@@ -802,13 +839,17 @@ the items where an import or combine claim lost to a human one (`locked_conflict
    `human`/`import`; a human reject sets `REJECT_REASON_HUMAN`, a typed text `text_source = 'human'`;
    else the reader consensus of `box_texts` (`src/services/detection/region_text.py:400-455`, moved
    to `src/domain/`). **Closed set**: with C the newest live human or import box or region claim, the
-   set is closed when no box is `proposed` after folding the claims with the machine boxes of
-   `region_seq` ≤ C's; then later unclaimed machine boxes stay results, unfolded (today the locked
-   item is never written, `occ_locks.py:137-151`). A live `no_region_visible` newer than every box
-   claim folds no machine box. `region_status`: `no_region_visible` under that verdict; else, with a
+   set is closed when no box is `proposed` after folding the claims with the machine boxes of the
+   generation the person saw (the newest generation not newer than C's `region_seq`; the repository
+   keeps that generation when a re-run replaces the rows, Q9); then later unclaimed machine boxes
+   stay results, unfolded (today the locked item is never written, `occ_locks.py:137-151`). A live
+   `region_status_set` newer than every box claim folds no machine box. `region_status`: the
+   verdict's own status (`no_region_visible`, or the `verify_rejected` / `false_positive` the person
+   gave over an empty list, Q7); else, with a
    human or import box claim, `derive_status(boxes, empty_status=NO_REGION_VISIBLE)`
    (`region_writes.py:68-105`); else the machine status. `region_validated` = closed (today's rule,
-   `region_writes.py:100-102`); counts and max score as `boxes_write_fields`
+   `region_writes.py:100-102`); `region_set_complete` = closed, else the machine region's own
+   (Q8, an `item_state` column); counts and max score as `boxes_write_fields`
    (`region_boxes.py:329-382`); `region_verifier` from C's actor, else the machine's.
 5. **Placement (M6, M21)**: `moved_partition_id`, `moved_cluster_uid` from the deciding `class_moved`.
    Readers use them only while that partition serves, else the serving partition's membership, so an
@@ -836,8 +877,8 @@ change:
 | `is_human_deleted` (:90) | excluded, by human, `not_an_object` | live human `excluded` with that reason | layer 3; a dormant claim re-applies to a new matching detection (3.4) |
 | `has_human_geometry` (:102) | `geometry_source` human or deleted | live human `item_drawn`/`geometry_set`, or deleted | layer 1 reads claims before detections |
 | `has_import_geometry` (:109) | `import_ids` and validated `external_label` | live import `item_drawn` or `class_set` | layer 1 (pin) and 2 |
-| `is_locked_geometry` (:121) | the two above or holdout | the claims above, any pinning claim, or live `holdout_frozen` | layer 1 pins the box to the claim's `subject_bbox`; `claim_match` step 4 keeps the item |
-| `is_locked_item` (:137) | any of the above, or region validated by human/import verifier | any of the above, or a closed box set | layer 4: later unclaimed machine boxes stay out of a closed set |
+| `is_locked_geometry` (:121) | the two above or holdout | the claims above or live `holdout_frozen` | layer 1 pins the box to the claim's `subject_bbox` or the `item_bbox` it saw (Q11); `claim_match` step 4 keeps the item |
+| `is_locked_item` (:137) | any of the above, any human-owned box, or region validated by human/import verifier | any of the above, a live human box claim, or a closed box set; `geometry_pinned` is exactly this predicate (Q11) | layer 4: later unclaimed machine boxes stay out of a closed set; layer 1 keeps the item's box |
 | `is_human_owned_item` (:154) | human class, human geometry, curator holdout, human box, human-validated set | the item has a live claim with `actor_kind = 'human'` | used by import undo: the item survives the withdrawal |
 
 The wire flags `label_locked` and per-box `locked` (`wire.py:389`, `:525`) keep today's predicates,
@@ -863,7 +904,9 @@ tests marked (DB) (`tests/db/`), each named with the finding it closes (appendix
 | `test_excluded_never_validated` (M2) | no history yields `excluded` and `class_validated` together |
 | `test_resumed_chunk_no_duplicate` (M4, DB) | a re-run committed chunk inserts nothing; a later step-back undo clears the item |
 | `test_undo_outcomes_match_effect` (M12) | dry-pass counts equal the observed change per item; a step-back undo of a discard restores class and review state together |
-| `test_cleared_hides_only_older`, `test_empty_vlm_answer_keeps_class`, `test_unresolved_keeps_lock` (M17) | the three M17 rules |
+| `test_cleared_hides_only_the_analysers_it_saw`, `test_empty_vlm_answer_keeps_class`, `test_unresolved_keeps_lock` (M17, Q10) | the three M17 rules; a clear hides the (source, analyser) pairs it lists, a newer analyser's opinion shows |
+| `test_rerun_of_the_same_analysers_after_a_clear_leaves_it_cleared` (Q10) | emptying every result and re-running the same analysers restores a cleared item |
+| `test_what_locks_the_item_pins_its_box`, `test_clears_dismissals_flags_moves_and_other_exclusions_do_not_pin` (Q11), truth table `p_pinned` | the box is pinned iff today's `is_locked_item` holds, on every enumerated history |
 | `test_rerun_restores_state`, `test_rebuild_equals_incremental` (M11, DB) | emptying rebuildable results and re-running (detections jittered under IoU 0.5) restores every claimed item, revisions aside; a chunked rebuild during writes ends equal to incremental folding, revisions included |
 | `test_class_resolution` (M20) | follows `merged_into`, survives a rename; a foreign hint never selects a class; an unknown name gives `class_unresolved` |
 | `test_region_revision_increases`, `test_opinion_rank` | `region_revision` grows on every observable write; removing the top opinion yields the next rank |
@@ -1290,6 +1333,11 @@ machine-class order (4.2), identity apart from state (4.1). New:
 3. **Trained weights after erasure** are not erased (section 8); the owner decides whether such a
    model must be retrained or deleted (plan 15 section 13).
 
+Answers (coordinator decisions 2026-11-15, applied by the fold lane; the rows are in appendix A,
+"Fold lane decisions"): question 1 stands as written (a person's newer claim decides a frozen
+item; an import or combine claim after the freeze does not, Q3); question 2 stands, now exact: the
+generation the person saw stays and a re-run's boxes stay results (Q9).
+
 ## Appendix A. Review trace
 
 One row per finding of the independent review (2026-11-15) and the section that now answers it.
@@ -1329,3 +1377,26 @@ One row per finding of the independent review (2026-11-15) and the section that 
 | m5 pgvector in the image | section 9, `0010` row |
 | m6 provenance key with a nullable job id | 2.1 `uq_photo_provenance_source` |
 | m7 two work lists | 2.3 `analysis_ledger` is the only work list; `vector_gaps` explains only |
+
+### Fold lane decisions
+
+Decisions of the coordinator on 2026-11-15 after the fold lane's differential run against today's
+code (`tests/domain/test_fold_differential.py`); each is applied in `src/domain/` and in the
+allow-list `tests/domain/world_allowed.py`.
+
+| Decision | Rule now | Answered in |
+|---|---|---|
+| Q1 `needs_new_class` | a later human `class_set`, a plain label too, clears the flag (today only resolve does) | 4.3 layer 3; test `test_a_plain_label_clears_needs_new_class_q1` |
+| Q2 audit outcome | the latest human class verdict after `audit_sampled`, as today | 4.3 layer 3 |
+| Q3 import on a held-out item | an import or combine class claim after the freeze does not decide, unless it corrects the import's own class; the writer still reports the conflict | 3.5 Import; 4.3 layer 2 |
+| Q4 step-back undo | does not step back over a bulk accept, as today | 3.5 Undo |
+| Q5 dormant claim group | step 3 of matching also tries the `item_bbox` the group's newest claim saw | 3.3, 3.4 step 3; test `test_claim_match` |
+| Q6 person-made box id | a created box owns its minted id and matches on it only; claims on machine boxes match on id, then IoU | 3.4 step 7 |
+| Q7 whole-set verdict over no box | keeps the status given (`verify_rejected`, `false_positive`); `no_region_visible` only when given | 3.2, 3.3, 4.3 layer 4; test `test_a_verdict_over_no_box_keeps_the_status_the_person_gave_q7` |
+| Q8 `region_set_complete` | a fold output and an `item_state` column | 2.4; 4.3 layer 4 |
+| Q9 `region_seen_seq` | a fold output the repository stores; a claim's `region_seq` is the generation the person saw | 2.4; 3.3; 4.3 layer 4 |
+| Q10 the clear | a `class_cleared` payload lists the hidden (source, analyser) pairs; an opinion is hidden iff its pair is in a live clear's list | 3.3; 4.2; 4.3 layer 2; tests in 4.5 |
+| Q11 what pins the box | exactly while today's `is_locked_item` holds; a clear, dismissals, flags, a move and another exclusion reason do not pin | 3.2; 4.3 layer 1; 4.4; tests in 4.5 |
+| Q12 text consensus | the fold takes the resolved reader consensus (`MachineText`) as input; the wiring lane moves `region_text.py` consensus into `src/domain/` | 4.3 layer 4 |
+| Q13 class profile | `profile` is `{detector?, detector_version?}` | 3.3 |
+| Q14 phase-5 kinds | not in the catalog until the gallery lane adds them | 3.2 |
