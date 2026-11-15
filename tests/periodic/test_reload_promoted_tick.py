@@ -50,6 +50,8 @@ def test_a_model_triton_lost_is_loaded_again(promoted, monkeypatch: pytest.Monke
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == '/v2/repository/index':
             return httpx.Response(200, json=[{'name': 'yolo_custom', 'state': 'UNAVAILABLE'}])
+        if request.url.path.endswith('/ready'):
+            return httpx.Response(400)  # lost by the server: the safe load only loads
         return httpx.Response(200)
 
     seen = triton(monkeypatch, handler)

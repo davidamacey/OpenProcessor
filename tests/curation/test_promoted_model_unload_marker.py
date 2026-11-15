@@ -36,6 +36,8 @@ def loads(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith('/repository/index'):
             return httpx.Response(200, json=[])
+        if request.url.path.endswith('/ready'):
+            return httpx.Response(400)  # not loaded: the safe load goes straight to the load
         posted.append(request.url.path)
         return httpx.Response(200)
 

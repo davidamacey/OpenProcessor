@@ -124,6 +124,11 @@ class _FakeIndexAndLoadClient:
     async def __aexit__(self, *_args: Any) -> None:
         return None
 
+    async def get(self, url: str) -> Any:
+        """The safe load's ready check: a lost model is not ready."""
+        assert url.endswith('/ready')
+        return httpx.Response(400)
+
     async def post(self, url: str) -> Any:
         class _Resp:
             def __init__(self, status_code: int, payload: Any) -> None:
