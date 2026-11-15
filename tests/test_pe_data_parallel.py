@@ -1,9 +1,9 @@
-"""PE image encoder placement across GPUs.
+"""PE encoder placement across GPUs.
 
-``pe_image_encoder`` carries no ``gpus`` list, so Triton starts one instance on every GPU the
-container sees and ``TRITON_GPU_ID`` in ``.env`` decides how many cards encode in parallel.
-Every other model stays on the first visible card, which the NVIDIA runtime numbers in host
-order, so it is the lowest listed id.
+The frame encoder ``pe_image_encoder`` and the crop encoder ``pe_crop_encoder`` carry no ``gpus``
+list, so Triton starts one instance of each on every GPU the container sees and ``TRITON_GPU_ID``
+in ``.env`` decides how many cards encode in parallel. Every other model stays on the first
+visible card, which the NVIDIA runtime numbers in host order, so it is the lowest listed id.
 """
 
 from __future__ import annotations
@@ -11,15 +11,14 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
 import yaml
 
 
 ROOT = Path(__file__).resolve().parent.parent
 MODELS = ROOT / 'models'
-PE = 'pe_image_encoder'
+PE_MODELS = ('pe_image_encoder', 'pe_crop_encoder')
 MEM_KEY = 'GPU_MIB_PER_INSTANCE'
-# setup-openprocessor.sh budgets whole gigabytes of VRAM for the encoder on a card.
-INSTALLER_PE_BUDGET_MIB = 2 * 1024
 
 
 def _config(model: str) -> str:
@@ -34,8 +33,24 @@ def _gpu_models() -> list[str]:
     ]
 
 
-def test_pe_encoder_is_not_pinned_to_a_gpu() -> None:
-    text = _config(PE)
+def _installer_pe_budget_gb() -> int:
+    """The whole gigabytes setup-openprocessor.sh plans for the PE encoders on a card."""
+    match = re.search(r'\bpe_need=(\d+)', (ROOT / 'setup-openprocessor.sh').read_text())
+    assert match, 'setup-openprocessor.sh no longer sets pe_need'
+    return int(match.group(1))
+
+
+def _recorded_mib(model: str) -> int:
+    match = re.search(
+        rf'key:\s*"{MEM_KEY}"\s*value:\s*{{\s*string_value:\s*"(\d+)"', _config(model)
+    )
+    assert match, f'{model}: missing {MEM_KEY}'
+    return int(match.group(1))
+
+
+@pytest.mark.parametrize('model', PE_MODELS)
+def test_pe_encoder_is_not_pinned_to_a_gpu(model: str) -> None:
+    text = _config(model)
     block = re.search(r'^instance_group\s*\[(.*?)^\]', text, re.S | re.M)
     assert block, 'no instance_group'
     assert 'KIND_GPU' in block.group(1)
@@ -46,7 +61,7 @@ def test_pe_encoder_is_not_pinned_to_a_gpu() -> None:
 
 
 def test_every_other_gpu_model_stays_on_the_primary_card() -> None:
-    others = [m for m in _gpu_models() if m != PE]
+    others = [m for m in _gpu_models() if m not in PE_MODELS]
     assert others
     for model in others:
         pins = re.findall(r'^\s*gpus:\s*\[\s*([\d,\s]*)\]', _config(model), re.M)
@@ -54,12 +69,13 @@ def test_every_other_gpu_model_stays_on_the_primary_card() -> None:
         assert all(p.strip() == '0' for p in pins), f'{model}: pinned to {pins}, expected [ 0 ]'
 
 
-def test_pe_encoder_records_its_memory_per_instance() -> None:
-    match = re.search(rf'key:\s*"{MEM_KEY}"\s*value:\s*{{\s*string_value:\s*"(\d+)"', _config(PE))
-    assert match, f'{PE}: missing {MEM_KEY}'
-    mib = int(match.group(1))
-    assert 0 < mib <= INSTALLER_PE_BUDGET_MIB, (
-        f'{mib} MiB per instance exceeds the {INSTALLER_PE_BUDGET_MIB} MiB the installer plans per card'
+def test_pe_encoders_record_their_memory_and_the_installer_plans_it() -> None:
+    recorded = {model: _recorded_mib(model) for model in PE_MODELS}
+    assert all(mib > 0 for mib in recorded.values()), recorded
+    # The installer's gate works in whole gigabytes; `gpu plan` checks the exact MiB.
+    planned_gb = _installer_pe_budget_gb()
+    assert round(sum(recorded.values()) / 1024) == planned_gb, (
+        f'{recorded} is {sum(recorded.values())} MiB per card; the installer plans {planned_gb} GB'
     )
 
 
