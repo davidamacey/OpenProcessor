@@ -17,6 +17,7 @@ from integration.ingest_fakes import (
     FakePEEncoder,
     FakeTritonPool,
     curation_app,
+    file_engine,
     jpeg_bytes,
 )
 
@@ -24,6 +25,7 @@ from integration.ingest_fakes import (
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+    from curation.engine_fakes import Engine
     from fastapi.testclient import TestClient
 
 
@@ -41,6 +43,11 @@ def fake_triton() -> FakeTritonPool:
 
 
 @pytest.fixture
+def engine() -> Engine:
+    return file_engine()
+
+
+@pytest.fixture
 def pe() -> FakePEEncoder:
     return FakePEEncoder()
 
@@ -50,9 +57,10 @@ def client(
     fake_opensearch: FakeOpenSearch,
     fake_triton: FakeTritonPool,
     pe: FakePEEncoder,
+    engine: Engine,
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[TestClient]:
-    with curation_app(fake_opensearch, fake_triton, monkeypatch, pe_encoder=pe) as c:
+    with curation_app(fake_opensearch, fake_triton, monkeypatch, pe_encoder=pe, engine=engine) as c:
         yield c
 
 
@@ -69,7 +77,7 @@ def test_upload_ingests_bytes_under_client_identifiers(
     client: TestClient,
     fake_opensearch: FakeOpenSearch,
     fake_triton: FakeTritonPool,
-    pe: FakePEEncoder,
+    engine: Engine,
 ) -> None:
     a, b = jpeg_bytes(11), jpeg_bytes(12)
     ids = ['remote://shoot1/a.jpg', 'remote://shoot1/b.jpg']
@@ -95,16 +103,16 @@ def test_upload_ingests_bytes_under_client_identifiers(
     persisted_paths = {d['image_path'] for d in docs.values()}
     assert len(persisted_paths) == 2
     assert all('op_test_state/projects/default/uploads' in p for p in persisted_paths)
-    # The identifiers do not exist on the server: the whole-frame
-    # embedding comes from the frame decoded from the upload, never a path re-read.
-    assert len(pe.whole_frame_sizes) == 2
+    # The identifiers do not exist on the server: the whole-frame embedding comes from the engine's
+    # decode of the uploaded bytes, never a path re-read.
     assert all(d.get('pe_embedding') is not None for d in docs.values())
-    # One batched detector call for the whole upload.
-    assert fake_triton.batch_sizes == [2]
+    # One engine request per photo (13a: the per-photo flow), and no host-side detector call.
+    assert len(engine.calls) == 2
+    assert fake_triton.batch_sizes == []
 
 
 def test_reupload_is_content_deduplicated(
-    client: TestClient, fake_opensearch: FakeOpenSearch, fake_triton: FakeTritonPool
+    client: TestClient, fake_opensearch: FakeOpenSearch, engine: Engine
 ) -> None:
     blob = jpeg_bytes(21)
     first = client.post(
@@ -123,7 +131,7 @@ def test_reupload_is_content_deduplicated(
     assert second.json()['summary']['duplicates'] == 1
     assert second.json()['results'][0]['status'] == 'duplicate'
     assert len(fake_opensearch.images) == 1
-    assert fake_triton.batch_sizes == [1]
+    assert len(engine.calls) == 1  # the duplicate never reaches the engine
 
 
 def test_identifiers_default_to_filenames(

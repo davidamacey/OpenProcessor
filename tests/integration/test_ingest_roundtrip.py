@@ -22,6 +22,7 @@ from integration.ingest_fakes import (
     FakeOpenSearch,
     FakeTritonPool,
     curation_app,
+    file_engine,
     jpeg_bytes as _jpeg_bytes,
 )
 
@@ -29,6 +30,7 @@ from integration.ingest_fakes import (
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+    from curation.engine_fakes import Engine
     from fastapi.testclient import TestClient
 
 
@@ -46,17 +48,23 @@ def fake_triton() -> FakeTritonPool:
 
 
 @pytest.fixture
+def engine() -> Engine:
+    return file_engine()
+
+
+@pytest.fixture
 def client(
     fake_opensearch: FakeOpenSearch,
     fake_triton: FakeTritonPool,
+    engine: Engine,
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[TestClient]:
-    with curation_app(fake_opensearch, fake_triton, monkeypatch) as c:
+    with curation_app(fake_opensearch, fake_triton, monkeypatch, engine=engine) as c:
         yield c
 
 
 def test_ingest_batch_then_crops_and_status(
-    client: TestClient, fake_opensearch: FakeOpenSearch, fake_triton: FakeTritonPool
+    client: TestClient, fake_opensearch: FakeOpenSearch, fake_triton: FakeTritonPool, engine: Engine
 ) -> None:
     body = {
         'items': [
@@ -103,9 +111,10 @@ def test_ingest_batch_then_crops_and_status(
     status_payload = status_resp.json()
     assert status_payload['total'] == 2
 
-    # G11 guard, end to end through the router: two images cost exactly
-    # one batched Triton round-trip, not two single-image ones.
-    assert fake_triton.batch_sizes == [2]
+    # End to end through the router: two images are two engine requests (13a: the per-photo
+    # flow), and the host sends no detector call of its own.
+    assert len(engine.calls) == 2
+    assert fake_triton.batch_sizes == []
 
 
 def test_ingest_batch_rejects_the_removed_label_fields(client: TestClient) -> None:

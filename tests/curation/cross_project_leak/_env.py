@@ -308,10 +308,10 @@ def leak_env(
 
     monkeypatch.setattr(resources_module, 'get_async_triton_pool', _LeakTritonPool)
     # Every photo goes through the frame engine (a request it cannot take is 503 engine_unavailable,
-    # so the ingest routes would never run): the fake engine answers any bytes, and the detector
+    # so the ingest routes would never run): the fake engine answers each real file, and the detector
     # and PE encoder read as loaded.
     engine = Engine('ok', {})
-    engine.any_size = (64, 64)
+    engine.read_sizes = True
     engine.embed_dim = (
         EMBED_DIM  # the seeded vectors' width, or the umap rebuild reads a mixed page
     )
