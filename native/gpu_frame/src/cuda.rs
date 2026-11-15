@@ -88,19 +88,7 @@ impl Context {
 
     /// The device's PCI bus id (`0000:65:00.0`), which names the card whatever the ordinal.
     pub fn pci_bus_id(&self) -> Result<String, CudaError> {
-        let mut buf = [0 as c_char; 32];
-        // SAFETY: the buffer holds `len` bytes, the documented minimum is 13; the device handle
-        // comes from the retained context.
-        let rc = unsafe {
-            sys::cuDeviceGetPCIBusId(buf.as_mut_ptr(), buf.len() as c_int, self.inner.cu_device())
-        };
-        self.check("cuDeviceGetPCIBusId", rc.result())?;
-        let bytes: Vec<u8> = buf
-            .iter()
-            .take_while(|c| **c != 0)
-            .map(|c| *c as u8)
-            .collect();
-        Ok(String::from_utf8_lossy(&bytes).into_owned())
+        bus_id_of(self.inner.cu_device()).inspect_err(|e| self.note(e))
     }
 
     /// Free and total device memory in bytes (`cuMemGetInfo`), for the whole device.
@@ -140,6 +128,40 @@ impl Context {
             self.lost.store(true, Ordering::Release);
         }
     }
+}
+
+fn bus_id_of(device: sys::CUdevice) -> Result<String, CudaError> {
+    let mut buf = [0 as c_char; 32];
+    // SAFETY: the buffer holds `len` bytes, the documented minimum is 13; the device handle comes
+    // from cuDeviceGet or a retained context.
+    let rc = unsafe { sys::cuDeviceGetPCIBusId(buf.as_mut_ptr(), buf.len() as c_int, device) };
+    driver("cuDeviceGetPCIBusId", rc.result())?;
+    let bytes: Vec<u8> = buf
+        .iter()
+        .take_while(|c| **c != 0)
+        .map(|c| *c as u8)
+        .collect();
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+/// The name and PCI bus id of device `ordinal` (as `CUDA_VISIBLE_DEVICES` numbers it), read
+/// without creating a context: nothing is allocated on the card, so a process can check it was
+/// given the card it expects before it takes any memory there (`cuInit`, `cuDeviceGet`,
+/// `cuDeviceGetName`, `cuDeviceGetPCIBusId` need no context:
+/// https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__DEVICE.html).
+pub fn device_identity(ordinal: usize) -> Result<(String, String), CudaError> {
+    // SAFETY: probing the loader has no precondition; it only tries to open the library.
+    if !unsafe { sys::is_culib_present() } {
+        return Err(CudaError::LibraryMissing {
+            library: "CUDA driver (libcuda)",
+        });
+    }
+    driver("cuInit", result::init())?;
+    let ordinal = c_int::try_from(ordinal)
+        .map_err(|_| CudaError::invalid(format!("device ordinal {ordinal}")))?;
+    let device = driver("cuDeviceGet", result::device::get(ordinal))?;
+    let name = driver("cuDeviceGetName", result::device::get_name(device))?;
+    Ok((name, bus_id_of(device)?))
 }
 
 /// A non-blocking CUDA stream, destroyed when the last holder drops it.

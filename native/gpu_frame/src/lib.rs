@@ -32,7 +32,7 @@ pub mod slab;
 pub use budget::{
     Admission, AdmitError, CapExceeded, Charge, DeviceCap, HostCount, OverloadCause, Permit,
 };
-pub use cuda::{Context, CudaError, DeviceRange, Fault, PinnedBuf, Stream};
+pub use cuda::{Context, CudaError, DeviceRange, Fault, PinnedBuf, Stream, device_identity};
 pub use frame_pool::{AllocError, DeviceBuf, FramePool};
 pub use kernels::{Kernel, KernelArg, KernelError, Kernels, LaunchConfig, Module};
 pub use model_calls::{CallError, InferCall, InputTensor, ModelCalls, OutputTensor};
