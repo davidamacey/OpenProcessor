@@ -12,6 +12,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+crossbeam-channel.workspace = true
 cudarc.workspace = true
 tokio = { workspace = true, features = ["macros", "sync", "time"] }
 

@@ -5,16 +5,19 @@
 //! |---|---|
 //! | `Admission::admit` | [`budget::Admission::admit`] |
 //!
-//! Under them: [`cuda`] (context, streams, copies, errors with their fault class). Every `unsafe`
-//! block is in `cuda.rs`.
+//! Under them: [`cuda`] (context, streams, copies, errors with their fault class) and [`pool`]
+//! (OS-thread pools with panic isolation and cancellation at the hand-off). Every `unsafe` block is
+//! in `cuda.rs`.
 //!
 //! CUDA is loaded at run time; nothing is linked at build time, so the crate builds and its tests
 //! run on a machine without a GPU.
 
 pub mod budget;
 pub mod cuda;
+pub mod pool;
 
 pub use budget::{
     Admission, AdmitError, CapExceeded, Charge, DeviceCap, HostCount, OverloadCause, Permit,
 };
 pub use cuda::{Context, CudaError, DeviceRange, Fault, PinnedBuf, Stream};
+pub use pool::{CancelToken, JobError, JobHandle, PoolError, WorkerPool};
