@@ -43,7 +43,7 @@ decision, 16 operations that must change more than one store. Four ways of keepi
 |---|---|
 | R1 | PostgreSQL is the record. A fact is written there first, in one transaction with every other fact of the same act. |
 | R2 | Three kinds of row, never mixed in one table: what was added (photos and where they came from), what a person decided (claims), what a machine computed (results). |
-| R3 | A human decision is one appended row. It is never updated and never deleted; an undo is another row. The current state of an object is computed from the machine results and the claims by one pure function. |
+| R3 | A human decision is one appended row. It is never updated and never deleted; an undo is another row. The current state of an object is computed from the machine results and the claims by one pure function. One exception: erasure (section 14, answer 4). |
 | R4 | A machine result names the analyser and the version that made it. A table of results can be emptied and filled again; rows below a new version are the work list of a re-run. |
 | R5 | A machine writer cannot write a claim, and it never needs to read one to stay clear of it. The lock rule becomes the shape of the data instead of a check in every writer. |
 | R6 | A vector lives in a table of its own, one row per subject and vector space, float16, with the model version beside it. Nothing else in that row changes. |
@@ -253,3 +253,17 @@ An independent review of 15 and 15a follows, then a fix pass, then lanes.
 | Gate B default | the 10 million vector round, after the crop encoder is chosen |
 | Whether cluster placement is a column of the current-state row or a side table swapped at activation | gate A's cluster-card numbers |
 | Exact counts on very large filtered lists, or a capped count ("10,000+") | gate A's count numbers; a wire change if capped |
+
+## 14. Coordinator answers to the schema file's questions (2026-11-15)
+
+| # | Question of [15a](15a_storage_schema.md) | Answer |
+|---|---|---|
+| 1 | The core API's data has no project | A reserved project created at bootstrap. No nullable project column anywhere: one isolation rule, fail closed. |
+| 2 | A table and an index per vector space need DDL, which the application role does not have | The vector tables live in a schema of their own, owned by a role that only the embedding-space service assumes for the statement (`SET LOCAL ROLE`), with row-level security forced on the owner too. The table is created through that role; the index is built after the bulk fill with a concurrent build, so ingest into a space that is being filled is never blocked. A definer function that builds an index while blocking inserts is not accepted. The review checks this against the PostgreSQL role and row-security pages. |
+| 3 | The photo-library plan's mutable tables (annotations, persons, albums) | They become claims plus folded state, as in this plan. The photo-library plan files are updated to that before any phase 5 lane starts. |
+| 4 | "Forget this person" and deleting a photo for good conflict with R3 | Erasure is the one path that deletes claims: it removes every row and file of a subject (a person, a photo, a project) in one guarded job, like project delete, and logs the act without its content (the existing `privacy_purges` table). Moving a photo to the trash is an ordinary claim; emptying the trash is erasure. |
+| 5 | Which machine opinion is the effective class when several exist | An ordered list of sources, applied by the fold. Default: open-vocabulary target, VLM, import suggestion, propagated, classifier, adopted detector, detection. Every opinion stays a row, so a different order is a re-fold, not a data change; the order can become a project setting later without a schema change. |
+| 6 | Emptying the current-state table on a rebuild | Confirmed: a stable identity table per object (what vectors, claims and members point at) and a state table beside it that the fold owns and may empty. |
+
+Compact integer keys on the large tables instead of 02a's time-ordered UUIDs are accepted (R8): the
+wire ids do not change, and the large indexes are about half the size.
