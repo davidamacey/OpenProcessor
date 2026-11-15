@@ -249,6 +249,9 @@ class ExifToolClient:
             rows = helper.get_tags(path, [*EXIFTOOL_TAGS, FILE_ERROR_KEY], params=list(_ARGS))
         finally:
             timer.cancel()
+            # The timer's thread holds ``self._abort`` until it exits; wait for it so a read never
+            # returns while a thread still keeps the client (and its pipe directory) alive.
+            timer.join()
         return dict(rows[0]) if rows else {}
 
     def _abort(self) -> None:
