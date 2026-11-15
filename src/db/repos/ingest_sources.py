@@ -4,7 +4,9 @@
 trigger state; ``ingest_source_files`` holds one row per discovered file. A file is ``pending``
 until a run claims it, ``claimed`` while a run holds it, then ``done`` or ``failed``. A failed
 row is retried until it has been tried ``MAX_ATTEMPTS`` times; a row that gave up (or failed for
-a reason a retry cannot fix) is *dead* and waits for ``retry_dead``.
+a reason a retry cannot fix) is *dead* and waits for ``retry_dead``. A *transient* failure (the
+engine or database was busy: nothing is wrong with the file) uses no attempt; the row waits until
+its ``retry_at`` and the claim skips it until then.
 
 Every function takes the caller's sync ``Session`` inside the caller's scoped transaction and
 never commits; an async caller wraps one in ``AsyncSession.run_sync``.
@@ -71,6 +73,17 @@ class SourceRow:
 class ClaimedFile:
     file_key: str
     attempts: int
+
+
+@dataclass(frozen=True)
+class Failure:
+    """One failed file: ``terminal`` uses up its attempts; ``retry_in_s`` (a transient failure)
+    keeps them and makes the row claimable again that many seconds from now; neither uses one."""
+
+    file_key: str
+    error: str
+    terminal: bool = False
+    retry_in_s: float | None = None
 
 
 def _row(model: IngestSource) -> SourceRow:
@@ -256,12 +269,13 @@ _CLAIM = text(
     WITH picked AS (
       SELECT file_key FROM ingest_source_files
       WHERE source_id = :source AND (status = 'pending' OR (status = 'failed' AND attempts < :max))
+        AND (retry_at IS NULL OR retry_at <= now())
       ORDER BY enqueued_at, file_key
       LIMIT :n
       FOR UPDATE SKIP LOCKED
     )
     UPDATE ingest_source_files f
-    SET status = 'claimed', job_id = :job, updated_at = now()
+    SET status = 'claimed', job_id = :job, retry_at = NULL, updated_at = now()
     FROM picked
     WHERE f.source_id = :source AND f.file_key = picked.file_key
     RETURNING f.file_key, f.attempts
@@ -306,10 +320,15 @@ _MARK_FAILED = text(
     """
     UPDATE ingest_source_files f
     SET status = 'failed', job_id = :job, error = v.error, updated_at = now(),
-        attempts = CASE WHEN v.terminal THEN :max ELSE f.attempts + 1 END
+        attempts = CASE WHEN v.terminal THEN :max
+                        WHEN v.retry_in IS NOT NULL THEN f.attempts
+                        ELSE f.attempts + 1 END,
+        retry_at = CASE WHEN v.retry_in IS NULL THEN NULL
+                        ELSE now() + make_interval(secs => v.retry_in) END
     FROM (SELECT unnest(CAST(:keys AS text[])) AS file_key,
                  unnest(CAST(:errors AS text[])) AS error,
-                 unnest(CAST(:terminals AS boolean[])) AS terminal) v
+                 unnest(CAST(:terminals AS boolean[])) AS terminal,
+                 unnest(CAST(:retry_in AS double precision[])) AS retry_in) v
     WHERE f.source_id = :source AND f.file_key = v.file_key AND f.status <> 'done'
     """
 )
@@ -348,10 +367,11 @@ def split_error(stored: str) -> tuple[str, str]:
 
 
 def mark_failed(
-    session: Session, source_id: uuid.UUID, job_id: uuid.UUID, rows: Sequence[tuple[str, str, bool]]
+    session: Session, source_id: uuid.UUID, job_id: uuid.UUID, rows: Sequence[Failure]
 ) -> None:
-    """Record ``(file_key, error, terminal)``: the attempt counts, and a terminal failure (one a
-    retry cannot fix) uses up the attempts so the row is dead at once."""
+    """Record failed files. A terminal failure (one a retry cannot fix) uses up the attempts so the
+    row is dead at once; a transient one keeps them and sets ``retry_at`` from the database
+    clock; any other counts one attempt and is claimable again at once."""
     if rows:
         session.execute(
             _MARK_FAILED,
@@ -359,9 +379,10 @@ def mark_failed(
                 'source': source_id,
                 'job': job_id,
                 'max': MAX_ATTEMPTS,
-                'keys': [k for k, _, _ in rows],
-                'errors': [e for _, e, _ in rows],
-                'terminals': [t for _, _, t in rows],
+                'keys': [r.file_key for r in rows],
+                'errors': [r.error for r in rows],
+                'terminals': [r.terminal for r in rows],
+                'retry_in': [r.retry_in_s for r in rows],
             },
         )
 
@@ -376,7 +397,7 @@ def retry_dead(session: Session, source_id: uuid.UUID) -> int:
                 IngestSourceFile.status == FAILED,
                 IngestSourceFile.attempts >= MAX_ATTEMPTS,
             )
-            .values(status=PENDING, attempts=0, updated_at=func.now())
+            .values(status=PENDING, attempts=0, retry_at=None, updated_at=func.now())
         ).rowcount  # type: ignore[attr-defined]
     )
 
@@ -390,9 +411,23 @@ def requeue_all(session: Session, source_id: uuid.UUID) -> int:
                 IngestSourceFile.source_id == source_id,
                 IngestSourceFile.status.in_((DONE, FAILED)),
             )
-            .values(status=PENDING, attempts=0, error=None, updated_at=func.now())
+            .values(status=PENDING, attempts=0, error=None, retry_at=None, updated_at=func.now())
         ).rowcount  # type: ignore[attr-defined]
     )
+
+
+_WAITING = text(
+    'SELECT count(*), EXTRACT(EPOCH FROM min(retry_at) - now()) FROM ingest_source_files '
+    "WHERE source_id = :source AND status = 'failed' AND attempts < :max AND retry_at IS NOT NULL"
+)
+
+
+def waiting(session: Session, source_id: uuid.UUID) -> tuple[int, float] | None:
+    """``(rows, seconds until the first is claimable)`` for the files waiting after a transient
+    failure, or ``None`` when none waits. The seconds are never negative: a row that is due but
+    was not claimed (another runner holds it locked) reads as 0."""
+    rows, due = session.execute(_WAITING, {'source': source_id, 'max': MAX_ATTEMPTS}).one()
+    return None if not rows else (int(rows), max(0.0, float(due)))
 
 
 _COUNTS = text(

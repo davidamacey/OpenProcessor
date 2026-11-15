@@ -166,6 +166,9 @@ class IngestSourceFile(Base):
     attempts: Mapped[int] = mapped_column(Integer, server_default='0')
     image_id: Mapped[str | None]
     error: Mapped[str | None]
+    # Set by a transient failure (the engine or database was busy, the photo is awaiting its repair):
+    # the claim skips the row until then and the attempt count did not move.
+    retry_at: Mapped[dt.datetime | None]
     enqueued_at: Mapped[dt.datetime] = mapped_column(server_default=NOW)
     updated_at: Mapped[dt.datetime] = mapped_column(server_default=NOW)
 

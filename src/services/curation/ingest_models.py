@@ -28,6 +28,21 @@ ERROR_KIND_BLUR = 'blur_failed'
 # The photo is stored incomplete (an item its images doc lists is missing) and a writer may still be
 # writing it; sending it again later stores it whole.
 ERROR_KIND_INCOMPLETE_WRITE = 'incomplete_write'
+# The engine or the database could not take the photo now; nothing is wrong with the file.
+ERROR_KIND_ENGINE_UNAVAILABLE = 'engine_unavailable'
+ERROR_KIND_DATABASE_BUSY = 'database_busy'
+# A bulk run's batch whose 503 or connection retries ran out (set by the run, not by the route).
+ERROR_KIND_BUSY = 'busy'
+# Failures that say nothing about the file: a retry later can succeed, so a bulk run never counts
+# one as an attempt (``bulk_ingest/source_queue.py`` turns each into a ``retry_at`` pause).
+TRANSIENT_ERROR_KINDS = frozenset(
+    {
+        ERROR_KIND_ENGINE_UNAVAILABLE,
+        ERROR_KIND_DATABASE_BUSY,
+        ERROR_KIND_INCOMPLETE_WRITE,
+        ERROR_KIND_BUSY,
+    }
+)
 
 
 class IngestSummary(BaseModel):
@@ -102,7 +117,11 @@ class BatchIngestResult(BaseModel):
 
 
 __all__ = [
+    'ERROR_KIND_BUSY',
+    'ERROR_KIND_DATABASE_BUSY',
+    'ERROR_KIND_ENGINE_UNAVAILABLE',
     'ERROR_KIND_INCOMPLETE_WRITE',
+    'TRANSIENT_ERROR_KINDS',
     'BatchIngestResult',
     'IngestResult',
     'IngestSummary',

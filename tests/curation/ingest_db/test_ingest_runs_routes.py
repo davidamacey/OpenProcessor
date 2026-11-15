@@ -149,8 +149,10 @@ async def test_failures_are_the_queue_rows_the_run_left_failed(
             source_id,
             job,
             [
-                ('/x/gone.jpg', repo.error_text('missing', 'decode_failed'), True),
-                ('/x/bad.jpg', repo.error_text('503', 'batch_error'), False),
+                repo.Failure(
+                    '/x/gone.jpg', repo.error_text('missing', 'decode_failed'), terminal=True
+                ),
+                repo.Failure('/x/bad.jpg', repo.error_text('503', 'batch_error')),
             ],
         )
 

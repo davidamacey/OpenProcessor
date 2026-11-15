@@ -23,6 +23,13 @@ from typing import TYPE_CHECKING, Any
 from src.db.repos import ingest_sources as repo
 from src.db.session import sync_project_tx, sync_session_factory
 from src.services.curation.bulk_ingest.object_store import ObjectRef
+from src.services.curation.ingest_models import (
+    ERROR_KIND_BUSY,
+    ERROR_KIND_DATABASE_BUSY,
+    ERROR_KIND_ENGINE_UNAVAILABLE,
+    ERROR_KIND_INCOMPLETE_WRITE,
+    TRANSIENT_ERROR_KINDS,
+)
 
 
 if TYPE_CHECKING:
@@ -39,6 +46,25 @@ TERMINAL_ERROR_KINDS = frozenset(
     {'gone', 'too_large', 'unsupported_type', 'empty', 'decode_failed', 'unservable_path'}
 )
 STATES = ('pending', 'claimed', 'done', 'failed', 'dead')
+
+# How long a file waits after a transient failure (``TRANSIENT_ERROR_KINDS``), in seconds. The
+# kind decides because the causes clear at different speeds:
+# - the engine is ready again 2.7 s after an engine restart and about 30 s after a model-server
+#   restart plus its reconnect (plan 13a, E1/R3): 30 s;
+# - a busy connection pool clears in seconds and every API worker shares it: 10 s;
+# - a batch that outlived the sender's retries (about 2.5 minutes of backoff) means a longer
+#   outage: 60 s on top of that;
+# - an incomplete photo is repaired by the next ingest once its image is older than
+#   ``ingest_writer.REPAIR_AFTER_S`` (5,047 s) or its writer marked the failure; each retry is one
+#   lookup, so the longest pause (about 17 tries at most) costs little: 300 s.
+# The ``Retry-After`` the API sent raises a pause, and no pause passes ``MAX_RETRY_PAUSE_S``.
+RETRY_PAUSE_S = {
+    ERROR_KIND_ENGINE_UNAVAILABLE: 30.0,
+    ERROR_KIND_DATABASE_BUSY: 10.0,
+    ERROR_KIND_BUSY: 60.0,
+    ERROR_KIND_INCOMPLETE_WRITE: 300.0,
+}
+MAX_RETRY_PAUSE_S = 300.0
 
 
 @dataclass(frozen=True)
@@ -111,16 +137,6 @@ class SourceQueue:
         with self._tx() as session:
             repo.mark_done(session, self.source_id, job_id, list(rows))
 
-    def mark_failed(self, job_id: uuid.UUID, rows: Iterable[tuple[str, str, str]]) -> None:
-        """Record failures as ``(file_key, error, error_kind)``. A terminal kind makes the row
-        dead; otherwise it stays retryable until its third attempt."""
-        stored = [
-            (key, repo.error_text(error, kind), kind in TERMINAL_ERROR_KINDS)
-            for key, error, kind in rows
-        ]
-        with self._tx() as session:
-            repo.mark_failed(session, self.source_id, job_id, stored)
-
     def retry_dead(self) -> int:
         with self._tx() as session:
             return repo.retry_dead(session, self.source_id)
@@ -170,6 +186,27 @@ class SourceQueue:
             repo.state_add(session, self.source_id, amounts)
 
 
+def retry_pause_s(error_kind: str, retry_after_s: float | None = None) -> float | None:
+    """Seconds a file waits after a failure of this kind, or ``None`` when the kind is not
+    transient (the failure then counts as an attempt, as before)."""
+    if error_kind not in TRANSIENT_ERROR_KINDS:
+        return None
+    return min(MAX_RETRY_PAUSE_S, max(RETRY_PAUSE_S[error_kind], retry_after_s or 0.0))
+
+
+def failure_row(
+    file_key: str, error: str, error_kind: str, retry_after_s: float | None = None
+) -> repo.Failure:
+    """The ledger's row for a failed file: terminal kinds are dead at once, transient kinds wait
+    and keep their attempts, any other kind counts one attempt."""
+    return repo.Failure(
+        file_key,
+        repo.error_text(error, error_kind),
+        terminal=error_kind in TERMINAL_ERROR_KINDS,
+        retry_in_s=retry_pause_s(error_kind, retry_after_s),
+    )
+
+
 @contextmanager
 def _scoped(project_id: uuid.UUID) -> Iterator[Session]:
     """A session in the project's scope; commits on a clean exit."""
@@ -179,11 +216,15 @@ def _scoped(project_id: uuid.UUID) -> Iterator[Session]:
 
 __all__ = [
     'MAX_ATTEMPTS',
+    'MAX_RETRY_PAUSE_S',
+    'RETRY_PAUSE_S',
     'STATES',
     'TERMINAL_ERROR_KINDS',
     'VERSION_SEP',
     'QueueEntry',
     'SourceQueue',
+    'failure_row',
     'path_of',
+    'retry_pause_s',
     'version_of',
 ]
