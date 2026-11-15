@@ -14,7 +14,14 @@
 
 pub mod arith;
 pub mod cgroup;
+pub mod client;
+pub mod commands;
 pub mod exchange;
+pub mod gpu;
 pub mod host;
 pub mod list;
+pub mod measure;
 pub mod plan;
+pub mod proto;
+pub mod row;
+pub mod statistics;
