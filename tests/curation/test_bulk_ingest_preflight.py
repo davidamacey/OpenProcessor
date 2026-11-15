@@ -4,6 +4,7 @@ refuses, and every estimate figure is a measured one from docs/PERFORMANCE.md.""
 
 from __future__ import annotations
 
+import dataclasses
 import os
 import re
 import threading
@@ -177,12 +178,24 @@ def test_the_megapixel_sample_buckets_headers_without_decoding(tmp_path: Path) -
     for i in range(4):
         _img(root / f'small{i}.jpg', (100, 100))  # 0.01 MP
     for i in range(2):
-        _img(root / f'big{i}.jpg', (2400, 1600))  # 3.84 MP, above the 3.0 MP gate
-    result = _preview(BulkSource('folder', str(root)), gpu_decode=True, gpu_min_megapixels=3.0)
+        _img(root / f'big{i}.jpg', (2400, 1600))  # 3.84 MP, a large photo
+    result = _preview(BulkSource('folder', str(root)), gpu_decode=True)
     sample = result.megapixels
     assert sample.sampled == 6
     assert sample.unreadable == 0
-    assert sample.share_at_or_above_gate == pytest.approx(2 / 6)
+    assert {f.name for f in dataclasses.fields(sample)} == {'sampled', 'unreadable', 'histogram'}
+    rates = {r.route: r.images_per_s for r in preflight_rates.RATES}
+    assert result.estimate.duration_s_min == pytest.approx(
+        4 / rates['cpu_small'] + 2 / rates['gpu_large']
+    )
+    from src.routers.curation._ingest_bulk_preview_models import (
+        BulkPreviewConfig,
+        PreviewMegapixelsWire,
+    )
+
+    gone = {'gate_megapixels', 'share_at_or_above_gate', 'gpu_min_megapixels'}
+    assert not gone & set(PreviewMegapixelsWire.model_fields)
+    assert not gone & set(BulkPreviewConfig.model_fields)
     assert sum(sample.histogram.values()) == 6
 
 
@@ -202,7 +215,7 @@ def test_estimate_uses_the_measured_rates_and_footprint_only(tmp_path: Path) -> 
     for i in range(4):
         _img(root / f's{i}.jpg', (100, 100))
     rates = {r.route: r for r in preflight_rates.RATES}
-    result = _preview(BulkSource('folder', str(root)), gpu_decode=True, gpu_min_megapixels=3.0)
+    result = _preview(BulkSource('folder', str(root)), gpu_decode=True)
     est = result.estimate
     assert est.basis == 'megapixel_sample'
     assert (
@@ -218,8 +231,8 @@ def test_large_photos_use_the_cpu_rate_when_gpu_decode_is_off(tmp_path: Path) ->
     root = tmp_path / 'm'
     _img(root / 'big.jpg', (2400, 1600))
     rates = {r.route: r for r in preflight_rates.RATES}
-    on = _preview(BulkSource('folder', str(root)), gpu_decode=True, gpu_min_megapixels=3.0)
-    off = _preview(BulkSource('folder', str(root)), gpu_decode=False, gpu_min_megapixels=3.0)
+    on = _preview(BulkSource('folder', str(root)), gpu_decode=True)
+    off = _preview(BulkSource('folder', str(root)), gpu_decode=False)
     assert on.estimate.duration_s_min == pytest.approx(1 / rates['gpu_large'].images_per_s)
     assert off.estimate.duration_s_min == pytest.approx(1 / rates['cpu_large'].images_per_s)
 

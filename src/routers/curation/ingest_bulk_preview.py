@@ -63,7 +63,6 @@ def preview_config() -> BulkPreviewConfig:
         max_seconds=PREVIEW_LIMITS.max_seconds,
         header_sample=PREVIEW_LIMITS.header_sample,
         gpu_decode=config.ingest_gpu_decode,
-        gpu_min_megapixels=config.ingest_gpu_min_megapixels,
         rates=[PreviewRateWire(**asdict(r)) for r in preflight_rates.RATES],
         embeddings_per_image=PreviewMeasuredWire(**asdict(preflight_rates.EMBEDDINGS_PER_IMAGE)),
         opensearch_bytes_per_image=PreviewMeasuredWire(
@@ -152,7 +151,6 @@ async def _plan(
             limits=PREVIEW_LIMITS,
             should_stop=should_stop,
             gpu_decode=gpu_decode,
-            gpu_min_megapixels=config.ingest_gpu_min_megapixels,
         )
 
     return kind, path, extensions, run_path
