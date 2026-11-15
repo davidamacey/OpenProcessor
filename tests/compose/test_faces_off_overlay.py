@@ -8,7 +8,12 @@ from compose._helpers import COMPOSE_PATH, REPO_ROOT, _load_yaml
 
 
 OVERLAY = REPO_ROOT / 'docker-compose.faces-off.yml'
-FACE_PRELOADS = {'--load-model=scrfd_10g_bnkps', '--load-model=arcface_w600k_r50'}
+FACE_PRELOADS = {
+    '--load-model=scrfd_10g_bnkps',
+    '--load-model=arcface_w600k_r50',
+    '--load-model=scrfd_10g_bnkps_uint8',
+    '--load-model=arcface_w600k_r50_uint8',
+}
 
 
 def _command(doc: dict[str, Any]) -> list[str]:

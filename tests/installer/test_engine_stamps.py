@@ -33,6 +33,8 @@ ENGINES: dict[str, dict[str, tuple[str, str]]] = {
     'faces': {
         'scrfd_10g_bnkps': ('pytorch_models/scrfd_10g_bnkps.onnx', 'fp16'),
         'arcface_w600k_r50': ('pytorch_models/arcface_w600k_r50.onnx', 'fp16'),
+        'scrfd_10g_bnkps_uint8': ('pytorch_models/scrfd_10g_bnkps.onnx', 'fp16'),
+        'arcface_w600k_r50_uint8': ('pytorch_models/arcface_w600k_r50.onnx', 'fp16'),
     },
     'ocr': {
         'paddleocr_det_trt': ('pytorch_models/paddleocr/ppocrv6_det_small.onnx', 'fp32'),
@@ -44,7 +46,12 @@ ENGINES: dict[str, dict[str, tuple[str, str]]] = {
 GROUP_MODELS = {
     'yolo': ['yolov11_small_trt_end2end'],
     'mobileclip': ['mobileclip2_s2_image_encoder', 'mobileclip2_s2_text_encoder'],
-    'faces': ['scrfd_10g_bnkps', 'arcface_w600k_r50'],
+    'faces': [
+        'scrfd_10g_bnkps',
+        'arcface_w600k_r50',
+        'scrfd_10g_bnkps_uint8',
+        'arcface_w600k_r50_uint8',
+    ],
     'ocr': [
         'paddleocr_det_trt',
         'paddleocr_rec_trt',
@@ -56,7 +63,12 @@ GROUP_MODELS = {
 PLANS = {
     'yolo': ['yolov11_small_trt_end2end'],
     'mobileclip': ['mobileclip2_s2_image_encoder', 'mobileclip2_s2_text_encoder'],
-    'faces': ['scrfd_10g_bnkps', 'arcface_w600k_r50'],
+    'faces': [
+        'scrfd_10g_bnkps',
+        'arcface_w600k_r50',
+        'scrfd_10g_bnkps_uint8',
+        'arcface_w600k_r50_uint8',
+    ],
     'ocr': [
         'paddleocr_det_trt',
         'paddleocr_rec_trt',

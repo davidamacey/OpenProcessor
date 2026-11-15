@@ -26,10 +26,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('onnx_out')
     parser.add_argument('--mean', type=float, nargs=3)
     parser.add_argument('--std', type=float, nargs=3)
+    parser.add_argument('--input-name', help='name of the uint8 input (default: keep the name)')
     args = parser.parse_args(argv)
     mean = tuple(args.mean) if args.mean else None
     std = tuple(args.std) if args.std else None
-    print(add_uint8_input(args.onnx_in, args.onnx_out, mean=mean, std=std))
+    print(
+        add_uint8_input(args.onnx_in, args.onnx_out, mean=mean, std=std, input_name=args.input_name)
+    )
     return 0
 
 

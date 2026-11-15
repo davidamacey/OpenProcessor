@@ -37,12 +37,18 @@ OCR = {
 }
 
 
+FACES = {'detector': 'scrfd', 'input_size': 640, 'recogniser': 'arcface', 'batch': 32,
+         'score_min': 0.5, 'nms': 0.4, 'max_faces': 128}  # fmt: skip
+
+
 def _plan(branches: list[str], **over: Any) -> str:
     body: dict[str, Any] = {'version': 1, 'branches': branches, 'crops': 'none', **over}
     if 'detect' in branches:
         body.setdefault('detector', DETECTOR)
     if {'embed_frame', 'embed_crops'} & set(branches):
         body.setdefault('embed', EMBED)
+    if 'faces' in branches:
+        body.setdefault('faces', FACES)
     if 'ocr' in branches:
         body.setdefault('ocr', OCR)
     return json.dumps(body)
@@ -200,15 +206,6 @@ async def test_stored_boxes_reach_the_engine_as_fp64_rows() -> None:
     assert engine.seen[0].boxes is not None
     np.testing.assert_array_equal(engine.seen[0].boxes, boxes)
     assert result.as_numpy('crop_embeddings').shape == (1, 4)
-
-
-async def test_unsupported_branches_are_reported_per_branch() -> None:
-    async with Harness(FakeEngine()) as h:
-        result = await h.infer(_plan(['detect', 'faces']))
-    assert wire.decode_branch_status(result.as_numpy('branch_status')[0]) == {
-        'detect': ('ok', ''),
-        'faces': ('error', 'unsupported_branch'),
-    }
 
 
 @pytest.mark.parametrize(

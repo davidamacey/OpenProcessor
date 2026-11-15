@@ -416,6 +416,8 @@ _ms_run_group_steps() {
             "$runner" faces_download _ms_export python /app/export/download_face_models.py || return 1
             "$runner" faces_arcface _ms_export python /app/export/export_face_recognition.py || return 1
             "$runner" faces_scrfd _ms_export python /app/export/export_scrfd.py || return 1
+            "$runner" faces_arcface_uint8 _ms_export python /app/export/export_face_recognition.py --uint8 || return 1
+            "$runner" faces_scrfd_uint8 _ms_export python /app/export/export_scrfd.py --uint8 || return 1
             "$runner" faces_stamp _ms_record_group_stamps faces || return 1
             ;;
         ocr)

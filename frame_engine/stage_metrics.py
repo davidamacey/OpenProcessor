@@ -68,6 +68,11 @@ STAGES = (
     'crop_copy',
     'crop_jpeg',
     'blur',
+    'face_letterbox',
+    'face_detect',
+    'face_align',
+    'face_embed',
+    'face_blur',
     'ocr_prep',
     'ocr_detect',
     'ocr_boxes',
@@ -78,7 +83,17 @@ STAGES = (
     'derivative_jpeg',
 )
 ASYNC_STAGES = frozenset(
-    {'letterbox', 'embed_frame', 'embed_crops', 'blur', 'ocr_prep', 'ocr_crops'}
+    {
+        'letterbox',
+        'embed_frame',
+        'embed_crops',
+        'blur',
+        'face_letterbox',
+        'face_align',
+        'face_blur',
+        'ocr_prep',
+        'ocr_crops',
+    }
 )
 SECONDS_NAME = 'op_frame_engine_stage_seconds'
 OBSERVATIONS_NAME = 'op_frame_engine_stage_observations'

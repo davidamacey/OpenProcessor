@@ -45,6 +45,14 @@ MAX_BATCH_SIZE = max_batch('arcface_w600k_r50', 128)  # Max batch for TensorRT (
 # Paths
 ONNX_PATH = Path('pytorch_models/arcface_w600k_r50.onnx')
 PLAN_PATH = Path('models/arcface_w600k_r50/1/model.plan')
+#: The frame engine's build (``--uint8``): uint8 input ``images``, the normalisation in the graph.
+#: InsightFace ``ArcFaceONNX`` (v0.7) feeds a graph without its own Sub/Mul prefix, as
+#: ``w600k_r50`` is, ``(x - 127.5) / 127.5``; the FP32 build above keeps today's ``/ 128``.
+UINT8_MODEL_NAME = 'arcface_w600k_r50_uint8'
+UINT8_PLAN_PATH = Path(f'models/{UINT8_MODEL_NAME}/1/model.plan')
+UINT8_INPUT_NAME = 'images'
+UINT8_MEAN = (0.5, 0.5, 0.5)
+UINT8_STD = (0.5, 0.5, 0.5)
 
 
 # =============================================================================
@@ -290,6 +298,8 @@ def convert_to_tensorrt(
     plan_path: Path,
     fp16: bool = True,
     max_batch_size: int = 128,
+    *,
+    uint8: bool = False,
 ) -> bool:
     """
     Convert ArcFace ONNX model to TensorRT engine.
@@ -323,6 +333,13 @@ def convert_to_tensorrt(
         if fp16:
             print('  Baking FP16 (ModelOpt AutoCast, TRT 11 typed builds)...')
             onnx_path = bake_fp16_onnx(onnx_path)
+        if uint8:
+            from uint8_input import add_uint8_input
+
+            onnx_path = add_uint8_input(
+                onnx_path, Path(onnx_path).with_suffix('.u8.onnx'), mean=UINT8_MEAN,
+                std=UINT8_STD, input_name=UINT8_INPUT_NAME,
+            )  # fmt: skip
         # Parse ONNX
         print('  Parsing ONNX model...')
         with Path(onnx_path).open('rb') as f:
@@ -394,19 +411,24 @@ def convert_to_tensorrt(
 # =============================================================================
 
 
-def create_triton_config(plan_path: Path) -> Path:
+def create_triton_config(plan_path: Path, *, uint8: bool = False) -> Path:
     """
-    Create Triton config.pbtxt for ArcFace model.
+    Create Triton config.pbtxt for ArcFace model (``uint8``: the frame engine's build).
     """
     config_path = plan_path.parent.parent / 'config.pbtxt'
+    name, input_name, input_type = (
+        (UINT8_MODEL_NAME, UINT8_INPUT_NAME, 'TYPE_UINT8')
+        if uint8
+        else ('arcface_w600k_r50', CANONICAL_INPUT_NAME, 'TYPE_FP32')
+    )
 
-    config_content = f"""name: "arcface_w600k_r50"
+    config_content = f"""name: "{name}"
 platform: "tensorrt_plan"
 max_batch_size: {MAX_BATCH_SIZE}
 
 input {{
-    name: "{CANONICAL_INPUT_NAME}"
-    data_type: TYPE_FP32
+    name: "{input_name}"
+    data_type: {input_type}
     dims: [3, {INPUT_SIZE}, {INPUT_SIZE}]
 }}
 
@@ -456,7 +478,13 @@ def main() -> int:
     parser.add_argument('--max-batch', type=int, default=MAX_BATCH_SIZE, help='Max batch size')
     parser.add_argument('--benchmark', action='store_true', help='Run ONNX benchmark')
     parser.add_argument('--skip-trt', action='store_true', help='Skip TensorRT conversion')
+    parser.add_argument(
+        '--uint8', action='store_true',
+        help=f'Build {UINT8_MODEL_NAME}: uint8 input, normalisation in the graph (frame engine)',
+    )  # fmt: skip
     args = parser.parse_args()
+    if args.uint8 and args.plan == PLAN_PATH:
+        args.plan = UINT8_PLAN_PATH
 
     print('=' * 60)
     print('ArcFace Face Recognition Export')
@@ -488,6 +516,7 @@ def main() -> int:
             args.plan,
             fp16=not args.no_fp16,
             max_batch_size=args.max_batch,
+            uint8=args.uint8,
         )
 
         if not success:
@@ -495,7 +524,7 @@ def main() -> int:
             return 1
 
         # Step 6: Create Triton config
-        create_triton_config(args.plan)
+        create_triton_config(args.plan, uint8=args.uint8)
 
     print('\n' + '=' * 60)
     print('ArcFace Export Complete!')

@@ -21,6 +21,22 @@ _setup_faces_on() {
     model_setup_faces_enabled
 }
 
+# _setup_required_models: the Triton models setup waits for, one per line; the faces group's
+# models (matched by whole name) only when faces are on.
+_setup_required_models() {
+    local faces faces_on=true m
+    faces=" $(model_setup_group_models faces) "
+    _setup_faces_on || faces_on=false
+    for m in yolov11_small_trt_end2end scrfd_10g_bnkps arcface_w600k_r50 scrfd_10g_bnkps_uint8 \
+        arcface_w600k_r50_uint8 mobileclip2_s2_image_encoder mobileclip2_s2_text_encoder \
+        paddleocr_det_trt paddleocr_rec_trt paddleocr_det_trt_uint8 paddleocr_rec_trt_uint8; do
+        if [[ "$faces_on" == false && "$faces" == *" $m "* ]]; then
+            continue
+        fi
+        echo "$m"
+    done
+}
+
 # =============================================================================
 # Service Start
 # =============================================================================
@@ -90,12 +106,8 @@ wait_for_services() {
 
     # Wait for required models to load
     log_info "Waiting for TensorRT models to load..."
-    local required_models=("yolov11_small_trt_end2end" "scrfd_10g_bnkps" "arcface_w600k_r50" "mobileclip2_s2_image_encoder" "mobileclip2_s2_text_encoder" "paddleocr_det_trt" "paddleocr_rec_trt" "paddleocr_det_trt_uint8" "paddleocr_rec_trt_uint8")
-    if ! _setup_faces_on; then
-        required_models=("${required_models[@]/scrfd_10g_bnkps}")
-        required_models=("${required_models[@]/arcface_w600k_r50}")
-        mapfile -t required_models < <(printf '%s\n' "${required_models[@]}" | sed '/^$/d')
-    fi
+    local required_models
+    mapfile -t required_models < <(_setup_required_models)
     local all_loaded=false
 
     for i in {1..90}; do  # Wait up to 3 minutes for models

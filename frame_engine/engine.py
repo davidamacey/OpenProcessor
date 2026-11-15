@@ -60,9 +60,11 @@ from frame_engine.branches.crops import CropJpegs
 from frame_engine.branches.derivatives import Derivatives
 from frame_engine.branches.detect import Detect
 from frame_engine.branches.embed import EmbedCrops, EmbedFrame
+from frame_engine.branches.faces import FaceEmbed, Faces
 from frame_engine.branches.ocr import Ocr
 from frame_engine.colour import ColourStep
 from frame_engine.cuda_fault import ContextLostError, is_sticky
+from frame_engine.faces.kernels import WarpKernel
 from frame_engine.messages import EngineRequest, EngineResult
 from frame_engine.nvjpeg_lanes import NvJpegError, NvJpegLanes
 from frame_engine.ocr.ctc import CtcDecoder
@@ -153,6 +155,7 @@ class FrameEngine:
         self.budget = self._reserve_budget(settings.budget_mib)
         metrics.watch_budget(self.budget)
         self.kernels = PrepKernels()
+        self.warp = WarpKernel()
         self.line_warp = LineWarp()
         self._ocr_decoder: CtcDecoder | None = None
         self._ocr_decoder_lock = threading.Lock()
@@ -348,6 +351,10 @@ class FrameEngine:
             out.append(EmbedFrame(plan.embed))
         if plan.embed is not None and plan.runs('embed_crops'):
             out.append(EmbedCrops(plan.embed, plan.embed_classes))
+        if plan.faces is not None and plan.runs('faces'):
+            out.append(Faces(plan.faces))
+        if plan.faces is not None and plan.runs('face_embed'):
+            out.append(FaceEmbed(plan.faces, self.warp))
         if plan.ocr is not None and plan.runs('ocr'):
             out.append(Ocr(plan.ocr, self._decoder(), self.line_warp))
         if plan.derivatives:

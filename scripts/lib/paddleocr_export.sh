@@ -74,6 +74,8 @@ unload_models_for_memory() {
         "yolov11_small_trt_end2end"
         "scrfd_10g_bnkps"
         "arcface_w600k_r50"
+        "scrfd_10g_bnkps_uint8"
+        "arcface_w600k_r50_uint8"
         "mobileclip2_s2_image_encoder"
         "mobileclip2_s2_text_encoder"
     )

@@ -470,7 +470,7 @@ def test_fresh_install_sets_a_working_primary_ingest_detector(shimmed: Shimmed) 
 
 CORE_REQUIRED_MODELS = (
     'yolov11_small_trt_end2end,mobileclip2_s2_image_encoder,mobileclip2_s2_text_encoder,'
-    'scrfd_10g_bnkps,arcface_w600k_r50'
+    'scrfd_10g_bnkps,arcface_w600k_r50,scrfd_10g_bnkps_uint8,arcface_w600k_r50_uint8'
 )
 
 
