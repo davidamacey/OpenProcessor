@@ -71,6 +71,25 @@ def _sizes() -> list[tuple[int, int]]:
 # ---------------------------------------------------------------------------------- geometry
 
 
+def _pairwise(rng: random.Random) -> list[dict[str, Any]]:
+    """Rows of float64 where the order of addition shows in the sum, and numpy's ``sum(axis=1)`` of
+    each (``filter_weights`` normalises with it); values as their IEEE bit patterns."""
+    import numpy as np
+
+    def bits(x: float) -> int:
+        return int(struct.unpack('<Q', struct.pack('<d', x))[0])
+
+    out = []
+    lengths = (3, 7, 8, 9, 17, 64, 100, 127, 128, 129, 130, 136, 200, 250, 300, 520, 777, 1000)
+    for n in [*lengths, *lengths, *lengths]:
+        values = [
+            rng.choice((1e16, -1e16, 1.0, 0.1, 3.3e-5, 2.0**-30)) * rng.random() for _ in range(n)
+        ]
+        total = float(np.array(values, np.float64).reshape(1, -1).sum(axis=1)[0])
+        out.append({'bits': [bits(v) for v in values], 'sum': bits(total)})
+    return out
+
+
 def _four(
     rng: random.Random, xs: tuple[float, float], ys: tuple[float, float]
 ) -> tuple[float, float, float, float]:
@@ -127,6 +146,7 @@ def _geometry(sizes: list[tuple[int, int]]) -> dict[str, Any]:
     return {
         'generated_by': 'scripts/codegen/frame_engine_goldens.py',
         'sources': ['src/domain/image_geometry.py', 'frame_engine/prep_geometry.py'],
+        'pairwise_sum': _pairwise(rng),
         'letterbox': letterbox,
         'square': square,
         'undo_letterbox': undo,
@@ -305,6 +325,7 @@ def _fixtures() -> list[tuple[str, bytes, float, float]]:
         + ENTROPY
         + EOI,
     )
+    add('frame_header_after_the_scan_header', SOI + _sos() + _sof(0xC0, 640, 480) + EOI)
     add('png_signature', b'\x89PNG\r\n\x1a\n' + b'\x00' * 30)
     add('empty', b'')
     add('one_byte', b'\xff')
