@@ -296,3 +296,12 @@ operation-level withdraw row; cluster placement is a side table; the vector DDL 
 login role; index design waits for gate A's measured queries. The rule changes are in R2, R3,
 sections 4.4, 7, 11, 13 and 14; the schema changes are in 15a, whose appendix A traces every finding
 to the section that now answers it.
+
+## 16. Coordinator answers after the fix pass (2026-11-15)
+
+| Question | Answer |
+|---|---|
+| May a person relabel an object that is frozen in the holdout? | Yes, as today: the freeze binds machines and undo, not a person's newer decision. The claim log shows that the holdout was edited after the freeze, so a comparison across that edit can be flagged. |
+| Machine boxes that arrive after a person closed an object's box set | Kept as results, not shown, as today's lock does. No route reopens a closed set except a person's own edit. |
+| A model trained on a photo that was erased later | Open, for the owner (section 13). Until decided: weights stay, exports and training data copies that hold the subject are deleted. |
+
