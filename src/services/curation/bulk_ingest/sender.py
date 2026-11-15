@@ -28,10 +28,14 @@ _STAGE_METRIC = 'op_pipeline_stage_seconds'
 
 
 #: Attempts at one batch the route answers with a retryable 503 (``database_busy``, Triton
-#: outage); the last answer then fails the batch as a whole.
+#: outage) or that could not reach the API at all (it is restarting); the last failure then
+#: fails the batch as a whole, recorded as the transient ``busy``.
 BUSY_MAX_ATTEMPTS = 6
 RETRY_SLEEP = asyncio.sleep
 _BACKOFF = wait_exponential_jitter(initial=1.0, max=30.0)
+# The connection was never made, so no worker saw the request (httpx exception hierarchy:
+# https://www.python-httpx.org/exceptions/).
+_NOT_CONNECTED = (httpx.ConnectError, httpx.ConnectTimeout)
 
 
 class BatchRequestError(Exception):
@@ -39,8 +43,11 @@ class BatchRequestError(Exception):
 
 
 class BatchBusyError(BatchRequestError):
-    """The route answered 503 with ``Retry-After``: the batch was not processed, so sending it
-    again is safe."""
+    """The batch was not processed, so sending it again is safe: the route answered 503 with
+    ``Retry-After``, or no connection could be made (``retry_after`` 0: the API is not up).
+    Failures after the request went out (a broken connection, a read timeout) are not this:
+    they may have been caused by a file that crashes or hangs the worker, so they stay a plain
+    :class:`BatchRequestError` and use an attempt."""
 
     def __init__(self, message: str, retry_after: float) -> None:
         super().__init__(message)
@@ -116,6 +123,8 @@ class HttpBatchSender:
                 json=self._request_body(paths, source, run_id),
                 timeout=BATCH_REQUEST_TIMEOUT_S,
             )
+        except _NOT_CONNECTED as exc:
+            raise BatchBusyError(f'{type(exc).__name__}: {exc}'[:300], 0.0) from exc
         except httpx.HTTPError as exc:
             raise BatchRequestError(f'{type(exc).__name__}: {exc}'[:300]) from exc
         if resp.status_code != 200:
