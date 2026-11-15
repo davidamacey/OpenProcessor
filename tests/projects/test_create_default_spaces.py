@@ -27,7 +27,9 @@ async def _spaces(project_id):
         return [tuple(r) for r in (await session.execute(_SPACES, {'p': project_id})).all()]
 
 
-def test_a_created_project_has_exactly_three_primary_ready_spaces() -> None:
+def test_a_created_project_has_exactly_three_primary_ready_spaces_crops_from_the_crop_encoder() -> (
+    None
+):
     async def _run():
         record = await bootstrap_default_project()
         return await _spaces(record.id)
@@ -35,10 +37,10 @@ def test_a_created_project_has_exactly_three_primary_ready_spaces() -> None:
     rows = asyncio.run(_run())
     assert rows == [
         ('box', 'primary', 'ready', 'items', 'region_box_embeddings.embedding',
-         None, 'region_box_embeddings', 'pe_core_l14_336', 1),
+         None, 'region_box_embeddings', 'pe_core_l14_crop224', 1),
         ('frame', 'primary', 'ready', 'images', 'pe_embedding', None, None, 'pe_core_l14_336', 1),
         ('item', 'primary', 'ready', 'items', 'pe_embedding', 'embedding_state', None,
-         'pe_core_l14_336', 1),
+         'pe_core_l14_crop224', 1),
     ]  # fmt: skip
 
 

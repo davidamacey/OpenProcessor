@@ -11,7 +11,15 @@ from typing import TYPE_CHECKING
 
 import pytest
 from installer_harness import REPO_ROOT
-from test_model_setup import LIB, ONNX_SHA, STAMP_STUBS, _installed_pe, _put_onnx, _stamp_row
+from test_model_setup import (
+    LIB,
+    ONNX_BYTES,
+    ONNX_SHA,
+    STAMP_STUBS,
+    _installed_pe,
+    _put_onnx,
+    _stamp_row,
+)
 
 
 if TYPE_CHECKING:
@@ -25,10 +33,10 @@ FLAGS_OK = 'min1/opt8/max32 336x336 target=default workspace=8G strongly-typed i
 def _build_script(tmp_path: Path, *, fp16_fails: bool, check_fails: bool = False) -> str:
     """The real `pe` group; every dc call is appended to calls.log."""
     _put_onnx(tmp_path)
-    (tmp_path / 'models' / 'pe_image_encoder').mkdir(parents=True)
-    shutil.copy(
-        REPO_ROOT / 'models/pe_image_encoder/config.pbtxt', tmp_path / 'models/pe_image_encoder'
-    )
+    (tmp_path / 'pytorch_models' / 'pe_crop_encoder.onnx').write_bytes(ONNX_BYTES)
+    for model in ('pe_image_encoder', 'pe_crop_encoder'):
+        (tmp_path / 'models' / model).mkdir(parents=True)
+        shutil.copy(REPO_ROOT / 'models' / model / 'config.pbtxt', tmp_path / 'models' / model)
     return (
         f'source {LIB}; OP_DIR="{tmp_path}"; mkdir -p "{tmp_path}/.install"; sleep() {{ :; }}; '
         f'triton_load_and_wait() {{ return 0; }}; {STAMP_STUBS} '
@@ -44,7 +52,16 @@ def _build_script(tmp_path: Path, *, fp16_fails: bool, check_fails: bool = False
 
 
 def _calls(tmp_path: Path) -> list[str]:
-    return (tmp_path / 'calls.log').read_text().splitlines()
+    """The calls that concern the frame encoder's build (the crop encoder's are checked in
+    test_pe_crop_encoder_install.py)."""
+    return [
+        c for c in (tmp_path / 'calls.log').read_text().splitlines() if 'pe_crop_encoder' not in c
+    ]
+
+
+def _frame_row(tmp_path: Path) -> list[str]:
+    rows = (tmp_path / '.install' / 'precision.tsv').read_text().splitlines()
+    return next(r for r in rows if r.startswith('pe_image_encoder\t')).split('\t')
 
 
 def _trtexec_inputs(calls: list[str]) -> list[str]:
@@ -78,14 +95,14 @@ def test_fp32_fallback_branch_applies_the_uint8_prefix_too(tmp_path: Path, bash)
     result = bash(_build_script(tmp_path, fp16_fails=True))
     assert 'rc=0' in result.stdout
     _assert_prefix_before_every_trtexec(_calls(tmp_path), 2)
-    row = (tmp_path / '.install' / 'precision.tsv').read_text().rstrip().split('\t')
+    row = _frame_row(tmp_path)
     assert row[1] == 'fp32_fallback'
     assert row[6] == FLAGS_OK
 
 
 def test_clean_build_stamp_records_the_input_datatype(tmp_path: Path, bash) -> None:
     bash(_build_script(tmp_path, fp16_fails=False))
-    row = (tmp_path / '.install' / 'precision.tsv').read_text().rstrip().split('\t')
+    row = _frame_row(tmp_path)
     assert row[1] == 'fp16'
     assert row[5] == ONNX_SHA
     assert row[6] == FLAGS_OK
@@ -203,6 +220,7 @@ def test_check_input_dtype_accepts_the_prefixed_onnx(tmp_path: Path) -> None:
 # config directory -> the sources that build its engine
 UINT8_BUILDERS = {
     'pe_image_encoder': ['export/build_pe_trt.sh', 'scripts/lib/model_setup.sh'],
+    'pe_crop_encoder': ['export/build_pe_trt.sh'],  # built with PE_ROLE=crop
     'yolov11_small_trt_end2end': ['export/yolo_trt_build.py'],
     'yolo26_small_trt': ['export/yolo_trt_build.py'],
     'scrfd_10g_bnkps_uint8': ['export/scrfd_triton.py'],

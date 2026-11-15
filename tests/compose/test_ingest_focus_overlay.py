@@ -10,7 +10,12 @@ import yaml
 from compose._helpers import COMPOSE_PATH, REPO_ROOT, _load_yaml
 
 
-INGEST_PROFILE_MODELS = ('yolov11_small_trt_end2end', 'pe_image_encoder', 'pe_text_encoder')
+INGEST_PROFILE_MODELS = (
+    'yolov11_small_trt_end2end',
+    'pe_image_encoder',
+    'pe_crop_encoder',
+    'pe_text_encoder',
+)
 
 
 OVERLAY = REPO_ROOT / 'docker-compose.ingest-focus.yml'

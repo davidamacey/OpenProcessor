@@ -12299,6 +12299,74 @@
         "title": "EmbeddingSpaceView",
         "type": "object"
       },
+      "EncoderMismatch": {
+        "description": "Served on a project whose item or box vectors are of another model than this deployment's\nencoders (a project made before the crop encoder): its writers refuse (ingest, import, reprocess,\ndrawn boxes) and the detection worker writes no box vectors, so its boxes are missing from\nclusters. Nothing is migrated: the remedy in ``message`` is a new project.",
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "spaces": {
+            "items": {
+              "$ref": "#/components/schemas/EncoderMismatchSpace"
+            },
+            "title": "Spaces",
+            "type": "array"
+          }
+        },
+        "required": [
+          "message",
+          "spaces"
+        ],
+        "title": "EncoderMismatch",
+        "type": "object"
+      },
+      "EncoderMismatchSpace": {
+        "properties": {
+          "encoder_model": {
+            "description": "The model this deployment's encoder makes them with.",
+            "title": "Encoder Model",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "registered_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The Triton image model the space's vectors came from.",
+            "title": "Registered Model"
+          },
+          "space_key": {
+            "title": "Space Key",
+            "type": "string"
+          },
+          "target": {
+            "enum": [
+              "item",
+              "box"
+            ],
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target",
+          "space_key",
+          "registered_model",
+          "encoder_model",
+          "message"
+        ],
+        "title": "EncoderMismatchSpace",
+        "type": "object"
+      },
       "EvalClassGt": {
         "properties": {
           "eval_class_id": {
@@ -26921,6 +26989,16 @@
             "title": "Display Name",
             "type": "string"
           },
+          "encoder_mismatch": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EncoderMismatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "error": {
             "anyOf": [
               {
@@ -27177,6 +27255,16 @@
           "display_name": {
             "title": "Display Name",
             "type": "string"
+          },
+          "encoder_mismatch": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EncoderMismatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "is_default": {
             "title": "Is Default",

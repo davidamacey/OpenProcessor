@@ -42,7 +42,29 @@ def _configured_or_default() -> list[str]:
         models.CLIP_IMAGE_MODEL,
         models.CLIP_TEXT_MODEL,
         models.PE_IMAGE_MODEL,
+        models.PE_CROP_MODEL,
     ]
+
+
+def crop_input_problem(config: dict[str, Any] | None, model: str, size: int) -> str | None:
+    """Why the crop engine ``model`` is not built at ``size`` (``PE_CROP_SIZE``), else ``None``.
+
+    ``config`` is the answer of ``GET /v2/models/<model>/config`` (the model configuration
+    extension: the ModelConfig as JSON, int64 ``dims`` as strings, the batch axis not among
+    them). A config that cannot be read, or has no ``images`` input of ``[3, H, W]``, is a
+    problem: the size is not known to be right.
+    """
+    inputs = (config or {}).get('input') or []
+    dims = next((i.get('dims') for i in inputs if i.get('name') == 'images'), None)
+    if not isinstance(dims, list) or len(dims) != 3:
+        return f"{model}: the server's configuration has no 'images' input of [3, H, W]"
+    built = tuple(int(d) for d in dims[1:])
+    if built != (size, size):
+        return (
+            f'{model} is built at {built[0]}x{built[1]} but PE_CROP_SIZE is {size}: '
+            'set PE_CROP_SIZE to the size of the engine, or rebuild it (make pe-build-crop-trt)'
+        )
+    return None
 
 
 def models_not_ready(

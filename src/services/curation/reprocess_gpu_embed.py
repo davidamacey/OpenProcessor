@@ -27,6 +27,7 @@ from src.domain import frame_engine_wire as wire
 from src.domain.decode_route import CPU_BOX_COUNT, GPU, prep_status_route
 from src.services.curation.ingest_gpu_decode import (
     call_frame_engine,
+    crop_embed_spec,
     embed_spec,
     engine_ready,
     engine_stage_applies,
@@ -73,14 +74,18 @@ async def embed_on_gpu(
     """The vectors of the encoded photo ``data`` and its ``boxes`` (stored ``bbox_norm``), or
     ``None`` when this photo takes the CPU path."""
     rows = np.asarray(boxes, np.float64).reshape(-1, 4)
-    plan = wire.EnginePlan(branches=('embed_frame', 'embed_crops'), embed=embed_spec())
+    plan = wire.EnginePlan(
+        branches=('embed_frame', 'embed_crops'), embed=embed_spec(), crop_embed=crop_embed_spec()
+    )
     answer = await call_frame_engine(route.frame_engine, data, plan, rows, caller='reprocess_embed')
     if isinstance(answer, str):
         _count(prep_status_route(answer))
         return None
     frame = answer.outputs[wire.WHOLE_EMBEDDING].astype(np.float32)
-    vectors = answer.outputs[wire.CROP_EMBEDDINGS].astype(np.float32).reshape(-1, frame.shape[0])
-    if vectors.shape[0] != rows.shape[0]:
+    vectors = answer.outputs[wire.CROP_EMBEDDINGS].astype(np.float32)
+    if (
+        vectors.ndim != 2 or vectors.shape[0] != rows.shape[0]
+    ):  # one row per box, the crop encoder's width
         _count(CPU_BOX_COUNT)
         return None
     _count(GPU)

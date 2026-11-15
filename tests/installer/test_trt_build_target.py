@@ -183,7 +183,7 @@ def test_the_recorded_stamp_carries_target_and_workspace(bash, tmp_path: Path) -
 def test_the_pe_stamp_and_the_trtexec_call_come_from_one_source(bash, tmp_path: Path) -> None:
     out = bash(
         f'source {LIB}; OP_DIR="{tmp_path}"; GPU_PROFILE=small; '
-        '_ms_triton() { echo "TRTEXEC $*"; }; _ms_pe_trtexec x.onnx; _ms_pe_flags'
+        '_ms_triton() { echo "TRTEXEC $*"; }; _ms_pe_trtexec pe_image_encoder x.onnx; _ms_pe_flags pe_image_encoder'
     ).stdout
     assert '--memPoolSize=workspace:2G' in out
     assert '--maxShapes=images:16x3x336x336' in out
@@ -193,7 +193,7 @@ def test_the_pe_stamp_and_the_trtexec_call_come_from_one_source(bash, tmp_path: 
 def test_the_default_pe_build_is_unchanged(bash, tmp_path: Path) -> None:
     out = bash(
         f'source {LIB}; OP_DIR="{tmp_path}"; '
-        '_ms_triton() { echo "TRTEXEC $*"; }; _ms_pe_trtexec x.onnx'
+        '_ms_triton() { echo "TRTEXEC $*"; }; _ms_pe_trtexec pe_image_encoder x.onnx'
     ).stdout
     assert '--memPoolSize=workspace:8G' in out
     assert '--maxShapes=images:32x3x336x336' in out

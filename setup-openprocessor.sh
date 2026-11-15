@@ -930,6 +930,8 @@ recommend_plan() {
         warns+=("${share_msg}; if an export step reports out of GPU memory, re-run with --gpu-plan triton=<card with >= ${export_floor_gb} GB free> (or --force to keep this placement)")
     fi
 
+    # Frame encoder 1536 MiB plus crop encoder 768 MiB is 2.25 GB; this gate works in whole GB,
+    # and `gpu plan` checks the exact figure in MiB.
     local tn pe_need=2
     tn=$(_triton_need_gb "$profile")
 

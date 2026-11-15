@@ -260,7 +260,7 @@ wait_for_gpu_memory() {
 
 # gpu_pe_placement IDS PE_MIB TABLE [TRITON_RUNNING] [PRIMARY_MIB]
 #   IDS     TRITON_GPU_ID as written in .env: "1" or "0,2" (host indexes)
-#   PE_MIB  GPU memory of one PE encoder instance
+#   PE_MIB  GPU memory of one instance of each PE encoder (frame + crop)
 #   TABLE   one GPU per line: index|name|total_mib|used_mib|compute_cap
 #   TRITON_RUNNING=1: this stack's Triton already holds its memory, so a
 #           shortfall of free memory is a warning, not a refusal
@@ -307,7 +307,7 @@ gpu_pe_placement() {
     for id in "${listed[@]}"; do
         free=$(( total[$id] - used[$id] ))
         need=$pe_mib
-        what="the PE encoder needs about ${pe_mib} MiB"
+        what="the PE encoder (frame and crop encoders) needs about ${pe_mib} MiB"
         if [[ "$id" == "$primary" ]] && (( primary_mib > pe_mib )); then
             need=$primary_mib
             what="the primary card runs every Triton model and needs about ${primary_mib} MiB (put a larger card first, i.e. give it the lowest id)"

@@ -38,7 +38,10 @@ async def _seed_defaults(project) -> None:
     async with async_session_factory()() as session, project_tx(session, project):
         version = await session.run_sync(lambda s: repo.get_model_version(s, 'pe_core_l14_336', 1))
         await repo.add_spaces(
-            session, spaces.default_space_rows(project, cast('Any', version), created_by='test')
+            session,
+            spaces.default_space_rows(
+                project, frame=cast('Any', version), crop=cast('Any', version), created_by='test'
+            ),
         )
 
 

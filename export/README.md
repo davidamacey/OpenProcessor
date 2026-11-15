@@ -20,7 +20,7 @@ In the `model-export` image (the `export` target of the root `Dockerfile`), neve
 | `export_mobileclip_image_encoder.py` | MobileCLIP image encoder | TensorRT engine |
 | `export_mobileclip_text_encoder.py` | MobileCLIP text encoder | TensorRT engine |
 | `download_pe_weights.py` | Pinned, SHA-256-verified PE-Core-L14-336 checkpoint (both PE exporters) | HF cache |
-| `export_pe_image_encoder.py` | PE-Core-L14-336 image encoder (curation `pe_embedding`) | ONNX + `config.pbtxt` |
+| `export_pe_image_encoder.py` | PE-Core-L14-336 image encoder (curation `pe_embedding`); `--crop`: the crop encoder at 224 | ONNX + `config.pbtxt` |
 | `build_pe_trt.sh` | PE-Core ONNX → TensorRT engine (Path 1) | TensorRT engine |
 | `build_pe_ort_fallback.sh` | PE-Core ONNX served by Triton's ORT backend (Path 2) | ONNX model dir |
 | `export_pe_text_encoder.py` | PE-Core-L14-336 text encoder (semantic-search queries), parity-gated | ONNX, then the TensorRT FP16 plan (default) or the ORT fallback model dir |
@@ -71,6 +71,9 @@ models/
 ├── pe_image_encoder/                   # PE-Core-L14-336 image encoder
 │   ├── 1/model.plan                    #   Path 1 (TensorRT), OR
 │   ├── 1/model.onnx                    #   Path 2 (ONNX Runtime) - never both
+│   └── config.pbtxt
+├── pe_crop_encoder/                    # the same weights at a 224 input: the object-crop encoder
+│   ├── 1/model.plan
 │   └── config.pbtxt
 ├── pe_text_encoder/                    # PE-Core-L14-336 text encoder (optional)
 │   ├── 1/model.plan                    #   --install-triton (TensorRT FP16), OR
@@ -136,7 +139,8 @@ Encoder) provides both towers of one shared 1024-d embedding space:
 
 | Tower | Consumer | Serving | Contract (hardcoded in `src/clients/pe_encoder.py`, `src/clients/pe_text_backends.py`) |
 |-------|----------|---------|-----------------------------------------------------|
-| Image | `PEEncoder.encode_images` → `pe_embedding` field (semantic search, near-dup, clustering, embedding viz) | Triton `pe_image_encoder`, **required** | `images` UINT8 `[B, 3, 336, 336]` → `image_embeddings` FP32 `[B, 1024]` |
+| Image (frame) | `PEEncoder.encode_images` → the frame `pe_embedding` field (near-dup, frame search, embedding viz) | Triton `pe_image_encoder`, **required** | `images` UINT8 `[B, 3, 336, 336]` → `image_embeddings` FP32 `[B, 1024]` |
+| Image (crops) | `PEEncoder.embed_crops` and the frame engine's `embed_crops` → the item and box vectors (clustering, search by picture, text search over crops) | Triton `pe_crop_encoder`, **required** | `images` UINT8 `[B, 3, 224, 224]` → `image_embeddings` FP32 `[B, 1024]` |
 | Text  | `PEEncoder.encode_text` → `GET /curation/projects/{project}/search/text` queries | **Triton `pe_text_encoder`** only (one shared GPU TensorRT FP16 instance for every uvicorn worker); there is no in-process fallback | `text_tokens` INT64 `[B, T≤32]` → `text_embeddings` FP32 `[B, 1024]` |
 
 Both embeddings come out L2-normalized. See
@@ -150,6 +154,8 @@ depends on them.
 make pe-download        # 0. weights: pinned commit + SHA-256 into the HF cache
 make pe-export-image    # 1. image tower -> pytorch_models/pe_image_encoder.onnx
 make pe-build-trt       # 2. -> models/pe_image_encoder/1/model.plan (Path 1)
+make pe-export-crop     # 2b. the crop encoder: the same weights at 224 -> pytorch_models/pe_crop_encoder.onnx
+make pe-build-crop-trt  # 2c. -> models/pe_crop_encoder/1/model.plan
 #   make pe-build-ort   #    ...or serve the ONNX via Triton ORT (Path 2 fallback)
 make pe-export-text-triton  # 3. text tower -> pytorch_models/pe_text_encoder.onnx
                              #    + builds, gates and installs models/pe_text_encoder/1/model.plan + config.pbtxt
@@ -373,7 +379,7 @@ docker compose run --rm model-export python /app/export/export_paddleocr_rec.py 
 - Output: `[B, 512]` L2-normalized embeddings
 - Dynamic batching: 1-64
 
-### PE-Core-L14-336 Image Encoder
+### PE-Core-L14-336 Image Encoder (frame vector)
 - Input: `images` `[B, 3, 336, 336]` UINT8 RGB
   (resize shorter edge to 336, center-crop — see
   `src/utils/pe_preprocess.py`); the engine applies PE-Core's
@@ -381,6 +387,25 @@ docker compose run --rm model-export python /app/export/export_paddleocr_rec.py 
   after the FP16 bake)
 - Output: `image_embeddings` `[B, 1024]` FP32, L2-normalized
 - Dynamic batching: 1-32 (engine profile min=1 / opt=8 / max=32)
+
+### PE-Core Crop Encoder (`pe_crop_encoder`, object-crop vector)
+- The same weights and the same text tower as the frame encoder, built at a 224 input
+  (`export_pe_image_encoder.py --crop`, `PE_ROLE=crop build_pe_trt.sh`; `make pe-export-crop`,
+  `make pe-build-crop-trt`). PE's own code interpolates the absolute position embedding and rebuilds
+  the 2-D RoPE grid for another input size (`core/vision_encoder/pe.py` `_sample_abs_posemb`, `rope.py`
+  `update_grid`); the rotary-layout pass is told the 257 tokens of a 224 input
+  (`pe_rope_layout.Geometry.for_input`).
+- Input: `images` `[B, 3, 224, 224]` UINT8 RGB: the **whole** box scaled to fit the square, aspect
+  kept (antialiased when the box is larger than 224 px, plain bilinear when smaller: Pillow
+  `BILINEAR`, the rule beside `letterbox_geometry` in `src/domain/image_geometry.py`), on a square of grey 128 (`src/utils/pe_preprocess.py` `letterbox_crop_rgb`; the frame engine
+  cuts the same square on the GPU, `frame_engine/branches/embed.py`). 128 is the value that stays at
+  the normalized zero: PE's transform has no pad (it squashes the image,
+  `core.vision_encoder.transforms.get_image_transform`) and normalizes with mean 0.5, std 0.5.
+- Output: `image_embeddings` `[B, 1024]` FP32, L2-normalized; dynamic batching 1-32
+- Its vectors are a space of their own (`pe_core_l14_crop224` in `examples/embedding/catalog.tsv`), not
+  comparable with the frame encoder's. The API reads the model name and size from `PE_CROP_MODEL` and
+  `PE_CROP_SIZE` and sends them in the engine plan (`crop_embed`); a smaller dedicated crop encoder
+  later is a model, a size and those two settings.
 
 ### PE-Core-L14-336 Text Encoder
 - Input: `text_tokens` `[B, T]` INT64, `T <= 32` — PE `SimpleTokenizer` ids,

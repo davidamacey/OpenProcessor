@@ -27,7 +27,8 @@ from src.domain import frame_engine_wire as wire
 pytestmark = pytest.mark.asyncio(loop_scope='function')
 
 DETECTOR = {'model': 'det', 'input_size': 640, 'letterbox_fill': 114}
-EMBED = {'model': 'pe', 'size': 336, 'batch': 32}
+EMBED = {'model': 'pe', 'size': 336}
+CROP_EMBED = {'model': 'pe_crop', 'size': 224, 'batch': 32}
 OCR = {
     'detector': 'ocr_det',
     'recogniser': 'ocr_rec',
@@ -45,8 +46,10 @@ def _plan(branches: list[str], **over: Any) -> str:
     body: dict[str, Any] = {'version': 1, 'branches': branches, 'crops': 'none', **over}
     if 'detect' in branches:
         body.setdefault('detector', DETECTOR)
-    if {'embed_frame', 'embed_crops'} & set(branches):
+    if 'embed_frame' in branches:
         body.setdefault('embed', EMBED)
+    if 'embed_crops' in branches:
+        body.setdefault('crop_embed', CROP_EMBED)
     if 'faces' in branches:
         body.setdefault('faces', FACES)
     if 'ocr' in branches:

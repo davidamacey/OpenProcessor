@@ -117,7 +117,7 @@ def ingest_pe(
 
     client = grpcclient.InferenceServerClient(grpc_url)
     plan = wire.EnginePlan(
-        branches=('embed_frame',), embed=wire.EmbedSpec(TritonModelConfig.PE_IMAGE_MODEL, 336, 32)
+        branches=('embed_frame',), embed=wire.EmbedSpec(TritonModelConfig.PE_IMAGE_MODEL, 336)
     ).to_json()
     vec = np.zeros((len(rows), 1024), dtype=np.float32)
     have = np.zeros(len(rows), dtype=bool)

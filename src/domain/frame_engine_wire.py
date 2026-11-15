@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from src.domain.decode_route import GPU
+from src.domain.image_geometry import CROP_FILL
 from src.domain.processing_plan import BRANCHES, CONDITIONAL, Branch
 
 
@@ -149,9 +150,11 @@ CropsMode = Literal['inline', 'none']
 #: Shorter side to ``size``, centre crop, antialiased bilinear (Pillow ``BILINEAR``):
 #: ``src.utils.pe_preprocess.whole_frame_rgb_from_image``.
 FRAME_RECIPES = ('whole_frame',)
-#: The crop rectangle, shorter side to ``size``, centre crop, plain bilinear:
-#: ``src.utils.pe_preprocess.resize_crop_rgb``.
-CROP_RECIPES = ('resize_crop',)
+#: The crop rectangle, the whole box scaled to fit the square (aspect kept; antialiased when the box
+#: is larger than the square, plain bilinear when smaller), the rest of the square ``fill``:
+#: ``src.domain.image_geometry.letterbox_geometry`` is the geometry and the rule beside it the
+#: resample on every path (the engine's kernels and the API's host copy, ``src.utils.pe_preprocess``).
+CROP_RECIPES = ('letterbox',)
 
 BranchState = Literal['ok', 'error', 'not_run']
 UNSUPPORTED_BRANCH = 'unsupported_branch'
@@ -179,6 +182,7 @@ _TOP_FIELDS = frozenset(
         'branches',
         'detector',
         'embed',
+        'crop_embed',
         'embed_classes',
         'if_detected',
         'faces',
@@ -232,11 +236,23 @@ class DetectorSpec:
 
 @dataclass(frozen=True)
 class EmbedSpec:
+    """The whole-frame encoder: one square of the frame per photo."""
+
+    model: str
+    size: int
+    frame_recipe: str = FRAME_RECIPES[0]
+
+
+@dataclass(frozen=True)
+class CropEmbedSpec:
+    """The crop encoder, a model of its own (its own size, preprocessing and vector space): one
+    ``size`` square per box, called in chunks of ``batch``. ``fill`` is the pad of the letterbox."""
+
     model: str
     size: int
     batch: int
-    frame_recipe: str = FRAME_RECIPES[0]
     crop_recipe: str = CROP_RECIPES[0]
+    fill: int = CROP_FILL
 
 
 @dataclass(frozen=True)
@@ -294,6 +310,7 @@ class EnginePlan:
     branches: tuple[EngineBranch, ...]
     detector: DetectorSpec | None = None
     embed: EmbedSpec | None = None
+    crop_embed: CropEmbedSpec | None = None
     #: Detector class ids that get a crop vector; ``None`` means every detection.
     embed_classes: frozenset[int] | None = None
     crops: CropsMode = 'none'
@@ -331,9 +348,16 @@ class EnginePlan:
             body['embed'] = {
                 'model': e.model,
                 'size': e.size,
-                'batch': e.batch,
                 'frame_recipe': e.frame_recipe,
-                'crop_recipe': e.crop_recipe,
+            }
+        if self.crop_embed is not None:
+            c = self.crop_embed
+            body['crop_embed'] = {
+                'model': c.model,
+                'size': c.size,
+                'batch': c.batch,
+                'crop_recipe': c.crop_recipe,
+                'fill': c.fill,
             }
         if self.embed_classes is not None:
             body['embed_classes'] = sorted(self.embed_classes)
@@ -446,15 +470,26 @@ def _detector(raw: Any) -> DetectorSpec:
 
 
 def _embed(raw: Any) -> EmbedSpec:
-    e = _obj(raw, 'embed', frozenset({'model', 'size', 'batch', 'frame_recipe', 'crop_recipe'}))
+    e = _obj(raw, 'embed', frozenset({'model', 'size', 'frame_recipe'}))
     return EmbedSpec(
         model=_str(_need(e, 'model', 'embed.model'), 'embed.model'),
         size=_int(_need(e, 'size', 'embed.size'), 'embed.size', 16, 4096),
-        batch=_int(_need(e, 'batch', 'embed.batch'), 'embed.batch', 1, 1024),
         frame_recipe=_str(
             e.get('frame_recipe', FRAME_RECIPES[0]), 'embed.frame_recipe', FRAME_RECIPES
         ),
-        crop_recipe=_str(e.get('crop_recipe', CROP_RECIPES[0]), 'embed.crop_recipe', CROP_RECIPES),
+    )
+
+
+def _crop_embed(raw: Any) -> CropEmbedSpec:
+    c = _obj(raw, 'crop_embed', frozenset({'model', 'size', 'batch', 'crop_recipe', 'fill'}))
+    return CropEmbedSpec(
+        model=_str(_need(c, 'model', 'crop_embed.model'), 'crop_embed.model'),
+        size=_int(_need(c, 'size', 'crop_embed.size'), 'crop_embed.size', 16, 4096),
+        batch=_int(_need(c, 'batch', 'crop_embed.batch'), 'crop_embed.batch', 1, 1024),
+        crop_recipe=_str(
+            c.get('crop_recipe', CROP_RECIPES[0]), 'crop_embed.crop_recipe', CROP_RECIPES
+        ),
+        fill=_int(c.get('fill', CROP_FILL), 'crop_embed.fill', 0, 255),
     )
 
 
@@ -539,12 +574,15 @@ def _branches(raw: Any) -> tuple[EngineBranch, ...]:
     return tuple(b for b in ENGINE_BRANCHES if b in raw)
 
 
-def _check_settings(plan: EnginePlan, branch: str, settings: object) -> None:
+def _check_settings(
+    plan: EnginePlan, branch: str, settings: object, *, field: str | None = None
+) -> None:
     """A branch's settings object comes with the branch and only with it."""
+    name = field or branch
     if plan.runs(branch) and settings is None:
-        raise EnginePlanError('missing_field', branch)
+        raise EnginePlanError('missing_field', name)
     if settings is not None and not plan.runs(branch):
-        raise EnginePlanError('bad_field', branch)
+        raise EnginePlanError('bad_field', name)
 
 
 def _check_dependencies(plan: EnginePlan, *, has_boxes: bool) -> None:
@@ -564,8 +602,8 @@ def _check_dependencies(plan: EnginePlan, *, has_boxes: bool) -> None:
     _check_settings(plan, 'ocr', plan.ocr)
     if runs('detect') and plan.detector is None:
         raise EnginePlanError('missing_field', 'detector')
-    if (runs('embed_frame') or runs('embed_crops')) and plan.embed is None:
-        raise EnginePlanError('missing_field', 'embed')
+    _check_settings(plan, 'embed_frame', plan.embed, field='embed')
+    _check_settings(plan, 'embed_crops', plan.crop_embed, field='crop_embed')
     if plan.embed_classes is not None and (not runs('embed_crops') or has_boxes):
         raise EnginePlanError('bad_field', 'embed_classes')
     for name in plan.if_detected:
@@ -601,6 +639,7 @@ def parse_plan(text: str | bytes, *, has_boxes: bool) -> EnginePlan:
         branches=branches,
         detector=_detector(body['detector']) if 'detector' in body else None,
         embed=_embed(body['embed']) if 'embed' in body else None,
+        crop_embed=_crop_embed(body['crop_embed']) if 'crop_embed' in body else None,
         embed_classes=(
             None if raw_classes is None else frozenset(_class_ids(raw_classes, 'embed_classes'))
         ),
@@ -655,6 +694,7 @@ __all__ = [
     'MODEL_NAME',
     'PROTOCOL_VERSION',
     'Branch',
+    'CropEmbedSpec',
     'DetectorSpec',
     'EmbedSpec',
     'EnginePlan',

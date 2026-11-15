@@ -196,7 +196,8 @@ async def test_a_small_photo_is_embedded_from_the_gpu_decode_with_its_stored_box
     assert call['names'] == ['boxes', 'image', 'plan']
     assert call['plan'].branches == ('embed_frame', 'embed_crops')
     assert call['plan'].crops == 'none'
-    assert call['plan'].embed == wire.EmbedSpec('pe_image_encoder', 336, 32)
+    assert call['plan'].embed == wire.EmbedSpec('pe_image_encoder', 336)
+    assert call['plan'].crop_embed == wire.CropEmbedSpec('pe_crop_encoder', 224, 32)
     # The crop box, then the embeddable region boxes; a region box equal to the crop box is
     # sent once and the rejected box not at all.
     np.testing.assert_array_equal(call['boxes'], np.array([CROP_BOX, REGION_BOX], np.float64))

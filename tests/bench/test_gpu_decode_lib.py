@@ -111,12 +111,10 @@ def test_letterbox_geometry_matches_product(size: tuple[int, int]) -> None:
 
 @pytest.mark.parametrize('size', [(336, 336), (1000, 400), (400, 1000), (37, 3), (5472, 3648)])
 def test_pe_square_geometry_matches_product(size: tuple[int, int]) -> None:
-    from src.utils.pe_preprocess import resize_crop_rgb
-
     w, h = size
     g = lib.pe_square_geometry(w, h, 336)
     rgb = np.arange(h * w * 3, dtype=np.uint64).reshape(h, w, 3).astype(np.uint8)
-    assert resize_crop_rgb(rgb).shape == (336, 336, 3)
+    assert lib.centre_square_reference(rgb).shape == (336, 336, 3)
     assert g.new_w >= 336
     assert g.new_h >= 336
     assert g.top == (g.new_h - 336) // 2

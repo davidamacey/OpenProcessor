@@ -7,7 +7,7 @@ Each function names the product function it stands in for and how close it is:
   un-map; Pillow's antialiased bilinear resampling is reproduced by ``F.interpolate(...,
   antialias=True)`` in float (Pillow rounds in fixed point), so pixels differ by about one
   grey level (gate T).
-* ``pe_square_u8``  ``pe_preprocess.resize_crop_rgb``: identical geometry; OpenCV's
+* ``pe_square_u8``  ``gpu_decode_lib.centre_square_reference``: identical geometry; OpenCV's
   ``INTER_LINEAR`` (fixed point, no antialiasing) by bilinear without antialiasing (gate T).
 * ``crop_u8``       ``ingest_index.crop_pil``: bit-identical, zeros outside the frame.
 * ``gray_u8``, ``lap_var``  ``crop_quality.image_lap_var`` / ``crop_lap_var``: bit-identical

@@ -15,7 +15,6 @@ class_name, held_out). Only public data is read.
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import sys
 import time
@@ -23,19 +22,18 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from PIL import Image
 
 
 _REPO = Path(__file__).resolve().parents[3]
 
 
 def _load_preprocess() -> Any:
-    """Import ``pe_preprocess`` by path: it needs only cv2 and numpy, not the ``src`` package."""
-    path = _REPO / 'src' / 'services' / 'detection' / 'pe_preprocess.py'
-    spec = importlib.util.spec_from_file_location('pe_preprocess', path)
-    module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
-    sys.modules['pe_preprocess'] = module
-    spec.loader.exec_module(module)  # type: ignore[union-attr]
-    return module
+    """``src.utils.pe_preprocess`` (the repository root is put on the path first)."""
+    sys.path.insert(0, str(_REPO))
+    from src.utils import pe_preprocess
+
+    return pe_preprocess
 
 
 def load_boxes(cache: Path, image_ids: set[int]) -> tuple[dict[int, list[tuple]], dict[int, str]]:
@@ -72,7 +70,7 @@ class ImageCrops:
             return image_id, [], []
         rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         h, w = rgb.shape[:2]
-        tiles = [self.pp.resize_crop_rgb(rgb)]
+        tiles = [self.pp.whole_frame_rgb_from_image(Image.fromarray(rgb))]
         cats = [-1]
         chosen = sorted(self.boxes.get(image_id, []), key=lambda b: -b[2] * b[3])
         for x, y, bw, bh, cat in chosen:
@@ -82,7 +80,9 @@ class ImageCrops:
             x1, y1 = min(w, int(x + bw)), min(h, int(y + bh))
             if min(x1 - x0, y1 - y0) < self.args.min_side:
                 continue
-            tiles.append(self.pp.resize_crop_rgb(np.ascontiguousarray(rgb[y0:y1, x0:x1])))
+            tiles.append(
+                self.pp.letterbox_crop_rgb(np.ascontiguousarray(rgb[y0:y1, x0:x1]), self.pp.PE_SIZE)
+            )
             cats.append(cat)
         return image_id, tiles, cats
 

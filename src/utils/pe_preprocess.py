@@ -1,4 +1,4 @@
-"""Canonical PE-Core-L14-336 image preprocessing for whole-frame embeddings.
+"""Canonical PE-Core image preprocessing: whole frames and object crops.
 
 Every code path that produces a *whole-frame* embedding (the images
 index's global embedding field) should go through here, so ingest and
@@ -12,6 +12,14 @@ Convention: resize so the shorter edge is 336, center-crop to
 are applied inside the TensorRT engine (``export/uint8_input.py``), so the
 request carries a quarter of the bytes of the float tensor.
 
+A crop of an object goes to the crop encoder (:data:`~src.config.settings.TritonModelConfig.
+PE_CROP_MODEL`, its own size): the WHOLE box, scaled to fit the square with its aspect kept (Pillow
+``BILINEAR``: antialiased when the box is larger than the square, plain bilinear when smaller, the
+rule stated beside :func:`~src.domain.image_geometry.letterbox_geometry`) and centred on a square of :data:`~src.domain.image_geometry.CROP_FILL`
+(:func:`letterbox_crop_rgb`). The frame engine cuts the same square on the GPU
+(``frame_engine/branches/embed.py``); both take the geometry from
+:func:`~src.domain.image_geometry.letterbox_geometry`.
+
 A whole frame is read from the full-resolution decoded frame (Pillow, EXIF orientation
 applied): the shorter edge to 336 with Pillow ``BILINEAR`` (antialiased on a downscale), then the
 centre square. Ingest passes the frame it already decoded for the detector, so a photo is decoded
@@ -22,24 +30,33 @@ from __future__ import annotations
 
 import io
 
-import cv2
 import numpy as np
 from PIL import Image, ImageOps
+
+from src.domain.image_geometry import CROP_FILL, letterbox_geometry
 
 
 PE_SIZE = 336
 
 
-def resize_crop_rgb(rgb: np.ndarray, target: int = PE_SIZE) -> np.ndarray:
-    """Resize-shorter-edge + center-crop an HWC RGB array to ``target`` square."""
+def letterbox_crop_rgb(rgb: np.ndarray, target: int, fill: int = CROP_FILL) -> np.ndarray:
+    """The whole HWC RGB crop scaled to fit a ``target`` square (aspect kept), centred on ``fill``.
+
+    Antialiased when the crop is larger than the square, plain bilinear when smaller (Pillow
+    ``BILINEAR``).
+
+    A crop with no pixels is a square of ``fill``.
+    """
     h, w = rgb.shape[:2]
+    out = np.full((target, target, 3), fill, dtype=np.uint8)
     if h == 0 or w == 0:
-        return np.zeros((target, target, 3), dtype=rgb.dtype)
-    scale = target / min(h, w)
-    nh, nw = max(target, round(h * scale)), max(target, round(w * scale))
-    resized = cv2.resize(rgb, (nw, nh), interpolation=cv2.INTER_LINEAR)
-    top, left = (nh - target) // 2, (nw - target) // 2
-    return resized[top : top + target, left : left + target]
+        return out
+    g = letterbox_geometry(w, h, target)
+    fitted = Image.fromarray(np.ascontiguousarray(rgb)).resize(
+        (g.new_w, g.new_h), Image.Resampling.BILINEAR
+    )
+    out[g.top : g.top + g.new_h, g.left : g.left + g.new_w] = np.asarray(fitted)
+    return out
 
 
 def to_chw(rgb_uint8: np.ndarray) -> np.ndarray:

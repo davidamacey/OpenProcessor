@@ -65,7 +65,11 @@ async def test_every_photo_goes_to_the_engine_whatever_its_size(tmp_path) -> Non
     assert item['class_name'] == 'widget'
     assert (tmp_path / 'crops' / 'default' / f'{crop_id}.jpg').read_bytes() == b'\xff\xd8crop'
     assert triton.calls == []  # the API called no detector: the engine ran it
-    assert triton.loaded == ['primary_end2end', 'pe_image_encoder']  # loaded on first use, once
+    assert triton.loaded == [
+        'primary_end2end',
+        'pe_image_encoder',
+        'pe_crop_encoder',
+    ]  # on first use, once
 
 
 @pytest.mark.asyncio
@@ -79,7 +83,8 @@ async def test_the_plan_names_the_profile_detector_the_pe_encoder_and_inline_cro
     plan = call['plan']
     assert plan.branches == ('detect', 'embed_frame', 'embed_crops')
     assert plan.detector == wire.DetectorSpec('primary_end2end', 320, 114)
-    assert plan.embed == wire.EmbedSpec('pe_image_encoder', 336, 32)
+    assert plan.embed == wire.EmbedSpec('pe_image_encoder', 336)
+    assert plan.crop_embed == wire.CropEmbedSpec('pe_crop_encoder', 224, 32)  # a model of its own
     assert plan.crops == 'inline'
     assert plan.embed_classes is None  # no class list restricts the crops: every detection
 

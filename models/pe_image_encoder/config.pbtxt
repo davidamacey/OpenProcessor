@@ -1,9 +1,9 @@
-# PE-Core-L14-336 image encoder — whole-frame and per-crop embeddings.
+# PE-Core-L14-336 image encoder — whole-frame embeddings.
 #
 # Consumed by src/clients/pe_encoder.py (PEEncoder.encode_images); the
-# resulting vector is stored as the curation `pe_embedding` field and backs
-# semantic search, near-duplicate detection, clustering and the embedding
-# visualization. The tensor names below are a contract with that client.
+# resulting vector is stored as the curation frame `pe_embedding` field and backs
+# semantic search, near-duplicate detection and the embedding visualization.
+# The tensor names below are a contract with that client.
 #
 # Input:  images [B, 3, 336, 336] UINT8 RGB pixels,
 #         resized and center-cropped (see src/utils/pe_preprocess.py);
@@ -53,8 +53,10 @@ instance_group [
 ]
 
 # Budget accounting for `openprocessor gpu plan` and the installer: GPU memory
-# of one warm instance, measured at max batch 32 (1312 MiB resident on an RTX
-# 3080 Ti, the same on an RTX A6000), recorded with headroom.
+# of one warm instance, recorded with headroom. Measured for the frame encoder at
+# max batch 32 (1312 MiB resident on an RTX 3080 Ti, the same on an RTX A6000). The
+# crop encoder (224 input) measured 750 MiB on the model server (NVML, one instance,
+# max batch 32, dynamic batching 4/8/16/32), planned at 768.
 parameters: {
   key: "GPU_MIB_PER_INSTANCE"
   value: { string_value: "1536" }

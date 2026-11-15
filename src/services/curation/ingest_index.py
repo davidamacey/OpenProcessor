@@ -25,6 +25,7 @@ from sqlalchemy.exc import SQLAlchemyError, TimeoutError as PoolTimeoutError
 from src.clients.curation_opensearch.capture_fields import capture_image_block, capture_item_fields
 from src.core.logging import get_logger, get_request_id
 from src.db.session import async_session_factory, project_tx
+from src.domain.embedding_spaces import Target
 from src.domain.embedding_state import EMBEDDED, FAILED
 from src.domain.image_geometry import crop_rect
 from src.domain.location_policy import apply_location_policy
@@ -50,6 +51,7 @@ from src.services.curation.ops_metrics import count_batch_fallback, count_whole_
 from src.services.curation.source_image_cache import project_crop_cache_dir, write_crop_cache
 from src.services.detection.crop_quality import blur_ratio, crop_lap_var, image_lap_var
 from src.services.detection.geometry import bbox_norm as _bbox_norm_fn, crop_id as _crop_id
+from src.services.embedding_spaces.encoder_guard import require_encoder_for
 from src.services.embedding_spaces.readers import WriteFields, frame_vector_field, item_write_fields
 from src.services.near_duplicates import content_key, ingest_claim
 from src.services.near_duplicates.content_key import ClaimOutcome, ContentClaim
@@ -761,6 +763,7 @@ async def index_items(
     validated labels the region worker must never see). A batch of one through the same steps
     :func:`commit_batch` runs for a whole batch.
     """
+    await require_encoder_for(Target.ITEM)
     prepared = await prepare_image(
         service,
         ctx,

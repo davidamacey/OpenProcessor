@@ -41,7 +41,7 @@ _compose_service_running() {
         --filter "label=com.docker.compose.service=$2" 2>/dev/null)" ]]
 }
 
-# Explain where the PE image encoder runs and refuse a TRITON_GPU_ID that this
+# Explain where the PE encoders run and refuse a TRITON_GPU_ID that this
 # host cannot honour (missing card, mixed architectures, no room).
 _gpu_plan_placement() {
     local ids pe_mib running=0 project table out line rc=0 primary_mib
@@ -51,8 +51,11 @@ _gpu_plan_placement() {
         log_warn "nvidia-smi not found: the placement of TRITON_GPU_ID=${ids} is not verified"
         return 0
     fi
-    pe_mib="$(_gpu_model_mib pe_image_encoder)"
-    pe_mib="${pe_mib:-1536}"
+    # Triton runs one instance of each PE encoder on every listed card (neither config pins gpus).
+    local frame_mib crop_mib
+    frame_mib="$(_gpu_model_mib pe_image_encoder)"
+    crop_mib="$(_gpu_model_mib pe_crop_encoder)"
+    pe_mib=$(( ${frame_mib:-1536} + ${crop_mib:-768} ))
     project="$(_env_value COMPOSE_PROJECT_NAME)"
     if command -v docker &> /dev/null \
         && _compose_service_running "${project:-openprocessor}" triton-server; then
@@ -67,7 +70,7 @@ _gpu_plan_placement() {
     table="$(nvidia-smi --query-gpu=index,name,memory.total,memory.used,compute_cap \
         --format=csv,noheader,nounits | awk -F', ' '{ print $1 "|" $2 "|" $3 "|" $4 "|" $5 }')"
     out="$(gpu_pe_placement "$ids" "$pe_mib" "$table" "$running" "$primary_mib")" || rc=$?
-    echo "  PE image encoder (about ${pe_mib} MiB per card):"
+    echo "  PE encoders (frame + crop, about ${pe_mib} MiB per card):"
     while IFS= read -r line; do
         case "$line" in
             gpu=*) echo "    GPU ${line#gpu=}" ;;

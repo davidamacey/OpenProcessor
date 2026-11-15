@@ -265,6 +265,24 @@ export_pe() {
         log_success "PE-Core image encoder exported (ONNX Runtime fallback)"
     fi
 
+    # The crop encoder (the same weights at a 224 input) is in the same default --load-model list. It has no
+    # ONNX Runtime fallback: export/build_pe_ort_fallback.sh installs the frame encoder only.
+    log_step "Exporting PE-Core crop encoder (pe_crop_encoder)..."
+    log_info "  Estimated time: ~${EXPORT_TIMES[pe_crop_encoder]} minutes"
+    mkdir -p "$MODELS_DIR/pe_crop_encoder/1"
+    if ! run_in_export_container python /app/export/export_pe_image_encoder.py --crop 2>&1 | tee /tmp/export_pe_crop.log; then
+        log_error "PE-Core crop encoder ONNX export failed"
+        log_info "Check log: /tmp/export_pe_crop.log"
+        return 1
+    fi
+    if ! PE_ROLE=crop bash "$PROJECT_DIR/export/build_pe_trt.sh" 2>&1 | tee /tmp/export_pe_crop_trt.log \
+        || [[ ! -s "$MODELS_DIR/pe_crop_encoder/1/model.plan" ]]; then
+        log_error "PE-Core crop encoder TensorRT build failed or produced no plan"
+        log_info "Check log: /tmp/export_pe_crop_trt.log"
+        return 1
+    fi
+    log_success "PE-Core crop encoder exported (TensorRT)"
+
     # Text tower: a parity-gated TensorRT FP16 plan served by Triton as pe_text_encoder. A failure here is a
     # warning: the image tower above (embeddings, near-dup, clustering) does not need it, only text queries do.
     if ! run_in_export_container python /app/export/export_pe_text_encoder.py \

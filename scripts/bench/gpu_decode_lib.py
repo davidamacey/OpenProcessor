@@ -123,10 +123,21 @@ class PeSquare(NamedTuple):
 
 
 def pe_square_geometry(w: int, h: int, target: int = 336) -> PeSquare:
-    """``resize_crop_rgb``'s arithmetic: resize the shorter edge to ``target``, centre crop."""
+    """The spike's square: resize the shorter edge to ``target``, centre crop (the frame square of
+    ``image_geometry.whole_square_geometry``; the product no longer cuts crops this way)."""
     scale = target / min(h, w)
     nh, nw = max(target, round(h * scale)), max(target, round(w * scale))
     return PeSquare(nw, nh, (nh - target) // 2, (nw - target) // 2)
+
+
+def centre_square_reference(rgb: np.ndarray, target: int = 336) -> np.ndarray:
+    """The CPU reference of the spike's ``pe_square_u8``: OpenCV ``INTER_LINEAR`` on
+    :func:`pe_square_geometry`. Bench-only: no product path cuts a crop this way."""
+    import cv2
+
+    g = pe_square_geometry(rgb.shape[1], rgb.shape[0], target)
+    resized = cv2.resize(rgb, (g.new_w, g.new_h), interpolation=cv2.INTER_LINEAR)
+    return resized[g.top : g.top + target, g.left : g.left + target]
 
 
 # ---------------------------------------------------------------------------- tensor gate

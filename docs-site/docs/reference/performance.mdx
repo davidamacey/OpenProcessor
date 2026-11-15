@@ -32,9 +32,25 @@ storage ([Storage and sizing](../deployment/sizing-and-storage.mdx)): the same c
 2.0 times faster on solid-state storage than on the array (mix 29.3 and 30.7 against 18.1 and
 19.2 photos per second).
 
-| Row | Measured |
-|---|---|
-| **Final ingest numbers of this release (per-photo flow, every photo through the engine)** | **after sweep 1115a** |
+### Per-photo flow, every photo through the engine
+
+Same method, solid-state storage, engine at 16 threads, 0 failed in every row listed. The old code
+on the same storage is in the last column.
+
+| Photos | Clients | Photos per second | Old code |
+|---|---|---|---|
+| Set P, 1,000 photos of 20 MP | 4 | 41.5 (the card 89 percent busy) | 35.5 |
+| COCO, 2,000 photos | 4 | 25.2 (the card 99 percent busy, the image encoder binds) | 25.7 |
+| COCO, 2,000 photos | 8 and 16 | 25.1 to 25.9; more clients only add latency | not measured |
+| Objects365 | 1 | 18.0 | 11.5 |
+| Set P, 200 photos | 1 | 21.1 | 11.0 |
+| 20 MP photos | 1 | 19.8 | 12.4 |
+| Progressive JPEG | 1 | 9.4 | 5.9 |
+| 12 MP PNG | 1 | 3.0 | 2.7 |
+
+One-client rows are the median of 3 runs. A row is not a result when photos failed: the 4,000-image
+mix (3 and 2 of 4,000 failed) is not listed. Its failures and two refused requests have known causes
+with fixes merged; the rerun has not happened.
 
 ## Model and engine speed
 
@@ -44,6 +60,7 @@ storage ([Storage and sizing](../deployment/sizing-and-storage.mdx)): the same c
 | Detector ceiling | `perf_analyzer`, two instances, batch 16, synthetic input | 1,037 images per second, not saturated |
 | One 20 MP photo through the engine | one photo in flight, set P | p50 about 205 to 210 ms: about 73 ms decode, 44 ms detector call, 69 ms encoding crop JPEGs on the host |
 | One card, 20 MP photos, every branch | set P, 32 in flight, direct to the model server | 44 to 47 photos per second; the card is 84 to 93 percent busy |
+| Engine alone on 20 MP photos, after the host-cost changes | set P, 32 in flight, direct to the model server, 32 engine threads | 46 to 48 photos per second, the card 94 to 96 percent busy (26 to 33 and 61 to 76 percent before); COCO 25.9, encoder-bound |
 | Text search tower | engine side, batch 1, synthetic tokens | TensorRT FP16 1.37 ms p50; ONNX Runtime CPU 46.1 ms p50 |
 | Engine memory when idle | 40 GB-profile sizes / smallest sizes | 3,340 MiB / 348 MiB |
 | Colour conversion to sRGB | 14.6 MP frame | 0.46 ms on the GPU; 48 MiB per distinct profile (2 kept) |
@@ -63,5 +80,6 @@ storage ([Storage and sizing](../deployment/sizing-and-storage.mdx)): the same c
 
 | Row | Measured |
 |---|---|
-| Ingest rows on the final build, array and solid-state, 1 and 4 clients | after sweep 1115a |
+| 4,000-image mix on the final build | invalid, photos failed; rerun pending |
+| Ingest on the final build on the spinning-disk array | rerun pending |
 | Request-level search and text-tower latency through the model server | after sweep 1115a |

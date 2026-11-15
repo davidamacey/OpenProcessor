@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
 
 from src.config.projects import ARCHIVABLE_STATUSES, UNARCHIVABLE_STATUSES
 from src.schemas.curation.config_common import ProjectCapacityWire
-from src.schemas.curation.projects import ProjectCounts, ProjectSummary
+from src.schemas.curation.projects import (
+    EncoderMismatch as EncoderMismatchWire,
+    ProjectCounts,
+    ProjectSummary,
+)
+from src.services.embedding_spaces.encoder_guard import EncoderMismatch, encoder_mismatch_of
 from src.services.projects.listing import SELECTABLE
 
 
@@ -14,7 +20,14 @@ if TYPE_CHECKING:
     from src.services.projects.capacity import ProjectCapacity
 
 
-def summarize(record: Any, counts: ProjectCounts) -> ProjectSummary:
+async def encoder_mismatch(slug: str) -> EncoderMismatch | None:
+    """The record's ``encoder_mismatch`` input: ``None`` for a project on the encoders' spaces."""
+    return await encoder_mismatch_of(slug)
+
+
+def summarize(
+    record: Any, counts: ProjectCounts, mismatch: EncoderMismatch | None
+) -> ProjectSummary:
     from src.config.project_context import bind_project
     from src.config.projects import DEFAULT_SLUG
 
@@ -42,6 +55,9 @@ def summarize(record: Any, counts: ProjectCounts) -> ProjectSummary:
         counts=counts,
         origin=record.origin,
         paused=paused,
+        encoder_mismatch=None
+        if mismatch is None
+        else EncoderMismatchWire.model_validate(asdict(mismatch)),
     )
 
 

@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from src.clients import frame_engine
-from src.clients.pe_encoder import PE_IMAGE_MODEL, _l2_normalize
+from src.clients.pe_encoder import PE_CROP_MODEL, PE_CROP_SIZE, PE_IMAGE_MODEL, _l2_normalize
 from src.config.ingest_profiles import model_class_name
 from src.core.logging import get_logger
 from src.domain import frame_engine_wire as wire
@@ -147,7 +147,15 @@ _READY: dict[tuple[str, int, int], float] = {}
 
 
 def embed_spec() -> wire.EmbedSpec:
-    return wire.EmbedSpec(model=PE_IMAGE_MODEL, size=PE_SIZE, batch=PE_BATCH)
+    """The frame encoder: PE at its own 336 input, the centre square of the photo."""
+    return wire.EmbedSpec(model=PE_IMAGE_MODEL, size=PE_SIZE)
+
+
+def crop_embed_spec() -> wire.CropEmbedSpec:
+    """The crop encoder: a model of its own (:data:`~src.clients.pe_encoder.PE_CROP_MODEL`) at
+    its own input size, each box letterboxed whole. The crop vector space is its space, not the
+    frame's."""
+    return wire.CropEmbedSpec(model=PE_CROP_MODEL, size=PE_CROP_SIZE, batch=PE_BATCH)
 
 
 def detector_spec(service: CurationIngestService) -> wire.DetectorSpec | None:
@@ -204,7 +212,7 @@ async def engine_ready(service: CurationIngestService) -> bool:
         _READY.pop(key, None)
         return False
     try:
-        for model in (det.model, PE_IMAGE_MODEL):
+        for model in (det.model, PE_IMAGE_MODEL, PE_CROP_MODEL):
             if not await service.triton_pool.is_model_ready(model):
                 await service.triton_pool.load_model(model)
     except _PROBE_ERRORS as exc:
@@ -288,23 +296,28 @@ def ingest_engine_plan(service: CurationIngestService) -> wire.EnginePlan:
         raise RuntimeError('the engine plan needs a one-grey letterbox fill (engine_stage_applies)')
     branches: list[wire.EngineBranch] = ['detect', 'embed_frame']
     embed_classes = None
+    crop_embed = None
     if service.policy.embedding.mode not in ('lazy', 'none'):
         branches.append('embed_crops')
+        crop_embed = crop_embed_spec()
         embed_classes = _embed_class_ids(service)
     return wire.EnginePlan(
         branches=tuple(branches),
         detector=det,
         embed=embed_spec(),
+        crop_embed=crop_embed,
         embed_classes=embed_classes,
         crops='inline',
     )
 
 
-def _crop_rows(out: dict[str, Any], n: int, dim: int) -> tuple[np.ndarray, np.ndarray | None]:
+def _crop_rows(out: dict[str, Any], n: int) -> tuple[np.ndarray, np.ndarray | None]:
     """The normalized crop vectors with one row per detection, and which rows the engine embedded.
     The engine answers only the picked rows (``crop_embedded`` marks them); the others are zero
-    rows no reader may use."""
-    picked = _l2_normalize(out[wire.CROP_EMBEDDINGS].reshape(-1, dim).astype(np.float32))
+    rows no reader may use. The width is the crop encoder's own (the answer says it)."""
+    vectors = np.asarray(out[wire.CROP_EMBEDDINGS], np.float32)
+    dim = vectors.shape[-1] if vectors.ndim == 2 else 0
+    picked = _l2_normalize(vectors.reshape(-1, dim)) if dim else vectors.reshape(0, 0)
     mask = out.get(wire.CROP_EMBEDDED)
     if mask is None:
         return picked, None
@@ -333,7 +346,7 @@ async def run_engine_stage(
         boxes, out[wire.DET_SCORES], out[wire.DET_CLASSES], scale, (pad_w, pad_h)
     )
     whole = out[wire.WHOLE_EMBEDDING].astype(np.float32)
-    crops, embedded = _crop_rows(out, n, whole.shape[0]) if plan_has_crops and n else (None, None)
+    crops, embedded = _crop_rows(out, n) if plan_has_crops and n else (None, None)
     frame = GpuDecodeFrame(
         width=width,
         height=height,

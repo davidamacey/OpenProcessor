@@ -56,6 +56,19 @@ def test_pe_image_config_matches_the_renderer() -> None:
     from pe_image_triton_config import PETritonConfig, render_config
 
     assert committed('pe_image_encoder') == signature(render_config(PETritonConfig()))
+    assert committed('pe_crop_encoder') == signature(
+        render_config(PETritonConfig(model_name='pe_crop_encoder', image_size=224))
+    )
+
+
+def test_pe_crop_config_plans_the_measured_768_mib() -> None:
+    from pe_image_triton_config import PETritonConfig, render_config
+
+    crop = render_config(PETritonConfig(model_name='pe_crop_encoder', image_size=224))
+    frame = render_config(PETritonConfig())
+    assert 'string_value: "768"' in crop
+    assert 'string_value: "768"' in (ROOT / 'models/pe_crop_encoder/config.pbtxt').read_text()
+    assert 'string_value: "1536"' in frame
 
 
 def test_pe_text_config_matches_the_renderer() -> None:

@@ -43,3 +43,13 @@ def test_gpu_plan_refuses_mixed_compute_capability(shimmed: Shimmed, inst: Path)
     done = cli(shimmed, inst, 'gpu', 'plan')
     assert done.returncode == 1
     assert 'compute capabilities' in done.stdout + done.stderr
+
+
+def test_gpu_plan_budgets_both_encoders_on_every_pe_card(shimmed: Shimmed, inst: Path) -> None:
+    """Triton runs an instance of the frame encoder and one of the crop encoder on every listed
+    card, so a card is planned for both (each one's GPU_MIB_PER_INSTANCE)."""
+    shimmed.gpus(TWO_A6000)
+    set_env(inst, TRITON_GPU_ID='0,2')
+    done = cli(shimmed, inst, 'gpu', 'plan')
+    assert done.returncode == 0, done.stderr
+    assert 'PE encoders (frame + crop, about 2304 MiB per card)' in done.stdout
