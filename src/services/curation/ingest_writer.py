@@ -66,12 +66,13 @@ from sqlalchemy.exc import SQLAlchemyError
 from src.clients.image_counts_dirty import CountsMarkError, mark_items_created
 from src.clients.occ_upsert import DocOutcome, occ_upsert_bulk
 from src.core.logging import get_logger
-from src.domain.image_completeness import ITEM_IDS_FIELD, STATE_FIELDS, listed_item_ids
+from src.domain.image_completeness import ITEM_IDS_FIELD, STATE_FIELDS
 from src.services.curation.image_completeness import (
-    begin_repair,
     classify,
     finish_repair,
     mark_incomplete,
+    set_repair_list,
+    take_repair_lease,
 )
 from src.services.curation.repair_match import plan_repair
 from src.services.embedding_spaces.readers import item_write_fields, vector_source_excludes
@@ -101,12 +102,12 @@ WRITE_ID_FIELD = 'ingest_write_id'
 #       its listed items), the items step 7 (mget, create bulk, conflict refetch mget, update mget +
 #       bulk, one retry round of mget + bulk) and the failure mark 4 (an OCC update with one retry
 #       round: mget + bulk each);
-#     a repair: the images step 3, the match 4 (the listed items' mget, the index refresh, the
-#       search of the image's items, a page more), the lease and list write 6 (an OCC update
-#       with up to 2 retry rounds), the create bulk 1, the lease's return 4 and the failure
-#       mark 4: 22 requests, the longer path (a new photo's is 14);
+#     a repair: the images step 3, the lease write 6 (an OCC update with up to 2 retry rounds),
+#       the match 4 (the listed items' mget, the index refresh, the search of the image's items,
+#       a page more), the list write 6 (the same), the create bulk 1, the lease's return 4 and
+#       the failure mark 4: 28 requests, the longer path (a new photo's is 14);
 #   plus the 429 pauses of the images step and of the items step (RETRY_429_PAUSES_S, 7.7 s).
-# So REPAIR_AFTER_S = 22 x 4 x 60 + 7.7 = 5,287.7 s (88 minutes).
+# So REPAIR_AFTER_S = 28 x 4 x 60 + 7.7 = 6,727.7 s (112 minutes).
 # tests/curation/test_ingest_repair_age.py pins each input against the real client and settings.
 OPENSEARCH_ATTEMPTS = 4
 CLIENT_TIMEOUT_S = 60
@@ -115,13 +116,15 @@ ITEMS_STEP_REQUESTS = 7
 MARK_WRITE_REQUESTS = 4
 MATCH_REQUESTS = 4
 LEASE_WRITE_REQUESTS = 6
+LIST_WRITE_REQUESTS = 6
 REPAIR_CREATE_REQUESTS = 1
 LEASE_RETURN_REQUESTS = 4
 NEW_PHOTO_REQUESTS = IMAGES_STEP_REQUESTS + ITEMS_STEP_REQUESTS + MARK_WRITE_REQUESTS
 REPAIR_REQUESTS = (
     IMAGES_STEP_REQUESTS
-    + MATCH_REQUESTS
     + LEASE_WRITE_REQUESTS
+    + MATCH_REQUESTS
+    + LIST_WRITE_REQUESTS
     + REPAIR_CREATE_REQUESTS
     + LEASE_RETURN_REQUESTS
     + MARK_WRITE_REQUESTS
@@ -172,10 +175,9 @@ class UnitResult:
 
 @dataclass(frozen=True)
 class RepairTarget:
-    """The stored image a unit completes: its id and the items its doc lists now."""
+    """The stored image a unit completes. What it lists is read once the repair holds the lease."""
 
     image_id: str
-    listed: tuple[str, ...]
 
 
 @dataclass
@@ -443,31 +445,46 @@ class IngestWriter:
         return True
 
     async def _begin_repair(self, unit: _Unit, result: UnitResult) -> bool:
-        """Match the unit's detections to the items the image has, then take the lease and set
-        the list. False when the unit has nothing more to do: another repair holds the image
-        (``incomplete``), or a step failed (``failure``)."""
+        """Take the lease, then read the image and match the unit's detections to the items it
+        has, then set the list. False when the unit has nothing more to do: another repair holds
+        the image (``incomplete``), another repair already completed it (``duplicate``), or a step
+        failed (``failure``). The reads come after the lease: a repair that waited behind another
+        must see what that one created."""
         assert unit.repair is not None
         target = unit.repair
 
         async def begin() -> None:
-            plan = await plan_repair(
-                self._client, unit.items_index, target.image_id, target.listed, unit.crop_docs
+            lease = await take_repair_lease(
+                self._client, unit.images_index, target.image_id, repair_after_s=REPAIR_AFTER_S
             )
-            token = await begin_repair(
+            if lease is None:
+                result.incomplete = True
+                return
+            unit.lease = lease.token
+            plan = await plan_repair(
+                self._client, unit.items_index, target.image_id, lease.listed, unit.crop_docs
+            )
+            if set(lease.listed) <= plan.existing_ids:
+                await finish_repair(self._client, unit.images_index, target.image_id, lease.token)
+                unit.lease = None
+                result.duplicate = True
+                return
+            planned = [d['crop_id'] for d in plan.to_create]
+            if not await set_repair_list(
                 self._client,
                 unit.images_index,
                 target.image_id,
+                token=lease.token,
                 existing_ids=plan.existing_ids,
-                planned_ids=[d['crop_id'] for d in plan.to_create],
-                repair_after_s=REPAIR_AFTER_S,
-            )
-            if token is None:
+                planned_ids=planned,
+            ):
+                unit.lease = None  # it ran out and is another repair's now: not ours to give back
                 result.incomplete = True
                 return
-            unit.lease, unit.to_create = token, plan.to_create
+            unit.to_create = plan.to_create
 
         await self._attempt([unit], {id(unit): result}, begin())
-        return unit.lease is not None and not self._failed(result)
+        return unit.to_create is not None and not self._failed(result)
 
     async def _write_images(self, units: list[_Unit], results: dict[int, UnitResult]) -> None:
         conflicted = await self._create_images([u for u in units if u.image_doc], results)
@@ -560,12 +577,12 @@ class IngestWriter:
             {i: src for i, (_, src) in others.items()},
             repair_after_s=REPAIR_AFTER_S,
         )
-        for image_id, (unit, source) in others.items():
+        for image_id, (unit, _) in others.items():
             result = results[id(unit)]
             if states[image_id] == 'complete':
                 result.duplicate = True
             elif states[image_id] == 'repair':
-                unit.repair = RepairTarget(image_id, tuple(listed_item_ids(source) or ()))
+                unit.repair = RepairTarget(image_id)
             else:
                 result.incomplete = True
 

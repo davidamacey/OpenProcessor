@@ -10,9 +10,10 @@ with ``if_seq_no`` / ``if_primary_term``, a 409 re-read):
 
 * :func:`forget_items` takes the ids of items about to be deleted off their images' lists, so a
   deleted item never makes its image look incomplete;
-* :func:`begin_repair` takes the repair lease and sets the list in one write, BEFORE the repair
-  creates anything: the list then names the items about to exist (the same order as an ingest),
-  so a delete that races the repair takes its id off the list and nothing relists it;
+* :func:`take_repair_lease` takes the repair lease before the repair reads anything, and
+  :func:`set_repair_list` sets the list under that lease, BEFORE the repair creates anything: the
+  list then names the items about to exist (the same order as an ingest), so a delete that races
+  the repair takes its id off the list and nothing relists it;
 * :func:`finish_repair` gives the lease back and clears the mark (best effort: the list is
   already true);
 * :func:`mark_incomplete` is the writer's best-effort note on a photo it saw fail, which also
@@ -30,6 +31,7 @@ https://docs.opensearch.org/latest/api-reference/document-apis/update-document/)
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -52,7 +54,7 @@ from src.services.embedding_spaces.readers import vector_source_excludes
 
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Mapping, Sequence
+    from collections.abc import Callable, Collection, Mapping, Sequence
 
 
 logger = get_logger(__name__)
@@ -156,33 +158,78 @@ async def holders_completeness(
     return {i: states.get(i, 'in_flight') for i in holder_ids}
 
 
-async def begin_repair(
+@dataclass(frozen=True)
+class RepairLease:
+    """A repair's hold on an image: the token (the start time) and the items the doc listed at the
+    moment the lease was taken, which is where the repair starts reading."""
+
+    token: str
+    listed: tuple[str, ...]
+
+
+async def take_repair_lease(
+    client: Any, images_index: str, image_id: str, *, repair_after_s: float
+) -> RepairLease | None:
+    """Take the repair lease, in one OCC write; ``None`` when another repair holds it. Raises when
+    the doc is gone or the write did not land.
+
+    The lease comes FIRST: everything the repair reads afterwards (the doc's list, the items) is
+    read while no other repair can change them, so a repair that waited behind another sees what
+    that one created. A repair that read first and took the lease after would plan from a state
+    that is gone and create a second set of items for the same objects."""
+    token = datetime.now(UTC).isoformat()
+    held = False
+    listed: tuple[str, ...] = ()
+
+    def merge(_id: str, source: dict[str, Any]) -> dict[str, Any]:
+        nonlocal held, listed
+        held = repair_in_progress(source, now=datetime.now(UTC), repair_after_s=repair_after_s)
+        if held:
+            return {}
+        listed = tuple(listed_item_ids(source) or ())
+        return {REPAIR_LEASE_FIELD: token}
+
+    await _write_under_lease(client, images_index, image_id, merge)
+    return None if held else RepairLease(token, listed)
+
+
+async def set_repair_list(
     client: Any,
     images_index: str,
     image_id: str,
     *,
+    token: str,
     existing_ids: Collection[str],
     planned_ids: Collection[str],
-    repair_after_s: float,
-) -> str | None:
-    """Take the repair lease and set the list, in one OCC write; the lease token (the start time),
-    or ``None`` when another repair holds the lease.
+) -> bool:
+    """Set the list, in one OCC write, while the doc still holds the lease ``token``; False when it
+    does not (the lease ran out and another repair took it). Call it BEFORE the repair creates
+    anything.
 
-    The list becomes the items the doc named that still exist (``existing_ids`` is what the repair
+    The list becomes the items the doc names that still exist (``existing_ids`` is what the repair
     just read, and the merge runs on the fresh source, so an id a delete took off the list since
     stays off) plus the items the repair is about to create (``planned_ids``). Raises when the doc
     is gone or the write did not land."""
-    token = datetime.now(UTC).isoformat()
-    held = False
+    ours = True
 
     def merge(_id: str, source: dict[str, Any]) -> dict[str, Any]:
-        nonlocal held
-        held = repair_in_progress(source, now=datetime.now(UTC), repair_after_s=repair_after_s)
-        if held:
+        nonlocal ours
+        ours = source.get(REPAIR_LEASE_FIELD) == token
+        if not ours:
             return {}
         listed = set(listed_item_ids(source) or ()) & set(existing_ids)
-        return {ITEM_IDS_FIELD: sorted(listed | set(planned_ids)), REPAIR_LEASE_FIELD: token}
+        return {ITEM_IDS_FIELD: sorted(listed | set(planned_ids))}
 
+    await _write_under_lease(client, images_index, image_id, merge)
+    return ours
+
+
+async def _write_under_lease(
+    client: Any,
+    images_index: str,
+    image_id: str,
+    merge: Callable[[str, dict[str, Any]], dict[str, Any]],
+) -> None:
     status = await occ_update_bulk(
         client,
         index=images_index,
@@ -192,9 +239,8 @@ async def begin_repair(
         max_retries=LIST_WRITE_RETRIES,
     )
     if status.get(image_id) != 'updated':
-        msg = f'the repair of image {image_id} could not start: {status.get(image_id)}'
+        msg = f'the repair of image {image_id} could not be written: {status.get(image_id)}'
         raise OpenSearchException(msg)
-    return None if held else token
 
 
 async def _release(
@@ -251,11 +297,13 @@ async def finish_repair(client: Any, images_index: str, image_id: str, lease: st
 
 __all__ = [
     'Completeness',
-    'begin_repair',
+    'RepairLease',
     'classify',
     'finish_repair',
     'forget_items',
     'holders_completeness',
     'mark_incomplete',
     'missing_items',
+    'set_repair_list',
+    'take_repair_lease',
 ]

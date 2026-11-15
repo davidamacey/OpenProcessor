@@ -42,6 +42,7 @@ def test_the_client_timeout_is_the_slowest_client_that_writes_images() -> None:
 
 def test_the_request_counts_are_the_retry_rounds_of_the_writes() -> None:
     assert w.LEASE_WRITE_REQUESTS == 2 * (image_completeness.LIST_WRITE_RETRIES + 1)
+    assert w.LIST_WRITE_REQUESTS == w.LEASE_WRITE_REQUESTS  # the same helper, the same rounds
     assert w.MARK_WRITE_REQUESTS == 2 * (image_completeness.MARK_WRITE_RETRIES + 1)
     assert w.LEASE_RETURN_REQUESTS == w.MARK_WRITE_REQUESTS  # the same write, the same rounds
     assert w.NEW_PHOTO_REQUESTS == (
@@ -49,8 +50,9 @@ def test_the_request_counts_are_the_retry_rounds_of_the_writes() -> None:
     )
     assert w.REPAIR_REQUESTS == (
         w.IMAGES_STEP_REQUESTS
-        + w.MATCH_REQUESTS
         + w.LEASE_WRITE_REQUESTS
+        + w.MATCH_REQUESTS
+        + w.LIST_WRITE_REQUESTS
         + w.REPAIR_CREATE_REQUESTS
         + w.LEASE_RETURN_REQUESTS
         + w.MARK_WRITE_REQUESTS
@@ -61,8 +63,8 @@ def test_the_request_counts_are_the_retry_rounds_of_the_writes() -> None:
 def test_the_age_covers_the_requests_pauses_and_attempts() -> None:
     pauses = 2 * sum(w.RETRY_429_PAUSES_S)
     assert w.SEQUENTIAL_REQUESTS * 4 * 60 + pauses == w.REPAIR_AFTER_S
-    assert w.SEQUENTIAL_REQUESTS == 22  # the repair's path: 3 + 4 + 6 + 1 + 4 + 4
-    assert pytest.approx(5287.7) == w.REPAIR_AFTER_S  # the number CHANGELOG and the docs state
+    assert w.SEQUENTIAL_REQUESTS == 28  # the repair's path: 3 + 6 + 4 + 6 + 1 + 4 + 4
+    assert pytest.approx(6727.7) == w.REPAIR_AFTER_S  # the number CHANGELOG and the docs state
 
 
 @pytest.mark.asyncio

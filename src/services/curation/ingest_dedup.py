@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.clients.optional_doc import get_doc_or_none
 from src.core.logging import get_logger
-from src.domain.image_completeness import STATE_FIELDS, listed_item_ids
+from src.domain.image_completeness import STATE_FIELDS
 from src.services.curation.image_completeness import Completeness, classify
 from src.services.curation.ingest_models import ERROR_KIND_INCOMPLETE_WRITE, IngestResult
 from src.services.curation.ingest_writer import REPAIR_AFTER_S
@@ -48,9 +48,6 @@ class Resolved:
     """Of ``existing``: ``complete`` (a duplicate), ``repair`` (an item is missing and no live
     writer can be writing it: ingest it again) or ``in_flight`` (an item is missing, a writer may
     still be writing it)."""
-    listed: tuple[str, ...] = ()
-    """The items ``existing`` lists, kept for a ``repair`` (the ones the rewrite no longer names are
-    stale)."""
 
 
 class IngestDedupMixin:
@@ -110,10 +107,7 @@ class IngestDedupMixin:
     def _resolved(
         holder: str, key: str, docs: dict[str, dict[str, Any]], states: dict[str, Completeness]
     ) -> Resolved:
-        view = _stored_view(holder, docs[holder])
-        if states[holder] == 'repair':
-            return Resolved(view, key, 'repair', tuple(listed_item_ids(docs[holder]) or ()))
-        return Resolved(view, key, states[holder])
+        return Resolved(_stored_view(holder, docs[holder]), key, states[holder])
 
 
 def held_back_result(

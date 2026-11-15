@@ -411,8 +411,8 @@ Built (lane L0; this replaces the rules of revision 2 where they differ, and say
    younger than `REPAIR_AFTER_S`) and the doc carries the failure mark or is older than
    `REPAIR_AFTER_S`, otherwise `failed`, `incomplete_write`. `REPAIR_AFTER_S` is the requests
    one unit makes in a row (the longer of a new photo's path and a repair's) times the longest one
-   request can take (4 attempts x the slowest client timeout, 60 s) plus the 429 pauses: 22 requests
-   (a repair's) x 4 x 60 + 7.7 = 5,287.7 s, 88 minutes; the
+   request can take (4 attempts x the slowest client timeout, 60 s) plus the 429 pauses: 28 requests
+   (a repair's) x 4 x 60 + 7.7 = 6,727.7 s, 112 minutes; the
    derivation sits next to the constant (`ingest_writer.py`) and `test_ingest_repair_age.py` pins
    every input against the real client and settings.
 5. **The failure mark.** A unit that saw its own write fail, on a doc that exists, sets
@@ -424,16 +424,18 @@ Built (lane L0; this replaces the rules of revision 2 where they differ, and say
    upsert of every item; both overwrite what a person, an import or a machine added to an item
    after the first ingest, and the upsert guards only class fields). The repair adopts the stored
    image (`ImageContext.created` False, `repair` set; no new frame vector, no capture read, no
-   claim) and: (a) matches its detections to the items the image has (the listed ones by a realtime
+   claim) and: (a) takes the lease first (one OCC update, `repair_started_at`), then reads the doc's list and matches its detections to the items the image has (the listed ones by a realtime
    `mget`, the others by a search) with `proposal_merge.merge_item_proposals`, the rule of a
    re-detection and an import's propose mode (IoU 0.5, a person-moved box also owns the detector's
    original spot; labels are not compared, as there), and creates only the unmatched detections (never
    by id: the detector is not bit-stable and the engine and CPU routes give different crop ids for
    one photo, about 3% of letterbox pixels differ by one level between the two resamplers);
-   (b) takes a lease and sets the list in one OCC update (`repair_started_at`; the list becomes the
-   listed items that still exist plus the items about to be created, computed on the fresh source,
-   so an id a delete took off the list since stays off); a second repairer that finds the lease
-   younger than `REPAIR_AFTER_S` answers `incomplete_write`; (c) creates the items with `create`
+   (b) sets the list under the lease in one OCC update (the list becomes the listed items that still
+   exist plus the items about to be created, computed on the fresh source, so an id a delete took
+   off the list since stays off); a second repairer that finds the lease younger than
+   `REPAIR_AFTER_S` answers `incomplete_write`, and one that takes the lease after another repair
+   finished finds every listed item there and answers `duplicate` (reading before the lease let it
+   plan from a state that was gone and store a second set of items, found by the live tier); (c) creates the items with `create`
    (a 409 leaves a stored item as it is); (d) gives the lease back and clears the mark. Nothing is
    deleted: an item of the first attempt the detector no longer sees stays (and stays listed).
    `adopt_existing` callers (a dataset import, a reprocess) never repair: they answer as before.
