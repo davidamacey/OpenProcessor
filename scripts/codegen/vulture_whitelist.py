@@ -95,35 +95,12 @@ _.to_request  # ProcessingPlan.to_request; the route that parses the plan, docs/
 _.crop_key  # src/domain/storage_keys.py; docs/design/v070_rebuild/03a_stage1_foundation.md 1E-4 (crop sizing work); only tests/clients/storage/test_crop_key_variant.py calls it today
 _.replace_groups  # src/db/repos/region_text.py; the consensus job of docs/design/v070_rebuild/06e_w5e_plate_text.md lane w5e/region-text-jobs; only tests/db/test_region_text_repo.py calls it today
 _.groups_for_boxes  # src/db/repos/region_text.py; the region-text wire and review lanes of 06e_w5e_plate_text.md; only tests/db/test_region_text_repo.py calls it today
-_.to_uuid  # src/domain/wire_ids.py; wired by storage steps 2 to 4; entry removed by that lane
-_.Analyser  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.AnalysisLedger  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.BoxText  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.TextLine  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.ClaimKindRow  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.ErasureJob  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.Entity  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.EntityEdge  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.EntityState  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.MembershipState  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.PhotoDerivative  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.PhotoFile  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.PhotoPlace  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.PhotoSignal  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.PhotoState  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.BoxStateRow  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.ItemStateRow  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.Face  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.ItemNote  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.ItemRegionResult  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.RawLabelCluster  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.VectorGap  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.PhotoCapture  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.PhotoProvenance  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.AssistAnswer  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.ItemProjection  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.ItemScore  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
-_.ProbePrediction  # src/db/models (15a storage record, revision 0010); wired by storage steps 2 to 4; entry removed by that lane
+_.get_or_create_analyser  # src/db/repos/analysers.py; wired by storage steps 2 to 4; entry removed by that lane
+_.record_ledger  # src/db/repos/analysers.py; wired by storage steps 2 to 4; entry removed by that lane
+_.photos_needing  # src/db/repos/analysers.py; wired by storage steps 2 to 4; entry removed by that lane
+_.live_claims_of_operation  # src/db/repos/claims.py; wired by storage steps 2 to 4; entry removed by that lane
+_.insert_items  # src/db/repos/items.py; wired by storage steps 2 to 4; entry removed by that lane
+_.item_keys_by_crop_id  # src/db/repos/items.py; wired by storage steps 2 to 4; entry removed by that lane
 
 # Registered or read by a framework through a name, a decorator or a protocol
 _._on_worker_init  # src/tasks/app.py; connected to Celery's worker_init signal by decorator
