@@ -246,7 +246,7 @@ thumbnail: longest side and quality).
 | `face_boxes`, `face_landmarks`, `face_scores`, `face_quality` | `faces` | every face above the stored floor; quality columns are face side in pixels, blur, and a pose measure from the five points |
 | `face_embeddings` | `face_embed` | one vector per face |
 | `ocr_quads`, `ocr_texts`, `ocr_scores` | `ocr` | per text region |
-| `derivative_jpegs` | `derivatives` | one JPEG per named rendition |
+| `derivative_jpegs` | `derivatives` | one JPEG per plan entry `{name, side 16-4096, quality 1-100 (85), format jpeg}`, in plan order; long side fits `side`, never enlarged (Pillow `thumbnail` geometry) |
 
 ### D2. A request is a plan; the engine runs only the requested branches (#67)
 
@@ -389,7 +389,7 @@ spike before code.
 | F2 | Faces in the project (D4) | Faces only in one deployment-wide index | The `faces` role in the migration wave of D5 (the PostgreSQL role check, the index for every existing project, the combine, clone, delete and capacity paths); the people and decision tables | Project isolation tests; the guard refuses a foreign faces index | Faces usable per library | Medium (migration) |
 | F3 | Face grouping rebuilt against F0's scores | Single linkage at cosine 0.7 | Quality-gated core points, incremental assignment to per-person prototypes, a review band, same-photo cannot-link, human decisions as constraints | F0's bars; real photos only | High recall at high purity; additions never regroup the library | High: written by the coordinator |
 | F4 | People routes on the project | Core routes on the global index | Project routes for people, the review queue and "every photo of this person" (D4); existing names, merges and locks exported into the decision tables; then the core routes are removed | Contract tests; recall of one identity at fixed precision | The face workload end to end | Medium |
-| T0 | Stored thumbnail at ingest | Thumbnails re-decoded from the original, with a per-process cache | A `derivatives` entry in the plan; the engine cuts the rendition from the resident frame | Thumbnail bytes decode to within the stored-crop quality bar; list latency p95 | A grid page never decodes an original | Low |
+| T0 | Stored thumbnail at ingest | Thumbnails re-decoded from the original, with a per-process cache | Built (`frame_engine/branches/derivatives.py`): a `derivatives` entry in the plan; one GPU Lanczos resample of the oriented resident frame and an nvJPEG encode (about 0.3 ms host CPU for a 256 plus a 512 rendition, against 2.3 to 2.8 ms with OpenCV; no new dependency). Photos the GPU route refuses or the API sends to the CPU decoder (small, progressive, CMYK) get the same rendition from the API's CPU path (`exif_transpose`, `thumbnail` LANCZOS, q85) | Engine rendition within 0.4 dB PSNR of Pillow's own q85 thumbnail on public photos, all eight EXIF orientations upright (`tests/gpu/test_gpu_renditions.py`); list latency p95 | A grid page never decodes an original | Low |
 
 ### Batch 4: clustering and scale
 
