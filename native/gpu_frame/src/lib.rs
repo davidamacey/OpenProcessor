@@ -7,18 +7,20 @@
 //! | `FramePool::alloc` | [`frame_pool::FramePool::alloc`] |
 //! | `Admission::admit` | [`budget::Admission::admit`] |
 //! | `Region::slice` | [`region::Region::slice`], [`region::Region::slice_blocking`] |
+//! | `Kernels::load`, `Module::launch` | [`kernels::Kernels::load`], [`kernels::Module::launch`] |
 //!
 //! Under them: [`cuda`] (context, streams, copies, errors with their fault class), [`pool`]
 //! (OS-thread pools with panic isolation and cancellation at the hand-off) and [`slab`] (first fit,
 //! coalescing, the per-photo window). Every `unsafe` block is in `cuda.rs`, `nvjpeg/ffi.rs` or
 //! `region.rs`.
 //!
-//! CUDA and nvJPEG are loaded at run time; nothing is linked at build time, so the crate builds and
-//! its tests run on a machine without a GPU.
+//! CUDA, NVRTC and nvJPEG are loaded at run time; nothing is linked at build time, so the crate
+//! builds and its tests run on a machine without a GPU.
 
 pub mod budget;
 pub mod cuda;
 pub mod frame_pool;
+pub mod kernels;
 pub mod nvjpeg;
 pub mod pool;
 pub mod region;
@@ -29,6 +31,7 @@ pub use budget::{
 };
 pub use cuda::{Context, CudaError, DeviceRange, Fault, PinnedBuf, Stream};
 pub use frame_pool::{AllocError, DeviceBuf, FramePool};
+pub use kernels::{Kernel, KernelArg, KernelError, Kernels, LaunchConfig, Module};
 pub use nvjpeg::{Backend, DecodeError, Decoded, DeviceFrame, Lane, Lanes};
 pub use pool::{CancelToken, JobError, JobHandle, PoolError, WorkerPool};
 pub use region::{Region, Slice};

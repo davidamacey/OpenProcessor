@@ -15,13 +15,16 @@
 //! management, execution control); NVRTC: https://docs.nvidia.com/cuda/nvrtc/index.html;
 //! cudarc 0.19.10: https://docs.rs/cudarc/0.19.10/cudarc/driver/result/index.html.
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{CString, c_char, c_int, c_uint, c_void};
 use std::fmt;
 use std::mem::MaybeUninit;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use cudarc::driver::{CudaContext, result, sys};
+use cudarc::nvrtc::{result as nvrtc_result, sys as nvrtc_sys};
+
+use crate::kernels::{KernelArg, LaunchConfig};
 
 mod error;
 
@@ -501,6 +504,166 @@ impl Drop for MemPool {
             // SAFETY: the pool is live and destroyed once; outstanding allocations keep the
             // driver's resources until they are freed (cuMemPoolDestroy).
             let _ = unsafe { result::mem_pool::destroy(self.raw) };
+        }
+    }
+}
+
+/// NVRTC's version (major, minor), or `LibraryMissing`.
+pub(crate) fn nvrtc_version() -> Result<(i32, i32), CudaError> {
+    // SAFETY: probing the loader has no precondition.
+    if !unsafe { nvrtc_sys::is_culib_present() } {
+        return Err(CudaError::LibraryMissing {
+            library: "NVRTC (libnvrtc)",
+        });
+    }
+    let (mut major, mut minor) = (0 as c_int, 0 as c_int);
+    // SAFETY: both out-parameters are valid for a write of their type.
+    let rc = unsafe { nvrtc_sys::nvrtcVersion(&mut major, &mut minor) };
+    nvrtc_status("nvrtcVersion", rc, String::new())?;
+    Ok((major, minor))
+}
+
+fn nvrtc_status(
+    call: &'static str,
+    rc: nvrtc_sys::nvrtcResult,
+    log: String,
+) -> Result<(), CudaError> {
+    match rc {
+        nvrtc_sys::nvrtcResult::NVRTC_SUCCESS => Ok(()),
+        other => Err(CudaError::Nvrtc {
+            call,
+            code: other as i32,
+            log,
+        }),
+    }
+}
+
+/// Compile CUDA C `source` (program `name`) with `options` into a cubin
+/// (`nvrtcCreateProgram`, `nvrtcCompileProgram`, `nvrtcGetCUBINSize`, `nvrtcGetCUBIN`).
+pub(crate) fn nvrtc_compile(
+    source: &str,
+    name: &str,
+    options: &[String],
+) -> Result<Vec<u8>, CudaError> {
+    nvrtc_version()?;
+    let src = CString::new(source).map_err(|_| CudaError::invalid("NUL byte in kernel source"))?;
+    let cname = CString::new(name).map_err(|_| CudaError::invalid("NUL byte in program name"))?;
+    let prog = nvrtc_result::create_program(&src, Some(&cname)).map_err(|e| CudaError::Nvrtc {
+        call: "nvrtcCreateProgram",
+        code: e.0 as i32,
+        log: String::new(),
+    })?;
+    let out = compile_program(prog, options);
+    // SAFETY: `prog` was created above and is destroyed once, after its last use.
+    let _ = unsafe { nvrtc_result::destroy_program(prog) };
+    out
+}
+
+fn compile_program(
+    prog: nvrtc_sys::nvrtcProgram,
+    options: &[String],
+) -> Result<Vec<u8>, CudaError> {
+    // SAFETY: `prog` is a live program; the options are owned strings converted to C strings by
+    // cudarc for the duration of the call.
+    if let Err(e) = unsafe { nvrtc_result::compile_program(prog, options) } {
+        // SAFETY: the program is live; the log exists after a failed compile.
+        let log = unsafe { nvrtc_result::get_program_log(prog) }.unwrap_or_default();
+        let log: Vec<u8> = log
+            .iter()
+            .take_while(|c| **c != 0)
+            .map(|c| *c as u8)
+            .collect();
+        return Err(CudaError::Nvrtc {
+            call: "nvrtcCompileProgram",
+            code: e.0 as i32,
+            log: String::from_utf8_lossy(&log).into_owned(),
+        });
+    }
+    let mut size = 0usize;
+    // SAFETY: the program compiled; `size` is a valid out-parameter.
+    let rc = unsafe { nvrtc_sys::nvrtcGetCUBINSize(prog, &mut size) };
+    nvrtc_status("nvrtcGetCUBINSize", rc, String::new())?;
+    let mut cubin = vec![0u8; size];
+    // SAFETY: `cubin` holds exactly the size NVRTC reported for this program's cubin.
+    let rc = unsafe { nvrtc_sys::nvrtcGetCUBIN(prog, cubin.as_mut_ptr().cast::<c_char>()) };
+    nvrtc_status("nvrtcGetCUBIN", rc, String::new())?;
+    Ok(cubin)
+}
+
+/// A module loaded into the context (`cuModuleLoadData`), unloaded on drop.
+pub(crate) struct LoadedModule {
+    ctx: Arc<Context>,
+    raw: sys::CUmodule,
+}
+
+// SAFETY: a module handle is usable from any thread of the context's process.
+unsafe impl Send for LoadedModule {}
+// SAFETY: as above; function lookups and launches on it are thread safe in the driver.
+unsafe impl Sync for LoadedModule {}
+
+impl LoadedModule {
+    /// Load a cubin.
+    pub(crate) fn load(ctx: &Arc<Context>, cubin: &[u8]) -> Result<Self, CudaError> {
+        if cubin.is_empty() {
+            return Err(CudaError::invalid("an empty cubin"));
+        }
+        ctx.bind()?;
+        // SAFETY: `cubin` is a complete image from nvrtcGetCUBIN, alive for the call; the driver
+        // copies what it keeps.
+        let raw = ctx.check("cuModuleLoadData", unsafe {
+            result::module::load_data(cubin.as_ptr().cast::<c_void>())
+        })?;
+        Ok(LoadedModule {
+            ctx: ctx.clone(),
+            raw,
+        })
+    }
+
+    /// The kernel `name` of this module.
+    pub(crate) fn function(&self, name: &str) -> Result<sys::CUfunction, CudaError> {
+        let cname =
+            CString::new(name).map_err(|_| CudaError::invalid("NUL byte in kernel name"))?;
+        self.ctx.bind()?;
+        // SAFETY: the module is live; the returned handle is valid while it stays loaded, which
+        // every holder guarantees by keeping an `Arc` of this module.
+        self.ctx.check("cuModuleGetFunction", unsafe {
+            result::module::get_function(self.raw, cname)
+        })
+    }
+
+    /// Launch `function` (a kernel of this module) on `stream`.
+    pub(crate) fn launch(
+        &self,
+        function: sys::CUfunction,
+        cfg: &LaunchConfig,
+        stream: &Stream,
+        args: &[KernelArg],
+    ) -> Result<(), CudaError> {
+        let mut values: Vec<KernelArg> = args.to_vec();
+        let mut params: Vec<*mut c_void> = values.iter_mut().map(KernelArg::as_param).collect();
+        self.ctx.bind()?;
+        // SAFETY: `function` belongs to this live module; each parameter points at one value of
+        // `values`, alive and unmoved for the call (the driver copies them at launch); the
+        // argument list is the caller's statement of the kernel's signature (`Module::launch`).
+        self.ctx.check("cuLaunchKernel", unsafe {
+            result::launch_kernel(
+                function,
+                cfg.grid,
+                cfg.block,
+                cfg.shared_bytes as c_uint,
+                stream.raw(),
+                &mut params,
+            )
+        })
+    }
+}
+
+impl Drop for LoadedModule {
+    fn drop(&mut self) {
+        if self.ctx.bind().is_ok() {
+            // SAFETY: the module is live and unloaded once; no holder of its functions remains
+            // (they keep the module alive).
+            let _ = unsafe { result::module::unload(self.raw) };
         }
     }
 }
