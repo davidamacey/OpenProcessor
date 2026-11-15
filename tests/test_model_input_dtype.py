@@ -191,9 +191,7 @@ def _detector(pool: _IngestPool) -> WholeImageDetector:
 _IMGS = [Image.new('RGB', (80, 40), (10 * i + 10, 50, 200)) for i in range(3)]
 _CALLS: dict[str, Callable[[WholeImageDetector], Any]] = {
     'primary': lambda d: d.run_primary(_IMGS[0]),
-    'primary_batch': lambda d: d.run_primary_batch(_IMGS),
     'secondary': lambda d: d.run_secondary_raw(_IMGS[0]),
-    'secondary_batch': lambda d: d.run_secondary_raw_batch(_IMGS),
 }
 
 

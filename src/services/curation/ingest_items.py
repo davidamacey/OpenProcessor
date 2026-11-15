@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 
     from src.clients.curation_opensearch import ClassRegistryFile
     from src.config import CurationConfig, DetectionProfile
-    from src.services.curation.ingest_detect import SecondaryOutput, WholeImageDetector
+    from src.services.curation.ingest_detect import WholeImageDetector
     from src.services.curation.item_doc import DetectedItem
 
 
@@ -152,8 +152,6 @@ class IngestItemsMixin:
         img: Image.Image,
         *,
         image_path: str = '',
-        prefilled_items: list[DetectedItem] | None = None,
-        prefilled_secondary: SecondaryOutput | None = None,
         resolve: bool = True,
     ) -> DetectResult:
         """The ingest detectors on one decoded image: the primary, then the
@@ -166,25 +164,19 @@ class IngestItemsMixin:
         stand. ``ingest_one``, a dataset import's ``propose`` mode and the
         ``detect`` reprocess scope all run this one function.
         """
-        if prefilled_items is not None:
-            items = prefilled_items
-        else:
-            items = await self.detector.run_primary(img)
+        items = await self.detector.run_primary(img)
 
         # surfaced on the response (IngestResult.secondary_detector_error)
         # and rolled into IngestSummary.secondary_detector_failures instead of
         # only ever reaching a 'warning' log line.
         secondary_detector_error: str | None = None
         if self.secondary_profile is not None and items:
-            secondary = prefilled_secondary
-            if secondary is None:
-                try:
-                    secondary = await self.detector.run_secondary_raw(img)
-                except TRITON_CALL_ERRORS as exc:
-                    secondary_detector_error = str(exc)
-                    logger.warning(
-                        'ingest_secondary_detector_failed', path=image_path, error=str(exc)
-                    )
+            secondary = None
+            try:
+                secondary = await self.detector.run_secondary_raw(img)
+            except TRITON_CALL_ERRORS as exc:
+                secondary_detector_error = str(exc)
+                logger.warning('ingest_secondary_detector_failed', path=image_path, error=str(exc))
             if secondary is not None:
                 sec_scale, sec_pad = letterbox_params(img, target=self.secondary_profile.input_size)
                 try:

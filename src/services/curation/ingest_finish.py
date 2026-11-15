@@ -1,82 +1,92 @@
-"""The finish phase of an ingest: what happens to a batch of photos after the inference results exist.
+"""The finish phase of an ingest: the photos of one request, each moving on its own to its write.
 
-:func:`finish_photos` runs the steps for a batch in a fixed order, the per-photo work
-:data:`~src.services.curation.ingest_helpers.MAX_INGEST_CONCURRENCY` wide and the database steps
-once for the whole batch:
+:func:`finish_photos` runs one request's photos as a small pipeline instead of barrier steps:
 
-1. per photo: identity and capture (:meth:`CurationIngestService.ingest_image`), then the detector's
-   items and the project's detect filter (:meth:`CurationIngestService.detect_for_ingest`);
-2. once: the registry classes the detector labels need, created in one transaction
-   (:meth:`CurationIngestService.resolve_classes`);
-3. per photo: crops, embeddings, blur, ids (:func:`~src.services.curation.ingest_index.prepare_image`);
-4. once each, for the batch as one commit group (:func:`~src.services.curation.ingest_index.commit_batch`):
-   placement, the content claims with the pending rows (one transaction), the writes through the
-   coalescing OpenSearch writer, the release of failed claims, the ``crop.created`` events.
+::
 
-A photo of a batch used to run all of this alone, with four or more PostgreSQL transactions of its
-own, each ending in a COMMIT that waits for the WAL. ``ingest_one`` and a dataset import's
-``index_items`` are a batch of one through the same functions.
+    todo queue ──> K stage workers ──> inbox ──> one committer ──> commit groups (at most 3)
+                   (one photo each:                 (classes, then the group transaction,
+                    engine or host stage,            then the writes, one group at a time)
+                    see ingest_stage)
 
-What a photo ends with when a step fails, in the per-photo path this replaced (OLD) and now
-(NEW). "request fails" is an exception out of the call: the route answers 500, or 503
-``database_busy`` for a pool timeout, and what was stored stays stored::
+* **Stage workers**, ``K = min(MAX_INGEST_CONCURRENCY, photos)``, pull photo indexes from an
+  ``asyncio.Queue`` that is filled before they start; a worker ends when the queue is empty (there
+  is no producer, so that is the end-of-input signal; ``Queue.shutdown`` is Python 3.13) and puts
+  one end marker on the inbox. A photo ends in the inbox as a
+  :class:`~src.services.curation.ingest_stage.StagedPhoto`, or as a result of its own (a
+  duplicate, a failure): a photo failure is a value, never an exception that cancels the others.
+* **The committer** takes the photos waiting in the inbox as one commit group when at least
+  ``ceil(photos / 3)`` wait, or when every worker has ended. The third group waits for the last
+  photo. Per group, in this order: the registry classes of the group's items are resolved (in
+  memory; one class transaction only for a label new to the project), the group transaction places,
+  claims and marks pending (:func:`~src.services.curation.ingest_index.commit_group`), the
+  documents are built and the photos written together
+  (:func:`~src.services.curation.ingest_index.write_group`). The next group starts when this one
+  is written; the stage workers keep the GPU busy meanwhile.
+* **The finish** (release the claims that must be released, announce every stored photo in one
+  transaction) runs once per request in a ``finally`` and survives a cancellation of the request
+  (:func:`~src.utils.task_group.finish_despite_cancel`): a stored photo never loses its events or
+  its claim release.
 
-    failure point            OLD                                NEW
-    -----------------------  ---------------------------------  --------------------------------
-    class create fails       that photo ``failed``              the photos that carry that class
-                             (``detector_infer``); others go    name ``failed`` (``detector_infer``);
-                             on                                 others go on. The batch create is
-                                                                tried again name by name first
-    detector fails           that photo ``failed``              same
-    placement fails          request fails (photos ahead of     request fails before any photo of
-                             the failure may be stored)         the batch is stored
-    claim: content held      ``duplicate`` of the holder; no    same
-    by another image         pending row, no write
-    claim: key changed or    ``failed`` (``bulk_index``);       same
-    refused                  nothing stored
-    claim or pending rows    ``failed`` (``bulk_index``);       a batch transaction that fails as
-    fail (database)          a claim already taken is           a whole is rolled back and the
-                             released                           batch runs photo by photo with
-                                                                the OLD behaviour (counted in
-                                                                ``op_ingest_batch_fallback_total``)
-    pool timeout in the      ``failed`` (``bulk_index``)        request fails (503): a retry per
-    claim or pending rows    for each photo that waited         photo would wait the pool timeout
-                             out the pool wait                  again for every photo
-    pool timeout elsewhere   as the step above (class create    same
-                             and detector: ``failed``;
-                             placement: request fails, 503)
-    OpenSearch write fails   ``failed`` (``bulk_index``);       same; the claims of the batch's
-                             claim released; pending rows       failed photos are released in one
-                             kept (the next rescore is          transaction
-                             idempotent)
-    crop cache fails         request fails; documents and       same
-                             claim stay
-    ``crop.created``         request fails; documents and       same; the events of the photos
-    publish fails            claim stay                         stored before a failure are still
-                                                                announced
+Every task group goes through :func:`~src.utils.task_group.run_all`, which re-raises the first
+failure unchanged, so a pool timeout still reaches the 503 handlers of ``src/core/db_session.py``.
+
+What a photo ends with when a step fails:
+
+::
+
+    failure point             what the photo ends with
+    ------------------------  -----------------------------------------------------------------
+    engine call fails         ``failed``: ``engine_unavailable`` (down, overloaded past its
+                              deadline), ``decode_failed`` (a file the engine cannot read),
+                              ``detector_infer`` (a model branch errored); others go on
+    class create fails        the photos that carry that class name ``failed``
+                              (``detector_infer``); others of the group go on
+    claim: content held       ``duplicate`` of the holder (``incomplete_write`` when the holder is
+    by another image          not stored whole); no pending row, no write
+    claim: key changed        ``failed`` (``bulk_index``); nothing stored
+    or refused
+    group 1: pool timeout     the request fails (503): nothing was stored
+    or no connection
+    group 2 or 3: the same    the stored photos keep ``success``; the photos of that group and
+                              every photo not yet committed answer ``failed`` /
+                              ``database_busy``; the stage workers stop taking photos
+    OpenSearch write fails    ``failed`` (``bulk_index``); the claim is released only when the
+                              store refused the images doc (the rules of ``write_prepared``)
+    ``crop.created``          announced once, at the end, for every photo stored
+    publish fails             the request fails; documents and claims stay
 
 A photo of one content as another (byte-identical) answers ``duplicate`` from the first one's
-result; two photos with one ``imohash`` and other bytes finish in separate rounds.
+result; two photos with one ``imohash`` and other bytes finish in separate waves.
 """
 
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+import math
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from sqlalchemy.exc import OperationalError, TimeoutError as PoolTimeoutError
+
 from src.core.logging import get_logger
+from src.services.curation.ingest_gpu_decode import engine_ready, engine_stage_applies
 from src.services.curation.ingest_helpers import MAX_INGEST_CONCURRENCY
 from src.services.curation.ingest_index import (
-    ImageContext,
     IndexOutcome,
-    PreparedImage,
-    commit_batch,
-    prepare_image,
+    commit_group,
+    doc_context,
+    finish_commit,
+    write_group,
 )
-from src.services.curation.ingest_models import ERROR_KIND_DETECTOR_INFER, IngestResult
+from src.services.curation.ingest_models import (
+    ERROR_KIND_DATABASE_BUSY,
+    ERROR_KIND_DETECTOR_INFER,
+    IngestResult,
+)
+from src.services.curation.ingest_stage import StagedPhoto, failed_result, stage_engine, stage_host
 from src.services.curation.ops_metrics import record_ingest_result
-from src.utils.task_group import run_all
+from src.utils.task_group import finish_despite_cancel, run_all
 
 
 if TYPE_CHECKING:
@@ -84,128 +94,196 @@ if TYPE_CHECKING:
 
     from src.services.curation.ingest import CurationIngestService
     from src.services.curation.ingest_dedup import Resolved
-    from src.services.curation.ingest_detect import SecondaryOutput
-    from src.services.curation.ingest_gpu_decode import GpuDecodeFrame
-    from src.services.curation.ingest_items import DetectResult
-    from src.services.curation.item_doc import DetectedItem
-    from src.utils.image_decode import DecodedImage
 
 
 logger = get_logger(__name__)
 
+#: A request's photos are committed in at most this many groups.
+COMMIT_GROUPS = 3
+
+#: Database failures the 503 handlers of ``src/core/db_session.py`` answer: no pool connection
+#: within the wait, no connection at all.
+_DATABASE_BUSY = (PoolTimeoutError, OperationalError)
+
 
 @dataclass
 class PhotoJob:
-    """One photo of a batch and what the batch already knows about it."""
+    """One photo of a request and what the request already knows about it."""
 
     image_bytes: bytes
     image_path: str
     source: str = 'unknown'
-    prefilled_image: DecodedImage | None = None
-    prefilled_items: list[DetectedItem] | None = None
-    prefilled_secondary: SecondaryOutput | None = None
-    prefilled_frame: GpuDecodeFrame | None = None
-    decode_route: str | None = None
     source_identifier: str | None = None
     ingest_run_id: str | None = None
     resolved: Resolved | None = None
-    """The photo's content looked up against the stored contents (the batch's one lookup); a
+    """The photo's content looked up against the stored contents (the request's one lookup); a
     photo without it is looked up on its own."""
 
 
 @dataclass
-class _Detected:
-    ctx: ImageContext
-    detected: DetectResult
+class _Flow:
+    """What the workers and the committer of ONE call share; nothing outlives the call."""
+
+    results: list[IngestResult | None]
+    inbox: asyncio.Queue[tuple[int, StagedPhoto] | None] = field(default_factory=asyncio.Queue)
+    stop: asyncio.Event = field(default_factory=asyncio.Event)
+    """Set when the database stopped taking commit groups: the workers take no more photos."""
+    written: list[IndexOutcome] = field(default_factory=list)
+    unclaimed: list[str] = field(default_factory=list)
+    stored_groups: int = 0
 
 
-def _failed_detector(job: PhotoJob, ctx: ImageContext, exc: Exception) -> IngestResult:
-    logger.error('ingest_primary_detector_failed', path=job.image_path, error=str(exc))
-    return IngestResult(
-        status='failed',
-        image_path=job.image_path,
-        source_identifier=job.source_identifier,
-        error=str(exc),
-        error_kind=ERROR_KIND_DETECTOR_INFER,
-        decode_route=ctx.decode_route,
+async def _stage_worker(
+    service: CurationIngestService,
+    jobs: Sequence[PhotoJob],
+    todo: asyncio.Queue[int],
+    flow: _Flow,
+    *,
+    use_engine: bool,
+    ready: bool,
+) -> None:
+    try:
+        while not flow.stop.is_set():
+            try:
+                i = todo.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+            staged = await (
+                stage_engine(service, jobs[i], engine_ready=ready)
+                if use_engine
+                else stage_host(service, jobs[i])
+            )
+            if isinstance(staged, IngestResult):
+                flow.results[i] = staged
+            else:
+                flow.inbox.put_nowait((i, staged))
+    finally:
+        flow.inbox.put_nowait(None)  # this worker's end marker
+
+
+def _finalize(result: IngestResult, staged: StagedPhoto) -> IngestResult:
+    result.n_filtered = staged.n_filtered
+    if result.status != 'duplicate':
+        result.decode_route = staged.prepared.ctx.decode_route
+    return result
+
+
+def _database_busy(job: PhotoJob, staged: StagedPhoto) -> IngestResult:
+    return failed_result(
+        job,
+        ERROR_KIND_DATABASE_BUSY,
+        'the database is busy; retry later',
+        staged.prepared.ctx.decode_route,
     )
 
 
-async def _detect(
-    service: CurationIngestService, job: PhotoJob, sem: asyncio.Semaphore
-) -> _Detected | IngestResult:
-    async with sem:
-        ctx = await service.ingest_image(
-            job.image_bytes,
-            job.image_path,
-            job.source,
-            prefilled_image=job.prefilled_image,
-            prefilled_frame=job.prefilled_frame,
-            decode_route=job.decode_route,
-            source_identifier=job.source_identifier,
-            ingest_run_id=job.ingest_run_id,
-            resolved=job.resolved,
-        )
-        if isinstance(ctx, IngestResult):
-            return ctx
-        detected = await service.detect_for_ingest(
-            ctx, job.image_path, job.prefilled_items, job.prefilled_secondary
-        )
-        if isinstance(detected, Exception):
-            return _failed_detector(job, ctx, detected)
-        return _Detected(ctx, detected)
+async def _commit(
+    service: CurationIngestService,
+    jobs: Sequence[PhotoJob],
+    flow: _Flow,
+    group: list[tuple[int, StagedPhoto]],
+) -> None:
+    """Resolve the classes of ``group``, run its transaction, write its photos."""
+    if flow.stop.is_set():
+        for i, staged in group:
+            flow.results[i] = _database_busy(jobs[i], staged)
+        return
+    class_errors = await service.resolve_classes([s.prepared.items for _, s in group])
+    live: list[tuple[int, StagedPhoto]] = []
+    for (i, staged), error in zip(group, class_errors, strict=True):
+        if error is None:
+            live.append((i, staged))
+        else:
+            flow.results[i] = failed_result(
+                jobs[i], ERROR_KIND_DETECTOR_INFER, str(error), staged.prepared.ctx.decode_route
+            )
+    if not live:
+        return
+    prepared = [s.prepared for _, s in live]
+    try:
+        shared = await doc_context(service, prepared)
+        claims = await commit_group(service, prepared)
+    except _DATABASE_BUSY as exc:
+        if flow.stored_groups == 0:
+            raise  # nothing of this request is stored: the 503 handlers answer, the client resends
+        logger.warning('ingest_group_database_busy', n_photos=len(live), error=type(exc).__name__)
+        flow.stop.set()
+        for i, staged in live:
+            flow.results[i] = _database_busy(jobs[i], staged)
+        return
+    outcomes = await write_group(service, prepared, claims, shared, flow.written, flow.unclaimed)
+    flow.stored_groups += 1
+    for (i, staged), outcome in zip(live, outcomes, strict=True):
+        flow.results[i] = _finalize(outcome.result, staged)
 
 
-async def _prepare(
-    service: CurationIngestService, found: _Detected, sem: asyncio.Semaphore
-) -> PreparedImage | IndexOutcome:
-    async with sem:
-        return await prepare_image(
-            service,
-            found.ctx,
-            found.detected.items,
-            secondary_detector_error=found.detected.secondary_detector_error,
-        )
+async def _committer(
+    service: CurationIngestService,
+    jobs: Sequence[PhotoJob],
+    flow: _Flow,
+    n_workers: int,
+) -> None:
+    per_group = math.ceil(len(jobs) / COMMIT_GROUPS)
+    waiting: list[tuple[int, StagedPhoto]] = []
+    ended = 0
+    groups = 0
+    while ended < n_workers or waiting:
+        if ended < n_workers:
+            item = await flow.inbox.get()
+            items = [item]
+            while not flow.inbox.empty():
+                items.append(flow.inbox.get_nowait())
+            for entry in items:
+                if entry is None:
+                    ended += 1
+                else:
+                    waiting.append(entry)
+        all_staged = ended == n_workers
+        early = groups < COMMIT_GROUPS - 1 and len(waiting) >= per_group
+        if waiting and (all_staged or early):
+            group, waiting = waiting, []
+            await _commit(service, jobs, flow, group)
+            groups += 1
 
 
 async def finish_photos(
     service: CurationIngestService, jobs: Sequence[PhotoJob]
 ) -> list[IngestResult]:
     """Ingest ``jobs`` and answer one result per job, in order (see the module docstring)."""
-    sem = asyncio.Semaphore(MAX_INGEST_CONCURRENCY)
-    staged = await run_all([_detect(service, job, sem) for job in jobs])
-    results: list[IngestResult | None] = [
-        s if isinstance(s, IngestResult) else None for s in staged
-    ]
-    found = [(i, s) for i, s in enumerate(staged) if isinstance(s, _Detected)]
+    if not jobs:
+        return []
+    use_engine = engine_stage_applies(service)
+    ready = await engine_ready(service) if use_engine else False
+    flow = _Flow(results=[None] * len(jobs))
+    todo: asyncio.Queue[int] = asyncio.Queue()
+    for i in range(len(jobs)):
+        todo.put_nowait(i)
+    n_workers = min(MAX_INGEST_CONCURRENCY, len(jobs))
+    try:
+        await run_all(
+            [
+                _stage_worker(service, jobs, todo, flow, use_engine=use_engine, ready=ready)
+                for _ in range(n_workers)
+            ]
+            + [_committer(service, jobs, flow, n_workers)]
+        )
+    finally:
+        if flow.written or flow.unclaimed:
+            await finish_despite_cancel(finish_commit(service, flow.written, flow.unclaimed))
+    results: list[IngestResult] = []
+    for i, done in enumerate(flow.results):
+        if done is None and not flow.stop.is_set():
+            msg = f'photo {jobs[i].image_path} ended the flow without a result'
+            raise RuntimeError(msg)
+        results.append(
+            record_ingest_result(
+                done
+                or failed_result(  # never taken: the database stopped taking groups
+                    jobs[i], ERROR_KIND_DATABASE_BUSY, 'the database is busy; retry later'
+                )
+            )
+        )
+    return results
 
-    class_errors = await service.resolve_classes([s.detected.items for _, s in found])
-    live: list[tuple[int, _Detected]] = []
-    for (i, s), error in zip(found, class_errors, strict=True):
-        if error is None:
-            live.append((i, s))
-        else:
-            results[i] = _failed_detector(jobs[i], s.ctx, error)
 
-    prepared = await run_all([_prepare(service, s, sem) for _, s in live])
-    finished: dict[int, IndexOutcome] = {}
-    ready: list[tuple[int, PreparedImage]] = []
-    for (i, _), p in zip(live, prepared, strict=True):
-        if isinstance(p, IndexOutcome):
-            finished[i] = p
-        else:
-            ready.append((i, p))
-    for (i, _), outcome in zip(
-        ready, await commit_batch(service, [p for _, p in ready]), strict=True
-    ):
-        finished[i] = outcome
-    for i, s in live:
-        result = finished[i].result
-        result.n_filtered = s.detected.n_filtered
-        if result.status != 'duplicate':
-            result.decode_route = s.ctx.decode_route
-        results[i] = result
-    return [record_ingest_result(r) for r in results if r is not None]
-
-
-__all__ = ['PhotoJob', 'finish_photos']
+__all__ = ['COMMIT_GROUPS', 'PhotoJob', 'finish_photos']

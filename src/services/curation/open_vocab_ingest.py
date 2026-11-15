@@ -13,14 +13,14 @@ down) stays ``pending`` for the next drain, which the periodic sweep starts, or 
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config
 from src.config.project_context import current_project_id
 from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
 from src.db.session import async_session_factory
-from src.services.curation.open_vocab_run import SegmentImage, stamp_open_vocab_status
 from src.services.curation.reprocess_models import ReprocessScopeResult
 from src.services.curation.reprocess_open_vocab import OpenVocabPass, current_active_set
 from src.services.curation.reprocess_targets import existing_images, scan_items
@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from opensearchpy import AsyncOpenSearch
 
     from src.services.curation.ingest import CurationIngestService
+    from src.services.curation.open_vocab_run import SegmentImage
 
 logger = get_logger(__name__)
 
@@ -57,6 +58,24 @@ async def start_drain() -> bool:
     return True
 
 
+async def _stamp_pending(opensearch: AsyncOpenSearch, image_ids: list[str]) -> None:
+    """Stamp every image ``pending`` in one bulk and wait for the stamps to become visible, so the
+    drain's search sees all of them (OpenSearch bulk API: ``refresh=wait_for`` "waits for the
+    changes to become visible before replying"). The stamp is bookkeeping: a refused one is logged
+    and the image is left for the periodic sweep, never allowed to fail the ingest."""
+    now = datetime.now(UTC).isoformat()
+    doc = {'doc': {'open_vocab_status': 'pending', 'open_vocab_status_at': now}}
+    index = get_curation_config().images_index
+    body: list[dict[str, Any]] = []
+    for image_id in image_ids:
+        body.append({'update': {'_index': index, '_id': image_id}})
+        body.append(doc)
+    response = await opensearch.bulk(body=body, refresh='wait_for')
+    if response.get('errors'):
+        refused = sum(1 for item in response['items'] if item['update'].get('error'))
+        logger.warning('open_vocab_status_stamp_failed', refused=refused, of=len(image_ids))
+
+
 async def schedule_open_vocab_after_ingest(
     opensearch: AsyncOpenSearch, image_ids: list[str]
 ) -> bool:
@@ -69,8 +88,7 @@ async def schedule_open_vocab_after_ingest(
         active = await current_active_set()
         if active is None or not active[0].run_on_ingest:
             return False
-        for image_id in image_ids:
-            await stamp_open_vocab_status(opensearch, image_id, 'pending')
+        await _stamp_pending(opensearch, image_ids)
         await start_drain()
     except Exception as exc:
         logger.warning('open_vocab_ingest_schedule_failed', error=str(exc))

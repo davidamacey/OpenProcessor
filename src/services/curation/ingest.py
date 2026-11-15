@@ -52,34 +52,33 @@ Sibling modules, split out of this one to keep each to one concern:
 * :mod:`src.services.curation.ingest_items` — detecting one image's items and
   bulk-writing its documents (:class:`IngestItemsMixin`, ``DetectResult``).
 * :mod:`src.services.curation.ingest_models` — the wire models.
-* :mod:`src.services.curation.ingest_detect` — steps 2-3, the
-  ``DetectionProfile``-driven Triton detector runners (single-image and
-  **batched**) and their tensor decoding.
-* :mod:`src.services.curation.ingest_batch` — ``ingest_batch``'s
-  implementation: one lookup of the stored contents, one batched decode, **one batched
-  Triton call per detector per ``batch_limit`` chunk** (not one per
-  image), the results fed to the finish phase as ``PhotoJob`` prefilled fields.
-* :mod:`src.services.curation.ingest_finish` — the finish phase of a batch (``ingest_one`` is a
-  batch of one): per-photo work in parallel, and the PostgreSQL steps (classes, placement, content
-  claims with the pending rows, release, events) once per batch.
+* :mod:`src.services.curation.ingest_detect` — steps 2-3 of the host stage, the
+  ``DetectionProfile``-driven Triton detector runner (one image per call) and its tensor decoding.
+* :mod:`src.services.curation.ingest_gpu_decode` — the frame engine as the decoder, detector and
+  embedder of the engine stage (every photo of a project without a secondary detector).
+* :mod:`src.services.curation.ingest_batch` — ``ingest_batch``'s implementation: one lookup of the
+  stored contents, admission, then the flow per wave.
+* :mod:`src.services.curation.ingest_stage` and :mod:`src.services.curation.ingest_finish` — one
+  photo's stage (engine or host) and the flow of a request (``ingest_one`` is a request of one
+  photo): each photo moves on its own to its write, the PostgreSQL steps (classes, placement,
+  content claims with the pending rows) run in at most three commit groups, then the release and
+  the events once.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from opensearchpy.exceptions import OpenSearchException
 
 from src.config import get_curation_config
+from src.core.exceptions import EngineUnavailableError
 from src.core.logging import get_logger
 from src.domain.capture_metadata import unknown_capture
-from src.domain.decode_route import CPU_SINGLE, GPU
+from src.domain.decode_route import CPU_HOST
 from src.services.curation.ingest_dedup import IngestDedupMixin, Resolved, held_back_result
-from src.services.curation.ingest_detect import (
-    SECONDARY_IOU_MATCH,
-    SecondaryOutput,
-    WholeImageDetector,
-)
+from src.services.curation.ingest_detect import SECONDARY_IOU_MATCH, WholeImageDetector
 from src.services.curation.ingest_finish import PhotoJob, finish_photos
 from src.services.curation.ingest_helpers import _decode_image
 from src.services.curation.ingest_index import ImageContext, IndexOutcome, index_items
@@ -87,6 +86,7 @@ from src.services.curation.ingest_items import DetectResult, IngestItemsMixin
 from src.services.curation.ingest_models import (
     ERROR_KIND_DECODE_FAILED,
     ERROR_KIND_EMPTY,
+    ERROR_KIND_ENGINE_UNAVAILABLE,
     BatchIngestResult,
     IngestResult,
     IngestSummary,
@@ -117,6 +117,15 @@ if TYPE_CHECKING:
 
 
 logger = get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class ImageIdentity:
+    """Who a file is: its ``imohash`` and its content's lookup (``resolved``)."""
+
+    image_hash: str
+    resolved: Resolved
+    adopt_existing: bool = False
 
 
 class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
@@ -173,36 +182,26 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
     # Public API
     # ------------------------------------------------------------------
 
-    async def ingest_image(
+    async def identify(
         self,
         image_bytes: bytes,
         image_path: str,
-        source: str = 'unknown',
+        source_identifier: str | None,
         *,
-        prefilled_image: DecodedImage | None = None,
-        prefilled_frame: GpuDecodeFrame | None = None,
-        decode_route: str | None = None,
-        source_identifier: str | None = None,
-        ingest_run_id: str | None = None,
         adopt_existing: bool = False,
         known_existing: dict[str, Any] | None = None,
         resolved: Resolved | None = None,
-    ) -> ImageContext | IngestResult:
-        """Decode, fingerprint and dedup one image.
+    ) -> ImageIdentity | IngestResult:
+        """Fingerprint and dedup one file, without touching its pixels.
 
-        Returns the :class:`ImageContext` :func:`index_items` consumes, or
-        a terminal :class:`IngestResult`: ``failed`` for empty or
-        undecodable bytes, ``duplicate`` for an image the index already
-        holds. ``known_existing`` is a lookup result the caller already has
-        (an image it indexed moments ago that search cannot see yet); ``resolved`` is the whole
-        lookup of this file the caller already made (a batch resolves all its files at once).
-        ``adopt_existing=True`` (a dataset import, which must attach
-        labels to an already-indexed image) turns a duplicate into a
-        context with ``created=False`` carrying the existing doc's
-        ``image_id`` and ``image_path``; it never repairs an incomplete image.
-        Without it, a stored image that misses items is answered ``incomplete_write`` while a
-        writer may still be writing it, and otherwise comes back as a context with ``created``
-        False and ``repair`` set: the ingest completes the image.
+        Returns the :class:`ImageIdentity` the context is built from, or a terminal
+        :class:`IngestResult`: ``failed`` for empty bytes, ``duplicate`` for an image the index
+        holds whole, ``incomplete_write`` for one a writer may still be writing. ``known_existing``
+        is a lookup result the caller already has (an image it indexed moments ago that search
+        cannot see yet); ``resolved`` is the whole lookup of this file the caller already made (a
+        batch resolves all its files at once). ``adopt_existing=True`` (a dataset import, which
+        must attach labels to an already-indexed image) never answers a duplicate and never
+        repairs.
         """
         if not image_bytes:
             return IngestResult(
@@ -212,32 +211,6 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
                 error='empty image bytes',
                 error_kind=ERROR_KIND_EMPTY,
             )
-
-        decoded: DecodedImage | None = None
-        if prefilled_frame is not None:
-            pass
-        elif prefilled_image is not None:
-            decoded = prefilled_image
-        else:
-            try:
-                decoded = await run_cpu(
-                    _decode_image, image_bytes, nbytes=encoded_nbytes(image_bytes)
-                )
-            except IMAGE_DECODE_ERRORS as exc:
-                return IngestResult(
-                    status='failed',
-                    image_path=image_path,
-                    source_identifier=source_identifier,
-                    error=str(exc),
-                    error_kind=ERROR_KIND_DECODE_FAILED,
-                )
-
-        if decoded is not None:
-            width, height = decoded.pil.size
-        else:
-            assert prefilled_frame is not None
-            width, height = prefilled_frame.width, prefilled_frame.height
-
         image_hash = content_imohash(image_bytes)
         if resolved is None:
             resolved = (
@@ -257,19 +230,37 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
                     source_identifier=source_identifier,
                     imohash=image_hash,
                 )
-        capture: CaptureMetadata | None = None
+        return ImageIdentity(image_hash, resolved, adopt_existing)
+
+    def context_for(
+        self,
+        identity: ImageIdentity,
+        image_bytes: bytes,
+        image_path: str,
+        source: str,
+        *,
+        width: int,
+        height: int,
+        decode_route: str,
+        gpu_frame: GpuDecodeFrame | None = None,
+        decoded: DecodedImage | None = None,
+        capture: CaptureMetadata | None = None,
+        source_identifier: str | None = None,
+        ingest_run_id: str | None = None,
+    ) -> ImageContext:
+        """The :class:`ImageContext` of an identified image whose pixels were decoded (by the
+        engine: ``gpu_frame``; or in the API: ``decoded``). ``capture`` is the file's capture
+        metadata for a new image."""
+        resolved = identity.resolved
+        existing = resolved.existing
         repair: RepairTarget | None = None
         if existing is None:
             image_id = content_image_id(resolved.key)
             resolved_path = image_path
-            with stage_timer('capture'):
-                capture = await self.read_capture(image_bytes)
         else:
             image_id = existing['image_id']
             resolved_path = existing.get('image_path') or image_path
-            if (
-                not adopt_existing
-            ):  # an incomplete image nobody is writing: this ingest completes it
+            if not identity.adopt_existing:  # an incomplete image nobody is writing: complete it
                 repair = RepairTarget(image_id, resolved.listed)
         return ImageContext(
             image_id=image_id,
@@ -278,17 +269,83 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
             dataset_split=(existing or {}).get('dataset_split'),
             pil=decoded.pil if decoded is not None else None,
             rgb=decoded.rgb if decoded is not None else None,
-            gpu_frame=prefilled_frame,
-            decode_route=decode_route or (GPU if prefilled_frame is not None else CPU_SINGLE),
+            gpu_frame=gpu_frame,
+            decode_route=decode_route,
             width=width,
             height=height,
-            imohash=image_hash,
+            imohash=identity.image_hash,
             content=image_bytes,
             source=source,
             source_identifier=source_identifier,
             ingest_run_id=ingest_run_id,
             capture=capture,
             repair=repair,
+        )
+
+    async def ingest_image(
+        self,
+        image_bytes: bytes,
+        image_path: str,
+        source: str = 'unknown',
+        *,
+        source_identifier: str | None = None,
+        ingest_run_id: str | None = None,
+        adopt_existing: bool = False,
+        known_existing: dict[str, Any] | None = None,
+        resolved: Resolved | None = None,
+    ) -> ImageContext | IngestResult:
+        """Decode (in the API), fingerprint and dedup one image: the host stage's first step, and
+        the first step of a dataset import and the reprocess scopes.
+
+        Returns the :class:`ImageContext` :func:`index_items` consumes, or a terminal
+        :class:`IngestResult` (see :meth:`identify`; ``decode_failed`` for undecodable bytes).
+        ``adopt_existing=True`` turns a duplicate into a context with ``created=False`` carrying
+        the existing doc's ``image_id`` and ``image_path``; it never repairs an incomplete image.
+        Without it, a stored image that misses items comes back as a context with ``created``
+        False and ``repair`` set: the ingest completes the image.
+        """
+        decoded: DecodedImage | None = None
+        if image_bytes:
+            try:
+                decoded = await run_cpu(
+                    _decode_image, image_bytes, nbytes=encoded_nbytes(image_bytes)
+                )
+            except IMAGE_DECODE_ERRORS as exc:
+                return IngestResult(
+                    status='failed',
+                    image_path=image_path,
+                    source_identifier=source_identifier,
+                    error=str(exc),
+                    error_kind=ERROR_KIND_DECODE_FAILED,
+                )
+        identity = await self.identify(
+            image_bytes,
+            image_path,
+            source_identifier,
+            adopt_existing=adopt_existing,
+            known_existing=known_existing,
+            resolved=resolved,
+        )
+        if isinstance(identity, IngestResult):
+            return identity
+        assert decoded is not None
+        capture: CaptureMetadata | None = None
+        if identity.resolved.existing is None:
+            with stage_timer('capture'):
+                capture = await self.read_capture(image_bytes)
+        width, height = decoded.pil.size
+        return self.context_for(
+            identity,
+            image_bytes,
+            image_path,
+            source,
+            width=width,
+            height=height,
+            decode_route=CPU_HOST,
+            decoded=decoded,
+            capture=capture,
+            source_identifier=source_identifier,
+            ingest_run_id=ingest_run_id,
         )
 
     async def read_capture(self, image_bytes: bytes) -> CaptureMetadata:
@@ -318,42 +375,20 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
         image_path: str,
         source: str = 'unknown',
         *,
-        prefilled_image: DecodedImage | None = None,
-        prefilled_items: list[DetectedItem] | None = None,
-        prefilled_secondary: SecondaryOutput | None = None,
-        prefilled_frame: GpuDecodeFrame | None = None,
-        decode_route: str | None = None,
         source_identifier: str | None = None,
         ingest_run_id: str | None = None,
     ) -> IngestResult:
-        """Run the full pipeline on a single image.
+        """Run the full pipeline on a single image: a request of one photo through the same flow
+        as a batch (:func:`~src.services.curation.ingest_finish.finish_photos`).
 
         Args:
-            image_bytes: Raw JPEG/PNG bytes. Required even when
-                ``prefilled_image`` is supplied — it is what the content
-                dedup fingerprint is computed from.
+            image_bytes: Raw image bytes.
             image_path: Source path, persisted verbatim on the images doc.
             source: Free-form provenance tag.
-            prefilled_image: The already-decoded frame; skips the decode.
-            prefilled_items: Primary-detector output from
-                :meth:`_run_primary_detector_batch`; skips this image's
-                own single-image Triton round-trip. An empty list is
-                meaningful (the detector found nothing) and is *not*
-                treated as "not prefilled".
-            prefilled_secondary: Secondary-detector output (raw tensor
-                plus optional backbone feature map) from
-                :meth:`WholeImageDetector.run_secondary_raw_batch`; same deal.
-            prefilled_frame: The GPU decode's products for this image
-                (:mod:`~src.services.curation.ingest_gpu_decode`), with its
-                items in ``prefilled_items``; the API never decodes it.
-            decode_route: The route the batch path chose for this image
-                (:mod:`src.domain.decode_route`); without it the route is ``gpu`` for a
-                ``prefilled_frame`` and ``cpu_single`` otherwise.
 
-        Every ``prefilled_*`` argument defaults to ``None``, in which
-        case this method does the work itself — so direct callers
-        (``POST /curation/ingest/image``, scripts) behave exactly as they
-        did before the batch path existed.
+        Raises:
+            EngineUnavailableError: the frame engine could not take the photo and nothing was
+                stored (a person is waiting: the route answers 503 with ``Retry-After``).
         """
         [result] = await self.ingest_photos(
             [
@@ -361,45 +396,31 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
                     image_bytes,
                     image_path,
                     source,
-                    prefilled_image=prefilled_image,
-                    prefilled_items=prefilled_items,
-                    prefilled_secondary=prefilled_secondary,
-                    prefilled_frame=prefilled_frame,
-                    decode_route=decode_route,
                     source_identifier=source_identifier,
                     ingest_run_id=ingest_run_id,
                 )
             ],
         )
+        if result.error_kind == ERROR_KIND_ENGINE_UNAVAILABLE:
+            msg = result.error or 'the image engine is unavailable'
+            raise EngineUnavailableError(msg)
         return result
 
     async def ingest_photos(self, jobs: Sequence[PhotoJob]) -> list[IngestResult]:
-        """Ingest a batch of photos (:func:`~src.services.curation.ingest_finish.finish_photos`):
-        one result per job, in order; the database steps run once for the whole batch."""
+        """Ingest a request's photos (:func:`~src.services.curation.ingest_finish.finish_photos`):
+        one result per job, in order; each photo moves on its own, the database steps run in at
+        most three commit groups."""
         return await finish_photos(self, jobs)
 
     async def detect_for_ingest(
-        self,
-        ctx: ImageContext,
-        image_path: str,
-        prefilled_items: list[DetectedItem] | None,
-        prefilled_secondary: SecondaryOutput | None,
+        self, ctx: ImageContext, image_path: str
     ) -> DetectResult | Exception:
-        """The detector's items for a decoded image, the project's detect filter applied; the
-        class names are left to :meth:`resolve_classes`, which a batch runs once for all its
-        photos. A failure of the detector is returned (the photo fails, the batch goes on)."""
+        """The host stage's detector items for a decoded image, the project's detect filter
+        applied; the class names are left to :meth:`resolve_classes`, which the committer runs
+        per commit group. A failure of the detector is returned (the photo fails, the others go
+        on)."""
         try:
-            if ctx.pil is None:
-                return await self.filter_detections(
-                    prefilled_items or [], ctx.width, ctx.height, resolve=False
-                )
-            return await self.detect_items(
-                ctx.pil,
-                image_path=image_path,
-                prefilled_items=prefilled_items,
-                prefilled_secondary=prefilled_secondary,
-                resolve=False,
-            )
+            return await self.detect_items(ctx.require_pil(), image_path=image_path, resolve=False)
         except Exception as exc:
             return exc
 
@@ -416,9 +437,10 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
         await apublish_crops_created(crops)
 
     async def refresh_indexes(self) -> None:
-        """Make this call's writes visible to search (stats, previews) once the
-        ingest call ends: one refresh per call, never per item. A failure is
-        logged, not raised: the writes already succeeded."""
+        """Make this call's writes visible to search at once, for a caller that promises it
+        (``/ingest/image``, ``/ingest/upload``, ``/ingest/objects``): one refresh per call,
+        never per item, and none in a batch ingest. A failure is logged, not raised: the writes
+        already succeeded."""
         try:
             await self.opensearch.indices.refresh(
                 index=f'{self.config.images_index},{self.config.items_index}'
@@ -434,7 +456,7 @@ class CurationIngestService(IngestDedupMixin, IngestItemsMixin):
         source_identifiers: list[str | None] | None = None,
         ingest_run_id: str | None = None,
     ) -> BatchIngestResult:
-        """Batch ingest: msearch dedup, batched detector inference, per-image finish.
+        """Batch ingest: one dedup lookup, then every new photo through the per-photo flow.
 
         Delegates to :func:`src.services.curation.ingest_batch.run_ingest_batch`
         — see that module's docstring for why the batch path is more than

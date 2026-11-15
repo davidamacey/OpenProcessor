@@ -591,7 +591,8 @@ async def write_prepared(
             [crops[i] for i in keep],
             [items[i] for i in keep],
         )
-    await _cache_crops(service, cids, crops)
+    with stage_timer('crop_cache'):
+        await _cache_crops(service, cids, crops)
     return IndexOutcome(
         result=IngestResult(
             status='success',

@@ -61,12 +61,3 @@ def test_zero_padding_rows_are_not_detections() -> None:
     pool = _RecordingPool([])
 
     assert asyncio.run(_detector(pool).run_primary(_IMG)) == []
-
-
-def test_a_batch_split_across_triton_calls_decodes_every_image() -> None:
-    pool = _RecordingPool([(0.1, 0.225, 0.6, 0.725, 0.9, 0), (0.2, 0.3, 0.4, 0.5, 0.8, 0)])
-
-    per_image = asyncio.run(_detector(pool, batch_limit=2).run_primary_batch([_IMG] * 5))
-
-    assert pool.batch_sizes == [2, 2, 1]
-    assert [len(items) for items in per_image] == [2] * 5

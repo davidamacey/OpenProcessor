@@ -120,8 +120,7 @@ def test_detector_request_build_is_timed() -> None:
     )
     built = _count('triton_request')
     assert asyncio.run(detector.run_primary(Image.new('RGB', (80, 50)))) == []
-    assert asyncio.run(detector.run_primary_batch([Image.new('RGB', (80, 50))])) == [[]]
-    assert _count('triton_request') - built == 2
+    assert _count('triton_request') - built == 1
 
 
 def test_opensearch_serializer_is_timed_and_encodes_like_the_stock_one() -> None:

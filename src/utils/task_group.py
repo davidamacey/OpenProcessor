@@ -7,6 +7,9 @@ failure arrives as an ``ExceptionGroup``; the callers here catch specific except
 
 Request handlers do not fan out. The ingest data plane (the four modules named in
 ``docs/design/engineering_standards.md``) and worker job bodies are the only callers.
+
+:func:`finish_despite_cancel` is the one other primitive: a step that must end (a stored photo's
+release and events) even when the task that awaits it is cancelled, once or again.
 """
 
 from __future__ import annotations
@@ -42,3 +45,28 @@ async def run_settled[T](coros: Sequence[Coroutine[Any, Any, T]]) -> list[T | Ex
         if isinstance(result, BaseException) and not isinstance(result, Exception):
             raise result
     return cast('list[T | Exception]', results)
+
+
+async def finish_despite_cancel[T](coro: Coroutine[Any, Any, T]) -> T:
+    """Run ``coro`` to its end although the awaiting task is cancelled, once or repeatedly, then
+    re-raise the cancellation (its result or exception otherwise).
+
+    Python docs, ``asyncio.shield``: it protects the inner task, and "if the coroutine containing
+    ``shield()`` is cancelled, the Task running in ``something()`` is not cancelled"; the docs also
+    require keeping a reference to the task, which this frame does until it is done. One ``shield``
+    only absorbs the first cancellation: a second one (a ``TaskGroup`` cancelling its parent
+    again) would interrupt the await, so the wait is repeated until the task is done. A
+    cancellation of the inner task itself (the loop shutting down) is not absorbed.
+    """
+    task = asyncio.ensure_future(coro)
+    cancelled = False
+    while not task.done():
+        try:
+            await asyncio.shield(task)
+        except asyncio.CancelledError:
+            if task.cancelled():
+                raise
+            cancelled = True
+    if cancelled:
+        raise asyncio.CancelledError
+    return task.result()

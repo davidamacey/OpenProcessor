@@ -1,4 +1,4 @@
-"""Ingest keeps per-image pixel work off the event loop and bounds the images in flight (#241)."""
+"""Ingest bounds the megabytes in flight (#241) and keeps per-image pixel work off the event loop."""
 
 from __future__ import annotations
 
@@ -9,9 +9,10 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
+from curation.ingest_fakes import _make_service
 from PIL import Image
 
-from src.services.curation import ingest_batch
+from src.services.curation import ingest, ingest_batch
 from src.services.curation.ingest_dedup import Resolved
 from src.services.curation.ingest_models import IngestResult
 from src.utils import cpu_pool
@@ -34,34 +35,27 @@ def _jpeg(seed: int = 0) -> bytes:
 
 
 class _Service:
-    """Just enough of CurationIngestService for run_ingest_batch."""
+    """Just enough of CurationIngestService for run_ingest_batch: the host stage (no engine);
+    the photos inside ``ingest_photos`` are the ones the gate admitted."""
 
     def __init__(self) -> None:
-        self.in_detector = 0
-        self.peak_in_detector = 0
-        self.detector = SimpleNamespace(
-            secondary_profile=None, run_primary_batch=self._run_primary_batch
-        )
+        self.in_flight = 0
+        self.peak_in_flight = 0
+        self.detector = SimpleNamespace(secondary_profile=None)
         self.config = SimpleNamespace(ingest_gpu_decode=False)
-
-    async def _run_primary_batch(self, imgs: list[Image.Image]) -> list[list]:
-        self.in_detector += len(imgs)
-        self.peak_in_detector = max(self.peak_in_detector, self.in_detector)
-        await asyncio.sleep(0.05)
-        self.in_detector -= len(imgs)
-        return [[] for _ in imgs]
 
     async def resolve_contents(self, entries: list[tuple[str, bytes]]) -> list[Resolved]:
         return [Resolved(None, h) for h, _ in entries]
 
     async def ingest_photos(self, jobs: Sequence[PhotoJob]) -> list[IngestResult]:
+        self.in_flight += len(jobs)
+        self.peak_in_flight = max(self.peak_in_flight, self.in_flight)
+        await asyncio.sleep(0.05)
+        self.in_flight -= len(jobs)
         return [
             IngestResult(status='success', image_id=j.image_path, image_path=j.image_path)
             for j in jobs
         ]
-
-    async def refresh_indexes(self) -> None:
-        return None
 
 
 def _ingest(service: _Service, images: list[bytes], paths: list[str]):
@@ -75,29 +69,21 @@ def _run_two_requests(monkeypatch: pytest.MonkeyPatch, capacity: int) -> int:
 
     async def main() -> None:
         await asyncio.gather(
-            _ingest(
-                service,
-                [_jpeg(1), _jpeg(2)],
-                ['a', 'b'],
-            ),
-            _ingest(
-                service,
-                [_jpeg(3), _jpeg(4)],
-                ['c', 'd'],
-            ),
+            _ingest(service, [_jpeg(1), _jpeg(2)], ['a', 'b']),
+            _ingest(service, [_jpeg(3), _jpeg(4)], ['c', 'd']),
         )
 
     asyncio.run(main())
-    return service.peak_in_detector
+    return service.peak_in_flight
 
 
-def test_requests_past_the_cap_queue_instead_of_decoding_together(
+def test_requests_past_the_cap_queue_instead_of_working_together(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     assert _run_two_requests(monkeypatch, capacity=2) == 2
 
 
-def test_without_a_cap_every_request_decodes_at_once(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_without_a_cap_every_request_works_at_once(monkeypatch: pytest.MonkeyPatch) -> None:
     assert _run_two_requests(monkeypatch, capacity=8) == 4
 
 
@@ -117,14 +103,12 @@ def test_waiting_for_the_gate_is_recorded_as_a_stage(monkeypatch: pytest.MonkeyP
     assert count() - before == 2
 
 
-def test_batch_decode_runs_off_the_loop_thread(monkeypatch: pytest.MonkeyPatch) -> None:
-    from src.services.curation import ingest_helpers
-
+def test_host_stage_decode_runs_off_the_loop_thread(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(cpu_pool, 'OFFLOAD_MIN_BYTES', 0)  # these frames are tiny
     threads: list[int] = []
     problems: list[str] = []
     loop_ran = threading.Event()
-    real = ingest_helpers._decode_image
+    real = ingest._decode_image
 
     def spy(data: bytes):
         threads.append(threading.get_ident())
@@ -135,8 +119,8 @@ def test_batch_decode_runs_off_the_loop_thread(monkeypatch: pytest.MonkeyPatch) 
             problems.append('event loop did not run during a decode')
         return real(data)
 
-    monkeypatch.setattr(ingest_helpers, '_decode_image', spy)
-    service = _Service()
+    monkeypatch.setattr(ingest, '_decode_image', spy)
+    service, _os, _triton = _make_service()
 
     async def main() -> int:
         async def heartbeat() -> None:
@@ -145,11 +129,7 @@ def test_batch_decode_runs_off_the_loop_thread(monkeypatch: pytest.MonkeyPatch) 
             loop_ran.set()
 
         beat = asyncio.create_task(heartbeat())
-        await _ingest(
-            service,
-            [_jpeg(i) for i in range(4)],
-            list('abcd'),
-        )
+        await service.ingest_batch([_jpeg(i) for i in range(4)], list('abcd'))
         await beat
         return threading.get_ident()
 
@@ -159,20 +139,16 @@ def test_batch_decode_runs_off_the_loop_thread(monkeypatch: pytest.MonkeyPatch) 
     assert problems == []
 
 
-def test_an_undecodable_image_is_left_for_ingest_one_to_report(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(ingest_batch, 'ingest_gate', lambda: InflightGate(4))
-    service = _Service()
-    result = asyncio.run(
-        _ingest(
-            service,
-            [b'not an image', _jpeg(5)],
-            ['bad', 'good'],
-        )
-    )
-    assert [r.status for r in result.results] == ['success', 'success']
-    assert service.peak_in_detector == 1  # only the decodable image reached the detector
+def test_an_undecodable_image_fails_alone_in_the_host_stage() -> None:
+    service, os_fake, _triton = _make_service()
+    result = asyncio.run(service.ingest_batch([b'not an image', _jpeg(5)], ['bad', 'good']))
+    assert sorted((r.image_path, r.status) for r in result.results) == [
+        ('bad', 'failed'),
+        ('good', 'success'),
+    ]
+    bad = next(r for r in result.results if r.image_path == 'bad')
+    assert bad.error_kind == 'decode_failed'
+    assert len(os_fake.images) == 1
 
 
 def _big_jpeg() -> bytes:
@@ -194,12 +170,26 @@ def _peak_for_two_big_images(monkeypatch: pytest.MonkeyPatch, capacity_mib: int)
         )
 
     asyncio.run(main())
-    return service.peak_in_detector
+    return service.peak_in_flight
 
 
-def test_the_gate_counts_decoded_megabytes_not_images(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_gate_counts_decoded_megabytes_not_images_in_the_host_stage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     assert _peak_for_two_big_images(monkeypatch, capacity_mib=8) == 1  # 6 + 6 does not fit
     assert _peak_for_two_big_images(monkeypatch, capacity_mib=12) == 2
+
+
+def test_the_gate_counts_only_the_encoded_bytes_of_an_engine_stage_photo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def ready(_service: object) -> bool:
+        return True
+
+    monkeypatch.setattr(ingest_batch, 'engine_stage_applies', lambda _service: True)
+    monkeypatch.setattr(ingest_batch, 'engine_ready', ready)
+    # the API never decodes this photo, so 6 decoded MiB each do not count: 1 + 1 fit in 2
+    assert _peak_for_two_big_images(monkeypatch, capacity_mib=2) == 2
 
 
 def test_mib_rounds_up_and_an_unknown_size_counts_one() -> None:
