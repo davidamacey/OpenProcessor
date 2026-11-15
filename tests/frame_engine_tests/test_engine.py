@@ -152,16 +152,19 @@ def _fake_cupy() -> types.ModuleType:
 class _Lanes:
     fail_with: Exception | None = None
     seen_streams: list[Any] = []
+    #: ``(data, length)`` of every decode: the buffer as the request holds it and how much of it is the image.
+    seen_inputs: list[tuple[Any, int]] = []
     last: Any = None
 
     def __init__(self, **_k: Any) -> None:
         pass
 
-    def decode(self, data: bytes, alloc_stream: Any = None) -> tuple[_Dev, str]:
+    def decode(self, data: Any, length: int, alloc_stream: Any = None) -> tuple[_Dev, str]:
         _Lanes.seen_streams.append(alloc_stream)
+        _Lanes.seen_inputs.append((data, length))
         if _Lanes.fail_with is not None:
             raise _Lanes.fail_with
-        rng = np.random.default_rng(len(data))
+        rng = np.random.default_rng(length)
         _Lanes.last = _dev(rng.integers(0, 256, (H, W, 3), dtype=np.uint8))
         return _Lanes.last, 'fake'
 
@@ -319,6 +322,7 @@ def eng(monkeypatch: pytest.MonkeyPatch) -> Any:
     EVENTS.clear()
     _Lanes.fail_with = None
     _Lanes.seen_streams = []
+    _Lanes.seen_inputs = []
     _Kernels.fail_on_call = None
     _Kernels.calls = 0
     from frame_engine.settings import EngineSettings
@@ -967,10 +971,10 @@ def test_requests_wait_for_the_budget_and_never_exceed_it(eng: Any) -> None:
     peak = [0]
     real = _Lanes.decode
 
-    def watching(self: Any, data: bytes, alloc_stream: Any = None) -> Any:
+    def watching(self: Any, data: Any, length: int, alloc_stream: Any = None) -> Any:
         peak[0] = max(peak[0], engine.budget.in_use)
         time.sleep(0.02)
-        return real(self, data, alloc_stream)
+        return real(self, data, length, alloc_stream)
 
     _Lanes.decode = watching  # type: ignore[method-assign]
     try:
@@ -993,9 +997,9 @@ def test_a_budget_wait_that_outlasts_its_limit_is_an_overload(eng: Any) -> None:
     gate = threading.Event()
     real = _Lanes.decode
 
-    def stuck(self: Any, data: bytes, alloc_stream: Any = None) -> Any:
+    def stuck(self: Any, data: Any, length: int, alloc_stream: Any = None) -> Any:
         gate.wait(5)
-        return real(self, data, alloc_stream)
+        return real(self, data, length, alloc_stream)
 
     _Lanes.decode = stuck  # type: ignore[method-assign]
     try:
@@ -1048,6 +1052,20 @@ def test_frames_are_allocated_on_the_shared_arena_stream(eng: Any) -> None:
     engine = eng()
     _run(engine)
     assert _Lanes.seen_streams == [engine.alloc_stream]
+
+
+def test_the_decoder_is_given_the_request_buffer_and_the_image_length_not_a_copy(eng: Any) -> None:
+    """A photo is megabytes: slicing it to the end-of-image marker copied it while holding the
+    interpreter lock. The decoder reads the first ``length`` bytes of the buffer the request holds."""
+    from frame_engine.messages import EngineRequest
+
+    jpeg = _jpeg()
+    data = jpeg + b'trailing bytes that are not the image'
+    view = memoryview(data)
+    eng().submit(EngineRequest(view, _plan())).result(timeout=20)
+    [(seen, length)] = _Lanes.seen_inputs
+    assert seen is view
+    assert length == len(jpeg)
 
 
 def test_the_budget_is_reserved_at_start(eng: Any) -> None:

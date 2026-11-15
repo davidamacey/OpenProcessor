@@ -16,7 +16,8 @@ if TYPE_CHECKING:
 
 @dataclass
 class EngineRequest:
-    data: bytes
+    #: The encoded photo (a view of the request message on the gRPC path: never sliced into a copy).
+    data: bytes | memoryview
     plan: wire.EnginePlan
     boxes: np.ndarray | None = None
     arrived: float = field(default_factory=time.perf_counter)

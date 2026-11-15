@@ -425,6 +425,13 @@ class TestHeaderProfile:
         with Image.open(io.BytesIO(data)) as im:
             assert fg.jpeg_header(data).icc == im.info['icc_profile'] == COLORD_SRGB
 
+    def test_a_photo_held_as_a_view_reads_the_same_header(self) -> None:
+        """The gRPC front hands the engine a ``memoryview`` of the request, not a copy of the photo:
+        the profile chunks (sorted to be joined) must still be bytes."""
+        data = _split_icc(_tagged_jpeg(COLORD_SRGB), 3, [2, 3, 1])
+        assert fg.jpeg_header(memoryview(data)) == fg.jpeg_header(data)
+        assert fg.route(memoryview(data), 0, 100) == fg.route(data, 0, 100)
+
     def test_a_wrong_chunk_count_is_no_profile_as_in_pillow(self) -> None:
         data = _split_icc(_tagged_jpeg(COLORD_SRGB), 2, [1, 2], count=3)
         with Image.open(io.BytesIO(data)) as im:

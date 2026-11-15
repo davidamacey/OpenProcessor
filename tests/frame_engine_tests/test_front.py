@@ -160,6 +160,13 @@ async def test_bytes_tensors_round_trip() -> None:
     assert unpack_bytes(pack_bytes(items)) == items
 
 
+def test_unpacked_elements_are_views_of_the_message_not_copies() -> None:
+    """Every element of an 8 MB photo tensor was copied while holding the interpreter lock."""
+    raw = pack_bytes([b'x' * 1000, b'yz'])
+    views = unpack_bytes(raw)
+    assert all(isinstance(v, memoryview) and v.obj is raw for v in views)
+
+
 @pytest.mark.parametrize(
     ('branches', 'extra', 'want'),
     [

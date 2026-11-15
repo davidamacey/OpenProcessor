@@ -50,7 +50,7 @@ class JpegHeader(NamedTuple):
     icc: bytes | None = None
 
 
-def jpeg_header(data: bytes) -> JpegHeader:
+def jpeg_header(data: bytes | memoryview) -> JpegHeader:
     """Parse ``data``'s markers up to the first frame header; ``kind`` is ``jpeg``, ``corrupt``
     (a JPEG start marker but no readable frame header) or ``other``."""
     if data[:2] != b'\xff\xd8':
@@ -71,7 +71,7 @@ def jpeg_header(data: bytes) -> JpegHeader:
     return JpegHeader('corrupt', 0, 0, 0, 0, False, orientation, False)
 
 
-def _scan_markers(data: bytes) -> np.ndarray:
+def _scan_markers(data: bytes | memoryview) -> np.ndarray:
     """Offsets of the marker bytes that can end an entropy-coded scan, ascending.
 
     Inside a scan ``0xFF`` is stuffed (``FF00``), starts a restart marker (``FFD0``..``FFD7``) or
@@ -87,7 +87,7 @@ def _scan_markers(data: bytes) -> np.ndarray:
     return ends
 
 
-def jpeg_end(data: bytes) -> int | None:
+def jpeg_end(data: bytes | memoryview) -> int | None:
     """Offset just past the end-of-image marker, or ``None`` when the file has none.
 
     Walks the marker segments (so an EOI inside a header segment, such as the EXIF thumbnail's,
@@ -136,7 +136,7 @@ class Route(NamedTuple):
     header: JpegHeader
 
 
-def route(data: bytes, min_megapixels: float, max_megapixels: float) -> Route:
+def route(data: bytes | memoryview, min_megapixels: float, max_megapixels: float) -> Route:
     """Choose the decoder from the header alone.
 
     nvJPEG takes a baseline, 8-bit, 1- or 3-component JPEG that has its end-of-image marker and is

@@ -274,15 +274,15 @@ class FrameEngine:
         sides = tuple(r.side for r in request.plan.derivatives)
         header = decision.header
         if decision.kind == 'gpu':
-            data = request.data[: header.end]
             return _Source(
                 need_bytes(header, sides),
                 wire.DECODED_GPU,
                 None,
-                lambda: self._decode(data, header),
+                lambda: self._decode(request.data, header),
             )
+        data = bytes(request.data)  # the host decoders take bytes (a copy only for a view)
         try:
-            width, height = host_decode.probe(request.data)
+            width, height = host_decode.probe(data)
         except host_decode.TooLargeError:
             return 'huge'
         except host_decode.HostDecodeError:
@@ -293,7 +293,7 @@ class FrameEngine:
             host_need_bytes(width, height, sides),
             cpu_reason_route(decision.reason),
             width * height,
-            lambda: self._decode_host(request.data, width * height),
+            lambda: self._decode_host(data, width * height),
         )
 
     def _process(self, request: EngineRequest, clock: StageClock) -> EngineResult:
@@ -343,10 +343,11 @@ class FrameEngine:
                 photo.frame = None
             self.budget.release(need)
 
-    def _decode(self, data: bytes, header: JpegHeader) -> Any:
-        """The oriented frame, or the status that says why there is none."""
+    def _decode(self, data: bytes | memoryview, header: JpegHeader) -> Any:
+        """The oriented frame, or the status that says why there is none. The decoder reads the
+        first ``header.end`` bytes of ``data`` (what follows the end-of-image marker is not the image)."""
         try:
-            frame, _backend = self.lanes.decode(data, self.alloc_stream)
+            frame, _backend = self.lanes.decode(data, header.end, self.alloc_stream)
         except (
             NvJpegError,
             cp.cuda.memory.OutOfMemoryError,
