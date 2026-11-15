@@ -53,3 +53,15 @@ def test_gpu_plan_budgets_both_encoders_on_every_pe_card(shimmed: Shimmed, inst:
     done = cli(shimmed, inst, 'gpu', 'plan')
     assert done.returncode == 0, done.stderr
     assert 'PE encoders (frame + crop, about 2304 MiB per card)' in done.stdout
+
+
+def test_gpu_plan_budgets_the_336_crop_encoder_at_its_own_figure(
+    shimmed: Shimmed, inst: Path
+) -> None:
+    """The shipped config is the 224 build's (768 MiB); a deployment set to 336 is planned at
+    least at 1024, never at the other size's reading."""
+    shimmed.gpus(TWO_A6000)
+    set_env(inst, TRITON_GPU_ID='0,2', PE_CROP_SIZE='336')
+    done = cli(shimmed, inst, 'gpu', 'plan')
+    assert done.returncode == 0, done.stderr
+    assert 'PE encoders (frame + crop, about 2560 MiB per card)' in done.stdout

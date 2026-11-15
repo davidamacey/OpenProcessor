@@ -59,8 +59,11 @@ ONNX_OPSET_VERSION = 17
 DEFAULT_MAX_BATCH = max_batch('pe_image_encoder', 32)
 # GPU memory of one warm instance at max batch, with headroom (gpu plan and the installer read it).
 PE_GPU_MIB_PER_INSTANCE = 1536
-# The crop encoder (224 input), measured: 750 MiB of model-server device memory, rounded up to 256.
-PE_CROP_GPU_MIB_PER_INSTANCE = 768
+# The crop encoder by its input size. 224 is measured: 750 MiB of model-server device memory,
+# rounded up to 256. 336 is an upper estimate (the model alone is 929 MiB against 735 at 224, plus
+# the same activations) pending a measurement on the model server. Three readers keep the table:
+# this one, scripts/lib/cli_gpu.sh and setup-openprocessor.sh (a test keeps them equal).
+PE_CROP_GPU_MIB_PER_INSTANCE = {224: 768, 336: 1024}
 
 # Triton platform identifiers for the two serving paths.
 TRT_PLATFORM = 'tensorrt_plan'

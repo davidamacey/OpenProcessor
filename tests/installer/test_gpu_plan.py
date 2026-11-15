@@ -449,3 +449,38 @@ def test_the_full_threshold_is_the_models_plus_the_working_engine() -> None:
     full = _profile_json('full')
     need = 17408 + _engine_mib(full['frame_engine_region_mib'], full['frame_engine_pool_mib'])
     assert need <= floor_mib
+
+
+@pytest.mark.parametrize('size', ['', '224'])
+@pytest.mark.parametrize('total_mib', [10240, 11008, 12288])
+def test_the_default_crop_size_keeps_curation_on_a_10_to_12gb_card(
+    size: str, total_mib: int
+) -> None:
+    rc, kv, _ = plan([(0, total_mib, 0)], '', f'crop_size={size}')
+    assert rc == 0
+    assert kv['recommended_tiers'] == 'core,curation'
+
+
+@pytest.mark.parametrize('total_mib', [10240, 11008, 12288])
+def test_the_336_crop_encoder_costs_a_gb_and_a_10_to_12gb_card_loses_the_curation_tier(
+    total_mib: int,
+) -> None:
+    """Frame 1536 + crop 1024 MiB is 3 GB in the whole-GB gate (2 GB at 224): the honest outcome
+    is that these cards recommend core only and refuse an explicit curation request."""
+    rc, kv, _ = plan([(0, total_mib, 0)], '', 'crop_size=336')
+    assert rc == 0
+    assert kv['recommended_tiers'] == 'core'
+    rc, kv, _ = plan([(0, total_mib, 0)], 'core curation', 'crop_size=336')
+    assert rc == 1
+
+
+@pytest.mark.parametrize('total_gb', [16, 24, 48])
+def test_the_336_crop_encoder_changes_no_tier_on_a_16gb_or_larger_card(total_gb: int) -> None:
+    same = plan([(0, gb(total_gb), 0)], '', 'crop_size=224')[1]['recommended_tiers']
+    assert plan([(0, gb(total_gb), 0)], '', 'crop_size=336')[1]['recommended_tiers'] == same
+
+
+def test_an_unsupported_crop_size_refuses_the_plan() -> None:
+    rc, kv, _ = plan([(0, gb(24), 0)], '', 'crop_size=300')
+    assert rc == 1
+    assert 'PE_CROP_SIZE must be 224 or 336' in kv['refuse']

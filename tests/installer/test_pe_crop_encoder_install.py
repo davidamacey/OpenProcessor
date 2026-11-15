@@ -351,11 +351,22 @@ def test_a_size_in_the_shell_beats_env_in_models_install(tmp_path: Path, bash) -
     assert 'pe_crop_size=[336]' in out
 
 
-def test_the_installer_hands_the_env_crop_size_to_the_model_setup() -> None:
+def test_the_installer_reads_the_crop_size_from_env_through_read_env_var(
+    tmp_path: Path, bash
+) -> None:
+    env = tmp_path / '.env'
+    env.write_text('OTHER=1\nPE_CROP_SIZE=336\n')
+    out = bash(
+        f'OP_SOURCE_ONLY=1 source "{REPO_ROOT / "setup-openprocessor.sh"}"; ENV_FILE="{env}"; '
+        'echo "env=[$(crop_size_setting)]"; PE_CROP_SIZE=224; echo "shell=[$(crop_size_setting)]"; '
+        f'unset PE_CROP_SIZE; ENV_FILE="{tmp_path}/none"; echo "none=[$(crop_size_setting)]"'
+    ).stdout
+    assert out.split() == ['env=[336]', 'shell=[224]', 'none=[]']
+
+
+def test_the_installer_exports_the_size_before_the_model_setup_runs() -> None:
     text = (REPO_ROOT / 'setup-openprocessor.sh').read_text()
-    assert re.search(
-        r'PE_CROP_SIZE="\$\{PE_CROP_SIZE:-\$\(read_env_var "\$ENV_FILE" PE_CROP_SIZE', text
-    )
-    assert text.index('export PE_CROP_SIZE') < text.index(
+    assert text.index('PE_CROP_SIZE="$(crop_size_setting)"') < text.index(
         'model_setup_run_groups "$SELECTED_TIERS"'
     )
+    assert 'export PE_CROP_SIZE' in text

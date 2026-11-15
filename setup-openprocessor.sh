@@ -755,8 +755,34 @@ _frame_engine_sizes_for_profile() {
 # _plan_refuse N MSG: the two lines every impossible plan prints; always returns 1.
 _plan_refuse() { echo "gpu_count=$1"; echo "refuse=$2"; return 1; }
 
+# pe_crop_mib SIZE: the planning MiB of one crop encoder instance at PE_CROP_SIZE SIZE (empty is
+# the default 224); returns 1 for any other size. export/pe_image_constants.py and
+# scripts/lib/cli_gpu.sh hold the same table (a test keeps them equal).
+PE_FRAME_MIB=1536
+pe_crop_mib() {
+    case "${1:-224}" in
+        224) echo 768 ;;
+        336) echo 1024 ;;
+        *) return 1 ;;
+    esac
+}
+
+# pe_need_gb SIZE: whole GB the PE encoders (frame + crop) need on a card, to the nearest GB with
+# half rounding up: 1536 + 768 = 2304 MiB is 2 GB, 1536 + 1024 = 2560 MiB is 3 GB.
+pe_need_gb() {
+    local crop
+    crop="$(pe_crop_mib "${1:-}")" || return 1
+    echo $(( ((PE_FRAME_MIB + crop) * 2 + 1024) / 2048 ))
+}
+
+# crop_size_setting: the crop encoder's input size, the shell's PE_CROP_SIZE first, else .env's
+# (empty when neither sets it).
+crop_size_setting() {
+    printf '%s' "${PE_CROP_SIZE:-$(read_env_var "$ENV_FILE" PE_CROP_SIZE 2>/dev/null || true)}"
+}
+
 # recommend_plan GPUS TIERS [force=0|1] [vlm_id=ID] [gpu_plan=k=v,...]
-#                [profile=NAME] [remote=0|1]
+#                [profile=NAME] [remote=0|1] [crop_size=224|336]
 # GPUS: "index total_mib used_mib" lines. TIERS: requested closure
 # (space-separated) or "" to recommend. Pure: reads only the VLM catalog.
 # Prints key=value lines; every key at most once, "warn=" may repeat.
@@ -764,7 +790,7 @@ _plan_refuse() { echo "gpu_count=$1"; echo "refuse=$2"; return 1; }
 recommend_plan() {
     local gpus="$1" req_tiers="$2"
     shift 2
-    local force=0 vlm_id="" gpu_plan="" profile_ovr="" remote=0 kv
+    local force=0 vlm_id="" gpu_plan="" profile_ovr="" remote=0 crop_size="" kv
     for kv in "$@"; do
         case "$kv" in
             force=*) force="${kv#force=}" ;;
@@ -772,8 +798,11 @@ recommend_plan() {
             gpu_plan=*) gpu_plan="${kv#gpu_plan=}" ;;
             profile=*) profile_ovr="${kv#profile=}" ;;
             remote=*) remote="${kv#remote=}" ;;
+            crop_size=*) crop_size="${kv#crop_size=}" ;;
         esac
     done
+    pe_need_gb "$crop_size" > /dev/null \
+        || { _plan_refuse 0 "PE_CROP_SIZE must be 224 or 336, got '${crop_size}'"; return 1; }
 
     local -a ids=() tot=() free=() warns=()
     local -A pos=()
@@ -930,9 +959,10 @@ recommend_plan() {
         warns+=("${share_msg}; if an export step reports out of GPU memory, re-run with --gpu-plan triton=<card with >= ${export_floor_gb} GB free> (or --force to keep this placement)")
     fi
 
-    # Frame encoder 1536 MiB plus crop encoder 768 MiB is 2.25 GB; this gate works in whole GB,
-    # and `gpu plan` checks the exact figure in MiB.
-    local tn pe_need=2
+    # Frame encoder 1536 MiB plus the crop encoder (768 MiB at 224, 1024 at 336): this gate works
+    # in whole GB, and `gpu plan` checks the exact figure in MiB.
+    local tn pe_need
+    pe_need="$(pe_need_gb "$crop_size")"
     tn=$(_triton_need_gb "$profile")
 
     # Extra PE encoder GPUs (triton=0+2): each needs room for one instance
@@ -2715,7 +2745,7 @@ do_install() {
     fi
     local remote=0
     [[ -n "$OP_VLM_URL" ]] && remote=1
-    local -a plan_args=("force=${OP_FORCE}" "vlm_id=${OP_VLM_CATALOG_ID}" "gpu_plan=${OP_GPU_PLAN}" "profile=${GPU_PROFILE_FLAG}" "remote=${remote}")
+    local -a plan_args=("force=${OP_FORCE}" "vlm_id=${OP_VLM_CATALOG_ID}" "gpu_plan=${OP_GPU_PLAN}" "profile=${GPU_PROFILE_FLAG}" "remote=${remote}" "crop_size=$(crop_size_setting)")
     if ! plan="$(recommend_plan "$gpus" "$tiers_arg" "${plan_args[@]}")"; then
         print_gpu_plan "$plan"
         die "GPU plan refused: $(plan_get "$plan" refuse)" "$EXIT_GPU"
@@ -2907,7 +2937,7 @@ do_install() {
     API_PORT="$(read_env_var "$ENV_FILE" API_PORT || echo 4603)"
     OP_HEALTH_HOST="$(_health_host)"
     # The crop encoder's input size: the shell's value beats .env (as for the API).
-    PE_CROP_SIZE="${PE_CROP_SIZE:-$(read_env_var "$ENV_FILE" PE_CROP_SIZE || true)}"
+    PE_CROP_SIZE="$(crop_size_setting)"
     export PE_CROP_SIZE
     # shellcheck disable=SC2034
     MODEL_SETUP_TRITON_DIGEST="$TRITON_DIGEST"
