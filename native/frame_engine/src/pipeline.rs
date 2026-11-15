@@ -166,6 +166,15 @@ pub trait Pipeline: Send + Sync + 'static {
         &self,
         photo: Photo,
     ) -> impl Future<Output = Result<PhotoAnswer, PipelineError>> + Send;
+
+    /// After the drain, at a clean stop: give back what outlives the process's photos (the GPU
+    /// pipeline unregisters its region from the model server, then frees it).
+    fn close(self) -> impl Future<Output = ()> + Send
+    where
+        Self: Sized,
+    {
+        async {}
+    }
 }
 
 #[cfg(test)]

@@ -70,6 +70,9 @@ pub struct Settings {
     pub max_message_mib: u32,
     pub drain_seconds: f64,
     pub health_seconds: f64,
+    /// `OP_FRAME_ENGINE_EXPECT_BUS_ID`: the PCI bus id of the card this engine must run on; the
+    /// start is refused on any other (unset: no check).
+    pub expect_bus_id: Option<String>,
 }
 
 /// What an unset variable means, apart from `lanes` (derived from the cores).
@@ -108,6 +111,7 @@ impl Settings {
             max_message_mib: 256,
             drain_seconds: 30.0,
             health_seconds: 2.0,
+            expect_bus_id: None,
         }
     }
 
@@ -156,6 +160,15 @@ impl Settings {
             return refuse(format!(
                 "OP_FRAME_ENGINE_INSTANCE={}: letters, digits and dashes only",
                 repr_str(&instance)
+            ));
+        }
+        let expect_bus_id = env.raw("OP_FRAME_ENGINE_EXPECT_BUS_ID");
+        if let Some(text) = &expect_bus_id
+            && parse_bus_id(text).is_none()
+        {
+            return refuse(format!(
+                "OP_FRAME_ENGINE_EXPECT_BUS_ID={}: a PCI bus id such as 0000:65:00.0",
+                repr_str(text)
             ));
         }
         let crop_max_side: u32 = env.int("OP_FRAME_ENGINE_CROP_MAX_SIDE", 0, 0, 65_535)?;
@@ -249,6 +262,7 @@ impl Settings {
                 0.1,
                 600.0,
             )?,
+            expect_bus_id,
         };
         if s.budget_mib > s.pool_mib {
             return refuse(format!(
@@ -266,6 +280,20 @@ impl Settings {
         }
         Ok(s)
     }
+}
+
+/// A PCI bus id (`domain:bus:device.function`, hex, as CUDA's `0000:65:00.0` and nvidia-smi's
+/// `00000000:65:00.0` write it) as numbers, so the two spellings of one card compare equal.
+pub fn parse_bus_id(text: &str) -> Option<(u32, u8, u8, u8)> {
+    let (domain, rest) = text.trim().split_once(':')?;
+    let (bus, rest) = rest.split_once(':')?;
+    let (device, function) = rest.split_once('.')?;
+    Some((
+        u32::from_str_radix(domain, 16).ok()?,
+        u8::from_str_radix(bus, 16).ok()?,
+        u8::from_str_radix(device, 16).ok()?,
+        u8::from_str_radix(function, 16).ok()?,
+    ))
 }
 
 struct Env<'a>(&'a dyn Fn(&str) -> Option<String>);
@@ -565,6 +593,22 @@ mod tests {
             refusal(&[("OP_FRAME_ENGINE_STAGE_SYNC", "maybe")]),
             "OP_FRAME_ENGINE_STAGE_SYNC='maybe': not a boolean"
         );
+    }
+
+    #[test]
+    fn the_expected_card_is_read_as_numbers_and_a_malformed_one_refuses_the_start() {
+        assert_eq!(parse_bus_id("0000:65:00.0"), Some((0, 0x65, 0, 0)));
+        assert_eq!(
+            parse_bus_id("00000000:65:00.0"),
+            parse_bus_id("0000:65:00.0")
+        );
+        assert_eq!(parse_bus_id("0000:B3:00.1"), Some((0, 0xb3, 0, 1)));
+        assert_ne!(parse_bus_id("0000:17:00.0"), parse_bus_id("0000:65:00.0"));
+        assert!(parse_bus_id("GPU-2").is_none());
+        let s = read(&[("OP_FRAME_ENGINE_EXPECT_BUS_ID", "00000000:65:00.0")]).expect("read");
+        assert_eq!(s.expect_bus_id.as_deref(), Some("00000000:65:00.0"));
+        assert_eq!(read(&[]).expect("read").expect_bus_id, None);
+        assert!(refusal(&[("OP_FRAME_ENGINE_EXPECT_BUS_ID", "card two")]).contains("PCI bus id"));
     }
 
     #[test]

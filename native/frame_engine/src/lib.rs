@@ -8,6 +8,7 @@
 pub mod admission;
 pub mod branches;
 pub mod cores;
+pub mod engine;
 pub mod fault;
 pub mod front;
 pub mod geometry;
