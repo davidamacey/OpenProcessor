@@ -169,6 +169,31 @@ class EmbeddingSpaceError(Exception):
         self.status = status
 
 
+def require_encoder(
+    *,
+    project: str,
+    space_key: str,
+    target: Target,
+    space_model: str | None,
+    served_model: str,
+    status: int = 409,
+) -> None:
+    """Refuse a vector of ``served_model`` for a space registered for ``space_model``.
+
+    The one check every writer, the re-index job and search by picture make before they put a
+    vector of the encoder they hold next to the vectors of a space. There is no migration of
+    vectors of one model into the space of another, so the remedy is a new project.
+    """
+    if space_model == served_model:
+        return
+    msg = (
+        f'project {project}: the {target.value} space {space_key} holds vectors of '
+        f'{space_model!r}, but this encoder makes {target.value} vectors with {served_model!r}; '
+        f'they are not comparable and nothing is migrated: re-ingest the photos into a new project'
+    )
+    raise EmbeddingSpaceError('embedding_model_unavailable', msg, status=status)
+
+
 class EmbeddingSpaceMismatch(Exception):  # noqa: N818 - names the broken invariant, like the plan
     """A query vector of one space was aimed at another space's field.
 

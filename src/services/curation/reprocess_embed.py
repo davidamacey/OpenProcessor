@@ -30,6 +30,7 @@ from PIL import Image, ImageOps
 from src.clients.occ import occ_skip_on_conflict_bulk
 from src.config import get_curation_config
 from src.core.logging import get_logger
+from src.domain.embedding_spaces import Target
 from src.domain.embedding_state import EMBEDDED
 from src.domain.region_boxes import read_boxes
 from src.services.curation.image_serving import is_servable_image_path
@@ -43,6 +44,7 @@ from src.services.curation.region_box_embeddings import (
     write_box_embeddings,
 )
 from src.services.curation.reprocess_gpu_embed import embed_on_gpu
+from src.services.embedding_spaces.encoder_guard import require_encoder_for
 from src.services.embedding_spaces.readers import (
     WriteFields,
     frame_vector_field,
@@ -332,6 +334,9 @@ async def reembed_items(
     ``images``, ``items``, ``crop_written``, ``frame_written``,
     ``region_written`` and ``missing_image`` (path unservable or unreadable).
     """
+    await require_encoder_for(
+        *(t for part, t in (('crop', Target.ITEM), ('region', Target.BOX)) if part in parts)
+    )
     cfg = get_curation_config()
     writes = _Writes(
         'crop' in parts and place_in_clusters, await item_write_fields(), await frame_vector_field()

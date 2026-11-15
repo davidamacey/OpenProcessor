@@ -70,6 +70,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy.exc import OperationalError, TimeoutError as PoolTimeoutError
 
 from src.core.logging import get_logger
+from src.domain.embedding_spaces import Target
 from src.services.curation.ingest_gpu_decode import engine_ready, engine_stage_applies
 from src.services.curation.ingest_helpers import MAX_INGEST_CONCURRENCY
 from src.services.curation.ingest_index import (
@@ -86,6 +87,7 @@ from src.services.curation.ingest_models import (
 )
 from src.services.curation.ingest_stage import StagedPhoto, failed_result, stage_engine, stage_host
 from src.services.curation.ops_metrics import record_ingest_result
+from src.services.embedding_spaces.encoder_guard import require_encoder_for
 from src.utils.task_group import finish_despite_cancel, run_all
 
 
@@ -252,6 +254,7 @@ async def finish_photos(
     """Ingest ``jobs`` and answer one result per job, in order (see the module docstring)."""
     if not jobs:
         return []
+    await require_encoder_for(Target.ITEM)
     use_engine = engine_stage_applies(service)
     ready = await engine_ready(service) if use_engine else False
     flow = _Flow(results=[None] * len(jobs))
