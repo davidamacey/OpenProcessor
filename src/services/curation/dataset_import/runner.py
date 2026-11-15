@@ -83,6 +83,7 @@ class ImportOutcome:
     report: ImportReport
     cancelled: bool = False
     error: str | None = None
+    error_code: str | None = None  # a refusal's own stable code (the job fails with it)
     failed_chunks: list[int] = field(default_factory=list)
     issues: list[dict[str, Any]] = field(default_factory=list)
 
@@ -253,6 +254,7 @@ async def run_import_job(
             outcome.failed_chunks.append(number)
             await ledger.save_report(report, issues=outcome.issues)
             outcome.error = refusal.detail
+            outcome.error_code = refusal.code
             return outcome
         except Exception as exc:
             logger.error('dataset_import_chunk_failed', chunk=number, error=str(exc))

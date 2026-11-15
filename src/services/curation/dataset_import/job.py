@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from src.config.curation_accessors import get_curation_config
+from src.domain.job_failure import JobFailedError
 from src.services.classes.registry import get_class_registry
 from src.services.curation.dataset_import import rows
 from src.services.curation.dataset_import.context import ImportContext
@@ -181,6 +182,8 @@ async def finish(
     """Turn how the loop ended into the job's end: cancel, failure, or the result."""
     if outcome.cancelled:
         return {'import_id': str(record.id), 'cancelled': True}
+    if outcome.error and outcome.error_code:
+        raise JobFailedError(outcome.error_code, outcome.error)
     if outcome.error or outcome.failed_chunks:
         raise ImportRunError(outcome.error or f'chunks failed: {outcome.failed_chunks}')
     if import_ctx.freeze_test and not record.scan.get('freeze_record'):

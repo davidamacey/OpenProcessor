@@ -218,7 +218,8 @@ at read time from the registered spaces and never stored. That project's writers
 refuse with the same `message`: every ingest route (`/ingest/image`, `/ingest/batch`,
 `/ingest/upload`, `/ingest/objects`) answers `409` with
 `{"detail": {"error": "embedding_model_unavailable", "message": ...}}` and stores nothing, and a job that
-writes vectors (reprocess, re-index, dataset import) fails with the same text as its error; a drawn or
+writes vectors (reprocess, re-index, dataset import) ends `failed` with `error_code`
+`embedding_model_unavailable` and the same text as its `error_message`, once, with no retry; a drawn or
 moved box is kept and served `embedding_state: deferred` with it) and the
 detection worker writes no box vectors for it. There is no migration: the
 remedy is a new project.
