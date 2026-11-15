@@ -259,6 +259,77 @@ impl Stream {
             len,
         })
     }
+
+    /// Copy a rectangle of `height` rows of `width_bytes` each, the first at `offset` of `src`
+    /// and the next ones `src_pitch` bytes apart, into the front of pinned host memory with the
+    /// rows packed (`width_bytes` apart): one `cuMemcpy2DAsync` for a crop of a frame, where a
+    /// copy per row or of the whole row band would move many more bytes over the bus
+    /// (https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__MEM.html, `cuMemcpy2DAsync`).
+    /// The bytes are readable through the returned guard once the stream was waited for.
+    pub fn copy_rect_to_pinned<'a>(
+        &'a self,
+        src: &dyn DeviceRange,
+        offset: usize,
+        src_pitch: usize,
+        width_bytes: usize,
+        height: usize,
+        dst: &'a mut PinnedBuf,
+    ) -> Result<PendingCopy<'a>, CudaError> {
+        let len = rect_bytes(src_pitch, width_bytes, height)?;
+        if len > dst.len {
+            return Err(CudaError::invalid(format!(
+                "{len} bytes into a pinned buffer of {}",
+                dst.len
+            )));
+        }
+        let addr = src.checked_addr(offset, rect_span(src_pitch, width_bytes, height)?)?;
+        // SAFETY: all-zero is a valid `CUDA_MEMCPY2D` (null pointers, zero sizes, the zero memory
+        // type); every field the copy reads is set below.
+        let mut copy: sys::CUDA_MEMCPY2D = unsafe { MaybeUninit::zeroed().assume_init() };
+        copy.srcMemoryType = sys::CUmemorytype::CU_MEMORYTYPE_DEVICE;
+        copy.srcDevice = addr;
+        copy.srcPitch = src_pitch;
+        copy.dstMemoryType = sys::CUmemorytype::CU_MEMORYTYPE_HOST;
+        copy.dstHost = dst.ptr.cast::<c_void>();
+        copy.dstPitch = width_bytes;
+        copy.WidthInBytes = width_bytes;
+        copy.Height = height;
+        self.ctx.bind()?;
+        // SAFETY: every source row lies inside a live device allocation (`checked_addr` over the
+        // whole span); the destination is `len` bytes of a live pinned allocation, borrowed
+        // mutably by the guard until the stream was waited for; `copy` lives for the call (the
+        // driver reads the description before it returns).
+        let rc = unsafe { sys::cuMemcpy2DAsync_v2(&copy, self.raw).result() };
+        self.ctx.check("cuMemcpy2DAsync", rc)?;
+        Ok(PendingCopy {
+            stream: self,
+            buf: Some(dst),
+            len,
+        })
+    }
+}
+
+/// The packed bytes of a rectangle; refused when a row is wider than the pitch or it overflows.
+fn rect_bytes(pitch: usize, width_bytes: usize, height: usize) -> Result<usize, CudaError> {
+    if width_bytes > pitch {
+        return Err(CudaError::invalid(format!(
+            "rows of {width_bytes} bytes do not fit a pitch of {pitch}"
+        )));
+    }
+    width_bytes
+        .checked_mul(height)
+        .ok_or_else(|| CudaError::invalid("rectangle size overflows"))
+}
+
+/// The source bytes a rectangle reaches from its first byte: `height - 1` pitches and one row.
+fn rect_span(pitch: usize, width_bytes: usize, height: usize) -> Result<usize, CudaError> {
+    match height {
+        0 => Ok(0),
+        h => pitch
+            .checked_mul(h - 1)
+            .and_then(|n| n.checked_add(width_bytes))
+            .ok_or_else(|| CudaError::invalid("rectangle span overflows")),
+    }
 }
 
 impl Drop for Stream {
@@ -708,5 +779,27 @@ mod tests {
         assert_eq!(r.checked_addr(60, 40), Ok(4156));
         assert!(r.checked_addr(60, 41).is_err());
         assert!(r.checked_addr(usize::MAX, 2).is_err());
+    }
+
+    #[test]
+    fn a_rectangle_reaches_its_last_row_only_and_packs_its_rows() {
+        // three rows of 6 bytes in a frame of 30-byte rows: 2 pitches and one row from the start
+        assert_eq!(rect_span(30, 6, 3), Ok(66));
+        assert_eq!(rect_bytes(30, 6, 3), Ok(18));
+        assert_eq!(rect_span(30, 6, 0), Ok(0));
+        assert!(rect_bytes(5, 6, 1).is_err(), "a row wider than its pitch");
+        assert!(rect_span(usize::MAX, 6, 3).is_err());
+        assert!(rect_bytes(usize::MAX, usize::MAX, 2).is_err());
+        // a crop at offset 60 of a 126-byte range fits exactly; one row more does not
+        let frame = Fake(4096, 126);
+        assert_eq!(
+            frame.checked_addr(60, rect_span(30, 6, 3).expect("span")),
+            Ok(4156)
+        );
+        assert!(
+            frame
+                .checked_addr(60, rect_span(30, 6, 4).expect("span"))
+                .is_err()
+        );
     }
 }
