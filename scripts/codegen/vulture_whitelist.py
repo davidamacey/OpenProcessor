@@ -107,6 +107,10 @@ _.row_security_flags  # src/db/vector_ddl.py; wired by storage steps 2 to 4; ent
 _.role_grants  # src/db/vector_ddl.py; wired by storage steps 2 to 4; entry removed by that lane
 _.ROLE_ATTRIBUTES  # src/db/vector_ddl.py; wired by storage steps 2 to 4; entry removed by that lane
 _.ROLE_SETTINGS  # src/db/vector_ddl.py; wired by storage steps 2 to 4; entry removed by that lane
+_.cascade_tables  # src/services/erasure/catalogue.py; wired by storage steps 2 to 4; entry removed by that lane
+_.vector_delete_statement  # src/services/erasure/catalogue.py; wired by storage steps 2 to 4; entry removed by that lane
+_.NOT_ERASED  # src/services/erasure/catalogue.py; wired by storage steps 2 to 4; entry removed by that lane
+_.DOCUMENT_REFERENCES  # src/services/erasure/catalogue.py; wired by storage steps 2 to 4; entry removed by that lane
 
 # Registered or read by a framework through a name, a decorator or a protocol
 _._on_worker_init  # src/tasks/app.py; connected to Celery's worker_init signal by decorator
