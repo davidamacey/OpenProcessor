@@ -250,6 +250,7 @@ SUMMARY_KEYS = {
     'counts',
     'origin',
     'paused',
+    'encoder_mismatch',
 }
 
 

@@ -191,9 +191,18 @@ def _from_env_derived_vars() -> set[str]:
     return derived
 
 
+def _op_tokens(text: str) -> set[str]:
+    # A name is matched whole: ``PE_CROP_MODEL`` does not contain the name ``OP_MODEL``.
+    return set(re.findall(r'(?<![A-Z0-9_])OP_[A-Z0-9_]*', text))
+
+
 def _env_template_tokens() -> set[str]:
-    text = (REPO_ROOT / 'env.template').read_text()
-    return set(re.findall(r'OP_[A-Z0-9_]*', text))
+    return _op_tokens((REPO_ROOT / 'env.template').read_text())
+
+
+def test_a_name_inside_a_longer_name_is_not_a_token() -> None:
+    text = '# PE_CROP_MODEL=x\n# PE_CROP_SIZE=224\n# OP_REAL=1\n# Pattern: OP_REGION_FIELD_<ATTR>'
+    assert _op_tokens(text) == {'OP_REAL', 'OP_REGION_FIELD_'}
 
 
 def test_every_op_env_var_read_by_code_is_documented_in_env_template() -> None:

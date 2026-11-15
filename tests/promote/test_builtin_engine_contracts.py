@@ -14,6 +14,8 @@ from typing import Any, cast
 import pytest
 from fixtures.job_rows import deployment_session, sql
 
+from src.config.crop_encoder import CROP_ENCODERS
+from src.config.settings import TritonModelConfig
 from src.db.repos import embedding_spaces as spaces_repo
 from src.schemas.models import (
     EncoderInputSpec,
@@ -129,14 +131,32 @@ def test_seeding_twice_inserts_nothing_and_keeps_a_measured_figure(pg) -> None:
 
 @pytest.mark.db
 def test_the_catalogued_encoders_are_available_with_the_seeded_engines(pg) -> None:
+    """One crop engine exists per deployment, built at ``PE_CROP_SIZE``; its seeded contract is
+    that size, so only the catalog row of that size is available. The row of the other size is
+    refused, which keeps a project of that space from being given vectors of this engine."""
     with deployment_session(pg.engine('app')) as session:
         builtin.seed_builtin_engines(session)
     with deployment_session(pg.engine('app')) as session:
         ready = spaces_repo.ready_engine_contracts(session)
+    served_crop_row = CROP_ENCODERS[TritonModelConfig.PE_CROP_SIZE][0]
+    other_crop_rows = {key for key, _ in CROP_ENCODERS.values()} - {served_crop_row}
     for entry in load_catalog():
         wanted = EncoderInputSpec.model_validate(entry.input_spec).image
-        assert wanted == EngineInputContract.model_validate(ready[entry.triton_image_model])  # type: ignore[index]
-        assert availability(cast('Any', entry), ready).available is True, entry.model_key
+        engine = EngineInputContract.model_validate(ready[entry.triton_image_model])  # type: ignore[index]
+        state = availability(cast('Any', entry), ready)
+        if entry.model_key in other_crop_rows:
+            assert wanted != engine, (
+                f'{entry.model_key} is of another size than the seeded {entry.triton_image_model}'
+                f' ({engine.size}); the seeded contract must be the configured size only'
+            )
+            assert not state.available, entry.model_key
+            assert 'differs' in (state.reason or ''), entry.model_key
+        else:
+            assert wanted == engine, (
+                f'{entry.model_key}: catalog image contract {wanted} differs from the seeded '
+                f'{entry.triton_image_model} contract {engine}'
+            )
+            assert state.available is True, entry.model_key
 
 
 @pytest.mark.db

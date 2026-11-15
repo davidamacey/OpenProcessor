@@ -8,6 +8,8 @@ import gc
 import subprocess
 import sys
 import textwrap
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -58,6 +60,41 @@ def test_garbage_collection_without_close_removes_the_directory(scratch: Path, j
     gc.collect()
     assert not _left(scratch)
     if helper_process is not None:  # the leaked helper would otherwise outlive the test
+        helper_process.kill()
+        helper_process.wait(10)
+
+
+def test_no_timer_thread_outlives_a_read_so_nothing_keeps_the_client_alive(
+    scratch: Path, jpeg: bytes, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A cancelled watchdog timer's thread still holds the client (its bound ``_abort``) until it
+    wakes and exits; on a loaded host that is long enough for a collection to miss the client and
+    leave its directory. The read must not return before that thread is gone."""
+    timers: list[threading.Timer] = []
+
+    class SlowToExit(threading.Timer):
+        def run(self) -> None:
+            super().run()
+            time.sleep(0.3)  # a thread the scheduler is slow to finish
+
+    def make_timer(interval: float, function: object) -> threading.Timer:
+        timer = SlowToExit(interval, function)  # type: ignore[arg-type]
+        timers.append(timer)
+        return timer
+
+    monkeypatch.setattr('src.clients.exiftool_client.threading.Timer', make_timer)
+    c = ExifToolClient(timeout_s=20)
+    c.read_bytes(jpeg)
+    assert timers
+    assert not [t for t in timers if t.is_alive()], (
+        'a watchdog timer thread outlived the read and still references the client'
+    )
+    timers.clear()  # each timer references the client through its callback
+    helper_process = c._process()
+    del c
+    gc.collect()
+    assert not _left(scratch)
+    if helper_process is not None:
         helper_process.kill()
         helper_process.wait(10)
 

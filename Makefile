@@ -58,6 +58,9 @@ OPENSEARCH_DASHBOARDS_PORT ?= 4608
 MLFLOW_PORT ?= 4609
 DCGM_PORT ?= 4610
 SEGMENTER_PORT ?= 4611
+# Square the crop encoder's engine is built at (224 or 336); empty leaves the export scripts'
+# own default (224). Read by pe-export-crop and the crop engine build; set in .env or `make PE_CROP_SIZE=336 ...`.
+PE_CROP_SIZE ?=
 
 # Default target
 .DEFAULT_GOAL := help

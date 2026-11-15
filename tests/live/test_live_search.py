@@ -1,5 +1,9 @@
 """Live: semantic search over items the test itself ingests, with the harness's fake Triton.
 
+A stored item is the crop of one detected box of its picture. The query by the whole picture
+and the query by that box are different pictures to the encoder: only the box is the item's own
+pixels, so only it can score near 1.0.
+
 The fake PE image encoder turns a picture's coarse colour layout into its vector, so a picture is
 its own nearest neighbour and a differently coloured one is not. The fake text encoder is a hash
 of the token ids: it cannot read a query, so the text route is checked for its contract (scope,
@@ -44,15 +48,17 @@ def corpus(api: Any, opensearch: Any) -> Iterator[dict[str, Any]]:
         assert count(opensearch, project.items_index) >= 3
         hits = opensearch.post(
             f'/{project.items_index}/_search',
-            json={'size': 50, '_source': ['image_id'], 'query': {'match_all': {}}},
+            json={'size': 50, '_source': ['image_id', 'bbox_norm'], 'query': {'match_all': {}}},
         ).json()['hits']['hits']
         crops: dict[str, list[str]] = {name: [] for name in COLOURS}
+        boxes: dict[str, list[list[float]]] = {name: [] for name in COLOURS}
         for hit in hits:
             for name, image_id in image_ids.items():
                 if hit['_source']['image_id'] == image_id:
                     crops[name].append(hit['_id'])
+                    boxes[name].append(hit['_source']['bbox_norm'])
         assert all(crops.values()), crops
-        yield {'project': project, 'image_ids': image_ids, 'crops': crops}
+        yield {'project': project, 'image_ids': image_ids, 'crops': crops, 'boxes': boxes}
 
 
 def _project(corpus: dict[str, Any]) -> IngestProject:
@@ -106,11 +112,32 @@ def test_image_search_finds_the_same_picture_first(api: Any, corpus: dict[str, A
         assert resp.status_code == 200, resp.text
         page = resp.json()
         assert _image_ids(page)[0] == corpus['image_ids'][name], (name, page['items'][:2])
-        # The query is the whole picture and the stored vector is the item's crop of it, so the
-        # best score is high but not 1.0; the other pictures score clearly below it.
+        # The query is the whole picture (letterboxed whole) and the stored vector is the item's
+        # box of it, so the best score is clearly above the other pictures' and below 1.0 (the
+        # exact match is the box query below).
         scores = [item['semantic_score'] for item in page['items']]
-        assert scores[0] > 0.9, scores
-        assert scores[0] > scores[1], scores
+        assert scores[0] > scores[1] + 0.2, scores
+
+
+def test_image_search_by_the_items_own_box_scores_near_one(
+    api: Any, corpus: dict[str, Any]
+) -> None:
+    """The engine encodes the stored item and the API encodes the query; given the same pixels
+    (the picture cut to the item's stored box) the two paths must make the same vector."""
+    project = _project(corpus)
+    for name, rgb in COLOURS.items():
+        (box,) = corpus['boxes'][name]
+        resp = api.post(
+            f'{project.prefix}/search/image',
+            files={'image': (f'{name}.jpg', picture(rgb), 'image/jpeg')},
+            data={'box': ','.join(repr(float(v)) for v in box)},
+            params={'page_size': 10},
+        )
+        assert resp.status_code == 200, resp.text
+        page = resp.json()
+        assert _image_ids(page)[0] == corpus['image_ids'][name], (name, page['items'][:2])
+        scores = [item['semantic_score'] for item in page['items']]
+        assert scores[0] > 0.99, (name, box, scores)
 
 
 def test_image_search_by_a_stored_image_id_and_its_refusals(
