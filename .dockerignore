@@ -138,3 +138,6 @@ benchmarks/results/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Native engine build output
+native/target/

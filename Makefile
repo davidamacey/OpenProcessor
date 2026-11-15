@@ -294,7 +294,7 @@ test-api-health: ## Test API health
 
 .PHONY: test
 test: ## Run the Docker-free pytest suite
-	$(V)/python -m pytest tests/ -q -m 'not live and not families and not db'
+	$(V)/python -m pytest tests/ -q -m 'not live and not families and not db and not native'
 
 .PHONY: test-db
 test-db: ## Run the db tier (needs Docker for the test PostgreSQL, no GPU)

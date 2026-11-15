@@ -15,7 +15,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = yaml.safe_load((ROOT / '.github' / 'workflows' / 'ci.yml').read_text())
 COMPOSE = yaml.safe_load((ROOT / 'docker-compose.yml').read_text())
-OFFLINE_EXPRESSION = "-m 'not live and not families and not db'"
+OFFLINE_EXPRESSION = "-m 'not live and not families and not db and not native'"
 
 
 def _run_text(job: dict) -> str:
@@ -55,4 +55,4 @@ def test_every_offline_pytest_command_excludes_db() -> None:
     selecting = [c for c in commands if '-m families' not in c]
     assert selecting, 'no offline pytest command found'
     for command in selecting:
-        assert "-m 'not live and not families and not db'" in command, command
+        assert "-m 'not live and not families and not db and not native'" in command, command

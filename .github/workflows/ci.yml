@@ -21,6 +21,7 @@ jobs:
       pull-requests: read
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      native: ${{ steps.native.outputs.native }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -34,6 +35,17 @@ jobs:
               - '!docs-site/**'
               - '!**/*.md'
               - '!**/*.mdx'
+      # Its own step: `predicate-quantifier: every` above would make a second filter here
+      # match only files that satisfy all of its patterns.
+      - uses: dorny/paths-filter@v4
+        id: native
+        with:
+          filters: |
+            native:
+              - 'native/**'
+              - 'tests/native/**'
+              - 'contracts/json/frame_engine_*.json'
+              - '.github/workflows/ci.yml'
 
   # Docs-only PRs: the tests that read docs (found by content, so a new one is picked up)
   # and the docs-vs-code check. A push to main still runs the full suite as the backstop.
@@ -66,7 +78,7 @@ jobs:
           mapfile -t files < <(git grep -lE "\.mdx?['\"]|['\"]docs/|docs-site|README|CHANGELOG|CLAUDE\.md" \
             -- 'tests/*.py' ':!tests/live/*' ':!*conftest.py')
           echo "running ${#files[@]} test files"
-          python -m pytest "${files[@]}" -q -n auto --no-cov -m 'not live and not families and not db'
+          python -m pytest "${files[@]}" -q -n auto --no-cov -m 'not live and not families and not db and not native'
 
   # The offline suite in 4 parallel shards (pytest-split, balanced by the committed
   # .test_durations file), each with pytest-xdist across the runner's cores. One job took
@@ -107,7 +119,7 @@ jobs:
 
       - name: Run shard ${{ matrix.group }} of the offline suite
         run: >-
-          python -m pytest tests/ -q -n auto -m 'not live and not families and not db'
+          python -m pytest tests/ -q -n auto -m 'not live and not families and not db and not native'
           --splits 4 --group ${{ matrix.group }} --splitting-algorithm least_duration
           --cov=src --cov=scripts --cov-report=
 
@@ -269,6 +281,75 @@ jobs:
       - name: Run the families tests (family matrix included)
         run: python -m pytest tests/ -q -m families --no-cov --durations=10
 
+  # The native frame engine (native/, plan 17 section 3.1). The cargo hooks of pre-commit run
+  # here, once; the `pre-commit` job below skips them. Toolchain: the version native/rust-toolchain.toml
+  # pins (rustup 1.28 stopped installing it on first use, the documented command installs it
+  # explicitly: https://github.com/rust-lang/rustup/blob/master/CHANGELOG.md). Caches: the cargo
+  # registry and the build output, keyed on the lockfile and the toolchain file
+  # (https://github.com/actions/cache). `cargo install --locked cargo-deny@<pin>` is cached with it.
+  native:
+    name: native (Rust gates, release build, binary tests)
+    needs: changes
+    if: needs.changes.outputs.native == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the pinned toolchain
+        working-directory: native
+        run: |
+          rustup show active-toolchain || rustup toolchain install
+          rustc --version
+          cargo --version
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements-test.txt
+
+      - name: Cache cargo registry, cargo-deny and build output
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin/cargo-deny
+            native/target
+          key: native-${{ runner.os }}-${{ hashFiles('native/Cargo.lock', 'native/rust-toolchain.toml') }}-deny-0.20.2
+          restore-keys: |
+            native-${{ runner.os }}-
+
+      - name: Install cargo-deny
+        run: command -v cargo-deny >/dev/null || cargo install --locked cargo-deny@0.20.2
+
+      - name: Format
+        run: cargo fmt --manifest-path native/Cargo.toml --all -- --check
+
+      - name: Clippy, warnings denied
+        run: cargo clippy --manifest-path native/Cargo.toml --workspace --all-targets --locked -- -D warnings
+
+      - name: Unit tests (no GPU, no network)
+        run: cargo test --manifest-path native/Cargo.toml --workspace --locked
+
+      - name: Licences, bans, sources
+        run: cargo deny --manifest-path native/Cargo.toml check licenses bans sources
+
+      - name: Advisories (RustSec database)
+        run: cargo deny --manifest-path native/Cargo.toml check advisories
+
+      - name: Release build
+        run: cargo build --manifest-path native/Cargo.toml --workspace --release --locked
+
+      - name: Binary tests (tests/native/, marker native)
+        run: |
+          pip install -r requirements-test.txt
+          python -m pytest -m native tests/native/ -q --no-cov
+
   pre-commit:
     name: pre-commit (all hooks)
     runs-on: ubuntu-latest
@@ -340,7 +421,10 @@ jobs:
           restore-keys: |
             mypy-${{ runner.os }}-${{ hashFiles('requirements-test.txt', 'pyproject.toml') }}-
 
+      # The cargo hooks run once, in the `native` job.
       - name: Run all hooks
+        env:
+          SKIP: cargo-fmt,cargo-clippy,cargo-test,cargo-deny,cargo-deny-advisories
         run: pre-commit run --all-files --show-diff-on-failure
 
   changelog:

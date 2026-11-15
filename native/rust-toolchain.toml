@@ -1,0 +1,7 @@
+# Pinned exactly; rustup fetches it on first use from this directory or below
+# (https://rust-lang.github.io/rustup/overrides.html). The builder image of the native engine
+# pins the same version.
+[toolchain]
+channel = "1.99.1"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

@@ -40,18 +40,18 @@ binary path.
 ## Running the offline test suite
 
 ```bash
-# The Docker-free tier: everything except the `live`, `families` and `db` markers (no Docker, no GPU)
-.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live and not families and not db'
+# The Docker-free tier: everything except the `live`, `families`, `db` and `native` markers (no Docker, no GPU)
+.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live and not families and not db and not native'
 
 # With coverage (also run in CI)
-.venv/bin/python -m pytest tests/ -q -m 'not live and not families and not db' --cov=src --cov=scripts \
+.venv/bin/python -m pytest tests/ -q -m 'not live and not families and not db and not native' --cov=src --cov=scripts \
     --cov-report=term-missing:skip-covered
 
 # Import sanity — the loudest, cheapest check; run this first when debugging
 .venv/bin/python -c "import src.main"
 ```
 
-`pyproject.toml`'s `addopts` deselects the `live`, `families` and `db` markers by default, so
+`pyproject.toml`'s `addopts` deselects the `live`, `families`, `db` and `native` markers by default, so
 a plain `pytest tests/` never touches Docker or the network.
 
 ### Test tiers
@@ -61,6 +61,7 @@ a plain `pytest tests/` never touches Docker or the network.
 | Docker-free (the default) | none | nothing | the commands above |
 | `db` | `db` | a PostgreSQL: Docker (testcontainers) or `OP_TEST_DATABASE_URL`; no GPU | `make test-db`, or the two commands below against a server you already have |
 | `live` | `live` | the `docker/test/` harness | `-m live`, see below |
+| `native` | `native` | the release binary of the native frame engine (`cargo build --release --manifest-path native/Cargo.toml --locked`); no GPU, no network | `-m native tests/native/` (CI job `native`) |
 
 A test under `tests/db/`, or one that uses the `pg` fixture, must carry `pytest.mark.db`
 (`pytestmark = pytest.mark.db`); collection stops with an error naming any that does not
@@ -252,7 +253,7 @@ Never add a line to hide a new finding; fix it.
 
 | Guard | Rule |
 |---|---|
-| `check_file_size.py` | File size is a guide to separation of concerns, not a hard cap. Application code (`src`, `models`, `docker`, `export` Python and `frontend/src` `.ts .svelte .js`): 700 to 1000 lines warns and asks for a split by concern, over 1000 fails. Test code (`tests`, `frontend/e2e`, `*.test.ts`): same warning from 700, fails over 1500. `scripts/`, shell, the root CLI and vendored files are out of scope; `CLAUDE.md` is capped at 400. Split by concern when you touch a warned file, never by collapsing lines. A file over the hard cap that is one cohesive concern needs a reviewed `cohesive: <one-line reason>` entry in `scripts/codegen/baselines/file_size.txt`; the baseline only shrinks |
+| `check_file_size.py` | File size is a guide to separation of concerns, not a hard cap. Application code (`src`, `models`, `docker`, `export` Python, `frontend/src` `.ts .svelte .js` and `native` `.rs`): 700 to 1000 lines warns and asks for a split by concern, over 1000 fails. Test code (`tests`, `frontend/e2e`, `*.test.ts`): same warning from 700, fails over 1500. `scripts/`, shell, the root CLI and vendored files are out of scope; `CLAUDE.md` is capped at 400. Split by concern when you touch a warned file, never by collapsing lines. A file over the hard cap that is one cohesive concern needs a reviewed `cohesive: <one-line reason>` entry in `scripts/codegen/baselines/file_size.txt`; the baseline only shrinks |
 | `check_duplication.py` | jscpd clones (12 lines, 100 tokens) over `src`, `scripts`, `frontend/src`; per file pair, baseline only shrinks. Extract a shared function or component instead |
 | `check_frontend_complexity.py` | ESLint `complexity` (15) per function in `frontend/src`, staged files only; baseline only shrinks |
 | `check_layering.py` | routers import services and clients, never the reverse; clients never import services; `src/domain`, `config`, `utils` and `schemas` import neither; only routers import `fastapi`. No baseline: the one permanent exception (the guarded OpenSearch client factory) is listed with its reason in the script |
@@ -273,6 +274,21 @@ Never add a line to hide a new finding; fix it.
 
 The config that makes these work, each guard's baseline and proof recipe, and the pitfalls hit while
 landing them are in [docs/design/engineering_standards.md](docs/design/engineering_standards.md).
+
+## The native engine (Rust)
+
+`native/` is a Cargo workspace (`gpu_frame`, the general GPU parts, and `frame_engine`, the product
+part) pinned to the toolchain in `native/rust-toolchain.toml`
+(plan: [docs/design/v070_rebuild/17_native_engine_plan.md](docs/design/v070_rebuild/17_native_engine_plan.md)).
+Build output goes to `native/target/` or wherever `CARGO_TARGET_DIR` points. Install `cargo-deny`
+once at the version CI uses: `cargo install --locked cargo-deny@0.20.2`. A commit that touches
+`native/` runs `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test` and `cargo deny check
+licenses bans sources` (hooks `cargo-fmt`, `cargo-clippy`, `cargo-test`, `cargo-deny`, each scoped to
+`^native/`); the RustSec advisories check (`cargo-deny-advisories`, needs the network) runs at push.
+CI runs the same gates once in the job `native`, and the `pre-commit` job skips those hooks.
+`Cargo.lock` is committed and every command passes `--locked`. A new dependency's licence must be on
+the allow-list in `native/deny.toml` (each entry is compatible with this repository's
+AGPL-3.0-or-later); a vendored or derived source is listed in `ATTRIBUTION.md`.
 
 ## Commit conventions
 

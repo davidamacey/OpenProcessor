@@ -33,7 +33,7 @@ section 1.
 Create the venv with `python3 -m venv .venv`, then install CPU torch and
 `requirements-test.txt` exactly as CONTRIBUTING.md shows. Do not add
 `requirements.txt` (its `faiss-gpu-cu12` breaks `faiss-cpu`). The offline suite needs no Docker
-and no GPU: `.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live and not families'`.
+and no GPU: `.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live and not families and not native'`.
 
 ## Project overview
 
@@ -64,6 +64,7 @@ at port 4603.
 | `src/config/` | `CurationConfig`, `RegionFields`, `DetectionProfile`, `RegionStatus`, project records and context, job kinds, task routes, retired-env guard |
 | `src/domain/` | Pure rules and field vocabularies shared by clients and services (`region_boxes`, `history`, `embedding_state`, `item_text`, `audit_math`, `ingest_class_sources`); imports only `config` and `utils` |
 | `src/schemas/` | Wire models (`curation/`, `bakeoff/`, `embed`, `ingest`, ...); routers and services import them, they import neither |
+| `native/` | Rust workspace of the native frame engine: `gpu_frame` (general GPU parts), `frame_engine` (product part). Gates: `cargo fmt/clippy/test/deny` hooks scoped to `^native/`, CI job `native` |
 | `scripts/curation/` | Worker entry points, ingest walkers, import client, backfills, `bakeoff/` |
 | `scripts/` | `setup.sh`, `lib/` (shell libraries, VLM catalog reader), `release/`, `codegen/`, `datasets/`, `docs/`, `examples/`, `bench/`, `research/`, `validation/` |
 | `openprocessor`, `setup-openprocessor.sh` | Management CLI and the one-line installer (both bash) |
@@ -260,7 +261,8 @@ are still checked.
 ## Testing
 
 ```bash
-.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live and not families'   # offline suite
+.venv/bin/python -m pytest tests/ -q --no-cov -m 'not live and not families and not native'   # offline suite
+.venv/bin/python -m pytest tests/native/ -q --no-cov -m native   # needs the built native engine binary (no GPU)
 .venv/bin/python tests/test_full_system.py                     # needs the running stack
 .venv/bin/python tests/validate_visual_results.py              # annotated images in test_results/
 ```

@@ -26,6 +26,8 @@ APP_FILES = [
     'docker/x/_probe.py',
     'frontend/src/lib/_probe.ts',
     'frontend/src/lib/_probe.svelte',
+    'native/gpu_frame/src/_probe.rs',
+    'native/frame_engine/src/branches/_probe.rs',
 ]
 TEST_FILES = ['tests/_probe.py', 'frontend/e2e/_probe.py', 'frontend/src/lib/_probe.test.ts']
 OUT_OF_SCOPE = [
@@ -35,6 +37,8 @@ OUT_OF_SCOPE = [
     'frontend/scripts/_probe.mjs',
     'openprocessor',
     'setup-openprocessor.sh',
+    'native/frame_engine/kernels/_probe.cu',
+    'native/Cargo.lock',
 ]
 
 

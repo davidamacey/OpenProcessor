@@ -1,0 +1,16 @@
+[package]
+name = "frame_engine"
+description = "The OpenProcessor frame engine: protocol version 1 over the general gpu_frame crate"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "op-frame-engine"
+path = "src/main.rs"
+
+[lints]
+workspace = true
