@@ -10,7 +10,8 @@ Two files under ``contracts/json/``, read by the native engine and by its contra
   request validation messages, the server's ping interval) is written out here, each pinned to
   the front's behaviour by ``tests/test_frame_engine_contract.py``.
 * ``frame_engine_plan_cases.json``: every plan text of ``frame_engine_plan_cases.py`` with the
-  answer ``parse_plan`` gives (the parsed plan, or the fault).
+  answer ``parse_plan`` gives (the parsed plan, or the fault and, but for ``bad_json``, the message
+  the front sends as the status details).
 
 ``src/domain/frame_engine_wire.py`` stays the one definition. The native parser is compared with it
 on every case.
@@ -218,6 +219,9 @@ def render_plan_cases() -> dict[str, Any]:
             plan = wire.parse_plan(text, has_boxes=has_boxes)
         except wire.EnginePlanError as exc:
             case['fault'] = exc.fault
+            if exc.fault != 'bad_json':
+                # the text of a malformed document is the Python JSON decoder's own wording
+                case['message'] = str(exc)
         else:
             case['parsed'] = json.loads(plan.to_json())
         cases.append(case)

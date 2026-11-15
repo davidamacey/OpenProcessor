@@ -231,6 +231,10 @@ def test_every_plan_fault_has_a_case_and_every_case_is_what_parse_plan_answers()
             with pytest.raises(wire.EnginePlanError) as err:
                 wire.parse_plan(case['plan'], has_boxes=case['has_boxes'])
             assert err.value.fault == case['fault'], case['id']
+            if case['fault'] == 'bad_json':
+                assert 'message' not in case, case['id']
+            else:
+                assert str(err.value) == case['message'], case['id']
         else:
             plan = wire.parse_plan(case['plan'], has_boxes=case['has_boxes'])
             assert case['parsed'] == json.loads(plan.to_json()), case['id']
