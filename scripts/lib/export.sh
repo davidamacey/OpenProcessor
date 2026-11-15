@@ -40,6 +40,8 @@ declare -gA EXPORT_TIMES=(
     ["yolov11_small_trt_end2end"]="5"
     ["scrfd_10g_bnkps"]="3"
     ["arcface_w600k_r50"]="3"
+    ["scrfd_10g_bnkps_uint8"]="3"
+    ["arcface_w600k_r50_uint8"]="3"
     ["mobileclip2_s2_image_encoder"]="10"
     ["mobileclip2_s2_text_encoder"]="5"
     ["paddleocr_det_trt"]="10"
@@ -88,6 +90,8 @@ unload_models_for_export() {
         "yolov11_small_trt_end2end"
         "scrfd_10g_bnkps"
         "arcface_w600k_r50"
+        "scrfd_10g_bnkps_uint8"
+        "arcface_w600k_r50_uint8"
         "mobileclip2_s2_image_encoder"
         "mobileclip2_s2_text_encoder"
         "paddleocr_det_trt"
@@ -404,6 +408,8 @@ check_exported_models() {
         "yolov11_small_trt_end2end"
         "scrfd_10g_bnkps"
         "arcface_w600k_r50"
+        "scrfd_10g_bnkps_uint8"
+        "arcface_w600k_r50_uint8"
         "mobileclip2_s2_image_encoder"
         "mobileclip2_s2_text_encoder"
         "paddleocr_det_trt"
@@ -433,6 +439,8 @@ all_models_exported() {
         "yolov11_small_trt_end2end"
         "scrfd_10g_bnkps"
         "arcface_w600k_r50"
+        "scrfd_10g_bnkps_uint8"
+        "arcface_w600k_r50_uint8"
         "mobileclip2_s2_image_encoder"
         "mobileclip2_s2_text_encoder"
         "paddleocr_det_trt"
@@ -442,7 +450,7 @@ all_models_exported() {
     )
 
     for model in "${required[@]}"; do
-        if [[ "$model" == scrfd_10g_bnkps || "$model" == arcface_w600k_r50 ]] \
+        if [[ "$model" == scrfd_10g_bnkps* || "$model" == arcface_w600k_r50* ]] \
             && ! model_setup_faces_enabled; then
             continue
         fi

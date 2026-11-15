@@ -29,5 +29,13 @@ def require_faces() -> None:
         raise FacesDisabledError
 
 
+# The frame engine's uint8 builds of the two face models (export_scrfd.py / export_face_recognition.py
+# --uint8): served beside the FP32 pair, so faces off drops them too.
+FRAME_ENGINE_FACE_MODELS = frozenset({'scrfd_10g_bnkps_uint8', 'arcface_w600k_r50_uint8'})
+
+
 def face_model_names() -> frozenset[str]:
-    return frozenset({TritonModelConfig.FACE_DETECT_MODEL, TritonModelConfig.ARCFACE_MODEL})
+    return (
+        frozenset({TritonModelConfig.FACE_DETECT_MODEL, TritonModelConfig.ARCFACE_MODEL})
+        | FRAME_ENGINE_FACE_MODELS
+    )

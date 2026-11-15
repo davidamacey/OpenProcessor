@@ -57,6 +57,13 @@ CROP_EMBEDDINGS = 'crop_embeddings'
 CROP_EMBEDDED = 'crop_embedded'
 BLUR_SUMS = 'blur_sums'
 CROP_JPEGS = 'crop_jpegs'
+FACE_BOXES = 'face_boxes'
+FACE_SCORES = 'face_scores'
+FACE_LANDMARKS = 'face_landmarks'
+FACE_BLUR_SUMS = 'face_blur_sums'
+FACE_OVERFLOW = 'face_overflow'
+FACE_EMBEDDINGS = 'face_embeddings'
+FACE_EMBEDDED = 'face_embedded'
 OCR_QUADS = 'ocr_quads'
 OCR_TEXTS = 'ocr_texts'
 OCR_SCORES = 'ocr_scores'
@@ -80,6 +87,13 @@ OUTPUT_DATATYPES: Mapping[str, str] = {
     CROP_EMBEDDED: 'BOOL',
     BLUR_SUMS: 'INT64',
     CROP_JPEGS: 'BYTES',
+    FACE_BOXES: 'FP32',
+    FACE_SCORES: 'FP32',
+    FACE_LANDMARKS: 'FP32',
+    FACE_BLUR_SUMS: 'INT64',
+    FACE_OVERFLOW: 'INT32',
+    FACE_EMBEDDINGS: 'FP32',
+    FACE_EMBEDDED: 'BOOL',
     OCR_QUADS: 'FP32',
     OCR_TEXTS: 'BYTES',
     OCR_SCORES: 'FP32',
@@ -104,7 +118,7 @@ ENGINE_BRANCHES: tuple[EngineBranch, ...] = cast(
 )
 #: Branches this engine runs; the others in the plan vocabulary answer ``unsupported_branch``.
 BUILT_BRANCHES: frozenset[str] = frozenset(
-    {'detect', 'embed_frame', 'embed_crops', 'derivatives', 'ocr'}
+    {'detect', 'embed_frame', 'embed_crops', 'faces', 'face_embed', 'derivatives', 'ocr'}
 )
 DERIVATIVES = 'derivatives'
 
@@ -112,6 +126,11 @@ BRANCH_OUTPUTS: Mapping[str, tuple[str, ...]] = {
     'detect': (DET_BOXES, DET_SCORES, DET_CLASSES, LETTERBOX, BLUR_SUMS),
     'embed_frame': (WHOLE_EMBEDDING,),
     'embed_crops': (CROP_EMBEDDINGS, CROP_EMBEDDED),
+    # boxes [n, 4] and landmarks [n, 10] (five x, y) in source pixels of the oriented frame, best
+    # score first; blur sums [n, 3] as ``blur_sums``; overflow [1]: faces past ``max_faces``
+    'faces': (FACE_BOXES, FACE_SCORES, FACE_LANDMARKS, FACE_BLUR_SUMS, FACE_OVERFLOW),
+    # vectors [m, dim] of the faces marked in ``face_embedded`` [n] (a degenerate landmark set is not)
+    'face_embed': (FACE_EMBEDDINGS, FACE_EMBEDDED),
     # One row per text line, in reading order: ``ocr_quads`` [n, 8] (x, y of the top-left,
     # top-right, bottom-right, bottom-left corner, pixels of the oriented frame), ``ocr_texts`` [n],
     # ``ocr_scores`` [n] (mean probability of the decoded characters), ``ocr_char_min`` [n] (the
@@ -216,6 +235,27 @@ class EmbedSpec:
 
 
 @dataclass(frozen=True)
+class FaceSpec:
+    """The ``faces`` and ``face_embed`` branches: a SCRFD build (uint8 input ``images``, the nine
+    stride outputs) at ``input_size``, an ArcFace build (uint8 input ``images``) called in chunks
+    of ``batch`` aligned faces. ``coarse`` adds a pass of the whole frame in that square (0: none);
+    ``tile_side`` adds tiles of the frame scaled to that longer side with ``overlap`` input pixels
+    shared (0: none). ``score_min`` and ``nms`` are the detector thresholds; ``max_faces`` caps the
+    faces kept per photo (the rest are counted in ``face_overflow``)."""
+
+    detector: str
+    input_size: int
+    recogniser: str
+    batch: int
+    score_min: float
+    nms: float
+    max_faces: int
+    coarse: int = 0
+    tile_side: int = 0
+    overlap: int = 0
+
+
+@dataclass(frozen=True)
 class OcrSpec:
     """The ``ocr`` branch: a detector build (uint8 BGR ``x``, normalisation in the graph, map
     ``fetch_name_0``) and a recogniser build (uint8 BGR ``x``, arg-max in the graph, ``indices`` and
@@ -253,7 +293,7 @@ class EnginePlan:
     embed_classes: frozenset[int] | None = None
     crops: CropsMode = 'none'
     if_detected: Mapping[str, tuple[int, ...]] = field(default_factory=dict)
-    faces: Mapping[str, Any] | None = None
+    faces: FaceSpec | None = None
     ocr: OcrSpec | None = None
     derivatives: tuple[RenditionSpec, ...] = ()
 
@@ -295,7 +335,19 @@ class EnginePlan:
         if self.if_detected:
             body['if_detected'] = {k: list(v) for k, v in self.if_detected.items()}
         if self.faces is not None:
-            body['faces'] = dict(self.faces)
+            f = self.faces
+            body['faces'] = {
+                'detector': f.detector,
+                'input_size': f.input_size,
+                'recogniser': f.recogniser,
+                'batch': f.batch,
+                'score_min': f.score_min,
+                'nms': f.nms,
+                'max_faces': f.max_faces,
+                'coarse': f.coarse,
+                'tile_side': f.tile_side,
+                'overlap': f.overlap,
+            }
         if self.ocr is not None:
             o = self.ocr
             body['ocr'] = {
@@ -401,6 +453,34 @@ def _embed(raw: Any) -> EmbedSpec:
     )
 
 
+_FACE_FIELDS = frozenset(
+    {'detector', 'input_size', 'recogniser', 'batch', 'score_min', 'nms', 'max_faces', 'coarse',
+     'tile_side', 'overlap'}
+)  # fmt: skip
+
+
+def _faces(raw: Any) -> FaceSpec:
+    f = _obj(raw, 'faces', _FACE_FIELDS)
+    net = _int(_need(f, 'input_size', 'faces.input_size'), 'faces.input_size', 32, 4096)
+    if net % 32:
+        raise EnginePlanError('bad_field', 'faces.input_size')
+    coarse = _int(f.get('coarse', 0), 'faces.coarse', 0, net)
+    if coarse and coarse < 32:
+        raise EnginePlanError('bad_field', 'faces.coarse')
+    return FaceSpec(
+        detector=_str(_need(f, 'detector', 'faces.detector'), 'faces.detector'),
+        input_size=net,
+        recogniser=_str(_need(f, 'recogniser', 'faces.recogniser'), 'faces.recogniser'),
+        batch=_int(_need(f, 'batch', 'faces.batch'), 'faces.batch', 1, 1024),
+        score_min=_float(_need(f, 'score_min', 'faces.score_min'), 'faces.score_min', 0.0, 1.0),
+        nms=_float(_need(f, 'nms', 'faces.nms'), 'faces.nms', 0.0, 1.0),
+        max_faces=_int(_need(f, 'max_faces', 'faces.max_faces'), 'faces.max_faces', 1, 100_000),
+        coarse=coarse,
+        tile_side=_int(f.get('tile_side', 0), 'faces.tile_side', 0, 65_535),
+        overlap=_int(f.get('overlap', 0), 'faces.overlap', 0, net - 1),
+    )
+
+
 _OCR_FIELDS = frozenset(
     {'detector', 'recogniser', 'batch', 'max_lines', 'det_side', 'det_limit', 'det_max_side',
      'det_antialias', 'thresh', 'box_thresh', 'unclip_ratio', 'taps'}
@@ -454,6 +534,14 @@ def _branches(raw: Any) -> tuple[EngineBranch, ...]:
     return tuple(b for b in ENGINE_BRANCHES if b in raw)
 
 
+def _check_settings(plan: EnginePlan, branch: str, settings: object) -> None:
+    """A branch's settings object comes with the branch and only with it."""
+    if plan.runs(branch) and settings is None:
+        raise EnginePlanError('missing_field', branch)
+    if settings is not None and not plan.runs(branch):
+        raise EnginePlanError('bad_field', branch)
+
+
 def _check_dependencies(plan: EnginePlan, *, has_boxes: bool) -> None:
     runs = plan.runs
     if has_boxes and runs('detect'):
@@ -467,10 +555,8 @@ def _check_dependencies(plan: EnginePlan, *, has_boxes: bool) -> None:
         raise EnginePlanError('missing_dependency', 'detect')
     if runs('face_embed') and not runs('faces'):
         raise EnginePlanError('missing_dependency', 'faces')
-    if runs('ocr') and plan.ocr is None:
-        raise EnginePlanError('missing_field', 'ocr')
-    if plan.ocr is not None and not runs('ocr'):
-        raise EnginePlanError('bad_field', 'ocr')
+    _check_settings(plan, 'faces', plan.faces)
+    _check_settings(plan, 'ocr', plan.ocr)
     if runs('detect') and plan.detector is None:
         raise EnginePlanError('missing_field', 'detector')
     if (runs('embed_frame') or runs('embed_crops')) and plan.embed is None:
@@ -503,9 +589,6 @@ def parse_plan(text: str | bytes, *, has_boxes: bool) -> EnginePlan:
     raw_cond = body.get('if_detected', {})
     if not isinstance(raw_cond, dict):
         raise EnginePlanError('bad_field', 'if_detected')
-    faces = body.get('faces')
-    if faces is not None and not isinstance(faces, dict):
-        raise EnginePlanError('bad_field', 'faces')
     derivatives = body.get(DERIVATIVES, [])
     if not isinstance(derivatives, list):
         raise EnginePlanError('bad_field', DERIVATIVES)
@@ -518,7 +601,7 @@ def parse_plan(text: str | bytes, *, has_boxes: bool) -> EnginePlan:
         ),
         crops=cast('CropsMode', crops),
         if_detected={str(k): _class_ids(v, f'if_detected.{k}') for k, v in raw_cond.items()},
-        faces=faces,
+        faces=_faces(body['faces']) if 'faces' in body else None,
         ocr=_ocr(body['ocr']) if 'ocr' in body else None,
         derivatives=_renditions(derivatives),
     )
@@ -570,6 +653,7 @@ __all__ = [
     'EmbedSpec',
     'EnginePlan',
     'EnginePlanError',
+    'FaceSpec',
     'OcrSpec',
     'RenditionSpec',
     'decode_branch_status',

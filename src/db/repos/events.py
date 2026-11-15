@@ -21,7 +21,7 @@ from src.db.models.projects import Project
 
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
     from datetime import timedelta
 
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -112,6 +112,30 @@ async def insert_event_async(
     return await session.run_sync(
         lambda sync: insert_event(sync, project, type, payload, job_id=job_id)
     )
+
+
+async def insert_events_async(
+    session: AsyncSession,
+    project: uuid.UUID | str | None,
+    events: Sequence[tuple[str, Mapping[str, Any]]],
+) -> list[InsertedEvent]:
+    """Insert ``(type, payload)`` rows for one project in ONE statement, in the caller's transaction.
+
+    One ``INSERT ... RETURNING`` with a list of parameter sets: SQLAlchemy's "insertmanyvalues"
+    sends it as multi-row statements (1,000 rows per round trip by default, 2.1 docs, "Insert Many
+    Values" behavior). ``sort_by_parameter_order`` makes the returned ids line up with ``events``.
+    Every payload is size-checked before anything is sent.
+    """
+    if not events:
+        return []
+    for _type, payload in events:
+        _check_size(payload)
+    project_id = await session.run_sync(lambda sync: _resolve_project(sync, project))
+    result = await session.execute(
+        insert(Event).returning(Event.id, sort_by_parameter_order=True),
+        [{'project_id': project_id, 'type': t, 'payload': dict(p)} for t, p in events],
+    )
+    return [InsertedEvent(id=new_id, project_id=project_id) for new_id in result.scalars().all()]
 
 
 # Static statements: the project and global forms differ only in the project filter, and each

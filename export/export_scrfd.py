@@ -39,7 +39,14 @@ import argparse
 import logging
 import sys
 
-from scrfd_constants import MAX_BATCH_SIZE, ONNX_DIR, ONNX_FILENAME, OUTPUT_DIR, TRITON_MODEL_NAME
+from scrfd_constants import (
+    MAX_BATCH_SIZE,
+    ONNX_DIR,
+    ONNX_FILENAME,
+    OUTPUT_DIR,
+    TRITON_MODEL_NAME,
+    UINT8_MODEL_NAME,
+)
 from scrfd_onnx import (
     analyze_onnx,
     benchmark_onnx,
@@ -87,6 +94,10 @@ Examples:
     parser.add_argument('--benchmark', action='store_true', help='Run ONNX benchmark')
     parser.add_argument('--no-fp16', action='store_true', help='Disable FP16')
     parser.add_argument('--max-batch', type=int, default=MAX_BATCH_SIZE, help='Max batch size')
+    parser.add_argument(
+        '--uint8', action='store_true',
+        help=f'Build {UINT8_MODEL_NAME}: uint8 input, normalisation in the graph (frame engine)',
+    )  # fmt: skip
     args = parser.parse_args()
 
     logger.info('=' * 60)
@@ -94,7 +105,7 @@ Examples:
     logger.info('=' * 60)
 
     onnx_path = ONNX_DIR / ONNX_FILENAME
-    plan_dir = OUTPUT_DIR / TRITON_MODEL_NAME / '1'
+    plan_dir = OUTPUT_DIR / (UINT8_MODEL_NAME if args.uint8 else TRITON_MODEL_NAME) / '1'
     plan_path = plan_dir / 'model.plan'
 
     # Step 1: Download ONNX
@@ -126,12 +137,13 @@ Examples:
             plan_path,
             fp16=not args.no_fp16,
             max_batch_size=args.max_batch,
+            uint8=args.uint8,
         )
         if not success:
             return 1
 
         # Step 7: Create Triton config
-        create_triton_config(plan_path, max_batch_size=args.max_batch)
+        create_triton_config(plan_path, max_batch_size=args.max_batch, uint8=args.uint8)
 
     logger.info('')
     logger.info('=' * 60)

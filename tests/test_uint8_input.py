@@ -62,6 +62,26 @@ def _lookup_table(mean: tuple[float, ...], std: tuple[float, ...]) -> np.ndarray
 
 
 class TestAddUint8Input:
+    def test_input_name_renames_only_the_new_uint8_input(self, tmp_path: Path) -> None:
+        """The face models' graphs name their input ``input.1`` / ``input``; the frame engine sends
+        ``images``. Catches a rename that leaves a node reading the old name (the graph would not
+        load) or arithmetic that changes with the name."""
+        src, renamed, kept = tmp_path / 'f.onnx', tmp_path / 'r.onnx', tmp_path / 'k.onnx'
+        _toy_model(src)
+        mean, std = (0.5, 0.5, 0.5), (128 / 255, 128 / 255, 128 / 255)
+        uint8_input.add_uint8_input(src, kept, mean=mean, std=std)
+        m = onnx.load(str(src))
+        m.graph.input[0].name = 'input.1'
+        for node in m.graph.node:
+            node.input[:] = ['input.1' if t == 'images' else t for t in node.input]
+        onnx.save(m, str(src))
+        uint8_input.add_uint8_input(src, renamed, mean=mean, std=std, input_name='images')
+        (inp,) = onnx.load(str(renamed)).graph.input
+        assert inp.name == 'images'
+        assert inp.type.tensor_type.elem_type == TensorProto.UINT8
+        pixels = np.random.default_rng(0).integers(0, 256, (2, 3, 4, 4), dtype=np.uint8)
+        np.testing.assert_array_equal(_run(renamed, pixels), _run(kept, pixels))
+
     def test_input_becomes_uint8_with_name_and_dynamic_batch_kept(self, tmp_path: Path) -> None:
         src, dst = tmp_path / 'f.onnx', tmp_path / 'u.onnx'
         _toy_model(src)

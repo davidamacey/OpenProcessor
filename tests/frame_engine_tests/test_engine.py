@@ -9,6 +9,7 @@ plan leaves out issues no model call and produces no output.
 from __future__ import annotations
 
 import importlib
+import io
 import json
 import sys
 import threading
@@ -32,6 +33,8 @@ FULL_STAGES = {
 }  # fmt: skip
 DETECTOR = {'model': 'det', 'input_size': 640, 'letterbox_fill': 114}
 EMBED = {'model': 'pe', 'size': 16, 'batch': 32}
+FACES = {'detector': 'scrfd', 'input_size': 640, 'recogniser': 'arc', 'batch': 32,
+         'score_min': 0.5, 'nms': 0.4, 'max_faces': 128}  # fmt: skip
 
 
 class _Dev(np.ndarray):
@@ -90,12 +93,30 @@ def _fake_cupy() -> types.ModuleType:
     cp.empty = _empty
     cp.ascontiguousarray = _dev
     cp.asnumpy = np.asarray
+    cp.asarray = lambda a: _dev(np.asarray(a))
+    cp.gathers = 0
+
+    class _RawKernel:
+        """The colour gather on the host: ``table[r*65536 + g*256 + b]`` per pixel, in place."""
+
+        def __init__(self, _src: str, _name: str) -> None:
+            pass
+
+        def __call__(self, _grid: Any, _block: Any, args: tuple[Any, ...]) -> None:
+            cp.gathers += 1
+            frame, n, table = args
+            px = np.asarray(frame).reshape(int(n), 3)
+            idx = px[:, 0].astype(np.int64) * 65536 + px[:, 1].astype(np.int64) * 256 + px[:, 2]
+            px[...] = np.asarray(table).reshape(-1, 3)[idx]
+
+    cp.RawKernel = _RawKernel
     return cp
 
 
 class _Lanes:
     fail_with: Exception | None = None
     seen_streams: list[Any] = []
+    last: Any = None
 
     def __init__(self, **_k: Any) -> None:
         pass
@@ -105,7 +126,8 @@ class _Lanes:
         if _Lanes.fail_with is not None:
             raise _Lanes.fail_with
         rng = np.random.default_rng(len(data))
-        return _dev(rng.integers(0, 256, (H, W, 3), dtype=np.uint8)), 'fake'
+        _Lanes.last = _dev(rng.integers(0, 256, (H, W, 3), dtype=np.uint8))
+        return _Lanes.last, 'fake'
 
 
 class _Kernels:
@@ -120,6 +142,30 @@ class _Kernels:
 
     def lap_sums(self, _frame: Any, rects: list[tuple[int, int, int, int]]) -> np.ndarray:
         return np.arange(2 * len(rects), dtype=np.int64).reshape(-1, 2)
+
+
+class _Warp:
+    """Stands in for the face warp kernel: each aligned crop holds its face's row number."""
+
+    def warp_into(self, _frame: Any, inv: np.ndarray, _taps: np.ndarray, dst: Any) -> None:
+        for k in range(len(inv)):
+            dst[k] = k + 1
+
+
+def _scrfd_answer(n: int, outputs: Any) -> dict[str, Any]:
+    """Nine stride outputs for ``n`` 640 inputs, each holding two faces at stride 32: centres
+    (160, 160) score 0.9 and (384, 320) score 0.8, 128 pixels wide, landmarks in face shape."""
+    out = {}
+    for kind, d in (('score', 1), ('bbox', 4), ('kps', 10)):
+        for st in (8, 16, 32):
+            out[f'{kind}_{st}'] = np.zeros((n, (640 // st) ** 2 * 2, d), np.float32)
+    kps = [-0.7, -0.5, 0.7, -0.5, 0.0, 0.0, -0.5, 0.7, 0.5, 0.7]
+    for (row, col), score in (((5, 5), 0.9), ((10, 12), 0.8)):
+        a = 2 * (row * 20 + col)
+        out['score_32'][:, a, 0] = score
+        out['bbox_32'][:, a] = 2.0
+        out['kps_32'][:, a] = kps
+    return {name: out[name] for name in outputs}
 
 
 class _Transport:
@@ -166,6 +212,8 @@ class _Transport:
             raise self.fail[p.model]
         if p.index in self.fail_call:
             raise self.fail_call[p.index]
+        if p.model == 'scrfd':
+            return _scrfd_answer(p.shape[0], p.outputs)
         if p.model == 'det':
             fused = np.zeros((1, 300, 6), np.float32)
             fused[0, :2] = [[100, 120, 300, 400, 0.9, 1], [320, 320, 600, 600, 0.8, 2]]
@@ -189,7 +237,8 @@ class _Transport:
 def m_needs_cupy(name: str) -> bool:
     """The engine modules that import CuPy at load (re-imported against the stand-in)."""
     return name in ('frame_engine.engine', 'frame_engine.nvjpeg_lanes', 'frame_engine.prep_kernels',
-                    'frame_engine.ocr.kernels') or name.startswith('frame_engine.branches')  # fmt: skip
+                    'frame_engine.colour', 'frame_engine.faces.kernels', 'frame_engine.ocr.kernels'
+                    ) or name.startswith('frame_engine.branches')  # fmt: skip
 
 
 @pytest.fixture
@@ -202,6 +251,7 @@ def eng(monkeypatch: pytest.MonkeyPatch) -> Any:
     mod = importlib.import_module('frame_engine.engine')
     monkeypatch.setattr(mod, 'NvJpegLanes', _Lanes)
     monkeypatch.setattr(mod, 'PrepKernels', _Kernels)
+    monkeypatch.setattr(mod, 'WarpKernel', _Warp)
     monkeypatch.setattr(mod, 'LineWarp', object)
     _Lanes.fail_with = None
     _Lanes.seen_streams = []
@@ -386,26 +436,12 @@ def test_stored_boxes_replace_the_detector(eng: Any) -> None:
     }  # fmt: skip
 
 
-def test_unbuilt_branches_answer_unsupported_and_the_rest_runs(eng: Any) -> None:
-    engine = eng()
-    plan = _plan(['detect', 'faces', 'face_embed'], embed=None, crops='none')
-    r = _run(engine, plan)
-    assert r.status == 'ok'
-    assert r.branches == {
-        'detect': ('ok', ''),
-        'faces': ('error', 'unsupported_branch'),
-        'face_embed': ('error', 'unsupported_branch'),
-    }
-    assert engine.transport.models() == ['det']
-    assert not {'face_boxes', 'face_embeddings', 'derivative_jpegs'} & set(r.outputs)
-
-
 def test_every_reported_name_has_exactly_one_branch_status_entry(eng: Any) -> None:
     engine = eng()
     for plan in (
         _plan(),
         _plan(['embed_frame'], detector=None, crops='none'),
-        _plan(['detect', 'faces', 'face_embed'], embed=None, crops='none'),
+        _plan(['detect', 'faces', 'face_embed'], embed=None, crops='none', faces=FACES),
     ):
         r = _run(engine, plan)
         assert list(r.branches) == sorted(r.branches, key=list(plan.reported()).index)
@@ -970,64 +1006,15 @@ def test_an_unknown_stage_is_refused() -> None:
 # ------------------------------------------------------------------ conditional branches
 
 
-def _face_branches(eng: Any, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    """Stand-ins for the faces lane's branches: ``faces`` (a frame-only call, ``scrfd``) and
-    ``face_embed`` (a call per photo cut from the faces' answer, ``arc``), wired in as built."""
-    from frame_engine.branches.base import Branch, DependencyFailedError
-    from frame_engine.transport import ModelInput
-
-    seen: dict[str, Any] = {'faces': None}
-    x = ModelInput('input.1', 'UINT8', (1, 3, 16, 16))
-
-    class Faces(Branch):
-        status = 'faces'
-
-        def round1(self, photo: Any) -> None:
-            staged = photo.calls.stage(x.nbytes, 'letterbox')
-            self.call = photo.calls.submit(self, 'detect', staged, 'scrfd', x, ('score_8',))
-
-        def settle(self, photo: Any) -> None:
-            seen['faces'] = photo.calls.result(self.call)['score_8']
-
-    class FaceEmbed(Branch):
-        status = 'face_embed'
-        needs = ('faces',)
-
-        def round2(self, photo: Any) -> None:
-            if seen['faces'] is None:
-                raise DependencyFailedError('no faces')
-            staged = photo.calls.stage(x.nbytes, 'embed_crops')
-            self.call = photo.calls.submit(self, 'embed_pe', staged, 'arc', x, ('output',))
-
-        def finish(self, photo: Any) -> None:
-            photo.calls.result(self.call)
-
-    monkeypatch.setattr(wire, 'BUILT_BRANCHES', wire.BUILT_BRANCHES | {'faces', 'face_embed'})
-    real = eng.module.FrameEngine._plan_branches
-
-    def plan_branches(self: Any, plan: Any) -> list[Any]:
-        out = real(self, plan)
-        seen['faces'] = None
-        if plan.runs('faces'):
-            out.append(Faces())
-        if plan.runs('face_embed'):
-            out.append(FaceEmbed())
-        return out
-
-    monkeypatch.setattr(eng.module.FrameEngine, '_plan_branches', plan_branches)
-    return seen
-
-
 def _faces_plan(classes: list[int] | None, branches: list[str] | None = None) -> Any:
     cond = None if classes is None else {'faces': classes}
     return _plan(branches or ['detect', 'faces', 'face_embed'], embed=None, crops='none',
-                 if_detected=cond)  # fmt: skip
+                 faces=FACES, if_detected=cond)  # fmt: skip
 
 
 def test_an_unconditional_faces_branch_goes_out_in_round_one(
     eng: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _face_branches(eng, monkeypatch)
     engine = eng()
     r = _run(engine, _faces_plan(None))
     assert engine.transport.events[:3] == [('commit', 2), ('submit', 'det'), ('submit', 'scrfd')]
@@ -1037,7 +1024,6 @@ def test_an_unconditional_faces_branch_goes_out_in_round_one(
 def test_a_condition_that_holds_runs_the_branch_after_the_detector(
     eng: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _face_branches(eng, monkeypatch)
     engine = eng()
     r = _run(engine, _faces_plan([2, 9]))  # the detector finds classes 1 and 2
     assert r.branches == dict.fromkeys(('detect', 'faces', 'face_embed'), ('ok', ''))
@@ -1053,9 +1039,8 @@ def test_a_conditional_branch_goes_out_before_the_round_two_calls(
 ) -> None:
     """The face call and the crop squares are in flight together: the condition costs one
     detector round, not a third round after the encoder."""
-    _face_branches(eng, monkeypatch)
     engine = eng()
-    plan = _plan(['detect', 'embed_crops', 'faces', 'face_embed'], crops='none',
+    plan = _plan(['detect', 'embed_crops', 'faces', 'face_embed'], crops='none', faces=FACES,
                  if_detected={'faces': [1]})  # fmt: skip
     r = _run(engine, plan)
     assert set(r.branches.values()) == {('ok', '')}
@@ -1067,7 +1052,6 @@ def test_a_conditional_branch_goes_out_before_the_round_two_calls(
 def test_a_condition_that_does_not_hold_is_not_run_with_its_dependents(
     eng: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _face_branches(eng, monkeypatch)
     engine = eng()
     r = _run(engine, _faces_plan([7]))
     assert r.status == 'ok'
@@ -1083,7 +1067,6 @@ def test_a_condition_that_does_not_hold_is_not_run_with_its_dependents(
 def test_a_photo_without_detections_does_not_run_a_conditional_branch(
     eng: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _face_branches(eng, monkeypatch)
     engine = eng()
     real = engine.transport.collect
     engine.transport.collect = lambda p: (
@@ -1099,7 +1082,6 @@ def test_a_failed_detector_fails_the_conditional_branch_and_its_dependents(
 ) -> None:
     from frame_engine.transport import ModelCallError
 
-    _face_branches(eng, monkeypatch)
     engine = eng()
     engine.transport.fail['det'] = ModelCallError('det', 'StatusCode.INTERNAL', 'boom')
     r = _run(engine, _faces_plan([1]))
@@ -1116,7 +1098,6 @@ def test_a_failed_branch_fails_what_needs_it_without_running_it(
 ) -> None:
     from frame_engine.transport import ModelCallError
 
-    _face_branches(eng, monkeypatch)
     engine = eng()
     engine.transport.fail['scrfd'] = ModelCallError('scrfd', 'StatusCode.INTERNAL', 'boom')
     r = _run(engine, _faces_plan(None))
@@ -1214,3 +1195,64 @@ def test_a_plan_without_renditions_pays_nothing_for_them(eng: Any) -> None:
     assert 'derivative_jpegs' not in r.outputs
     assert 'derivatives' not in r.branches
     assert not {'derivative_render', 'derivative_jpeg'} & {s for s, n in _seen(engine).items() if n}
+
+
+# ------------------------------------------------------------------ colour
+
+
+def _tagged_jpeg(icc_name: str) -> bytes:
+    from pathlib import Path
+
+    from PIL import Image
+
+    icc = (Path(__file__).resolve().parents[1] / 'fixtures' / 'icc' / icc_name).read_bytes()
+    buf = io.BytesIO()
+    Image.new('RGB', (W, H), (10, 20, 30)).save(buf, 'JPEG', quality=85, icc_profile=icc)
+    return buf.getvalue()
+
+
+def _colour_counts(engine: Any) -> dict[str, int]:
+    return {
+        s.labels['outcome']: int(s.value)
+        for metric in engine.metrics.colour.collect()
+        for s in metric.samples
+        if s.name.endswith('_total')
+    }
+
+
+def test_a_p3_photo_is_converted_to_srgb_before_any_branch(eng: Any) -> None:
+    from PIL import Image, ImageCms
+
+    engine = eng()
+    data = _tagged_jpeg('DisplayP3-v4.icc')
+    rng = np.random.default_rng(len(data))
+    raw = rng.integers(0, 256, (H, W, 3), dtype=np.uint8)  # what the stand-in decoder returns
+    ref = np.asarray(ImageCms.profileToProfile(
+        Image.fromarray(raw), ImageCms.ImageCmsProfile(io.BytesIO(_icc(data))),
+        ImageCms.ImageCmsProfile(ImageCms.createProfile('sRGB')), outputMode='RGB',
+    ))  # fmt: skip
+    r = _run(engine, data=data)
+    assert r.status == 'ok'
+    assert np.array_equal(np.asarray(_Lanes.last), ref)
+    assert _colour_counts(engine) == {'converted': 1}
+    assert engine.colour.table_bytes == 3 << 24
+
+
+@pytest.mark.parametrize('icc_name', [None, 'colord-sRGB.icc'])
+def test_untagged_and_srgb_photos_are_not_touched(eng: Any, icc_name: str | None) -> None:
+    engine = eng()
+    data = _tagged_jpeg(icc_name) if icc_name else _jpeg()
+    rng = np.random.default_rng(len(data))
+    raw = rng.integers(0, 256, (H, W, 3), dtype=np.uint8)
+    _run(engine, data=data)
+    assert np.array_equal(np.asarray(_Lanes.last), raw)
+    assert (eng.cp.gathers, engine.colour.table_bytes) == (0, 0)
+    assert _colour_counts(engine) == {'srgb': 1}
+
+
+def _icc(data: bytes) -> bytes:
+    from frame_engine.prep_geometry import jpeg_header
+
+    icc = jpeg_header(data).icc
+    assert icc is not None
+    return icc

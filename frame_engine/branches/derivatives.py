@@ -1,5 +1,9 @@
 """Stored renditions (thumbnails) of the resident, already oriented frame: ``plan.derivatives``.
 
+The frame is already in sRGB (``frame_engine/colour.py`` converts a photo tagged with a wide-gamut
+profile before any branch reads it), so every rendition is an sRGB picture and is written as a
+JPEG without a profile, which every viewer reads as sRGB.
+
 The geometry is ``PIL.Image.thumbnail``'s (the long side fits ``side``, the aspect is kept, a
 photo smaller than ``side`` is not enlarged), so a rendition lands on the pixels the CPU thumbnail
 route serves. The pixels are one GPU resample per rendition from the full-resolution frame with

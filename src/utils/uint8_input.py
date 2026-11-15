@@ -21,13 +21,15 @@ def add_uint8_input(
     *,
     mean: tuple[float, float, float] | None = None,
     std: tuple[float, float, float] | None = None,
+    input_name: str | None = None,
 ) -> Path:
     """Write ``output_path``: ``onnx_path`` with a uint8 NCHW input normalized in the graph.
 
     The graph must have exactly one input and it must be float32 (the exporters keep the I/O
     float32 even after an FP16 bake). The input keeps its name and shape (including a dynamic
-    batch). With ``mean`` and ``std`` the pixel becomes ``(v / 255 - mean) / std`` per channel;
-    without them it becomes ``v / 255``.
+    batch) unless ``input_name`` names it (the frame engine sends every input as ``images``).
+    With ``mean`` and ``std`` the pixel becomes ``(v / 255 - mean) / std`` per channel; without
+    them it becomes ``v / 255``.
 
     Raises:
         ValueError: The graph does not have a single float32 input (so it was already converted),
@@ -64,8 +66,9 @@ def add_uint8_input(
         )
         return const_name
 
+    new_name = input_name or name
     steps = [
-        helper.make_node('Cast', [name], [f'{name}__f32'], to=TensorProto.FLOAT),
+        helper.make_node('Cast', [new_name], [f'{name}__f32'], to=TensorProto.FLOAT),
         helper.make_node('Div', [f'{name}__f32', constant('scale', 255.0)], [f'{name}__unit']),
     ]
     last = f'{name}__unit'
@@ -87,7 +90,7 @@ def add_uint8_input(
     for position, node in enumerate(steps):
         graph.node.insert(position, node)
 
-    uint8 = helper.make_tensor_value_info(name, TensorProto.UINT8, None)
+    uint8 = helper.make_tensor_value_info(new_name, TensorProto.UINT8, None)
     uint8.type.tensor_type.shape.CopyFrom(old.type.tensor_type.shape)
     graph.input.remove(old)
     graph.input.insert(0, uint8)
