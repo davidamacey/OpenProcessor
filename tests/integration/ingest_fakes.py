@@ -17,10 +17,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from curation.engine_fakes import Engine
 from fastapi.testclient import TestClient
 from fused_output import GpuDecodeAbsent, fused_tensor
 from PIL import Image
-from tritonclient.utils import InferenceServerException
 
 from src.domain.location_policy import DEFAULT_LOCATION_POLICY
 
@@ -63,11 +63,7 @@ class FakeTritonPool(GpuDecodeAbsent):
         self.batch_sizes: list[int] = []
 
     async def is_model_ready(self, model_name: str) -> bool:
-        return False
-
-    async def load_model(self, model_name: str) -> None:
-        # The GPU image-prep model is not in this fake repository: the CPU decode path runs.
-        raise InferenceServerException(f'{model_name}: not in the repository')
+        return True  # the engine stage asks that the detector and PE encoder are loaded
 
     async def get_model_input_datatype(self, model_name: str) -> str:
         return 'UINT8'
@@ -78,6 +74,16 @@ class FakeTritonPool(GpuDecodeAbsent):
         return FakeInferResult(
             {'output0': fused_tensor([(0.1, 0.1, 0.5, 0.5, 0.95, 0)], net=_NET, batch=batch)}
         )
+
+
+def file_engine() -> Engine:
+    """The frame engine fake for tests that ingest real files: it reads each file's size, and
+    answers class 0 with the PE encoder fake's vector width."""
+    engine = Engine('ok', {})
+    engine.read_sizes = True
+    engine.embed_dim = 2
+    engine.det_class = 0
+    return engine
 
 
 class FakePEEncoder:
@@ -243,6 +249,8 @@ class FakeOpenSearch:
         body: dict[str, Any],
         index: str | None = None,
         _source_excludes: list[str] | None = None,
+        _source_includes: list[str] | None = None,
+        _source: Any = None,
     ) -> dict[str, Any]:
         # Two shapes land here: the {'ids': [...]} shape used directly by
         # this module's own callers, and mget_crops' {'docs': [{'_id':...,
@@ -343,12 +351,13 @@ def curation_app(
     registry: Any = None,
     pe_encoder: Any = None,
     state_dir: Path | None = None,
+    engine: Engine | None = None,
 ) -> Iterator[TestClient]:
     """The real app with the OpenSearch/Triton/PE/registry boundary faked.
 
     ``registry='project'`` leaves the class registry unfaked: each request
     resolves the bound project's own ``class_registry.json``, as in
-    production. ``state_dir`` replaces the shared ``$TMP/op_test_state``."""
+    production. ``engine`` is the fake frame engine (default: :func:`file_engine`). ``state_dir`` replaces the shared ``$TMP/op_test_state``."""
     import src.app.resources as resources_module
     import src.main as main_module
     from src.core.dependencies import get_async_triton, get_opensearch
@@ -386,6 +395,10 @@ def curation_app(
     # lifespan startup below unconditionally (re)builds both -- so these
     # must be patched AFTER entering the TestClient context, not before.
     monkeypatch.setattr(resources_module, 'get_async_triton_pool', lambda: fake_triton)
+    # every photo goes through the frame engine; this one reads each file's size and answers with
+    # the PE encoder fake's vector width
+    frame_engine = engine or file_engine()
+    monkeypatch.setattr(resources_module, 'get_frame_engine_pool', lambda: frame_engine)
     # These tests ingest images written under the system temp dir; declare it
     # the deployment's source root, as a real deployment declares its image
     # store (OP_SOURCE_ROOT), so path-based ingest accepts them.
