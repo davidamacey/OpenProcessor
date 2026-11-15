@@ -125,33 +125,56 @@ def jpeg_end(data: bytes) -> int | None:
         in_scan = marker == 0xDA
 
 
-def route(data: bytes, min_megapixels: float, max_megapixels: float) -> tuple[str, JpegHeader]:
-    """``('gpu', header)`` or ``(reason, header)``: the reason the image stays on the CPU path.
+class Route(NamedTuple):
+    """Where an image is decoded. ``kind`` is ``gpu`` (nvJPEG, ``reason`` empty), ``cpu`` (the host
+    decode of ``frame_engine/host_decode.py``; ``reason`` is one of
+    :data:`src.domain.decode_route.CPU_REASONS`) or ``refused`` (nothing is decoded; ``reason`` is
+    one of :data:`src.domain.decode_route.PREP_STATUSES`)."""
 
-    Fail closed: the GPU decoders return an image for a truncated file, so a JPEG without its
-    end-of-image marker is refused here and the CPU decoder rejects or accepts it as today. A
-    complete JPEG with bytes after the marker goes to the GPU; ``header.end`` is where the
-    decoder's input stops.
+    kind: str
+    reason: str
+    header: JpegHeader
+
+
+def route(data: bytes, min_megapixels: float, max_megapixels: float) -> Route:
+    """Choose the decoder from the header alone.
+
+    nvJPEG takes a baseline, 8-bit, 1- or 3-component JPEG that has its end-of-image marker and is
+    at least ``min_megapixels``; every other readable image goes to the host decode with the first
+    reason that applies. Fail closed: the GPU decoders return an image for a truncated file, so a
+    JPEG without its end-of-image marker is never given to them (the host decode rejects or accepts
+    it as the API's CPU path does). A complete JPEG with bytes after the marker goes to the GPU;
+    ``header.end`` is where the decoder's input stops. Refused without a decode: a JPEG start
+    marker with no readable frame header (``corrupt``) and a baseline JPEG above
+    ``max_megapixels`` (``huge``; the size of an image that goes to the host is checked against
+    the same limit from its header by the engine, before it is decoded).
     """
     h = jpeg_header(data)
-    if h.kind != 'jpeg':
-        return ('not_jpeg' if h.kind == 'other' else 'corrupt'), h
-    if h.lossless or h.precision != 8:
-        return 'precision', h
-    if h.components not in (1, 3):
-        return 'components', h
-    if h.progressive:
-        return 'progressive', h
+    if h.kind == 'corrupt':
+        return Route('refused', 'corrupt', h)
+    if reason := _structural_reason(h):
+        return Route('cpu', reason, h)
     end = jpeg_end(data)
     if end is None:
-        return 'truncated', h
+        return Route('cpu', 'truncated', h)
     h = h._replace(end=end)
     mp = h.width * h.height / 1e6
     if mp < min_megapixels:
-        return 'small', h
+        return Route('cpu', 'small', h)
     if mp > max_megapixels:
-        return 'huge', h
-    return 'gpu', h
+        return Route('refused', 'huge', h)
+    return Route('gpu', '', h)
+
+
+def _structural_reason(h: JpegHeader) -> str:
+    """Why nvJPEG cannot take this file whatever its size, or ``''``."""
+    if h.kind != 'jpeg':
+        return 'not_jpeg'
+    if h.lossless or h.precision != 8:
+        return 'precision'
+    if h.components not in (1, 3):
+        return 'components'
+    return 'progressive' if h.progressive else ''
 
 
 def oriented_size(h: JpegHeader) -> tuple[int, int]:

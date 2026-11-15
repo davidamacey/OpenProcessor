@@ -32,19 +32,28 @@ class OverBudgetError(Exception):
     """A single request needs more bytes than the whole budget."""
 
 
+def _scratch(width: int, height: int, rendition_sides: tuple[int, ...]) -> int:
+    """The float32 scratch of a rendition's horizontal resample pass (every source row at the
+    output width, three channels); renditions run one after the other, so the largest counts."""
+    return max(
+        (height * fit_size(width, height, side)[0] * 12 for side in rendition_sides), default=0
+    )
+
+
 def need_bytes(header: JpegHeader, rendition_sides: tuple[int, ...] = ()) -> int:
     """Bytes the request's frame holds in the shared arena: the HWC uint8 RGB decode, plus the
     re-oriented copy that exists next to it while an EXIF tag other than 1 is applied. A rendition
-    adds the float32 scratch of its horizontal resample pass (every source row at the output
-    width, three channels) once the oriented frame is the only copy; renditions run one after the
-    other, so the largest counts."""
+    adds the scratch of its resample pass once the oriented frame is the only copy."""
     frame = header.width * header.height * 3
     held = frame * (2 if header.orientation != 1 else 1)
     width, height = oriented_size(header)
-    scratch = max(
-        (height * fit_size(width, height, side)[0] * 12 for side in rendition_sides), default=0
-    )
-    return max(held, frame + scratch)
+    return max(held, frame + _scratch(width, height, rendition_sides))
+
+
+def host_need_bytes(width: int, height: int, rendition_sides: tuple[int, ...] = ()) -> int:
+    """The same for a frame decoded on the host: it arrives upright and in sRGB, so the device
+    holds the one frame (no oriented copy next to it), plus a rendition's scratch."""
+    return width * height * 3 + _scratch(width, height, rendition_sides)
 
 
 class ByteBudget:
