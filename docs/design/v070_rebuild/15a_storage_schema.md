@@ -1400,3 +1400,13 @@ allow-list `tests/domain/world_allowed.py`.
 | Q12 text consensus | the fold takes the resolved reader consensus (`MachineText`) as input; the wiring lane moves `region_text.py` consensus into `src/domain/` | 4.3 layer 4 |
 | Q13 class profile | `profile` is `{detector?, detector_version?}` | 3.3 |
 | Q14 phase-5 kinds | not in the catalog until the gallery lane adds them | 3.2 |
+
+### Database lane decisions
+
+Decisions of the database fix lane on 2026-11-15, after the first server run of `0010_storage_record`
+failed at `CREATE SCHEMA vec` (`permission denied for database`).
+
+| Decision | Rule now | Answered in |
+|---|---|---|
+| Placement of the privileged steps | the owner role has no `CREATE` on the database, so the superuser bootstrap (`src/db/roles.py`: `ensure_roles`, `prepare_database`) creates the role `op_vector` (secret `OP_DB_VECTOR_PASSWORD_FILE`), installs `pg_trgm` and, when the image offers it, `vector`, and creates the schema `vec` owned by `op_owner`; `apply_grants` (as the owner) gives `op_vector` `USAGE, CREATE` on `vec` and `REFERENCES (id)` on `projects`; the migration creates none of them, checks them, and fails naming the bootstrap step | 6.1; 12 `0010_storage_record` step 1; 02a 1.5 |
+| `vec` outlives a downgrade | the schema belongs to the bootstrap, so `downgrade()` no longer drops it | 6.1 |
