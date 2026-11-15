@@ -12,8 +12,10 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+bytes.workspace = true
 crossbeam-channel.workspace = true
 cudarc.workspace = true
+libloading.workspace = true
 tokio = { workspace = true, features = ["macros", "sync", "time"] }
 
 [dev-dependencies]
