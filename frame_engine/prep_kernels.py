@@ -14,8 +14,9 @@ squares (int64 atomics): what ``crop_quality.laplacian_var`` reduces, bit for bi
 
 from __future__ import annotations
 
+import functools
 import threading
-from typing import Any
+from typing import Any, NamedTuple
 
 import cupy as cp
 import numpy as np
@@ -53,13 +54,13 @@ extern "C" __global__ void resample_h(
 
 extern "C" __global__ void resample_v(
     const float* tmp, int out_w,
-    const int* ymin, const int* ycnt, const float* wy, int kmax, int out_h,
+    const int* ymin, const int* ycnt, const float* wy, int kmax, int out_h, int ybase,
     unsigned char* dst, long long plane, int row_stride)
 {
     int ox = blockIdx.x * blockDim.x + threadIdx.x;
     int oy = blockIdx.y;
     if (ox >= out_w || oy >= out_h) return;
-    int b = ymin[oy], n = ycnt[oy];
+    int b = ymin[oy] - ybase, n = ycnt[oy];
     const float* w = wy + (size_t)oy * kmax;
     float a0 = 0.f, a1 = 0.f, a2 = 0.f;
     for (int k = 0; k < n; ++k) {
@@ -120,16 +121,74 @@ extern "C" __global__ void lap_sums(
 """
 
 
-#: Filter-weight sets one worker keeps on the device (most are a few KB; a full-frame downscale a
-#: few tens of KB), so all workers together hold tens of MB at most.
-CACHE_KEYS = 1024
+#: Host-side weight sets remembered (``functools.lru_cache``: its documentation promises thread
+#: safety). A set is a few KB (a crop square) to about 200 KB (a Lanczos full-frame rendition).
+WEIGHT_SETS = 2048
+#: Bytes of one worker's staging area for the weights of the resamples it has queued.
+ARENA_BYTES = 2 << 20
+_ALIGN = 16
+
+
+class _Weights(NamedTuple):
+    """One axis's filter, packed as ``first int32[n] | count int32[n] | weights float32[n * kmax]``
+    (the layout the kernels read), plus what the caller needs to size its scratch."""
+
+    blob: np.ndarray
+    n: int
+    kmax: int
+    #: First and one past the last source index any output of this slice reads.
+    lo: int
+    hi: int
+
+
+@functools.lru_cache(maxsize=WEIGHT_SETS)
+def _weights(
+    n_in: int, n_out: int, left: int, take: int, antialias: bool, lanczos: bool
+) -> _Weights:
+    f, c, w = filter_weights(n_in, n_out, antialias=antialias, lanczos=lanczos)
+    f, c, w = f[left : left + take], c[left : left + take], w[left : left + take]
+    blob = np.concatenate([f.view(np.uint8).ravel(), c.view(np.uint8).ravel(),
+                           np.ascontiguousarray(w).view(np.uint8).ravel()])  # fmt: skip
+    return _Weights(blob, int(f.shape[0]), int(w.shape[1]), int(f[0]), int((f + c).max()))
+
+
+class _Arena:
+    """One worker's staging for weights: a pinned host buffer and its device twin, filled front to
+    back. A set is written to the host buffer, copied to the device on the worker's stream
+    (``cudaMemcpyAsync``, https://docs.cupy.dev/en/stable/reference/generated/cupy.cuda.runtime.memcpyAsync.html,
+    which CuPy calls without the interpreter lock) and read there by the kernels queued behind the
+    copy on the same stream. Neither buffer is written again until the stream was waited for: when
+    the buffer is full the worker waits for its stream and starts over at the front."""
+
+    def __init__(self) -> None:
+        self.pinned = cp.cuda.alloc_pinned_memory(ARENA_BYTES)
+        self.host = np.frombuffer(self.pinned, np.uint8, ARENA_BYTES)
+        self.device = cp.empty(ARENA_BYTES, cp.uint8)
+        self.used = 0
+
+    def put(self, blob: np.ndarray) -> int:
+        """The device address of a copy of ``blob`` (valid for kernels queued on this stream until
+        the stream is next waited for by this arena)."""
+        n = blob.nbytes
+        if n > ARENA_BYTES:
+            raise ValueError(f'a weight set of {n} bytes does not fit the {ARENA_BYTES} byte arena')
+        at = -(-self.used // _ALIGN) * _ALIGN
+        stream = cp.cuda.get_current_stream()
+        if at + n > ARENA_BYTES:
+            stream.synchronize()  # queued kernels read the device bytes, queued copies the host ones
+            at = 0
+        self.host[at : at + n] = blob
+        base = int(self.device.data.ptr) + at
+        cp.cuda.runtime.memcpyAsync(
+            base, int(self.pinned.ptr) + at, n, cp.cuda.runtime.memcpyHostToDevice, stream.ptr
+        )
+        self.used = at + n
+        return base
 
 
 class PrepKernels:
-    """One instance serves every worker thread. The filter weights are uploaded per worker: an
-    array uploaded on one worker's stream (an asynchronous copy) is read only by kernels queued on
-    that stream, and the worker's cache is emptied only after its stream was waited for, so no
-    kernel reads weights that are not there yet or were already freed."""
+    """One instance serves every worker thread; each worker stages its weights in its own arena
+    (an array uploaded on one worker's stream is read only by kernels queued on that stream)."""
 
     def __init__(self) -> None:
         mod = cp.RawModule(code=_SRC)
@@ -138,31 +197,11 @@ class PrepKernels:
         self.k_lap = mod.get_function('lap_sums')
         self._local = threading.local()
 
-    def _weights(
-        self, n_in: int, n_out: int, left: int, take: int, antialias: bool, lanczos: bool
-    ) -> tuple[Any, ...]:
-        key = (n_in, n_out, left, take, antialias, lanczos)
-        cache: dict[tuple[int, int, int, int, bool, bool], tuple[Any, ...]] | None
-        cache = getattr(self._local, 'cache', None)
-        if cache is None:
-            cache = self._local.cache = {}
-        hit = cache.get(key)
-        if hit is None:
-            f, c, w = filter_weights(n_in, n_out, antialias=antialias, lanczos=lanczos)
-            f, c, w = f[left : left + take], c[left : left + take], w[left : left + take]
-            hit = (
-                cp.asarray(f),
-                cp.asarray(c),
-                cp.asarray(w),
-                w.shape[1],
-                int(f[0]),
-                int((f + c).max()),
-            )
-            if len(cache) >= CACHE_KEYS:
-                cp.cuda.get_current_stream().synchronize()  # queued kernels may still read them
-                cache.clear()
-            cache[key] = hit
-        return hit
+    def _arena(self) -> _Arena:
+        arena: _Arena | None = getattr(self._local, 'arena', None)
+        if arena is None:
+            arena = self._local.arena = _Arena()
+        return arena
 
     def resample_into(
         self,
@@ -181,23 +220,27 @@ class PrepKernels:
         x0, y0, rw, rh = roi
         ow, oh = size
         left, top, ww, wh = window or (0, 0, ow, oh)
-        fx, cx, wx, kx, _, _ = self._weights(rw, ow, left, ww, antialias, lanczos)
-        fy, cy, wy, ky, y_lo, y_hi = self._weights(rh, oh, top, wh, antialias, lanczos)
-        rows = max(1, y_hi - y_lo)
+        wx = _weights(rw, ow, left, ww, antialias, lanczos)
+        wy = _weights(rh, oh, top, wh, antialias, lanczos)
+        arena = self._arena()
+        px = arena.put(wx.blob)
+        py = arena.put(wy.blob)
+        rows = max(1, wy.hi - wy.lo)
         tmp = cp.empty((rows, ww, 3), dtype=cp.float32)
         self.k_h(
             ((ww + 127) // 128, rows),
             (128,),
-            (frame, np.int32(h_img), np.int32(w_img), np.int32(x0), np.int32(y0 + y_lo), np.int32(rows),
-             fx, cx, wx, np.int32(kx), np.int32(ww), tmp),
+            (frame, np.int32(h_img), np.int32(w_img), np.int32(x0), np.int32(y0 + wy.lo), np.int32(rows),
+             np.int64(px), np.int64(px + 4 * wx.n), np.int64(px + 8 * wx.n), np.int32(wx.kmax), np.int32(ww), tmp),
         )  # fmt: skip
         plane = dst.strides[0] // dst.itemsize
         row_stride = dst.strides[1] // dst.itemsize
+        # the device copy holds source row indices; the scratch starts at row ``wy.lo``
         self.k_v(
             ((ww + 127) // 128, wh),
             (128,),
-            (tmp, np.int32(ww), fy - y_lo, cy, wy, np.int32(ky), np.int32(wh), dst, np.int64(plane),
-             np.int32(row_stride)),
+            (tmp, np.int32(ww), np.int64(py), np.int64(py + 4 * wy.n), np.int64(py + 8 * wy.n),
+             np.int32(wy.kmax), np.int32(wh), np.int32(wy.lo), dst, np.int64(plane), np.int32(row_stride)),
         )  # fmt: skip
 
     def lap_sums(self, frame: Any, rects: list[tuple[int, int, int, int]]) -> Any:
