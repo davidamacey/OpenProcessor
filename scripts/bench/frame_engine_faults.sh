@@ -107,11 +107,11 @@ record() { # a JSON line for one kill or restart
 }
 
 start_loop() { # N: the closed loop of photos in flight, in the background but bounded by timeout
-  local sink=/dev/null
-  ((DRY_RUN)) && sink=/dev/stdout
+  local sink=/dev/null log="$OUT.loops.log"
+  if ((DRY_RUN)); then sink=/dev/stdout log=/dev/null; fi
   run 120 "$LOADGEN" engine --url "$NATIVE_URL" --list "$LIST" --plan-file "$PLAN_FILE" \
     --in-flight "$IN_FLIGHT" --warmup-s 2 --window-s "$((SETTLE_S + 20))" --no-stats --no-gpu \
-    --allow-failures --label "faults:kill$1" --out "$OUT.loops.jsonl" >"$sink" 2>>"$OUT.loops.log" &
+    --allow-failures --label "faults:kill$1" --out "$OUT.loops.jsonl" >"$sink" 2>>"$log" &
   LOOP_PID=$!
 }
 
@@ -180,7 +180,7 @@ restart_once() {
 acquire_hold
 guard_device
 load_gate
-mkdir -p "$(dirname "$OUT")"
+((DRY_RUN)) || mkdir -p "$(dirname "$OUT")"
 if ((!DRY_RUN)); then
   wait_ready "$NATIVE_URL" frame_engine || die "the engine is not ready before the first kill"
   wait_ready "$SERVER_URL" "$DETECTOR" || die "the model server is not ready"
