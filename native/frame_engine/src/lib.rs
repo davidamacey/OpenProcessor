@@ -7,9 +7,11 @@
 
 pub mod admission;
 pub mod cores;
+pub mod health;
 pub mod metrics;
 pub mod pipeline;
 pub mod proto;
 pub mod pyfmt;
 pub mod settings;
+pub mod stub;
 pub mod wire;
