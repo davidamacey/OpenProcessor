@@ -129,6 +129,26 @@ def test_a_stored_secondary_is_resolved_and_absent_otherwise(world: Any) -> None
     assert (secondary.detector_model, secondary.name) == ('cls', 'secondary')
 
 
+def test_the_deployments_secondary_applies_only_while_no_profile_is_active(
+    world: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A project with an active profile has the profile's secondary, none when it names none:
+    the deployment's ``OP_INGEST_SECONDARY_DETECTOR_MODEL`` is not laid under it. So such a
+    project takes the engine stage (``engine_stage_applies``), and only one with no active
+    profile takes the host stage a deployment secondary needs."""
+    from src.services.curation.ingest_detector import project_ingest_profiles
+
+    client, *_ = world
+    monkeypatch.setenv('OP_INGEST_SECONDARY_DETECTOR_MODEL', 'env_secondary')
+    client.get(f'{PROFILES}/active')
+    env = project_ingest_profiles()
+    assert env.source == 'env'
+    assert env.secondary is not None
+    assert env.secondary.detector_model == 'env_secondary'
+    _activate(client, 'plain', 'birds')
+    assert project_ingest_profiles().secondary is None
+
+
 def test_deactivating_returns_to_the_env_profile(world: Any) -> None:
     from src.services.curation.ingest_detector import project_ingest_profiles
 
