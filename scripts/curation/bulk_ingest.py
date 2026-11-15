@@ -237,9 +237,10 @@ def progress_line(run: dict[str, Any]) -> str:
     p = run['progress']
     seen = f'{p["discovered"]}' + ('' if p['discovery_complete'] else '+')
     rate = p['images_per_s_recent'] or p['images_per_s'] or 0.0
+    waiting = f' waiting {p["waiting"]}' if p['waiting'] else ''
     return (
         f'{run["status"]:<22} {p["processed"]}/{seen} '
-        f'ingested {p["ingested"]} duplicate {p["duplicates"]} failed {p["failed"]} '
+        f'ingested {p["ingested"]} duplicate {p["duplicates"]} failed {p["failed"]}{waiting} '
         f'| {rate:.1f} img/s eta {_fmt_eta(p["eta_s"])}'
     )
 

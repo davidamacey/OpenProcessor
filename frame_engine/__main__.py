@@ -59,18 +59,22 @@ def _transport(s: EngineSettings, metrics: EngineMetrics) -> BodyTransport | Cud
     )
 
 
-async def _health(transport: Any, engine: FrameEngine, every: float, stop: asyncio.Event) -> None:
-    """Readiness and re-registration without traffic (a model-server restart); a lost CUDA
-    context stops the process."""
+async def _health(
+    transport: Any, engine: FrameEngine, every: float, stop: asyncio.Event, wake: asyncio.Event
+) -> None:
+    """Readiness and re-registration without traffic (a model-server restart), every ``every``
+    seconds and at once when a call failed (``wake``, set through ``transport.on_suspect``); a lost
+    CUDA context stops the process. ``wake`` is also set by a stop, so the wait ends at once."""
     loop = asyncio.get_running_loop()
     with ThreadPoolExecutor(1, thread_name_prefix='fe-health') as pool:
         while not stop.is_set():
             if engine.lost.is_set():
                 stop.set()
                 return
+            wake.clear()  # a failure during the probe below asks for another one
             await loop.run_in_executor(pool, transport.check)
             try:
-                await asyncio.wait_for(stop.wait(), timeout=every)
+                await asyncio.wait_for(wake.wait(), timeout=every)
             except TimeoutError:
                 continue
 
@@ -95,10 +99,21 @@ async def serve(s: EngineSettings) -> int:
     )
     await server.start()
     stop = asyncio.Event()
+    wake = asyncio.Event()
     loop = asyncio.get_running_loop()
+
+    def stopping() -> None:
+        stop.set()
+        wake.set()
+
     for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(sig, stop.set)
-    health = asyncio.create_task(_health(transport, engine, s.health_seconds, stop))
+        loop.add_signal_handler(sig, stopping)
+
+    def suspect() -> None:  # from a gRPC callback or worker thread
+        loop.call_soon_threadsafe(wake.set)
+
+    transport.on_suspect = suspect
+    health = asyncio.create_task(_health(transport, engine, s.health_seconds, stop, wake))
     logger.info(
         'frame engine serving on %d (transport %s, model server %s)',
         s.port,
