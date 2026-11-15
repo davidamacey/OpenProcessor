@@ -137,6 +137,8 @@ async def test_promote_warm_up_runs_batch_1_and_max_batch_after_the_load_and_cle
             body = json.loads(request.content)['inputs'][0]
             batches.append(body['shape'][0])
             datatypes.append(body['datatype'])
+        if request.url.path.endswith('/ready'):
+            return httpx.Response(400)  # not loaded: no unload is sent
         return httpx.Response(200, json={})
 
     real = httpx.AsyncClient
@@ -150,6 +152,7 @@ async def test_promote_warm_up_runs_batch_1_and_max_batch_after_the_load_and_cle
         status=fake_status, triton_name='op_warm_up_ok', recorder=FakeRecorder(CLASS_MAP)
     )
     assert calls == [
+        '/v2/models/op_warm_up_ok/ready',
         '/v2/repository/models/op_warm_up_ok/load',
         '/v2/models/op_warm_up_ok/infer',
         '/v2/models/op_warm_up_ok/infer',
@@ -170,6 +173,8 @@ async def test_promote_warm_up_failure_keeps_the_cold_flag_and_does_not_fail_the
     from src.services.training import triton_http
 
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith('/ready'):
+            return httpx.Response(400)
         return httpx.Response(500 if request.url.path.endswith('/infer') else 200)
 
     real = httpx.AsyncClient
