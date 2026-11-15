@@ -144,7 +144,27 @@ def test_the_graph_keeps_its_input_connected_to_the_output() -> None:
     assert graph.node[0].input[0] == 'images'
     assert graph.output[0].name in produced
     chain = [n.op_type for n in graph.node]
-    assert chain == ['Slice', 'Cast', 'Mul', 'Reshape', 'Add']
+    assert chain == ['Cast', 'Slice', 'Mul', 'Reshape', 'Add']
+
+
+#: TensorRT operators page for Slice (type T: bool, int4, int8, int32, int64, float8, float16,
+#: float32, bfloat16; no uint8); Cast takes uint8. Mul and Add (ElementWise) and Reshape see
+#: only the float tensors after the Cast.
+UINT8_SAFE_CONSUMERS = {'Cast'}
+
+
+@pytest.mark.parametrize('name', sorted(SPEC))
+def test_no_operator_receives_the_uint8_input_but_the_cast(name: str) -> None:
+    graph = si.null_onnx(SPEC[name]).graph
+    assert [i.type.tensor_type.elem_type for i in graph.input] == [2], 'the model input stays UINT8'
+    uint8 = {i.name for i in graph.input}
+    for node in graph.node:
+        if uint8 & set(node.input):
+            assert node.op_type in UINT8_SAFE_CONSUMERS, node.op_type
+            if node.op_type == 'Cast':
+                assert node.attribute[0].i != 2, 'a cast to uint8 would keep the type'
+        else:
+            continue
 
 
 def test_the_trtexec_command_builds_the_real_models_batch_range() -> None:
@@ -281,6 +301,23 @@ def test_plan_commands_print_by_default_and_run_only_when_asked(
     assert len(printed) == 3
     assert all(line.startswith('definitely-not-installed-trtexec --onnx=') for line in printed)
     assert si.main(['plan-commands', '--runner', 'definitely-not-installed-trtexec', '--run']) == 1
+
+
+def test_the_default_plan_command_mounts_the_stand_in_directory_writable(
+    tmp_path: Path,
+) -> None:
+    for command in si.plan_commands(tmp_path):
+        mounts = [command[i + 1] for i, a in enumerate(command) if a == '-v']
+        assert mounts == [f'{tmp_path.resolve()}:/stand_in'], 'no :ro, so the plan can be written'
+        assert command.index('-v') < command.index('triton-server')
+        assert command.index('triton-server') < command.index('trtexec')
+
+
+def test_serving_still_mounts_the_stand_in_directory_read_only() -> None:
+    compose = (REPO / 'docker' / 'frame-engine-native' / 'compose.n0.yml').read_text()
+    lines = [ln.strip() for ln in compose.splitlines() if ':/stand_in' in ln and 'N0_STAND' in ln]
+    assert lines
+    assert all(ln.endswith(':/stand_in:ro') for ln in lines)
 
 
 def test_names_are_printed_for_the_hold_script(capsys: pytest.CaptureFixture[str]) -> None:

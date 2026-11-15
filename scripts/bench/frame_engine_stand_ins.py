@@ -181,9 +181,11 @@ def capture_config(s: Spec) -> str:
 
 
 def null_onnx(s: Spec) -> ModelProto:
-    """The null model's graph: ``images`` (UINT8, ``[B, 3, S, S]``) -> its first pixel -> FP32 ->
+    """The null model's graph: ``images`` (UINT8, ``[B, 3, S, S]``) -> FP32 -> its first pixel ->
     times zero -> added to the constant answer. TensorRT keeps the input bound because the output
-    depends on it; the answer does not change with it (zero times a finite number)."""
+    depends on it; the answer does not change with it (zero times a finite number). The cast comes
+    first because TensorRT's Slice takes no UINT8 (operators page for Slice: bool, int4, int8,
+    int32, int64, float8, float16, float32, bfloat16); Cast takes it."""
     import numpy as np
     import onnx
     from onnx import TensorProto, helper, numpy_helper
@@ -206,8 +208,8 @@ def null_onnx(s: Spec) -> ModelProto:
         numpy_helper.from_array(answer, 'answer'),
     ]
     nodes = [
-        helper.make_node('Slice', ['images', 'starts', 'ends', 'axes'], ['pixel']),
-        helper.make_node('Cast', ['pixel'], ['pixel_f'], to=TensorProto.FLOAT),
+        helper.make_node('Cast', ['images'], ['images_f'], to=TensorProto.FLOAT),
+        helper.make_node('Slice', ['images_f', 'starts', 'ends', 'axes'], ['pixel_f']),
         helper.make_node('Mul', ['pixel_f', 'zero'], ['nothing']),
         helper.make_node('Reshape', ['nothing', 'batch_shape'], ['nothing_b']),
         helper.make_node('Add', ['nothing_b', 'answer'], [s.output_name]),
@@ -243,15 +245,19 @@ def trtexec_args(s: Spec, repo: str = SERVER_STAND_IN_DIR) -> list[str]:
 
 
 #: How ``export/build_pe_trt.sh`` reaches trtexec: the model server's image carries it. The test
-#: bed's compose file mounts the stand-in repository at ``/stand_in``.
+#: bed's compose file mounts the stand-in repository at ``/stand_in`` read-only (serving only
+#: reads it), so the build run mounts it writable for itself: ``compose run -v`` replaces the
+#: file's mount of the same target. ``{stand_in}`` is the host directory.
 DEFAULT_RUNNER = (
     'docker compose -p op-n0 -f docker/frame-engine-native/compose.n0.yml '
-    'run --rm --no-deps -T triton-server trtexec'
+    'run --rm --no-deps -T -v {stand_in}:/stand_in triton-server trtexec'
 )
+DEFAULT_OUT = Path('artifacts_local/native_engine/n0/stand_in')
 
 
-def plan_commands(runner: str = DEFAULT_RUNNER) -> list[list[str]]:
-    return [[*shlex.split(runner), *trtexec_args(s)] for s in SPECS]
+def plan_commands(out: Path = DEFAULT_OUT, runner: str = DEFAULT_RUNNER) -> list[list[str]]:
+    prefix = shlex.split(runner.replace('{stand_in}', shlex.quote(str(out.resolve()))))
+    return [[*prefix, *trtexec_args(s)] for s in SPECS]
 
 
 def generate(
@@ -291,6 +297,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     gen.add_argument('--detector-instances', type=int, default=2)
     gen.add_argument('--encoder-instances', type=int, default=1)
     cmds = sub.add_parser('plan-commands', help='the trtexec commands that build the null plans')
+    cmds.add_argument('--out', type=Path, default=DEFAULT_OUT, help='the stand-in repository')
     cmds.add_argument('--runner', default=DEFAULT_RUNNER, help='what runs trtexec')
     cmds.add_argument('--run', action='store_true', help="run them (the coordinator's step)")
     sub.add_parser(
@@ -314,7 +321,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.cmd == 'names':
         print(json.dumps(null_names() if args.kind == 'null' else capture_names()))
         return 0
-    for command in plan_commands(args.runner):
+    for command in plan_commands(args.out, args.runner):
         print(shlex.join(command))
         if args.run:
             if shutil.which(command[0]) is None:

@@ -119,6 +119,7 @@ load1() {
 
 load_gate() { # the 1-minute load under the limit, waiting at most LOAD_WAIT_S for it to fall
   local waited=0 now
+  ((DRY_RUN)) && return 0 # a dry run runs nothing, so it waits for nothing
   while :; do
     now=$(load1)
     if awk -v l="$now" -v m="$LOAD_MAX" 'BEGIN { exit !(l < m) }'; then

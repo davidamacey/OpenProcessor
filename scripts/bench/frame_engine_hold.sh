@@ -194,7 +194,7 @@ write_evidence() { # what the paper's tables name: commit, image ids, plan hashe
 }
 
 preflight() {
-  mkdir -p "$OUT_DIR" "$COUNTS" 2>/dev/null || true
+  ((DRY_RUN)) || mkdir -p "$OUT_DIR" "$COUNTS" 2>/dev/null || true
   guard_device
   load_gate
   local arm
@@ -263,7 +263,7 @@ capture_for_arm() { # ARM SET: 50 frames through the capture models, into the ar
 rows_h1() {
   [[ -n "$CAPTURE_DIR" ]] || die "--capture-dir is required for the parity hold"
   local set limit plan load status dir="$OUT_DIR/h1"
-  mkdir -p "$dir" 2>/dev/null || true
+  ((DRY_RUN)) || mkdir -p "$dir" 2>/dev/null || true
   for set in $SETS; do
     case "$set" in coco) limit=200 ;; hires) limit=100 ;; *) limit=0 ;; esac
     for plan in frame ingest; do

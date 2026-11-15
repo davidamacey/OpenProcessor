@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -34,6 +35,9 @@ def bed(tmp_path: Path) -> dict[str, str]:
         'esac\n'
     )
     smi.chmod(0o755)
+    docker = smi.parent / 'docker'  # a real run asks for the containers' ids; nothing else
+    docker.write_text('#!/bin/bash\n[[ "$1" == inspect ]] || exit 99\nprintf "deadbeef\\n"\n')
+    docker.chmod(0o755)
     load = tmp_path / 'loadavg'
     load.write_text('1.50 1.00 1.00 1/100 1\n')
     return {**os.environ, 'PATH': f'{smi.parent}:{os.environ["PATH"]}', 'FE_LOADAVG': str(load)}
@@ -243,11 +247,45 @@ def test_a_process_of_another_tenant_on_the_card_stops_the_hold(
 def test_a_loaded_host_stops_the_hold_after_the_bounded_wait(
     bed: dict[str, str], tmp_path: Path
 ) -> None:
+    # a real run (--locked stands in for having the lock; the load gate is the first thing after
+    # the card checks, so nothing starts)
     Path(bed['FE_LOADAVG']).write_text('23.40 20.00 18.00 3/900 1\n')
-    done = hold('h3', bed, tmp_path, '--load-wait-s', '0')
+    done = subprocess.run(
+        [str(HOLD), '--locked', '--hold-file', str(tmp_path / 'hold'), '--rows', 'h3',
+         '--lists', '/lists', '--out', str(tmp_path / 'out.jsonl'), '--gpu-index', '2',
+         '--gpu-bus-id', BUS, '--load-wait-s', '0'],
+        env=bed, capture_output=True, text=True, timeout=60, check=False,
+    )  # fmt: skip
     assert done.returncode == 1
     assert 'the 1-minute load 23.40 is not under 16' in done.stderr
     assert lines(done.stdout, 'RUN') == []
+
+
+def test_a_dry_run_waits_for_no_load_and_creates_nothing(
+    bed: dict[str, str], tmp_path: Path
+) -> None:
+    Path(bed['FE_LOADAVG']).write_text('23.40 20.00 18.00 3/900 1\n')
+    started = time.monotonic()
+    done = hold('h1', bed, tmp_path)
+    assert done.returncode == 0, done.stderr
+    assert time.monotonic() - started < 10
+    assert lines(done.stdout, 'RUN')
+    assert not (tmp_path / 'out.jsonl.d').exists()
+    assert not (tmp_path / 'hold').exists(), 'the lock file is never opened'
+    assert sorted(p.name for p in tmp_path.iterdir()) == ['bin', 'loadavg']
+
+
+def test_the_fault_hold_dry_run_creates_nothing_either(bed: dict[str, str], tmp_path: Path) -> None:
+    Path(bed['FE_LOADAVG']).write_text('23.40 20.00 18.00 3/900 1\n')
+    out = tmp_path / 'sub' / 'faults.jsonl'
+    done = subprocess.run(
+        [str(FAULTS), '--dry-run', '--hold-file', str(tmp_path / 'h'), '--mode', 'kill', '--kills', '1',
+         '--list', '/l/a.txt', '--plan-file', '/p.json', '--out', str(out),
+         '--gpu-index', '2', '--gpu-bus-id', BUS],
+        env=bed, capture_output=True, text=True, timeout=60, check=False,
+    )  # fmt: skip
+    assert done.returncode == 0, done.stderr
+    assert sorted(p.name for p in tmp_path.iterdir()) == ['bin', 'loadavg']
 
 
 def test_the_fault_hold_kills_the_engine_by_its_exact_name_each_time(

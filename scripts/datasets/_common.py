@@ -9,6 +9,7 @@ Kept here so neither fetcher duplicates network or hashing code.
 from __future__ import annotations
 
 import csv
+import datetime as dt
 import hashlib
 import json
 import logging
@@ -16,6 +17,7 @@ import random
 import time
 import urllib.error
 import urllib.request
+from email.utils import parsedate_to_datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 
@@ -30,6 +32,11 @@ USER_AGENT = 'OpenProcessor-sample-fetcher/1 (+https://github.com/davidamacey/Op
 
 class FetchError(RuntimeError):
     """Raised for anything that should abort the fetch with a clear message."""
+
+
+class MissingUpstreamError(FetchError):
+    """The server no longer has the file (HTTP 404 or 410, RFC 9110 section 15.5): a retry cannot
+    bring it back, so ``download`` gives up at once and the caller decides what a gap costs."""
 
 
 def require_basename(file_name: str) -> str:
@@ -49,13 +56,27 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def _retry_after(value: str) -> float | None:
+    """``Retry-After`` is delay-seconds or an HTTP-date (RFC 9110 section 10.2.3)."""
+    try:
+        return float(value)
+    except ValueError:
+        pass
+    try:
+        when = parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=dt.UTC)
+    return max(0.0, (when - dt.datetime.now(dt.UTC)).total_seconds())
+
+
 def _retry_delay(exc: Exception, attempt: int) -> float:
-    """Seconds to wait before a retry: the server's ``Retry-After`` on 429/503, else backoff."""
+    """Seconds to wait before a retry: the server's ``Retry-After`` on 429/503 (RFC 6585
+    section 4), else backoff."""
     if isinstance(exc, urllib.error.HTTPError) and exc.code in {429, 503}:
-        try:
-            return min(float(exc.headers.get('Retry-After') or 15 * attempt), 300.0)
-        except ValueError:
-            return 15.0 * attempt
+        asked = _retry_after(exc.headers.get('Retry-After') or '')
+        return min(asked if asked is not None else 15.0 * attempt, 300.0)
     return float(min(2**attempt, 10))
 
 
@@ -97,6 +118,10 @@ def download(url: str, dest: Path, *, expected_sha256: str | None = None, retrie
         except (urllib.error.URLError, OSError, FetchError) as exc:
             last_exc = exc
             part.unlink(missing_ok=True)
+            if isinstance(exc, urllib.error.HTTPError) and exc.code in {404, 410}:
+                raise MissingUpstreamError(
+                    f'{url}: HTTP {exc.code}, the server no longer has it'
+                ) from exc
             if attempt < retries:
                 logger.warning('download failed (%s/%s) for %s: %s', attempt, retries, url, exc)
                 time.sleep(_retry_delay(exc, attempt))
