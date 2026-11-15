@@ -12,7 +12,13 @@ from typing import TYPE_CHECKING
 
 from src.domain.claim_kinds import CLASS_DECIDING_KINDS, ActorKind, ClaimKind
 from src.domain.claim_layers import deciding, of_kinds, split_claims
-from src.domain.claim_payloads import ClassSet, HoldoutFrozen, MachineClass
+from src.domain.claim_payloads import (
+    ClassCleared,
+    ClassSet,
+    HiddenOpinion,
+    HoldoutFrozen,
+    MachineClass,
+)
 from src.domain.ingest_class_sources import (
     DETECTOR_CLASS_SOURCE,
     HUMAN_CLASS_SOURCE,
@@ -72,7 +78,7 @@ class ClassDecision:
 
 def chosen_detection(
     detections: tuple[DetectionResult, ...],
-    after: datetime | None = None,
+    hidden: frozenset[tuple[str, int]] = frozenset(),
     before: datetime | None = None,
 ) -> DetectionResult | None:
     """The detection that gives the item its machine box: the newest detector row; an
@@ -80,7 +86,7 @@ def chosen_detection(
     live = [
         d
         for d in detections
-        if (after is None or d.created_at > after) and (before is None or d.created_at <= before)
+        if ('detection', d.analyser_id) not in hidden and (before is None or d.created_at <= before)
     ]
     for kind in ('detector', 'open_vocab', 'import'):
         group = [d for d in live if d.analyser_kind == kind]
@@ -126,23 +132,23 @@ def machine_class(
     settings: FoldSettings,
     registry: RegistrySnapshot,
     *,
-    after: datetime | None = None,
+    hidden: frozenset[tuple[str, int]] = frozenset(),
     before: datetime | None = None,
     precedence: tuple[str, ...] | None = None,
 ) -> ClassDecision:
-    """The first present machine opinion of the precedence order, ignoring every opinion and
-    detection created at or before ``after`` (a person's clear hides only what came before it).
+    """The first present machine opinion of the precedence order, ignoring every result a
+    person's clear hid (``hidden``: source and analyser of each, Q10).
     An opinion row without a class never displaces one with a class; an empty VLM answer is no
     opinion (M17)."""
     order = settings.precedence if precedence is None else precedence
     opinions: dict[str, ClassOpinion] = {
         o.source: o
         for o in inp.opinions
-        if (after is None or o.created_at > after) and (before is None or o.created_at <= before)
+        if (o.source, o.analyser_id) not in hidden and (before is None or o.created_at <= before)
     }
     for position, source in enumerate(order):
         if source == 'detection':
-            det = chosen_detection(inp.detections, after, before)
+            det = chosen_detection(inp.detections, hidden, before)
             if det is not None:
                 return ClassDecision(None, detection_source(det, settings))
             continue
@@ -159,7 +165,7 @@ def machine_class(
                 inp,
                 settings,
                 registry,
-                after=after,
+                hidden=hidden,
                 before=before,
                 precedence=order[position + 1 :],
             )
@@ -233,6 +239,19 @@ def _bound_by_freeze(layer: list[Claim], freeze: Claim) -> list[Claim]:
     return settled + (later if own_import else [])
 
 
+def _hidden_by(clear: Claim) -> frozenset[tuple[str, int]]:
+    payload = clear.payload
+    assert isinstance(payload, ClassCleared)
+    return frozenset((h.source, h.analyser_id) for h in payload.hidden)
+
+
+def present_opinions(inp: ItemInputs) -> tuple[HiddenOpinion, ...]:
+    """Every machine result present now, as a clear records it: what the person cleared."""
+    pairs: set[tuple[str, int]] = {(o.source, o.analyser_id) for o in inp.opinions}
+    pairs |= {('detection', d.analyser_id) for d in inp.detections}
+    return tuple(HiddenOpinion(source=src, analyser_id=aid) for src, aid in sorted(pairs))
+
+
 def decide_class(
     inp: ItemInputs, split: Split, registry: RegistrySnapshot, settings: FoldSettings
 ) -> ClassDecision:
@@ -256,7 +275,7 @@ def decide_class(
     if top is None or top.kind is ClaimKind.CLASS_MOVED:
         return machine_class(inp, settings, registry, before=before)
     if top.kind is ClaimKind.CLASS_CLEARED:
-        return machine_class(inp, settings, registry, after=top.at, before=before)
+        return machine_class(inp, settings, registry, hidden=_hidden_by(top), before=before)
     return _from_claim(top, registry)
 
 
@@ -278,7 +297,7 @@ def _frozen(
         else (None, None)
     )
     vlm = next((o for o in inp.opinions if o.source == 'vlm' and o.proposed_class), None)
-    if mc.source == OPEN_VOCAB_TARGET_CLASS_SOURCE and vlm is not None:
+    if mc.source in (OPEN_VOCAB_TARGET_CLASS_SOURCE, VLM_NEW_CLASS_PENDING) and vlm is not None:
         suggestion = (None, vlm.proposed_class)
     return ClassDecision(
         ref, mc.source, confidence=mc.confidence, suggestion=suggestion, by_freeze=True
@@ -293,8 +312,10 @@ def freeze_machine_class(
     came before it, so the freeze records what is left."""
     split = split_claims(inp.claims)
     top = deciding(of_kinds(split.live, CLASS_DECIDING_KINDS))
-    cleared_at = top.at if top is not None and top.kind is ClaimKind.CLASS_CLEARED else None
-    pick = machine_class(inp, settings, registry, after=cleared_at)
+    hidden = (
+        _hidden_by(top) if top is not None and top.kind is ClaimKind.CLASS_CLEARED else frozenset()
+    )
+    pick = machine_class(inp, settings, registry, hidden=hidden)
     if pick.ref is None or pick.class_source is None:
         return None
     return MachineClass(

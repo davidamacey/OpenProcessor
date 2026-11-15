@@ -84,6 +84,7 @@ def _claims_for_result(
     region_seq: int,
     op_id: str | None,
     every_state: bool,
+    verdict_status: str = 'no_region_visible',
 ) -> list[ClaimDraft]:
     by_id = {b.box_id: b for b in shown}
     drafts: list[ClaimDraft] = []
@@ -92,6 +93,7 @@ def _claims_for_result(
         changes = box_changes(before, box)
         if before is None:
             created = BoxCreated(
+                item_bbox=view.bbox,
                 bbox=box.bbox_norm,
                 state=box.state,
                 text=box.text if box.text_source == 'human' else None,
@@ -102,12 +104,13 @@ def _claims_for_result(
             )
             continue
         if 'bbox' in changes:
-            moved = BoxMoved(bbox=box.bbox_norm, region_seq=region_seq)
+            moved = BoxMoved(item_bbox=view.bbox, bbox=box.bbox_norm, region_seq=region_seq)
             drafts.append(
                 _box_draft(view, box.box_id, before.bbox_norm, ClaimKind.BOX_MOVED, moved, op_id)
             )
         if 'state' in changes or every_state:
             state = BoxStateSet(
+                item_bbox=view.bbox,
                 state=box.state,
                 rejection_reason=box.rejection_reason if box.state == 'rejected' else None,
                 region_seq=region_seq,
@@ -116,7 +119,7 @@ def _claims_for_result(
                 _box_draft(view, box.box_id, box.bbox_norm, ClaimKind.BOX_STATE_SET, state, op_id)
             )
         if 'text' in changes:
-            text = BoxTextSet(text=box.text or '', region_seq=region_seq)
+            text = BoxTextSet(item_bbox=view.bbox, text=box.text or '', region_seq=region_seq)
             drafts.append(
                 _box_draft(view, box.box_id, box.bbox_norm, ClaimKind.BOX_TEXT_SET, text, op_id)
             )
@@ -127,7 +130,7 @@ def _claims_for_result(
             b.box_id,
             b.bbox_norm,
             ClaimKind.BOX_DELETED,
-            BoxDeleted(region_seq=region_seq),
+            BoxDeleted(item_bbox=view.bbox, region_seq=region_seq),
             op_id,
         )
         for b in shown
@@ -135,10 +138,18 @@ def _claims_for_result(
     ]
     if not result:
         verdict = RegionStatusSet(
-            status='no_region_visible', label_source='human', region_seq=region_seq
+            item_bbox=view.bbox,
+            status=verdict_status,
+            label_source='human',
+            region_seq=region_seq,
         )
         drafts.append(human_draft(ClaimKind.REGION_STATUS_SET, view, verdict, op_id=op_id))
     return drafts
+
+
+def _verdict(status: str | None) -> str:
+    """The status a verdict over a set with no box records: the one the person said (Q7)."""
+    return status if status in ('verify_rejected', 'false_positive') else 'no_region_visible'
 
 
 def _write(
@@ -150,12 +161,19 @@ def _write(
     region_seq: int,
     op_id: str | None,
     every_state: bool,
+    verdict_status: str = 'no_region_visible',
 ) -> RegionWrite:
     # An edit that leaves no box proposed closes the set: every box gets a state claim, so the
     # closed set is entirely claims and a later region re-run cannot change what the person saw.
     closes = bool(result) and not any(b.state == 'proposed' for b in result)
     drafts = _claims_for_result(
-        view, shown, result, region_seq=region_seq, op_id=op_id, every_state=every_state or closes
+        view,
+        shown,
+        result,
+        region_seq=region_seq,
+        op_id=op_id,
+        every_state=every_state or closes,
+        verdict_status=verdict_status,
     )
     top = max([box_seq, *(_box_id_number(b.box_id) for b in result)])
     return RegionWrite(drafts, top)
@@ -185,6 +203,7 @@ def put_regions(
         region_seq=region_seq,
         op_id=op_id,
         every_state=whole_set_status is not None,
+        verdict_status=_verdict(whole_set_status),
     )
 
 
@@ -245,6 +264,7 @@ def set_region_status(
         region_seq=region_seq,
         op_id=op_id,
         every_state=True,
+        verdict_status=_verdict(status),
     )
 
 
@@ -287,7 +307,7 @@ def set_geometry(
             b.box_id,
             b.bbox_norm,
             ClaimKind.BOX_DELETED,
-            BoxDeleted(region_seq=region_seq),
+            BoxDeleted(item_bbox=view.bbox, region_seq=region_seq),
             op_id,
         )
         for b in drop

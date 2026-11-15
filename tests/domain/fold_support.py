@@ -41,6 +41,14 @@ REGISTRY = RegistrySnapshot(
         RegistryClass(4, 'van'),
     )
 )
+SOURCE_ANALYSER = {
+    'classifier': 10,
+    'vlm': 20,
+    'assist_propagated': 30,
+    'import_suggestion': 40,
+    'adopted_detector': 50,
+    'open_vocab_target': 60,
+}
 BOX: Box4 = (0.10, 0.10, 0.50, 0.50)
 CROP = 'c1'
 PHOTO = 7
@@ -59,6 +67,7 @@ def detection(
     kind: str = 'detector',
     class_name: str | None = 'car',
     import_id: str | None = None,
+    analyser_id: int = 1,
 ) -> DetectionResult:
     return DetectionResult(
         analyser_kind=kind,  # type: ignore[arg-type]
@@ -68,6 +77,7 @@ def detection(
         created_at=t(at),
         class_name=class_name,
         import_id=import_id,
+        analyser_id=analyser_id,
     )
 
 
@@ -79,6 +89,7 @@ def opinion(
     outcome: str = 'matched',
     **extra: object,
 ) -> ClassOpinion:
+    extra.setdefault('analyser_id', SOURCE_ANALYSER[source])
     return ClassOpinion(
         source=source,  # type: ignore[arg-type]
         analyser_name=PRIMARY if source == 'classifier' else source,

@@ -101,6 +101,8 @@ class DocWorld:
         self.landed_machine_sources: list[str] = []
         self.refused_imports = 0
         self.last_bbox_refused_by_lock = False
+        self.bbox_refused_count = 0
+        self.redetect_log: list[tuple[bool, bool]] = []
         self.last_machine_boxes: list[RegionBox] = []
 
     def _op(self) -> str:
@@ -285,9 +287,15 @@ class DocWorld:
 
     # ----- machine acts ------------------------------------------------------------------
     def act_redetect(self, shift: float) -> None:
+        whole_set = bool(self.doc.get(F.validated)) and self.doc.get(F.verifier) not in (
+            'human',
+            'import',
+        )
+        self.redetect_log.append((not is_locked_item(self.doc, F), whole_set))
         self.last_bbox_refused_by_lock = False
         if is_locked_item(self.doc, F):
             self.last_bbox_refused_by_lock = True
+            self.bbox_refused_count += 1
             return
         x1, y1, x2, y2 = BOX
         box = [x1 + shift, y1 + shift, x2 + shift, y2 + shift]

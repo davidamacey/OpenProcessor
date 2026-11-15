@@ -153,6 +153,14 @@ def test_boxes_match_by_id_then_overlap_and_a_split_matches_nothing() -> None:
     assert match_boxes({'old': [(0.0, 0.0, 0.9, 0.5)]}, split) == {}
 
 
+def test_claims_under_an_old_id_join_the_box_another_group_took_by_id() -> None:
+    # A re-run changed the id of the box a person edited, and they edited it again under the new
+    # id: both groups are that one box, so they must not stand as two.
+    machine = [BoxRef('b3', (0.2, 0.35, 0.45, 0.48))]
+    claimed = {'b3': [(0.15, 0.15, 0.3, 0.3)], 'b1': [(0.2, 0.35, 0.45, 0.48)]}
+    assert match_boxes(claimed, machine) == {'b3': 'b3', 'b1': 'b3'}
+
+
 def test_registry_resolution_follows_the_hint_merges_and_names() -> None:
     reg = RegistrySnapshot(
         (

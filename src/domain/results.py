@@ -121,6 +121,7 @@ class DetectionResult:
     confidence: float | None = None
     proposal_name: str | None = None
     import_id: str | None = None
+    analyser_id: int = 0
 
 
 @dataclass(frozen=True)
@@ -140,6 +141,7 @@ class ClassOpinion:
     empty_reason: str | None = None
     op_id: str | None = None
     import_id: str | None = None
+    analyser_id: int = 0
 
 
 @dataclass(frozen=True)

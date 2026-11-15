@@ -84,7 +84,10 @@ class KindInfo:
     subject_kind: SubjectKind
     layer: Layer
     pins_geometry: bool
-    """R3 pin: the item's box is the box the person saw (fold layer 1)."""
+    """The claim records the item's box the person saw. The item's box is pinned to it only while
+    the item is locked by today's ``is_locked_item`` (a person's or validated import's class,
+    holdout, human or import geometry, a human delete, any human-owned box, a region set a person
+    or an import validated); a clear, a move, a dismissal and a flag never pin (Q11)."""
     asserts_object: bool
     """An unmatched claim creates an item or box from the claim alone; false: it stays dormant."""
 
@@ -106,10 +109,10 @@ KINDS: dict[ClaimKind, KindInfo] = dict(
         _k(ClaimKind.ITEM_DRAWN, _I, Layer.GEOMETRY, pins=True, asserts=True),
         _k(ClaimKind.GEOMETRY_SET, _I, Layer.GEOMETRY, pins=True, asserts=True),
         _k(ClaimKind.CLASS_SET, _I, Layer.CLASS, pins=True, asserts=True),
-        _k(ClaimKind.CLASS_CLEARED, _I, Layer.CLASS, pins=True),
+        _k(ClaimKind.CLASS_CLEARED, _I, Layer.CLASS),
         _k(ClaimKind.CLASS_MOVED, _I, Layer.CLASS),
         _k(ClaimKind.HOLDOUT_FROZEN, _I, Layer.CLASS, pins=True, asserts=True),
-        _k(ClaimKind.EXCLUDED, _I, Layer.FLAG),
+        _k(ClaimKind.EXCLUDED, _I, Layer.FLAG, pins=True),
         _k(ClaimKind.RESTORED, _I, Layer.FLAG),
         _k(ClaimKind.REVIEW_DISMISSED, _I, Layer.FLAG),
         _k(ClaimKind.REVIEW_RESTORED, _I, Layer.FLAG),
@@ -118,12 +121,12 @@ KINDS: dict[ClaimKind, KindInfo] = dict(
         _k(ClaimKind.NEEDS_NEW_CLASS, _I, Layer.FLAG),
         _k(ClaimKind.AUDIT_SAMPLED, _I, Layer.FLAG),
         _k(ClaimKind.COMBINE_CONFLICT, _I, Layer.FLAG),
-        _k(ClaimKind.REGION_STATUS_SET, _I, Layer.REGION),
-        _k(ClaimKind.BOX_CREATED, _B, Layer.BOX, asserts=True),
-        _k(ClaimKind.BOX_MOVED, _B, Layer.BOX, asserts=True),
-        _k(ClaimKind.BOX_STATE_SET, _B, Layer.BOX, asserts=True),
-        _k(ClaimKind.BOX_TEXT_SET, _B, Layer.BOX, asserts=True),
-        _k(ClaimKind.BOX_DELETED, _B, Layer.BOX),
+        _k(ClaimKind.REGION_STATUS_SET, _I, Layer.REGION, pins=True),
+        _k(ClaimKind.BOX_CREATED, _B, Layer.BOX, pins=True, asserts=True),
+        _k(ClaimKind.BOX_MOVED, _B, Layer.BOX, pins=True, asserts=True),
+        _k(ClaimKind.BOX_STATE_SET, _B, Layer.BOX, pins=True, asserts=True),
+        _k(ClaimKind.BOX_TEXT_SET, _B, Layer.BOX, pins=True, asserts=True),
+        _k(ClaimKind.BOX_DELETED, _B, Layer.BOX, pins=True),
         _k(ClaimKind.DUPLICATE_VERDICT, SubjectKind.PAIR, Layer.PAIR),
         _k(ClaimKind.WITHDRAW, SubjectKind.CLAIM, Layer.WITHDRAW),
     )

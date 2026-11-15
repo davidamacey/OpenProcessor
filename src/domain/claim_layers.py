@@ -53,20 +53,28 @@ def of_kinds(claims: Iterable[Claim], kinds: frozenset[ClaimKind] | set[ClaimKin
     return [c for c in claims if c.kind in kinds]
 
 
-def claim_geometry(live: Sequence[Claim]) -> tuple[Box4 | None, Claim | None]:
-    """The box the claims give an item and the claim that gave it (layer 1).
+def seen_item_bbox(claim: Claim) -> Box4 | None:
+    """The item's box the person saw when they made the claim: the subject box of an item claim,
+    the recorded ``item_bbox`` of a box or region claim."""
+    seen = getattr(claim.payload, 'item_bbox', None)
+    return seen if seen is not None else claim.subject.bbox
 
-    A deciding drawn or moved box is the box. Otherwise a pinning claim (a class, a clear or a
-    holdout freeze) pins the box the person saw. ``(None, None)`` leaves it to the machine.
-    """
+
+def claim_geometry(live: Sequence[Claim]) -> tuple[Box4 | None, Claim | None]:
+    """The box a deciding drawn or moved claim gives an item, and that claim (layer 1);
+    ``(None, None)`` leaves the box to the pin or to the machine."""
     geometry = deciding(of_kinds(live, GEOMETRY_KINDS))
-    if geometry is not None and geometry.subject.bbox is not None:
-        box = geometry.payload.bbox if hasattr(geometry.payload, 'bbox') else geometry.subject.bbox
-        return box, geometry
-    pin = deciding(of_kinds(live, PINNING_KINDS))
-    if pin is not None:
-        return pin.subject.bbox, pin
+    if geometry is not None:
+        box = getattr(geometry.payload, 'bbox', None)
+        return (box if box is not None else geometry.subject.bbox), geometry
     return None, None
+
+
+def pinned_item_bbox(live: Sequence[Claim]) -> Box4 | None:
+    """The item's box as shown at the newest claim that pins (used while pinned): whoever made it,
+    the box in effect when the item was last pinned is the one that stays."""
+    pins = of_kinds(live, PINNING_KINDS)
+    return seen_item_bbox(max(pins, key=lambda c: c.claim_id)) if pins else None
 
 
 def newest_machine_bbox(claims: Sequence[Claim]) -> Box4 | None:

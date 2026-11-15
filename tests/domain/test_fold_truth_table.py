@@ -41,6 +41,7 @@ PREDICATES = (
     'p_is_locked_item',
     'p_is_human_owned_item',
     'p_is_locked_box',
+    'p_pinned',
 )
 
 

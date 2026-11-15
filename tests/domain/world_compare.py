@@ -8,6 +8,7 @@ from typing import Any
 
 from src.clients import occ_locks
 from src.config import get_region_fields
+from src.domain.box_overlap import iou
 from src.domain.claim_kinds import ActorKind
 from src.domain.claim_layers import split_claims
 from src.domain.fold_locks import box_is_locked, has_import_geometry, is_locked_class
@@ -29,6 +30,7 @@ def doc_predicates(world: DocWorld) -> dict[str, Any]:
         'p_is_locked_item': occ_locks.is_locked_item(doc, get_region_fields()),
         'p_is_human_owned_item': occ_locks.is_human_owned_item(doc, get_region_fields()),
         'p_is_locked_box': tuple(occ_locks.is_locked_box(b) for b in boxes),
+        'p_pinned': occ_locks.is_locked_item(doc, get_region_fields()),
     }
 
 
@@ -49,6 +51,7 @@ def fold_predicates(world: FoldWorld) -> dict[str, Any]:
         'p_is_locked_geometry': s.geometry_locked or s.geometry_source == 'human',
         'p_is_locked_item': s.label_locked,
         'p_is_human_owned_item': any(c.actor_kind is ActorKind.HUMAN for c in live),
+        'p_pinned': s.geometry_pinned,
         'p_is_locked_box': tuple(
             box_is_locked(
                 source=b.source,
@@ -188,6 +191,41 @@ def diff(doc: dict[str, Any], fold: dict[str, Any]) -> dict[str, tuple[Any, Any]
     return {k: (doc[k], fold[k]) for k in doc if doc[k] != fold[k]}
 
 
+_INDEXED = {'box_state', 'box_text', 'box_move', 'box_delete'}
+
+
+def _fold_index(fold: FoldWorld, bbox: Any, at: int) -> int | None:
+    """The box the person points at, in the fold's list: the one drawn where today's box is (the
+    same position when it matches, else exact, else the best overlap of at least one half)."""
+    shown = fold.shown()
+    if at < len(shown) and tuple(shown[at].bbox_norm) == tuple(bbox):
+        return at
+    for i, b in enumerate(shown):
+        if tuple(b.bbox_norm) == tuple(bbox):
+            return i
+    scored = [(iou(b.bbox_norm, bbox), -i) for i, b in enumerate(shown)]
+    best = max(scored, default=(0.0, 0))
+    return -best[1] if best[0] >= 0.5 else None
+
+
+def _as_pointed_at(act: Act, doc_boxes: list[Any], fold: FoldWorld) -> Act:
+    """A person points at a box on the screen, not at an array index: the fold is given the box
+    drawn where the document's box is, so a list that differs by a merged or kept box does not
+    shift which box an act lands on (the box lists themselves are still compared)."""
+
+    def point(i: int) -> int:
+        if i >= len(doc_boxes):
+            return i
+        found = _fold_index(fold, doc_boxes[i], i)
+        return i if found is None else found
+
+    if act[0] in _INDEXED:
+        return (act[0], point(act[1]), *act[2:])
+    if act[0] == 'box_batch_state':
+        return (act[0], [point(i) for i in act[1]], *act[2:])
+    return act
+
+
 def run_seed(seed: int, allowed: list[Any], length: int = 8) -> Outcome:
     classifier, acts = random_sequence(seed, length)
     return run_acts(classifier, acts, allowed, seed=seed)
@@ -206,6 +244,7 @@ def run_acts(
     done: list[Act] = []
     for step, act in enumerate(acts):
         done.append(act)
+        shown_before = [b.bbox_norm for b in doc.boxes()]
         try:
             doc.apply(act) if act[0] != 'region_write' else _region_write(doc, fold, act)
         except RefusedError:
@@ -214,7 +253,7 @@ def run_acts(
             doc_refused = False
         try:
             if act[0] != 'region_write':
-                fold.apply(act)
+                fold.apply(_as_pointed_at(act, shown_before, fold))
             fold_refused = False
         except RefusedError:
             fold_refused = True

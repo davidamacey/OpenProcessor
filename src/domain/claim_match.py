@@ -22,7 +22,12 @@ from typing import TYPE_CHECKING
 
 from src.domain.box_overlap import LABEL_IOU_MATCH, iou
 from src.domain.claim_kinds import KINDS, SubjectKind
-from src.domain.claim_layers import claim_geometry, newest_machine_bbox, split_claims
+from src.domain.claim_layers import (
+    claim_geometry,
+    newest_machine_bbox,
+    seen_item_bbox,
+    split_claims,
+)
 
 
 if TYPE_CHECKING:
@@ -107,7 +112,7 @@ def match_items(
         # Question 5: 15a lists the effective box and the machine box only, which leaves a group of
         # dormant kinds (a lone dismissal, a delete) no box to match by; the box the newest claim
         # saw is added so a deleted object stays deleted when its detection comes back moved.
-        candidates = (effective, newest_machine_bbox(group), group[-1].subject.bbox)
+        candidates = (effective, newest_machine_bbox(group), seen_item_bbox(group[-1]))
         for det in detections:
             if det.crop_id in taken_dets:
                 continue
@@ -153,4 +158,12 @@ def match_boxes(
         if (value := _best_overlap(boxes, m.bbox)) >= LABEL_IOU_MATCH
     ]
     out.update(_greedy(pairs, taken_left=taken_claims, taken_right=taken_machine))
+    # A box whose id a re-run replaced, claimed again under the new id: the old claims name the
+    # same box, so they join the box another group took by id instead of standing as a second one.
+    for bid, boxes in claim_boxes.items():
+        if bid in out:
+            continue
+        best = min(((-_best_overlap(boxes, m.bbox), m.box_id) for m in machine), default=(0.0, ''))
+        if -best[0] >= LABEL_IOU_MATCH:
+            out[bid] = best[1]
     return out

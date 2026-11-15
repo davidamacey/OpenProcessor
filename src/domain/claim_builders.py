@@ -20,12 +20,14 @@ from typing import TYPE_CHECKING
 from src.domain.claim_kinds import ActorKind, ClaimKind, SubjectKind
 from src.domain.claim_payloads import (
     AuditSampled,
+    ClassCleared,
     ClassMoved,
     ClassProfile,
     ClassSet,
     DuplicateVerdict,
     Empty,
     Excluded,
+    HiddenOpinion,
     HoldoutFrozen,
     MachineClass,
     NeedsNewClass,
@@ -119,9 +121,12 @@ def resolve_new_class(
     )
 
 
-def clear_class(view: ItemView, *, op_id: str) -> list[ClaimDraft]:
-    """``DELETE /crops/{id}/label`` on an item with no human decision to step back over."""
-    return [human_draft(ClaimKind.CLASS_CLEARED, view, Empty(), op_id=op_id)]
+def clear_class(view: ItemView, *, hidden: Sequence[HiddenOpinion], op_id: str) -> list[ClaimDraft]:
+    """``DELETE /crops/{id}/label`` on an item with no human decision to step back over.
+    ``hidden`` is every machine result present now (``fold_class.present_opinions``): the clear
+    hides those, so a re-run of the same analysers leaves the item cleared (Q10)."""
+    payload = ClassCleared(hidden=tuple(hidden))
+    return [human_draft(ClaimKind.CLASS_CLEARED, view, payload, op_id=op_id)]
 
 
 @dataclass(frozen=True)
@@ -154,23 +159,34 @@ def withdraw_operation(
     return [withdraw(c, view, op_id=op_id) for c in sorted(operation.claim_ids)]
 
 
-def unlabel(view: ItemView, history: Sequence[LiveOperation], *, op_id: str) -> list[ClaimDraft]:
+def unlabel(
+    view: ItemView,
+    history: Sequence[LiveOperation],
+    *,
+    hidden: Sequence[HiddenOpinion],
+    op_id: str,
+) -> list[ClaimDraft]:
     """``DELETE /crops/{id}/label``: step back over the item's newest live label operation (a
     discard comes back whole); with none, clear the class. ``history`` is oldest first."""
     for operation in reversed(history):
         if operation.kind in STEP_BACK_OPERATION_KINDS and operation.claim_ids:
             return withdraw_operation(view, operation, op_id=op_id)
-    return clear_class(view, op_id=op_id)
+    return clear_class(view, hidden=hidden, op_id=op_id)
 
 
 def discard(
-    view: ItemView, *, clear_class_too: bool, dismiss_from_review: bool, op_id: str
+    view: ItemView,
+    *,
+    clear_class_too: bool,
+    dismiss_from_review: bool,
+    hidden: Sequence[HiddenOpinion] = (),
+    op_id: str,
 ) -> list[ClaimDraft]:
     """``POST /crops/{id}/discard``: clear the class, dismiss from review, or both, as one
     operation so the undo brings them back together."""
     drafts: list[ClaimDraft] = []
     if clear_class_too:
-        drafts += clear_class(view, op_id=op_id)
+        drafts += clear_class(view, hidden=hidden, op_id=op_id)
     if dismiss_from_review:
         drafts.append(human_draft(ClaimKind.REVIEW_DISMISSED, view, Empty(), op_id=op_id))
     return drafts

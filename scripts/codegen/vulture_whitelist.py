@@ -125,6 +125,7 @@ _.fold_item  # the fold and its readers: wired by storage steps 2 to 4; entry re
 _.moved_placement  # the fold and its readers: wired by storage steps 2 to 4; entry removed by that lane
 _.rank_items  # the fold and its readers: wired by storage steps 2 to 4; entry removed by that lane
 _.freeze_machine_class  # the fold and its readers: wired by storage steps 2 to 4; entry removed by that lane
+_.present_opinions  # the fold and its readers: the class_cleared payload the clear route writes; wired by storage steps 2 to 4; entry removed by that lane
 _.match_items  # claim matching: wired by storage steps 2 to 4; entry removed by that lane
 _.parse_payload  # claim payload and replay helpers: wired by storage steps 2 to 4; entry removed by that lane
 _.payload_json  # claim payload and replay helpers: wired by storage steps 2 to 4; entry removed by that lane

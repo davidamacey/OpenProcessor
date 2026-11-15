@@ -52,11 +52,11 @@ def test_unlabel_steps_back_over_the_newest_label_operation_or_clears() -> None:
         cb.LiveOperation('o1', 'label', (1,)),
         cb.LiveOperation('o2', 'discard', (2, 3)),
     ]
-    undo = cb.unlabel(VIEW, history, op_id='u')
+    undo = cb.unlabel(VIEW, history, hidden=[], op_id='u')
     assert [d.withdraws_claim_id for d in undo] == [2, 3]  # a discard comes back whole
     accepted_only = [cb.LiveOperation('oa', 'accept_machine', (9,))]
-    assert kinds(cb.unlabel(VIEW, accepted_only, op_id='u')) == [ClaimKind.CLASS_CLEARED]
-    assert kinds(cb.unlabel(VIEW, [], op_id='u')) == [ClaimKind.CLASS_CLEARED]
+    assert kinds(cb.unlabel(VIEW, accepted_only, hidden=[], op_id='u')) == [ClaimKind.CLASS_CLEARED]
+    assert kinds(cb.unlabel(VIEW, [], hidden=[], op_id='u')) == [ClaimKind.CLASS_CLEARED]
 
 
 def test_discard_variants() -> None:

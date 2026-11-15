@@ -98,7 +98,21 @@ class ClassSet(Payload):
 
 
 class Empty(Payload):
-    """class_cleared, restored, review_dismissed, review_restored, withdraw."""
+    """restored, review_dismissed, review_restored, withdraw."""
+
+
+class HiddenOpinion(Payload):
+    """One machine result a person's clear hid: the source and the analyser that made it."""
+
+    source: str
+    analyser_id: int
+
+
+class ClassCleared(Payload):
+    """A clear hides the opinions it saw, not the time before it: emptying and re-running the same
+    analysers leaves the item cleared, and a newer model version shows its opinion (Q10)."""
+
+    hidden: tuple[HiddenOpinion, ...] = ()
 
 
 class Excluded(Payload):
@@ -136,16 +150,36 @@ class AuditSampled(Payload):
     label_source: str
 
 
-class RegionStatusSet(Payload):
-    status: Literal['no_region_visible']
+class SeenItemBox(Payload):
+    """The item's own box when the person edited its region boxes: a person's box was drawn against
+    the crop they saw, so the item's box does not move under it (Q11)."""
+
+    item_bbox: Box4
+
+    @field_validator('item_bbox', check_fields=False)
+    @classmethod
+    def _item_bbox_in_image(cls, value: Box4) -> Box4:
+        return _checked_box(value)
+
+
+class RegionStatusSet(SeenItemBox):
+    # The verdict a person gave over a set with no box: ``no_region_visible``, or the named status
+    # (``verify_rejected``, ``false_positive``) kept as said (Q7).
+    status: Literal['no_region_visible', 'verify_rejected', 'false_positive']
     label_source: str
     region_seq: int = Field(ge=0)
 
 
-class BoxCreated(BoxPayload):
+class BoxCreated(SeenItemBox):
+    bbox: Box4
     state: str
     text: str | None = None
     region_seq: int = Field(ge=0)
+
+    @field_validator('bbox')
+    @classmethod
+    def _bbox_in_image(cls, value: Box4) -> Box4:
+        return _checked_box(value)
 
     @field_validator('state')
     @classmethod
@@ -153,12 +187,18 @@ class BoxCreated(BoxPayload):
         return _box_state(value)
 
 
-class BoxMoved(BoxPayload):
+class BoxMoved(SeenItemBox):
+    bbox: Box4
     bbox_correct: bool | None = None
     region_seq: int = Field(ge=0)
 
+    @field_validator('bbox')
+    @classmethod
+    def _bbox_in_image(cls, value: Box4) -> Box4:
+        return _checked_box(value)
 
-class BoxStateSet(Payload):
+
+class BoxStateSet(SeenItemBox):
     state: str
     rejection_reason: str | None = None
     region_seq: int = Field(ge=0)
@@ -169,12 +209,12 @@ class BoxStateSet(Payload):
         return _box_state(value)
 
 
-class BoxTextSet(Payload):
+class BoxTextSet(SeenItemBox):
     text: str  # an explicit empty text is a reading of "no text"
     region_seq: int = Field(ge=0)
 
 
-class BoxDeleted(Payload):
+class BoxDeleted(SeenItemBox):
     region_seq: int = Field(ge=0)
 
 
@@ -199,7 +239,7 @@ PAYLOAD_MODELS: dict[ClaimKind, type[Payload]] = {
     ClaimKind.ITEM_DRAWN: ItemDrawn,
     ClaimKind.GEOMETRY_SET: GeometrySet,
     ClaimKind.CLASS_SET: ClassSet,
-    ClaimKind.CLASS_CLEARED: Empty,
+    ClaimKind.CLASS_CLEARED: ClassCleared,
     ClaimKind.CLASS_MOVED: ClassMoved,
     ClaimKind.HOLDOUT_FROZEN: HoldoutFrozen,
     ClaimKind.EXCLUDED: Excluded,

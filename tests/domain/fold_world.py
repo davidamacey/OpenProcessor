@@ -13,7 +13,7 @@ from src.domain import (
     claim_builders_region as cbr,
 )
 from src.domain.fold import fold_item
-from src.domain.fold_class import freeze_machine_class
+from src.domain.fold_class import freeze_machine_class, present_opinions
 from src.domain.item_geometry import ItemBoxError
 from src.domain.region_boxes import RegionBox, RegionBoxWriteError, derive_status
 from src.domain.region_edit_rules import BoxEdit
@@ -48,16 +48,23 @@ class FoldWorld:
     def __init__(self, classifier_class: str | None) -> None:
         self.log = Log(clock=0)
         self.detections = [detection(at=0, class_name='car')]
+        self.detection_boxes: list[tuple[float, ...]] = [tuple(self.detections[0].bbox)]
         self.opinions: dict[str, ClassOpinion] = {}
         self.boxes: list[MachineBox] = []
         self.region: RegionResult | None = None
         self.item = ItemRow(crop_id=CROP, photo_key=PHOTO, created_at=t(0))
         self.ops: dict[str, str] = {}
+        self.pinned_log: list[bool] = []
+        self.analyser = 100  # every machine write is a newer analyser version
         self.op = 0
         if classifier_class is not None:
             self._opinion('classifier', classifier_class, outcome='model', confidence=0.9)
 
     # ----- plumbing ------------------------------------------------------------------
+    def fresh(self) -> int:
+        self.analyser += 1
+        return self.analyser
+
     def tick(self) -> float:
         self.log.clock += 1
         return self.log.clock
@@ -98,6 +105,7 @@ class FoldWorld:
         self.log.add(drafts)
 
     def _opinion(self, source: str, cls: str | None, **kw: Any) -> None:
+        kw.setdefault('analyser_id', self.fresh())
         new = opinion(source, cls, at=self.tick(), **kw)
         old = self.opinions.get(source)
         # An answer without a class never replaces a row that has one (M17).
@@ -161,14 +169,22 @@ class FoldWorld:
             ids = tuple(c.claim_id for c in live if c.op_id == op_id)
             if ids:
                 history.append(cb.LiveOperation(op_id, kind, ids))
-        self._add(cb.unlabel(self.view(), history, op_id=op))
+        self._add(
+            cb.unlabel(self.view(), history, hidden=present_opinions(self.inputs()), op_id=op)
+        )
 
     def act_discard(self, clear: bool, dismiss: bool) -> None:
         if not (clear or dismiss):
             return
         op = self._op('discard')
         self._add(
-            cb.discard(self.view(), clear_class_too=clear, dismiss_from_review=dismiss, op_id=op)
+            cb.discard(
+                self.view(),
+                clear_class_too=clear,
+                dismiss_from_review=dismiss,
+                hidden=present_opinions(self.inputs()),
+                op_id=op,
+            )
         )
 
     def act_exclude(self, reason: str) -> None:
@@ -330,9 +346,13 @@ class FoldWorld:
 
     # ----- machine acts --------------------------------------------------------------
     def act_redetect(self, shift: float) -> None:
+        self.pinned_log.append(self.fold().state.geometry_pinned)
         x1, y1, x2, y2 = BOX
         box = (x1 + shift, y1 + shift, x2 + shift, y2 + shift)
-        self.detections = [detection(bbox=box, at=self.tick(), class_name='car')]
+        self.detections = [
+            detection(bbox=box, at=self.tick(), class_name='car', analyser_id=self.fresh())
+        ]
+        self.detection_boxes.append(box)
 
     def act_vlm(self, outcome: str, cls: str) -> None:
         if outcome == 'matched':

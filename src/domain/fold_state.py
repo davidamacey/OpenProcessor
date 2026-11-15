@@ -112,6 +112,8 @@ class ItemState:
     updated_at: datetime
     label_locked: bool
     """Wire ``label_locked``: today's ``is_locked_item`` on the folded state."""
+    geometry_pinned: bool
+    """The item's box is the box the person saw: today's ``is_locked_item`` holds (Q11)."""
     geometry_locked: bool
     """Wire ``geometry_locked``: today's ``is_editor_locked`` on the folded state."""
 

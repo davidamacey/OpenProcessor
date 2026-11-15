@@ -16,8 +16,14 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from src.domain.audit_math import audit_outcome
-from src.domain.claim_kinds import GEOMETRY_KINDS, KINDS, PINNING_KINDS, ActorKind, ClaimKind
-from src.domain.claim_layers import claim_geometry, deciding, of_kinds, split_claims
+from src.domain.claim_kinds import KINDS, PINNING_KINDS, ActorKind, ClaimKind
+from src.domain.claim_layers import (
+    claim_geometry,
+    deciding,
+    of_kinds,
+    pinned_item_bbox,
+    split_claims,
+)
 from src.domain.claim_payloads import ClassMoved, ClassSet, Excluded, ProbeDismissed, VlmDismissed
 from src.domain.fold_boxes import fold_boxes
 from src.domain.fold_class import ClassDecision, chosen_detection, decide_class
@@ -53,15 +59,10 @@ def _machine_geometry(inp: ItemInputs) -> Box4 | None:
     return None if det is None else det.bbox
 
 
-def _geometry(
-    inp: ItemInputs, live: Sequence[Claim]
-) -> tuple[Box4 | None, Claim | None, ActorKind | None]:
-    """``(box, geometry claim, actor of a deciding geometry claim)``: layer 1."""
+def _geometry(live: Sequence[Claim]) -> tuple[Box4 | None, ActorKind | None]:
+    """``(box, actor)`` of a deciding drawn or moved claim: layer 1, claims before machines."""
     box, claim = claim_geometry(live)
-    if claim is not None:
-        actor = claim.actor_kind if claim.kind in GEOMETRY_KINDS else None
-        return box, claim, actor
-    return _machine_geometry(inp), None, None
+    return box, None if claim is None else claim.actor_kind
 
 
 def _flag_exclusion(live: Sequence[Claim]) -> Claim | None:
@@ -81,13 +82,10 @@ def _needs_new_class(inp: ItemInputs, live: Sequence[Claim]) -> bool:
         since = opinion.created_at
     if since is None:
         return False
-    # Question 1: a plain label does not clear the flag today; only resolving the new-class
-    # proposal does (``new_class_resolve.py``: ``class_label_update`` plus ``needs_new_class``
-    # False). 15a says "a later class_set"; this reads it as the resolving one.
+    # Q1: a person who labels the object has decided its class, so a later class_set of a person
+    # clears the flag (today only resolving the new-class proposal does).
     return not any(
-        c.kind is ClaimKind.CLASS_SET
-        and getattr(c.payload, 'via', None) == 'resolve'
-        and c.at > since
+        c.kind is ClaimKind.CLASS_SET and c.actor_kind is ActorKind.HUMAN and c.at > since
         for c in live
     )
 
@@ -189,9 +187,7 @@ def fold_item(
     asserting = any(KINDS[c.kind].asserts_object for c in live)
     if chosen_detection(inp.detections) is None and not asserting:
         return None
-    bbox, _geometry_claim, geometry_actor = _geometry(inp, live)
-    if bbox is None:
-        return None
+    claimed_bbox, geometry_actor = _geometry(live)
 
     exclusion = _flag_exclusion(live)
     excluded = exclusion is not None
@@ -238,6 +234,19 @@ def fold_item(
         region_validated=boxes.closed,
         region_verifier=boxes.verifier,
     )
+
+    # Q11: the item's box is pinned to the box the person saw exactly while today's is_locked_item
+    # holds (a locked class, geometry, box or validated set); a clear, move, dismissal or flag
+    # never pins.
+    pinned = label_locked
+    if claimed_bbox is not None:
+        bbox: Box4 | None = claimed_bbox
+    elif pinned:
+        bbox = pinned_item_bbox(live) or _machine_geometry(inp)
+    else:
+        bbox = _machine_geometry(inp) or pinned_item_bbox(live)
+    if bbox is None:
+        return None
 
     geometry_revision, region_revision = _revisions(inp, split)
     audit_sample, audit_result = _audit(inp, live)
@@ -303,6 +312,7 @@ def fold_item(
         created_at=inp.item.created_at,
         updated_at=_updated_at(inp),
         label_locked=label_locked,
+        geometry_pinned=pinned,
         geometry_locked=is_editor_locked(
             import_geometry=import_geom, holdout=holdout, deleted=deleted_by_human
         ),

@@ -18,12 +18,12 @@ from src.domain import (
     claim_builders_region as cbr,
 )
 from src.domain.claim_kinds import ClaimKind
-from src.domain.claim_layers import split_claims
 from src.domain.claim_match import DetectionRef, match_items
 from src.domain.claims import without_replays
 from src.domain.fold import fold_item, moved_placement
+from src.domain.fold_class import present_opinions
 from src.domain.region_boxes import RegionBox
-from src.domain.region_edit_rules import boxes_with_status
+from src.domain.region_edit_rules import BoxEdit, boxes_with_status
 from src.domain.results import ItemRow, RegistryClass, RegistrySnapshot
 from tests.domain.doc_world import RefusedError
 from tests.domain.fold_support import (
@@ -89,22 +89,9 @@ def comparable(fold):
 @pytest.mark.parametrize('seed', SEEDS)
 def test_pin_survives_machine_writes_b1(seed: int) -> None:
     world = human_world(seed)
-    live = split_claims(world.log.claims).live
-    pins = [
-        c
-        for c in live
-        if c.kind
-        in (
-            ClaimKind.CLASS_SET,
-            ClaimKind.CLASS_CLEARED,
-            ClaimKind.HOLDOUT_FROZEN,
-            ClaimKind.ITEM_DRAWN,
-            ClaimKind.GEOMETRY_SET,
-        )
-    ]
-    if not pins:
-        pytest.skip('no pinning claim in this history')
     before = world.fold().state
+    if not before.geometry_pinned:
+        pytest.skip('nothing pins the box in this history')
     machine_writes(world, seed)
     after = world.fold().state
     assert after.bbox == before.bbox  # the box the person saw, whatever re-detected
@@ -115,6 +102,55 @@ def test_pin_survives_machine_writes_b1(seed: int) -> None:
             before.class_validated,
             before.class_name,
         )
+
+
+MOVED = (0.12, 0.10, 0.52, 0.50)
+
+
+def _box_after_redetect(log: Log) -> tuple[bool, tuple[float, ...]]:
+    state = folded(inputs(log.claims, detections=[detection(bbox=MOVED, at=500)])).state
+    return state.geometry_pinned, state.bbox
+
+
+@pytest.mark.parametrize(
+    'drafts',
+    [
+        cb.label(VIEW, class_name='car', class_id_hint=1, op_id='o'),
+        cb.holdout_freeze(VIEW, freeze_id='f', machine_class=None, op_id='o'),
+        cb.exclude(VIEW, reason='not_an_object', op_id='o'),
+        cbr.put_regions(
+            VIEW, [], [BoxEdit(bbox=(0.2, 0.2, 0.3, 0.3))], box_seq=0, region_seq=0, op_id='o'
+        ).drafts,
+        cbr.set_geometry(VIEW, (0.1, 0.1, 0.5, 0.5), region_seq=0, op_id='o'),
+        cbi.import_label(VIEW, import_id='i', class_name='car', class_id_hint=1, op_id='o'),
+    ],
+)
+def test_what_locks_the_item_pins_its_box_q11(drafts) -> None:
+    log = Log()
+    log.add(drafts)
+    pinned, box = _box_after_redetect(log)
+    assert pinned
+    assert box == BOX  # a person's box was drawn against the crop they saw
+
+
+@pytest.mark.parametrize(
+    'drafts',
+    [
+        cb.clear_class(VIEW, hidden=[], op_id='o'),
+        cb.review_dismiss(VIEW),
+        cb.vlm_dismiss(VIEW, class_name='car', class_id_hint=1),
+        cb.probe_dismiss(VIEW, class_name='car', probe_analyser_id=1),
+        cb.flag_new_class(VIEW, note=None),
+        cb.move_to_cluster(VIEW, partition_id='p', cluster_uid='u', op_id='o'),
+        cb.exclude(VIEW, reason='blurry', op_id='o'),
+    ],
+)
+def test_clears_dismissals_flags_moves_and_other_exclusions_do_not_pin_q11(drafts) -> None:
+    log = Log()
+    log.add(drafts)
+    pinned, box = _box_after_redetect(log)
+    assert not pinned
+    assert box == MOVED  # the box follows the detector, as today
 
 
 def test_a_redetect_overlapping_a_claimed_item_does_not_move_it_b1() -> None:
@@ -302,7 +338,7 @@ def test_duplicate_chunk_replay_adds_nothing_m4(seed: int) -> None:
     assert comparable(folded(inputs(log.claims))) == comparable(first)
     # a later step-back undo still clears the item whole
     history = [cb.LiveOperation('op', 'label', tuple(c.claim_id for c in log.claims))]
-    log.add(cb.unlabel(VIEW, history, op_id='undo'))
+    log.add(cb.unlabel(VIEW, history, hidden=[], op_id='undo'))
     assert folded(inputs(log.claims)).state.excluded is False
 
 
@@ -359,13 +395,15 @@ def test_withdrawing_the_freeze_lets_the_undo_through_m1() -> None:
 
 
 # ---- M17 ----------------------------------------------------------------------------------
-def test_cleared_hides_only_older_m17() -> None:
-    old = opinion('classifier', 'car', at=1, outcome='model')
+def test_a_clear_hides_the_analysers_it_saw_not_the_time_before_it_m17_q10() -> None:
+    old = opinion('classifier', 'car', at=1, outcome='model', analyser_id=10)
     log = Log(clock=10)
-    log.add(cb.clear_class(VIEW, op_id='c'))
+    log.add(cb.clear_class(VIEW, hidden=present_opinions(inputs(opinions=[old])), op_id='c'))
     assert folded(inputs(log.claims, opinions=[old])).state.class_name is None
-    newer = opinion('vlm', 'bus', at=100)
-    assert folded(inputs(log.claims, opinions=[old, newer])).state.class_name == 'bus'
+    other = opinion('vlm', 'bus', at=100, analyser_id=20)
+    assert folded(inputs(log.claims, opinions=[old, other])).state.class_name == 'bus'
+    newer_model = opinion('classifier', 'truck', at=100, outcome='model', analyser_id=11)
+    assert folded(inputs(log.claims, opinions=[newer_model])).state.class_name == 'truck'
 
 
 def test_an_empty_vlm_answer_keeps_the_class_m17() -> None:
@@ -431,8 +469,6 @@ def test_machine_results_order_independence(seed: int) -> None:
 def test_fold_of_a_rebuilt_result_set_equals_the_incremental_one(seed: int) -> None:
     world = human_world(seed, length=5)
     machine_writes(world, seed, count=5)
-    if any(c.kind is ClaimKind.CLASS_CLEARED for c in world.log.claims):
-        pytest.skip('see test_rerun_after_a_clear_shows_older_results_again')
     incremental = world.fold()
     # empty every rebuildable result and run the analysers again, in another order and later
     rebuilt = dataclasses.replace(
@@ -453,20 +489,14 @@ def test_fold_of_a_rebuilt_result_set_equals_the_incremental_one(seed: int) -> N
     assert comparable(again) == comparable(incremental)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason='question 10: a clear hides what is older than itself, and a re-run makes every result '
-    'newer, so plan 15 section 11 "empty every result table, re-run, state equals before" fails '
-    'for an item a person cleared',
-)
-def test_rerun_after_a_clear_shows_older_results_again() -> None:
-    old = opinion('classifier', 'car', at=1, outcome='model')
+def test_rerun_of_the_same_analysers_after_a_clear_leaves_it_cleared_q10() -> None:
+    old = opinion('classifier', 'car', at=1, outcome='model', analyser_id=10)
     log = Log(clock=10)
-    log.add(cb.clear_class(VIEW, op_id='c'))
+    log.add(cb.clear_class(VIEW, hidden=present_opinions(inputs(opinions=[old])), op_id='c'))
     before = folded(inputs(log.claims, opinions=[old])).state
-    rerun = dataclasses.replace(old, created_at=t(500))
+    rerun = dataclasses.replace(old, created_at=t(500))  # emptied and run again, same analyser
     after = folded(inputs(log.claims, opinions=[rerun])).state
-    assert after.class_name == before.class_name
+    assert after.class_name == before.class_name is None
 
 
 def test_fold_is_none_without_a_detection_or_an_asserting_claim() -> None:
@@ -478,3 +508,20 @@ def test_fold_is_none_without_a_detection_or_an_asserting_claim() -> None:
     created = fold_item(inputs(log.claims, detections=[], item=row), REGISTRY, SETTINGS)
     assert created is not None
     assert created.state.bbox == BOX  # an item made from its claims
+
+
+@pytest.mark.parametrize('status', ['verify_rejected', 'false_positive', 'no_region_visible'])
+def test_a_verdict_over_no_box_keeps_the_status_the_person_gave_q7(status: str) -> None:
+    log = Log()
+    log.add(cbr.set_region_status(VIEW, [], status, box_seq=0, region_seq=0, op_id='o').drafts)
+    state = folded(inputs(log.claims)).state
+    assert state.region_status == status
+    assert state.region_validated is True
+
+
+def test_a_plain_label_clears_needs_new_class_q1() -> None:
+    log = Log()
+    log.add(cb.flag_new_class(VIEW, note='a boat'))
+    assert folded(inputs(log.claims)).state.needs_new_class is True
+    log.add(cb.label(VIEW, class_name='car', class_id_hint=1, op_id='l'))
+    assert folded(inputs(log.claims)).state.needs_new_class is False

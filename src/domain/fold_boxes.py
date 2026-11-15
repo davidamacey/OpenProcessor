@@ -16,7 +16,7 @@ from src.config.region_state import RegionStatus
 from src.domain.claim_kinds import ActorKind, ClaimKind
 from src.domain.claim_layers import deciding, of_kinds
 from src.domain.claim_match import BoxRef, match_boxes
-from src.domain.claim_payloads import BoxCreated, BoxMoved, BoxStateSet, BoxTextSet
+from src.domain.claim_payloads import BoxCreated, BoxMoved, BoxStateSet, BoxTextSet, RegionStatusSet
 from src.domain.fold_locks import box_is_locked
 from src.domain.fold_state import BoxState
 from src.domain.region_boxes import RegionBox, derive_status
@@ -228,6 +228,12 @@ def _apply(
     return [replace(b, ordinal=i) for i, b in enumerate(boxes)]
 
 
+def _verdict_status(verdict: Claim | None) -> str:
+    payload = verdict.payload if verdict is not None else None
+    assert isinstance(payload, RegionStatusSet)
+    return payload.status
+
+
 def _derived_status(boxes: Sequence[BoxState]) -> str:
     stubs = [RegionBox(box_id=b.box_id, bbox_norm=b.bbox, state=b.state) for b in boxes]
     return derive_status(stubs, empty_status=RegionStatus.NO_REGION_VISIBLE).value
@@ -269,7 +275,7 @@ def fold_boxes(inp: ItemInputs, live: Sequence[Claim], settings: FoldSettings) -
 
     machine_region = inp.region
     if no_region:
-        status: str | None = RegionStatus.NO_REGION_VISIBLE.value
+        status: str | None = _verdict_status(verdict)
     elif newest is not None:
         status = _derived_status(boxes)
     else:

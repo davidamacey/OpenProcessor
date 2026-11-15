@@ -118,7 +118,7 @@ def import_box(
         bbox=bbox,
         frame=view.frame,
     )
-    payload = BoxCreated(bbox=bbox, state=state, region_seq=region_seq)
+    payload = BoxCreated(item_bbox=view.bbox, bbox=bbox, state=state, region_seq=region_seq)
     return [
         ClaimDraft(
             ActorKind.IMPORT,
