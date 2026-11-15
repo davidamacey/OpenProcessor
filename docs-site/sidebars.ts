@@ -120,6 +120,7 @@ const sidebars: SidebarsConfig = {
         'reference/performance',
         'developer-guide/screenshots',
         'developer-guide/restart-after-update',
+        'developer-guide/native-engine-comparison',
       ],
     },
   ],

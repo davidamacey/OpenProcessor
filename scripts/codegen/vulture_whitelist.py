@@ -31,6 +31,7 @@ _.depends_on  # Alembic reads the revision module attributes by name
 _.get_col_spec  # SQLAlchemy UserDefinedType hook, called by the DDL compiler
 _.get_next  # onnxruntime CalibrationDataReader protocol, called by the quantizer
 _.rewind  # onnxruntime CalibrationDataReader protocol, called by the quantizer
+_.TritonPythonModel  # Triton's Python backend instantiates the class of this name in a model's model.py
 
 # Looked up by string
 _.preset_none  # docker/trainer/augment.py resolves preset_<id> through globals() for each catalog id

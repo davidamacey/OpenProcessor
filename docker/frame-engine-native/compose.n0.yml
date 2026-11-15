@@ -1,0 +1,161 @@
+# =============================================================================
+# The N0 test bed of the native frame engine (docs/design/v070_rebuild/17_native_engine_plan.md,
+# N0 "Inputs" and "The holds"): one model server on one card, the native engine and the Python
+# engine beside it, both protocol version 1, so one client measures either.
+#
+#   docker compose -p op-n0 -f docker/frame-engine-native/compose.n0.yml build
+#   docker compose -p op-n0 -f docker/frame-engine-native/compose.n0.yml up -d
+#   docker compose -p op-n0 -f docker/frame-engine-native/compose.n0.yml down
+#
+# The project name is op-n0 and never the default one (the default project is the live stack).
+# Thrown away after N0 (plan 17, "Thrown away after N0"). Run by the coordinator, never by a lane.
+#
+# Ports, all on loopback: model server gRPC 4620; native engine 4621, metrics 4623; Python engine
+# 4622, metrics 4624. Every container has a fixed name, so scripts address it by its exact name
+# (frame_engine_hold.sh, frame_engine_faults.sh).
+#
+# The card is N0_GPU_ID (default 2, an RTX A6000 on this host): the NVIDIA container toolkit
+# numbers it as nvidia-smi does (PCI order). All three containers reserve that one card.
+#
+# What the model server loads: the real models of docker-compose.yml's triton-server, from
+# N0_MODELS_DIR (the repository's models/, with the built .plan files), and the stand-ins from
+# N0_STAND_IN_DIR, a second repository (scripts/bench/frame_engine_stand_ins.py generate). The
+# capture models write the rows they receive into N0_CAPTURE_DIR.
+#
+# The two engines carry different OP_FRAME_ENGINE_INSTANCE names: a region's name starts with the
+# card and the instance, and an engine unregisters every region of its own prefix at start, so two
+# engines with one instance name would unregister each other's region.
+name: op-n0
+
+x-engine-settings: &engine-settings
+  # The committed defaults of docker-compose.yml's frame-engine service.
+  CUDA_DEVICE_ORDER: PCI_BUS_ID
+  OP_FRAME_ENGINE_TRITON_URL: triton-server:8001
+  OP_FRAME_ENGINE_TRANSPORT: cuda
+  OP_FRAME_ENGINE_REGION_MIB: "1024"
+  OP_FRAME_ENGINE_WORKERS: "16"
+  OP_FRAME_ENGINE_BUDGET_MIB: "2048"
+  OP_FRAME_ENGINE_MAX_IN_FLIGHT: "128"
+  OP_FRAME_ENGINE_CROP_MAX_SIDE: "0"
+
+x-gpu: &gpu
+  driver: nvidia
+  device_ids: ["${N0_GPU_ID:-2}"]
+  capabilities: [gpu]
+
+services:
+  triton-server:
+    # A local-only tag: a registry's :latest is never pulled over a local build here.
+    image: ${N0_TRITON_IMAGE:-op-n0/triton:n0}
+    container_name: op-n0-model-server
+    build:
+      context: ../..
+      dockerfile: Dockerfile.triton
+    restart: "no"
+    ports:
+      - "127.0.0.1:4620:8001"
+    volumes:
+      - ${N0_MODELS_DIR:-../../models}:/models:ro
+      - ${N0_STAND_IN_DIR:-../../artifacts_local/native_engine/n0/stand_in}:/stand_in:ro
+      - ${N0_CAPTURE_DIR:-../../artifacts_local/native_engine/n0/capture}:/capture
+    command:
+      - tritonserver
+      # Two repositories (the server's --model-repository may be given more than once): the real
+      # models and the stand-ins. A model must not exist in both.
+      - --model-repository=/models
+      - --model-repository=/stand_in
+      - --backend-config=default-max-batch-size=128
+      - --strict-model-config=false
+      # The engines ping every 30 s while idle; Triton's defaults refuse that.
+      - --grpc-keepalive-permit-without-calls=true
+      - --grpc-http2-min-recv-ping-interval-without-data=20000
+      - --model-control-mode=explicit
+      - --exit-on-error=false
+      - --strict-readiness=false
+      # the CUDA shared-memory regions the engines register
+      - --allow-client-shm=true
+      - --load-model=yolov11_small_trt_end2end
+      - --load-model=pe_image_encoder
+      - --load-model=pe_crop_encoder
+      - --load-model=null_detector_640
+      - --load-model=null_encoder_336
+      - --load-model=null_encoder_224
+      - --load-model=capture_detector_640
+      - --load-model=capture_encoder_336
+      - --load-model=capture_encoder_224
+      - --log-info=true
+    environment:
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      CUPY_CACHE_DIR: /tmp/cupy_cache
+    shm_size: 8g
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    deploy:
+      resources:
+        reservations:
+          memory: 4g
+          devices:
+            - *gpu
+
+  engine-native:
+    image: ${N0_NATIVE_IMAGE:-op-n0/frame-engine-native:n0}
+    container_name: op-n0-engine-native
+    build:
+      context: ../..
+      dockerfile: docker/frame-engine-native/Dockerfile
+      # the wire contract the engine embeds; the root .dockerignore keeps contracts/ out of the
+      # main context, so it comes as a named one (https://docs.docker.com/reference/compose-file/build/)
+      additional_contexts:
+        contracts_json: ../../contracts/json
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
+    restart: "no"
+    # A region cannot be registered by a process that has the model server's process id: both
+    # would be 1 without an init.
+    init: true
+    ports:
+      - "127.0.0.1:4621:8001"
+      - "127.0.0.1:4623:8002"
+    environment:
+      <<: *engine-settings
+      OP_FRAME_ENGINE_INSTANCE: fe-native
+    ulimits:
+      memlock: -1
+    deploy:
+      resources:
+        reservations:
+          memory: 2g
+          devices:
+            - *gpu
+    depends_on:
+      triton-server:
+        condition: service_started
+
+  engine-python:
+    image: ${N0_PYTHON_IMAGE:-op-n0/frame-engine-python:n0}
+    container_name: op-n0-engine-python
+    build:
+      context: ../..
+      dockerfile: docker/frame-engine/Dockerfile
+      args:
+        OP_BUILD_SHA: "${OP_BUILD_SHA:-}"
+    restart: "no"
+    init: true
+    ports:
+      - "127.0.0.1:4622:8001"
+      - "127.0.0.1:4624:8002"
+    environment:
+      <<: *engine-settings
+      OP_FRAME_ENGINE_INSTANCE: fe-python
+    ulimits:
+      memlock: -1
+    deploy:
+      resources:
+        reservations:
+          memory: 2g
+          devices:
+            - *gpu
+    depends_on:
+      triton-server:
+        condition: service_started

@@ -1,0 +1,39 @@
+[package]
+name = "frame_engine_loadgen"
+description = "op-fe-loadgen: one client that measures any engine speaking protocol version 1, and the models alone"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "op-fe-loadgen"
+path = "src/main.rs"
+
+[dependencies]
+bytes = { workspace = true }
+clap = { version = "=4.6.7", default-features = false, features = ["derive", "error-context", "help", "std", "usage"] }
+futures-util = { version = "=0.3.34", default-features = false, features = ["alloc"] }
+gpu_frame = { path = "../gpu_frame" }
+nvml-wrapper = { workspace = true }
+prost = { workspace = true }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.154"
+sha2 = "=0.11.1"
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
+tonic = { workspace = true, features = ["codegen", "transport"] }
+tonic-prost = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+tokio-stream = { version = "=0.1.19", features = ["net"] }
+tonic = { workspace = true, features = ["router", "server"] }
+
+[build-dependencies]
+protox = { workspace = true }
+tonic-prost-build = { workspace = true }
+
+[lints]
+workspace = true
