@@ -73,11 +73,11 @@ def test_two_ingest_requests_report_scheduled_and_queue_one_job(
     async def active() -> Any:
         return SimpleNamespace(run_on_ingest=True), 1
 
-    async def stamp(_client: Any, image_id: str, _status: str) -> None:
-        stamped.append(image_id)
+    async def stamp(_client: Any, image_ids: list[str]) -> None:
+        stamped.extend(image_ids)
 
     monkeypatch.setattr(open_vocab_ingest, 'current_active_set', active)
-    monkeypatch.setattr(open_vocab_ingest, 'stamp_open_vocab_status', stamp)
+    monkeypatch.setattr(open_vocab_ingest, '_stamp_pending', stamp)
 
     first = asyncio.run(schedule_open_vocab_after_ingest(object(), ['a']))  # type: ignore[arg-type]
     second = asyncio.run(schedule_open_vocab_after_ingest(object(), ['b']))  # type: ignore[arg-type]
@@ -103,5 +103,5 @@ def test_a_broker_that_is_down_fails_the_start_loudly_and_the_ingest_still_succe
         return None
 
     monkeypatch.setattr(open_vocab_ingest, 'current_active_set', active)
-    monkeypatch.setattr(open_vocab_ingest, 'stamp_open_vocab_status', stamp)
+    monkeypatch.setattr(open_vocab_ingest, '_stamp_pending', stamp)
     assert asyncio.run(schedule_open_vocab_after_ingest(object(), ['a'])) is False  # type: ignore[arg-type]
