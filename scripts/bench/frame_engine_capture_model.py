@@ -3,9 +3,11 @@
 Copied by ``frame_engine_stand_ins.py`` to ``<model>/1/model.py`` of each ``capture_*`` model. It
 answers like the null model it stands for (the same fixed tensor, so both engines cut the same
 crops from every photo) and records every input row the model server hands it: the row's bytes to
-``<CAPTURE_DIR>/<model>/<sha256>.bin`` (one file per distinct content) and a line
-``<order>\\t<sha256>\\t<shape>`` to ``<CAPTURE_DIR>/<model>/index.txt``, in the order the rows
-arrived. ``scripts/bench/gpu_prep_parity.py compare-inputs`` reads those two to decide whether two
+``<CAPTURE_DIR>/<arm>/<model>/<sha256>.bin`` (one file per distinct content) and a line
+``<order>\\t<sha256>\\t<shape>`` to ``<CAPTURE_DIR>/<arm>/<model>/index.txt``, in the order the
+rows arrived. The arm is the text of the file ``<CAPTURE_DIR>/ARM`` at the time of the batch
+(``default`` when there is none): the hold script names the engine under test there, so one
+loaded model captures both engines into separate directories. ``scripts/bench/gpu_prep_parity.py compare-inputs`` reads those two to decide whether two
 engines wrote the same model inputs, byte for byte.
 
 ``FORCE_CPU_ONLY_INPUT_TENSORS`` is ``yes`` in the config, so the server copies the engine's CUDA
@@ -29,6 +31,10 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+
+ARM_FILE = 'ARM'
+DEFAULT_ARM = 'default'
 
 
 def output_row(kind: str, params: dict[str, str]) -> np.ndarray:
@@ -75,7 +81,17 @@ class TritonPythonModel:
         params = {k: v['string_value'] for k, v in config.get('parameters', {}).items()}
         self.output_name = params['OUTPUT_NAME']
         self.answer = output_row(params['OUTPUT_KIND'], params)
-        self.recorder = Recorder(Path(params['CAPTURE_DIR']) / args['model_name'])
+        self.root = Path(params['CAPTURE_DIR'])
+        self.model_name = args['model_name']
+        self.recorders: dict[str, Recorder] = {}
+
+    def recorder(self) -> Recorder:
+        """The recorder of the arm named in ``ARM`` right now."""
+        marker = self.root / ARM_FILE
+        arm = marker.read_text().strip() if marker.exists() else DEFAULT_ARM
+        if arm not in self.recorders:
+            self.recorders[arm] = Recorder(self.root / arm / self.model_name)
+        return self.recorders[arm]
 
     def execute(self, requests: list[Any]) -> list[Any]:
         import triton_python_backend_utils as pb_utils
@@ -83,7 +99,7 @@ class TritonPythonModel:
         responses = []
         for request in requests:
             batch = pb_utils.get_input_tensor_by_name(request, 'images').as_numpy()
-            self.recorder.record(batch)
+            self.recorder().record(batch)
             out = np.broadcast_to(self.answer, (len(batch), *self.answer.shape)).copy()
             responses.append(
                 pb_utils.InferenceResponse(output_tensors=[pb_utils.Tensor(self.output_name, out)])

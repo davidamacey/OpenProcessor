@@ -293,6 +293,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     cmds = sub.add_parser('plan-commands', help='the trtexec commands that build the null plans')
     cmds.add_argument('--runner', default=DEFAULT_RUNNER, help='what runs trtexec')
     cmds.add_argument('--run', action='store_true', help="run them (the coordinator's step)")
+    sub.add_parser(
+        'detections', help='how many detections (crops) a stand-in detector gives a photo'
+    )
     names = sub.add_parser('names', help='the model names as JSON')
     names.add_argument('--kind', choices=['null', 'capture'], required=True)
     args = ap.parse_args(argv)
@@ -304,6 +307,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             encoder_instances=args.encoder_instances,
         ):
             print(path)
+        return 0
+    if args.cmd == 'detections':
+        print(len(BOX_SIDES))
         return 0
     if args.cmd == 'names':
         print(json.dumps(null_names() if args.kind == 'null' else capture_names()))

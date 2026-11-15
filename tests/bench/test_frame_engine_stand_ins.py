@@ -210,7 +210,7 @@ def test_the_capture_model_answers_like_the_null_model_and_records_each_row(
     assert [a.name for a in answers] == ['output0', 'output0']
     assert np.array_equal(answers[0].array, evaluate(spec, first))
     assert answers[1].array.shape == (1, 300, 6)
-    root = tmp_path / 'capture_detector_640'
+    root = tmp_path / 'default' / 'capture_detector_640'
     lines = [ln.split('\t') for ln in (root / 'index.txt').read_text().splitlines()]
     digests = [
         hashlib.sha256(first[0].tobytes()).hexdigest(),
@@ -232,8 +232,28 @@ def test_a_reloaded_capture_model_continues_the_arrival_order(
     spec = si.SPECS[2]
     load_capture(spec, tmp_path).execute([{'images': batch}])
     load_capture(spec, tmp_path).execute([{'images': batch}])
-    lines = (tmp_path / 'capture_encoder_224' / 'index.txt').read_text().splitlines()
+    lines = (tmp_path / 'default' / 'capture_encoder_224' / 'index.txt').read_text().splitlines()
     assert [ln.split('\t')[0] for ln in lines] == ['0', '1']
+
+
+def test_each_arm_is_captured_into_its_own_directory(
+    pb_utils: types.ModuleType, tmp_path: Path
+) -> None:
+    model = load_capture(si.SPECS[2], tmp_path)
+    one = np.full((1, 3, 224, 224), 1, np.uint8)
+    two = np.full((2, 3, 224, 224), 2, np.uint8)
+    (tmp_path / 'ARM').write_text('python\n')
+    model.execute([{'images': one}])
+    (tmp_path / 'ARM').write_text('native')
+    model.execute([{'images': two}])
+    model.execute([{'images': one}])
+
+    def count(arm: str) -> int:
+        index = tmp_path / arm / 'capture_encoder_224' / 'index.txt'
+        return len(index.read_text().splitlines())
+
+    assert (count('python'), count('native')) == (1, 3)
+    assert not (tmp_path / 'default').exists()
 
 
 def test_generate_writes_the_six_models_and_the_graphs_only_when_asked(tmp_path: Path) -> None:
@@ -270,3 +290,8 @@ def test_names_are_printed_for_the_hold_script(capsys: pytest.CaptureFixture[str
         'null_encoder_336',
         'null_encoder_224',
     ]
+
+
+def test_the_detection_count_is_the_fixed_boxes(capsys: pytest.CaptureFixture[str]) -> None:
+    assert si.main(['detections']) == 0
+    assert capsys.readouterr().out.strip() == str(len(si.detector_rows())) == '5'
