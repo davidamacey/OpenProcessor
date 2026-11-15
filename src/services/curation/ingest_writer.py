@@ -101,17 +101,19 @@ WRITE_ID_FIELD = 'ingest_write_id'
 #       its listed items), the items step 7 (mget, create bulk, conflict refetch mget, update mget +
 #       bulk, one retry round of mget + bulk) and the failure mark 4 (an OCC update with one retry
 #       round: mget + bulk each);
-#     a repair: the images step 3, the match 3 (the listed items' mget, the search of the image's
-#       items, a page more), the lease and list write 6 (an OCC update with up to 2 retry rounds),
-#       the create bulk 1, the lease's return 4 and the failure mark 4;
-#   plus the 429 pauses of the images step and of the items step (RETRY_429_PAUSES_S).
+#     a repair: the images step 3, the match 4 (the listed items' mget, the index refresh, the
+#       search of the image's items, a page more), the lease and list write 6 (an OCC update
+#       with up to 2 retry rounds), the create bulk 1, the lease's return 4 and the failure
+#       mark 4: 22 requests, the longer path (a new photo's is 14);
+#   plus the 429 pauses of the images step and of the items step (RETRY_429_PAUSES_S, 7.7 s).
+# So REPAIR_AFTER_S = 22 x 4 x 60 + 7.7 = 5,287.7 s (88 minutes).
 # tests/curation/test_ingest_repair_age.py pins each input against the real client and settings.
 OPENSEARCH_ATTEMPTS = 4
 CLIENT_TIMEOUT_S = 60
 IMAGES_STEP_REQUESTS = 3
 ITEMS_STEP_REQUESTS = 7
 MARK_WRITE_REQUESTS = 4
-MATCH_REQUESTS = 3
+MATCH_REQUESTS = 4
 LEASE_WRITE_REQUESTS = 6
 REPAIR_CREATE_REQUESTS = 1
 LEASE_RETURN_REQUESTS = 4

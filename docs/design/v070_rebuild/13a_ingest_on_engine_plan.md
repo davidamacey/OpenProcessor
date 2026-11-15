@@ -411,7 +411,8 @@ Built (lane L0; this replaces the rules of revision 2 where they differ, and say
    younger than `REPAIR_AFTER_S`) and the doc carries the failure mark or is older than
    `REPAIR_AFTER_S`, otherwise `failed`, `incomplete_write`. `REPAIR_AFTER_S` is the requests
    one unit makes in a row (the longer of a new photo's path and a repair's) times the longest one
-   request can take (4 attempts x the slowest client timeout, 60 s) plus the 429 pauses; the
+   request can take (4 attempts x the slowest client timeout, 60 s) plus the 429 pauses: 22 requests
+   (a repair's) x 4 x 60 + 7.7 = 5,287.7 s, 88 minutes; the
    derivation sits next to the constant (`ingest_writer.py`) and `test_ingest_repair_age.py` pins
    every input against the real client and settings.
 5. **The failure mark.** A unit that saw its own write fail, on a doc that exists, sets
