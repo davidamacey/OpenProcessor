@@ -96,6 +96,7 @@ def _no_residency(monkeypatch: pytest.MonkeyPatch) -> None:
     async def no_wait(_s: float) -> None:
         return None
 
+    monkeypatch.setattr(frame_engine, 'RETRY_SLEEP', no_wait)
     monkeypatch.setattr(triton_pool_core, 'ensure_loaded', loaded)
     monkeypatch.setattr(triton_pool_core.asyncio, 'sleep', no_wait)
 
@@ -133,13 +134,29 @@ async def test_an_overload_is_retried_and_the_next_answer_used() -> None:
 
 
 @pytest.mark.asyncio
-async def test_an_overload_that_outlasts_the_retries_is_reported_as_overloaded() -> None:
+async def test_an_overload_is_retried_until_the_photos_deadline_not_a_fixed_count() -> None:
     busy = _status_error(grpc.StatusCode.RESOURCE_EXHAUSTED)
-    client = _Client([busy] * 10)
+    many = 3 * (1 + frame_engine.RETRIES)
+    client = _Client([busy] * many, _ok_result())
+    assert (await frame_engine.process(_pool(client), b'j', PLAN)).ok
+    assert len(client.calls) == many + 1
+
+
+@pytest.mark.asyncio
+async def test_an_overload_that_outlasts_the_deadline_is_reported_as_overloaded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def tick(_s: float) -> None:
+        await asyncio.sleep(0.01)
+
+    monkeypatch.setattr(frame_engine, 'DEADLINE_SECONDS', 0.1)
+    monkeypatch.setattr(frame_engine, 'RETRY_SLEEP', tick)
+    busy = _status_error(grpc.StatusCode.RESOURCE_EXHAUSTED)
+    client = _Client([busy] * 100_000)
     with pytest.raises(frame_engine.EngineCallError) as caught:
         await frame_engine.process(_pool(client), b'j', PLAN)
     assert caught.value.overloaded is True
-    assert len(client.calls) == 1 + frame_engine.RETRIES
+    assert len(client.calls) > 1 + frame_engine.RETRIES
 
 
 @pytest.mark.parametrize(
