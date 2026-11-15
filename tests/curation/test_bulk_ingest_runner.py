@@ -16,13 +16,14 @@ import pytest
 
 from src.domain.job_perf import JobPerfSummary
 from src.services.curation.bulk_ingest import limits, runner, sender as sender_mod
-from src.services.curation.bulk_ingest.runner import BulkRunAbortedError, ClaimedPath
+from src.services.curation.bulk_ingest.runner import BulkRunAbortedError, ClaimedPath, RetryWait
 from src.services.curation.bulk_ingest.source import (
     BulkSource,
     InvalidSourceError,
     iter_manifest_paths,
     validate_source,
 )
+from src.services.curation.bulk_ingest.source_queue import failure_row
 
 
 @pytest.fixture(autouse=True)
@@ -36,29 +37,58 @@ def served(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 class MemoryLedger:
-    """The queue of one source as a dict: ``pending`` -> ``claimed`` -> ``done``/``failed``."""
+    """The queue of one source as a dict: ``pending`` -> ``claimed`` -> ``done``/``failed``.
+
+    A failure the real ledger turns into a pause (``failure_row``) leaves the row ``waiting``:
+    claimable again once ``now`` (seconds the run has waited, advanced by the patched
+    ``WAIT_SLEEP``) reaches its due time. Any other failed row stays failed until a test resets it.
+    Whether a row's attempts move is SQL, tested on PostgreSQL; here ``attempts_used`` records what
+    the ledger was told."""
 
     def __init__(self, paths: list[str]) -> None:
         self.rows = dict.fromkeys(paths, 'pending')
         self.errors: dict[str, tuple[str, str]] = {}
         self.images: dict[str, str | None] = {}
+        self.now = 0.0
+        self.due: dict[str, float] = {}
+        self.pauses: dict[str, list[float]] = {}
+        self.attempts_used: dict[str, int] = {}
+        self.dead: set[str] = set()
 
     async def remaining(self) -> int:
         return sum(1 for s in self.rows.values() if s in {'pending', 'claimed', 'failed'})
 
     async def claim(self, limit: int) -> list[ClaimedPath]:
-        picked = [k for k, s in self.rows.items() if s == 'pending'][:limit]
+        picked = [
+            k
+            for k, s in self.rows.items()
+            if s == 'pending' or (s == 'failed' and k in self.due and self.due[k] <= self.now)
+        ][:limit]
         for key in picked:
             self.rows[key] = 'claimed'
+            self.due.pop(key, None)
         return [ClaimedPath(k, k) for k in picked]
 
-    async def settle(self, done: Any, failed: Any) -> None:
+    async def settle(self, done: Any, failed: Any, retry_after_s: float | None = None) -> None:
         for key, image in done:
             self.rows[key] = 'done'
             self.images[key] = image
         for key, error, kind in failed:
+            row = failure_row(key, error, kind, retry_after_s)
             self.rows[key] = 'failed'
             self.errors[key] = (error, kind)
+            if row.terminal:
+                self.dead.add(key)
+            elif row.retry_in_s is None:
+                self.attempts_used[key] = self.attempts_used.get(key, 0) + 1
+            else:
+                self.due[key] = self.now + row.retry_in_s
+                self.pauses.setdefault(key, []).append(row.retry_in_s)
+
+    async def waiting(self) -> RetryWait | None:
+        if not self.due:
+            return None
+        return RetryWait(len(self.due), max(0.0, min(self.due.values()) - self.now))
 
     async def release(self) -> None:
         for key, state in self.rows.items():
@@ -103,7 +133,11 @@ class FakeSender:
         duplicates: set[str] | None = None,
         failing: dict[str, str] | None = None,
         fail_all: bool = False,
+        busy_after: float | None = None,
+        transient_once: dict[str, str] | None = None,
     ) -> None:
+        self.busy_after = busy_after
+        self.transient_once = dict(transient_once or {})
         self.calls: list[list[str]] = []
         self.in_flight = 0
         self.max_in_flight = 0
@@ -126,6 +160,8 @@ class FakeSender:
             if self.gate is not None:
                 await self.gate.wait()
             await asyncio.sleep(0.005)
+            if self.busy_after is not None:
+                raise sender_mod.BatchBusyError('HTTP 503: engine down', self.busy_after)
             if self.fail_all:
                 raise sender_mod.BatchRequestError('HTTP 503: triton down')
             results = []
@@ -139,6 +175,16 @@ class FakeSender:
                             'image_path': path,
                             'error': self.failing[name],
                             'error_kind': 'unservable_path',
+                        }
+                    )
+                    continue
+                if name in self.transient_once:
+                    results.append(
+                        {
+                            'status': 'failed',
+                            'image_path': path,
+                            'error': 'engine restarting',
+                            'error_kind': self.transient_once.pop(name),
                         }
                     )
                     continue
@@ -382,3 +428,147 @@ def test_a_resumed_run_continues_the_decode_route_tally() -> None:
 
     assert result['decode_routes'] == {'gpu': 8, 'cpu_small': 2}
     assert reporter.checkpoints[-1]['decode_routes'] == {'gpu': 8, 'cpu_small': 2}
+
+
+# --- transient failures: no attempt, a pause, and a run that waits instead of stalling or spinning
+
+
+def _waits(monkeypatch: pytest.MonkeyPatch, ledger: MemoryLedger) -> list[float]:
+    """Replace the run's wait with a fake clock: each slice advances the ledger's ``now``."""
+    steps: list[float] = []
+
+    async def sleep(seconds: float) -> None:
+        steps.append(seconds)
+        ledger.now += seconds
+
+    monkeypatch.setattr(runner, 'WAIT_SLEEP', sleep)
+    return steps
+
+
+def test_a_file_that_failed_transiently_waits_for_its_pause_and_is_then_stored(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = MemoryLedger(_paths(4))
+    steps = _waits(monkeypatch, ledger)
+    sender = FakeSender(transient_once={'002.jpg': 'engine_unavailable'})
+    run, reporter = _run(ledger, sender)
+    result = asyncio.run(run.run())
+
+    assert ledger.count('done') == 4  # the run did not end with the file left waiting
+    assert (result['ingested'], result['waiting']) == (4, 0)
+    assert ledger.pauses == {_paths(4)[2]: [30.0]}
+    assert ledger.attempts_used == {}
+    assert ledger.dead == set()
+    assert sum(steps) == pytest.approx(30.0)
+    assert all(step <= 1.0 for step in steps)  # a cancel is seen within a second
+    assert result['stage_s']['retry_wait'] == pytest.approx(30.0)
+    # the wait is visible in the job's progress: its stage and the number of waiting files
+    waits = [s for s in reporter.snapshots if s['stage'] == 'retry_wait']
+    assert waits
+    assert waits[0]['waiting'] == 1
+    assert reporter.snapshots[-1]['stage'] == 'ingest'
+    assert sender.calls[-1] == [_paths(4)[2]]
+
+
+def test_a_resumed_run_that_finds_only_waiting_files_waits_and_stores_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = MemoryLedger(_paths(3))
+    for key in _paths(3):  # what an earlier run left: failed, 20 s from due
+        ledger.rows[key] = 'failed'
+        ledger.due[key] = 20.0
+    steps = _waits(monkeypatch, ledger)
+    sender = FakeSender()
+    run, _ = _run(ledger, sender, batch_size=3)
+    result = asyncio.run(run.run())
+
+    assert (result['discovered'], result['ingested'], result['failed']) == (3, 3, 0)
+    assert ledger.count('done') == 3
+    assert sum(steps) == pytest.approx(20.0)
+    assert sender.calls == [_paths(3)]
+
+
+def test_a_stop_request_ends_the_wait_within_one_slice_and_leaves_the_files_waiting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = MemoryLedger(_paths(2))
+    reporter = MemoryReporter()
+    steps = _waits(monkeypatch, ledger)
+    inner = runner.WAIT_SLEEP
+
+    async def stop_after_two(seconds: float) -> None:
+        await inner(seconds)
+        reporter.stop = len(steps) >= 2
+
+    monkeypatch.setattr(runner, 'WAIT_SLEEP', stop_after_two)
+    sender = FakeSender(transient_once={'000.jpg': 'database_busy', '001.jpg': 'database_busy'})
+    run, _ = _run(ledger, sender, reporter=reporter)
+    result = asyncio.run(run.run())
+
+    assert result['cancelled'] is True
+    assert len(steps) == 2
+    assert ledger.count('failed') == 2
+    assert ledger.count('claimed') == 0
+    assert ledger.dead == set()
+    assert ledger.attempts_used == {}
+
+
+def test_a_row_that_is_due_but_never_claimable_does_not_make_the_run_spin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Another runner holds the row locked: ``waiting`` says 0 s, ``claim`` says nothing."""
+
+    class Locked(MemoryLedger):
+        async def waiting(self) -> RetryWait | None:
+            return RetryWait(1, 0.0)
+
+    ledger = Locked([])
+    reporter = MemoryReporter()
+    steps: list[float] = []
+
+    async def sleep(seconds: float) -> None:
+        steps.append(seconds)
+        reporter.stop = len(steps) >= 3
+
+    monkeypatch.setattr(runner, 'WAIT_SLEEP', sleep)
+    run, _ = _run(ledger, FakeSender(), reporter=reporter)
+    asyncio.run(run.run())
+    assert steps == [limits.RETRY_WAIT_SLICE_S] * 3  # a pause per round, never a tight loop
+
+
+def test_a_failure_that_is_not_transient_is_not_waited_for(monkeypatch: pytest.MonkeyPatch) -> None:
+    ledger = MemoryLedger(_paths(3))
+    steps = _waits(monkeypatch, ledger)
+    run, _ = _run(ledger, FakeSender(failing={'001.jpg': 'cannot read'}))
+    result = asyncio.run(run.run())
+
+    assert steps == []
+    assert result['stage_s']['retry_wait'] == 0
+    assert ledger.dead == {_paths(3)[1]}  # terminal, exactly as before
+
+
+def test_a_batch_whose_503_retries_ran_out_is_recorded_busy_with_the_retry_after() -> None:
+    ledger = MemoryLedger(_paths(12))
+    sender = FakeSender(busy_after=90.0)
+    run, _ = _run(ledger, sender, batch_size=2, concurrency=1)
+    with pytest.raises(BulkRunAbortedError, match='engine down'):
+        asyncio.run(run.run())
+
+    # 5 such batches in a row still stop the run, and no file is dead or used an attempt
+    assert len(sender.calls) == limits.MAX_CONSECUTIVE_FAILED_BATCHES
+    assert {kind for _, kind in ledger.errors.values()} == {'busy'}
+    assert ledger.count('failed') == 2 * limits.MAX_CONSECUTIVE_FAILED_BATCHES
+    assert ledger.dead == set()
+    assert ledger.attempts_used == {}
+    assert {p for ps in ledger.pauses.values() for p in ps} == {90.0}
+    assert ledger.count('claimed') == 0
+
+
+def test_a_batch_that_failed_for_another_reason_still_uses_an_attempt() -> None:
+    ledger = MemoryLedger(_paths(12))
+    run, _ = _run(ledger, FakeSender(fail_all=True), batch_size=2, concurrency=1)
+    with pytest.raises(BulkRunAbortedError):
+        asyncio.run(run.run())
+    assert {kind for _, kind in ledger.errors.values()} == {runner.ERROR_KIND_BATCH}
+    assert set(ledger.attempts_used.values()) == {1}
+    assert not ledger.pauses

@@ -86,6 +86,10 @@ class BulkIngestProgress(BaseModel):
     n_not_embedded: int
     n_embed_failed: int
     in_flight: int
+    # Files waiting for their retry time after a transient failure (the engine or database was
+    # busy, a photo awaits its repair). They used no attempt and the run sends them again when
+    # due; while it waits, ``stage_s.retry_wait`` grows.
+    waiting: int
     # Entries discovery could not queue (symlinks not followed, unreadable directories or files),
     # with a few sample paths relative to the folder; a run with any ends completed_with_errors.
     unreadable: int

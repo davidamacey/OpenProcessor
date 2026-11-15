@@ -123,7 +123,10 @@ async def test_failed_files_are_dead_or_retryable_and_retry_dead_requeues_them(
             session,
             source_id,
             job,
-            [('flaky', repo.error_text('503', 'batch_error'), False), ('gone', 'gone', True)],
+            [
+                repo.Failure('flaky', repo.error_text('503', 'batch_error')),
+                repo.Failure('gone', 'gone', terminal=True),
+            ],
         )
 
     status = (await client.get(url('sf-one', f'sources/{source["source_id"]}'))).json()

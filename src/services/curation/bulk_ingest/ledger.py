@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from src.db.repos import ingest_sources as repo
-from src.services.curation.bulk_ingest.runner import ClaimedPath
-from src.services.curation.bulk_ingest.source_queue import TERMINAL_ERROR_KINDS, path_of
+from src.services.curation.bulk_ingest.runner import ClaimedPath, RetryWait
+from src.services.curation.bulk_ingest.source_queue import failure_row, path_of
 
 
 if TYPE_CHECKING:
@@ -50,11 +50,9 @@ class DbLedger:
         self,
         done: Sequence[tuple[str, str | None]],
         failed: Sequence[tuple[str, str, str]],
+        retry_after_s: float | None = None,
     ) -> None:
-        failures = [
-            (key, repo.error_text(error, kind), kind in TERMINAL_ERROR_KINDS)
-            for key, error, kind in failed
-        ]
+        failures = [failure_row(key, error, kind, retry_after_s) for key, error, kind in failed]
         async with self._session() as session:
 
             def write(sync: Session) -> None:
@@ -62,6 +60,11 @@ class DbLedger:
                 repo.mark_failed(sync, self._source, self._job, failures)
 
             await session.run_sync(write)
+
+    async def waiting(self) -> RetryWait | None:
+        async with self._session() as session:
+            found = await session.run_sync(lambda sync: repo.waiting(sync, self._source))
+        return None if found is None else RetryWait(*found)
 
     async def release(self) -> None:
         async with self._session() as session:

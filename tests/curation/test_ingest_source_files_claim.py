@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from fixtures.job_rows import insert_row, make_project, project_session
+from sqlalchemy import text
 
 from src.db.repos import ingest_sources as repo
 
@@ -89,7 +90,10 @@ def test_settle_retry_and_dead_rows(pg, source) -> None:
             session,
             source_id,
             job,
-            [('flaky', repo.error_text('503', 'batch_error'), False), ('gone', 'gone', True)],
+            [
+                repo.Failure('flaky', repo.error_text('503', 'batch_error')),
+                repo.Failure('gone', 'gone', terminal=True),
+            ],
         )
         counts = repo.counts(session, source_id)
         assert counts == {'pending': 0, 'claimed': 0, 'done': 1, 'failed': 1, 'dead': 1}
@@ -100,9 +104,8 @@ def test_settle_retry_and_dead_rows(pg, source) -> None:
     # a failed row with attempts left is claimed again; a dead one only after retry_dead
     with project_session(engine, project) as session:
         assert [c.file_key for c in repo.claim(session, source_id, job, 10)] == ['flaky']
-        repo.mark_failed(session, source_id, job, [('flaky', 'again', False)] * 1)
-        repo.mark_failed(session, source_id, job, [('flaky', 'again', False)] * 1)
-        repo.mark_failed(session, source_id, job, [('flaky', 'again', False)] * 1)
+        for _ in range(3):
+            repo.mark_failed(session, source_id, job, [repo.Failure('flaky', 'again')])
         assert repo.counts(session, source_id)['dead'] == 2
         assert repo.retry_dead(session, source_id) == 2
         counts = repo.counts(session, source_id)
@@ -149,3 +152,66 @@ def test_a_name_is_unique_per_project_and_a_delete_takes_the_files(pg, source) -
             repo.insert(session, project, name=existing.name, kind='folder', config={}, schedule={})
         assert repo.delete_source(session, source_id) is True
         assert repo.counts(session, source_id)['pending'] == 0
+
+
+def _attempts(session, source_id, key):
+    return session.execute(
+        text(
+            'SELECT attempts, retry_at FROM ingest_source_files WHERE source_id = :s AND file_key = :k'
+        ),
+        {'s': source_id, 'k': key},
+    ).one()
+
+
+def test_a_transient_failure_keeps_the_attempts_and_waits_for_retry_at(pg, source) -> None:
+    project, source_id, job = source
+    enqueue(pg, project, source_id, ['a', 'b'])
+    with project_session(pg.engine('app'), project) as session:
+        repo.claim(session, source_id, job, 10)
+        repo.mark_failed(
+            session,
+            source_id,
+            job,
+            [repo.Failure('a', 'engine down', retry_in_s=30.0), repo.Failure('b', 'bad')],
+        )
+        attempts_a, retry_a = _attempts(session, source_id, 'a')
+        attempts_b, retry_b = _attempts(session, source_id, 'b')
+        assert (attempts_a, attempts_b) == (0, 1)  # a transient failure is not an attempt
+        assert retry_b is None  # any other kind is claimable at once, as before
+        assert retry_a is not None
+        # the claim takes b and skips a until its retry_at has passed
+        assert [c.file_key for c in repo.claim(session, source_id, job, 10)] == ['b']
+        rows, due = repo.waiting(session, source_id) or (0, 0.0)
+        assert rows == 1
+        assert 0 < due <= 30
+        session.execute(
+            text(
+                "UPDATE ingest_source_files SET retry_at = now() - interval '1 second' "
+                "WHERE source_id = :s AND file_key = 'a'"
+            ),
+            {'s': source_id},
+        )
+        assert repo.waiting(session, source_id) == (1, 0.0)
+        claimed = repo.claim(session, source_id, job, 10)
+        assert [(c.file_key, c.attempts) for c in claimed] == [('a', 0)]
+        assert _attempts(session, source_id, 'a')[1] is None  # the claim clears it
+        assert repo.waiting(session, source_id) is None
+
+
+def test_transient_failures_never_make_a_row_dead_and_a_terminal_one_still_does(pg, source) -> None:
+    project, source_id, job = source
+    enqueue(pg, project, source_id, ['flaky', 'gone'])
+    with project_session(pg.engine('app'), project) as session:
+        for _ in range(repo.MAX_ATTEMPTS + 2):
+            assert 'flaky' in {c.file_key for c in repo.claim(session, source_id, job, 10)}
+            repo.mark_failed(session, source_id, job, [repo.Failure('flaky', 'x', retry_in_s=0.0)])
+        repo.mark_failed(session, source_id, job, [repo.Failure('gone', 'x', terminal=True)])
+        counts = repo.counts(session, source_id)
+        assert (counts['failed'], counts['dead']) == (1, 1)
+        assert _attempts(session, source_id, 'flaky')[0] == 0
+        assert _attempts(session, source_id, 'gone')[0] == repo.MAX_ATTEMPTS
+        # a dead row never waits; a requeue clears a pause
+        assert repo.waiting(session, source_id) is not None
+        repo.requeue_all(session, source_id)
+        assert repo.waiting(session, source_id) is None
+        assert _attempts(session, source_id, 'flaky')[1] is None

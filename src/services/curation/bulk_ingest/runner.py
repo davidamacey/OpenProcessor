@@ -37,8 +37,10 @@ from src.services.curation.bulk_ingest.limits import (
     METRICS_SAMPLE_INTERVAL_S,
     PROGRESS_WRITE_INTERVAL_S,
     RATE_WINDOW_S,
+    RETRY_WAIT_SLICE_S,
 )
-from src.services.curation.bulk_ingest.sender import BatchRequestError
+from src.services.curation.bulk_ingest.sender import BatchBusyError, BatchRequestError
+from src.services.curation.ingest_models import ERROR_KIND_BUSY
 
 
 if TYPE_CHECKING:
@@ -50,6 +52,11 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 ERROR_KIND_BATCH = 'batch_error'
+STAGE_INGEST = 'ingest'
+# The stage the job reports (and the key under ``stage_s`` that adds up the seconds) while the run
+# waits for files whose transient failure told them to retry later.
+STAGE_RETRY_WAIT = 'retry_wait'
+WAIT_SLEEP = asyncio.sleep
 COUNTER_KEYS = (
     'ingested',
     'duplicates',
@@ -84,6 +91,14 @@ class ClaimedPath:
     path: str
 
 
+@dataclass(frozen=True)
+class RetryWait:
+    """Files waiting after a transient failure: how many, and seconds until the first is due."""
+
+    rows: int
+    due_in_s: float
+
+
 class FileLedger(Protocol):
     """The queue rows of one source, as the runner needs them."""
 
@@ -97,8 +112,15 @@ class FileLedger(Protocol):
         self,
         done: Sequence[tuple[str, str | None]],
         failed: Sequence[tuple[str, str, str]],
+        retry_after_s: float | None = None,
     ) -> None:
-        """``(file_key, image_id)`` rows done; ``(file_key, error, error_kind)`` rows failed."""
+        """``(file_key, image_id)`` rows done; ``(file_key, error, error_kind)`` rows failed.
+        A transient kind keeps the file's attempts and makes it wait (at least ``retry_after_s``
+        when the API said so); any other kind counts an attempt."""
+        ...
+
+    async def waiting(self) -> RetryWait | None:
+        """The files of this source waiting for their retry time, or ``None``."""
         ...
 
     async def release(self) -> None:
@@ -160,6 +182,9 @@ class BulkIngestRun:
         self._attempt_done = 0
         self._consecutive_failed_batches = 0
         self._abort: str | None = None
+        self._stage = STAGE_INGEST
+        self._waiting: RetryWait | None = None
+        self._retry_wait_s = 0.0
         self._started = time.monotonic()
         self._last_flush = 0.0
         self._window: deque[tuple[float, int]] = deque()
@@ -203,13 +228,19 @@ class BulkIngestRun:
             **self.totals,
             'decode_routes': dict(self.decode_routes),
             'in_flight': self.in_flight,
+            # Files waiting for their retry time after a transient failure; they use no attempt.
+            'waiting': self._waiting.rows if self._waiting else 0,
             'images_per_s': round(overall, 3),
             'images_per_s_recent': round(recent, 3) if recent is not None else None,
             'eta_s': round(remaining / rate, 1)
             if self.discovery_complete and rate and remaining > 0
             else None,
             'elapsed_s': round(now - self._started, 1),
-            'stage_s': {**self._stage_delta, 'batch_requests': round(self.request_s, 3)},
+            'stage_s': {
+                **self._stage_delta,
+                'batch_requests': round(self.request_s, 3),
+                STAGE_RETRY_WAIT: round(self._retry_wait_s, 3),
+            },
         }
 
     async def _sample_stages(self, *, force: bool = False) -> None:
@@ -235,7 +266,7 @@ class BulkIngestRun:
         self._window.append((now, self.processed))
         await self._sample_stages(force=force)
         await self.reporter.progress(
-            self.processed, self.discovered, 'ingest', self.counters(now), force=force
+            self.processed, self.discovered, self._stage, self.counters(now), force=force
         )
         await self.reporter.checkpoint({**self.totals, 'decode_routes': dict(self.decode_routes)})
 
@@ -272,10 +303,16 @@ class BulkIngestRun:
             await self._flush()
 
     async def _record_failures(
-        self, batch: Sequence[ClaimedPath], error: str, error_kind: str
+        self,
+        batch: Sequence[ClaimedPath],
+        error: str,
+        error_kind: str,
+        retry_after_s: float | None = None,
     ) -> None:
         self.failed += len(batch)
-        await self.ledger.settle([], [(c.file_key, error[:300], error_kind) for c in batch])
+        await self.ledger.settle(
+            [], [(c.file_key, error[:300], error_kind) for c in batch], retry_after_s
+        )
 
     async def _process(self, batch: list[ClaimedPath]) -> None:
         started = time.perf_counter()
@@ -288,7 +325,11 @@ class BulkIngestRun:
             )
         except BatchRequestError as exc:
             logger.error('bulk_ingest_batch_failed', error=str(exc), n=len(batch))
-            await self._record_failures(batch, str(exc), ERROR_KIND_BATCH)
+            if isinstance(exc, BatchBusyError):
+                # the sender's retries ran out and nothing was processed: no fault of the files
+                await self._record_failures(batch, str(exc), ERROR_KIND_BUSY, exc.retry_after)
+            else:
+                await self._record_failures(batch, str(exc), ERROR_KIND_BATCH)
             self._note_batch(all_failed=True, reason=str(exc))
             return
         finally:
@@ -342,24 +383,59 @@ class BulkIngestRun:
 
     # ---------------------------------------------------------------------- run
 
-    async def run(self) -> dict[str, Any]:
-        """Drain the queue and return the job's result. Raises :class:`BulkRunAbortedError` when
-        the run gave up; a stop request ends it early with the counts so far."""
-        self.discovered = await self.ledger.remaining()
-        await self._sample_stages(force=True)
-        await self.reporter.progress(0, self.discovered, 'ingest', self.counters(time.monotonic()))
+    async def _drain(self) -> None:
+        """Claim and send until the ledger has nothing claimable left (waiting rows are not)."""
         queue: asyncio.Queue[list[ClaimedPath] | None] = asyncio.Queue(
             maxsize=self.options.concurrency
         )
+        async with asyncio.TaskGroup() as group:
+            for _ in range(self.options.concurrency):
+                group.create_task(self._work(queue))
+            await self._produce(queue)
+            for _ in range(self.options.concurrency):
+                await queue.put(None)
+
+    async def _wait_for_retries(self) -> bool:
+        """Wait for the files that failed transiently; ``False`` when none waits or the run is
+        stopping. The wait is in slices (a cancel is seen within one) and lasts at least one, so a
+        row that is due but locked by someone else cannot make the run spin. The run reports the
+        stage and the seconds, so a wait is visible and not a stall."""
+        if self._stopping():
+            return False
+        self._waiting = await self.ledger.waiting()
+        if self._waiting is None:
+            return False
+        self._stage = STAGE_RETRY_WAIT
+        await self._flush(force=True)
+        left = max(self._waiting.due_in_s, RETRY_WAIT_SLICE_S)
+        while left > 0 and not self._stopping():
+            step = min(left, RETRY_WAIT_SLICE_S)
+            await WAIT_SLEEP(step)
+            left -= step
+            self._retry_wait_s += step
+            await self._flush()
+        self._stage = STAGE_INGEST
+        self._waiting = None
+        return not self._stopping()
+
+    async def run(self) -> dict[str, Any]:
+        """Drain the queue and return the job's result. Files that fail transiently are waited
+        for and sent again; the run ends when none waits. Raises :class:`BulkRunAbortedError`
+        when the run gave up (5 batches in a row failed entirely: the files stay ``failed``, none
+        is dead); a stop request ends it early with the counts so far."""
+        self.discovered = await self.ledger.remaining()
+        await self._sample_stages(force=True)
+        await self.reporter.progress(
+            0, self.discovered, self._stage, self.counters(time.monotonic())
+        )
         try:
-            async with asyncio.TaskGroup() as group:
-                for _ in range(self.options.concurrency):
-                    group.create_task(self._work(queue))
-                await self._produce(queue)
-                for _ in range(self.options.concurrency):
-                    await queue.put(None)
+            while True:
+                await self._drain()
+                if not await self._wait_for_retries():
+                    break
         finally:
             await self.ledger.release()
+        self._waiting = None
         await self._flush(force=True)
         if self._abort:
             raise BulkRunAbortedError(self._abort)

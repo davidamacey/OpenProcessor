@@ -24,6 +24,9 @@ DEFAULT_EXTENSIONS: tuple[str, ...] = ('.jpg', '.jpeg', '.png')
 # in a row instead of recording the whole source as failed.
 MAX_CONSECUTIVE_FAILED_BATCHES = 5
 PROGRESS_WRITE_INTERVAL_S = 1.0
+# The run waits for files that failed transiently in slices this long, so a cancel is seen at once
+# and a due-but-locked row cannot make it spin.
+RETRY_WAIT_SLICE_S = 1.0
 METRICS_SAMPLE_INTERVAL_S = 5.0
 MAX_SENDER_CONNECTIONS = 64
 # One batch of the largest size on a loaded host; the route answers when the whole batch is stored.
