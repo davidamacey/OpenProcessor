@@ -56,6 +56,7 @@ def test_keepalive_and_reconnect_values_are_the_api_pools() -> None:
         'grpc.initial_reconnect_backoff_ms',
         'grpc.min_reconnect_backoff_ms',
         'grpc.max_reconnect_backoff_ms',
+        'grpc.dns_min_time_between_resolutions_ms',
         'grpc.max_send_message_length',
         'grpc.max_receive_message_length',
     )
@@ -64,6 +65,8 @@ def test_keepalive_and_reconnect_values_are_the_api_pools() -> None:
     # docker-compose.yml: --grpc-http2-min-recv-ping-interval-without-data=20000
     assert engine['grpc.keepalive_time_ms'] >= 20000
     assert engine['grpc.max_reconnect_backoff_ms'] == RECONNECT_MAX_BACKOFF_MS <= 5000
+    # a recreated model server on a new address is re-resolved within the reconnect bound
+    assert engine['grpc.dns_min_time_between_resolutions_ms'] <= RECONNECT_MAX_BACKOFF_MS
 
 
 def test_a_restarted_model_server_is_reached_within_the_backoff_bound() -> None:

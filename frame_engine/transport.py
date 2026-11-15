@@ -89,7 +89,10 @@ RECONNECT_MAX_BACKOFF_MS = 3000
 #: ``--grpc-http2-min-recv-ping-interval-without-data=20000`` and pings without calls permitted),
 #: else the server answers GOAWAY ``too_many_pings``. gRPC connection backoff: the delay between
 #: connect attempts grows towards 120 s by default; capped, a restarted model server is reached
-#: within about ``RECONNECT_MAX_BACKOFF_MS``.
+#: within about ``RECONNECT_MAX_BACKOFF_MS``. A model server recreated on a new address is found
+#: only after the channel re-resolves its name, which gRPC allows at most every 30 s by default
+#: (``grpc.dns_min_time_between_resolutions_ms``); here at most every second, and only while the
+#: connections fail.
 CHANNEL_OPTIONS: tuple[tuple[str, int], ...] = (
     ('grpc.max_send_message_length', 512 * MIB),
     ('grpc.max_receive_message_length', 512 * MIB),
@@ -100,6 +103,7 @@ CHANNEL_OPTIONS: tuple[tuple[str, int], ...] = (
     ('grpc.initial_reconnect_backoff_ms', 250),
     ('grpc.min_reconnect_backoff_ms', 250),
     ('grpc.max_reconnect_backoff_ms', RECONNECT_MAX_BACKOFF_MS),
+    ('grpc.dns_min_time_between_resolutions_ms', 1000),
 )
 
 
