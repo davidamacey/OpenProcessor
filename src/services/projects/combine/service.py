@@ -45,12 +45,12 @@ _SLUG_ERRORS = frozenset({'slug_taken', 'slug_retired', 'slug_invalid'})
 
 
 def target_space_keys() -> frozenset[str]:
-    """The space keys a new target will have: its default encoder's (every project is created
-    with the default spaces)."""
+    """The space keys a new target will have: its default encoders' (every project is created
+    with the default spaces: the frame encoder's and the crop encoder's)."""
     from src.domain.embedding_spaces import space_key
-    from src.services.projects.store import DEFAULT_ENCODER
+    from src.services.projects.store import CROP_ENCODER, FRAME_ENCODER
 
-    return frozenset({space_key(*DEFAULT_ENCODER)})
+    return frozenset({space_key(*FRAME_ENCODER), space_key(*CROP_ENCODER)})
 
 
 def report_of(issues: list[CombineIssue]) -> ValidationReport:

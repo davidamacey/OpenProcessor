@@ -46,15 +46,17 @@ def seed_default_spaces(pg: PgDatabase, project: uuid.UUID) -> None:
     from src.db.repos import embedding_spaces as spaces_repo
     from src.services.embedding_spaces.catalog import sync_catalog
     from src.services.embedding_spaces.spaces import default_space_rows
-    from src.services.projects.store import DEFAULT_ENCODER
+    from src.services.projects.store import CROP_ENCODER, FRAME_ENCODER
 
     with Session(pg.engine('app')) as session:
         sync_catalog(session)
     with Session(pg.engine('super')) as session:
-        encoder = spaces_repo.get_model_version(session, *DEFAULT_ENCODER)
-    assert encoder is not None, 'the shipped catalog carries the default encoder'
+        frame = spaces_repo.get_model_version(session, *FRAME_ENCODER)
+        crop = spaces_repo.get_model_version(session, *CROP_ENCODER)
+    assert frame is not None, 'the shipped catalog carries the frame encoder'
+    assert crop is not None, 'the shipped catalog carries the crop encoder'
     with psycopg.connect(pg.conninfo('super'), autocommit=True) as conn:
-        for row in default_space_rows(project, encoder, created_by='test'):
+        for row in default_space_rows(project, frame=frame, crop=crop, created_by='test'):
             conn.execute(
                 'INSERT INTO embedding_spaces (project_id, space_key, model_version_id, target, '
                 'dim, role, status, index_role, vector_field, state_field, nested_path, '

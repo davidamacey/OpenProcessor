@@ -61,7 +61,7 @@ def engine() -> Any:
 def _plan() -> wire.EnginePlan:
     return wire.EnginePlan(
         branches=('embed_frame',),
-        embed=wire.EmbedSpec(PE_MODEL, 336, 32),
+        embed=wire.EmbedSpec(PE_MODEL, 336),
         derivatives=tuple(wire.RenditionSpec(f's{s}', s) for s in SIDES),
     )
 

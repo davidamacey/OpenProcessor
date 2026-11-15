@@ -434,8 +434,8 @@ class FrameEngine:
             out.append(Detect(plan.detector))
         if plan.embed is not None and plan.runs('embed_frame'):
             out.append(EmbedFrame(plan.embed))
-        if plan.embed is not None and plan.runs('embed_crops'):
-            out.append(EmbedCrops(plan.embed, plan.embed_classes))
+        if plan.crop_embed is not None and plan.runs('embed_crops'):
+            out.append(EmbedCrops(plan.crop_embed, plan.embed_classes))
         if plan.faces is not None and plan.runs('faces'):
             out.append(Faces(plan.faces))
         if plan.faces is not None and plan.runs('face_embed'):

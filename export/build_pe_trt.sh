@@ -1,12 +1,16 @@
 #!/bin/bash
 # =============================================================================
-# PE-Core-L14-336 image encoder: TensorRT engine build (Path 1)
+# PE-Core-L14 image encoders: TensorRT engine build (Path 1)
 # =============================================================================
 #
 # Step 1: export/export_pe_image_encoder.py produces the ONNX.
 # Step 2: this script runs trtexec over it, installs the resulting plan as
 #         <models dir>/pe_image_encoder/1/model.plan, and writes the matching
 #         config.pbtxt (platform: tensorrt_plan).
+#
+# Two models come from the same weights: the frame encoder pe_image_encoder (336 input) and the
+# crop encoder pe_crop_encoder (224 input, the encoder of object crops). PE_ROLE=crop builds the
+# second (its ONNX comes from `export_pe_image_encoder.py --crop`).
 #
 # If the engine build fails -- PE's attention pooling has hit ops that some
 # TensorRT releases do not support -- fall back to Path 2:
@@ -17,13 +21,14 @@
 # triton-server trtexec`; set TRTEXEC=trtexec to use a host binary instead.
 #
 # Environment:
+#   PE_ROLE          frame (default) or crop: which model to build
 #   ONNX_PATH        ONNX produced by the exporter (default:
-#                    <repo>/pytorch_models/pe_image_encoder.onnx)
+#                    <repo>/pytorch_models/<model name>.onnx)
 #   MODELS_DIRS      Space-separated Triton model repositories to install
 #                    into (default: <repo>/models)
 #   MAX_BATCH        Engine + config max batch size (default: 32; halved on the small target)
 #   OPT_BATCH        Engine optimization-profile opt batch (default: 8)
-#   IMAGE_SIZE       Input resolution (default: 336)
+#   IMAGE_SIZE       Input resolution (default: 336, or 224 for PE_ROLE=crop)
 #   WORKSPACE        trtexec workspace memory pool (default: trt_workspace_gb, 8G; 2G on the small target)
 #   PYTHON           Interpreter used to render config.pbtxt (default:
 #                    <repo>/.venv/bin/python if present, else python3)
@@ -38,16 +43,21 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
-ONNX_PATH="${ONNX_PATH:-$REPO_DIR/pytorch_models/pe_image_encoder.onnx}"
+PE_ROLE="${PE_ROLE:-frame}"
+case "$PE_ROLE" in
+    frame) MODEL_NAME="pe_image_encoder"; DEFAULT_IMAGE_SIZE=336; EXPORT_ARGS=() ;;
+    crop)  MODEL_NAME="pe_crop_encoder";  DEFAULT_IMAGE_SIZE=224; EXPORT_ARGS=(--crop) ;;
+    *) echo "[ERROR] PE_ROLE must be frame or crop, got '$PE_ROLE'" >&2; exit 2 ;;
+esac
+ONNX_PATH="${ONNX_PATH:-$REPO_DIR/pytorch_models/$MODEL_NAME.onnx}"
 MODELS_DIRS="${MODELS_DIRS:-$REPO_DIR/models}"
-PLAN_TMP="${PLAN_TMP:-$(dirname "$ONNX_PATH")/pe_image_encoder.plan}"
+PLAN_TMP="${PLAN_TMP:-$(dirname "$ONNX_PATH")/$MODEL_NAME.plan}"
 # shellcheck source=../scripts/lib/trt_settings.sh
 source "$REPO_DIR/scripts/lib/trt_settings.sh"
-MAX_BATCH="${MAX_BATCH:-$(trt_max_batch pe_image_encoder 32)}"
+MAX_BATCH="${MAX_BATCH:-$(trt_max_batch "$MODEL_NAME" 32)}"
 OPT_BATCH="${OPT_BATCH:-8}"
-IMAGE_SIZE="${IMAGE_SIZE:-336}"
-WORKSPACE="${WORKSPACE:-$(trt_workspace_gb pe_image_encoder)G}"
-MODEL_NAME="pe_image_encoder"
+IMAGE_SIZE="${IMAGE_SIZE:-$DEFAULT_IMAGE_SIZE}"
+WORKSPACE="${WORKSPACE:-$(trt_workspace_gb "$MODEL_NAME")G}"
 INPUT_TENSOR="images"
 
 if [ -x "$REPO_DIR/.venv/bin/python" ]; then
@@ -61,7 +71,7 @@ err()  { echo "[ERROR] $1" >&2; }
 
 if [ ! -f "$ONNX_PATH" ]; then
     err "ONNX not found: $ONNX_PATH"
-    err "Run export/export_pe_image_encoder.py first."
+    err "Run export/export_pe_image_encoder.py ${EXPORT_ARGS[*]:-} first."
     exit 1
 fi
 
@@ -228,6 +238,7 @@ for models_dir in $MODELS_DIRS; do
     log "installed: $models_dir/$MODEL_NAME/1/model.plan"
 
     "$PYTHON" "$SCRIPT_DIR/export_pe_image_encoder.py" \
+        ${EXPORT_ARGS[@]+"${EXPORT_ARGS[@]}"} \
         --config-only \
         --platform tensorrt_plan \
         --models-dir "$models_dir" \

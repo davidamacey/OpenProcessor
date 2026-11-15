@@ -3,6 +3,15 @@
 Pure arithmetic on sizes and boxes, standard library only: the frame engine's image carries
 ``src/domain`` and nothing else of ``src``.
 
+Crops for the encoder are letterboxed (:data:`CROP_FILL`); frames keep the shorter-edge centre
+square of :func:`whole_square_geometry`.
+
+The resample of a crop onto its fitted rectangle (the one rule of the frame engine's kernel,
+``antialias=True``, and of the API's host copy, Pillow ``BILINEAR``): a triangle filter whose
+support widens with the downscale factor. A box larger than the encoder input is therefore
+antialiased (area-weighted, every source pixel counts); a box smaller than the input gets the plain
+bilinear enlargement, because the filter does not widen when it enlarges.
+
 A letterbox pastes the resized frame at an integer offset, so the pad every caller un-maps with
 is that same integer: ``(target - new) // 2``. An odd margin puts the extra pixel on the right
 or bottom; a fractional pad would put every un-mapped coordinate half a pixel off.
@@ -11,6 +20,12 @@ or bottom; a fractional pad would put every un-mapped coordinate half a pixel of
 from __future__ import annotations
 
 from typing import NamedTuple
+
+
+#: The pad of an encoder crop square. PE's own transform has no pad (it squashes the image,
+#: ``core.vision_encoder.transforms.get_image_transform``) and normalizes with mean 0.5 and std
+#: 0.5, so the pad that stays at the normalized zero is 127.5; the integer 128.
+CROP_FILL = 128
 
 
 class Letterbox(NamedTuple):
@@ -48,7 +63,8 @@ class Square(NamedTuple):
 
 
 def whole_square_geometry(w: int, h: int, target: int) -> Square:
-    """Shorter edge to ``target``, centre crop (the whole-frame embedding input)."""
+    """Shorter edge to ``target``, centre crop (the whole-frame embedding input only: a crop is
+    letterboxed, :func:`letterbox_geometry`)."""
     scale = target / min(h, w)
     nw, nh = max(target, round(w * scale)), max(target, round(h * scale))
     return Square(nw, nh, (nw - target) // 2, (nh - target) // 2)

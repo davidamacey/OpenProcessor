@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from pe_image_constants import (
+    CROP_TRITON_MODEL_NAME,
     DEFAULT_MAX_BATCH,
     EMBEDDING_DIM,
     IMAGE_SIZE,
@@ -98,15 +99,34 @@ def render_config(cfg: PETritonConfig) -> str:
             '# dynamic_batching below is invalid.'
         )
 
-    return f"""# {PE_VARIANT} image encoder — whole-frame and per-crop embeddings.
-#
-# Consumed by src/clients/pe_encoder.py (PEEncoder.encode_images); the
-# resulting vector is stored as the curation `pe_embedding` field and backs
-# semantic search, near-duplicate detection, clustering and the embedding
-# visualization. The tensor names below are a contract with that client.
+    if cfg.model_name == CROP_TRITON_MODEL_NAME:
+        purpose = (
+            f'# {PE_VARIANT} crop encoder — one vector per object box, a model of its own.\n#\n'
+            '# Consumed by src/clients/pe_encoder.py (PEEncoder.embed_crops) and the frame engine\n'
+            '# (plan.crop_embed); the vector is stored as the item and box vectors of the crop\n'
+            '# space (examples/embedding/catalog.tsv, pe_core_l14_crop224). The same weights as\n'
+            '# pe_image_encoder built at this input size; its vectors are not comparable with it.\n'
+            '# The tensor names below are a contract with that client.'
+        )
+        pixels = (
+            'the whole box scaled to fit the square (aspect kept; antialiased when the box is\n'
+            '#         larger than the square) and padded with grey 128\n'
+            '#         (see src/utils/pe_preprocess.py, letterbox_crop_rgb)'
+        )
+    else:
+        purpose = (
+            f'# {PE_VARIANT} image encoder — whole-frame embeddings.\n#\n'
+            '# Consumed by src/clients/pe_encoder.py (PEEncoder.encode_images); the\n'
+            '# resulting vector is stored as the curation frame `pe_embedding` field and backs\n'
+            '# semantic search, near-duplicate detection and the embedding visualization.\n'
+            '# The tensor names below are a contract with that client.'
+        )
+        pixels = 'resized and center-cropped (see src/utils/pe_preprocess.py)'
+
+    return f"""{purpose}
 #
 # Input:  {cfg.input_name} [B, 3, {cfg.image_size}, {cfg.image_size}] UINT8 RGB pixels,
-#         resized and center-cropped (see src/utils/pe_preprocess.py);
+#         {pixels};
 #         the engine scales them and applies PE-Core's 0.5/0.5 mean/std itself
 #         (export/uint8_input.py)
 # Output: {cfg.output_name} [B, {cfg.embedding_dim}] FP32, L2-normalized

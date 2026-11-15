@@ -27,7 +27,7 @@ Measured on an RTX A6000 (GPU memory after loading each model on top of the inge
 | `ocr_pipeline` (calls the two OCR models) | `/ocr/*` | 0 MiB (the two above load with it) |
 | Total | | 27,698 MiB |
 
-The detector, `pe_image_encoder` and `pe_text_encoder` (curation ingest, search and clustering)
+The detector, `pe_image_encoder`, `pe_crop_encoder` and `pe_text_encoder` (curation ingest, search and clustering)
 are the same in both profiles, and the frame engine runs in both. Face and OCR models are loaded on the first
 call under the ingest profile, so those calls pay a few seconds once.
 

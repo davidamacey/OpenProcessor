@@ -1,8 +1,11 @@
-"""Unified PE-Core-L14-336 client.
+"""Unified PE-Core-L14 client.
 
 Two encoders ship under one class, both on Triton:
 
-* **Image encoder**: the model ``pe_image_encoder`` through an :class:`AsyncTritonPool`.
+* **Image encoders**: the frame encoder ``pe_image_encoder`` (336 input, one centre square per
+  photo) and the crop encoder ``pe_crop_encoder`` (its own input size, the whole box letterboxed;
+  the same weights built at a 224 input), through an :class:`AsyncTritonPool`. They are two models
+  and two vector spaces; the text tower below matches both.
 * **Text encoder**: the text-tower graph from ``export/export_pe_text_encoder.py`` served as
   ``pe_text_encoder`` (onnxruntime backend, one CPU instance shared by every uvicorn worker),
   called synchronously through :class:`~src.clients.pe_text_backends.TritonTextBackend` and
@@ -42,10 +45,10 @@ from src.clients.pe_text_backends import (
 from src.config.env import env_str
 from src.config.settings import TritonModelConfig
 from src.core.logging import get_logger
+from src.domain.embedding_spaces import Target
 from src.utils.cpu_pool import run_cpu
 from src.utils.pe_preprocess import (
-    PE_SIZE,
-    resize_crop_rgb,
+    letterbox_crop_rgb,
     to_chw,
     to_chw_into,
     whole_frame_rgb_from_image,
@@ -68,6 +71,16 @@ logger = get_logger(__name__)
 
 
 PE_IMAGE_MODEL = TritonModelConfig.PE_IMAGE_MODEL
+PE_CROP_MODEL = TritonModelConfig.PE_CROP_MODEL
+PE_CROP_SIZE = TritonModelConfig.PE_CROP_SIZE
+
+
+def image_model_for(target: Target) -> str:
+    """The Triton image encoder whose vectors fill a space of ``target``: the frame encoder for
+    frame vectors, the crop encoder for the vectors of items and boxes."""
+    return PE_IMAGE_MODEL if target is Target.FRAME else PE_CROP_MODEL
+
+
 PE_EMBEDDING_DIM = 1024
 
 # Maximum number of distinct text queries to keep cached. The labeler
@@ -78,11 +91,12 @@ TextCacheInfo = namedtuple('TextCacheInfo', ['hits', 'misses', 'maxsize', 'currs
 
 
 def _preprocess_crops(crops: list[np.ndarray]) -> np.ndarray:
-    """PE preprocessing of a list of HWC-uint8 crops into one ``(N, 3, 336, 336)`` batch."""
+    """The crop encoder's preprocessing of HWC-uint8 crops into one ``(N, 3, S, S)`` batch (each
+    crop letterboxed whole, ``S`` = :data:`PE_CROP_SIZE`)."""
     with stage_timer('pe_preprocess'):
-        batch = np.empty((len(crops), 3, PE_SIZE, PE_SIZE), dtype=np.uint8)
+        batch = np.empty((len(crops), 3, PE_CROP_SIZE, PE_CROP_SIZE), dtype=np.uint8)
         for slot, crop in zip(batch, crops, strict=True):
-            to_chw_into(slot, resize_crop_rgb(crop))
+            to_chw_into(slot, letterbox_crop_rgb(crop, PE_CROP_SIZE))
         return batch
 
 
@@ -146,12 +160,13 @@ class PEEncoder:
     # Image path — Triton
     # ------------------------------------------------------------------
 
-    async def encode_images(self, chws: np.ndarray) -> np.ndarray:
+    async def encode_images(self, chws: np.ndarray, model: str = PE_IMAGE_MODEL) -> np.ndarray:
         """Encode pre-preprocessed image tensors via Triton.
 
         Args:
-            chws: ``(N, 3, H, W)`` uint8 RGB pixels, already resized and
-                center-cropped; the engine applies the PE-Core normalization.
+            chws: ``(N, 3, H, W)`` uint8 RGB pixels, already preprocessed for ``model``; the
+                engine applies the PE-Core normalization.
+            model: the Triton image encoder: the frame encoder (default) or the crop encoder.
 
         Returns:
             ``(N, 1024)`` L2-normalized float32.
@@ -171,7 +186,7 @@ class PEEncoder:
         inp = await run_cpu(uint8_images_input, chws, nbytes=chws.nbytes)
         outs = [InferRequestedOutput('image_embeddings')]
         with stage_timer('embed', nbytes=chws.nbytes):
-            result = await self.triton_pool.infer(PE_IMAGE_MODEL, [inp], outputs=outs)
+            result = await self.triton_pool.infer(model, [inp], outputs=outs)
         embeddings = np.asarray(result.as_numpy('image_embeddings'), dtype=np.float32)
         return _l2_normalize(embeddings)
 
@@ -180,18 +195,18 @@ class PEEncoder:
         crops: list[np.ndarray],
         max_batch: int = PE_CROP_MAX_BATCH,
     ) -> np.ndarray:
-        """Preprocess + encode a list of HWC-uint8 RGB item crops.
+        """Preprocess + encode a list of HWC-uint8 RGB item crops with the crop encoder.
 
-        Applies the canonical PE preprocessing (resize-shorter-edge,
-        center-crop to uint8 pixels; the engine applies the PE-Core 0.5/0.5 normalize — see
-        :mod:`src.utils.pe_preprocess`) to each crop, then
+        Letterboxes each whole crop to the crop encoder's square (:func:`~src.utils.pe_preprocess.
+        letterbox_crop_rgb`; the engine applies the PE-Core 0.5/0.5 normalize), then
         chunks at ``max_batch`` to respect the encoder's configured Triton
         max batch size. :meth:`encode_images` already L2-normalizes its
         output, so the returned rows are unit-norm.
 
         Args:
             crops: HWC uint8 RGB arrays, any size (including degenerate /
-                zero-size, which :func:`resize_crop_rgb` maps to zeros).
+                zero-size, which :func:`~src.utils.pe_preprocess.letterbox_crop_rgb` maps to a
+                square of the fill).
             max_batch: Max crops per Triton call.
 
         Returns:
@@ -206,7 +221,7 @@ class PEEncoder:
         rows: list[np.ndarray] = []
         for start in range(0, chws.shape[0], max_batch):
             chunk = chws[start : start + max_batch]
-            rows.append(await self.encode_images(chunk))
+            rows.append(await self.encode_images(chunk, PE_CROP_MODEL))
         return np.concatenate(rows, axis=0)
 
     async def embed_whole_frame_image(self, img: Image.Image) -> np.ndarray:

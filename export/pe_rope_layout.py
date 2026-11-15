@@ -45,6 +45,11 @@ class Geometry:
     def width(self) -> int:
         return self.heads * self.head_dim
 
+    @classmethod
+    def for_input(cls, image_size: int, patch_size: int = 14) -> Geometry:
+        """PE-Core-L14 at a square input of ``image_size``: its patch grid plus the class token."""
+        return cls(seq_len=(image_size // patch_size) ** 2 + 1)
+
 
 PE_CORE_L14_336 = Geometry()
 

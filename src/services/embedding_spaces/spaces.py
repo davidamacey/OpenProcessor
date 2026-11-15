@@ -67,12 +67,14 @@ def mapping_properties(space: repo.SpaceRow) -> dict[str, Any]:
 
 def default_space_rows(
     project_id: uuid.UUID,
-    version: repo.ModelVersionRow,
     *,
+    frame: repo.ModelVersionRow,
+    crop: repo.ModelVersionRow,
     created_by: str,
     knn_method: KnnMethodSpec | None = None,
 ) -> list[repo.NewSpace]:
-    """The three ``primary``, ``ready`` default spaces (item, box, frame) of a project.
+    """The three ``primary``, ``ready`` default spaces (item, box, frame) of a project: the item
+    and box spaces are ``crop``'s (the crop encoder), the frame space is ``frame``'s.
 
     They keep the 0.6.0 physical names, so an upgraded project and a new one read the same
     fields. The project create (and the upgrade, with ``knn_method`` read from the live mapping)
@@ -82,6 +84,7 @@ def default_space_rows(
     rows = []
     for target in DEFAULT_TARGETS:
         names = legacy_names(target)
+        version = frame if target is Target.FRAME else crop
         rows.append(
             repo.NewSpace(
                 project_id=project_id,

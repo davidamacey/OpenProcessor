@@ -66,6 +66,7 @@ under a different Triton model name. Leave them unset for the stock names.
 | `CLIP_IMAGE_MODEL` / `CLIP_TEXT_MODEL` | `mobileclip2_s2_image_encoder` / `mobileclip2_s2_text_encoder` |
 | `OCR_DET_MODEL` / `OCR_REC_MODEL` / `OCR_PIPELINE_MODEL` | `paddleocr_det_trt` / `paddleocr_rec_trt` / `ocr_pipeline` |
 | `PE_IMAGE_MODEL` / `PE_TEXT_MODEL` | `pe_image_encoder` / `pe_text_encoder` |
+| `PE_CROP_MODEL` / `PE_CROP_SIZE` | `pe_crop_encoder` / `224`: the encoder of object crops and the square its engine was built at (each box is letterboxed whole into it). Change both together with the engine (`make pe-export-crop`, `make pe-build-crop-trt`); it is a new vector space, so a project is re-ingested |
 
 ## Image names
 

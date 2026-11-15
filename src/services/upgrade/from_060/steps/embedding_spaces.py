@@ -112,7 +112,7 @@ async def run(ctx: StepContext) -> None:
     version = await _model_version(ctx)
     for pd in ctx.parsed.projects:
         project_id: uuid.UUID = ctx.project_ids[pd.project.slug]
-        rows = default_space_rows(project_id, version, created_by=CREATED_BY)
+        rows = default_space_rows(project_id, frame=version, crop=version, created_by=CREATED_BY)
         await repo.add_spaces(ctx.session, await _methods(ctx, pd.project.indexes, rows))
         ctx.report.add('embedding_spaces', len(rows))
 

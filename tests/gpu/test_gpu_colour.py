@@ -53,7 +53,7 @@ def _ask(engine: Any, data: bytes) -> list[np.ndarray]:
 
     plan = wire.EnginePlan(
         branches=('embed_frame',),
-        embed=wire.EmbedSpec('pe_image_encoder', 336, 32),
+        embed=wire.EmbedSpec('pe_image_encoder', 336),
         derivatives=(wire.RenditionSpec('t', THUMB, 95), wire.RenditionSpec('full', FULL, 100)),
     )
     inputs = []

@@ -5,7 +5,7 @@ product's CPU path on the same images, through the same detector and PE engines.
 ``capture`` runs every image three ways and stores what ingest would store:
 
 * ``cpu``  the product: Pillow decode + EXIF (``ingest_helpers._decode_image``), Pillow letterbox,
-           crops by ``crop_pil`` + ``resize_crop_rgb``, the whole frame from OpenCV's 1/8
+           crops by ``crop_pil`` + ``gpu_decode_lib.centre_square_reference``, the whole frame from OpenCV's 1/8
            DCT decode, OpenCV blur.
 * ``dec``  GPU decode (``--decoder``: nvImageCodec, default, or torchvision), then the product's CPU functions on the
            decoded pixels; the whole frame still from OpenCV's 1/8 decode. Isolates the decoder.
@@ -144,12 +144,13 @@ def capture_image(name: str, data: bytes, eng: Engines, out: dict[str, Any]) -> 
     from PIL import Image
 
     from scripts.bench import gpu_decode_kernels as k
+    from scripts.bench.gpu_decode_lib import centre_square_reference
     from src.domain.image_geometry import crop_rect
     from src.services.curation.ingest_helpers import _decode_image
     from src.services.curation.ingest_index import crop_pil
     from src.services.detection.crop_quality import crop_lap_var, image_lap_var
     from src.services.detection.geometry import letterbox_to_square
-    from src.utils.pe_preprocess import resize_crop_rgb, whole_frame_rgb_from_bytes
+    from src.utils.pe_preprocess import whole_frame_rgb_from_bytes
 
     pil = _decode_image(data).pil
     w, h = pil.size
@@ -218,7 +219,7 @@ def capture_image(name: str, data: bytes, eng: Engines, out: dict[str, Any]) -> 
                 r = _clamped_rect(box, w, h)
                 bv = None if r is None else k.lap_var(frame[r[1] : r[3], r[0] : r[2]])
             else:
-                sq = resize_crop_rgb(np.asarray(crop_pil(src_pil, _box4(box))))
+                sq = centre_square_reference(np.asarray(crop_pil(src_pil, _box4(box))))
                 bv = crop_lap_var(src_rgb, _box4(box), 'rgb')
             squares[arm].append(sq)
             out['items'][arm].append((name, *det, bv, full_var[arm], *crop_rect(_box4(box), w, h)))

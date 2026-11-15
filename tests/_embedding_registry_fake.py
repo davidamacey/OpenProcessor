@@ -39,7 +39,8 @@ def default_space(target: Target, key: str = DEFAULT_KEY, dim: int = DIM) -> Res
         index_role='images' if target is Target.FRAME else 'items',
         model_key=key.rsplit('_v', 1)[0],
         model_version=1,
-        triton_image_model='pe_image_encoder',
+        # frame vectors come from the frame encoder, item and box vectors from the crop encoder
+        triton_image_model='pe_image_encoder' if target is Target.FRAME else 'pe_crop_encoder',
         triton_text_model='pe_text_encoder',
         knn_method=default_knn_spec(),
     )

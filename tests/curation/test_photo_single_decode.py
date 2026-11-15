@@ -178,7 +178,7 @@ def test_embed_whole_frame_image_sends_the_square_of_the_frame() -> None:
 
     frame = Image.open(io.BytesIO(_jpeg(700, 400))).convert('RGB')
     encoder = PEEncoder(triton_pool=SimpleNamespace())  # type: ignore[arg-type]
-    encoder.encode_images = _encode  # type: ignore[method-assign]
+    encoder.encode_images = _encode  # type: ignore[method-assign, assignment]
     vector = asyncio.run(encoder.embed_whole_frame_image(frame))
     assert vector is not None
     assert vector.shape == (1024,)

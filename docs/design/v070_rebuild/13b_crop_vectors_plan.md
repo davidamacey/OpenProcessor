@@ -127,3 +127,22 @@ What the labelling loop needs from a crop vector is to tell objects of ONE detec
 | C1 (engine and API) | the crop encoder as its own named model with input size and letterbox preprocessing; the 224 build of today's encoder through the documented export path; the centre-crop rule deleted; the crop space registered as new | COCO crop R@1 and NMI not below the 336 letterbox numbers by more than 1.5 points; Cars and the placed-object sets at 32 to 512 px likewise; text to crop mAP reported; GPU ms per crop from the model server; rate at 32 in flight on COCO and the 20 MP set with the named bound |
 | C2 (measurement) | point 3 | its bar |
 
+
+## 7. Lane C1 result (branch `lane/crop-encoder`)
+
+Built as section 6 point 2 says: the crop encoder is the plan's own object (`crop_embed`: model, size, batch, recipe `letterbox`, fill 128), today's weights at a 224 input
+(`pe_crop_encoder`, `PE_CROP_MODEL`, `PE_CROP_SIZE`), the centre-crop rule is gone from every path, the crop space is the new `pe_core_l14_crop224` (a new project's item and box
+spaces), the frame vector is unchanged (cosine to today's 0.999995 minimum on 200 COCO and 100 set P photos). Measured through the engine against the 336 letterbox:
+
+| Gate | Result |
+|---|---|
+| COCO crop R@1 / NMI | 0.703 / 0.587 against 0.712 / 0.596 (-1.0 / -0.9 points; NMI paired over 10 seeds -0.6, sd 0.9): pass |
+| Cars R@1 / NMI | 0.911 / 0.924 against 0.913 / 0.921 (-0.2 / +0.3; NMI paired +0.4, sd 0.5): pass |
+| Text to crop mAP | COCO 0.793 against 0.806, Cars 0.899 against 0.906 (same PE-L text tower): reported |
+| Placed objects 32 to 512 px, NMI (cars, coco, cs sets, 10 k-means seeds, the same seeds for both arms) | paired gap to the 336 letterbox, mean of 10 seeds (sd of the paired gaps): no set below -1.5 at any size; worst COCO 32 px -1.05 (sd 1.40; -1.53 on the first five seeds), Cars 256 px -0.90 (0.67), COCO 512 px -0.72 (1.60), Cars 32 px -0.83 (0.45); the 32 and 64 px boxes are enlarged, so the rule does not touch them: pass |
+| Model server device memory (NVML, process of `tritonserver`, one instance, max batch 32, dynamic batching 4 / 8 / 16 / 32) | the crop model costs 750 MiB (21,246 to 21,996 MiB with the frame encoder and the detector, face and OCR models loaded), the same idle and at the peak of the 32-in-flight COCO row (nothing grows after load) |
+| GPU per crop (model server counters) | 2.1 to 2.3 ms at 224 against 4.5 to 4.8 at 336 (full batches); single stream 1.9 against 4.2 ms at batch 8 and up, but 7.5 against 6.1 ms at batch 1 |
+| Rate, 32 in flight, engine alone | COCO 40 photos/s against 25 with the same plan at 336 (GPU bound, 89 to 92 % busy); the 20 MP set 47 to 54 against 42 (the engine process's interpreter lock held in 0.78 of the samples, GPU 78 to 84 %) |
+
+The crop rule is letterbox with the resample antialiased when the box is larger than the square and plain bilinear when smaller (Pillow `BILINEAR`; the first build used plain bilinear everywhere and missed COCO at 32 px by 0.03 and at 512 px by 0.4 on five seeds). Open: the installer group that builds `pe_crop_encoder`; a start-up check that a project's
+primary item and box spaces name the configured crop model.

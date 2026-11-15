@@ -132,7 +132,7 @@ in front of PostgreSQL.
   `yolo26_small_trt` (fused `[300, 6]`), `scrfd_10g_bnkps`, `arcface_w600k_r50`,
   `mobileclip2_s2_image_encoder`, `mobileclip2_s2_text_encoder`,
   `paddleocr_det_trt`, `paddleocr_rec_trt`, `ocr_pipeline` (a BLS pipeline;
-  see [OCR.md](OCR.md)) and the curation encoders `pe_image_encoder` (TensorRT) and `pe_text_encoder`
+  see [OCR.md](OCR.md)) and the curation encoders `pe_image_encoder` and `pe_crop_encoder` (TensorRT; frames and object crops) and `pe_text_encoder`
   (TensorRT FP16, GPU). Dynamic batching is on; preferred sizes and instance counts are in each
   `config.pbtxt`. The API reads a detector's output format from Triton
   metadata, so YOLO11 and YOLO26 are interchangeable at `/detect`.

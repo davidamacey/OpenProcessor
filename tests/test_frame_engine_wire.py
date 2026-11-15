@@ -12,7 +12,8 @@ from src.domain.processing_plan import BRANCHES
 
 
 DETECTOR = {'model': 'yolov11_small_trt_end2end', 'input_size': 640, 'letterbox_fill': 114}
-EMBED = {'model': 'pe_image_encoder', 'size': 336, 'batch': 32}
+EMBED = {'model': 'pe_image_encoder', 'size': 336}
+CROP_EMBED = {'model': 'pe_crop_encoder', 'size': 224, 'batch': 32}
 FACES = {'detector': 'scrfd_u8', 'input_size': 640, 'recogniser': 'arcface_u8', 'batch': 32,
          'score_min': 0.5, 'nms': 0.4, 'max_faces': 128, 'coarse': 256, 'tile_side': 1920,
          'overlap': 160}  # fmt: skip
@@ -26,14 +27,18 @@ OCR = {
 
 
 def _plan(**over: Any) -> str:
+    """The ingest plan; each encoder object comes with its branch unless the test sets it."""
     body: dict[str, Any] = {
         'version': 1,
         'branches': ['detect', 'embed_frame', 'embed_crops'],
         'detector': DETECTOR,
-        'embed': EMBED,
         'crops': 'inline',
     }
     body.update(over)
+    if 'embed' not in over and 'embed_frame' in body['branches']:
+        body['embed'] = EMBED
+    if 'crop_embed' not in over and 'embed_crops' in body['branches']:
+        body['crop_embed'] = CROP_EMBED
     return json.dumps({k: v for k, v in body.items() if v is not None})
 
 
@@ -41,7 +46,8 @@ def test_the_ingest_plan_parses_and_round_trips() -> None:
     plan = wire.parse_plan(_plan(), has_boxes=False)
     assert plan.branches == ('detect', 'embed_frame', 'embed_crops')
     assert plan.detector == wire.DetectorSpec('yolov11_small_trt_end2end', 640, 114)
-    assert plan.embed == wire.EmbedSpec('pe_image_encoder', 336, 32, 'whole_frame', 'resize_crop')
+    assert plan.embed == wire.EmbedSpec('pe_image_encoder', 336, 'whole_frame')
+    assert plan.crop_embed == wire.CropEmbedSpec('pe_crop_encoder', 224, 32, 'letterbox', 128)
     assert plan.crops == 'inline'
     assert plan.embed_classes is None
     assert wire.parse_plan(plan.to_json(), has_boxes=False) == plan
@@ -72,8 +78,20 @@ def test_the_engine_branches_are_the_plan_vocabulary_minus_api_branches() -> Non
         (_plan(detector={**DETECTOR, 'input_size': 0}), 'bad_field'),
         (_plan(detector={**DETECTOR, 'letterbox_fill': 256}), 'bad_field'),
         (_plan(detector={**DETECTOR, 'nms': 1}), 'unknown_field'),
-        (_plan(embed={**EMBED, 'batch': True}), 'bad_field'),
-        (_plan(embed={**EMBED, 'crop_recipe': 'letterbox'}), 'bad_field'),
+        (_plan(embed={**EMBED, 'batch': 32}), 'unknown_field'),
+        (_plan(embed={**EMBED, 'crop_recipe': 'letterbox'}), 'unknown_field'),
+        (_plan(crop_embed=None), 'missing_field'),
+        (_plan(crop_embed={**CROP_EMBED, 'batch': True}), 'bad_field'),
+        (_plan(crop_embed={**CROP_EMBED, 'size': 8}), 'bad_field'),
+        (_plan(crop_embed={**CROP_EMBED, 'fill': 256}), 'bad_field'),
+        (_plan(crop_embed={**CROP_EMBED, 'crop_recipe': 'resize_crop'}), 'bad_field'),
+        (_plan(crop_embed={**CROP_EMBED, 'crop_recipe': 'centre_crop'}), 'bad_field'),
+        (_plan(crop_embed={**CROP_EMBED, 'extra': 1}), 'unknown_field'),
+        (
+            _plan(branches=['detect', 'embed_frame'], crop_embed=CROP_EMBED, crops='none'),
+            'bad_field',
+        ),
+        (_plan(branches=['detect', 'embed_crops'], embed=EMBED), 'bad_field'),
         (_plan(crops='thumb'), 'bad_field'),
         (_plan(embed_classes=['car']), 'bad_field'),
         (_plan(branches=['detect', 'embed_frame'], embed_classes=[2]), 'bad_field'),

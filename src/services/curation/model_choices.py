@@ -202,7 +202,7 @@ def build_model_choices(
             'item_embedding',
             'Item embeddings',
             'deployment',
-            TritonModelConfig.PE_IMAGE_MODEL,
+            TritonModelConfig.PE_CROP_MODEL,
             settable=False,
             dims=config.encoder_embedding_dim,
             reason=(

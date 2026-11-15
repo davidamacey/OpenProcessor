@@ -92,6 +92,11 @@ _MODELS: dict[str, tuple[int, list[_Tensor], list[_Tensor]]] = {
         [_tensor('images', 'UINT8', [-1, 3, 336, 336])],
         [_tensor('image_embeddings', 'FP32', [-1, EMBED_DIM])],
     ),
+    'pe_crop_encoder': (
+        32,
+        [_tensor('images', 'UINT8', [-1, 3, 224, 224])],
+        [_tensor('image_embeddings', 'FP32', [-1, EMBED_DIM])],
+    ),
     'pe_text_encoder': (
         8,
         [_tensor('text_tokens', 'INT64', [-1, -1])],
@@ -370,7 +375,7 @@ class _Models(service_pb2_grpc.GRPCInferenceServiceServicer):
         name = request.model_name
         if name == 'yolov11_small_trt_end2end' or name in _promoted():
             return _as_response(request, {'output0': _fixed(_detect(_array(request, 0)))})
-        if name == 'pe_image_encoder':
+        if name in ('pe_image_encoder', 'pe_crop_encoder'):
             return _as_response(
                 request,
                 {'image_embeddings': _fixed(_image_embeddings(_array(request, 0), EMBED_DIM))},

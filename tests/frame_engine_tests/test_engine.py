@@ -32,7 +32,8 @@ FULL_STAGES = {
     'embed_pe', 'crop_copy', 'crop_jpeg', 'blur',
 }  # fmt: skip
 DETECTOR = {'model': 'det', 'input_size': 640, 'letterbox_fill': 114}
-EMBED = {'model': 'pe', 'size': 16, 'batch': 32}
+EMBED = {'model': 'pe', 'size': 16}
+CROP_EMBED = {'model': 'pe_crop', 'size': 16, 'batch': 32}
 FACES = {'detector': 'scrfd', 'input_size': 640, 'recogniser': 'arc', 'batch': 32,
          'score_min': 0.5, 'nms': 0.4, 'max_faces': 128}  # fmt: skip
 
@@ -349,10 +350,13 @@ def _plan(branches: list[str] | None = None, *, boxes: bool = False, **over: Any
         'version': 1,
         'branches': branches or ['detect', 'embed_frame', 'embed_crops'],
         'detector': DETECTOR,
-        'embed': EMBED,
         'crops': 'inline',
     }
     body.update(over)
+    if 'embed' not in over and 'embed_frame' in body['branches']:
+        body['embed'] = EMBED
+    if 'crop_embed' not in over and 'embed_crops' in body['branches']:
+        body['crop_embed'] = CROP_EMBED
     return wire.parse_plan(json.dumps({k: v for k, v in body.items() if v is not None}),
                            has_boxes=boxes)  # fmt: skip
 
@@ -389,7 +393,7 @@ def test_the_full_plan_answers_every_output_and_observes_every_stage(eng: Any) -
     r1 = _run(engine)
     # round 1: the detector and the frame square; round 2: one encoder call with both crops
     assert engine.transport.calls == [
-        ('det', [1, 3, 640, 640]), ('pe', [1, 3, 16, 16]), ('pe', [2, 3, 16, 16]),
+        ('det', [1, 3, 640, 640]), ('pe', [1, 3, 16, 16]), ('pe_crop', [2, 3, 16, 16]),
     ]  # fmt: skip
     _run(engine)
     assert r1.status == 'ok'
@@ -422,13 +426,15 @@ def test_a_photo_without_detections_still_answers_every_output_of_its_plan(eng: 
     assert set(r.outputs) == {'size', *wire.expected_outputs(_plan())}
     assert r.outputs['crop_jpegs'] == []
     assert r.outputs['det_boxes'].shape == (0, 4)
-    assert r.outputs['crop_embeddings'].shape == (0, 8)
+    assert r.outputs['crop_embeddings'].shape == (0, 0)  # no row to tell the crop encoder's width
 
 
 def test_encoder_chunks_follow_the_plan_batch(eng: Any) -> None:
     engine = eng()
-    _run(engine, _plan(embed={**EMBED, 'batch': 1}))
-    assert engine.transport.calls[1:] == [('pe', [1, 3, 16, 16])] * 3
+    _run(engine, _plan(crop_embed={**CROP_EMBED, 'batch': 1}))
+    assert (
+        engine.transport.calls[1:] == [('pe', [1, 3, 16, 16])] + [('pe_crop', [1, 3, 16, 16])] * 2
+    )
 
 
 # ------------------------------------------------------------------ skip-proof, per branch
@@ -464,7 +470,7 @@ def test_an_embed_frame_only_plan_issues_no_detector_call(eng: Any) -> None:
 def test_embed_crops_without_embed_frame_sends_no_frame_square(eng: Any) -> None:
     engine = eng()
     r = _run(engine, _plan(['detect', 'embed_crops'], crops='none'))
-    assert engine.transport.calls == [('det', [1, 3, 640, 640]), ('pe', [2, 3, 16, 16])]
+    assert engine.transport.calls == [('det', [1, 3, 640, 640]), ('pe_crop', [2, 3, 16, 16])]
     assert 'whole_embedding' not in r.outputs
     assert r.outputs['crop_embeddings'].shape == (2, 8)
 
@@ -473,7 +479,7 @@ def test_embed_classes_embeds_only_the_wanted_detections(eng: Any) -> None:
     engine = eng()
     full = _run(engine, _plan())
     r = _run(engine, _plan(embed_classes=[2]))
-    assert engine.transport.calls[-1] == ('pe', [1, 3, 16, 16])  # the one wanted crop
+    assert engine.transport.calls[-1] == ('pe_crop', [1, 3, 16, 16])  # the one wanted crop
     assert r.outputs['crop_embedded'].tolist() == [False, True]
     assert r.outputs['crop_embeddings'].shape == (1, 8)
     np.testing.assert_array_equal(
@@ -495,7 +501,7 @@ def test_stored_boxes_replace_the_detector(eng: Any) -> None:
     boxes = np.array([[0.1, 0.1, 0.5, 0.6], [0.0, 0.0, 1.0, 1.0]], np.float64)
     r = _run(engine, _plan(['embed_frame', 'embed_crops'], boxes=True, detector=None, crops='none'),
              boxes=boxes)  # fmt: skip
-    assert engine.transport.calls == [('pe', [1, 3, 16, 16]), ('pe', [2, 3, 16, 16])]
+    assert engine.transport.calls == [('pe', [1, 3, 16, 16]), ('pe_crop', [2, 3, 16, 16])]
     assert r.outputs['crop_embeddings'].shape == (2, 8)
     assert r.outputs['crop_embedded'].tolist() == [True, True]
     assert set(r.outputs) == {'size', 'whole_embedding', 'crop_embeddings', 'crop_embedded'}
@@ -537,7 +543,9 @@ def test_a_failed_detector_call_fails_detect_and_what_needs_it(eng: Any) -> None
     assert engine.transport.staged == 0
 
 
-def test_a_failed_encoder_call_fails_both_embed_branches(eng: Any) -> None:
+def test_each_encoder_is_a_model_of_its_own_and_fails_alone(eng: Any) -> None:
+    """The frame encoder and the crop encoder are two named models: a failed call of one leaves
+    the other branch's vectors in the answer."""
     from frame_engine.transport import ModelCallError
 
     engine = eng()
@@ -545,8 +553,16 @@ def test_a_failed_encoder_call_fails_both_embed_branches(eng: Any) -> None:
     r = _run(engine)
     assert r.branches['detect'] == ('ok', '')
     assert r.branches['embed_frame'] == ('error', 'model_error')
-    assert r.branches['embed_crops'] == ('error', 'model_error')
+    assert r.branches['embed_crops'] == ('ok', '')
     assert 'whole_embedding' not in r.outputs
+    assert r.outputs['crop_embeddings'].shape == (2, 8)
+    engine = eng()
+    engine.transport.fail['pe_crop'] = ModelCallError('pe_crop', 'StatusCode.INTERNAL', 'boom')
+    r = _run(engine)
+    assert r.branches['embed_frame'] == ('ok', '')
+    assert r.branches['embed_crops'] == ('error', 'model_error')
+    assert 'crop_embeddings' not in r.outputs
+    assert r.outputs['whole_embedding'].shape == (8,)
     assert len(r.outputs['crop_jpegs']) == 2
 
 
@@ -687,7 +703,8 @@ STORED = np.array([[0.1, 0.1, 0.5, 0.6], [0.0, 0.0, 1.0, 1.0], [0.2, 0.3, 0.9, 0
 
 def _stored_plan(size: int, batch: int) -> Any:
     return _plan(['embed_frame', 'embed_crops'], boxes=True, detector=None, crops='none',
-                 embed={**EMBED, 'size': size, 'batch': batch})  # fmt: skip
+                 embed={**EMBED, 'size': size},
+                 crop_embed={**CROP_EMBED, 'size': size, 'batch': batch})  # fmt: skip
 
 
 def test_the_squares_are_staged_one_encoder_call_at_a_time(eng: Any) -> None:
@@ -763,19 +780,19 @@ def test_round_one_sends_the_detector_and_the_frame_square_after_one_commit(eng:
     assert engine.transport.events == [
         ('commit', 2), ('submit', 'det'), ('submit', 'pe'),  # round 1: one wait, two calls
         ('collect', 'det'),  # settle: the boxes
-        ('commit', 1), ('submit', 'pe'),  # round 2: the crop squares
-        ('collect', 'pe'), ('collect', 'pe'),  # finish
+        ('commit', 1), ('submit', 'pe_crop'),  # round 2: the crop squares
+        ('collect', 'pe'), ('collect', 'pe_crop'),  # finish
     ]  # fmt: skip
 
 
 def test_round_two_submits_every_chunk_before_it_collects_any(eng: Any) -> None:
     engine = eng()
-    _run(engine, _plan(embed={**EMBED, 'batch': 1}))
+    _run(engine, _plan(crop_embed={**CROP_EMBED, 'batch': 1}))
     events = engine.transport.events
-    last_submit = max(i for i, e in enumerate(events) if e == ('submit', 'pe'))
-    first_collect = min(i for i, e in enumerate(events) if e == ('collect', 'pe'))
+    last_submit = max(i for i, e in enumerate(events) if e == ('submit', 'pe_crop'))
+    first_collect = min(i for i, e in enumerate(events) if e == ('collect', 'pe_crop'))
     assert last_submit < first_collect
-    assert events.count(('submit', 'pe')) == 3
+    assert events.count(('submit', 'pe_crop')) == 2
 
 
 def test_the_window_bounds_what_one_photo_holds_with_calls_in_flight(eng: Any) -> None:
@@ -816,14 +833,14 @@ def test_a_failed_crop_call_fails_embed_crops_only_and_cancels_its_other_calls(e
 
     engine = eng()
     # sent in order: detector, frame square, crop square 1, crop square 2
-    engine.transport.fail_call[2] = ModelCallError('pe', 'StatusCode.INTERNAL', 'boom')
-    r = _run(engine, _plan(embed={**EMBED, 'batch': 1}))
+    engine.transport.fail_call[2] = ModelCallError('pe_crop', 'StatusCode.INTERNAL', 'boom')
+    r = _run(engine, _plan(crop_embed={**CROP_EMBED, 'batch': 1}))
     assert r.branches == {
         'detect': ('ok', ''),
         'embed_frame': ('ok', ''),
         'embed_crops': ('error', 'model_error'),
     }
-    assert ('cancel', 'pe') in engine.transport.events  # crop square 2, still in flight
+    assert ('cancel', 'pe_crop') in engine.transport.events  # crop square 2, still in flight
     assert set(r.outputs) == {'size', *wire.expected_outputs(_plan())} - {
         'crop_embeddings', 'crop_embedded',
     }  # fmt: skip
@@ -856,7 +873,7 @@ def test_an_encoder_that_never_answers_ends_the_photo_by_one_deadline(eng: Any) 
     engine = eng(transport=transport)
     start = time.monotonic()
     with pytest.raises(TritonUnavailableError, match='no answer'):
-        _run(engine, _plan(embed={**EMBED, 'batch': 1}))
+        _run(engine, _plan(crop_embed={**CROP_EMBED, 'batch': 1}))
     assert time.monotonic() - start < 0.9
     assert server.cancelled == 3
     assert (engine.budget.in_use, transport.slab.in_use) == (0, 0)
@@ -1128,8 +1145,8 @@ def test_a_conditional_branch_goes_out_before_the_round_two_calls(
     r = _run(engine, plan)
     assert set(r.branches.values()) == {('ok', '')}
     events = engine.transport.events
-    assert events.index(('submit', 'scrfd')) < events.index(('submit', 'pe'))
-    assert events.index(('submit', 'pe')) < events.index(('collect', 'scrfd'))
+    assert events.index(('submit', 'scrfd')) < events.index(('submit', 'pe_crop'))
+    assert events.index(('submit', 'pe_crop')) < events.index(('collect', 'scrfd'))
 
 
 def test_a_condition_that_does_not_hold_is_not_run_with_its_dependents(

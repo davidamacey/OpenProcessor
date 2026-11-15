@@ -77,6 +77,16 @@ Then build the engine:
         bash export/build_pe_trt.sh        # Path 1 (preferred)
     ONNX_PATH=/app/pytorch_models/pe_image_encoder.onnx \\
         bash export/build_pe_ort_fallback.sh  # Path 2 (fallback)
+
+The crop encoder (``--crop``)
+-----------------------------
+The same weights are exported a second time as a model of its own, ``pe_crop_encoder``, at a 224
+input (``pe_image_constants.CROP_IMAGE_SIZE``): the encoder of object crops, each box letterboxed
+whole (``src/utils/pe_preprocess.py`` ``letterbox_crop_rgb``). ``--crop`` presets the Triton name,
+the input size and the ONNX path for it; the build script takes ``PE_ROLE=crop``:
+
+    python export/export_pe_image_encoder.py --crop
+    PE_ROLE=crop bash export/build_pe_trt.sh
 """
 
 from __future__ import annotations
@@ -87,6 +97,8 @@ import sys
 from pathlib import Path
 
 from pe_image_constants import (
+    CROP_IMAGE_SIZE,
+    CROP_TRITON_MODEL_NAME,
     DEFAULT_MAX_BATCH,
     EMBEDDING_DIM,
     EXPORT_DIR,
@@ -179,10 +191,17 @@ def build_parser() -> argparse.ArgumentParser:
         help='Refuse to execute custom modeling code',
     )
     parser.add_argument(
+        '--crop',
+        action='store_true',
+        help=f'Export the crop encoder: the Triton name defaults to {CROP_TRITON_MODEL_NAME}, '
+        f'the input size to {CROP_IMAGE_SIZE} and the ONNX to '
+        f'{EXPORT_DIR / f"{CROP_TRITON_MODEL_NAME}.onnx"}',
+    )
+    parser.add_argument(
         '--onnx-out',
         type=Path,
-        default=EXPORT_DIR / f'{TRITON_MODEL_NAME}.onnx',
-        help=f'ONNX destination (default: {EXPORT_DIR / f"{TRITON_MODEL_NAME}.onnx"})',
+        default=None,
+        help=f'ONNX destination (default: {EXPORT_DIR / "<triton name>.onnx"})',
     )
     parser.add_argument(
         '--models-dir',
@@ -192,8 +211,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         '--triton-name',
-        default=TRITON_MODEL_NAME,
-        help=f'Triton model name (default: {TRITON_MODEL_NAME}; the client hardcodes this)',
+        default=None,
+        help=f'Triton model name (default: {TRITON_MODEL_NAME}, or {CROP_TRITON_MODEL_NAME} '
+        'with --crop; the client reads it from PE_IMAGE_MODEL / PE_CROP_MODEL)',
     )
     parser.add_argument(
         '--platform',
@@ -211,8 +231,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         '--image-size',
         type=int,
-        default=IMAGE_SIZE,
-        help=f'Input resolution (default {IMAGE_SIZE})',
+        default=None,
+        help=f'Input resolution (default {IMAGE_SIZE}, or {CROP_IMAGE_SIZE} with --crop)',
     )
     parser.add_argument(
         '--embedding-dim',
@@ -255,8 +275,20 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def resolve_role(args: argparse.Namespace) -> None:
+    """Fill the Triton name, the input size and the ONNX path the caller left out: the frame
+    encoder's, or the crop encoder's with ``--crop``."""
+    name, size = (
+        (CROP_TRITON_MODEL_NAME, CROP_IMAGE_SIZE) if args.crop else (TRITON_MODEL_NAME, IMAGE_SIZE)
+    )
+    args.triton_name = args.triton_name or name
+    args.image_size = args.image_size or size
+    args.onnx_out = args.onnx_out or EXPORT_DIR / f'{args.triton_name}.onnx'
+
+
 def config_from_args(args: argparse.Namespace) -> PETritonConfig:
     """Build the (validated) Triton config from parsed CLI arguments."""
+    resolve_role(args)
     return PETritonConfig(
         model_name=args.triton_name,
         platform=args.platform,
@@ -308,9 +340,9 @@ def main(argv: list[str] | None = None) -> int:
             verify_checkpoint=args.verify_checkpoint,
         )
         # Same function, contiguous rotary halves: the engine is faster (export/pe_rope_layout.py).
-        from pe_rope_layout import apply_if_supported
+        from pe_rope_layout import Geometry, apply_if_supported
 
-        apply_if_supported(onnx_path)
+        apply_if_supported(onnx_path, Geometry.for_input(args.image_size))
 
     problems: list[str] = []
     if not args.skip_validate:

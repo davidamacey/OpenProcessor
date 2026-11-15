@@ -30,7 +30,8 @@ ROOT = Path(__file__).resolve().parents[2]
 PLAN = wire.EnginePlan(
     branches=('detect', 'embed_frame', 'embed_crops'),
     detector=wire.DetectorSpec('yolov11_small_trt_end2end', 640, 114),
-    embed=wire.EmbedSpec('pe_image_encoder', 336, 32),
+    embed=wire.EmbedSpec('pe_image_encoder', 336),
+    crop_embed=wire.CropEmbedSpec('pe_crop_encoder', 224, 32),
     crops='inline',
 )
 
@@ -140,7 +141,9 @@ async def test_bytes_that_are_no_image_answer_corrupt_and_run_no_branch(engine: 
 @pytest.mark.asyncio
 async def test_stored_boxes_are_embedded_without_the_detector(engine: Any) -> None:
     pool, _ = engine
-    plan = wire.EnginePlan(branches=('embed_frame', 'embed_crops'), embed=PLAN.embed)
+    plan = wire.EnginePlan(
+        branches=('embed_frame', 'embed_crops'), embed=PLAN.embed, crop_embed=PLAN.crop_embed
+    )
     boxes = np.array([[0.1, 0.1, 0.5, 0.5], [0.4, 0.3, 0.9, 0.8]], np.float64)
 
     answer = await frame_engine.process(pool, _picture((10, 200, 10)), plan, boxes)
