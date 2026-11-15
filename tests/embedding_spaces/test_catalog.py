@@ -137,6 +137,7 @@ def test_sync_inserts_once_and_refuses_a_drifted_row(pg, tmp_path: Path) -> None
     assert set(first.inserted) == {
         'pe_core_l14_336_v1',
         'pe_core_l14_crop224_v1',
+        'pe_core_l14_crop336_v1',
         'mobileclip2_s2_v1',
     }
     with Session(pg.engine('app')) as session:
@@ -158,7 +159,15 @@ def test_a_changed_status_in_the_file_moves_the_stored_status(pg, tmp_path: Path
         Path(__file__).resolve().parents[2].joinpath('examples/embedding/catalog.tsv').read_text()
     )
     changed = tmp_path / 'catalog.tsv'
-    changed.write_text(text.replace('Apache-2.0\tavailable', 'Apache-2.0\tdeprecated'))
+    # Only the frame encoder's row: the two crop rows share its licence text and must not move.
+    changed.write_text(
+        ''.join(
+            line.replace('Apache-2.0\tavailable', 'Apache-2.0\tdeprecated')
+            if line.startswith('pe_core_l14_336\t')
+            else line
+            for line in text.splitlines(keepends=True)
+        )
+    )
     with Session(pg.engine('app')) as session:
         assert sync_catalog(session, changed).status_changed == ('pe_core_l14_336_v1',)
         row = repo.get_model_version(session, 'pe_core_l14_336', 1)
