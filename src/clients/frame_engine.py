@@ -2,21 +2,27 @@
 
 One unary KServe v2 ``ModelInfer`` per image to the model ``frame_engine``
 (:mod:`src.domain.frame_engine_wire`), sent through an :class:`AsyncTritonPool` opened on the
-engine's address (``OP_FRAME_ENGINE_URL``): the same channels, back-pressure, router and bounded
-retry as every Triton call. The engine answers an overload (its device-memory budget or its
-shared-memory region stayed full for its bounded wait, or too many requests in flight) with gRPC
-``RESOURCE_EXHAUSTED``; the pool retries that status, and an UNAVAILABLE engine, ``RETRIES`` times
-with its backoff. What is left after the retries is an :class:`EngineCallError`, whose
-``overloaded`` says whether the last answer was the overload status.
+engine's address (``OP_FRAME_ENGINE_URL``): the same channels, back-pressure and router as every
+Triton call. The engine answers an overload (its device-memory budget or its shared-memory region
+stayed full for its bounded wait, or too many requests in flight) with gRPC
+``RESOURCE_EXHAUSTED``. A photo is a unit of work that waits its turn: the overload is retried
+with a jittered exponential backoff until the photo's deadline (``DEADLINE_SECONDS``; tenacity
+``stop_after_delay`` and ``wait_exponential_jitter``,
+https://tenacity.readthedocs.io/en/stable/#stopping), an UNAVAILABLE engine ``RETRIES`` times.
+The pool's own retry is off (``retries=0``): its 10 ms steps do not outlast a busy card. What is
+left is an :class:`EngineCallError`, whose ``overloaded`` says whether the last answer was the
+overload status.
 """
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 import grpc
 import numpy as np
+from tenacity import AsyncRetrying, RetryCallState, stop_after_delay, wait_exponential_jitter
 
 from src.config.env import env_str
 from src.domain import frame_engine_wire as wire
@@ -29,12 +35,18 @@ if TYPE_CHECKING:
 
 FRAME_ENGINE_URL_ENV = 'OP_FRAME_ENGINE_URL'
 DEFAULT_URL = 'frame-engine:8001'
-#: Retries after the first try; with the engine's 4 s budget wait the four tries stay inside the
-#: 20 s the Triton prep model waited before it answered gpu_memory.
+#: Retries of an UNAVAILABLE engine after the first try (a restarting engine is the caller's to
+#: wait out: the bulk run's 503 backoff); an overload is not counted, the deadline ends it.
 RETRIES = 3
-#: One photo's whole pipeline (decode, detector, encoder, crop JPEGs) plus the engine's waits.
+#: One photo's whole pipeline (decode, detector, encoder, crop JPEGs) plus the engine's waits: the
+#: timeout of one try.
 TIMEOUT_SECONDS = 120.0
+#: How long a photo waits for the engine across overload retries.
+DEADLINE_SECONDS = 120.0
+RETRY_SLEEP = asyncio.sleep
+_BACKOFF = wait_exponential_jitter(multiplier=0.05, max=2.0, jitter=0.2)
 _OVERLOAD = str(grpc.StatusCode.RESOURCE_EXHAUSTED)
+_UNAVAILABLE = str(grpc.StatusCode.UNAVAILABLE)
 #: The pool also raises RuntimeError: not initialized, or no server for the model.
 _CALL_ERRORS: tuple[type[Exception], ...] = (*TRITON_CALL_ERRORS, RuntimeError)
 
@@ -120,6 +132,21 @@ def _answer(result: Any, plan: wire.EnginePlan) -> EngineAnswer:
     return EngineAnswer(status, _text(result, wire.DECODE_ROUTE), branches, outputs)
 
 
+def _status(exc: BaseException | None) -> str | None:
+    from tritonclient.utils import InferenceServerException
+
+    return exc.status() if isinstance(exc, InferenceServerException) else None
+
+
+def _retry_again(state: RetryCallState) -> bool:
+    """Retry an overload (the deadline ends it) and an UNAVAILABLE engine ``RETRIES`` times."""
+    outcome = state.outcome
+    status = _status(outcome.exception() if outcome is not None else None)
+    if status == _OVERLOAD:
+        return True
+    return status == _UNAVAILABLE and state.attempt_number <= RETRIES
+
+
 async def process(
     pool: AsyncTritonPool, data: bytes, plan: wire.EnginePlan, boxes: np.ndarray | None = None
 ) -> EngineAnswer:
@@ -129,22 +156,29 @@ async def process(
         EngineCallError: no answer after the retries (``overloaded`` when the last one was the
             overload status).
     """
-    from tritonclient.utils import InferenceServerException
-
     inputs = [_bytes_input(wire.IMAGE, data), _bytes_input(wire.PLAN, plan.to_json().encode())]
     if boxes is not None:
         inputs.append(_boxes_input(boxes))
     try:
-        result = await pool.infer(
-            wire.MODEL_NAME, inputs, [], timeout=TIMEOUT_SECONDS, retries=RETRIES
-        )
+        async for attempt in AsyncRetrying(
+            retry=_retry_again,
+            wait=_BACKOFF,
+            stop=stop_after_delay(DEADLINE_SECONDS),
+            sleep=RETRY_SLEEP,
+            reraise=True,
+        ):
+            with attempt:
+                result = await pool.infer(
+                    wire.MODEL_NAME, inputs, [], timeout=TIMEOUT_SECONDS, retries=0
+                )
+                return _answer(result, plan)
     except _CALL_ERRORS as exc:
-        overloaded = isinstance(exc, InferenceServerException) and exc.status() == _OVERLOAD
-        raise EngineCallError(str(exc), overloaded=overloaded) from exc
-    return _answer(result, plan)
+        raise EngineCallError(str(exc), overloaded=_status(exc) == _OVERLOAD) from exc
+    raise AssertionError('unreachable')  # pragma: no cover - AsyncRetrying always yields
 
 
 __all__ = [
+    'DEADLINE_SECONDS',
     'DEFAULT_URL',
     'FRAME_ENGINE_URL_ENV',
     'RETRIES',

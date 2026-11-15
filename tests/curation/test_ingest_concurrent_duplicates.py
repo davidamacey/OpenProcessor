@@ -20,7 +20,7 @@ from curation.ingest_fakes import _jpeg_bytes, _make_service
 from curation.occ_fakes import FakeIngestOpenSearch
 from src.config import get_curation_config
 from src.services.curation.ingest_writer import IngestWriter
-from src.services.near_duplicates import content_key
+from src.services.near_duplicates import content_key, ingest_claim
 from src.services.near_duplicates.content_key import content_image_id, content_imohash
 
 
@@ -52,6 +52,46 @@ def _hold_writes_until_lookups(
         return await real_bulk(**kw)
 
     monkeypatch.setattr(content_key, 'resolve_many_bound', resolve_many_bound)
+    os_fake.bulk = bulk
+
+
+def _hold_claims_and_writes(
+    os_fake: FakeIngestOpenSearch, n_copies: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The interleaving of the race, pinned: no copy claims before every copy's lookup has run and
+    no copy writes before every copy has claimed. Each request's photos move on at their own
+    pace, so nothing else orders the copies."""
+    looked_up, claimed = asyncio.Event(), asyncio.Event()
+    lookups = claims = 0
+    real_resolve, real_claim = (
+        content_key.resolve_many_bound,
+        ingest_claim.claim_and_mark_in_session,
+    )
+    real_bulk = os_fake.bulk
+
+    async def resolve_many_bound(entries: Any) -> Any:
+        nonlocal lookups
+        found = await real_resolve(entries)
+        lookups += 1
+        if lookups >= n_copies:
+            looked_up.set()
+        return found
+
+    async def claim(*args: Any) -> Any:
+        nonlocal claims
+        await asyncio.wait_for(looked_up.wait(), timeout=10)
+        found = await real_claim(*args)
+        claims += 1
+        if claims >= n_copies:
+            claimed.set()
+        return found
+
+    async def bulk(**kw: Any) -> Any:
+        await asyncio.wait_for(claimed.wait(), timeout=10)
+        return await real_bulk(**kw)
+
+    monkeypatch.setattr(content_key, 'resolve_many_bound', resolve_many_bound)
+    monkeypatch.setattr(ingest_claim, 'claim_and_mark_in_session', claim)
     os_fake.bulk = bulk
 
 
@@ -121,7 +161,7 @@ async def test_a_losing_copy_with_other_boxes_leaves_no_items_or_crops(
         return await real_infer(model_name, inputs, outputs)
 
     triton.infer = infer
-    _hold_writes_until_lookups(os_fake, 2, monkeypatch)
+    _hold_claims_and_writes(os_fake, 2, monkeypatch)
     data = _jpeg_bytes(seed=7)
 
     first, second = await asyncio.gather(

@@ -19,6 +19,11 @@ STORAGE_SECTION = 'Storage per image and per vector'
 BASELINE_SECTION = '0.5.0 baseline (set A, public COCO, 2,000 images)'
 
 
+#: The size class the measured rates split on: the small rate is COCO frames (0.3 MP), the large
+#: rates are 12 to 24 MP photos; a sampled photo at or above this is priced at a large rate.
+LARGE_PHOTO_MEGAPIXELS = 3.0
+
+
 @dataclass(frozen=True)
 class Rate:
     route: Literal['cpu_small', 'cpu_large', 'gpu_large']
@@ -79,7 +84,7 @@ class Estimate:
 
 def estimate(*, files: int, share_large: float | None, gpu_decode: bool) -> Estimate:
     """Duration and footprint for ``files`` images. ``share_large`` is the sampled share
-    of images at or above the GPU-decode gate, or ``None`` when no sizes are known."""
+    of images at or above :data:`LARGE_PHOTO_MEGAPIXELS`, or ``None`` when no sizes are known."""
     rates = {r.route: r.images_per_s for r in RATES}
     if share_large is None:
         fastest, slowest = max(rates.values()), min(rates.values())

@@ -4760,10 +4760,6 @@
             "title": "Gpu Decode",
             "type": "boolean"
           },
-          "gpu_min_megapixels": {
-            "title": "Gpu Min Megapixels",
-            "type": "number"
-          },
           "header_sample": {
             "title": "Header Sample",
             "type": "integer"
@@ -4796,7 +4792,6 @@
           "max_seconds",
           "header_sample",
           "gpu_decode",
-          "gpu_min_megapixels",
           "rates",
           "embeddings_per_image",
           "opensearch_bytes_per_image",
@@ -26264,10 +26259,6 @@
       },
       "PreviewMegapixelsWire": {
         "properties": {
-          "gate_megapixels": {
-            "title": "Gate Megapixels",
-            "type": "number"
-          },
           "histogram": {
             "additionalProperties": {
               "type": "integer"
@@ -26279,17 +26270,6 @@
             "title": "Sampled",
             "type": "integer"
           },
-          "share_at_or_above_gate": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Share At Or Above Gate"
-          },
           "unreadable": {
             "title": "Unreadable",
             "type": "integer"
@@ -26298,8 +26278,7 @@
         "required": [
           "sampled",
           "unreadable",
-          "histogram",
-          "gate_megapixels"
+          "histogram"
         ],
         "title": "PreviewMegapixelsWire",
         "type": "object"

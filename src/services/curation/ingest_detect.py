@@ -21,19 +21,16 @@ Two detectors are supported:
   (:func:`~src.services.detection.ensemble_nms.apply_ensemble_nms`).
   Its hits override the primary's class assignment on IoU-matched boxes.
 
-Each detector exposes a single-image method and a **batched** one. The
-batched variants stack ``N`` letterboxed tensors and issue one Triton
-call per ``batch_limit`` chunk rather than ``N`` single-image
-round-trips; they return exactly the shape ``N`` sequential single-image
-calls would, so a caller cannot tell which path produced a result.
+Each detector runs one image per call: this is the host stage (a project with a secondary
+detector, a letterbox fill that is not one grey, ``OP_INGEST_GPU_DECODE=0``). The concurrent calls
+of the photos of a request are grouped by the model server's dynamic batcher, not by the client.
+The engine stage never gets here: the frame engine runs the primary detector itself.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
-
-import numpy as np
 
 from src.clients.model_adapters import FUSED_OUTPUT, FusedDetAdapter
 from src.clients.triton_pool_core import images_input
@@ -46,10 +43,10 @@ from src.services.curation.item_doc import DetectedItem
 from src.services.detection.geometry import iou as _iou_fn, letterbox_to_square
 from src.utils.class_names import normalize_class_name
 from src.utils.cpu_pool import run_cpu
-from src.utils.task_group import run_all
 
 
 if TYPE_CHECKING:
+    import numpy as np
     from PIL import Image
 
     from src.clients.curation_opensearch import ClassRegistryFile
@@ -132,51 +129,6 @@ class WholeImageDetector:
         return self.decode_primary_row(
             found['boxes'], found['scores'], found['classes'], scale, pad
         )
-
-    async def run_primary_batch(self, imgs: list[Image.Image]) -> list[list[DetectedItem]]:
-        """Batched variant of :meth:`run_primary`.
-
-        Stacks per-image letterboxed CHW tensors into an ``(N, 3, S, S)``
-        batch and issues **one Triton call per ``batch_limit`` chunk** —
-        not one call per image. This is the whole point of the batch
-        ingest path: the GPU sees a few large inferences instead of ``N``
-        round-trips each paying full request + H2D/D2H latency.
-        """
-        if not imgs:
-            return []
-        from tritonclient.grpc import InferRequestedOutput
-
-        letterboxed = await run_all(
-            [
-                run_cpu(
-                    letterbox_to_square,
-                    img,
-                    target=self.profile.input_size,
-                    fill=self.profile.letterbox_fill,
-                    nbytes=_rgb_bytes(img),
-                )
-                for img in imgs
-            ]
-        )
-        # ``letterbox_to_square`` returns (1, 3, S, S); strip the leading dim.
-        scales = [scale for _chw, scale, _pad in letterboxed]
-        pads = [pad for _chw, _scale, pad in letterboxed]
-        tensors = [chw[0] for chw, _scale, _pad in letterboxed]
-        full_batch = await run_cpu(np.stack, tensors, axis=0, nbytes=sum(t.nbytes for t in tensors))
-
-        outs = [InferRequestedOutput(FUSED_OUTPUT)]
-        found: list[dict[str, Any]] = []
-        step = max(1, self.profile.batch_limit)
-        for start in range(0, full_batch.shape[0], step):
-            chunk = full_batch[start : start + step]
-            inp = await self._images(self.profile.detector_model, chunk)
-            result = await self.triton_pool.infer(self.profile.detector_model, [inp], outputs=outs)
-            found.extend(_FUSED.parse(result, chunk.shape[0]))
-
-        return [
-            self.decode_primary_row(f['boxes'], f['scores'], f['classes'], scales[i], pads[i])
-            for i, f in enumerate(found)
-        ]
 
     def decode_primary_row(
         self,
@@ -277,46 +229,6 @@ class WholeImageDetector:
             profile.detector_model, [inp], outputs=self._secondary_outputs()
         )
         return SecondaryOutput(raw=result.as_numpy(RAW_OUTPUT))
-
-    async def run_secondary_raw_batch(self, imgs: list[Image.Image]) -> list[SecondaryOutput]:
-        """Batched variant of :meth:`run_secondary_raw`.
-
-        One Triton call per ``batch_limit`` chunk instead of one per
-        image. Returns each image's raw ``(N_anchors, 5 + nc)`` slice,
-        index-aligned with ``imgs``; client-side NMS still runs per image
-        in :meth:`resolve_with_secondary` because each image's item list
-        is enriched independently.
-        """
-        if not imgs:
-            return []
-        profile = self.secondary_profile
-        assert profile is not None
-        outs = self._secondary_outputs()
-
-        letterboxed = await run_all(
-            [
-                run_cpu(
-                    letterbox_to_square,
-                    img,
-                    target=profile.input_size,
-                    fill=profile.letterbox_fill,
-                    nbytes=_rgb_bytes(img),
-                )
-                for img in imgs
-            ]
-        )
-        tensors = [chw[0] for chw, _scale, _pad in letterboxed]
-        full_batch = await run_cpu(np.stack, tensors, axis=0, nbytes=sum(t.nbytes for t in tensors))
-
-        rows: list[SecondaryOutput] = []
-        step = max(1, profile.batch_limit)
-        for start in range(0, full_batch.shape[0], step):
-            chunk = full_batch[start : start + step]
-            inp = await self._images(profile.detector_model, chunk)
-            result = await self.triton_pool.infer(profile.detector_model, [inp], outputs=outs)
-            raws = result.as_numpy(RAW_OUTPUT)
-            rows.extend(SecondaryOutput(raw=raws[i]) for i in range(raws.shape[0]))
-        return rows[: len(imgs)]
 
     def resolve_with_secondary(
         self,

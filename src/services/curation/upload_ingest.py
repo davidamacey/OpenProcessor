@@ -102,6 +102,9 @@ async def stage_and_ingest(
             source_identifiers=identifiers,
             ingest_run_id=run_id,
         )
+        # A person waits for this answer and then reads the library: the one refresh of the call
+        # (``ingest_batch`` refreshes nothing).
+        await service.refresh_indexes()
         await schedule_open_vocab_after_ingest(
             opensearch,
             [r.image_id for r in result.results if r.status == 'success' and r.image_id],

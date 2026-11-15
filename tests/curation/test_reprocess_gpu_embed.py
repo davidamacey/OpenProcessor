@@ -1,10 +1,10 @@
-"""The embed pass on the GPU decode (#259): a photo at or above the ingest size gate is sent to
-the frame engine with its stored boxes (protocol version 1, the ``boxes`` input) and never
-decoded in the API; everything else, and every photo the engine declines, takes the CPU path as
-before. No GPU here: a fake pool on the engine's address answers through the real client."""
+"""The embed pass on the GPU decode (#259): every photo is sent to the frame engine with its
+stored boxes (protocol version 1, the ``boxes`` input), whatever its size, and never decoded in
+the API; every photo the engine declines takes the CPU path as before. No GPU here: a fake pool on the engine's address answers through the real client."""
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import json
 import struct
@@ -29,6 +29,7 @@ from curation.reprocess_fixtures import (
     make_service,
     servable_root,
 )
+from src.clients import frame_engine
 from src.config.curation import CurationConfig
 from src.domain import frame_engine_wire as wire
 from src.services.curation import ingest_gpu_decode, reprocess_embed
@@ -148,11 +149,10 @@ def _world(
     monkeypatch: pytest.MonkeyPatch,
     engine: Engine,
     *,
-    gate: float = 0.1,
     gpu_decode: bool = True,
 ) -> tuple[Any, FakePE, Any, bytes, EmbedTarget]:
     root = servable_root(tmp_path, monkeypatch)
-    data = jpeg_bytes((400, 300), seed=11)  # 0.12 MP
+    data = jpeg_bytes((400, 300), seed=11)  # 0.12 MP: no size gate sends it to the CPU
     path = root / 'a.jpg'
     path.write_bytes(data)
     doc = item(
@@ -169,15 +169,13 @@ def _world(
     pe = FakePE()
     service = make_service(fake, GpuTriton(), pe)
     service.frame_engine = engine
-    service.config = dataclasses.replace(
-        CurationConfig(), ingest_gpu_decode=gpu_decode, ingest_gpu_min_megapixels=gate
-    )
+    service.config = dataclasses.replace(CurationConfig(), ingest_gpu_decode=gpu_decode)
     target = EmbedTarget(image_id='img-1', image_path=str(path), items=[('c0', doc)])
     return fake, pe, service, data, target
 
 
 @pytest.mark.asyncio
-async def test_a_photo_above_the_gate_is_embedded_from_the_gpu_decode_with_its_stored_boxes(
+async def test_a_small_photo_is_embedded_from_the_gpu_decode_with_its_stored_boxes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     triton = Engine()
@@ -218,22 +216,6 @@ async def test_a_photo_above_the_gate_is_embedded_from_the_gpu_decode_with_its_s
     assert _sample('gpu') == before + 1
 
 
-@pytest.mark.asyncio
-async def test_a_photo_below_the_gate_keeps_the_cpu_path(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    triton = Engine()
-    fake, pe, service, _data, target = _world(tmp_path, monkeypatch, triton, gate=3.0)
-    before = _sample('cpu_small')
-    route = await gpu_embed_route(service)
-    await reembed_items(fake, pe, [target], gpu=route)
-    assert triton.streams == []
-    assert pe.crop_calls == 3  # the crop, then the two region boxes (decoded from JPEG)
-    assert pe.frame_calls == 1
-    assert docs(fake)['c0']['pe_embedding'] == pytest.approx([0.0, 0.0, 1.0])  # the CPU fake's
-    assert _sample('cpu_small') == before + 1
-
-
 @pytest.mark.parametrize(
     ('status', 'fail', 'short', 'route'),
     [
@@ -261,13 +243,20 @@ async def test_a_photo_the_gpu_decode_declines_falls_back_to_the_cpu(
     short: bool,
     route: str,
 ) -> None:
+    async def tick(_s: float) -> None:
+        await asyncio.sleep(0.01)
+
+    # an overload is retried until the photo's deadline (a few tries here), then the CPU path
+    monkeypatch.setattr(frame_engine, 'DEADLINE_SECONDS', 0.05)
+    monkeypatch.setattr(frame_engine, 'RETRY_SLEEP', tick)
     triton = Engine(status=status)
     triton.fail = fail
     triton.rows_short = short
     fake, pe, service, _data, target = _world(tmp_path, monkeypatch, triton)
     before = _sample(route)
     counts = await reembed_items(fake, pe, [target], gpu=await gpu_embed_route(service))
-    assert len(triton.streams) == 1
+    overloaded = fail is not None and route == 'cpu_gpu_memory'
+    assert len(triton.streams) >= 1 if overloaded else len(triton.streams) == 1
     assert (pe.crop_calls, pe.frame_calls) == (3, 1)
     assert docs(fake)['c0']['pe_embedding'] == pytest.approx([0.0, 0.0, 1.0])
     assert counts['crop_written'] == 1

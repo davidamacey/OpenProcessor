@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
     from src.clients.occ import OCCFinalConflictError
     from src.config.faces import FacesDisabledError
-    from src.core.exceptions import RequestRejectedError
+    from src.core.exceptions import EngineUnavailableError, RequestRejectedError
     from src.domain.nested_limit import NestedLimitError
     from src.utils.retry import RetryExhaustedError, TritonDeadlineError
     from src.utils.upstream_errors import UpstreamError
@@ -30,6 +30,9 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 TRITON_UNAVAILABLE_RETRY_AFTER_SECONDS = 5
+#: An engine restart is ready again in seconds (the engine's own start-up), a model-server restart
+#: in about half a minute: the bulk run's sender retries with its own backoff on top of this hint.
+ENGINE_UNAVAILABLE_RETRY_AFTER_SECONDS = 5
 
 
 async def triton_unavailable_response(request: Request, exc: RetryExhaustedError) -> JSONResponse:
@@ -60,6 +63,28 @@ async def triton_unavailable_response(request: Request, exc: RetryExhaustedError
         },
         headers={
             'Retry-After': str(TRITON_UNAVAILABLE_RETRY_AFTER_SECONDS),
+        },
+    )
+
+
+async def engine_unavailable_response(
+    request: Request, exc: EngineUnavailableError
+) -> JSONResponse:
+    """The frame engine could not take the photos of an ingest request and nothing was stored ->
+    503 with ``Retry-After`` and the stable ``code`` (the bulk sender retries a 503 that carries
+    ``Retry-After``; a person's upload sees a retryable busy answer, not a 500)."""
+    req_id = get_request_id()
+    logger.warning('engine_unavailable', request_id=req_id, path=request.url.path, error=str(exc))
+    return JSONResponse(
+        status_code=503,
+        content={
+            'detail': 'The image engine is temporarily unavailable; retry shortly',
+            'code': 'engine_unavailable',
+            'request_id': req_id,
+        },
+        headers={
+            'Retry-After': str(ENGINE_UNAVAILABLE_RETRY_AFTER_SECONDS),
+            'X-Request-ID': req_id,
         },
     )
 

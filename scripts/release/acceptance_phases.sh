@@ -407,7 +407,7 @@ ph_metrics() {
 
 # After ingest: when the GPU decode route took images, Triton's stage counters exist
 # and the CPU fallbacks stay under the bound. Absent counters skip this part only.
-# cpu_gpu_off and cpu_small are policy (GPU decode off or not ready, image under the size gate), not fallbacks.
+# cpu_host (the host stage) and the engine's own host decodes (cpu_small, cpu_not_jpeg, ...) are policy, not fallbacks.
 check_gpu_route() {
     local gpu fb tot pct tm="$FRAME_ENGINE_METRICS_URL"
     if ! grep -q '^op_decode_route_total{.*path="ingest"' "$BODY"; then
@@ -416,7 +416,7 @@ check_gpu_route() {
     fi
     read -r gpu fb < <(awk '/^op_decode_route_total\{.*path="ingest"/ {
         r = $0; sub(/.*route="/, "", r); sub(/".*/, "", r); v = $NF + 0
-        if (r == "gpu") g += v; else if (r != "cpu_gpu_off" && r != "cpu_small" && r ~ /^cpu_/) f += v
+        if (r == "gpu") g += v; else if (r ~ /^cpu_/ && r !~ /^cpu_(host|small|not_jpeg|progressive|components|precision|truncated)$/) f += v
     } END { printf "%d %d\n", g, f }' "$BODY")
     if ((gpu == 0)); then
         ev "SKIP-PART: GPU decode route took no images (gpu=0, fallbacks=${fb}); stage counters and fallback rate not checked"

@@ -1,4 +1,4 @@
-"""The finish phase of an ingest batch opens a constant number of database transactions.
+"""The finish phase of an ingest request opens a bounded number of database transactions.
 
 Every photo used to open its own: a lookup, the content claim, two pending-row writes, the
 placement, the ``crop.created`` events, and a class create per detector label (about 4 to 6 per
@@ -115,10 +115,11 @@ async def test_sessions_per_batch_do_not_grow_with_the_photos(
     result, os_fake = await _ingest(tmp_path, 32)
     assert len(os_fake.images) == 32
     assert sum(r.n_crops for r in result.results) == 64
-    # the batch's lookup, its one group transaction (placement, claims, pending rows), and the
-    # events: once each
-    assert sessions.opened == small
-    assert sessions.opened <= 3
+    # the lookup, one transaction per commit group (at most 3), the events: at most 5, however
+    # many photos (the formula of ingest_finish; tests/curation/test_ingest_flow.py pins it with
+    # an engine that answers one photo at a time)
+    assert small <= 5
+    assert sessions.opened <= 5
     assert sessions.peak == 1  # one connection at a time, not one per photo
 
 

@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 
 # ``capture``, ``class_create``, ``placement``, ``claim`` (content claim and pending rows in one
 # transaction), ``release`` and ``publish`` are the batch ingest's per-batch database steps.
+# ``crop_cache`` is a written photo's crop-cache fill, after its own write.
 # ``decode`` .. ``opensearch_write`` are the original ingest stages. The rest (#210)
 # name the work that ran untimed on the event loop. All are wall time of a synchronous block,
 # so on the loop thread a stage's seconds are API CPU seconds; ``embed``, ``opensearch_write``,
@@ -52,6 +53,7 @@ STAGES: tuple[str, ...] = (
     'claim',
     'release',
     'publish',
+    'crop_cache',
     'project_create_validate',
     'project_create_capacity',
     'project_create_row',

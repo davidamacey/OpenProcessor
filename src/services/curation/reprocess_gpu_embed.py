@@ -3,16 +3,15 @@ stored boxes there.
 
 The ``embed`` reprocess scope decoded every photo in the API, cut the stored boxes and resized
 them on the CPU: a 21 MP photo costs about 0.5 CPU-s there while the GPU sits 10 to 16 % busy.
-With the ingest GPU decode usable (:func:`~src.services.curation.ingest_gpu_decode.gpu_decode_ready`),
-a photo at or above the ingest size gate (``OP_INGEST_GPU_MIN_MEGAPIXELS``) is sent to the frame
-engine with its stored ``bbox_norm`` boxes (the ``boxes`` input of protocol version 1, a plan of
+With the ingest engine stage usable (:func:`~src.services.curation.ingest_gpu_decode.engine_stage_applies`
+and :func:`~src.services.curation.ingest_gpu_decode.engine_ready`), every photo is sent to the frame
+engine (which decodes any image) with its stored ``bbox_norm`` boxes (the ``boxes`` input of protocol version 1, a plan of
 ``embed_frame`` and ``embed_crops``): the engine decodes it once (nvJPEG, EXIF orientation), cuts
 each box by the rectangle the CPU pass cuts and returns the whole-frame vector and one vector per
 box. Only vectors come back.
 
-Fail closed, photo by photo, exactly where ingest falls back: below the gate, an unreadable
-header, a status other than ``ok`` (progressive, truncated, decoder, ...), an engine still
-overloaded after the retries, a failed call or an answer with the wrong row count take the CPU
+Fail closed, photo by photo: a status other than ``ok`` (corrupt, decoder, ...), an engine still
+overloaded after its deadline, a failed call or an answer with the wrong row count take the CPU
 path, counted in ``op_decode_route_total``.
 """
 
@@ -25,12 +24,12 @@ import numpy as np
 
 from src.clients.pe_encoder import _l2_normalize
 from src.domain import frame_engine_wire as wire
-from src.domain.decode_route import CPU_BOX_COUNT, CPU_NOT_IMAGE, CPU_SMALL, GPU, prep_status_route
+from src.domain.decode_route import CPU_BOX_COUNT, GPU, prep_status_route
 from src.services.curation.ingest_gpu_decode import (
     call_frame_engine,
     embed_spec,
-    gpu_decode_ready,
-    megapixels,
+    engine_ready,
+    engine_stage_applies,
 )
 from src.services.curation.ops_metrics import count_decode_route
 
@@ -43,10 +42,9 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class GpuEmbedRoute:
-    """Where and from what size the embed pass uses the GPU decode."""
+    """Where the embed pass uses the GPU decode."""
 
     frame_engine: Any
-    min_megapixels: float
 
 
 @dataclass(frozen=True)
@@ -60,9 +58,9 @@ class StoredBoxVectors:
 async def gpu_embed_route(service: CurationIngestService) -> GpuEmbedRoute | None:
     """The route when photos of the embed pass go to the GPU decode, else ``None`` (every photo
     then takes the CPU path): the ingest readiness rule."""
-    if not await gpu_decode_ready(service):
+    if not engine_stage_applies(service) or not await engine_ready(service):
         return None
-    return GpuEmbedRoute(service.frame_engine, service.config.ingest_gpu_min_megapixels)
+    return GpuEmbedRoute(service.frame_engine)
 
 
 def _count(route: str) -> None:
@@ -74,10 +72,6 @@ async def embed_on_gpu(
 ) -> StoredBoxVectors | None:
     """The vectors of the encoded photo ``data`` and its ``boxes`` (stored ``bbox_norm``), or
     ``None`` when this photo takes the CPU path."""
-    mp = megapixels(data)
-    if mp is None or mp < route.min_megapixels:
-        _count(CPU_NOT_IMAGE if mp is None else CPU_SMALL)
-        return None
     rows = np.asarray(boxes, np.float64).reshape(-1, 4)
     plan = wire.EnginePlan(branches=('embed_frame', 'embed_crops'), embed=embed_spec())
     answer = await call_frame_engine(route.frame_engine, data, plan, rows, caller='reprocess_embed')

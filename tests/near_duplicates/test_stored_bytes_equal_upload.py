@@ -25,6 +25,9 @@ class _Pipeline:
         self.received, self.paths = list(data), list(paths)
         return BatchIngestResult(results=[], summary=IngestSummary())
 
+    async def refresh_indexes(self) -> None:
+        return None
+
 
 @pytest.mark.asyncio
 async def test_the_stored_file_is_the_upload_and_is_named_by_its_imohash(

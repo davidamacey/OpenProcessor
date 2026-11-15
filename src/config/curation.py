@@ -227,14 +227,10 @@ class CurationConfig:
     # (src/domain/nested_limit.py) and also counts further box spaces and assist attributes.
     region_max_boxes_per_write: int = MAX_BOXES_PER_ITEM_DEFAULT_SPACE
 
-    # GPU decode (#217): photos at or above the size gate are decoded once on the
-    # GPU by the frame engine (frame_engine/), which also builds the detector letterbox, the PE
-    # squares, the blur sums and the crop JPEGs. On by default (the installer writes 0 for profiles
-    # whose card has no room for it): it changes the stored numerics once (nvJPEG decode), smaller
-    # images stay on the CPU path, and any failure of the engine falls back to the CPU path per
-    # image.
+    # The frame engine (frame_engine/) decodes every photo once and builds the detector letterbox,
+    # the PE squares, the blur sums and the crop JPEGs. On by default (the installer writes 0 for
+    # profiles whose card has no room for it, which runs the host stage instead).
     ingest_gpu_decode: bool = True
-    ingest_gpu_min_megapixels: float = 3.0
 
     # --- Project-scoped fields (see ``PROJECT_SCOPED_FIELDS`` in
     # ``src.config.curation_accessors`` and
@@ -384,9 +380,6 @@ class CurationConfig:
                 'REGION_MAX_BOXES_PER_WRITE', defaults.region_max_boxes_per_write
             ),
             ingest_gpu_decode=_bool('INGEST_GPU_DECODE', defaults.ingest_gpu_decode),
-            ingest_gpu_min_megapixels=_float(
-                'INGEST_GPU_MIN_MEGAPIXELS', defaults.ingest_gpu_min_megapixels
-            ),
         )
 
 

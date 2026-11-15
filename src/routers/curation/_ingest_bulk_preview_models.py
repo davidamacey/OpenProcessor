@@ -38,9 +38,6 @@ class PreviewMegapixelsWire(BaseModel):
     unreadable: int
     # Bucket label ("<1", "1-3", "3-8", "8-16", "16-24", "24+" megapixels) to sampled count.
     histogram: dict[str, int]
-    # The GPU-decode gate (OP_INGEST_GPU_MIN_MEGAPIXELS) the share is measured against.
-    gate_megapixels: float
-    share_at_or_above_gate: float | None = None
 
 
 class PreviewEstimateWire(BaseModel):
@@ -99,7 +96,6 @@ class BulkPreviewConfig(BaseModel):
     max_seconds: float
     header_sample: int
     gpu_decode: bool
-    gpu_min_megapixels: float
     rates: list[PreviewRateWire]
     embeddings_per_image: PreviewMeasuredWire
     opensearch_bytes_per_image: PreviewMeasuredWire

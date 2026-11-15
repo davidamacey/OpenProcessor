@@ -59,7 +59,6 @@ src/services/curation/dataset_import/runner.py	1	chunk boundary: a failed chunk 
 src/services/curation/empty_vlm_answer_repair.py	1	per-item boundary: any write failure is counted in errors and the sweep continues
 src/services/curation/index_bootstrap.py	2	bootstrap boundary: any migration or index-create failure is logged and the project is reported as not bootstrapped (retried on the next request)
 src/services/curation/ingest.py	1	per-image boundary: a primary detector failure becomes a failed IngestResult (error_kind detector_infer), logged
-src/services/curation/ingest_batch.py	1	batch detector failure falls back to the per-image path, which runs the detector again, logged
 src/services/curation/ingest_index.py	1	per-image boundary: a bulk-index failure marks the item failed and releases the claim, logged
 src/services/curation/ingest_writer.py	1	drain-loop boundary: a crash fails every pending caller with the same exception
 src/services/curation/item_delete.py	1	delete boundary: the failure is recorded per crop id in errors

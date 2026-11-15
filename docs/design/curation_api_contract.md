@@ -150,7 +150,7 @@ failures of a request body are the standard FastAPI `422` list.
 | `429` | `probe_busy` (VLM endpoint probe), `test_busy` (test-on-crop) |
 | `500` | `internal_isolation_error` (a cross-project access was refused), `path_escape` |
 | `502` | `vlm_transport_error`, `segmenter_error`, `detector_error`, a Triton load refusal on promote |
-| `503` | `config_store_unavailable`, `detector_unavailable` (`POST /classes/seed_from_detector`), `vlm_unreachable` (`POST /vlm/label_batch`: no crop got an answer, nothing was written), an OpenSearch outage on a read, ingest unavailable before the encoder has loaded |
+| `503` | `config_store_unavailable`, `detector_unavailable` (`POST /classes/seed_from_detector`), `vlm_unreachable` (`POST /vlm/label_batch`: no crop got an answer, nothing was written), an OpenSearch outage on a read, ingest unavailable before the encoder has loaded, `engine_unavailable` (an ingest request while the image engine is not ready or when it took none of the new photos: nothing was stored, `Retry-After: 5`), `database_busy` (no database connection in time, nothing stored) |
 | `504` | `test_timeout` |
 
 The full code enumeration is `ConfigErrorDetail.error` in the OpenAPI
@@ -1879,8 +1879,12 @@ under `store_coarse` cells are at most precision 15 and markers are rounded to 0
   configured secondary detector call failed; the image still ingests on the
   primary detector's output).
 - `error_kind` is one of `empty`, `unservable_path`, `unsupported_type`,
-  `decode_failed`, `detector_infer`, `bulk_index`, `blur_failed`, `incomplete_write`. It is
-  present with `error` when `status` is `failed`. `bulk_index`: a document the store refused
+  `decode_failed`, `detector_infer`, `bulk_index`, `blur_failed`, `incomplete_write`,
+  `engine_unavailable`, `database_busy`. It is present with `error` when `status` is `failed`.
+  `engine_unavailable` and `database_busy` are transient like `incomplete_write`: the engine or the
+  database could not take the photo now (a request after a commit group failed answers
+  `database_busy` for the photos not yet stored, while the stored ones keep `success`), nothing is
+  wrong with the file, and a bulk run does not count them as an attempt. `bulk_index`: a document the store refused
   or a write that failed, so the photo is not stored whole (before, a refused item still answered
   `success`). `incomplete_write` is transient: the image of these bytes is stored without some of
   its items and a writer may still be writing it; send the file again later and it is stored

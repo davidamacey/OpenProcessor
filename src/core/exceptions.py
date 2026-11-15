@@ -55,3 +55,9 @@ class RequestRejectedError(Exception):
         self.status_code = status_code
         self.detail = detail
         super().__init__(f'{status_code}: {detail}')
+
+
+class EngineUnavailableError(Exception):
+    """The frame engine cannot take the photos of this request now (not ready, down, or still
+    overloaded after its retries) and nothing of the request was stored: resending is safe. The
+    app answers 503 with ``Retry-After`` (``engine_unavailable_response``)."""

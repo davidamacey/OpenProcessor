@@ -65,13 +65,3 @@ def test_run_primary_sends_one_uint8_tensor() -> None:
     asyncio.run(_detector(pool).run_primary(Image.new('RGB', (100, 50), (10, 20, 30))))
     (inp,) = pool.inputs
     assert (inp.datatype(), inp.shape()) == ('UINT8', [1, 3, 64, 64])
-
-
-def test_run_primary_batch_chunks_by_batch_limit_in_uint8() -> None:
-    pool = _Pool()
-    imgs = [Image.new('RGB', (80, 40), (i, i, i)) for i in range(3)]
-    asyncio.run(_detector(pool).run_primary_batch(imgs))
-    assert [(i.datatype(), i.shape()) for i in pool.inputs] == [
-        ('UINT8', [2, 3, 64, 64]),
-        ('UINT8', [1, 3, 64, 64]),
-    ]

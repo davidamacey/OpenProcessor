@@ -102,11 +102,14 @@ checkout rarely needs them.
 
 All of these are served back on `GET /curation/projects/{project}/ingest/config`.
 
-GPU decode for large photos has two settings. `OP_INGEST_GPU_DECODE` has a code
-default of on, and the installer writes `1` for the `full` profile and `0` for
-`minimal` and `standard`. `OP_INGEST_GPU_MIN_MEGAPIXELS` (default `3.0`) is the
-size gate: smaller images stay on the CPU path, and so does any image the GPU
-path cannot decode.
+`OP_INGEST_GPU_DECODE` has a code default of on, and the installer writes `1` for
+the `full` profile and `0` for `minimal` and `standard`. On, every photo of an
+ingest goes to the frame engine, which decodes it (nvJPEG for a baseline JPEG,
+the CPU inside the engine for any other image); while the engine is down the
+ingest answers 503 with `Retry-After`. Off, the API decodes and detects each
+photo itself (the host stage), as it does for a project with a secondary
+detector. There is no size gate in the API; the engine's own gates are
+`OP_FRAME_ENGINE_MIN_MEGAPIXELS` and `OP_FRAME_ENGINE_MAX_MEGAPIXELS`.
 
 ## Ingest sources (S3 and triggers)
 

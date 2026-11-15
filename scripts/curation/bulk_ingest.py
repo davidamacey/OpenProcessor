@@ -199,11 +199,7 @@ def print_preview(preview: dict[str, Any], config: dict[str, Any]) -> None:
     mp = preview['megapixels']
     if mp['sampled']:
         shares = ', '.join(f'{k} MP: {v}' for k, v in mp['histogram'].items())
-        gate = mp['share_at_or_above_gate'] * 100
-        print(
-            f'  image sizes (header sample of {mp["sampled"]}): {shares}; '
-            f'{gate:.0f}% at or above {mp["gate_megapixels"]:g} MP'
-        )
+        print(f'  image sizes (header sample of {mp["sampled"]}): {shares}')
     skipped = [
         (preview['unreadable_dirs'], 'unreadable directories'),
         (preview['symlinks_skipped'], 'symlinks (not followed)'),

@@ -11,18 +11,13 @@ from curation.occ_fakes import FakeIngestOpenSearch
 from src.services.near_duplicates.content_key import content_imohash
 
 
-class TestBatchedTritonInference:
-    """Regression guards for G11 — ``ingest_batch`` must issue *batched*
-    Triton calls, not N single-image calls behind a semaphore.
-
-    The public API is output-identical either way, so nothing else in the
-    suite would notice a silent regression back to per-image inference.
-    These tests assert on the call count and the request batch dimension,
-    which is the only observable difference.
-    """
+class TestHostStageDetectorCalls:
+    """The host stage (a service without the frame engine) runs the detector one photo at a time
+    and lets the model server's dynamic batcher group the concurrent calls; the client no longer
+    stacks a batch itself. The output is the same as for a photo ingested alone."""
 
     @pytest.mark.asyncio
-    async def test_batch_issues_one_triton_call_for_the_whole_batch(self) -> None:
+    async def test_each_photo_is_one_single_image_detector_call(self) -> None:
         svc, _, triton = _make_service(batch_limit=8)
         images = [_jpeg_bytes(seed=s) for s in range(5)]
         paths = [f'/tmp/b{s}.jpg' for s in range(5)]
@@ -30,29 +25,12 @@ class TestBatchedTritonInference:
         result = await svc.ingest_batch(images, paths)
 
         assert result.summary.successful == 5
-        # THE assertion: one Triton round-trip for 5 images, carrying a
-        # batch of 5 — not 5 round-trips of batch 1.
-        assert triton.calls == ['primary_end2end']
-        assert triton.batch_sizes == [5]
-
-    @pytest.mark.asyncio
-    async def test_batch_chunks_at_profile_batch_limit(self) -> None:
-        """Chunking honors ``DetectionProfile.batch_limit`` — the engine's
-        configured ``max_batch_size`` — rather than one giant request."""
-        svc, _, triton = _make_service(batch_limit=2)
-        images = [_jpeg_bytes(seed=100 + s) for s in range(5)]
-        paths = [f'/tmp/c{s}.jpg' for s in range(5)]
-
-        result = await svc.ingest_batch(images, paths)
-
-        assert result.summary.successful == 5
-        assert triton.calls == ['primary_end2end'] * 3
-        assert triton.batch_sizes == [2, 2, 1]
+        assert triton.calls == ['primary_end2end'] * 5
+        assert triton.batch_sizes == [1] * 5
 
     @pytest.mark.asyncio
     async def test_batch_skips_duplicates_before_inference(self, content_rows: Any) -> None:
-        """Duplicates never reach the GPU — the batched call carries only
-        the non-duplicate images."""
+        """Duplicates never reach the detector: only the new photos are staged."""
         dup = _jpeg_bytes(seed=200)
         os_fake = FakeIngestOpenSearch(images={'existing': {'image_id': 'existing'}})
         content_rows.rows[content_imohash(dup)] = 'existing'
@@ -64,12 +42,11 @@ class TestBatchedTritonInference:
 
         assert result.summary.duplicates == 1
         assert result.summary.successful == 2
-        assert triton.batch_sizes == [2]
+        assert triton.batch_sizes == [1, 1]
 
     @pytest.mark.asyncio
     async def test_batch_output_matches_per_image_output(self) -> None:
-        """Batched and per-image paths must produce identical documents —
-        batching is a performance change, never a behavior change."""
+        """A request's flow and a photo ingested alone produce identical documents."""
         images = [_jpeg_bytes(seed=300 + s) for s in range(3)]
         paths = [f'/tmp/e{s}.jpg' for s in range(3)]
 
@@ -94,59 +71,25 @@ class TestBatchedTritonInference:
         assert _comparable(os_batch.items) == _comparable(os_single.items)
 
     @pytest.mark.asyncio
-    async def test_batch_falls_back_to_per_image_when_batched_call_fails(self) -> None:
-        """A detector that rejects multi-image requests must not fail the
-        ingest — it falls back to the per-image path."""
-        svc, os_fake, triton = _make_service(batch_limit=8, fail_on_batch_gt=1)
+    async def test_a_detector_that_fails_for_one_photo_fails_that_photo_only(self) -> None:
+        svc, os_fake, triton = _make_service(batch_limit=8, fail_on_batch_gt=0)
+        real_infer = triton.infer
+        calls = [0]
+
+        async def infer(*args: Any, **kwargs: Any) -> Any:
+            calls[0] += 1
+            if calls[0] == 2:
+                raise RuntimeError('model server refused this call')
+            return await real_infer(*args, **kwargs)
+
+        triton.fail_on_batch_gt = None
+        triton.infer = infer
         images = [_jpeg_bytes(seed=400 + s) for s in range(3)]
-        paths = [f'/tmp/f{s}.jpg' for s in range(3)]
+        result = await svc.ingest_batch(images, [f'/tmp/f{s}.jpg' for s in range(3)])
 
-        result = await svc.ingest_batch(images, paths)
-
-        assert result.summary.successful == 3
-        assert len(os_fake.items) == 3
-        # The batched attempt raised (never recorded), then three
-        # per-image calls of batch 1 went through.
-        assert triton.batch_sizes == [1, 1, 1]
-
-    @pytest.mark.asyncio
-    async def test_ingest_one_honors_prefilled_items(self) -> None:
-        """``prefilled_items`` is real plumbing, not a vestigial arg: when
-        supplied, ``ingest_one`` issues no detector call at all."""
-        from src.services.curation.item_doc import DetectedItem
-
-        svc, os_fake, triton = _make_service()
-        prefilled = [
-            DetectedItem(
-                bbox_pixel=(10.0, 10.0, 80.0, 60.0),
-                score=0.9,
-                class_id=1,
-                class_name='widget',
-                class_source='primary_model',
-                proposal_name='widget',
-            )
-        ]
-        result = await svc.ingest_one(
-            _jpeg_bytes(seed=500), '/tmp/g.jpg', prefilled_items=prefilled
-        )
-
-        assert result.status == 'success'
-        assert result.n_crops == 1
-        assert triton.calls == []
-        [doc] = list(os_fake.items.values())
-        assert doc['class_id'] == 1
-
-    @pytest.mark.asyncio
-    async def test_ingest_one_honors_empty_prefilled_items(self) -> None:
-        """An empty prefilled list means "the detector found nothing",
-        not "not prefilled" — it must not trigger a detector call."""
-        svc, os_fake, triton = _make_service()
-        result = await svc.ingest_one(_jpeg_bytes(seed=501), '/tmp/h.jpg', prefilled_items=[])
-
-        assert result.status == 'success'
-        assert result.n_crops == 0
-        assert triton.calls == []
-        assert len(os_fake.images) == 1
+        assert sorted(r.status for r in result.results) == ['failed', 'success', 'success']
+        assert [r.error_kind for r in result.results if r.status == 'failed'] == ['detector_infer']
+        assert len(os_fake.items) == 2
 
 
 class TestCropCreatedEvents:

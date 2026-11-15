@@ -61,9 +61,6 @@ class MegapixelSample:
     sampled: int = 0
     unreadable: int = 0
     histogram: dict[str, int] = field(default_factory=dict)
-    gate_megapixels: float = 0.0
-    # Share of the sampled images at or above the GPU-decode gate; None without a sample.
-    share_at_or_above_gate: float | None = None
 
 
 @dataclass
@@ -150,10 +147,12 @@ def _bucket_label(megapixels: float) -> str:
 
 
 def _sample_headers(
-    paths: Iterable[str], gate_megapixels: float, stopped: Callable[[], bool]
-) -> MegapixelSample:
+    paths: Iterable[str], stopped: Callable[[], bool]
+) -> tuple[MegapixelSample, float | None]:
+    """The sampled sizes and the share of them in the large size class the estimate prices
+    (``None`` without a sample)."""
     histogram: dict[str, int] = {}
-    sampled = unreadable = at_gate = 0
+    sampled = unreadable = large = 0
     for path in paths:
         if stopped():
             break
@@ -167,20 +166,15 @@ def _sample_headers(
         label = _bucket_label(megapixels)
         histogram[label] = histogram.get(label, 0) + 1
         sampled += 1
-        at_gate += megapixels >= gate_megapixels
-    return MegapixelSample(
-        sampled,
-        unreadable,
-        histogram,
-        gate_megapixels,
-        at_gate / sampled if sampled else None,
-    )
+        large += megapixels >= preflight_rates.LARGE_PHOTO_MEGAPIXELS
+    return MegapixelSample(sampled, unreadable, histogram), large / sampled if sampled else None
 
 
 def _finish(
     result: PreviewResult,
     budget: _Budget,
     sample: MegapixelSample,
+    share_large: float | None,
     *,
     gpu_decode: bool,
 ) -> PreviewResult:
@@ -189,7 +183,7 @@ def _finish(
     result.partial = budget.reason is not None
     result.stop_reason = budget.reason
     result.estimate = preflight_rates.estimate(
-        files=result.files, share_large=sample.share_at_or_above_gate, gpu_decode=gpu_decode
+        files=result.files, share_large=share_large, gpu_decode=gpu_decode
     )
     return result
 
@@ -209,7 +203,6 @@ def preview_source(
     should_stop: Callable[[], bool] = lambda: False,
     clock: Callable[[], float] = time.monotonic,
     gpu_decode: bool = True,
-    gpu_min_megapixels: float = 3.0,
     walk_workers: int = 8,
 ) -> PreviewResult:
     """Preview a folder or manifest. Blocking: run it off the event loop. Raises
@@ -225,8 +218,8 @@ def preview_source(
         _preview_folder(source, result, budget, reservoir, walk_workers)
     else:
         _preview_manifest(source, result, budget, reservoir)
-    sample = _sample_headers(reservoir.items, gpu_min_megapixels, should_stop)
-    return _finish(result, budget, sample, gpu_decode=gpu_decode)
+    sample, share_large = _sample_headers(reservoir.items, should_stop)
+    return _finish(result, budget, sample, share_large, gpu_decode=gpu_decode)
 
 
 def _preview_folder(
@@ -315,7 +308,7 @@ def preview_s3(
         token = page.next_token
         if token is None or budget.reason is not None:
             break
-    return _finish(result, budget, MegapixelSample(), gpu_decode=gpu_decode)
+    return _finish(result, budget, MegapixelSample(), None, gpu_decode=gpu_decode)
 
 
 __all__ = [

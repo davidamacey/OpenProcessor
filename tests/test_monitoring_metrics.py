@@ -387,3 +387,17 @@ def test_a_contact_point_that_cannot_deliver_says_so_in_its_name() -> None:
     policy = data['policies'][0]
     routed = {policy['receiver'], *(r['receiver'] for r in policy['routes'])}
     assert routed <= set(points)
+
+
+def test_the_ingest_dashboard_lists_every_ingest_stage() -> None:
+    """A stage timer nobody can pick in the stage selector is a measurement nobody reads (the
+    per-photo flow adds ``crop_cache`` beside the engine call, claim and publish timers)."""
+    from src.utils.stage_timing import STAGES
+
+    dashboard = json.loads(
+        (REPO_ROOT / 'monitoring' / 'dashboards' / 'ingest-pipeline.json').read_text()
+    )
+    selector = next(v for v in dashboard['templating']['list'] if v['name'] == 'stage')
+    listed = set(selector['query'].split(','))
+    ingest_stages = {s for s in STAGES if not s.startswith('project_create')}
+    assert ingest_stages <= listed, sorted(ingest_stages - listed)
