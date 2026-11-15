@@ -128,7 +128,8 @@ BEGIN
       USING ERRCODE = 'undefined_object';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
-    RAISE WARNING 'extension vector is not installed in database %: needed for the per-space vector tables (15a section 6), the application image must ship pgvector; %', current_database(), hint;
+    RAISE EXCEPTION 'extension vector is not installed in database %: needed for the per-space vector tables (15a section 6); the pinned pgvector/pgvector image ships it; %', current_database(), hint
+      USING ERRCODE = 'undefined_object';
   END IF;
   SELECT nspowner::regrole::text INTO owner_name FROM pg_namespace WHERE nspname = 'vec';
   IF owner_name IS NULL THEN
@@ -157,9 +158,8 @@ def require_bootstrap() -> None:
     installer, production and the test fixtures through ``scripts/db/migrate.py``); the grants on
     ``vec`` and ``projects`` to the vector role are ``roles.apply_grants``'s.
 
-    Deviation 1 (accepted): a missing ``vector`` extension is a warning only until the deploy lane
-    ships the image with pgvector. From then on this must FAIL without it: change that
-    ``RAISE WARNING`` to ``RAISE EXCEPTION`` in the revision that lane writes. Nothing in this
-    revision uses the extension.
+    Deviation 1 is closed: the compose files pin the pgvector project's image
+    (``pgvector/pgvector:0.8.7-pg18-trixie``, 01_package_pins.md), so a missing ``vector`` extension
+    fails here like the others. Nothing in this revision uses the extension.
     """
     op.execute(_BOOTSTRAP.replace('@VECTOR_ROLE@', VECTOR_USER))

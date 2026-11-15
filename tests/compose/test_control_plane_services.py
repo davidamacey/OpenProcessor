@@ -92,7 +92,7 @@ def test_postgres_volume_connections_and_tcp_healthcheck() -> None:
     probe = ' '.join(pg['healthcheck']['test'])
     assert 'pg_isready' in probe
     assert '-h 127.0.0.1' in probe, 'the socket-only first-init server must not count as ready'
-    assert pg['image'].startswith('postgres:18.6-trixie@sha256:')
+    assert pg['image'].startswith('pgvector/pgvector:0.8.7-pg18-trixie@sha256:')
     assert 'ports' not in pg
 
 

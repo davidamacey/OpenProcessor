@@ -39,9 +39,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncEngine
 
 # The image and digest of the Postgres service in docker-compose.yml.
-POSTGRES_IMAGE = (
-    'postgres:18.6-trixie@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583'
-)
+POSTGRES_IMAGE = 'pgvector/pgvector:0.8.7-pg18-trixie@sha256:ab49524d18df7200b74ac9a475e1db6297fc1eb57da4c214c63d10ecc4b754fa'
 URL_ENV = 'OP_TEST_DATABASE_URL'
 _PASSWORDS = {
     'app': 'op-test-app-password',

@@ -208,9 +208,9 @@ def test_the_migration_creates_no_schema_extension_or_role_because_its_role_may_
 def test_a_missing_bootstrap_piece_fails_naming_it_and_the_step_that_supplies_it() -> None:
     sql = upgrade_sql()
     check = sql[: sql.index('CREATE TABLE')]
-    assert check.count('RAISE EXCEPTION') == 4
+    assert check.count('RAISE EXCEPTION') == 5
     # every failure passes the hint that names the bootstrap step as its last argument
-    assert len(re.findall(r'hint\s+USING ERRCODE', check)) == 4
+    assert len(re.findall(r'hint\s+USING ERRCODE', check)) == 5
     for piece in (
         'pg_trgm',
         'schema vec does not exist',
@@ -222,10 +222,10 @@ def test_a_missing_bootstrap_piece_fails_naming_it_and_the_step_that_supplies_it
         "hint constant text := 'run the db-migrate step (python -m scripts.db.migrate upgrade)"
         in check
     )
-    # the recorded exception (deviation 1): the vector extension only warns until the image ships it
-    assert re.search(r"extname = 'vector'\) THEN\s+RAISE WARNING", check)
-    assert not re.search(r"extname = 'vector'\) THEN\s+RAISE EXCEPTION", check)
-    assert re.search(r"extname = 'pg_trgm'\) THEN\s+RAISE EXCEPTION", check)
+    # both extensions are hard requirements: the pinned pgvector image ships `vector`
+    assert 'RAISE WARNING' not in check
+    for extension in ('pg_trgm', 'vector'):
+        assert re.search(rf"extname = '{extension}'\) THEN\s+RAISE EXCEPTION", check)
     # no vector table is made by the migration: the embedding-space job makes them at run time
     assert 'vec.v' not in sql
     assert 'halfvec' not in sql

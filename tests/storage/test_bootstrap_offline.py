@@ -8,7 +8,6 @@ server must answer (that PostgreSQL accepts each statement) is in the ``db`` tes
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, cast
 
 import pytest
@@ -106,7 +105,7 @@ def test_a_rerun_alters_an_existing_vector_role(settings) -> None:
 
 
 def test_the_vector_role_is_never_granted_to_another_role(settings) -> None:
-    conn = RecordingConnection(available={'pg_trgm'})
+    conn = RecordingConnection(available={'pg_trgm', 'vector'})
     roles.ensure_roles(conn.connection, settings)
     roles.prepare_database(conn.connection, settings)
     roles.apply_grants(conn.connection, settings)
@@ -126,20 +125,12 @@ def test_the_database_step_makes_what_the_owner_may_not_create(settings) -> None
     assert 'GRANT CONNECT ON DATABASE "openprocessor" TO "op_vector"' in sql
 
 
-def test_a_missing_vector_package_is_a_warning_and_a_missing_trigram_module_is_not(
-    settings, caplog: pytest.LogCaptureFixture
-) -> None:
-    conn = RecordingConnection(available={'pg_trgm'})
-    with caplog.at_level(logging.WARNING):
+@pytest.mark.parametrize('missing', ['pg_trgm', 'vector'])
+def test_a_server_without_either_extension_is_refused_naming_it(settings, missing: str) -> None:
+    conn = RecordingConnection(available={'pg_trgm', 'vector'} - {missing})
+    with pytest.raises(roles.BootstrapError, match=missing):
         roles.prepare_database(conn.connection, settings)
-    sql = _joined(conn)
-    assert 'CREATE EXTENSION IF NOT EXISTS "vector"' not in sql
-    assert 'CREATE EXTENSION IF NOT EXISTS "pg_trgm"' in sql
-    assert any('vector' in r.getMessage() and 'pgvector' in r.getMessage() for r in caplog.records)
-
-    broken = RecordingConnection(available={'vector'})
-    with pytest.raises(roles.BootstrapError, match='pg_trgm'):
-        roles.prepare_database(broken.connection, settings)
+    assert 'CREATE SCHEMA IF NOT EXISTS "vec" AUTHORIZATION "op_owner"' not in _joined(conn)
 
 
 def test_the_owner_grants_the_vector_role_its_schema_and_the_project_reference(settings) -> None:

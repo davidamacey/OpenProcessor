@@ -18,7 +18,6 @@ rule, and gives the vector role its schema and its reference to ``projects``.
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 from psycopg import sql
@@ -30,8 +29,6 @@ if TYPE_CHECKING:
     from psycopg import Connection
 
     from src.config.database import DatabaseSettings
-
-logger = logging.getLogger(__name__)
 
 # Settings applied with ALTER ROLE so they hold for every new session of the role, wherever it
 # connects from. The application role keeps short limits so a runaway request query ends in
@@ -54,12 +51,13 @@ class BootstrapError(RuntimeError):
     """A step only the superuser can take cannot be taken: the database is not usable."""
 
 
-# Installed by ``prepare_database``. ``pg_trgm`` ships with PostgreSQL (contrib), so its absence is a
-# broken server; ``vector`` (pgvector) is not in the stock image, so until the deploy lane ships an
-# image that has it, its absence is a warning (15a section 12, ``0010_storage_record`` step 1; the
-# migration repeats the warning).
-_REQUIRED_EXTENSION = 'pg_trgm'
-_OPTIONAL_EXTENSION = 'vector'
+# Both installed by ``prepare_database``. ``pg_trgm`` ships with PostgreSQL (contrib); ``vector``
+# (pgvector) ships in the ``pgvector/pgvector`` image the compose files pin (01_package_pins.md).
+# A server that offers either one fewer is not a server the record can run on.
+_REQUIRED_EXTENSIONS = (
+    ('pg_trgm', 'the text-search indexes'),
+    ('vector', 'the per-space vector tables'),
+)
 
 
 def _role_exists(conn: Connection, name: str) -> bool:
@@ -115,27 +113,16 @@ def _extension_available(conn: Connection, name: str) -> bool:
 
 
 def _install_extensions(conn: Connection) -> None:
-    if not _extension_available(conn, _REQUIRED_EXTENSION):
-        raise BootstrapError(
-            f'the PostgreSQL server does not offer the extension {_REQUIRED_EXTENSION} '
-            '(the contrib package of the server image): the text-search indexes need it'
-        )
-    conn.execute(
-        sql.SQL('CREATE EXTENSION IF NOT EXISTS {} WITH SCHEMA public').format(
-            sql.Identifier(_REQUIRED_EXTENSION)
-        )
-    )
-    if _extension_available(conn, _OPTIONAL_EXTENSION):
+    for name, needed_for in _REQUIRED_EXTENSIONS:
+        if not _extension_available(conn, name):
+            raise BootstrapError(
+                f'the PostgreSQL server does not offer the extension {name}, which {needed_for} need: '
+                'run the pinned pgvector/pgvector image (docker-compose.yml, postgres service)'
+            )
         conn.execute(
             sql.SQL('CREATE EXTENSION IF NOT EXISTS {} WITH SCHEMA public').format(
-                sql.Identifier(_OPTIONAL_EXTENSION)
+                sql.Identifier(name)
             )
-        )
-    else:
-        logger.warning(
-            'the extension %s (pgvector) is not installed in this server image: the per-space '
-            'vector tables cannot be made until the image ships it',
-            _OPTIONAL_EXTENSION,
         )
 
 
