@@ -2,9 +2,9 @@
 
 | Field | Value |
 |---|---|
-| Status | decision and lane plan, revision 0 (2026-11-15), by the coordinator |
+| Status | decision and lane plan, revision 1 (2026-11-15), by the coordinator: the frame vector comes from the same letterbox pass (section 2a) |
 | Refines | [13_backend_speed_plan.md](13_backend_speed_plan.md) track T3 (encoder cost) and item E3; [14_roadmap.md](14_roadmap.md) phase 1b |
-| Not in scope | the frame vector's model (unchanged), faces, text reading, the vector index (plan 15) |
+| Not in scope | faces, text reading, the vector index (plan 15) |
 
 ## 0. The user's job
 
@@ -43,6 +43,19 @@ gate fails, the fallbacks are, in this order: the frame pass at 448; a second pa
 photos whose boxes are small against the encoder's patches (as the face branch does). Two crop
 vector spaces at once are not an option: clusters must compare every crop with every other.
 
+## 2a. The frame vector moves to the same pass (revision 1)
+
+The prototype pooled from a pass over the whole photo letterboxed to the encoder's input, so every
+box has tokens. Today's frame vector is made from the centre square, which drops the sides of a
+wide photo; the two differ (median cosine 0.962), and the letterbox one scored 0.5575 against 0.5477
+on COCO text-to-image R@1. One pass cannot give both. Decision: the letterbox pass is the only
+pass, and its frame vector is the frame vector. The frame space is therefore new as well. The
+near-duplicate thresholds were calibrated on today's space and are re-calibrated in lane P2.
+
+The model's own attention-pooling head is applied to a box's tokens. It runs as an exported model,
+not as a hand-written copy of the layer, unless that costs more than about 1 ms per photo; either
+way it is tested against the reference head.
+
 ## 3. Lanes
 
 | Lane | Work |
@@ -54,7 +67,8 @@ vector spaces at once are not an option: clusters must compare every crop with e
 
 | Gate | Bar |
 |---|---|
-| Frame vector | cosine at least 0.9999 against today's on 200 COCO and 100 set P photos |
+| Export check | the new model fed today's centre-square input gives today's frame vector: cosine at least 0.9999 on 200 COCO and 100 set P photos |
+| Frame vector (letterbox pass) | COCO text-to-image R@1 on the 5,000 captions and image-to-image retrieval not below today's; the cosine distributions of near-duplicate pairs and of random pairs reported for both frame vectors |
 | Quality, public | COCO crop R@1 at least 0.70 and NMI at least 0.61; Cars R@1 at least 0.92 and NMI at least 0.93; text to crop mAP at least 0.77 on COCO headline boxes |
 | Quality, high resolution | on labelled photos of 12 megapixels or more (set P's labelled vehicle classes as numbers only, and any public large-photo set on the host), by box size: pooled at 336 against per crop letterbox and pooled at 448. Pooled at 336 passes if NMI is within 2 points on every size bucket; otherwise the lane stops and reports, and the coordinator picks the fallback |
 | GPU cost | at most 6 ms of GPU per photo for the frame and every crop vector at 1, 3, 10 and 50 boxes, measured from the model server's counters and the engine's stage timers |
