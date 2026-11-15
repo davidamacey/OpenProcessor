@@ -18,6 +18,7 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.db.base import Base
+from src.db.models.storage_common import fk_index
 from src.db.types import EMPTY_ARRAY, EMPTY_OBJECT, NOW, UUIDV7, check, in_list
 
 
@@ -65,6 +66,7 @@ class DatasetImport(Base):
         ForeignKey('dataset_uploads.id', ondelete='SET NULL')
     )
     source_key: Mapped[str | None]
+    dataset_name: Mapped[str | None]
     format: Mapped[str]
     mapping: Mapped[Any] = mapped_column(JSONB)
     options: Mapped[Any] = mapped_column(JSONB)
@@ -175,7 +177,10 @@ class IngestSourceFile(Base):
 
 class LabelOperation(Base):
     __tablename__ = 'label_operations'
-    __table_args__ = (check('status', in_list('status', LABEL_OPERATION_STATUSES)),)
+    __table_args__ = (
+        check('status', in_list('status', LABEL_OPERATION_STATUSES)),
+        fk_index('label_operations', 'dataset_import_id', partial=True),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, server_default=UUIDV7)
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey('projects.id', ondelete='CASCADE'))
@@ -187,6 +192,9 @@ class LabelOperation(Base):
     created_at: Mapped[dt.datetime] = mapped_column(server_default=NOW)
     created_by: Mapped[str]
     undone_at: Mapped[dt.datetime | None]
+    dataset_import_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey('dataset_imports.id', ondelete='SET NULL')
+    )
 
 
 class LabelOperationMember(Base):

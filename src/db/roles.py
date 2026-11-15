@@ -93,6 +93,8 @@ def apply_grants(conn: Connection, settings: DatabaseSettings) -> None:
     app = sql.Identifier(settings.app_user)
     for statement in (
         'GRANT USAGE ON SCHEMA public TO {}',
+        # the per-space vector tables are made in this schema by op_vector, which grants the table rights
+        'GRANT USAGE ON SCHEMA vec TO {}',
         'GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {}',
         'GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO {}',
         'GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO {}',
