@@ -55,6 +55,18 @@ ready") and `ingest_engine_probe_undelivered` (it could not be asked; it names t
 `op_engine_probe_total{outcome}` counts `ready`, `recovered`, `not_ready` and `undelivered`
 ([Monitoring](./monitoring.mdx)).
 
+### A photo whose engine call was lost
+
+The call for one photo is a pure function of the photo and the plan: the engine stores nothing, so
+sending it again is safe. The API sends it again, up to 3 times with a short growing pause, when
+the engine answers `UNAVAILABLE` or when the transport lost the stream (`INTERNAL` with a text
+such as `Stream removed` or `Received RST_STREAM with error code 1`), and for as long as the
+photo's 120 s deadline when the engine answers overloaded. An `INTERNAL` that the engine raised
+for the photo (its text starts with `frame engine:`) is not sent again: it would fail the same
+way, and the photo ends `engine_unavailable` with that text in the API log
+(`frame_engine_call_failed`). See
+[gRPC status codes](https://grpc.io/docs/guides/status-codes/).
+
 A file the engine cannot read answers `decode_failed` (not transient, it uses an attempt), and one
 larger than `OP_FRAME_ENGINE_MAX_MEGAPIXELS` is refused from its header before any decode.
 
@@ -107,7 +119,7 @@ the line to delete).
 |---|---|
 | `frame-engine` not healthy, or ingest answers 503 `engine_unavailable` | `./openprocessor logs frame-engine`. A line naming a setting means that value is malformed. No GPU line means the card is not visible to Docker. `./openprocessor status` shows whether Triton is up first: the engine waits for it. |
 | Photos or a request fail with `too_many_pings` or `GOAWAY` in the API log | The API's channels to the engine ping every 30 s, idle or not, and the engine's server accepts that (pings without calls, no more often than every 10 s): `frame_engine.front.SERVER_OPTIONS` and `src.clients.frame_engine.ENGINE_CHANNEL_OPTIONS`, kept in step by a test. A line saying `too_many_pings` means the two sides disagree again, for example an engine image older than the API's: update both. ([gRPC keepalive](https://grpc.io/docs/guides/keepalive/)) |
-| A photo fails `engine_unavailable` with `INTERNAL: Stream removed` or `frame of size 9 overflows local window` in the API log, and `fork_posix.cc ... Other threads are currently calling into gRPC, skipping fork() handlers` above it | A process of the API called `fork()` while engine calls were in flight; gRPC does not support that ([gRPC Python fork support](https://github.com/grpc/grpc/blob/master/doc/fork_support.md)). The one cause found was ExifTool's start-up (PyExifTool's `preexec_fn`); the API now starts its ExifTool processes at start-up, before it opens any engine channel, and without `preexec_fn`, so a start-up or a replacement never forks. A new `fork_posix.cc` line names a new cause: find the process that forks (`ps -ef --forest` in the API container). |
+| A photo fails `engine_unavailable` with `INTERNAL: Stream removed` or `frame of size 9 overflows local window` in the API log, and `fork_posix.cc ... Other threads are currently calling into gRPC, skipping fork() handlers` above it | A process of the API called `fork()` while engine calls were in flight; gRPC does not support that ([gRPC Python fork support](https://github.com/grpc/grpc/blob/master/doc/fork_support.md)). The one cause found was ExifTool's start-up (PyExifTool's `preexec_fn`); the API now starts its ExifTool processes at start-up, before it opens any engine channel, and without `preexec_fn`, so a start-up or a replacement never forks. A new `fork_posix.cc` line names a new cause: find the process that forks (`ps -ef --forest` in the API container). The call itself is also sent again, [see above](#a-photo-whose-engine-call-was-lost). |
 | The engine does not start (memory) | The card is too small for the sizes: `./openprocessor gpu plan`, lower `OP_FRAME_ENGINE_BUDGET_MIB` and `OP_FRAME_ENGINE_REGION_MIB`, unload models you do not use, or use `OP_LOAD_PROFILE=ingest` ([Ingest load profile](./ingest-load-profile.mdx)). |
 | Engine unready after a CUDA error | A lost CUDA context makes it refuse work as retryable, report not ready and exit; Docker restarts it and it is ready within seconds. Repeated restarts: check `nvidia-smi` and the driver. |
 | A model failed to load, `/health` or `/ready` names it | The API loads a model by unloading it first, waiting up to 30 seconds until it is no longer ready, then loading it, so that model answers unavailable for a second or two. If it stays unavailable: `./openprocessor logs triton-server` for the reason, then `./openprocessor models repair`. The engine's own models are `pe_image_encoder`, the detector, and (for faces and text) the `uint8` SCRFD, ArcFace and PaddleOCR engines. |

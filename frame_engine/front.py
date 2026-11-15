@@ -13,7 +13,9 @@ answer, an engine that is not ready or is draining, and one whose CUDA context w
 INVALID_ARGUMENT; an unknown model is NOT_FOUND; a request still running at
 ``OP_FRAME_ENGINE_REQUEST_DEADLINE_SECONDS`` is DEADLINE_EXCEEDED (logged and counted with the
 stage it was in; the photo goes on to release what it holds, every wait in it being bounded);
-anything else is INTERNAL. The API's retry helper (``src/utils/retry.py``) retries the first two.
+anything else is INTERNAL, its details starting with ``wire.ENGINE_ERROR_PREFIX`` (an INTERNAL
+without it came from the transport; the API retries only that one, ``src/clients/frame_engine.py``).
+The API's retry helper (``src/utils/retry.py``) retries the first two.
 
 The handler stays on the event loop only to unpack and pack tensors; the photo runs on the
 engine's worker threads (``engine.submit``), awaited through ``asyncio.wrap_future``. The in-flight
@@ -279,7 +281,7 @@ class FrontService(service_pb2_grpc.GRPCInferenceServiceServicer):
             failure = grpc.StatusCode.UNAVAILABLE, f'frame engine restarting: {exc}'
         except Exception as exc:
             logger.exception('frame engine request failed')
-            failure = grpc.StatusCode.INTERNAL, f'frame engine: {exc}'
+            failure = grpc.StatusCode.INTERNAL, f'{wire.ENGINE_ERROR_PREFIX}{exc}'
         finally:
             self.in_flight -= 1
             self.metrics.in_flight.set(self.in_flight)

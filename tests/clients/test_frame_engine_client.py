@@ -162,7 +162,9 @@ async def test_an_overload_that_outlasts_the_deadline_is_reported_as_overloaded(
 @pytest.mark.parametrize(
     'error',
     [
-        _status_error(grpc.StatusCode.INTERNAL),
+        InferenceServerException(
+            msg=f'{wire.ENGINE_ERROR_PREFIX}kernel failed', status=str(grpc.StatusCode.INTERNAL)
+        ),  # the engine's own INTERNAL: the photo's failure
         _status_error(grpc.StatusCode.INVALID_ARGUMENT),
         OSError('connection refused'),
     ],

@@ -8,7 +8,7 @@ stayed full for its bounded wait, or too many requests in flight) with gRPC
 ``RESOURCE_EXHAUSTED``. A photo is a unit of work that waits its turn: the overload is retried
 with a jittered exponential backoff until the photo's deadline (``DEADLINE_SECONDS``; tenacity
 ``stop_after_delay`` and ``wait_exponential_jitter``,
-https://tenacity.readthedocs.io/en/stable/#stopping), an UNAVAILABLE engine ``RETRIES`` times.
+https://tenacity.readthedocs.io/en/stable/#stopping), an UNAVAILABLE engine or a call lost in transit ``RETRIES`` times.
 The pool's own retry is off (``retries=0``): its 10 ms steps do not outlast a busy card. What is
 left is an :class:`EngineCallError`, whose ``overloaded`` says whether the last answer was the
 overload status.
@@ -43,8 +43,9 @@ if TYPE_CHECKING:
 
 FRAME_ENGINE_URL_ENV = 'OP_FRAME_ENGINE_URL'
 DEFAULT_URL = 'frame-engine:8001'
-#: Retries of an UNAVAILABLE engine after the first try (a restarting engine is the caller's to
-#: wait out: the bulk run's 503 backoff); an overload is not counted, the deadline ends it.
+#: Retries of an UNAVAILABLE engine or a call lost in transit after the first try (a restarting
+#: engine is the caller's to wait out: the bulk run's 503 backoff); an overload is not counted,
+#: the deadline ends it.
 RETRIES = 3
 #: One photo's whole pipeline (decode, detector, encoder, crop JPEGs) plus the engine's waits: the
 #: timeout of one try.
@@ -86,6 +87,7 @@ ENGINE_CHANNEL_OPTIONS: tuple[tuple[str, int], ...] = (
 _BACKOFF = wait_exponential_jitter(multiplier=0.05, max=2.0, jitter=0.2)
 _OVERLOAD = str(grpc.StatusCode.RESOURCE_EXHAUSTED)
 _UNAVAILABLE = str(grpc.StatusCode.UNAVAILABLE)
+_INTERNAL = str(grpc.StatusCode.INTERNAL)
 #: The pool also raises RuntimeError: not initialized, or no server for the model.
 _CALL_ERRORS: tuple[type[Exception], ...] = (*TRITON_CALL_ERRORS, RuntimeError)
 
@@ -243,13 +245,36 @@ def _status(exc: BaseException | None) -> str | None:
     return exc.status() if isinstance(exc, InferenceServerException) else None
 
 
+def _lost_in_transit(exc: BaseException | None) -> bool:
+    """An ``INTERNAL`` the transport or the gRPC library made (``Stream removed``, ``Received
+    RST_STREAM with error code 1``, a flow-control violation): the call or its answer was lost
+    with the stream, whatever the engine did with the photo. The engine's own ``INTERNAL``
+    (the photo's failure) starts with :data:`wire.ENGINE_ERROR_PREFIX` and is not one."""
+    from tritonclient.utils import InferenceServerException
+
+    return (
+        isinstance(exc, InferenceServerException)
+        and exc.status() == _INTERNAL
+        and not (exc.message() or '').startswith(wire.ENGINE_ERROR_PREFIX)
+    )
+
+
 def _retry_again(state: RetryCallState) -> bool:
-    """Retry an overload (the deadline ends it) and an UNAVAILABLE engine ``RETRIES`` times."""
+    """Retry an overload (the deadline ends it), and ``RETRIES`` times an UNAVAILABLE engine or a
+    call lost in transit.
+
+    gRPC status-code guide (https://grpc.io/docs/guides/status-codes/): UNAVAILABLE "is most
+    likely a transient condition, which can be corrected by retrying with a backoff" and "it is
+    not always safe to retry non-idempotent operations"; this call is a pure function of the
+    photo and the plan (nothing is stored by the engine), so any repeat is safe. INTERNAL is "for
+    serious errors" and the engine's own is deterministic for the photo, so only the transport's
+    is repeated (:func:`_lost_in_transit`)."""
     outcome = state.outcome
-    status = _status(outcome.exception() if outcome is not None else None)
+    exc = outcome.exception() if outcome is not None else None
+    status = _status(exc)
     if status == _OVERLOAD:
         return True
-    return status == _UNAVAILABLE and state.attempt_number <= RETRIES
+    return (status == _UNAVAILABLE or _lost_in_transit(exc)) and state.attempt_number <= RETRIES
 
 
 async def process(
