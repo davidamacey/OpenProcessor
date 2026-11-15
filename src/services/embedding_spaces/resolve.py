@@ -22,7 +22,14 @@ from src.config.project_context import current_project
 from src.db.models.projects import Project
 from src.db.repos import embedding_spaces as repo
 from src.db.session import async_session_factory, deployment_tx, project_tx
-from src.domain.embedding_spaces import EmbeddingSpaceError, ResolvedSpace, Role, Status, Target
+from src.domain.embedding_spaces import (
+    EmbeddingSpaceError,
+    ResolvedSpace,
+    Role,
+    Status,
+    Target,
+    image_input_size,
+)
 
 
 if TYPE_CHECKING:
@@ -88,6 +95,7 @@ async def _load(slug: str) -> _Entry:
                 triton_image_model=v.triton_image_model,
                 triton_text_model=v.triton_text_model,
                 knn_method=r.knn_method,
+                input_size=image_input_size(v.input_spec),
             )
         )
         if r.role is Role.PRIMARY and r.status is Status.READY:

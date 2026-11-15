@@ -19,7 +19,7 @@ import numpy as np
 from opensearchpy.exceptions import NotFoundError
 from PIL import Image
 
-from src.clients.pe_encoder import PE_CROP_MODEL
+from src.clients.pe_encoder import crop_encoder_build
 from src.config import CurationConfig, get_curation_config
 from src.config.project_context import current_project
 from src.config.region_fields import RegionFields, get_region_fields
@@ -178,8 +178,8 @@ async def semantic_image_search(
             project=current_project().record.slug,
             space_key=space.space_key,
             target=space.target,
-            space_model=space.triton_image_model,
-            served_model=PE_CROP_MODEL,
+            space_build=space.encoder_build,
+            served_build=crop_encoder_build(),
             status=422,
         )
         try:

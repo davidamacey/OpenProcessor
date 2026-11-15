@@ -25,4 +25,5 @@ def legacy_item_space(dim: int = 1024) -> ResolvedSpace:
         triton_image_model=None,
         triton_text_model=None,
         knn_method=KnnMethodSpec(),
+        input_size=None,
     )

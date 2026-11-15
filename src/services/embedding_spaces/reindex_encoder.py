@@ -13,11 +13,11 @@ import asyncio
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any
 
-from src.clients.pe_encoder import image_model_for
+from src.clients.pe_encoder import served_encoder_for
 from src.config import get_curation_config
 from src.db.repos import embedding_spaces as repo
 from src.db.session import async_session_factory, project_tx
-from src.domain.embedding_spaces import Target, require_encoder
+from src.domain.embedding_spaces import EncoderBuild, Target, image_input_size, require_encoder
 from src.services.curation.reprocess_embed import _target_vectors, new_image_gate
 from src.services.curation.reprocess_targets import existing_images
 from src.services.embedding_spaces.reindex import DocRef, Encoder
@@ -64,8 +64,12 @@ class ReindexEncoder(Encoder):
             project=str(space.project_id),
             space_key=space.space_key,
             target=space.target,
-            space_model=version.triton_image_model if version else None,
-            served_model=image_model_for(space.target),
+            space_build=(
+                EncoderBuild(version.triton_image_model, image_input_size(version.input_spec))
+                if version and version.triton_image_model
+                else None
+            ),
+            served_build=served_encoder_for(space.target),
         )
         self._checked.add((space.model_version_id, space.target))
 

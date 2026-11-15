@@ -43,6 +43,8 @@ def default_space(target: Target, key: str = DEFAULT_KEY, dim: int = DIM) -> Res
         triton_image_model='pe_image_encoder' if target is Target.FRAME else 'pe_crop_encoder',
         triton_text_model='pe_text_encoder',
         knn_method=default_knn_spec(),
+        # the frame encoder's 336 input; the crop encoder's default 224
+        input_size=336 if target is Target.FRAME else 224,
     )
 
 
@@ -65,6 +67,7 @@ def new_space(
         triton_image_model=f'{model_key}_image',
         triton_text_model=text_model,
         knn_method=default_knn_spec(),
+        input_size=224,
     )
 
 
