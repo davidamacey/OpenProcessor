@@ -62,6 +62,7 @@ from frame_engine.branches.embed import EmbedCrops, EmbedFrame
 from frame_engine.branches.ocr import Ocr
 from frame_engine.cuda_fault import ContextLostError, is_sticky
 from frame_engine.messages import EngineRequest, EngineResult
+from frame_engine.nvjpeg_encode import NvJpegEncoders
 from frame_engine.nvjpeg_lanes import NvJpegError, NvJpegLanes
 from frame_engine.ocr.ctc import CtcDecoder
 from frame_engine.ocr.kernels import LineWarp
@@ -147,6 +148,7 @@ class FrameEngine:
         # grows past 15 GB. At the cap it frees cached blocks before allocating.
         cp.get_default_memory_pool().set_limit(size=settings.pool_mib * MIB)
         self.lanes = NvJpegLanes(lanes=settings.lanes)
+        self.encoders = NvJpegEncoders(settings.encode_threads)
         self.alloc_stream = cp.cuda.Stream(non_blocking=True)
         self.budget = self._reserve_budget(settings.budget_mib)
         metrics.watch_budget(self.budget)
@@ -341,7 +343,7 @@ class FrameEngine:
         if plan.ocr is not None and plan.runs('ocr'):
             out.append(Ocr(plan.ocr, self._decoder(), self.line_warp))
         if plan.derivatives:
-            out.append(Derivatives(self.encode_pool))
+            out.append(Derivatives(self.encode_pool, self.encoders))
         if plan.crops == 'inline':
             out.append(CropJpegs(self.encode_pool, self.s.jpeg_quality, self.s.crop_max_side))
         return out

@@ -108,6 +108,31 @@ class _Lanes:
         return _dev(rng.integers(0, 256, (H, W, 3), dtype=np.uint8)), 'fake'
 
 
+class _Encoders:
+    """nvJPEG stand-in: the JPEG of the pixels it is handed, at the quality it is handed."""
+
+    encoded: list[tuple[tuple[int, ...], int]] = []
+
+    def __init__(self, *_a: Any, **_k: Any) -> None:
+        pass
+
+    @staticmethod
+    def mark() -> None:
+        return None
+
+    def encode(self, rgb: Any, quality: int, ready: Any) -> bytes:
+        import cv2
+
+        assert ready is None
+        arr = np.asarray(rgb)
+        _Encoders.encoded.append((arr.shape, quality))
+        ok, buf = cv2.imencode(
+            '.jpg', np.ascontiguousarray(arr[:, :, ::-1]), [cv2.IMWRITE_JPEG_QUALITY, quality]
+        )
+        assert ok
+        return buf.tobytes()
+
+
 class _Kernels:
     fail_on_call: tuple[int, Exception] | None = None
     calls = 0
@@ -202,6 +227,8 @@ def eng(monkeypatch: pytest.MonkeyPatch) -> Any:
     mod = importlib.import_module('frame_engine.engine')
     monkeypatch.setattr(mod, 'NvJpegLanes', _Lanes)
     monkeypatch.setattr(mod, 'PrepKernels', _Kernels)
+    monkeypatch.setattr(mod, 'NvJpegEncoders', _Encoders)
+    _Encoders.encoded = []
     monkeypatch.setattr(mod, 'LineWarp', object)
     _Lanes.fail_with = None
     _Lanes.seen_streams = []
@@ -1204,6 +1231,10 @@ def test_renditions_are_jpegs_in_plan_order_never_enlarged(eng: Any) -> None:
                for j in r.outputs['derivative_jpegs']]  # fmt: skip
     sizes = [d.shape[:2] for d in decoded if d is not None]
     assert len(decoded) == 2
+    assert _Encoders.encoded == [
+        ((21, 32, 3), 85),
+        ((H, W, 3), 60),
+    ]  # the pixels it was handed, HWC
     assert sizes == [(21, 32), (H, W)]  # 96 x 64 fits 32 as 32 x 21; 200 is larger than the photo
     assert {s for s, n in _seen(engine).items() if n} >= {'derivative_render', 'derivative_jpeg'}
 
