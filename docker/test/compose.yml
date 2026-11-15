@@ -177,6 +177,7 @@ services:
       - OP_DB_APP_PASSWORD_FILE=/run/secrets/op_pg/app_password
       - OP_DB_OWNER_PASSWORD_FILE=/run/secrets/op_pg/owner_password
       - OP_DB_SUPER_PASSWORD_FILE=/run/secrets/op_pg/super_password
+      - OP_DB_VECTOR_PASSWORD_FILE=/run/secrets/op_pg/vector_password
       - OPENSEARCH_URL=http://opensearch:9200
       # Every project index carries the verify_ prefix, as for api.
       - OP_PROJECT_INDEX_PREFIX=verify_prj_

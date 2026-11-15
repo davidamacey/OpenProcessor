@@ -22,10 +22,13 @@ POOLERS = ('none', 'pgbouncer')
 # request or a worker. libpq ``connect_timeout``, which psycopg applies to sync and async connects.
 CONNECT_TIMEOUT_S = 10
 SSLMODES = ('disable', 'allow', 'prefer', 'require', 'verify-ca', 'verify-full')
-ROLES = ('app', 'owner', 'super')
+ROLES = ('app', 'owner', 'super', 'vector')
 
 # The image's POSTGRES_USER, used only by the migration runner to create the other two roles.
 SUPER_USER = 'op_super'
+# The login role that creates the per-space vector tables (15a section 6.1). Its name is fixed, like
+# the superuser's: the migration and the schema grants name it, and nothing else may take it.
+VECTOR_USER = 'op_vector'
 
 _IDENTIFIER = re.compile(r'^[a-z_][a-z0-9_]{0,62}$')
 _HOST = re.compile(r'^[A-Za-z0-9._-]+$')
@@ -34,6 +37,7 @@ _PASSWORD_FILE_VARIABLE = {
     'app': 'OP_DB_APP_PASSWORD_FILE',
     'owner': 'OP_DB_OWNER_PASSWORD_FILE',
     'super': 'OP_DB_SUPER_PASSWORD_FILE',
+    'vector': 'OP_DB_VECTOR_PASSWORD_FILE',
 }
 
 
@@ -77,6 +81,7 @@ class DatabaseSettings:
     app_password_file: Path
     owner_password_file: Path
     super_password_file: Path
+    vector_password_file: Path
     sslmode: str
     pooler: str
     api_replicas: int
@@ -101,6 +106,9 @@ class DatabaseSettings:
             ),
             super_password_file=Path(
                 env_str('OP_DB_SUPER_PASSWORD_FILE', '/run/secrets/op_pg/super_password')
+            ),
+            vector_password_file=Path(
+                env_str('OP_DB_VECTOR_PASSWORD_FILE', '/run/secrets/op_pg/vector_password')
             ),
             sslmode=_choice('OP_DB_SSLMODE', env_str('OP_DB_SSLMODE', 'prefer'), SSLMODES),
             pooler=_choice('OP_DB_POOLER', env_str('OP_DB_POOLER', 'none'), POOLERS),
@@ -131,4 +139,6 @@ class DatabaseSettings:
             return self.owner_user
         if role == 'app':
             return self.app_user
+        if role == 'vector':
+            return VECTOR_USER
         raise DatabaseConfigError('role', f'unknown database role {role!r}; use one of {ROLES}')

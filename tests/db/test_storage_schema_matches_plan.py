@@ -16,6 +16,7 @@ import pytest
 from alembic import command
 
 from scripts.db import migrate
+from src.db import vector_ddl
 from src.domain.claim_kinds import KINDS
 
 
@@ -118,6 +119,12 @@ def test_the_vector_schema_exists_empty_and_the_application_role_cannot_create_i
         "SELECT has_schema_privilege(%s, 'vec', 'USAGE'), has_schema_privilege(%s, 'vec', 'CREATE')",
         (app, app),
     ).fetchone() == (True, False)
+    vector = vector_ddl.OWNER_ROLE
+    assert catalog.execute(
+        "SELECT has_schema_privilege(%s, 'vec', 'USAGE'), has_schema_privilege(%s, 'vec', 'CREATE'), "
+        "has_column_privilege(%s, 'projects', 'id', 'REFERENCES')",
+        (vector, vector, vector),
+    ).fetchone() == (True, True, True)
 
 
 def test_every_table_in_the_vector_schema_is_closed_by_forced_row_level_security(catalog) -> None:
@@ -144,9 +151,8 @@ def test_downgrade_to_0009_removes_what_0010_made_and_the_upgrade_makes_it_again
             )
         }
         assert not (plan.TABLES & found)
-        assert not conn.exec_driver_sql(
-            "SELECT 1 FROM pg_namespace WHERE nspname = 'vec'"
-        ).fetchall()
+        # the schema is the bootstrap's, not the revision's: a downgrade leaves it
+        assert conn.exec_driver_sql("SELECT 1 FROM pg_namespace WHERE nspname = 'vec'").fetchall()
         assert not conn.exec_driver_sql(
             "SELECT 1 FROM pg_proc WHERE proname IN ('claims_append_only', 'op_erasure_allows')"
         ).fetchall()

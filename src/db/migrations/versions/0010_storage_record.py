@@ -14,9 +14,11 @@ section 2.6, from gate A); the per-space vector tables (made at run time by the 
 
 Official documentation read for the choices: PostgreSQL 18 identity columns, CREATE TABLE (identity,
 generated columns, CHECK, FOREIGN KEY), CREATE POLICY and ALTER TABLE ... FORCE ROW LEVEL SECURITY,
-CREATE INDEX (partial, NULLS NOT DISTINCT), CREATE TRIGGER, CREATE EXTENSION and ``trusted``
-extensions; Alembic ``op.execute`` and offline SQL generation (the revision is plain DDL, so it renders
-the same with ``as_sql``).
+CREATE INDEX (partial, NULLS NOT DISTINCT), CREATE TRIGGER, and the privileges CREATE SCHEMA and
+CREATE EXTENSION need (``CREATE`` on the database, which the owner role lacks, so the superuser
+bootstrap of ``src/db/roles.py`` makes the extensions, the role ``op_vector`` and the schema ``vec``
+and this revision only checks them); Alembic ``op.execute`` and offline SQL generation (the revision
+is plain DDL, so it renders the same with ``as_sql``).
 """
 
 from __future__ import annotations
@@ -47,8 +49,7 @@ def _add_columns_to_existing_tables() -> None:
 
 
 def upgrade() -> None:
-    security.ensure_extensions()
-    security.create_vector_schema()
+    security.require_bootstrap()
     ddl.create(_TABLES)
     for statement in (*record.INDEXES, *state.INDEXES):
         op.execute(statement)
@@ -70,5 +71,3 @@ def downgrade() -> None:
     for table in reversed(_TABLES):
         op.execute(f'DROP TABLE {table.name}')
     security.drop_functions()
-    # fails while a vector table exists: a downgrade never drops vectors silently
-    op.execute('DROP SCHEMA vec')

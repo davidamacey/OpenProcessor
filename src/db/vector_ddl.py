@@ -17,12 +17,14 @@ from __future__ import annotations
 
 import re
 
+from src.config.database import VECTOR_USER
+
 
 SCHEMA = 'vec'
-OWNER_ROLE = 'op_vector'
-# The role of 15a section 6.1: a login role that is granted to nobody and cannot bypass row security.
-# Its timeouts are set on the role (applied at login), not by SET ROLE.
-ROLE_ATTRIBUTES = 'LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS'
+OWNER_ROLE = VECTOR_USER
+# The role of 15a section 6.1 (the bootstrap adds LOGIN and the password): granted to nobody and
+# cannot bypass row security. Its timeouts are set on the role (applied at login), not by SET ROLE.
+ROLE_ATTRIBUTES = 'NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS'
 ROLE_SETTINGS = {'statement_timeout': '0', 'lock_timeout': '0'}
 MAX_TABLE_NAME = 60
 _SPACE_KEY = re.compile(r'^[a-z][a-z0-9_]{2,47}$')  # the check on embedding_spaces.space_key
@@ -89,7 +91,7 @@ def row_security_flags(lock_key: int, space_key: str) -> str:
 
 def role_grants() -> tuple[str, ...]:
     """What the role needs from the schema owner: tables in ``vec``, and REFERENCES on ``projects`` for
-    the project foreign key of the template. Run by the bootstrap that creates the role."""
+    the project foreign key of the template. Run as the owner of both, after the schema is at head."""
     return (
         f'GRANT USAGE, CREATE ON SCHEMA {SCHEMA} TO {OWNER_ROLE}',
         f'GRANT REFERENCES (id) ON projects TO {OWNER_ROLE}',

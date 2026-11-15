@@ -57,7 +57,7 @@ ensure_control_plane_secrets() {
     ( umask 077; mkdir -p "$sdir/vlm" "$sdir/postgres" "$sdir/valkey" "$sdir/flower" ) || return 1
     chmod 700 "$sdir" "$sdir/vlm" "$sdir/postgres" "$sdir/valkey" "$sdir/flower"
     local name
-    for name in super_password owner_password app_password; do
+    for name in super_password owner_password app_password vector_password; do
         _cp_ensure_file "$sdir/postgres/$name" || return 1
     done
     _cp_ensure_file "$sdir/valkey/password" || return 1

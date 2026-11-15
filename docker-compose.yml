@@ -502,6 +502,7 @@ services:
       - OP_DB_OWNER_USER=${OP_DB_OWNER_USER:-op_owner}
       - OP_DB_OWNER_PASSWORD_FILE=/run/secrets/op_pg/owner_password
       - OP_DB_SUPER_PASSWORD_FILE=/run/secrets/op_pg/super_password
+      - OP_DB_VECTOR_PASSWORD_FILE=/run/secrets/op_pg/vector_password
       - OPENSEARCH_URL=http://opensearch:9200
     volumes:
       - ./secrets/postgres:/run/secrets/op_pg:ro
