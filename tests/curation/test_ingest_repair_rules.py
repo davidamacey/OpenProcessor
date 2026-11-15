@@ -462,3 +462,81 @@ async def test_a_repair_reports_and_caches_the_items_it_created(tmp_path: Any) -
     assert (result.n_crops, result.crops_created) == (1, 1)
     assert {p.stem for p in cache.glob('*.jpg')} == {lost}
     assert survivor in os_fake.items
+
+
+@pytest.mark.asyncio
+async def test_a_second_repair_after_a_dead_one_leaves_one_item_per_object() -> None:
+    """The first repairer died after its lease and list write and one create: its lease runs
+    out, the second repair finds that item by overlap, creates the other, and the list names only
+    items that exist."""
+    svc, os_fake, triton = _make_service(detections=TWO_BOXES)
+    data = _jpeg_bytes(seed=76)
+    await svc.ingest_one(data, PATH)
+    image_id = _image_id(data)
+    first, second = sorted(os_fake.items)
+    dead_first = os_fake.items.pop(first)
+    dead_first.update(crop_id='dead-1')
+    os_fake.items['dead-1'] = dead_first
+    del os_fake.items[second]
+    old = (datetime.now(UTC) - timedelta(seconds=REPAIR_AFTER_S + 60)).isoformat()
+    os_fake.images[image_id].update(
+        item_ids=['dead-1', 'dead-2'], repair_started_at=old, indexed_at=old
+    )
+    triton.detections = _shifted(TWO_BOXES, 4e-5)
+
+    assert (await svc.ingest_one(data, PATH)).status == 'success'
+
+    assert len(os_fake.items) == 2
+    assert 'dead-1' in os_fake.items
+    assert os_fake.images[image_id]['item_ids'] == sorted(os_fake.items)
+    assert (await svc.ingest_one(data, PATH)).status == 'duplicate'
+
+
+@pytest.mark.asyncio
+async def test_two_overlapping_objects_are_both_kept_when_both_are_detected() -> None:
+    """The match is one to one: an item takes its own detection (IoU 1), so the second object
+    that overlaps it at IoU 0.5 or more is created, not mistaken for it."""
+    outer, inner = (0.10, 0.10, 0.60, 0.60, 0.9, 1), (0.15, 0.15, 0.62, 0.62, 0.9, 1)
+    svc, os_fake, _ = _make_service(detections=[outer, inner])
+    data = _jpeg_bytes(seed=77)
+    await svc.ingest_one(data, PATH)
+    stored = sorted(os_fake.items.values(), key=lambda d: d['bbox_norm'])
+    assert len(stored) == 2
+    from src.services.detection.geometry import iou
+
+    assert iou(*(tuple(d['bbox_norm']) for d in stored)) >= 0.5
+    image_id = _image_id(data)
+    del os_fake.items[stored[1]['crop_id']]
+    _old(os_fake, image_id)
+
+    assert (await svc.ingest_one(data, PATH)).status == 'success'
+
+    assert sorted(os_fake.items) == sorted(d['crop_id'] for d in stored)
+
+
+@pytest.mark.asyncio
+async def test_a_holder_that_claimed_and_died_without_writing_is_stored_by_the_resend(
+    content_rows: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from src.services.curation.ingest_dedup import Resolved
+
+    svc, os_fake, _ = _make_service(detections=TWO_BOXES)
+    data = _jpeg_bytes(seed=78)
+    image_id = _image_id(data)
+    content_rows.rows[content_imohash(data)] = image_id  # claimed; no images doc, ever
+    real_lookup = svc._lookup_image
+
+    async def lookup_that_missed(imohash: str, _data: bytes) -> Resolved:
+        return Resolved(None, imohash)
+
+    monkeypatch.setattr(svc, '_lookup_image', lookup_that_missed)
+    held = await svc.ingest_one(data, PATH)
+    assert (held.status, held.error_kind) == ('failed', 'incomplete_write')
+    assert os_fake.images == {}
+
+    monkeypatch.setattr(svc, '_lookup_image', real_lookup)  # the resend looks the content up
+    stored = await svc.ingest_one(data, PATH)
+
+    assert stored.status == 'success', 'the lookup released the claim of a doc that never came'
+    assert set(os_fake.images) == {image_id}
+    assert len(os_fake.items) == 2
