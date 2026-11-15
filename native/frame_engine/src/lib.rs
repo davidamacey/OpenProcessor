@@ -7,6 +7,7 @@
 
 pub mod admission;
 pub mod cores;
+pub mod front;
 pub mod health;
 pub mod metrics;
 pub mod pipeline;

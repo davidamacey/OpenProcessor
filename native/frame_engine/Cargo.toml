@@ -23,8 +23,11 @@ prost = { workspace = true }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.154", features = ["arbitrary_precision", "preserve_order"] }
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
-tonic = { workspace = true, features = ["codegen", "server"] }
+tokio-stream = { version = "=0.1.19", features = ["net"] }
+tonic = { workspace = true, features = ["codegen", "router", "server"] }
 tonic-prost = { workspace = true }
+tower = { version = "=0.5.3", default-features = false, features = ["util"] }
+tracing = "=0.1.44"
 
 [build-dependencies]
 prost-types = "=0.14.6"
