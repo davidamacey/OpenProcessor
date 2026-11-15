@@ -152,6 +152,8 @@ export interface BulkIngestProgress {
   n_not_embedded: number;
   n_embed_failed: number;
   in_flight: number;
+  /** Files waiting to be sent again after a transient failure (no attempt used). */
+  waiting: number;
   /** Entries discovery could not read (broken links, unreadable files). */
   unreadable: number;
   /** A few relative paths of those entries. */
