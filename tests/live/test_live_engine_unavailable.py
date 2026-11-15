@@ -32,8 +32,10 @@ BULK_DONE = ('completed', 'completed_with_errors', 'failed', 'cancelled', 'inter
 RED = (200, 30, 30)
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture
 def project(api: Any, opensearch: Any) -> Any:
+    """One project per test case: an ingest claims a photo by its content, so a photo stored by
+    an earlier case would answer ``duplicate`` and need no engine."""
     with ingest_project(api, opensearch, 'engdown') as handle:
         yield handle
 
@@ -51,6 +53,8 @@ def test_an_upload_while_the_engine_refuses_answers_503_and_stores_nothing(
     api: Any, opensearch: Any, project: IngestProject, mode: Refusal
 ) -> None:
     before = (count(opensearch, project.images_index), count(opensearch, project.items_index))
+    # the photo must be new to the project, or the upload needs no engine and answers 200
+    assert before == (0, 0), 'the project already holds a photo'
 
     with engine_refuses(mode):
         refused = _upload(api, project, RED)
@@ -67,7 +71,7 @@ def test_an_upload_while_the_engine_refuses_answers_503_and_stores_nothing(
     again = _upload(api, project, RED)
     assert again.status_code == 200, again.text
     assert [r['status'] for r in again.json()['results']] == ['success'], again.text
-    assert count(opensearch, project.images_index) == before[0] + 1
+    assert count(opensearch, project.images_index) == 1
 
 
 def _ledger(run_id: str) -> list[tuple[str, int, bool]]:
