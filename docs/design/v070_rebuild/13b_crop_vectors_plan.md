@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | revision 2 (2026-11-15), by the coordinator: the pooled design of revisions 0 and 1 is REJECTED by its own high-resolution gate (section 5); sections 2 to 4 are kept as the record of what was tried; the decision in force is section 6 |
+| Status | revision 2 (2026-11-15), by the coordinator: the pooled design of revisions 0 and 1 is REJECTED by its own high-resolution gate (section 5); sections 2 to 4 are kept as the record of what was tried; the decision in force is section 6; sections 7 and 8 record what lane C1 built and what measurement C2 found |
 | Refines | [13_backend_speed_plan.md](13_backend_speed_plan.md) track T3 (encoder cost) and item E3; [14_roadmap.md](14_roadmap.md) phase 1b |
 | Not in scope | faces, text reading, the vector index (plan 15) |
 
@@ -148,3 +148,53 @@ The crop rule is letterbox with the resample antialiased when the box is larger 
 primary item and box spaces name the configured crop model.
 
 Measured: the crop model takes 750 MiB of device memory on the model server (NVML, model-server process, one instance, max batch 32, dynamic batching 4/8/16/32; unchanged at the peak of a 32-in-flight run). `GPU_MIB_PER_INSTANCE` (`openprocessor gpu plan`) is 768 MiB, the next 256 up. Frame 1,536 MiB plus crop 768 MiB is 2.25 GB; the installer's `pe_need` stays 2 (whole GB) and the profile budgets are unchanged.
+
+## 8. Measurement C2 result: no smaller encoder replaces today's for crops
+
+Section 6 point 3 asked whether a smaller dedicated crop encoder can replace today's encoder.
+Measured on fine-grained public sets with the product's crop rule (letterbox, Pillow `BILINEAR`,
+fill 128): Stanford Cars with detector boxes, CUB-200-2011 (200 bird species), FGVC-Aircraft (100
+variants), and objects of the three sets placed at 32 to 512 px into 12 to 22 megapixel photos.
+The reference is today's encoder at 336 with the same rule. Engines: the existing half-float
+builds, timed alone (not through the model server).
+
+| Encoder for crops | Cars | CUB | Aircraft | Placed cells below the bar (of 15) | Images/s at batch 32 | Device MiB |
+|---|---|---|---|---|---|---|
+| Today's at 336 (reference) | 0 | 0 | 0 | | 225 | 929 |
+| Today's at 224 (merged, section 7) | -0.1 | -0.3 | -1.6 | Aircraft at every size (-1.4 to -2.2); Cars at 256 px by 0.1 | 502 | 735 |
+| PE-Core-B/16 at 224 | -3.3 | -3.5 | -15.5 | 15 | 2,032 | 265 |
+| SigLIP 2 B/16 at 224 | +1.6 | -8.9 | -8.1 | 12 | 2,216 | 254 |
+| SigLIP 2 So400m/16 at 256 | +2.3 | -9.0 | +0.5 | 7 | 381 | 973 |
+
+Cluster NMI gap to the reference in points (bar: not below -1.0). The row of today's encoder at
+224 is paired over the same ten k-means seeds for both arms (standard deviation of the paired gap
+0.4 to 0.8); the other rows are means of five seeds. Single-seed gaps reach -3.9, so unpaired
+five-seed runs overstate misses.
+
+With ten labelled examples per class (logistic regression on the vectors, top-1 on cars / birds /
+aircraft): reference 0.938 / 0.896 / 0.775; today's at 224 0.936 / 0.890 / 0.747; PE-Core-B
+0.915 / 0.853 / 0.625; SigLIP 2 B 0.935 / 0.791 / 0.665. On 32 px placed objects with five labels
+SigLIP 2 B falls to 0.46 / 0.30 / 0.23 against the reference's 0.80 / 0.66 / 0.52. The letterbox
+rule against the old centre rule gains 2.8 to 3.5 NMI points for today's encoder and 9 to 20 for
+SigLIP 2 B.
+
+Decisions:
+
+1. No smaller encoder replaces today's for crops. The two fast base models lose 3 to 15 points on
+   birds and aircraft and fail on small objects; the one that wins on car models loses elsewhere.
+   A labelling tool cannot pick its encoder by the user's subject.
+2. The crop encoder stays today's weights at 224 (section 7): equal on car models and birds within
+   the bar, at 2.2 times the rate. Its measured cost is stated, not hidden: on the most
+   fine-grained set (aircraft variants) it is 1.4 to 2.2 NMI points and about 3 points of
+   ten-label accuracy below the 336 input. The bar of section 6 point 3 (1 point on any set or
+   size) is therefore missed on that set, and this decision accepts the miss in writing for the
+   default.
+3. Open to the owner: a 336 crop build as a supported choice for deployments whose classes are of
+   that kind (its own space, since vectors of two input sizes are not comparable).
+4. Cheaper crops through a smaller model are closed on this evidence. The remaining levers on the
+   card's time per photo are both cards for the encoders and the model build settings
+   (plan 17, the native engine plan, section "the card budget").
+
+Not measured: the private set's labelled classes (the sample on the host carries no labels);
+Stanford Dogs (download refused); detector box jitter on birds and aircraft (ground-truth boxes).
+
