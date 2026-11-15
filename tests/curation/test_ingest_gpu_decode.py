@@ -65,7 +65,11 @@ async def test_every_photo_goes_to_the_engine_whatever_its_size(tmp_path) -> Non
     assert item['class_name'] == 'widget'
     assert (tmp_path / 'crops' / 'default' / f'{crop_id}.jpg').read_bytes() == b'\xff\xd8crop'
     assert triton.calls == []  # the API called no detector: the engine ran it
-    assert triton.loaded == ['primary_end2end', 'pe_image_encoder']  # loaded on first use, once
+    assert triton.loaded == [
+        'primary_end2end',
+        'pe_image_encoder',
+        'pe_crop_encoder',
+    ]  # on first use, once
 
 
 @pytest.mark.asyncio
