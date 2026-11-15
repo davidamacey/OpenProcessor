@@ -152,6 +152,11 @@ impl Region {
         self.mem.registered.load(Ordering::Acquire)
     }
 
+    /// The flag the registration sets and clears (`model_server.rs`).
+    pub(crate) fn registration_flag(&self) -> Arc<AtomicBool> {
+        self.mem.registered.clone()
+    }
+
     /// Whether `slice` is a slice of this region.
     pub fn owns(&self, slice: &Slice) -> bool {
         Arc::ptr_eq(&self.mem, &slice.mem)
