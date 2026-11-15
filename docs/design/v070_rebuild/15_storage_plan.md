@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | plan, revision 0 (2026-11-15): the rules, the record model and the two measured gates. The field-by-field schema, the query map and the lane specs are companion files written from this one (section 12) |
+| Status | plan, revision 1 (2026-11-15): the rules, the record model and the two measured gates, with the independent review folded in (section 15). The field-by-field schema, the query map and the lane specs are companion files written from this one (section 12) |
 | Code base read | `int/b4-stateless` at `4a6c8d788`, through a written inventory of every stored field, writer, query shape, table, human-decision path and file path |
 | Refines | [14_roadmap.md](14_roadmap.md) phase 2; [13_backend_speed_plan.md](13_backend_speed_plan.md) decisions on storage and its vector-store track; [02a_postgres_schema.md](02a_postgres_schema.md) (the tables that exist) |
 | Not in scope | what the models compute (phase 1b, phase 3); the gallery screens (phase 5). Their data shapes ARE in scope, so no later phase redesigns a table |
@@ -42,8 +42,8 @@ decision, 16 operations that must change more than one store. Four ways of keepi
 | # | Rule |
 |---|---|
 | R1 | PostgreSQL is the record. A fact is written there first, in one transaction with every other fact of the same act. |
-| R2 | Three kinds of row, never mixed in one table: what was added (photos and where they came from), what a person decided (claims), what a machine computed (results). |
-| R3 | A human decision is one appended row. It is never updated and never deleted; an undo is another row. The current state of an object is computed from the machine results and the claims by one pure function. One exception: erasure (section 14, answer 4). |
+| R2 | Three kinds of row, never mixed in one table: what was added (photos and where they came from), what a person decided (claims), what a machine computed (results). An unvalidated import annotation, an adopted detector class and a propagated class are not recomputable by an analyser: they are opinion rows marked not rebuildable, carry their operation or import id, are kept through a rebuild and a re-run, and are removed only by the undo of their operation or import. |
+| R3 | A human decision is one appended row. It is never updated and never deleted; an undo is another row. The current state of an object is computed from the machine results and the claims by one pure function. **A claim pins what the person saw**: once an object carries a live class, validation, holdout or import-validated claim, its geometry is the claim's geometry (until a newer geometry claim) and, while frozen in the holdout, its class is the frozen one; machine results that arrive later are stored as results and never move or relabel it. **Claims are ranked by who made them before time**: a person's claim beats an import's or a combine's; the newest wins within a rank. One exception to append-only: erasure (section 14, answer 4). |
 | R4 | A machine result names the analyser and the version that made it. A table of results can be emptied and filled again; rows below a new version are the work list of a re-run. |
 | R5 | A machine writer cannot write a claim, and it never needs to read one to stay clear of it. The lock rule becomes the shape of the data instead of a check in every writer. |
 | R6 | A vector lives in a table of its own, one row per subject and vector space, float16, with the model version beside it. Nothing else in that row changes. |
@@ -58,7 +58,8 @@ decision, 16 operations that must change more than one store. Four ways of keepi
 |---|---|---|---|
 | PostgreSQL, record tables | photos, sources, claims, class registry, configuration, jobs, training and models | nothing: this is the backup target | fixed |
 | PostgreSQL, result tables | detections, boxes, text, capture data, scores, cluster and duplicate runs, vectors | photos + models + configuration | fixed |
-| PostgreSQL, current-state table | one row per object: the effective class, flags, geometry, placement | results + claims (section 4.4) | fixed |
+| PostgreSQL, current-state table | one row per object: what changes through a claim, the effective class, the region status | results + claims (section 4.4) | fixed |
+| PostgreSQL, cluster placement | the run's membership rows (`cluster_memberships`); readers join the serving partition | the clustering runs | fixed (section 13) |
 | Vector index | approximate search over the vector tables | the vector tables | gate B (section 7) |
 | List and facet reads | the 60 or so list, count and facet shapes | the current-state table | gate A (section 6): SQL on the record, or a search copy without vectors |
 | Files | originals, uploads, exports, training artifacts; crops and thumbnails as a cache | originals: nothing; the rest: originals + record | section 8 |
@@ -86,8 +87,8 @@ import, a bulk accept), the operation it belongs to, the kind, the subject, and 
 | Subject | a photo, an object, a box, a pair (duplicate verdict), a face or a cluster. Always with the photo's wire id and, for an object or a box, its geometry at the time, so the claim can find its subject again after every machine result was rebuilt |
 | Kinds | class set or cleared; validated; excluded or restored; object drawn; geometry changed; box created, moved, state, text; dismissed (review, VLM suggestion, probe); needs a new class; moved to a cluster; audit verdict; duplicate verdict; holdout frozen; person named or merged; and for the gallery: favourite, hidden, album membership, a date or place corrected |
 | Class | by name, with the registry id of that moment as a hint only |
-| Undo | a row that names the claim it withdraws. The current state is then the fold without that claim. No prior state is stored anywhere |
-| Operations | the existing `label_operations` row groups the claims of one act; its member table and the two history lists inside documents are deleted |
+| Undo | a row that names the claim it withdraws. The current state is then the fold without that claim. No prior state is stored anywhere. An operation is undone claim by claim, in chunks; each chunk writes its withdraw rows and folds its objects in one transaction |
+| Operations | the existing `label_operations` row groups the claims of one act and keeps a stored status (`undoing`, `undone`) set by the undo job; its member table and the two history lists inside documents are deleted |
 
 A validated import label is a claim whose actor is the import. An unvalidated import label is a
 machine opinion (4.3).
@@ -100,7 +101,7 @@ machine opinion (4.3).
 | Analysis ledger | photo and analyser kind: version done, state, time | "what has been computed for this photo"; the work list of any re-run; replaces the status fields scattered over the document |
 | Capture data | photo | parser version; the timeline sort key and the map point |
 | Objects (detections) | detected or drawn object | photo, box, detector class and confidence, analyser; a drawn object has no detector row and exists through its claim |
-| Class opinions | object and source | detector, VLM, auto-label, probe, unvalidated import: class by name, confidence, analyser. The effective machine class is picked by one precedence function, not by whichever writer came last |
+| Class opinions | object and source | detector, VLM, auto-label, probe, unvalidated import, adopted detector, propagation: class by name, confidence, analyser; the last three are not rebuildable (R2). The effective machine class is picked by one precedence function, not by whichever writer came last |
 | Boxes | box inside an object | region-stage geometry, state proposed by the machine, detector, score; text readings as rows per reader |
 | Faces, text lines | face, line | the same shape as objects; today's global face and text indexes are these tables under a project |
 | Vectors | subject and space | R6. One table per vector space, created when the space is added (the `embedding_spaces` row already names it) |
@@ -108,13 +109,17 @@ machine opinion (4.3).
 
 ### 4.4 Current state
 
-One narrow row per object holds what the lists filter and sort on: effective class and its source,
-validated, excluded, holdout, effective geometry, rank in the photo, review flags, the times. It is
+One narrow row per object holds what changes through a claim, the effective class and the region
+status: effective class and its source, validated, excluded, holdout, effective geometry, rank in
+the photo, review flags, the times. Machine scores stay in their result tables and are joined. It is
 written in the same transaction as the claim or the result that changes it, by calling the one fold
 function (`src/domain/`, pure, property-tested: any order of machine writes around a claim gives
 the same row; a withdrawn claim leaves no trace; today's lock predicates in
-`src/clients/occ_locks.py` hold on every generated history). A rebuild empties the table and folds
-again. Because the write is transactional, a list read after a label sees it: no refresh wait, no
+`src/clients/occ_locks.py` hold on every generated history). A rebuild is a chunked refold in key
+order under the same lock order and a job lease: it upserts state rows and deletes state rows whose
+object has no identity left; no table is emptied while readers run. The revision counters are
+computed from claims and from sequence numbers stored on record rows, so a rebuild reproduces
+them. Because the write is transactional, a list read after a label sees it: no refresh wait, no
 realtime get.
 
 ### 4.5 What the gallery adds (phase 5, tables designed now)
@@ -142,7 +147,8 @@ The question: can PostgreSQL also answer the interactive reads at 1 and 10 milli
 project, or does a search copy (without vectors, fed from the record) stay?
 
 Measured on the same generated rows in both engines, shape for shape: the object list with its
-total, the review queue, cluster cards over a whole project, one cluster's facets, dataset
+total, the review queue, cluster cards over a whole project and one cluster's facets (both through
+the join to the serving partition's membership rows, section 13), dataset
 statistics, class counts, the photo page with object facts, box rows, locate, a text-substring
 filter, the map grid, and reads while 1,000 objects per second are relabelled. Bars at 8 clients:
 page shapes p50 at most 50 ms and p99 at most 200 ms; dashboard shapes p50 at most 200 ms and p99 at
@@ -179,8 +185,15 @@ the cost of changing a filter field on 100,000 rows, start to first answer after
 A candidate that needs a second service must beat the in-record candidate by more than the
 run-to-run spread on a bar that a user feels.
 
-Small sets do not use the index: when a filter leaves fewer rows than a threshold (measured), the
-search is exact over those rows.
+A filter that lives in another table than the vector (class, excluded, holdout and cluster live in
+the current-state and membership tables) is a post-filter: pgvector applies such a condition
+"after the index scan", an iterative scan is off by default and stops at `hnsw.max_scan_tuples`
+(default 20,000), and "exact indexes work well for conditions that match a low percentage of rows"
+([pgvector README](https://github.com/pgvector/pgvector), "Filtering", "Iterative Index Scans").
+So the search picks one of three paths by the estimated number of rows the filter keeps: exact over
+the filtered rows (small), an iterative index scan with a raised scan limit (middle), a plain index
+scan (large). The two thresholds are measured in gate B, and gate B tests the schema's real join,
+not a filter column inside the vector row.
 
 ## 8. Files
 
@@ -211,7 +224,7 @@ passes. At most three lanes at a time.
 |---|---|---|
 | 1 | Schema migration; repositories; the fold function with its property tests; the analysers and ledger | this plan and the schema file |
 | 2 | Ingest writes the record in one transaction per commit group (after 13a's per-photo flow) | 1 |
-| 3 | Human write paths as claims: label, bulk label, undo, exclude, dismiss, geometry, drawn object, boxes, holdout, import | 1 |
+| 3 | Human write paths as claims: label, bulk label, undo, exclude, dismiss, geometry, drawn object, boxes, holdout, import; erasure | 1 |
 | 4 | Machine writers as results: region stage, VLM, auto-label, probe, scores, projection coordinates | 1 |
 | 5 | Reads, by family, per gate A | 1, gate A |
 | 6 | Vector index behind its interface; the search routes; clustering and duplicate jobs read vectors from the record | 1, gate B for the default only |
@@ -230,7 +243,8 @@ for gate B; the interface makes the default a configuration choice.
   its subject and the current state equals the state before.
 - The scripted labelling walk (label by cluster, undo, bulk accept, exclude, freeze the holdout,
   export, train) passes on the public set with the same trained-model AP as before the change.
-- The wire contract is unchanged except where a field had no writer.
+- The wire contract is unchanged except the fields listed in the contract diff of
+  [15a](15a_storage_schema.md) (section 10), each with its reason.
 - Two API processes and two workers writing the same objects under load: no lost claim, no
   current-state row that differs from a fresh fold.
 - Gate A and gate B bars met by the chosen designs at 10 million objects.
@@ -239,11 +253,12 @@ for gate B; the interface makes the default a configuration choice.
 
 | File | Content |
 |---|---|
-| 15a, schema | every table with columns, keys, indexes and row-level security; every one of today's fields mapped to a column, a derived value or "deleted", with the reason; the claim kinds and payloads; the fold function's truth table against today's lock predicates |
+| 15a, schema | every table with columns, keys and row-level security; every one of today's fields mapped to a column, a derived value or "deleted", with the reason; the claim kinds and payloads; the fold function's truth table against today's lock predicates; erasure; the contract diff. Indexes beyond keys, summary tables and fillfactors come from gate A's measured queries (15a section 2.6) |
 | 15b, reads | each of the 80 query shapes mapped to its new query (both gate A outcomes), with the index it needs |
 | 15c, lanes | lane specs for section 10 with keep-lists, tests seen failing first, and what each lane owes the sweep |
 
-An independent review of 15 and 15a follows, then a fix pass, then lanes.
+The independent review is folded in (section 15). A short physical-design pass then copies gate A's
+measured index set and summary tables into 15a section 2.6, then lanes.
 
 ## 13. Open
 
@@ -251,19 +266,33 @@ An independent review of 15 and 15a follows, then a fix pass, then lanes.
 |---|---|
 | Gate A outcome | the read-shape measurement at 1 and 10 million rows (running) |
 | Gate B default | the 10 million vector round, after the crop encoder is chosen |
-| Whether cluster placement is a column of the current-state row or a side table swapped at activation | gate A's cluster-card numbers |
 | Exact counts on very large filtered lists, or a capped count ("10,000+") | gate A's count numbers; a wire change if capped |
+| Whether a trained model whose training set held an erased photo must be retrained or deleted (erasure does not touch trained weights) | the owner |
+
+Settled (review, 2026-11-15): cluster placement is a side table keyed by partition and subject
+(`cluster_memberships`). Readers join the serving partition; activation flips a pointer and rewrites
+no object row. Gate A measures the cluster shapes with that join.
 
 ## 14. Coordinator answers to the schema file's questions (2026-11-15)
 
 | # | Question of [15a](15a_storage_schema.md) | Answer |
 |---|---|---|
 | 1 | The core API's data has no project | A reserved project created at bootstrap. No nullable project column anywhere: one isolation rule, fail closed. |
-| 2 | A table and an index per vector space need DDL, which the application role does not have | The vector tables live in a schema of their own, owned by a role that only the embedding-space service assumes for the statement (`SET LOCAL ROLE`), with row-level security forced on the owner too. The table is created through that role; the index is built after the bulk fill with a concurrent build, so ingest into a space that is being filled is never blocked. A definer function that builds an index while blocking inserts is not accepted. The review checks this against the PostgreSQL role and row-security pages. |
+| 2 | A table and an index per vector space need DDL, which the application role does not have | Replaced after the review: no `SET ROLE` (`SET LOCAL` has no effect outside a transaction block and `CREATE INDEX CONCURRENTLY` cannot run inside one, [SET](https://www.postgresql.org/docs/18/sql-set.html), [CREATE INDEX](https://www.postgresql.org/docs/18/sql-createindex.html); `SET ROLE` does not apply the role's settings, [SET ROLE](https://www.postgresql.org/docs/18/sql-set-role.html)). A separate login role `op_vector` (`NOBYPASSRLS`, not granted to `op_app`) is used only by the embedding-space job, through its own small pool of autocommit connections, with its timeouts set on the role. It creates the vector table (row-level security enabled and forced, policy as the other project tables) and builds the index concurrently after the bulk fill. The job checks `pg_index.indisvalid` before a space becomes ready and drops an invalid index before a retry. Tests: the application role cannot create or alter a vector table; a build killed midway is recovered. A definer function that builds an index while blocking inserts is not accepted. |
 | 3 | The photo-library plan's mutable tables (annotations, persons, albums) | They become claims plus folded state, as in this plan. The photo-library plan files are updated to that before any phase 5 lane starts. |
-| 4 | "Forget this person" and deleting a photo for good conflict with R3 | Erasure is the one path that deletes claims: it removes every row and file of a subject (a person, a photo, a project) in one guarded job, like project delete, and logs the act without its content (the existing `privacy_purges` table). Moving a photo to the trash is an ordinary claim; emptying the trash is erasure. |
+| 4 | "Forget this person" and deleting a photo for good conflict with R3 | Erasure is the one path that deletes claims: it removes every row and file of a subject (a person, a photo, a project) in one guarded job, like project delete, and logs the act without its content (the existing `privacy_purges` table). Its reach is a catalogue of (table, key column) pairs, checked by a schema test that every table holding a subject key is in it (vector tables included, found through `embedding_spaces`); its guard is an `erasure_jobs` row that the append-only triggers check; files (exports, snapshots, caches, training data copies) are listed. Trained weights are not erased (section 13). Moving a photo to the trash is an ordinary claim; emptying the trash is erasure. 15a section 8. |
 | 5 | Which machine opinion is the effective class when several exist | An ordered list of sources, applied by the fold. Default: open-vocabulary target, VLM, import suggestion, propagated, classifier, adopted detector, detection. Every opinion stays a row, so a different order is a re-fold, not a data change; the order can become a project setting later without a schema change. |
 | 6 | Emptying the current-state table on a rebuild | Confirmed: a stable identity table per object (what vectors, claims and members point at) and a state table beside it that the fold owns and may empty. |
 
 Compact integer keys on the large tables instead of 02a's time-ordered UUIDs are accepted (R8): the
 wire ids do not change, and the large indexes are about half the size.
+
+## 15. Review
+
+An independent review of this plan and of 15a (2026-11-15) found 5 blockers, 21 major and 7 minor
+findings, each with evidence, a failing scenario and a proposed fix. All were accepted. Where the
+review offered alternatives, the coordinator's decisions picked one: undo is chunk-atomic with no
+operation-level withdraw row; cluster placement is a side table; the vector DDL uses a separate
+login role; index design waits for gate A's measured queries. The rule changes are in R2, R3,
+sections 4.4, 7, 11, 13 and 14; the schema changes are in 15a, whose appendix A traces every finding
+to the section that now answers it.
