@@ -250,6 +250,7 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "scripts/bench/**/*.py" = ["E402"]
 "scripts/research/**/*.py" = ["E402"]
 "scripts/datasets/*.py" = ["E402"]
+"scripts/curation/backfill_item_ids.py" = ["E402"]
 "scripts/curation/backfill_region_embeddings.py" = ["E402"]
 "scripts/curation/backfill_scores.py" = ["E402"]
 "scripts/curation/bulk_ingest.py" = ["E402"]
