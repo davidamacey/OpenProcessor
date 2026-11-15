@@ -23,9 +23,9 @@ use std::ffi::c_void;
 use std::fmt;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use cudarc::driver::sys;
-
-use crate::cuda::{Context, CudaError, LoadedModule, Stream, nvrtc_compile, nvrtc_version};
+use crate::cuda::{
+    Context, CudaError, LoadedFunction, LoadedModule, Stream, nvrtc_compile, nvrtc_version,
+};
 
 const TEGRA_ARCHS: [u32; 5] = [32, 53, 62, 72, 87];
 
@@ -163,10 +163,8 @@ impl fmt::Debug for Module {
 impl Module {
     /// The kernel `name`; resolve once and keep it.
     pub fn function(&self, name: &str) -> Result<Kernel, KernelError> {
-        let raw = self.inner.function(name)?;
         Ok(Kernel {
-            module: self.inner.clone(),
-            raw,
+            inner: self.inner.function(name)?,
         })
     }
 
@@ -190,19 +188,12 @@ impl Module {
 
 /// One kernel of a loaded module (keeps the module loaded).
 pub struct Kernel {
-    module: Arc<LoadedModule>,
-    raw: sys::CUfunction,
+    inner: LoadedFunction,
 }
-
-// SAFETY: a CUfunction handle is valid from any thread while its module is loaded, which the
-// `Arc` guarantees; launches are thread safe in the driver.
-unsafe impl Send for Kernel {}
-// SAFETY: as above.
-unsafe impl Sync for Kernel {}
 
 impl fmt::Debug for Kernel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Kernel").field("raw", &self.raw).finish()
+        f.debug_struct("Kernel").finish_non_exhaustive()
     }
 }
 
@@ -214,7 +205,7 @@ impl Kernel {
         stream: &Stream,
         args: &[KernelArg],
     ) -> Result<(), KernelError> {
-        Ok(self.module.launch(self.raw, cfg, stream, args)?)
+        Ok(self.inner.launch(cfg, stream, args)?)
     }
 }
 

@@ -619,35 +619,54 @@ impl LoadedModule {
         })
     }
 
-    /// The kernel `name` of this module.
-    pub(crate) fn function(&self, name: &str) -> Result<sys::CUfunction, CudaError> {
+    /// The kernel `name` of this module; it keeps the module loaded.
+    pub(crate) fn function(self: &Arc<Self>, name: &str) -> Result<LoadedFunction, CudaError> {
         let cname =
             CString::new(name).map_err(|_| CudaError::invalid("NUL byte in kernel name"))?;
         self.ctx.bind()?;
         // SAFETY: the module is live; the returned handle is valid while it stays loaded, which
-        // every holder guarantees by keeping an `Arc` of this module.
-        self.ctx.check("cuModuleGetFunction", unsafe {
+        // the `LoadedFunction` guarantees by holding an `Arc` of this module.
+        let raw = self.ctx.check("cuModuleGetFunction", unsafe {
             result::module::get_function(self.raw, cname)
+        })?;
+        Ok(LoadedFunction {
+            module: self.clone(),
+            raw,
         })
     }
+}
 
-    /// Launch `function` (a kernel of this module) on `stream`.
+/// One kernel of a loaded module; keeps the module loaded.
+pub(crate) struct LoadedFunction {
+    module: Arc<LoadedModule>,
+    raw: sys::CUfunction,
+}
+
+// SAFETY: a CUfunction handle is valid from any thread while its module is loaded, which the
+// `Arc` guarantees; launches are thread safe in the driver.
+unsafe impl Send for LoadedFunction {}
+// SAFETY: as above.
+unsafe impl Sync for LoadedFunction {}
+
+impl LoadedFunction {
+    /// Launch on `stream` with `args` passed by value.
     pub(crate) fn launch(
         &self,
-        function: sys::CUfunction,
         cfg: &LaunchConfig,
         stream: &Stream,
         args: &[KernelArg],
     ) -> Result<(), CudaError> {
+        let ctx = &self.module.ctx;
         let mut values: Vec<KernelArg> = args.to_vec();
         let mut params: Vec<*mut c_void> = values.iter_mut().map(KernelArg::as_param).collect();
-        self.ctx.bind()?;
-        // SAFETY: `function` belongs to this live module; each parameter points at one value of
-        // `values`, alive and unmoved for the call (the driver copies them at launch); the
-        // argument list is the caller's statement of the kernel's signature (`Module::launch`).
-        self.ctx.check("cuLaunchKernel", unsafe {
+        ctx.bind()?;
+        // SAFETY: the function belongs to a live module (held by `self`); each parameter points
+        // at one value of `values`, alive and unmoved for the call (the driver copies them at
+        // launch); the argument list is the caller's statement of the kernel's signature
+        // (`Module::launch`).
+        ctx.check("cuLaunchKernel", unsafe {
             result::launch_kernel(
-                function,
+                self.raw,
                 cfg.grid,
                 cfg.block,
                 cfg.shared_bytes as c_uint,
