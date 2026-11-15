@@ -63,6 +63,8 @@ monitoring/
 docker/bench/
 docker/segmenter/
 docker/test/
+# the native workspace's build output (the image builds in its own cache mount)
+native/target/
 .test_durations
 
 # Documentation (not needed in containers)
@@ -94,6 +96,8 @@ pytorch_models/
 **/*.generated
 **/*.lock
 **/.lock
+# the native workspace's lock file: the image builds with --locked
+!native/Cargo.lock
 
 # Promoted project models and their promote records (models/<project>__<model>/).
 # The release builds from the committed tree, so this only protects local dev builds.
