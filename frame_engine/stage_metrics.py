@@ -199,6 +199,18 @@ class EngineMetrics:
             ['cause'],
             registry=r,
         )
+        self.colour = Counter(
+            'op_frame_engine_colour',
+            'Decoded frames by what the embedded colour profile asked: srgb (untagged or sRGB, '
+            'untouched), converted (to sRGB on the GPU) or ignored (not an RGB profile).',
+            ['outcome'],
+            registry=r,
+        )
+        self.colour_table_bytes = Gauge(
+            'op_frame_engine_colour_table_bytes',
+            'Device bytes held by the cached profile-to-sRGB tables.',
+            registry=r,
+        )
 
     def publish(self, clock: StageClock) -> None:
         for stage, secs in clock.seconds.items():
@@ -208,6 +220,10 @@ class EngineMetrics:
     def watch_budget(self, budget: Any) -> None:
         """Read the budget's bytes in use at scrape time."""
         self.budget_in_use.set_function(lambda: float(budget.in_use))
+
+    def watch_colour(self, step: Any) -> None:
+        """Read the colour tables' device bytes at scrape time."""
+        self.colour_table_bytes.set_function(lambda: float(step.table_bytes))
 
     def watch_slab(self, slab: Any) -> None:
         """Read the slab's counters at scrape time."""

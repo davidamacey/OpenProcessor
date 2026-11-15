@@ -214,6 +214,18 @@ used only for code, ids, hashes and paths.
 
 ---
 
+## ICC colour profiles (test fixtures)
+
+Three small profiles in `tests/fixtures/icc/` test the conversion of tagged photos to sRGB
+(`src/utils/icc_srgb.py`, `frame_engine/colour.py`). They are not shipped in any image.
+
+- `DisplayP3-v4.icc` and `AdobeCompat-v4.icc`: Compact ICC Profiles by Clinton Ingram,
+  https://github.com/saucecontrol/Compact-ICC-Profiles, **CC0 1.0** (public domain dedication).
+- `colord-sRGB.icc`: the sRGB profile of colord (`data/profiles/`),
+  https://github.com/hughsie/colord, **CC0 1.0** per its Debian copyright file.
+
+---
+
 ## Datasets used for public sample fetching
 
 ### COCO 2017

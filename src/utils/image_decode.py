@@ -8,6 +8,10 @@ frame for the letterbox, the whole-frame square and the crops (one copy into its
 Everything else, CMYK JPEGs and a JPEG whose header libjpeg-turbo cannot read (no
 subsampling level) included, decodes through Pillow.
 
+Colour: an image tagged with an RGB colour profile other than sRGB is converted to sRGB by
+littleCMS (:mod:`src.utils.icc_srgb`, the rule the frame engine applies on the GPU), so the models
+see the same pixels on both routes; untagged and sRGB-tagged images are not touched.
+
 Damaged files are refused as before: ``simplejpeg`` raises on libjpeg's recoverable errors
 (``strict``), so a truncated JPEG fails the decode instead of ingesting a grey tail.
 """
@@ -19,6 +23,8 @@ from dataclasses import dataclass
 
 import numpy as np
 from PIL import Image, ImageOps, UnidentifiedImageError
+
+from src.utils.icc_srgb import to_srgb
 
 
 EXIF_ORIENTATION = 0x0112
@@ -92,6 +98,8 @@ def decode_image(data: bytes) -> DecodedImage:
 def _decode(data: bytes) -> DecodedImage:
     header = Image.open(io.BytesIO(data))
     orientation = header.getexif().get(EXIF_ORIENTATION, 1)
+    # an RGB profile describes RGB samples only: grey and CMYK sources keep their own conversion
+    icc = header.info.get('icc_profile') if header.mode in ('RGB', 'RGBA') else None
     if header.format == 'JPEG' and header.mode in ('RGB', 'L'):
         import simplejpeg
 
@@ -106,10 +114,14 @@ def _decode(data: bytes) -> DecodedImage:
                 raise
         else:
             rgb = orient_array(decoded, orientation)
-            return DecodedImage(Image.fromarray(rgb), rgb)
+            img = Image.fromarray(rgb)
+            converted = to_srgb(img, icc)
+            if converted is img:
+                return DecodedImage(img, rgb)
+            return DecodedImage(converted, np.array(converted))
     img = ImageOps.exif_transpose(header) if orientation != 1 else header
     if img.mode != 'RGB':
         img = img.convert('RGB')
     else:
         img.load()
-    return DecodedImage(img)
+    return DecodedImage(to_srgb(img, icc))

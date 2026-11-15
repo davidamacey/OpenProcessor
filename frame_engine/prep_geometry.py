@@ -22,12 +22,15 @@ import numpy as np
 
 from src.domain.image_geometry import crop_rect
 from src.domain.jpeg_markers import (
+    ICC_MARKER,
+    ICC_TAG,
     LOSSLESS,
     PROGRESSIVE,
     SOF_MARKERS,
     STANDALONE,
     exif_orientation,
     header_segments,
+    join_icc_chunks,
 )
 
 
@@ -43,6 +46,8 @@ class JpegHeader(NamedTuple):
     orientation: int
     lossless: bool
     end: int = 0  # bytes of the image proper, EOI included (set by route)
+    #: The embedded ICC profile (APP2 chunks before the frame header, joined), or ``None``.
+    icc: bytes | None = None
 
 
 def jpeg_header(data: bytes) -> JpegHeader:
@@ -51,14 +56,17 @@ def jpeg_header(data: bytes) -> JpegHeader:
     if data[:2] != b'\xff\xd8':
         return JpegHeader('other', 0, 0, 0, 0, False, 1, False)
     orientation = 1
+    icc: list[bytes] = []
     for marker, payload in header_segments(data):
         if marker == 0xE1 and payload[:6] == b'Exif\x00\x00':
             orientation = exif_orientation(payload)
+        elif marker == ICC_MARKER and payload[:12] == ICC_TAG:
+            icc.append(payload)
         elif marker in SOF_MARKERS and len(payload) >= 6:
             precision, height, width, comps = struct.unpack('>BHHB', payload[:6])
             return JpegHeader(
                 'jpeg', width, height, comps, precision, marker in PROGRESSIVE, orientation,
-                marker in LOSSLESS,
+                marker in LOSSLESS, icc=join_icc_chunks(icc),
             )  # fmt: skip
     return JpegHeader('corrupt', 0, 0, 0, 0, False, orientation, False)
 
