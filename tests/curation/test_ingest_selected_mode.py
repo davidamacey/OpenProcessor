@@ -71,11 +71,11 @@ async def test_selected_mode_still_places_an_embedded_unclassed_item(
     partition, cluster = uuid.uuid4(), uuid.uuid4()
     placed_ids: list[str] = []
 
-    async def place(item_ids: Any, _vectors: Any) -> list[Placement]:
+    async def place(_session: Any, *, item_ids: Any, **_k: Any) -> list[Placement]:
         placed_ids.extend(item_ids)
         return [Placement(i, partition, cluster, 'assigned', 0.9, 0.2) for i in item_ids]
 
-    monkeypatch.setattr('src.services.curation.ingest_index.place_vectors', place)
+    monkeypatch.setattr('src.services.curation.ingest_index.place_new', place)
     svc, os_fake = _service(
         IngestPolicy(
             embedding=EmbeddingPolicy(mode='selected', min_confidence=0.2, max_per_image=3)

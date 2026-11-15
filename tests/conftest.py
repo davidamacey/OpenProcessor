@@ -267,7 +267,9 @@ def content_rows(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
 
     fake = ContentRows()
     if request.node.get_closest_marker('db') is None:
-        monkeypatch.setattr(ingest_claim, 'claim_and_mark_bound', fake.claim_and_mark_bound)
+        monkeypatch.setattr(
+            ingest_claim, 'claim_and_mark_in_session', fake.claim_and_mark_in_session
+        )
         for name in (
             'resolve_many_bound',
             'claim_bound',
@@ -282,19 +284,50 @@ def content_rows(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
 
 
 @pytest.fixture(autouse=True)
-def _no_serving_partition_offline(
+def _no_group_transaction_offline(
     request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Ingest and the re-embed pass place each embedded item by the project's serving partition
-    (PostgreSQL); the offline tier has none, so it places nothing, and a ``db`` test runs the
-    real lookup."""
+    """An ingest commit group runs its placement read, content claims and pending rows in one
+    PostgreSQL transaction. The offline tier has none: the session is a stand-in that holds
+    nothing, the claims are ``content_rows``', and the serving partition places nothing. A ``db``
+    test runs the real lookup."""
     if request.node.get_closest_marker('db') is not None:
         return
+    import uuid
+    from contextlib import asynccontextmanager
+    from types import SimpleNamespace
+
+    project = uuid.uuid4()
+
+    class _NoDbSession:
+        def __init__(self) -> None:
+            self.sync_session = SimpleNamespace(info={})
+
+        async def __aenter__(self) -> _NoDbSession:
+            return self
+
+        async def __aexit__(self, *_exc: object) -> None:
+            return None
+
+        def in_transaction(self) -> bool:
+            return False
+
+    @asynccontextmanager
+    async def no_tx(session: Any, _project: Any) -> Any:
+        yield session
+
+    async def bound() -> uuid.UUID:
+        return project
 
     async def no_placement(*_args: Any, **_kwargs: Any) -> list[Any]:
         return []
 
-    monkeypatch.setattr('src.services.curation.ingest_index.place_vectors', no_placement)
+    monkeypatch.setattr(
+        'src.services.curation.ingest_index.async_session_factory', lambda: _NoDbSession
+    )
+    monkeypatch.setattr('src.services.curation.ingest_index.project_tx', no_tx)
+    monkeypatch.setattr('src.services.curation.ingest_index.bound_project_id', bound)
+    monkeypatch.setattr('src.services.curation.ingest_index.place_new', no_placement)
     monkeypatch.setattr('src.services.curation.reprocess_embed.place_vectors', no_placement)
 
 

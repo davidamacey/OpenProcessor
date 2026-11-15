@@ -62,7 +62,8 @@ async def test_an_embedded_item_gets_its_cluster_fields_in_the_doc(
     bare = DetectedItem(bbox_pixel=(0, 0, 10, 10), score=0.9)
     service = SimpleNamespace(policy=IngestPolicy())
     prepared = SimpleNamespace(items=[item, bare], cids=['a', 'b'])
-    await ingest_index.place_prepared(service, [prepared])  # type: ignore[arg-type, list-item]
+    async with async_session_factory()() as session, project_tx(session, project):
+        await ingest_index.place_prepared(service, [prepared], session, project)  # type: ignore[arg-type, list-item]
     assert item.placement is not None
     assert item.placement.state == 'assigned'
     assert bare.placement is None
