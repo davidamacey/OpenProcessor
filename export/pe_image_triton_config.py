@@ -13,6 +13,7 @@ from pe_image_constants import (
     IMAGE_SIZE,
     INPUT_TENSOR,
     OUTPUT_TENSOR,
+    PE_CROP_GPU_MIB_PER_INSTANCE,
     PE_GPU_MIB_PER_INSTANCE,
     PE_VARIANT,
     PLATFORMS,
@@ -82,6 +83,11 @@ def render_config(cfg: PETritonConfig) -> str:
         f'    gpus: [ {", ".join(str(g) for g in cfg.gpu_ids)} ]\n'
         if cfg.gpu_ids is not None
         else ''
+    )
+    gpu_mib = (
+        PE_CROP_GPU_MIB_PER_INSTANCE
+        if cfg.model_name == CROP_TRITON_MODEL_NAME
+        else PE_GPU_MIB_PER_INSTANCE
     )
     if cfg.platform == TRT_PLATFORM:
         provenance = (
@@ -172,12 +178,12 @@ instance_group [
 
 # Budget accounting for `openprocessor gpu plan` and the installer: GPU memory
 # of one warm instance, recorded with headroom. Measured for the frame encoder at
-# max batch 32 (1312 MiB resident on an RTX 3080 Ti, the same on an RTX A6000); the
-# crop encoder has the same weights and a smaller input, so the same figure bounds
-# it (its own measurement is pending).
+# max batch 32 (1312 MiB resident on an RTX 3080 Ti, the same on an RTX A6000). The
+# crop encoder (224 input) measured 750 MiB on the model server (NVML, one instance,
+# max batch 32, dynamic batching 4/8/16/32), planned at 768.
 parameters: {{
   key: "GPU_MIB_PER_INSTANCE"
-  value: {{ string_value: "{PE_GPU_MIB_PER_INSTANCE}" }}
+  value: {{ string_value: "{gpu_mib}" }}
 }}
 """
 

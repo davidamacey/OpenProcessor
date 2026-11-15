@@ -57,10 +57,10 @@ instance_group [
 
 # Budget accounting for `openprocessor gpu plan` and the installer: GPU memory
 # of one warm instance, recorded with headroom. Measured for the frame encoder at
-# max batch 32 (1312 MiB resident on an RTX 3080 Ti, the same on an RTX A6000); the
-# crop encoder has the same weights and a smaller input, so the same figure bounds
-# it (its own measurement is pending).
+# max batch 32 (1312 MiB resident on an RTX 3080 Ti, the same on an RTX A6000). The
+# crop encoder (224 input) measured 750 MiB on the model server (NVML, one instance,
+# max batch 32, dynamic batching 4/8/16/32), planned at 768.
 parameters: {
   key: "GPU_MIB_PER_INSTANCE"
-  value: { string_value: "1536" }
+  value: { string_value: "768" }
 }
