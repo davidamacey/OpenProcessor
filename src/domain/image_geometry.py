@@ -6,6 +6,12 @@ Pure arithmetic on sizes and boxes, standard library only: the frame engine's im
 Crops for the encoder are letterboxed (:data:`CROP_FILL`); frames keep the shorter-edge centre
 square of :func:`whole_square_geometry`.
 
+The resample of a crop onto its fitted rectangle (the one rule of the frame engine's kernel,
+``antialias=True``, and of the API's host copy, Pillow ``BILINEAR``): a triangle filter whose
+support widens with the downscale factor. A box larger than the encoder input is therefore
+antialiased (area-weighted, every source pixel counts); a box smaller than the input gets the plain
+bilinear enlargement, because the filter does not widen when it enlarges.
+
 A letterbox pastes the resized frame at an integer offset, so the pad every caller un-maps with
 is that same integer: ``(target - new) // 2``. An odd margin puts the extra pixel on the right
 or bottom; a fractional pad would put every un-mapped coordinate half a pixel off.

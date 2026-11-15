@@ -150,9 +150,10 @@ CropsMode = Literal['inline', 'none']
 #: Shorter side to ``size``, centre crop, antialiased bilinear (Pillow ``BILINEAR``):
 #: ``src.utils.pe_preprocess.whole_frame_rgb_from_image``.
 FRAME_RECIPES = ('whole_frame',)
-#: The crop rectangle, the whole box scaled to fit the square (aspect kept), plain bilinear, the
-#: rest of the square ``fill``: ``src.domain.image_geometry.letterbox_geometry`` is the geometry on
-#: every path (the engine's kernels and the API's host copy, ``src.utils.pe_preprocess``).
+#: The crop rectangle, the whole box scaled to fit the square (aspect kept; antialiased when the box
+#: is larger than the square, plain bilinear when smaller), the rest of the square ``fill``:
+#: ``src.domain.image_geometry.letterbox_geometry`` is the geometry and the rule beside it the
+#: resample on every path (the engine's kernels and the API's host copy, ``src.utils.pe_preprocess``).
 CROP_RECIPES = ('letterbox',)
 
 BranchState = Literal['ok', 'error', 'not_run']

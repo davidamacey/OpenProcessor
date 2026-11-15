@@ -7,7 +7,8 @@
 # The tensor names below are a contract with that client.
 #
 # Input:  images [B, 3, 224, 224] UINT8 RGB pixels,
-#         the whole box scaled to fit the square (aspect kept) and padded with grey 128
+#         the whole box scaled to fit the square (aspect kept; antialiased when the box is
+#         larger than the square) and padded with grey 128
 #         (see src/utils/pe_preprocess.py, letterbox_crop_rgb);
 #         the engine scales them and applies PE-Core's 0.5/0.5 mean/std itself
 #         (export/uint8_input.py)

@@ -14,9 +14,9 @@ import re
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
-import cv2
 import numpy as np
 import pytest
+from PIL import Image
 
 from src.clients.pe_encoder import PE_CROP_MODEL, PE_CROP_SIZE, PE_IMAGE_MODEL, PEEncoder
 from src.domain import frame_engine_wire as wire
@@ -89,8 +89,10 @@ def test_the_host_square_is_the_letterbox_of_the_whole_crop(size: tuple[int, int
     outside = np.ones(sq.shape[:2], bool)
     outside[g.top : g.top + g.new_h, g.left : g.left + g.new_w] = False
     assert (sq[outside] == CROP_FILL).all()
-    fitted = cv2.resize(crop, (g.new_w, g.new_h), interpolation=cv2.INTER_LINEAR)
-    np.testing.assert_array_equal(inside, fitted)  # the whole box, aspect kept, nothing cut
+    fitted = Image.fromarray(crop).resize((g.new_w, g.new_h), Image.Resampling.BILINEAR)
+    np.testing.assert_array_equal(
+        inside, np.asarray(fitted)
+    )  # the whole box, aspect kept, nothing cut
     assert max(g.new_w, g.new_h) == 224 or max(w, h) == 1
 
 

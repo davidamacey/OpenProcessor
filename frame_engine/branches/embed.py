@@ -5,11 +5,13 @@ runs ``plan.crop_embed``, each with its own size and recipe.
 
 The whole-frame square is Pillow ``BILINEAR`` (antialiased), shorter edge to the encoder size,
 centre crop (``src.utils.pe_preprocess.whole_frame_rgb_from_image``). A crop square is the whole
-rectangle (``crop_pil``'s) scaled to fit the square with its aspect kept, plain bilinear, on a
-square of the plan's ``fill`` (the letterbox geometry of :func:`~src.domain.image_geometry.
-letterbox_geometry`, the one the API's host copy uses). The crop squares go through the encoder in
-calls of the plan's batch, each call its own slice of the region; every call is submitted before
-any is collected, within the photo's window (:class:`~frame_engine.branches.base.PhotoCalls`).
+rectangle (``crop_pil``'s) scaled to fit the square with its aspect kept, on a square of the
+plan's ``fill`` (the letterbox geometry of :func:`~src.domain.image_geometry.letterbox_geometry`
+and the resample rule beside it, antialiased when the box is larger than the square and plain
+bilinear when it is smaller, the ones the API's host copy uses). The crop squares go through the
+encoder in calls of the plan's batch, each call its own slice of the region; every call is
+submitted before any is collected, within the photo's window
+(:class:`~frame_engine.branches.base.PhotoCalls`).
 """
 
 from __future__ import annotations
@@ -101,7 +103,7 @@ class EmbedCrops(Branch):
                         (x1, y1, x2 - x1, y2 - y1),
                         (g.new_w, g.new_h),
                         squares[k, :, g.top : g.top + g.new_h, g.left : g.left + g.new_w],
-                        antialias=False,
+                        antialias=True,
                     )
             self.calls.append(
                 photo.calls.submit(

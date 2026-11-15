@@ -13,8 +13,9 @@ are applied inside the TensorRT engine (``export/uint8_input.py``), so the
 request carries a quarter of the bytes of the float tensor.
 
 A crop of an object goes to the crop encoder (:data:`~src.config.settings.TritonModelConfig.
-PE_CROP_MODEL`, its own size): the WHOLE box, scaled to fit the square with its aspect kept (OpenCV
-bilinear) and centred on a square of :data:`~src.domain.image_geometry.CROP_FILL`
+PE_CROP_MODEL`, its own size): the WHOLE box, scaled to fit the square with its aspect kept (Pillow
+``BILINEAR``: antialiased when the box is larger than the square, plain bilinear when smaller, the
+rule stated beside :func:`~src.domain.image_geometry.letterbox_geometry`) and centred on a square of :data:`~src.domain.image_geometry.CROP_FILL`
 (:func:`letterbox_crop_rgb`). The frame engine cuts the same square on the GPU
 (``frame_engine/branches/embed.py``); both take the geometry from
 :func:`~src.domain.image_geometry.letterbox_geometry`.
@@ -29,7 +30,6 @@ from __future__ import annotations
 
 import io
 
-import cv2
 import numpy as np
 from PIL import Image, ImageOps
 
@@ -42,6 +42,9 @@ PE_SIZE = 336
 def letterbox_crop_rgb(rgb: np.ndarray, target: int, fill: int = CROP_FILL) -> np.ndarray:
     """The whole HWC RGB crop scaled to fit a ``target`` square (aspect kept), centred on ``fill``.
 
+    Antialiased when the crop is larger than the square, plain bilinear when smaller (Pillow
+    ``BILINEAR``).
+
     A crop with no pixels is a square of ``fill``.
     """
     h, w = rgb.shape[:2]
@@ -49,9 +52,10 @@ def letterbox_crop_rgb(rgb: np.ndarray, target: int, fill: int = CROP_FILL) -> n
     if h == 0 or w == 0:
         return out
     g = letterbox_geometry(w, h, target)
-    out[g.top : g.top + g.new_h, g.left : g.left + g.new_w] = cv2.resize(
-        rgb, (g.new_w, g.new_h), interpolation=cv2.INTER_LINEAR
+    fitted = Image.fromarray(np.ascontiguousarray(rgb)).resize(
+        (g.new_w, g.new_h), Image.Resampling.BILINEAR
     )
+    out[g.top : g.top + g.new_h, g.left : g.left + g.new_w] = np.asarray(fitted)
     return out
 
 

@@ -396,7 +396,8 @@ docker compose run --rm model-export python /app/export/export_paddleocr_rec.py 
   `update_grid`); the rotary-layout pass is told the 257 tokens of a 224 input
   (`pe_rope_layout.Geometry.for_input`).
 - Input: `images` `[B, 3, 224, 224]` UINT8 RGB: the **whole** box scaled to fit the square, aspect
-  kept, on a square of grey 128 (`src/utils/pe_preprocess.py` `letterbox_crop_rgb`; the frame engine
+  kept (antialiased when the box is larger than 224 px, plain bilinear when smaller: Pillow
+  `BILINEAR`, the rule beside `letterbox_geometry` in `src/domain/image_geometry.py`), on a square of grey 128 (`src/utils/pe_preprocess.py` `letterbox_crop_rgb`; the frame engine
   cuts the same square on the GPU, `frame_engine/branches/embed.py`). 128 is the value that stays at
   the normalized zero: PE's transform has no pad (it squashes the image,
   `core.vision_encoder.transforms.get_image_transform`) and normalizes with mean 0.5, std 0.5.

@@ -330,12 +330,12 @@ class TestWeights:
         assert np.abs(ours.astype(int) - ref).max() <= 1
 
     @pytest.mark.parametrize('size', [(700, 500), (120, 90), (40, 300)])
-    def test_crop_squares_match_opencv_linear_within_a_grey_level(
+    def test_crop_squares_match_pillow_bilinear_within_a_grey_level(
         self, size: tuple[int, int]
     ) -> None:
         rgb = np.random.default_rng(size[1]).integers(0, 256, (size[1], size[0], 3), dtype=np.uint8)
         g = letterbox_geometry(*size, 336)
-        ours = _resample(rgb, g.new_w, g.new_h, antialias=False)
+        ours = _resample(rgb, g.new_w, g.new_h, antialias=True)
         ref = letterbox_crop_rgb(rgb, 336)[g.top : g.top + g.new_h, g.left : g.left + g.new_w]
         assert ours.shape == ref.shape
         assert np.abs(ours.astype(int) - ref).max() <= 1

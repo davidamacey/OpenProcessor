@@ -22,7 +22,7 @@ tower and nothing else:
 | Vector | Model | Input | What goes in |
 |---|---|---|---|
 | The photo (frame) | `pe_image_encoder` | 336 x 336 | the photo scaled so its shorter side is 336, centre square |
-| Each object (item, box) | `pe_crop_encoder` | 224 x 224 | the **whole** box, scaled to fit the square with its aspect kept, on a grey (128) square |
+| Each object (item, box) | `pe_crop_encoder` | 224 x 224 | the **whole** box, scaled to fit the square with its aspect kept (antialiased when the box is larger than 224 px, plain bilinear enlargement when smaller), on a grey (128) square |
 
 A wide box keeps both its ends: the old rule cut the centre square and lost about half of it. The
 two vectors are different spaces and are never compared with each other. Both are in the plan the

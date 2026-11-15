@@ -211,7 +211,7 @@ _FP32_BUILDS: tuple[Shipped, ...] = (
             color='RGB',
             normalize='in_graph',
             resize='letterbox',
-            interpolation='bilinear',
+            interpolation='pil_bilinear',
             fill=CROP_FILL,
         ),
         _embedding(1024),

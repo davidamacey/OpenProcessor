@@ -109,7 +109,8 @@ def render_config(cfg: PETritonConfig) -> str:
             '# The tensor names below are a contract with that client.'
         )
         pixels = (
-            'the whole box scaled to fit the square (aspect kept) and padded with grey 128\n'
+            'the whole box scaled to fit the square (aspect kept; antialiased when the box is\n'
+            '#         larger than the square) and padded with grey 128\n'
             '#         (see src/utils/pe_preprocess.py, letterbox_crop_rgb)'
         )
     else:
