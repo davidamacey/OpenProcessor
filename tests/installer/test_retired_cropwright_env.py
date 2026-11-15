@@ -113,3 +113,24 @@ def test_cli_refuses_an_install_made_with_the_retired_control_plane_only_mode(
     assert result.returncode == 2, result.stderr
     assert 'control-plane-only' in result.stdout + result.stderr
     assert 'Triton' in result.stdout + result.stderr
+
+
+REMOVED = 'OP_INGEST_GPU_MIN_MEGAPIXELS'
+
+
+def test_installer_refuses_a_removed_name_in_env(shimmed: Shimmed) -> None:
+    inst = _install(shimmed)
+    with (inst / '.env').open('a') as fh:
+        fh.write(f'{REMOVED}=3.0\n')
+    result = dry(shimmed)
+    assert result.returncode == 2, result.stderr
+    assert f'{REMOVED} was removed' in result.stderr
+
+
+def test_cli_refuses_a_removed_name_in_env(shimmed: Shimmed) -> None:
+    inst = _install(shimmed)
+    with (inst / '.env').open('a') as fh:
+        fh.write(f'{REMOVED}=3.0\n')
+    result = _cli(shimmed, inst, 'status')
+    assert result.returncode == 2, result.stderr
+    assert f'{REMOVED} was removed' in result.stdout + result.stderr

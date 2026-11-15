@@ -20,13 +20,26 @@ RETIRED_ENV_NAMES=(
     CROPWRIGHT_DATASET_UPLOAD_MAX_MB
 )
 
+# Removed with no replacement of the same meaning: a value left in .env would look like a working
+# setting that does nothing. Each entry is NAME|what to do instead.
+RETIRED_REMOVED_ENV=(
+    "OP_INGEST_GPU_MIN_MEGAPIXELS|the frame engine decodes every image; OP_FRAME_ENGINE_MIN_MEGAPIXELS sets where its nvJPEG route starts"
+)
+
 # refuse_retired_env FILE -- exit 2 naming the new variable for every retired name set in FILE
 refuse_retired_env() {
-    local file="$1" name found=0
+    local file="$1" name entry found=0
     [[ -f "$file" ]] || return 0
     for name in "${RETIRED_ENV_NAMES[@]}"; do
         if awk -v k="$name" '{ i = index($0, "=") } i > 1 && substr($0, 1, i - 1) == k { f = 1 } END { exit !f }' "$file"; then
             echo "[ERROR] ${name} was renamed to OP_${name}: update ${file}" >&2
+            found=1
+        fi
+    done
+    for entry in "${RETIRED_REMOVED_ENV[@]}"; do
+        name="${entry%%|*}"
+        if awk -v k="$name" '{ i = index($0, "=") } i > 1 && substr($0, 1, i - 1) == k { f = 1 } END { exit !f }' "$file"; then
+            echo "[ERROR] ${name} was removed: ${entry#*|}; delete the line from ${file}" >&2
             found=1
         fi
     done

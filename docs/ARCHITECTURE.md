@@ -141,11 +141,13 @@ in front of PostgreSQL.
   code takes the shared client, never builds its own.
 - **Preprocessing** (letterbox, normalization) runs in the API on CPU before
   the request. Keep the API layer to validation and decoding; the models own the
-  rest. The exception is photo ingest: with `OP_INGEST_GPU_DECODE` on, a photo at or
-  above `OP_INGEST_GPU_MIN_MEGAPIXELS` goes to the frame engine (`frame-engine`), which
-  decodes it once on the GPU, builds the detector input, the PE vectors, the blur
-  scores and the crop JPEGs there and calls the models in Triton as a client. A file it
-  declines falls back to the CPU path.
+  rest. The exception is photo ingest: with `OP_INGEST_GPU_DECODE` on, every photo goes
+  to the frame engine (`frame-engine`), which decodes it once (on the GPU for a baseline
+  JPEG, on the CPU inside the engine for any other image), builds the detector input,
+  the PE vectors, the blur scores and the crop JPEGs there and calls the models in
+  Triton as a client. The API never decodes the photo; while the engine is down the
+  ingest answers 503 with `Retry-After`. Each photo moves on its own from the engine's
+  answer to its write; the database work runs in at most three commit groups per request.
   Details and numbers: [PERFORMANCE.md](PERFORMANCE.md).
 - **Thread safety.** Ultralytics model objects keep internal state. The code
   creates a thin client wrapper per request rather than sharing one instance

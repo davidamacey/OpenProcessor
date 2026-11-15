@@ -146,6 +146,10 @@ RETIRED_ENV: dict[str, str] = {
         f'{_REMOVED} the bucketed near-duplicate scorer is gone; near duplicates are run-scoped '
         'groups configured by a near_dup_profile'
     ),
+    'OP_INGEST_GPU_MIN_MEGAPIXELS': (
+        f'{_REMOVED} the frame engine decodes every image; OP_FRAME_ENGINE_MIN_MEGAPIXELS sets '
+        'where its nvJPEG route starts'
+    ),
     'GPU_IMAGE_PREP_MODEL': (
         f'{_REMOVED} the GPU decode is the frame-engine service; the API finds it at '
         'OP_FRAME_ENGINE_URL'
