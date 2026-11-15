@@ -6,6 +6,7 @@ from __future__ import annotations
 import io
 import time
 from collections.abc import Callable
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -19,10 +20,18 @@ from src.domain.image_geometry import (
     undo_letterbox,
     whole_square_geometry,
 )
+from src.domain.jpeg_markers import ICC_TAG, join_icc_chunks
 from src.services.curation.ingest_index import crop_pil
 from src.services.detection.crop_quality import crop_lap_var, variance_from_sums
 from src.services.detection.geometry import letterbox_to_square
 from src.utils.pe_preprocess import resize_crop_rgb, whole_frame_rgb_from_image
+
+
+#: CC0 profiles (``tests/fixtures/icc``, ATTRIBUTION.md).
+ICC = Path(__file__).resolve().parents[1] / 'fixtures' / 'icc'
+P3 = (ICC / 'DisplayP3-v4.icc').read_bytes()
+ADOBE = (ICC / 'AdobeCompat-v4.icc').read_bytes()
+COLORD_SRGB = (ICC / 'colord-sRGB.icc').read_bytes()
 
 
 def _jpeg(w: int, h: int, *, progressive: bool = False, orientation: int | None = None) -> bytes:
@@ -347,3 +356,51 @@ class TestFitSize:
             im = Image.new('L', (w, h))
             im.thumbnail((side, side))
             assert fg.fit_size(w, h, side) == im.size, (w, h)
+
+
+def _tagged_jpeg(icc: bytes | None, size: tuple[int, int] = (48, 32)) -> bytes:
+    rng = np.random.default_rng(7)
+    img = Image.fromarray(rng.integers(0, 256, (size[1], size[0], 3), dtype=np.uint8))
+    buf = io.BytesIO()
+    img.save(buf, 'JPEG', quality=95, **({'icc_profile': icc} if icc else {}))
+    return buf.getvalue()
+
+
+def _split_icc(data: bytes, parts: int, order: list[int], count: int | None = None) -> bytes:
+    """``data`` with its one ICC APP2 segment replaced by ``parts`` chunks written in ``order``
+    (sequence numbers from 1), each claiming ``count`` chunks (default ``parts``)."""
+    tag = b'\xff\xe2'
+    at = data.index(ICC_TAG) - 4
+    assert data[at : at + 2] == tag
+    length = int.from_bytes(data[at + 2 : at + 4], 'big')
+    profile = data[at + 18 : at + 2 + length]
+    step = -(-len(profile) // parts)
+    chunks = [profile[k * step : (k + 1) * step] for k in range(parts)]
+    out = b''
+    for seq in order:
+        body = ICC_TAG + bytes([seq, count or parts]) + chunks[seq - 1]
+        out += tag + (len(body) + 2).to_bytes(2, 'big') + body
+    return data[:at] + out + data[at + 2 + length :]
+
+
+class TestHeaderProfile:
+    @pytest.mark.parametrize('icc', [None, P3, ADOBE, COLORD_SRGB])
+    def test_the_profile_is_the_one_pillow_reads(self, icc: bytes | None) -> None:
+        data = _tagged_jpeg(icc)
+        with Image.open(io.BytesIO(data)) as im:
+            assert fg.jpeg_header(data).icc == im.info.get('icc_profile') == icc
+
+    def test_chunks_out_of_order_are_joined_in_sequence(self) -> None:
+        data = _split_icc(_tagged_jpeg(COLORD_SRGB), 3, [2, 3, 1])
+        with Image.open(io.BytesIO(data)) as im:
+            assert fg.jpeg_header(data).icc == im.info['icc_profile'] == COLORD_SRGB
+
+    def test_a_wrong_chunk_count_is_no_profile_as_in_pillow(self) -> None:
+        data = _split_icc(_tagged_jpeg(COLORD_SRGB), 2, [1, 2], count=3)
+        with Image.open(io.BytesIO(data)) as im:
+            assert im.info['icc_profile'] is None
+        assert fg.jpeg_header(data).icc is None
+
+    def test_a_chunk_too_short_for_its_numbers_is_no_profile(self) -> None:
+        assert join_icc_chunks([ICC_TAG + b'\x01']) is None
+        assert join_icc_chunks([]) is None

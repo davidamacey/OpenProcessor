@@ -44,9 +44,10 @@ RUN apt-get update && apt-get upgrade -y \
     && useradd -r -g engine -G video -u 1000 -m -s /usr/sbin/nologin engine
 
 COPY --from=builder --chown=engine:engine /root/.local /home/engine/.local
-# The engine's code and the one part of src/ it imports (the wire module, the decode-route
-# vocabulary and the geometry the CPU paths share).
+# The engine's code and the parts of src/ it imports (the wire module, the decode-route
+# vocabulary and the geometry the CPU paths share; the colour-profile rule of both decode routes).
 COPY src/domain /app/src/domain
+COPY src/utils/__init__.py src/utils/icc_srgb.py /app/src/utils/
 COPY frame_engine /app/frame_engine
 # The recogniser's character dictionary, the one copy the Triton pipeline model also reads.
 COPY models/paddleocr_rec_trt/ppocrv6_dict.txt /app/ocr/ppocrv6_dict.txt

@@ -748,6 +748,7 @@ download-face-models: ## Download ArcFace face recognition models
 export-face-recognition: ## Export ArcFace to TensorRT
 	@echo "Exporting ArcFace face recognition to TensorRT..."
 	$(EXPORT_RUN) python /app/export/export_face_recognition.py
+	$(EXPORT_RUN) python /app/export/export_face_recognition.py --uint8
 	@$(MAKE) load-face-models
 
 .PHONY: load-face-models
@@ -755,6 +756,8 @@ load-face-models: ## Load face models into Triton (SCRFD + ArcFace)
 	@echo "Loading face models into Triton..."
 	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/scrfd_10g_bnkps/load" || true
 	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/arcface_w600k_r50/load" || true
+	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/scrfd_10g_bnkps_uint8/load" || true
+	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/arcface_w600k_r50_uint8/load" || true
 	@echo "Face models loaded."
 
 .PHONY: setup-face-pipeline
@@ -779,11 +782,13 @@ download-face-test-data: ## Download LFW and WIDER Face test datasets
 export-scrfd: ## Download + export SCRFD to TensorRT for Triton
 	@echo "Exporting SCRFD face detection to TensorRT..."
 	$(EXPORT_RUN) python /app/export/export_scrfd.py
+	$(EXPORT_RUN) python /app/export/export_scrfd.py --uint8
 
 .PHONY: load-scrfd
 load-scrfd: ## Load SCRFD model into Triton
 	@echo "Loading SCRFD model..."
 	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/scrfd_10g_bnkps/load" || true
+	@curl -s -X POST "http://localhost:$(TRITON_HTTP_PORT)/v2/repository/models/scrfd_10g_bnkps_uint8/load" || true
 	@echo "SCRFD loaded."
 
 .PHONY: setup-scrfd

@@ -169,6 +169,7 @@ describe('bulk ingest contract', () => {
         'n_not_embedded',
         'n_embed_failed',
         'in_flight',
+        'waiting',
         'unreadable',
         'unreadable_samples',
         'images_per_s',

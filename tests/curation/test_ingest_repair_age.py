@@ -61,7 +61,8 @@ def test_the_request_counts_are_the_retry_rounds_of_the_writes() -> None:
 def test_the_age_covers_the_requests_pauses_and_attempts() -> None:
     pauses = 2 * sum(w.RETRY_429_PAUSES_S)
     assert w.SEQUENTIAL_REQUESTS * 4 * 60 + pauses == w.REPAIR_AFTER_S
-    assert w.REPAIR_AFTER_S > 3600, 'an hour of the slowest possible client'
+    assert w.SEQUENTIAL_REQUESTS == 22  # the repair's path: 3 + 4 + 6 + 1 + 4 + 4
+    assert pytest.approx(5287.7) == w.REPAIR_AFTER_S  # the number CHANGELOG and the docs state
 
 
 @pytest.mark.asyncio

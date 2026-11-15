@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
     import numpy as np
 
+    from frame_engine.faces.scrfd import Faces
     from frame_engine.prep_kernels import PrepKernels
     from frame_engine.stage_metrics import StageClock
     from frame_engine.transport import BodyTransport, CudaShmTransport, ModelInput, Pending, Staged
@@ -47,6 +48,8 @@ class Photo:
     rects: list[tuple[int, int, int, int]] | None = None
     #: The detector's class id of each rectangle; ``None`` for stored boxes.
     classes: np.ndarray | None = None
+    #: The ``faces`` branch's detections in frame pixels; ``None`` when it failed or did not run.
+    faces: Faces | None = None
 
 
 class Branch:

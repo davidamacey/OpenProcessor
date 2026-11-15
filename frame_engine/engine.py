@@ -10,7 +10,8 @@ rounds of model calls and the mapping of failures. The branches themselves live 
 1. Route by header (JPEG, 8-bit, 1 or 3 components, baseline, end-of-image marker present, size
    gate); anything else answers with a status (the API decodes that image on the CPU, counted).
 2. Reserve the frame's bytes (``prep_budget``, a bounded wait), nvJPEG decode (GPU Huffman lanes),
-   EXIF orientation applied on the GPU.
+   EXIF orientation applied on the GPU, then the embedded colour profile (``colour``: the frame
+   every branch reads is sRGB).
 3. Round 1: every requested branch that needs only the frame stages its input and its call (the
    detector letterbox, the whole-frame encoder square); one wait for the stream, then all those
    calls go out at once. The caller's stored ``boxes`` (the embed pass) stand in for the detector.
@@ -59,9 +60,13 @@ from frame_engine.branches.crops import CropJpegs
 from frame_engine.branches.derivatives import Derivatives
 from frame_engine.branches.detect import Detect
 from frame_engine.branches.embed import EmbedCrops, EmbedFrame
+from frame_engine.branches.faces import FaceEmbed, Faces
 from frame_engine.branches.ocr import Ocr
+from frame_engine.colour import ColourStep
 from frame_engine.cuda_fault import ContextLostError, is_sticky
+from frame_engine.faces.kernels import WarpKernel
 from frame_engine.messages import EngineRequest, EngineResult
+from frame_engine.nvjpeg_encode import NvJpegEncoders
 from frame_engine.nvjpeg_lanes import NvJpegError, NvJpegLanes
 from frame_engine.ocr.ctc import CtcDecoder
 from frame_engine.ocr.kernels import LineWarp
@@ -147,13 +152,17 @@ class FrameEngine:
         # grows past 15 GB. At the cap it frees cached blocks before allocating.
         cp.get_default_memory_pool().set_limit(size=settings.pool_mib * MIB)
         self.lanes = NvJpegLanes(lanes=settings.lanes)
+        self.encoders = NvJpegEncoders(settings.encode_threads)
         self.alloc_stream = cp.cuda.Stream(non_blocking=True)
         self.budget = self._reserve_budget(settings.budget_mib)
         metrics.watch_budget(self.budget)
         self.kernels = PrepKernels()
+        self.warp = WarpKernel()
         self.line_warp = LineWarp()
         self._ocr_decoder: CtcDecoder | None = None
         self._ocr_decoder_lock = threading.Lock()
+        self.colour = ColourStep(settings.colour_tables, self.alloc_stream)
+        metrics.watch_colour(self.colour)
         self.encode_pool = ThreadPoolExecutor(settings.encode_threads, thread_name_prefix='fe-jpeg')
         self.workers = ThreadPoolExecutor(settings.workers, thread_name_prefix='fe-image')
         #: Region bytes one photo may hold with calls in flight: its worker's fair share.
@@ -298,6 +307,12 @@ class FrameEngine:
         frame = _orient(frame, header.orientation, self.alloc_stream)
         if (int(frame.shape[1]), int(frame.shape[0])) != oriented_size(header):
             return 'decoder'
+        # a profile is read for colour frames only, as the CPU route reads it for RGB images only
+        if header.components == 3:
+            outcome = self.colour.apply(frame, header.icc)
+        else:
+            outcome = 'ignored' if header.icc else 'srgb'
+        self.metrics.colour.labels(outcome).inc()
         return frame
 
     def _check_context(self, exc: BaseException) -> None:
@@ -338,10 +353,14 @@ class FrameEngine:
             out.append(EmbedFrame(plan.embed))
         if plan.embed is not None and plan.runs('embed_crops'):
             out.append(EmbedCrops(plan.embed, plan.embed_classes))
+        if plan.faces is not None and plan.runs('faces'):
+            out.append(Faces(plan.faces))
+        if plan.faces is not None and plan.runs('face_embed'):
+            out.append(FaceEmbed(plan.faces, self.warp))
         if plan.ocr is not None and plan.runs('ocr'):
             out.append(Ocr(plan.ocr, self._decoder(), self.line_warp))
         if plan.derivatives:
-            out.append(Derivatives(self.encode_pool))
+            out.append(Derivatives(self.encode_pool, self.encoders))
         if plan.crops == 'inline':
             out.append(CropJpegs(self.encode_pool, self.s.jpeg_quality, self.s.crop_max_side))
         return out

@@ -13,6 +13,9 @@ from src.domain.processing_plan import BRANCHES
 
 DETECTOR = {'model': 'yolov11_small_trt_end2end', 'input_size': 640, 'letterbox_fill': 114}
 EMBED = {'model': 'pe_image_encoder', 'size': 336, 'batch': 32}
+FACES = {'detector': 'scrfd_u8', 'input_size': 640, 'recogniser': 'arcface_u8', 'batch': 32,
+         'score_min': 0.5, 'nms': 0.4, 'max_faces': 128, 'coarse': 256, 'tile_side': 1920,
+         'overlap': 160}  # fmt: skip
 OCR = {
     'detector': 'paddleocr_det_trt_uint8',
     'recogniser': 'paddleocr_rec_trt_uint8',
@@ -116,20 +119,78 @@ def test_a_built_branch_may_carry_a_detector_condition() -> None:
     assert plan.if_detected == {'ocr': (2, 7)}
 
 
-def test_unbuilt_branches_are_reported_unsupported_and_renditions_are_built() -> None:
+def test_every_branch_is_built_and_renditions_are_reported() -> None:
     plan = wire.parse_plan(
         _plan(
             branches=['detect', 'faces', 'face_embed'],
             embed=None,
+            faces=FACES,
             crops='none',
-            if_detected={'faces': [0]},
             derivatives=[{'name': 'thumb', 'side': 256}],
         ),
         has_boxes=False,
     )
-    assert plan.unsupported() == ('faces', 'face_embed')
+    assert plan.unsupported() == ()
     assert plan.reported() == ('detect', 'faces', 'face_embed', 'derivatives')
+    assert {*wire.ENGINE_BRANCHES, wire.DERIVATIVES} == wire.BUILT_BRANCHES
+
+
+def test_the_faces_plan_parses_and_round_trips() -> None:
+    plan = wire.parse_plan(_plan(branches=['faces', 'face_embed'], detector=None, embed=None,
+                                 crops='none', faces=FACES), has_boxes=False)  # fmt: skip
+    assert plan.faces == wire.FaceSpec(
+        'scrfd_u8', 640, 'arcface_u8', 32, 0.5, 0.4, 128, 256, 1920, 160
+    )
+    assert wire.parse_plan(plan.to_json(), has_boxes=False) == plan
+    lean = {k: v for k, v in FACES.items() if k not in ('coarse', 'tile_side', 'overlap')}
+    plan = wire.parse_plan(_plan(branches=['faces'], detector=None, embed=None, crops='none',
+                                 faces=lean), has_boxes=False)  # fmt: skip
+    assert plan.faces is not None
+    assert (plan.faces.coarse, plan.faces.tile_side, plan.faces.overlap) == (0, 0, 0)
+    assert wire.expected_outputs(plan) == (
+        'face_boxes',
+        'face_scores',
+        'face_landmarks',
+        'face_blur_sums',
+        'face_overflow',
+    )
+
+
+@pytest.mark.parametrize(
+    ('faces', 'branches', 'fault'),
+    [
+        (None, ['faces'], 'missing_field'),
+        (FACES, ['detect'], 'bad_field'),
+        ({**FACES, 'score_min': 1.5}, ['faces'], 'bad_field'),
+        ({**FACES, 'nms': '0.4'}, ['faces'], 'bad_field'),
+        ({**FACES, 'input_size': 600}, ['faces'], 'bad_field'),
+        ({**FACES, 'coarse': 16}, ['faces'], 'bad_field'),
+        ({**FACES, 'overlap': 640}, ['faces'], 'bad_field'),
+        ({**FACES, 'max_faces': 0}, ['faces'], 'bad_field'),
+        ({**FACES, 'tiles': 4}, ['faces'], 'unknown_field'),
+        ({k: v for k, v in FACES.items() if k != 'recogniser'}, ['faces'], 'missing_field'),
+    ],
+)
+def test_a_bad_faces_object_is_refused(faces: Any, branches: list[str], fault: str) -> None:
+    """Catches a faces branch without its settings, settings for a branch not asked for, and a
+    threshold, size or overlap the branch cannot use."""
+    with pytest.raises(wire.EnginePlanError) as err:
+        wire.parse_plan(
+            _plan(branches=branches, embed=None, crops='none', faces=faces), has_boxes=False
+        )
+    assert err.value.fault == fault
+
+
+def test_faces_on_a_person_condition_round_trips_and_needs_the_detector() -> None:
+    plan = wire.parse_plan(_plan(branches=['detect', 'faces', 'face_embed'], embed=None,
+                                 crops='none', faces=FACES, if_detected={'faces': [0]}),
+                           has_boxes=False)  # fmt: skip
     assert plan.if_detected == {'faces': (0,)}
+    assert wire.parse_plan(plan.to_json(), has_boxes=False) == plan
+    with pytest.raises(wire.EnginePlanError) as err:
+        wire.parse_plan(_plan(branches=['faces'], detector=None, embed=None, crops='none',
+                              faces=FACES, if_detected={'faces': [0]}), has_boxes=False)  # fmt: skip
+    assert (err.value.fault, err.value.detail) == ('missing_dependency', 'detect')
 
 
 def test_branch_status_round_trips_one_entry_per_name() -> None:

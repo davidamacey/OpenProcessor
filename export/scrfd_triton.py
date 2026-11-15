@@ -6,7 +6,17 @@ import logging
 import time
 from pathlib import Path
 
-from scrfd_constants import FPN_STRIDES, INPUT_SIZE, MAX_BATCH_SIZE, NUM_ANCHORS, TRITON_MODEL_NAME
+from scrfd_constants import (
+    FPN_STRIDES,
+    INPUT_SIZE,
+    MAX_BATCH_SIZE,
+    NUM_ANCHORS,
+    TRITON_MODEL_NAME,
+    UINT8_INPUT_NAME,
+    UINT8_MEAN,
+    UINT8_MODEL_NAME,
+    UINT8_STD,
+)
 from trt_build_settings import workspace_bytes
 
 
@@ -18,8 +28,11 @@ def convert_to_tensorrt(
     plan_path: Path,
     fp16: bool = True,
     max_batch_size: int = MAX_BATCH_SIZE,
+    *,
+    uint8: bool = False,
 ) -> bool:
-    """Convert SCRFD ONNX to TensorRT engine with dynamic batch."""
+    """Convert SCRFD ONNX to TensorRT engine with dynamic batch; with ``uint8``, the input is
+    uint8 ``images`` and the normalisation runs in the graph (the frame engine's build)."""
     logger.info(f'Converting to TensorRT: {onnx_path} -> {plan_path}')
     logger.info(f'  FP16: {fp16}, Max batch: {max_batch_size}')
 
@@ -36,6 +49,13 @@ def convert_to_tensorrt(
 
         logger.info('  Baking FP16 (ModelOpt AutoCast, TRT 11 typed builds)...')
         onnx_path = bake_fp16_onnx(onnx_path)
+        if uint8:
+            from uint8_input import add_uint8_input
+
+            onnx_path = add_uint8_input(
+                onnx_path, Path(onnx_path).with_suffix('.u8.onnx'), mean=UINT8_MEAN,
+                std=UINT8_STD, input_name=UINT8_INPUT_NAME,
+            )  # fmt: skip
         logger.info('  Parsing ONNX...')
         with Path(onnx_path).open('rb') as f:
             if not parser.parse(f.read()):
@@ -105,8 +125,10 @@ def convert_to_tensorrt(
         return False
 
 
-def create_triton_config(plan_path: Path, max_batch_size: int = MAX_BATCH_SIZE) -> Path:
-    """Create Triton config.pbtxt for SCRFD model.
+def create_triton_config(
+    plan_path: Path, max_batch_size: int = MAX_BATCH_SIZE, *, uint8: bool = False
+) -> Path:
+    """Create Triton config.pbtxt for SCRFD model (``uint8``: the frame engine's build).
 
     The ONNX is batch-patched (make_batch_dynamic) so the TensorRT engine
     supports dynamic batch. We use Triton's implicit batching (max_batch_size > 0)
@@ -123,8 +145,18 @@ def create_triton_config(plan_path: Path, max_batch_size: int = MAX_BATCH_SIZE) 
     fm_sizes = {s: INPUT_SIZE // s for s in FPN_STRIDES}
     n_anchors = {s: fm_sizes[s] * fm_sizes[s] * NUM_ANCHORS for s in FPN_STRIDES}
 
+    name, input_name, input_type, norm = (
+        (
+            UINT8_MODEL_NAME,
+            UINT8_INPUT_NAME,
+            'TYPE_UINT8',
+            'uint8 RGB, (x-127.5)/128.0 in the graph',
+        )
+        if uint8
+        else (TRITON_MODEL_NAME, 'input.1', 'TYPE_FP32', 'RGB images, normalized (x-127.5)/128.0')
+    )
     config_content = f"""# SCRFD-10G Face Detection with 5-point Landmarks
-# Input: RGB images, normalized (x-127.5)/128.0
+# Input: {norm}
 # Output: 9 tensors across 3 FPN strides for CPU post-processing
 # Post-processing: anchor decode + NMS in numpy (src/utils/scrfd_decode.py)
 #
@@ -132,14 +164,14 @@ def create_triton_config(plan_path: Path, max_batch_size: int = MAX_BATCH_SIZE) 
 # dynamic batch via Triton's implicit batching (max_batch_size > 0).
 # Anchor counts per stride: {n_anchors[8]} (stride 8), {n_anchors[16]} (stride 16), {n_anchors[32]} (stride 32).
 
-name: "{TRITON_MODEL_NAME}"
+name: "{name}"
 platform: "tensorrt_plan"
 max_batch_size: {max_batch_size}
 
 input [
   {{
-    name: "input.1"
-    data_type: TYPE_FP32
+    name: "{input_name}"
+    data_type: {input_type}
     dims: [ 3, {INPUT_SIZE}, {INPUT_SIZE} ]
   }}
 ]

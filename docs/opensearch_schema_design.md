@@ -201,7 +201,7 @@ as whole, always (`scripts/curation/backfill_item_ids.py` lists the items of tho
 cannot tell an old broken photo from one with no detections and does not try). An incomplete
 image is completed by the next ingest of the same bytes when no live writer can still be writing
 it: the writer that saw its own write fail set `ingest_incomplete` (stored, not indexed), or the
-doc is older than `REPAIR_AFTER_S` (`src/services/curation/ingest_writer.py`, derived from the
+doc is older than `REPAIR_AFTER_S` (5,287.7 s, 88 minutes; `src/services/curation/ingest_writer.py`, derived from the
 OpenSearch client's timeout and retries), and no repair of it is running. A repair is a writer:
 it sets `repair_started_at` (a lease, stored, not indexed) in one OCC update together with the
 list (the listed items that still exist plus the items it is about to create) before it creates

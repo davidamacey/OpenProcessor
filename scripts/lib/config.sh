@@ -62,6 +62,9 @@ generate_model_config() {
         arcface_w600k_r50)
             generate_arcface_config "$config_file" "$profile" "$gpu_id"
             ;;
+        scrfd_10g_bnkps_uint8|arcface_w600k_r50_uint8)
+            generate_uint8_engine_config "$config_file" "$profile" "$gpu_id"
+            ;;
         mobileclip2_s2_image_encoder)
             generate_mobileclip_image_config "$config_file" "$profile" "$gpu_id"
             ;;
@@ -75,7 +78,7 @@ generate_model_config() {
             generate_paddleocr_rec_config "$config_file" "$profile" "$gpu_id"
             ;;
         paddleocr_det_trt_uint8|paddleocr_rec_trt_uint8)
-            generate_ocr_uint8_config "$config_file" "$profile" "$gpu_id"
+            generate_uint8_engine_config "$config_file" "$profile" "$gpu_id"
             ;;
         ocr_pipeline)
             # Python BLS model: its instance count is the OCR concurrency and
@@ -215,6 +218,8 @@ generate_all_configs() {
         "yolov11_small_trt_end2end"
         "scrfd_10g_bnkps"
         "arcface_w600k_r50"
+        "scrfd_10g_bnkps_uint8"
+        "arcface_w600k_r50_uint8"
         "mobileclip2_s2_image_encoder"
         "mobileclip2_s2_text_encoder"
         "paddleocr_det_trt"

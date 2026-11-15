@@ -32,6 +32,7 @@ in `docker-compose.yml`:
 | `yolov11_small_trt_end2end` | Object detection (TensorRT, fused `[300, 6]` output in letterboxed pixels) |
 | `scrfd_10g_bnkps` | Face detection + 5-point landmarks |
 | `arcface_w600k_r50` | Face embedding, 512-dim |
+| `scrfd_10g_bnkps_uint8`, `arcface_w600k_r50_uint8` | The frame engine's builds of the two face models: uint8 input `images`, normalisation in the graph (SCRFD `(x-127.5)/128`, ArcFace `(x-127.5)/127.5` as InsightFace `ArcFaceONNX` does). The faces group builds them with `--uint8`; the FP32 models above stay for the API face path until it moves to plans |
 | `mobileclip2_s2_image_encoder`, `mobileclip2_s2_text_encoder` | CLIP image/text embeddings, 512-dim |
 | `paddleocr_det_trt`, `paddleocr_rec_trt` | PP-OCRv6 text detection / recognition |
 | `paddleocr_det_trt_uint8`, `paddleocr_rec_trt_uint8` | The frame engine's builds of the two OCR models: uint8 BGR input `x`, the normalisation in the graph (detector: ImageNet mean/std; recogniser: `x/127.5 - 1`), and for the recogniser the arg-max over the 18,710 character probabilities in the graph (`indices` and `scores`, no probability tensor to the host). The `ocr` group builds them with `--uint8`; `ocr_pipeline` and the `/ocr` route keep the FP32 pair |

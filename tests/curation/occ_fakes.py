@@ -12,6 +12,7 @@ on ``src.clients.occ``.
 
 from __future__ import annotations
 
+import copy
 from typing import Any
 
 
@@ -143,11 +144,14 @@ class FakeOccOpenSearch:
 class FakeIndicesApi:
     """The ``indices`` namespace ingest refresh and export readiness call."""
 
-    def __init__(self) -> None:
+    def __init__(self, parent: FakeIngestOpenSearch | None = None) -> None:
         self.refresh_calls: list[str] = []
+        self._parent = parent
 
     async def refresh(self, *, index: str) -> dict[str, Any]:
         self.refresh_calls.append(index)
+        if self._parent is not None:
+            self._parent.make_searchable()
         return {'_shards': {'failed': 0}}
 
     async def get_settings(self, *, index: str) -> dict[str, Any]:
@@ -172,6 +176,7 @@ class FakeIngestOpenSearch:
         images: dict[str, dict[str, Any]] | None = None,
         items: dict[str, dict[str, Any]] | None = None,
         create_conflict_ids: set[str] | None = None,
+        near_real_time_search: bool = False,
     ) -> None:
         self.images: dict[str, dict[str, Any]] = dict(images or {})
         self.items: dict[str, dict[str, Any]] = dict(items or {})
@@ -182,16 +187,31 @@ class FakeIngestOpenSearch:
         # exercise occ_upsert_bulk's create-conflict -> refetch -> OCC
         # update fallback path.
         self._create_conflict_pending: set[str] = set(create_conflict_ids or set())
-        self.indices = FakeIndicesApi()
+        self.indices = FakeIndicesApi(self)
+        # With ``near_real_time_search`` a search sees only what an index refresh has published
+        # (a get and an mget always see the latest write, as OpenSearch's do).
+        self.near_real_time_search = near_real_time_search
+        self._searchable: dict[str, dict[str, dict[str, Any]]] = {}
+        self.make_searchable()
         self.bulk_calls: list[list[dict[str, Any]]] = []
         self.update_calls: list[dict[str, Any]] = []
+
+    def make_searchable(self) -> None:
+        """What an index refresh does: the writes so far become visible to a search."""
+        self._searchable = {
+            'items': copy.deepcopy(self.items),
+            'images': copy.deepcopy(self.images),
+        }
 
     async def search(self, *, index: str, body: dict[str, Any]) -> dict[str, Any]:
         from src.config import get_curation_config
 
-        store = self.items if index == get_curation_config().items_index else self.images
+        is_items = index == get_curation_config().items_index
+        role = 'items' if is_items else 'images'
+        store = self._searchable[role] if self.near_real_time_search else getattr(self, role)
         hits = [
-            {'_id': doc.get('image_id', doc_id), '_source': doc} for doc_id, doc in store.items()
+            {'_id': doc_id if is_items else doc.get('image_id', doc_id), '_source': doc}
+            for doc_id, doc in store.items()
         ]
         return {'hits': {'hits': hits[: body.get('size', len(hits))]}}
 

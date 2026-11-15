@@ -14,7 +14,8 @@ differently on another run is still the same object, and two items for it would 
 this exists to prevent.
 
 The items read are the image's listed ones (a real-time ``mget``: an item written a moment ago is
-there) and every other item of the image (a search: drawn, imported and open-vocabulary items).
+there) and every other item of the image (a search after a refresh: drawn, imported and
+open-vocabulary items).
 """
 
 from __future__ import annotations
@@ -60,6 +61,11 @@ async def _existing_items(
         for doc in resp.get('docs') or []:
             if doc.get('found'):
                 found[doc['_id']] = doc.get('_source') or {}
+    # A search sees only what a refresh has published (about a second after a write): an item a
+    # person drew, or an import or an open-vocabulary run wrote, a moment ago would be missed and
+    # its object created again. A repair is the rare path, so it publishes the index first
+    # (https://docs.opensearch.org/latest/api-reference/index-apis/refresh/).
+    await client.indices.refresh(index=items_index)
     for crop_id, source in await items_by_terms(
         client, 'image_id', [image_id], index=items_index, includes=_includes()
     ):
