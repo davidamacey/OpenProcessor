@@ -309,7 +309,7 @@ Inputs and returns per route: [Core routes](docs-site/docs/api-reference/core.md
 | | `/query/stats` | GET | Statistics for every index |
 | | `/query/duplicates` | GET | Duplicate groups |
 | Models | `/models` | GET | Models in the Triton repository |
-| | `/models/{model_name}/load`, `/unload` | POST | Runtime load and unload |
+| | `/models/{model_name}/load`, `/unload` | POST | Runtime load and unload (loading a model that is already loaded unloads it first and waits, so that model answers unavailable for a second or two) |
 | Health | `/health` | GET | Service health |
 | | `/ready` | GET | Readiness: Triton, its required models and OpenSearch; `503` names any model not `READY` |
 
