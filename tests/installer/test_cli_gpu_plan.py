@@ -52,4 +52,4 @@ def test_gpu_plan_budgets_both_encoders_on_every_pe_card(shimmed: Shimmed, inst:
     set_env(inst, TRITON_GPU_ID='0,2')
     done = cli(shimmed, inst, 'gpu', 'plan')
     assert done.returncode == 0, done.stderr
-    assert 'PE encoders (frame + crop, about 3072 MiB per card)' in done.stdout
+    assert 'PE encoders (frame + crop, about 2304 MiB per card)' in done.stdout

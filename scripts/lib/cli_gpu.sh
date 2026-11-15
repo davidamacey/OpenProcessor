@@ -55,7 +55,7 @@ _gpu_plan_placement() {
     local frame_mib crop_mib
     frame_mib="$(_gpu_model_mib pe_image_encoder)"
     crop_mib="$(_gpu_model_mib pe_crop_encoder)"
-    pe_mib=$(( ${frame_mib:-1536} + ${crop_mib:-1536} ))
+    pe_mib=$(( ${frame_mib:-1536} + ${crop_mib:-768} ))
     project="$(_env_value COMPOSE_PROJECT_NAME)"
     if command -v docker &> /dev/null \
         && _compose_service_running "${project:-openprocessor}" triton-server; then
