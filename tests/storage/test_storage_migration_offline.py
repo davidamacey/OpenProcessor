@@ -195,13 +195,37 @@ def test_claim_kinds_are_seeded_from_the_domain_catalogue() -> None:
     assert len(rows) == len(KINDS) == 23
 
 
-def test_the_extensions_are_asked_for_with_a_message_naming_what_is_missing() -> None:
+def test_the_migration_creates_no_schema_extension_or_role_because_its_role_may_not() -> None:
+    # CREATE SCHEMA and CREATE EXTENSION need CREATE on the database, which the owner role lacks;
+    # the superuser bootstrap (src/db/roles.py) makes them and the migration checks they are there
     sql = upgrade_sql()
-    for extension in ('vector', 'pg_trgm'):
-        assert f'CREATE EXTENSION IF NOT EXISTS {extension}' in sql
-    assert 'RAISE WARNING' in sql
-    assert 'superuser' in sql
-    assert 'CREATE SCHEMA vec' in sql
+    assert 'CREATE SCHEMA' not in sql
+    assert 'CREATE EXTENSION' not in sql
+    assert 'CREATE ROLE' not in sql
+    assert not re.search(r'^(GRANT|ALTER DEFAULT PRIVILEGES)', sql, flags=re.M)
+
+
+def test_a_missing_bootstrap_piece_fails_naming_it_and_the_step_that_supplies_it() -> None:
+    sql = upgrade_sql()
+    check = sql[: sql.index('CREATE TABLE')]
+    assert check.count('RAISE EXCEPTION') == 5
+    # every failure passes the hint that names the bootstrap step as its last argument
+    assert len(re.findall(r'hint\s+USING ERRCODE', check)) == 5
+    for piece in (
+        'pg_trgm',
+        'schema vec does not exist',
+        'schema vec is owned by',
+        'role op_vector',
+    ):
+        assert piece in check, piece
+    assert (
+        "hint constant text := 'run the db-migrate step (python -m scripts.db.migrate upgrade)"
+        in check
+    )
+    # both extensions are hard requirements: the pinned pgvector image ships `vector`
+    assert 'RAISE WARNING' not in check
+    for extension in ('pg_trgm', 'vector'):
+        assert re.search(rf"extname = '{extension}'\) THEN\s+RAISE EXCEPTION", check)
     # no vector table is made by the migration: the embedding-space job makes them at run time
     assert 'vec.v' not in sql
     assert 'halfvec' not in sql
@@ -215,7 +239,8 @@ def test_downgrade_drops_every_table_before_its_parents_and_every_function() -> 
     assert dropped == list(reversed(created))
     for function in plan.FUNCTIONS:
         assert re.search(rf'DROP FUNCTION {function}\(', sql)
-    assert 'DROP SCHEMA vec' in sql
+    # the schema belongs to the bootstrap, not to this revision: a downgrade leaves it (and any vectors)
+    assert 'DROP SCHEMA' not in sql
 
 
 def test_every_modelled_table_agrees_with_the_plan() -> None:

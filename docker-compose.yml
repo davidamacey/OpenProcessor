@@ -389,7 +389,7 @@ services:
   # Health: nothing acts on `unhealthy`; `restart:` fires only when the main process exits.
   # ===================================================================
   postgres:
-    image: postgres:18.6-trixie@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583
+    image: pgvector/pgvector:0.8.7-pg18-trixie@sha256:ab49524d18df7200b74ac9a475e1db6297fc1eb57da4c214c63d10ecc4b754fa
     logging: *default-logging
     security_opt:
       - no-new-privileges:true
@@ -402,6 +402,7 @@ services:
       - SETGID
       - SETUID
     restart: unless-stopped
+    # The pgvector project's image: the official postgres:18-trixie plus the vector extension.
     # postgres:18 moved PGDATA to /var/lib/postgresql/18/docker and the volume to /var/lib/postgresql.
     command:
       - postgres
@@ -502,6 +503,7 @@ services:
       - OP_DB_OWNER_USER=${OP_DB_OWNER_USER:-op_owner}
       - OP_DB_OWNER_PASSWORD_FILE=/run/secrets/op_pg/owner_password
       - OP_DB_SUPER_PASSWORD_FILE=/run/secrets/op_pg/super_password
+      - OP_DB_VECTOR_PASSWORD_FILE=/run/secrets/op_pg/vector_password
       - OPENSEARCH_URL=http://opensearch:9200
     volumes:
       - ./secrets/postgres:/run/secrets/op_pg:ro

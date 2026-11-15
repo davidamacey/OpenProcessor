@@ -39,14 +39,13 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncEngine
 
 # The image and digest of the Postgres service in docker-compose.yml.
-POSTGRES_IMAGE = (
-    'postgres:18.6-trixie@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583'
-)
+POSTGRES_IMAGE = 'pgvector/pgvector:0.8.7-pg18-trixie@sha256:ab49524d18df7200b74ac9a475e1db6297fc1eb57da4c214c63d10ecc4b754fa'
 URL_ENV = 'OP_TEST_DATABASE_URL'
 _PASSWORDS = {
     'app': 'op-test-app-password',
     'owner': 'op-test-owner-password',
     'super': 'op-test-super-password',
+    'vector': 'op-test-vector-password',
 }
 _CONNECT_TIMEOUT_S = 5
 # Database names carry this per-process token: two sessions on one shared server (OP_TEST_DATABASE_URL)
@@ -232,6 +231,7 @@ class PgDatabase:
             'OP_DB_APP_PASSWORD_FILE': str(s.app_password_file),
             'OP_DB_OWNER_PASSWORD_FILE': str(s.owner_password_file),
             'OP_DB_SUPER_PASSWORD_FILE': str(s.super_password_file),
+            'OP_DB_VECTOR_PASSWORD_FILE': str(s.vector_password_file),
         }
 
     def conninfo(self, role: str = 'app') -> str:
@@ -259,6 +259,7 @@ def _settings_for(server: PgServer, dbname: str, secrets: Path) -> DatabaseSetti
         app_password_file=files['app'],
         owner_password_file=files['owner'],
         super_password_file=files['super'],
+        vector_password_file=files['vector'],
     )
 
 

@@ -2,7 +2,8 @@
 """The one place that changes the schema: ``upgrade``, ``current`` and ``check``.
 
 ``upgrade`` is what the one-shot ``db-migrate`` service runs. As the bootstrap superuser it
-creates the owner and application roles; then, as the owner on the direct host (never through
+creates the owner, application and vector roles and what only a superuser may create (the
+extensions and the ``vec`` schema, ``src/db/roles.py``); then, as the owner on the direct host (never through
 a pooler: the lock below is a session lock), it takes ``pg_advisory_lock(2, 0)`` for the whole
 run, upgrades to head on that same connection, re-applies the application role's grants and
 unlocks. Two runners started together serialize and the second finds the schema at head.

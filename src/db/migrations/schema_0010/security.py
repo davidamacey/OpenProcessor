@@ -1,4 +1,4 @@
-"""Row-level security, the append-only trigger and its erasure guard, extensions and the ``vec`` schema.
+"""Row-level security, the append-only trigger and its erasure guard, and the bootstrap check.
 
 Policies are the direct form of 02a section 1.4 on every table with a ``project_id``. The claim log
 refuses UPDATE and DELETE except under the guards of 15a section 8: the project's delete job
@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 from alembic import op
 
+from src.config.database import VECTOR_USER
 from src.domain.claim_kinds import KINDS
 
 
@@ -116,58 +117,49 @@ def seed_claim_kinds() -> None:
     )
 
 
-_EXTENSION_NEEDS = {
-    'vector': 'the per-space vector tables (15a section 6); the application image must ship pgvector',
-    'pg_trgm': 'the trigram indexes of text search (15a section 2.6)',
-}
-
-
-_EXTENSION_BLOCK = """
+_BOOTSTRAP = """
 DO $$
+DECLARE
+  hint constant text := 'run the db-migrate step (python -m scripts.db.migrate upgrade), whose bootstrap (src/db/roles.py prepare_database) runs as the superuser';
+  owner_name text;
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = '@EXT@') THEN
-    BEGIN
-      EXECUTE 'CREATE EXTENSION IF NOT EXISTS @EXT@';
-    EXCEPTION WHEN OTHERS THEN
-      RAISE WARNING 'extension @EXT@ is missing and could not be created by % (%): a superuser must run CREATE EXTENSION @EXT@ in database %; needed for @NEEDED@', current_user, SQLERRM, current_database();
-    END;
+  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
+    RAISE EXCEPTION 'extension pg_trgm is not installed in database %: needed for the trigram indexes of text search (15a section 2.6); %', current_database(), hint
+      USING ERRCODE = 'undefined_object';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
+    RAISE EXCEPTION 'extension vector is not installed in database %: needed for the per-space vector tables (15a section 6); the pinned pgvector/pgvector image ships it; %', current_database(), hint
+      USING ERRCODE = 'undefined_object';
+  END IF;
+  SELECT nspowner::regrole::text INTO owner_name FROM pg_namespace WHERE nspname = 'vec';
+  IF owner_name IS NULL THEN
+    RAISE EXCEPTION 'schema vec does not exist in database %: the owner role has no CREATE on the database, so it cannot make it; %', current_database(), hint
+      USING ERRCODE = 'undefined_schema';
+  ELSIF owner_name <> current_user THEN
+    RAISE EXCEPTION 'schema vec is owned by %, not by the migration role %: it could not grant on it; %', owner_name, current_user, hint
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '@VECTOR_ROLE@') THEN
+    RAISE EXCEPTION 'role @VECTOR_ROLE@ does not exist: it makes the per-space vector tables (15a section 6.1) and only a superuser can create it; %', hint
+      USING ERRCODE = 'undefined_object';
   END IF;
 END $$
 """
 
 
-def ensure_extensions() -> None:
-    """Create the extensions the record needs, or say exactly what is missing and why.
+def require_bootstrap() -> None:
+    """Check what the superuser bootstrap supplies, and fail naming the missing piece.
 
-    ``vector`` is not a trusted extension (its control file has no ``trusted = true``), so the
-    non-superuser schema owner cannot create it: a superuser must run ``CREATE EXTENSION vector`` in
-    this database once, or the image's bootstrap must. Nothing in this revision uses the extension, so
-    a missing one is a warning here and an error in the job that makes the first vector table.
+    The migration role has no ``CREATE`` on the database, so it can neither create a schema nor
+    install an extension (PostgreSQL 18: ``CREATE SCHEMA`` and ``CREATE EXTENSION`` require
+    ``CREATE`` on the database, https://www.postgresql.org/docs/18/sql-createschema.html,
+    https://www.postgresql.org/docs/18/sql-createextension.html), and only a superuser creates a
+    role. 02a section 1.5: those steps are the bootstrap's (``src/db/roles.py``, shared by the
+    installer, production and the test fixtures through ``scripts/db/migrate.py``); the grants on
+    ``vec`` and ``projects`` to the vector role are ``roles.apply_grants``'s.
 
-    Deviation 1 (accepted): this is a warning only until the deploy lane ships the image with pgvector,
-    the ``op_vector`` role and its secret. From then on the migration must FAIL without the extension
-    instead of warning: change the ``RAISE WARNING`` below to ``RAISE EXCEPTION`` in the revision that
-    lane writes, and make its bootstrap create the extension as the superuser first.
+    Deviation 1 is closed: the compose files pin the pgvector project's image
+    (``pgvector/pgvector:0.8.7-pg18-trixie``, 01_package_pins.md), so a missing ``vector`` extension
+    fails here like the others. Nothing in this revision uses the extension.
     """
-    for extension, needed_for in _EXTENSION_NEEDS.items():
-        op.execute(_EXTENSION_BLOCK.replace('@EXT@', extension).replace('@NEEDED@', needed_for))
-
-
-def create_vector_schema() -> None:
-    """The schema of the per-space vector tables, created at run time by the embedding-space job as
-    ``op_vector`` (15a section 6.1). The migration creates the schema and, when the role exists,
-    lets it create tables there and reference ``projects``; no vector table is made here."""
-    op.execute('CREATE SCHEMA vec')
-    op.execute(
-        """
-        DO $$
-        BEGIN
-          IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'op_vector') THEN
-            GRANT USAGE, CREATE ON SCHEMA vec TO op_vector;
-            GRANT REFERENCES (id) ON projects TO op_vector;
-          ELSE
-            RAISE NOTICE 'role op_vector does not exist yet: the bootstrap that creates it also grants USAGE, CREATE on schema vec and REFERENCES (id) on projects';
-          END IF;
-        END $$
-        """
-    )
+    op.execute(_BOOTSTRAP.replace('@VECTOR_ROLE@', VECTOR_USER))

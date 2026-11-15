@@ -33,7 +33,7 @@ def test_the_api_image_has_the_postgres_18_client() -> None:
     base = dockerfile.split(' AS base', 1)[1].split('FROM ', 1)[0]
     assert 'postgresql-client-18' in base
     postgres = _load_yaml(REPO_ROOT / 'docker-compose.yml')['services']['postgres']['image']
-    assert postgres.startswith('postgres:18')
+    assert '-pg18-' in postgres
 
 
 def test_the_periodic_worker_can_run_the_backup_tick() -> None:

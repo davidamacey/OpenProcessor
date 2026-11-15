@@ -104,9 +104,6 @@ _.item_keys_by_crop_id  # src/db/repos/items.py; wired by storage steps 2 to 4; 
 _.create_statements  # src/db/vector_ddl.py; wired by storage steps 2 to 4; entry removed by that lane
 _.drop_statement  # src/db/vector_ddl.py; wired by storage steps 2 to 4; entry removed by that lane
 _.row_security_flags  # src/db/vector_ddl.py; wired by storage steps 2 to 4; entry removed by that lane
-_.role_grants  # src/db/vector_ddl.py; wired by storage steps 2 to 4; entry removed by that lane
-_.ROLE_ATTRIBUTES  # src/db/vector_ddl.py; wired by storage steps 2 to 4; entry removed by that lane
-_.ROLE_SETTINGS  # src/db/vector_ddl.py; wired by storage steps 2 to 4; entry removed by that lane
 _.cascade_tables  # src/services/erasure/catalogue.py; wired by storage steps 2 to 4; entry removed by that lane
 _.vector_delete_statement  # src/services/erasure/catalogue.py; wired by storage steps 2 to 4; entry removed by that lane
 _.NOT_ERASED  # src/services/erasure/catalogue.py; wired by storage steps 2 to 4; entry removed by that lane

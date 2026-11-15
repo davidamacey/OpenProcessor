@@ -19,6 +19,7 @@ _VARS = (
     'OP_DB_OWNER_USER',
     'OP_DB_OWNER_PASSWORD_FILE',
     'OP_DB_SUPER_PASSWORD_FILE',
+    'OP_DB_VECTOR_PASSWORD_FILE',
     'OP_API_REPLICAS',
     'OP_DB_DIRECT_HOST',
     'OP_DB_SSLMODE',
@@ -68,6 +69,7 @@ def test_valid_values_and_password_files_load(
     monkeypatch.setenv('OP_DB_APP_PASSWORD_FILE', str(_secret(tmp_path, 'app', 'pw-app\n')))
     monkeypatch.setenv('OP_DB_OWNER_PASSWORD_FILE', str(_secret(tmp_path, 'own', 'pw-own')))
     monkeypatch.setenv('OP_DB_SUPER_PASSWORD_FILE', str(_secret(tmp_path, 'sup', 'pw-sup')))
+    monkeypatch.setenv('OP_DB_VECTOR_PASSWORD_FILE', str(_secret(tmp_path, 'vec', 'pw-vec')))
     settings = _load()
     assert (settings.host, settings.direct_host, settings.port) == (
         'pgbouncer',
@@ -78,6 +80,8 @@ def test_valid_values_and_password_files_load(
     assert settings.password('app') == 'pw-app'
     assert settings.password('owner') == 'pw-own'
     assert settings.password('super') == 'pw-sup'
+    assert settings.password('vector') == 'pw-vec'
+    assert settings.user('vector') == 'op_vector'
 
 
 @pytest.mark.parametrize(
@@ -113,6 +117,7 @@ def test_a_bad_value_refuses_naming_the_variable(
         ('app', 'OP_DB_APP_PASSWORD_FILE'),
         ('owner', 'OP_DB_OWNER_PASSWORD_FILE'),
         ('super', 'OP_DB_SUPER_PASSWORD_FILE'),
+        ('vector', 'OP_DB_VECTOR_PASSWORD_FILE'),
     ],
 )
 def test_a_missing_password_file_refuses_naming_the_variable(

@@ -5,7 +5,7 @@
 | Status | plan, revision 1 (2026-11-15): the independent review and the coordinator's decisions on it folded in; appendix A traces each finding. Companion of [15_storage_plan.md](15_storage_plan.md) section 12; its decisions are fixed here, not reopened |
 | Code base read | `lane/speed-plan` at `ca918ea2d` (integration code of `int/b4-stateless` plus plan 15); the storage inventory of 2026-11-13 (`artifacts_local/speed_1113/storage_inventory.md`, gitignored), re-checked in code where a design depends on it |
 | Conventions | [02a_postgres_schema.md](02a_postgres_schema.md) section 1 and [02d_research_seam_schema.md](02d_research_seam_schema.md) section 0.1 apply to every table here, except where section 1 below says why not |
-| Server | PostgreSQL 18 (`postgres:18.6-trixie`, [01_package_pins.md](01_package_pins.md)); pgvector 0.8.7, the newest release (not pinned in 01; the lane adds the pin, [pgvector README](https://github.com/pgvector/pgvector)) |
+| Server | PostgreSQL 18 with pgvector 0.8.7 (`pgvector/pgvector:0.8.7-pg18-trixie`, [01_package_pins.md](01_package_pins.md); [pgvector README](https://github.com/pgvector/pgvector)) |
 | Not here | the query map (15b), the lane specs (15c), what the models compute |
 | Data | wiped and re-ingested (owner, 2026-11-14): no migration of search-index documents |
 
@@ -1280,7 +1280,7 @@ section 0).
 
 | Revision | Lane (plan 15 section 10) | Creates or changes |
 |---|---|---|
-| `0010_storage_record` | step 1 | `CREATE EXTENSION IF NOT EXISTS vector` and `pg_trgm` (m5: the image is a custom build on `postgres:18.6-trixie` with pgvector 0.8.7 pinned; `pg_trgm` is a trusted contrib module, [pg_trgm](https://www.postgresql.org/docs/18/pgtrgm.html); a test runs both statements as `op_owner` on the real image, and if pgvector needs more, `db-migrate`'s bootstrap step creates it as `op_super`); schema `vec` with `CREATE` for `op_vector` only; every table of sections 2 and 8 with its keys, foreign-key indexes, policies and triggers (`claims_append_only`, `analysers_immutable`, the erasure guard `op_erasure_allows`); the `claim_kinds` rows; the `label_operations` changes; `dataset_imports.dataset_name`; the `embedding_spaces`, `cluster_memberships`, `near_dup_*`, `holdout_near_dup_moves`, `dataset_import_images` changes; grants to `op_app`. The role `op_vector` is created by `db-migrate`'s bootstrap with the other roles (02a 1.5), from its own secret file. Existing space rows are reset to `pending`, so the embedding-space job creates their tables (data is re-ingested). The indexes of section 2.6 come in the revision the physical-design pass writes |
+| `0010_storage_record` | step 1 | `CREATE EXTENSION IF NOT EXISTS vector` and `pg_trgm` (m5: the image is the pgvector project's `pgvector/pgvector:0.8.7-pg18-trixie`, pinned in 01 (decided in the database lane, round 3); `pg_trgm` is a trusted contrib module, [pg_trgm](https://www.postgresql.org/docs/18/pgtrgm.html); a test runs both statements as `op_owner` on the real image, and if pgvector needs more, `db-migrate`'s bootstrap step creates it as `op_super`); schema `vec` with `CREATE` for `op_vector` only; every table of sections 2 and 8 with its keys, foreign-key indexes, policies and triggers (`claims_append_only`, `analysers_immutable`, the erasure guard `op_erasure_allows`); the `claim_kinds` rows; the `label_operations` changes; `dataset_imports.dataset_name`; the `embedding_spaces`, `cluster_memberships`, `near_dup_*`, `holdout_near_dup_moves`, `dataset_import_images` changes; grants to `op_app`. The role `op_vector` is created by `db-migrate`'s bootstrap with the other roles (02a 1.5), from its own secret file. Existing space rows are reset to `pending`, so the embedding-space job creates their tables (data is re-ingested). The indexes of section 2.6 come in the revision the physical-design pass writes |
 | `0011_ingest_cutover` | step 2 | drops `image_contents` |
 | `0012_claims_cutover` | step 3 | drops `label_operation_members`, `near_dup_decisions` |
 | `0013_results_cutover` | step 4 | drops `search_projection_tasks` |
@@ -1400,3 +1400,13 @@ allow-list `tests/domain/world_allowed.py`.
 | Q12 text consensus | the fold takes the resolved reader consensus (`MachineText`) as input; the wiring lane moves `region_text.py` consensus into `src/domain/` | 4.3 layer 4 |
 | Q13 class profile | `profile` is `{detector?, detector_version?}` | 3.3 |
 | Q14 phase-5 kinds | not in the catalog until the gallery lane adds them | 3.2 |
+
+### Database lane decisions
+
+Decisions of the database fix lane on 2026-11-15, after the first server run of `0010_storage_record`
+failed at `CREATE SCHEMA vec` (`permission denied for database`).
+
+| Decision | Rule now | Answered in |
+|---|---|---|
+| Placement of the privileged steps | the owner role has no `CREATE` on the database, so the superuser bootstrap (`src/db/roles.py`: `ensure_roles`, `prepare_database`) creates the role `op_vector` (secret `OP_DB_VECTOR_PASSWORD_FILE`), installs `pg_trgm` and, when the image offers it, `vector`, and creates the schema `vec` owned by `op_owner`; `apply_grants` (as the owner) gives `op_vector` `USAGE, CREATE` on `vec` and `REFERENCES (id)` on `projects`; the migration creates none of them, checks them, and fails naming the bootstrap step | 6.1; 12 `0010_storage_record` step 1; 02a 1.5 |
+| `vec` outlives a downgrade | the schema belongs to the bootstrap, so `downgrade()` no longer drops it | 6.1 |
