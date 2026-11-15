@@ -10,6 +10,7 @@ pub mod cores;
 pub mod front;
 pub mod geometry;
 pub mod health;
+pub mod jpeg_header;
 pub mod metrics;
 pub mod pipeline;
 pub mod proto;

@@ -257,6 +257,7 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
+ "memchr",
  "procfs",
  "prometheus-client",
  "prost",
