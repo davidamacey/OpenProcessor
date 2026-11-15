@@ -914,3 +914,15 @@ One row per finding of the review of 15b and 15c (2026-11-15) and the place that
 | m10 mixed-direction sorts | 15b sections 4 and 7; S1b-i (`keyset_clause`) |
 | m11 capped-total classification | 15b section 5 rules 1 and 9; S1b-i tests |
 | Jobs (the review's question 6) | 15b section 10; S3 and S7 tests |
+
+## Coordinator answers after the review fix pass (2026-11-15)
+
+| # | Question | Answer |
+|---|---|---|
+| 1 | The count of the `all` review tab on a cluster card | Computed per visible card, measured in round 3 (M10). If it misses the dashboard bar it leaves the cards and stays on the queue page. |
+| 2 | Crop area and rank live on `items` | Confirmed: written only when geometry or membership changes; a label never touches them. |
+| 3 | "Recently updated" moves only on facts a person sees | Decided: a label, a class change, a geometry or box change, a region verdict. Background score writes do not move it. Told to the owner as a behaviour note. |
+| 4 | The 0.6.0 upgrade code breaks in slice S3, not S9 | The owner's confirmation of its deletion is an entry condition of wave C. Without it, S3 keeps the upgrade code compiling by cutting only its imports of the moved modules, and S9 decides. |
+| 5 | 15a is over 1,000 lines | Its field map and review appendices move to a companion file in the docs commit of slice S1a-i; no content changes. |
+| 6 | Open vocabulary in S8c | Confirmed. |
+
