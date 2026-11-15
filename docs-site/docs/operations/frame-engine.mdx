@@ -14,6 +14,25 @@ Triton**. It starts with the core stack; there is nothing to enable beyond `OP_I
 
 Speed numbers are on [Measured performance](../reference/performance.mdx).
 
+## Two encoders, two vectors
+
+A photo gets two kinds of vector, from two Triton models that share PE-Core's weights and its text
+tower and nothing else:
+
+| Vector | Model | Input | What goes in |
+|---|---|---|---|
+| The photo (frame) | `pe_image_encoder` | 336 x 336 | the photo scaled so its shorter side is 336, centre square |
+| Each object (item, box) | `pe_crop_encoder` | 224 x 224 | the **whole** box, scaled to fit the square with its aspect kept, on a grey (128) square |
+
+A wide box keeps both its ends: the old rule cut the centre square and lost about half of it. The
+two vectors are different spaces and are never compared with each other. Both are in the plan the
+API sends (`embed` and `crop_embed`), so the crop model, its size and its pad are a setting, not
+code: `PE_CROP_MODEL` and `PE_CROP_SIZE` ([Advanced configuration](../configuration/advanced.mdx));
+`PE_CROP_SIZE` must be the size the crop engine was built at (`make pe-export-crop`,
+`make pe-build-crop-trt`, [Model export](../getting-started/model-export.mdx)). A new project's item
+and box spaces are the crop encoder's (`pe_core_l14_crop224`); text search over crops uses the same
+`pe_text_encoder` for both.
+
 ## What it needs
 
 - **GPU memory** on the Triton card: about 6 GB at the sizes the `full` profile uses, 3.3 GB idle

@@ -486,8 +486,10 @@ closed: upload the model again.
 
 Nothing here ships a pretrained region detector, VLM or trainer weights.
 
-- **PE-Core encoders.** The image tower `pe_image_encoder` is required; the text
-  tower `pe_text_encoder` is needed for semantic search. Build both with
+- **PE-Core encoders.** The image towers `pe_image_encoder` (whole frames, 336 input) and
+  `pe_crop_encoder` (object crops, the same weights at a 224 input, each box letterboxed whole;
+  its vectors are a space of their own) are required; the text tower `pe_text_encoder` is needed
+  for semantic search and serves both. Build all three with
   `make export-pe`. If it fails with `ModuleNotFoundError: No module named 'core'`,
   the `api` image predates the source tree: rebuild it first.
 - **An item detector for ingest**, named by `OP_INGEST_PRIMARY_DETECTOR_MODEL` or by a

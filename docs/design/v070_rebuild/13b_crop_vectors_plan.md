@@ -127,3 +127,21 @@ What the labelling loop needs from a crop vector is to tell objects of ONE detec
 | C1 (engine and API) | the crop encoder as its own named model with input size and letterbox preprocessing; the 224 build of today's encoder through the documented export path; the centre-crop rule deleted; the crop space registered as new | COCO crop R@1 and NMI not below the 336 letterbox numbers by more than 1.5 points; Cars and the placed-object sets at 32 to 512 px likewise; text to crop mAP reported; GPU ms per crop from the model server; rate at 32 in flight on COCO and the 20 MP set with the named bound |
 | C2 (measurement) | point 3 | its bar |
 
+
+## 7. Lane C1 result (branch `lane/crop-encoder`)
+
+Built as section 6 point 2 says: the crop encoder is the plan's own object (`crop_embed`: model, size, batch, recipe `letterbox`, fill 128), today's weights at a 224 input
+(`pe_crop_encoder`, `PE_CROP_MODEL`, `PE_CROP_SIZE`), the centre-crop rule is gone from every path, the crop space is the new `pe_core_l14_crop224` (a new project's item and box
+spaces), the frame vector is unchanged (cosine to today's 0.999995 minimum on 200 COCO and 100 set P photos). Measured through the engine against the 336 letterbox:
+
+| Gate | Result |
+|---|---|
+| COCO crop R@1 / NMI | 0.704 / 0.589 against 0.712 / 0.596 (-0.8 / -0.7 points): pass |
+| Cars R@1 / NMI | 0.910 / 0.922 against 0.913 / 0.921 (-0.3 / +0.1): pass |
+| Text to crop mAP | COCO 0.793 against 0.806, Cars 0.896 against 0.906 (same PE-L text tower): reported |
+| Placed objects 32 to 512 px, NMI | Cars (two sets) within 1.2 points at every size; COCO misses at 32 px (-1.53) and 512 px (-1.88) by less than the 2-point k-means seed spread; with an antialiased resample of the crop (not built) the 512 px gap is -0.94 on COCO and -0.33 on Cars |
+| GPU per crop (model server counters) | 2.1 to 2.3 ms at 224 against 4.5 to 4.8 at 336 (full batches); single stream 1.9 against 4.2 ms at batch 8 and up, but 7.5 against 6.1 ms at batch 1 |
+| Rate, 32 in flight, engine alone | COCO 40 photos/s against 25 with the same plan at 336 (GPU bound, 89 to 92 % busy); the 20 MP set 47 to 54 against 42 (the engine process's interpreter lock held in 0.78 of the samples, GPU 78 to 84 %) |
+
+Open: the antialiased crop resample (one argument in the engine kernel call and `cv2.INTER_AREA` on the host); the installer group that builds `pe_crop_encoder`; a start-up check that a project's
+primary item and box spaces name the configured crop model.
