@@ -45,7 +45,7 @@ from src.config.curation_accessors import images_index, items_index
 from src.services.projects.script_binding import abind_script_project
 from src.services.projects.guard import make_script_opensearch
 from src.services.curation.ingest_writer import IngestWriter, RepairTarget
-from src.services.curation.image_completeness import missing_items, set_item_ids
+from src.services.curation.image_completeness import missing_items
 from src.services.curation.item_delete import delete_items
 
 req = json.loads(sys.stdin.read())
@@ -76,6 +76,8 @@ async def main():
         out['first'] = {'failure': first.failure, 'images_indexed': first.images_indexed}
         out['missing_after_failure'] = await missing_items(
             client, items_index(), {image_id: req['crops']})
+        await writer.close()  # the failure mark is written after the answer: let it land first
+        writer = IngestWriter(client)
         repaired = await writer.write(None, crop_docs, repair=RepairTarget(image_id), **kw)
         out['repaired'] = {'failure': repaired.failure, 'repaired': repaired.repaired,
                            'created': repaired.created}
