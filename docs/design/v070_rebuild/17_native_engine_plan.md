@@ -82,7 +82,7 @@ not engine work; it belongs to plans 13 and 13b. The native engine is what lets 
 | C, set P | 14.0 to 15.8 ms, 63 to 71/s | Python 47 to 54 (lock-bound) |
 
 The levers, each a measurement with its own bar and none of them engine work: a cheaper crop
-encoder (13b lane C2, running); both cards (encoders data-parallel, and where the decode's device
+encoder (measured and closed: no smaller encoder replaces today's for crops, 13b section 8); both cards (encoders data-parallel, and where the decode's device
 work runs: N2's two-card row); model build and batching settings (plan 13 P2). Cores one card needs
 at its bound: 20 MP frame plan about 125 photos/s x 85 to 100 ms = 11 to 13 cores (pipeline: 12 to
 14 busy); COCO 1.3 to 1.5. Two cards at 20 MP need 24 to 28, more than this host's 24 physical
@@ -690,14 +690,14 @@ did 3,398 photos/s on small photos against 650 in one, and 1.2 to 1.4x at 12 to 
 | Contract drift while N1 runs | the drift hook fails on the plan cases | the lane that changes the vocabulary regenerates the cases and the Rust parser in the same change |
 | The stand-ins bound the capacity row | Z0 under 2x the native row | more stand-in instances; the row is not judged until Z0 clears it |
 
-## 8. Questions for the coordinator (open)
+## 8. Questions for the coordinator (answered 2026-11-15)
 
-| # | Question | Recommendation |
-|---|---|---|
-| Q3 | Outside contributions to `native/gpu_frame` and a later relicence | AGPL now (decided); accept outside contributions there only under a contributor agreement that allows a relicence, or record that a move needs their consent |
-| Q6 | Crop JPEG equality where a build or setting cannot match | decided: decoded pixels identical and sizes within 0.5%; bytes asserted where version and settings match (3.1.2 is planned to match) |
-| Q7 | An over-limit request answers `RESOURCE_EXHAUSTED`, which the API retries until its 120 s deadline (today's behaviour, kept by decision) | keep for the switch; a separate API change could refuse it at once |
-| Q8 | The capacity bar G2 is applied on both plans F and C | confirm |
+| # | Question | Recommendation | Answer |
+|---|---|---|---|
+| Q3 | Outside contributions to `native/gpu_frame` and a later relicence | AGPL now (decided); accept outside contributions there only under a contributor agreement that allows a relicence, or record that a move needs their consent | Answer: AGPL now. Licence questions are deferred by the owner; until then the crate takes no outside contribution without the owner's yes |
+| Q6 | Crop JPEG equality where a build or setting cannot match | decided: decoded pixels identical and sizes within 0.5%; bytes asserted where version and settings match (3.1.2 is planned to match) | As decided |
+| Q7 | An over-limit request answers `RESOURCE_EXHAUSTED`, which the API retries until its 120 s deadline (today's behaviour, kept by decision) | keep for the switch; a separate API change could refuse it at once | Keep the status in N0 (equal answers). N1a adds a test that the API's upload limit is below the engine's message limit, so the API refuses an oversize photo before it is sent and the retry cannot happen |
+| Q8 | The capacity bar G2 is applied on both plans F and C | confirm | Confirmed |
 
 ## 9. Results
 
