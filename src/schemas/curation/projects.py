@@ -45,6 +45,26 @@ class ProjectCounts(BaseModel):
     items_embedded: int | None = None
 
 
+class EncoderMismatchSpace(BaseModel):
+    target: Literal['item', 'box']
+    space_key: str
+    registered_model: str | None = Field(
+        description="The Triton image model the space's vectors came from."
+    )
+    encoder_model: str = Field(description="The model this deployment's encoder makes them with.")
+    message: str
+
+
+class EncoderMismatch(BaseModel):
+    """Served on a project whose item or box vectors are of another model than this deployment's
+    encoders (a project made before the crop encoder): its writers refuse (ingest, import, reprocess,
+    drawn boxes) and the detection worker writes no box vectors, so its boxes are missing from
+    clusters. Nothing is migrated: the remedy in ``message`` is a new project."""
+
+    message: str
+    spaces: list[EncoderMismatchSpace]
+
+
 class ProjectSummary(BaseModel):
     slug: str
     display_name: str
@@ -68,6 +88,9 @@ class ProjectSummary(BaseModel):
     # this record's own state dir so GET /projects needs no per-row
     # GET .../pause call to render a "paused" chip.
     paused: bool = False
+    # null when the project's item and box spaces are the deployment's encoders'; derived at read
+    # time from the registered spaces, never stored.
+    encoder_mismatch: EncoderMismatch | None = None
 
 
 class ProjectLimits(BaseModel):

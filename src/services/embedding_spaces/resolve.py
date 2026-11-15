@@ -119,6 +119,14 @@ async def live_spaces() -> tuple[ResolvedSpace, ...]:
     return (await _entry(current_project().record.slug)).spaces
 
 
+async def primary_spaces(slug: str) -> tuple[ResolvedSpace, ...]:
+    """The primary, ready space of each target of the project ``slug`` (any project, bound or
+    not: the project record reads it for the list), through the same cache as the readers."""
+    entry = await _entry(slug)
+    primary = dict(entry.primary_keys)
+    return tuple(s for s in entry.spaces if primary.get(s.target) == s.space_key)
+
+
 async def embedding_space(target: Target, key: str | None = None) -> ResolvedSpace:
     """The bound project's primary space for ``target``, or its live space named ``key``."""
     slug = current_project().record.slug

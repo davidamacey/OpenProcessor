@@ -25,7 +25,12 @@ from src.core.logging import get_logger
 from src.routers.curation._api_error import api_error
 from src.routers.curation._cursor_params import CursorQ, cursor_refused
 from src.routers.curation._project_deps import bind_path_project
-from src.routers.curation._project_views import capacity_wire, resources_wire, summarize
+from src.routers.curation._project_views import (
+    capacity_wire,
+    encoder_mismatch,
+    resources_wire,
+    summarize,
+)
 from src.schemas.curation.config_common import ApiErrorResponse
 from src.schemas.curation.projects import (
     ArchiveRequest,
@@ -188,7 +193,10 @@ async def list_projects(
         logger.warning('project_counts_unavailable', error=str(exc))
     if order.id == projects_listing.ITEMS_SORT:
         records = projects_listing.rank_by_items(records, counts, limit)
-    summaries = [summarize(r, counts.get(r.slug, UNKNOWN_COUNTS)) for r in records]
+    summaries = [
+        summarize(r, counts.get(r.slug, UNKNOWN_COUNTS), await encoder_mismatch(r.slug))
+        for r in records
+    ]
 
     capacity = None
     from src.services.projects.capacity import capacity_status
@@ -233,7 +241,7 @@ async def get_project(
         counts = (await _fetch_counts(client, {project: record})).get(project, counts)
     except OpenSearchException as exc:
         logger.warning('project_counts_unavailable', project=project, error=str(exc))
-    summary = summarize(record, counts)
+    summary = summarize(record, counts, await encoder_mismatch(project))
     return ProjectRecordResponse(
         **summary.model_dump(),
         resources=resources_wire(record.resources),
@@ -249,7 +257,7 @@ async def _summary_response(
     client = await make_curation_opensearch()
     counts = (await _fetch_counts(client, {record.slug: record})).get(record.slug, ProjectCounts())
     return ProjectLifecycleResponse(
-        project=summarize(record, counts),
+        project=summarize(record, counts, await encoder_mismatch(record.slug)),
         warnings=warnings or [],
         keymap_clone_conflicts=keymap_clone_conflicts or [],
     )
@@ -295,7 +303,7 @@ async def create_project(
     response.status_code = 202 if started.created else 200
     record = record_from_row(row)
     return ProjectLifecycleResponse(
-        project=summarize(record, UNKNOWN_COUNTS),
+        project=summarize(record, UNKNOWN_COUNTS, await encoder_mismatch(record.slug)),
         warnings=warnings,
         job_id=str(started.job.id),
     )
