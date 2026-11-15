@@ -25,6 +25,7 @@ tokio = { version = "=1.54.1", default-features = false }
 tonic = { version = "=0.14.9", default-features = false }
 tonic-prost = "=0.14.9"
 tonic-prost-build = "=0.14.9"
+turbojpeg = { version = "=1.5.1", default-features = false }
 
 # Lint levels for every member (`[lints] workspace = true`); the clippy names are in
 # https://rust-lang.github.io/rust-clippy/stable/index.html. `unwrap` stays allowed inside

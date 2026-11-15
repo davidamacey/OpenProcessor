@@ -90,6 +90,29 @@ def test_a_port_that_is_taken_refuses_the_start(binary: Path) -> None:
 
 
 @async_test
+async def test_the_health_subcommand_follows_model_ready(start: StartEngine, binary: Path) -> None:
+    """The container's health check: exit 0 while the engine answers ModelReady, 1 when it does
+    not, 1 when no engine listens."""
+    engine = await start('rust')
+    assert isinstance(engine, RustEngine)
+    port = engine.target.rsplit(':', 1)[1]
+    env = {'OP_FRAME_ENGINE_PORT': port}
+    done = await asyncio.to_thread(run_once, binary, ['health'], env)
+    assert done.returncode == 0, done.stdout + done.stderr
+    await engine.set_ready(False)
+    await engine.wait_model_ready(False)
+    done = await asyncio.to_thread(run_once, binary, ['health'], env)
+    assert done.returncode == 1
+    assert 'not ready' in done.stdout + done.stderr
+    nobody = await asyncio.to_thread(
+        run_once, binary, ['health', '--timeout-seconds', '0.5'],
+        {'OP_FRAME_ENGINE_PORT': str(free_ports(1)[0])},
+    )  # fmt: skip
+    assert nobody.returncode == 1
+    assert 'no engine' in nobody.stdout + nobody.stderr
+
+
+@async_test
 async def test_sigterm_stops_an_idle_engine_with_exit_0_at_once(start: StartEngine) -> None:
     engine = await start('rust')
     assert isinstance(engine, RustEngine)

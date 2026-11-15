@@ -15,6 +15,7 @@ path = "src/main.rs"
 [dependencies]
 bytes = { workspace = true }
 clap = { version = "=4.6.7", default-features = false, features = ["derive", "error-context", "help", "std", "usage"] }
+gpu_frame = { path = "../gpu_frame" }
 http-body-util = "=0.1.5"
 hyper = { version = "=1.12.0", features = ["http1", "server"] }
 hyper-util = { version = "=0.1.21", features = ["tokio"] }
@@ -26,11 +27,14 @@ serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.154", features = ["arbitrary_precision", "preserve_order"] }
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 tokio-stream = { version = "=0.1.19", features = ["net"] }
-tonic = { workspace = true, features = ["codegen", "router", "server"] }
+tonic = { workspace = true, features = ["channel", "codegen", "router", "server"] }
 tonic-prost = { workspace = true }
 tower = { version = "=0.5.3", default-features = false, features = ["util"] }
 tracing = "=0.1.44"
 tracing-subscriber = { version = "=0.3.23", default-features = false, features = ["fmt", "std"] }
+# libjpeg-turbo built from the crate's source unless TURBOJPEG_SOURCE=explicit points at the
+# image's 3.1.2 build (plan 17 section 3); SIMD required, as the plan asks.
+turbojpeg = { workspace = true, features = ["cmake", "require-simd"] }
 
 [dev-dependencies]
 base64 = "=0.22.1"

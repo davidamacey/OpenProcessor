@@ -7,10 +7,10 @@
 use std::collections::BTreeMap;
 use std::future::Future;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use bytes::Bytes;
+use gpu_frame::CancelToken;
 use tokio::sync::Notify;
 
 use crate::admission::{Overload, RequestClock};
@@ -86,12 +86,13 @@ pub struct PhotoAnswer {
 
 /// The state of one request that every stage reads: its deadline, the stage it is in, and
 /// whether its caller is gone (the stream ended or the deadline passed). Each hand-off checks
-/// [`RequestState::cancelled`] and releases what the photo holds instead of starting work.
+/// the cancel token (`gpu_frame`'s pools check it before a job starts) and releases what the
+/// photo holds instead of starting work.
 #[derive(Debug)]
 pub struct RequestState {
     pub clock: RequestClock,
     stage: Mutex<&'static str>,
-    cancelled: AtomicBool,
+    cancelled: CancelToken,
 }
 
 impl RequestState {
@@ -99,7 +100,7 @@ impl RequestState {
         Self {
             clock,
             stage: Mutex::new("queue"),
-            cancelled: AtomicBool::new(false),
+            cancelled: CancelToken::new(),
         }
     }
 
@@ -115,11 +116,16 @@ impl RequestState {
     }
 
     pub fn cancel(&self) {
-        self.cancelled.store(true, Ordering::Release);
+        self.cancelled.cancel();
     }
 
     pub fn cancelled(&self) -> bool {
-        self.cancelled.load(Ordering::Acquire)
+        self.cancelled.is_cancelled()
+    }
+
+    /// The token every pool job of this request is submitted with.
+    pub fn cancel_token(&self) -> &CancelToken {
+        &self.cancelled
     }
 
     pub fn arrived(&self) -> Instant {
@@ -160,6 +166,15 @@ pub trait Pipeline: Send + Sync + 'static {
         &self,
         photo: Photo,
     ) -> impl Future<Output = Result<PhotoAnswer, PipelineError>> + Send;
+
+    /// After the drain, at a clean stop: give back what outlives the process's photos (the GPU
+    /// pipeline unregisters its region from the model server, then frees it).
+    fn close(self) -> impl Future<Output = ()> + Send
+    where
+        Self: Sized,
+    {
+        async {}
+    }
 }
 
 #[cfg(test)]

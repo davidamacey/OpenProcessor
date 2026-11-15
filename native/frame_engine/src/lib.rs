@@ -6,15 +6,21 @@
 //! and golden tests can reach them.
 
 pub mod admission;
+pub mod branches;
 pub mod cores;
+pub mod engine;
+pub mod fault;
 pub mod front;
 pub mod geometry;
 pub mod health;
 pub mod jpeg_header;
+pub mod kernels;
 pub mod metrics;
+pub mod photo;
 pub mod pipeline;
 pub mod proto;
 pub mod pyfmt;
+pub mod self_check;
 pub mod settings;
 pub mod stub;
 pub mod wire;
