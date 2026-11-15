@@ -95,7 +95,6 @@ class IngestItemsMixin:
         *,
         seed_region: bool = True,
         repair: RepairTarget | None = None,
-        stale_ids: list[str] | None = None,
     ) -> dict[str, int]:
         """Write 1 images doc (create) + N items docs (OCC upsert) through the process's
         coalescing writer (:mod:`~src.services.curation.ingest_writer`), which batches them
@@ -104,13 +103,13 @@ class IngestItemsMixin:
         ``incomplete`` is 1 when it exists and misses items a live writer may still be
         writing: nothing was written either.
 
-        ``repair`` completes an image already stored incomplete: its items are written and its
-        list set (``image_doc`` is then None); ``repaired`` is 1 when this call completed one,
-        also when a 409 on the create found an incomplete doc nobody is writing.
+        ``repair`` completes an image already stored incomplete (``image_doc`` is then None): the
+        items no existing item stands for are created, none is rewritten; ``repaired`` is 1 when
+        this call completed one, also when a 409 on the create found an incomplete doc nobody is
+        writing.
 
         ``created_ids`` (optional out-list) receives the crop_id of every items doc this call
-        newly created; ``stale_ids`` the items a repair's old list named that the new one no
-        longer does. A unit with any document refused, or whose flush failed, raises
+        newly created. A unit with any document refused, or whose flush failed, raises
         :class:`~src.services.curation.ingest_writer.IngestWriteError`: a photo is reported
         stored only when all of it is.
         """
@@ -131,8 +130,6 @@ class IngestItemsMixin:
             raise IngestWriteError(reason, release_claim=unit.image_absent)
         if created_ids is not None:
             created_ids.extend(unit.created_ids)
-        if stale_ids is not None:
-            stale_ids.extend(unit.stale_ids)
         queued = 0
         if seeding:
             status_field = get_region_fields().status

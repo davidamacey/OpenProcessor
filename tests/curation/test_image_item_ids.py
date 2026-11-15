@@ -17,7 +17,7 @@ from opensearchpy.exceptions import OpenSearchException
 from curation.ingest_fakes import _jpeg_bytes, _make_service
 from curation.query_fakes import QueryFakeOpenSearch
 from src.config.curation_accessors import get_curation_config
-from src.domain.image_completeness import listed_item_ids, repairable
+from src.domain.image_completeness import listed_item_ids, repair_in_progress, repairable
 from src.services.curation.image_completeness import forget_items, missing_items
 from src.services.curation.item_delete import delete_items
 from src.services.near_duplicates.content_key import content_image_id, content_imohash
@@ -211,3 +211,17 @@ async def test_a_batch_answers_each_photo_by_its_stored_image() -> None:
     assert os_fake.images[ids['repair']]['item_ids'] == sorted(
         i for i in os_fake.items if os_fake.items[i]['image_id'] == ids['repair']
     )
+
+
+def test_a_repair_in_progress_holds_the_image_until_its_lease_is_as_old_as_the_repair_age() -> None:
+    now = datetime(2026, 11, 14, 12, 0, tzinfo=UTC)
+    old = (now - timedelta(seconds=5000)).isoformat()
+    leased = {'indexed_at': old, 'ingest_incomplete': True}
+    fresh = (now - timedelta(seconds=10)).isoformat()
+    assert repairable(leased, now=now, repair_after_s=100)
+    assert not repairable({**leased, 'repair_started_at': fresh}, now=now, repair_after_s=100)
+    assert repair_in_progress({'repair_started_at': fresh}, now=now, repair_after_s=100)
+    # a lease that ran out is a repair that died; a returned lease (null) holds nothing
+    assert repairable({**leased, 'repair_started_at': old}, now=now, repair_after_s=100)
+    assert not repair_in_progress({'repair_started_at': None}, now=now, repair_after_s=100)
+    assert not repair_in_progress({}, now=now, repair_after_s=100)

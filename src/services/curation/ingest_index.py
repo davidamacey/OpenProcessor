@@ -19,12 +19,14 @@ from typing import TYPE_CHECKING, Any
 
 import cv2
 import numpy as np
+from opensearchpy.exceptions import OpenSearchException
 
 from src.clients.curation_opensearch.capture_fields import capture_image_block, capture_item_fields
 from src.core.logging import get_logger, get_request_id
 from src.domain.embedding_state import EMBEDDED, FAILED
 from src.domain.image_geometry import crop_rect
 from src.domain.location_policy import apply_location_policy
+from src.services.curation.image_completeness import holders_completeness
 from src.services.curation.ingest_gpu_decode import GpuDecodeFrame
 from src.services.curation.ingest_models import (
     ERROR_KIND_BLUR,
@@ -33,8 +35,7 @@ from src.services.curation.ingest_models import (
     IngestResult,
 )
 from src.services.curation.ingest_policy import select_for_embedding
-from src.services.curation.ingest_writer import IngestWriteError, RepairTarget
-from src.services.curation.item_delete import delete_items
+from src.services.curation.ingest_writer import REPAIR_AFTER_S, IngestWriteError, RepairTarget
 from src.services.curation.item_doc import (
     DetectedItem,
     build_image_doc,
@@ -42,7 +43,6 @@ from src.services.curation.item_doc import (
     region_seed_status,
 )
 from src.services.curation.ops_metrics import count_whole_event
-from src.services.curation.reprocess_locks import item_locked
 from src.services.curation.source_image_cache import project_crop_cache_dir, write_crop_cache
 from src.services.detection.crop_quality import blur_ratio, crop_lap_var, image_lap_var
 from src.services.detection.geometry import bbox_norm as _bbox_norm_fn, crop_id as _crop_id
@@ -282,14 +282,38 @@ async def _whole_frame_vector(service: CurationIngestService, ctx: ImageContext)
         return None
 
 
-def _held_elsewhere(ctx: ImageContext, holder: str) -> IngestResult:
-    """Another copy stored this content first: nothing of this one is written."""
-    return IngestResult(
-        status='duplicate',
-        image_id=holder,
-        image_path=ctx.image_path,
-        source_identifier=ctx.source_identifier,
-        imohash=ctx.imohash,
+async def _held_elsewhere(
+    service: CurationIngestService, ctx: ImageContext, holder: str
+) -> IndexOutcome:
+    """Another copy claimed this content first: nothing of this one is written. The answer is
+    ``duplicate`` only when that image is whole (the rule of the content lookup, the same
+    function); a holder that has claimed and not written yet, or whose items are not all there,
+    is ``incomplete_write``: send the file again later."""
+    try:
+        state = (
+            await holders_completeness(
+                service.opensearch,
+                service.config.images_index,
+                service.config.items_index,
+                [holder],
+                repair_after_s=REPAIR_AFTER_S,
+            )
+        )[holder]
+    except OpenSearchException as exc:
+        logger.error('ingest_holder_check_failed', path=ctx.image_path, error=str(exc))
+        return _failed_write(ctx, exc, ERROR_KIND_BULK_INDEX)
+    if state != 'complete':
+        count_whole_event('held_back')
+        msg = f'image {holder} holds these bytes and is not stored whole yet; retry later'
+        return _failed_write(ctx, ValueError(msg), ERROR_KIND_INCOMPLETE_WRITE)
+    return IndexOutcome(
+        result=IngestResult(
+            status='duplicate',
+            image_id=holder,
+            image_path=ctx.image_path,
+            source_identifier=ctx.source_identifier,
+            imohash=ctx.imohash,
+        )
     )
 
 
@@ -472,26 +496,6 @@ def build_documents(
     return BuiltDocuments(image_doc, crop_docs)
 
 
-async def _delete_stale(service: CurationIngestService, stale: list[str]) -> None:
-    """Delete the items a repair's old list named and the new one does not (machine items an
-    earlier, partial attempt wrote), except any a person or an import validated or the test
-    holdout holds (:func:`~src.services.curation.reprocess_locks.item_locked`). Best effort:
-    a leftover is an unlisted extra item, which keeps the list true."""
-
-    async def unlocked(_crop_id: str, doc: dict[str, Any]) -> bool:
-        return not item_locked(doc)
-
-    result = await delete_items(
-        service.opensearch,
-        stale,
-        items_index=service.config.items_index,
-        crop_cache_dir=service.config.crop_cache_dir,
-        deletable=unlocked,
-    )
-    if result['errors']:
-        logger.warning('ingest_repair_stale_delete_failed', errors=result['errors'][:3])
-
-
 def _failed_write(ctx: ImageContext, exc: Exception, kind: str) -> IndexOutcome:
     return IndexOutcome(
         result=IngestResult(
@@ -523,9 +527,8 @@ async def write_prepared(
     lookup)."""
     ctx = p.ctx
     if claim.holder is not None:
-        return IndexOutcome(result=_held_elsewhere(ctx, claim.holder))
+        return await _held_elsewhere(service, ctx, claim.holder)
     created_ids: list[str] = []
-    stale: list[str] = []
     try:
         if claim.error is not None:
             raise claim.error
@@ -535,7 +538,6 @@ async def write_prepared(
             created_ids,
             seed_region=p.seed_region,
             repair=ctx.repair,
-            stale_ids=stale,
         )
     except IngestWriteError as exc:
         logger.error('ingest_bulk_index_failed', path=ctx.image_path, error=str(exc))
@@ -565,8 +567,6 @@ async def write_prepared(
         )
     if bulk_result.get('repaired'):
         count_whole_event('repaired')
-        if stale:
-            await _delete_stale(service, stale)
     await _cache_crops(service, p.cids, p.crops)
     items = p.items
     return IndexOutcome(

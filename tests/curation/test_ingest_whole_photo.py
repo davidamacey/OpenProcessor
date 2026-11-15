@@ -22,7 +22,7 @@ from curation.ingest_fakes import _jpeg_bytes, _make_service
 from curation.occ_fakes import FakeIngestOpenSearch
 from src.config import get_curation_config
 from src.services.curation import ingest_writer, ops_metrics
-from src.services.curation.ingest_writer import REPAIR_AFTER_S
+from src.services.curation.ingest_writer import REPAIR_AFTER_S, get_ingest_writer
 from src.services.near_duplicates import content_key
 from src.services.near_duplicates.content_key import content_image_id, content_imohash
 
@@ -74,6 +74,12 @@ def _refuse_next_item(os_fake: FakeIngestOpenSearch) -> None:
     os_fake.bulk = bulk
 
 
+async def _writes_done(svc: Any) -> None:
+    """The notes a writer leaves on a failed photo are written after its answers go out: wait for
+    the flush that is still writing them."""
+    await get_ingest_writer(svc.opensearch).close()
+
+
 def _old(os_fake: FakeIngestOpenSearch, image_id: str) -> None:
     """The images doc was written longer ago than a live writer can still be writing it."""
     when = datetime.now(UTC) - timedelta(seconds=REPAIR_AFTER_S + 60)
@@ -101,6 +107,7 @@ async def test_the_retry_of_a_failed_items_step_stores_the_photo_whole() -> None
     data = _jpeg_bytes(seed=21)
     _fail_next_items_bulk(os_fake)
     await svc.ingest_one(data, PATH)
+    await _writes_done(svc)
 
     second = await svc.ingest_one(data, PATH)
 
@@ -119,6 +126,7 @@ async def test_a_photo_whose_item_was_refused_answers_failed_and_a_retry_stores_
     _refuse_next_item(os_fake)
 
     first = await svc.ingest_one(data, PATH)
+    await _writes_done(svc)
 
     assert (first.status, first.error_kind) == ('failed', 'bulk_index')
     assert len(os_fake.items) == 1, 'the item the store accepted stays'
@@ -193,6 +201,7 @@ async def test_a_photo_the_writer_marked_is_repaired_at_once_and_the_mark_goes()
     data = _jpeg_bytes(seed=5)
     _fail_next_items_bulk(os_fake)
     await svc.ingest_one(data, PATH)
+    await _writes_done(svc)
     image_id = _image_id(data)
     assert os_fake.images[image_id]['ingest_incomplete'] is True
 
@@ -217,6 +226,7 @@ async def test_a_mark_that_cannot_be_written_changes_no_answer() -> None:
     failed_before = ops_metrics.OP_INGEST_WHOLE_TOTAL.labels(event='mark_failed')._value.get()
 
     first = await svc.ingest_one(data, PATH)
+    await _writes_done(svc)
 
     assert (first.status, first.error_kind) == ('failed', 'bulk_index')
     assert 'ingest_incomplete' not in os_fake.images[_image_id(data)]
@@ -275,29 +285,32 @@ async def test_an_image_listing_no_items_is_complete() -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_repair_deletes_a_stale_machine_item_and_keeps_a_human_one() -> None:
+async def test_a_repair_deletes_nothing_and_lists_what_exists_and_what_it_creates() -> None:
+    """A repair only creates: the item of the first attempt the detector does not see again stays
+    (and a person's item with it), the lost objects are created, the list names all that exist."""
     svc, os_fake, triton = _make_service(detections=TWO_BOXES[:1])
     data = _jpeg_bytes(seed=10)
     await svc.ingest_one(data, PATH)
     image_id = _image_id(data)
-    (stale_machine,) = os_fake.items
+    (first_attempt,) = os_fake.items
     os_fake.items['human-1'] = {
         'crop_id': 'human-1',
         'image_id': image_id,
+        'bbox_norm': [0.1, 0.6, 0.2, 0.7],
         'class_source': 'human',
         'label_source': 'human',
     }
-    os_fake.images[image_id]['item_ids'] = sorted([stale_machine, 'human-1', 'never-written'])
+    os_fake.images[image_id]['item_ids'] = sorted([first_attempt, 'human-1', 'never-written'])
     _old(os_fake, image_id)
     triton.detections = TWO_BOXES[1:]  # another detector output: the old box is no longer found
 
     result = await svc.ingest_one(data, PATH)
 
     assert result.status == 'success'
-    assert stale_machine not in os_fake.items
-    assert 'human-1' in os_fake.items, 'a human-validated item is never deleted'
-    (written,) = [i for i in os_fake.items if i not in ('human-1',)]
-    assert os_fake.images[image_id]['item_ids'] == [written]
+    assert {first_attempt, 'human-1'} <= set(os_fake.items), 'nothing is deleted'
+    (created,) = [i for i in os_fake.items if i not in (first_attempt, 'human-1')]
+    assert os_fake.images[image_id]['item_ids'] == sorted([first_attempt, 'human-1', created])
+    assert 'never-written' not in os_fake.images[image_id]['item_ids']
 
 
 @pytest.mark.asyncio
@@ -309,13 +322,14 @@ async def test_a_repair_never_rewrites_the_images_doc_beyond_its_list() -> None:
     image_id = _image_id(data)
     os_fake.items.clear()
     os_fake.images[image_id].update(import_ids=['job-1'], dataset_split='val', negative_for=['x'])
-    before = {k: v for k, v in os_fake.images[image_id].items() if k != 'item_ids'}
+    own = {'item_ids', 'repair_started_at'}  # what a repair writes
+    before = {k: v for k, v in os_fake.images[image_id].items() if k not in own}
     _old(os_fake, image_id)
     before['indexed_at'] = os_fake.images[image_id]['indexed_at']
 
     assert (await svc.ingest_one(data, PATH)).status == 'success'
 
-    after = {k: v for k, v in os_fake.images[image_id].items() if k != 'item_ids'}
+    after = {k: v for k, v in os_fake.images[image_id].items() if k not in own}
     assert after == before
 
 

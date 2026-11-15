@@ -41,14 +41,21 @@ def test_the_client_timeout_is_the_slowest_client_that_writes_images() -> None:
 
 
 def test_the_request_counts_are_the_retry_rounds_of_the_writes() -> None:
-    assert w.LIST_WRITE_REQUESTS == 2 * (image_completeness.LIST_WRITE_RETRIES + 1)
+    assert w.LEASE_WRITE_REQUESTS == 2 * (image_completeness.LIST_WRITE_RETRIES + 1)
     assert w.MARK_WRITE_REQUESTS == 2 * (image_completeness.MARK_WRITE_RETRIES + 1)
-    assert w.SEQUENTIAL_REQUESTS == (
+    assert w.LEASE_RETURN_REQUESTS == w.MARK_WRITE_REQUESTS  # the same write, the same rounds
+    assert w.NEW_PHOTO_REQUESTS == (
+        w.IMAGES_STEP_REQUESTS + w.ITEMS_STEP_REQUESTS + w.MARK_WRITE_REQUESTS
+    )
+    assert w.REPAIR_REQUESTS == (
         w.IMAGES_STEP_REQUESTS
-        + w.ITEMS_STEP_REQUESTS
-        + w.LIST_WRITE_REQUESTS
+        + w.MATCH_REQUESTS
+        + w.LEASE_WRITE_REQUESTS
+        + w.REPAIR_CREATE_REQUESTS
+        + w.LEASE_RETURN_REQUESTS
         + w.MARK_WRITE_REQUESTS
     )
+    assert max(w.NEW_PHOTO_REQUESTS, w.REPAIR_REQUESTS) == w.SEQUENTIAL_REQUESTS
 
 
 def test_the_age_covers_the_requests_pauses_and_attempts() -> None:
@@ -87,7 +94,7 @@ async def test_a_unit_that_hits_every_conflict_makes_no_more_requests_than_the_b
 
         return call
 
-    for name in ('bulk', 'mget'):
+    for name in ('bulk', 'mget', 'search'):
         setattr(os_fake, name, counting(name))
 
     # No content row: this ingest claims and creates, and its create meets the doc (the 409 path).

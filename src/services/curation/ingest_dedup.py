@@ -14,19 +14,12 @@ marked the failure, or it is older than :data:`REPAIR_AFTER_S`) or answered ``in
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any
 
 from src.clients.optional_doc import get_doc_or_none
 from src.core.logging import get_logger
-from src.domain.image_completeness import (
-    INCOMPLETE_MARK_FIELD,
-    INDEXED_AT_FIELD,
-    ITEM_IDS_FIELD,
-    listed_item_ids,
-    repairable,
-)
-from src.services.curation.image_completeness import missing_items
+from src.domain.image_completeness import STATE_FIELDS, listed_item_ids
+from src.services.curation.image_completeness import Completeness, classify
 from src.services.curation.ingest_models import ERROR_KIND_INCOMPLETE_WRITE, IngestResult
 from src.services.curation.ingest_writer import REPAIR_AFTER_S
 from src.services.curation.ops_metrics import count_whole_event
@@ -40,8 +33,6 @@ if TYPE_CHECKING:
 
 
 logger = get_logger(__name__)
-
-Completeness = Literal['complete', 'repair', 'in_flight']
 
 
 @dataclass(frozen=True)
@@ -96,13 +87,7 @@ class IngestDedupMixin:
             resp = await self.opensearch.mget(
                 index=self.config.images_index,
                 body={'ids': ids},
-                _source_includes=[
-                    'image_path',
-                    'dataset_split',
-                    ITEM_IDS_FIELD,
-                    INDEXED_AT_FIELD,
-                    INCOMPLETE_MARK_FIELD,
-                ],
+                _source_includes=['image_path', 'dataset_split', *STATE_FIELDS],
             )
             docs = {
                 d['_id']: d.get('_source') or {} for d in resp.get('docs') or [] if d.get('found')
@@ -111,37 +96,24 @@ class IngestDedupMixin:
             if orphans:
                 logger.warning('ingest_content_row_without_image', n=len(orphans))
                 await content_key.release_bound(orphans)
-        gaps = await self._gaps(docs)
-        now = datetime.now(UTC)
+        states = await classify(
+            self.opensearch, self.config.items_index, docs, repair_after_s=REPAIR_AFTER_S
+        )
         return [
-            self._resolved(v.holder, v.key, docs, gaps, now)
+            self._resolved(v.holder, v.key, docs, states)
             if v.holder is not None and v.holder in docs
             else Resolved(None, v.key)
             for v in verdicts
         ]
 
-    async def _gaps(self, docs: dict[str, dict[str, Any]]) -> dict[str, list[str]]:
-        """The listed items each stored image lacks (one ``mget`` for all of them)."""
-        listed = {i: ids for i, src in docs.items() if (ids := listed_item_ids(src))}
-        if not listed:
-            return {}
-        return await missing_items(self.opensearch, self.config.items_index, listed)
-
     @staticmethod
     def _resolved(
-        holder: str,
-        key: str,
-        docs: dict[str, dict[str, Any]],
-        gaps: dict[str, list[str]],
-        now: datetime,
+        holder: str, key: str, docs: dict[str, dict[str, Any]], states: dict[str, Completeness]
     ) -> Resolved:
-        source = docs[holder]
-        view = _stored_view(holder, source)
-        if holder not in gaps:
-            return Resolved(view, key)
-        if repairable(source, now=now, repair_after_s=REPAIR_AFTER_S):
-            return Resolved(view, key, 'repair', tuple(listed_item_ids(source) or ()))
-        return Resolved(view, key, 'in_flight')
+        view = _stored_view(holder, docs[holder])
+        if states[holder] == 'repair':
+            return Resolved(view, key, 'repair', tuple(listed_item_ids(docs[holder]) or ()))
+        return Resolved(view, key, states[holder])
 
 
 def held_back_result(

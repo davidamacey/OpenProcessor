@@ -40,8 +40,13 @@ Safety rules kept from the per-image path:
   between the two steps leaves a doc the next ingest can recognise as incomplete. The unit that
   saw its own items step fail marks the doc (best effort); a unit that finds another copy's
   incomplete doc after a 409 repairs it when no live writer can still be writing it, and answers
-  ``incomplete`` otherwise. A repair writes the items (the same OCC upsert, human guards
-  included) and then sets the list in one OCC update; it never replaces the images doc.
+  ``incomplete`` otherwise. A repair only CREATES the items no existing item stands for
+  (:mod:`~src.services.curation.repair_match`; a 409 leaves a stored item untouched), under a
+  lease on the images doc taken together with the list before anything is created; it never
+  replaces the images doc and never rewrites an item.
+- Failures are attributed per unit and answers go out first: a unit's lease, list or create
+  step failing fails that unit only, every unit's result is set before any failure mark is
+  written, and the marks are written together, best effort.
 """
 
 from __future__ import annotations
@@ -52,24 +57,25 @@ import time
 import uuid
 import weakref
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from functools import cached_property
 from typing import Any
 
 from opensearchpy.exceptions import OpenSearchException
 from sqlalchemy.exc import SQLAlchemyError
 
+from src.clients.image_counts_dirty import mark_items_created
 from src.clients.occ_upsert import DocOutcome, occ_upsert_bulk
 from src.core.logging import get_logger
-from src.domain.image_completeness import (
-    INCOMPLETE_MARK_FIELD,
-    INDEXED_AT_FIELD,
-    ITEM_IDS_FIELD,
-    listed_item_ids,
-    repairable,
+from src.domain.image_completeness import ITEM_IDS_FIELD, STATE_FIELDS, listed_item_ids
+from src.services.curation.image_completeness import (
+    begin_repair,
+    classify,
+    finish_repair,
+    mark_incomplete,
 )
-from src.services.curation.image_completeness import mark_incomplete, missing_items, set_item_ids
+from src.services.curation.repair_match import plan_repair
 from src.services.embedding_spaces.readers import item_write_fields, vector_source_excludes
+from src.utils.task_group import run_all
 
 
 logger = get_logger(__name__)
@@ -90,22 +96,35 @@ WRITE_ID_FIELD = 'ingest_write_id'
 #                  request takes;
 #   CLIENT_TIMEOUT_S = 60, the slowest client that writes images (the job workers:
 #                  src/tasks/jobs_c.py, src/tasks/b4_project.py; the API's is opensearch_timeout, 30);
-#   the requests of one unit in a row, worst case: the images step 3 (create bulk, the 409's mget
-#                  of the stored doc, the mget of its listed items), the items step 7 (mget,
-#                  create bulk, conflict refetch mget, update mget + bulk, one retry round of mget
-#                  + bulk), the list write 6 (an OCC bulk update with up to 2 retry rounds: mget +
-#                  bulk each) and the failure mark 4 (one retry round);
+#   the requests of one unit in a row, worst case, on the longer of its two paths:
+#     a new photo: the images step 3 (create bulk, the 409's mget of the stored doc, the mget of
+#       its listed items), the items step 7 (mget, create bulk, conflict refetch mget, update mget +
+#       bulk, one retry round of mget + bulk) and the failure mark 4 (an OCC update with one retry
+#       round: mget + bulk each);
+#     a repair: the images step 3, the match 3 (the listed items' mget, the search of the image's
+#       items, a page more), the lease and list write 6 (an OCC update with up to 2 retry rounds),
+#       the create bulk 1, the lease's return 4 and the failure mark 4;
 #   plus the 429 pauses of the images step and of the items step (RETRY_429_PAUSES_S).
 # tests/curation/test_ingest_repair_age.py pins each input against the real client and settings.
 OPENSEARCH_ATTEMPTS = 4
 CLIENT_TIMEOUT_S = 60
 IMAGES_STEP_REQUESTS = 3
 ITEMS_STEP_REQUESTS = 7
-LIST_WRITE_REQUESTS = 6
 MARK_WRITE_REQUESTS = 4
-SEQUENTIAL_REQUESTS = (
-    IMAGES_STEP_REQUESTS + ITEMS_STEP_REQUESTS + LIST_WRITE_REQUESTS + MARK_WRITE_REQUESTS
+MATCH_REQUESTS = 3
+LEASE_WRITE_REQUESTS = 6
+REPAIR_CREATE_REQUESTS = 1
+LEASE_RETURN_REQUESTS = 4
+NEW_PHOTO_REQUESTS = IMAGES_STEP_REQUESTS + ITEMS_STEP_REQUESTS + MARK_WRITE_REQUESTS
+REPAIR_REQUESTS = (
+    IMAGES_STEP_REQUESTS
+    + MATCH_REQUESTS
+    + LEASE_WRITE_REQUESTS
+    + REPAIR_CREATE_REQUESTS
+    + LEASE_RETURN_REQUESTS
+    + MARK_WRITE_REQUESTS
 )
+SEQUENTIAL_REQUESTS = max(NEW_PHOTO_REQUESTS, REPAIR_REQUESTS)
 REPAIR_AFTER_S = SEQUENTIAL_REQUESTS * OPENSEARCH_ATTEMPTS * CLIENT_TIMEOUT_S + 2 * sum(
     RETRY_429_PAUSES_S
 )
@@ -129,10 +148,10 @@ class UnitResult:
     ``duplicate``: the images doc already existed, written by another copy of the content
     (its write id is not this unit's), and is whole, so nothing of this unit was written.
     ``incomplete``: the same, but the doc misses items and a writer may still be writing it, so
-    nothing was written and the photo is not reported stored. ``repaired``: the doc existed
-    incomplete with no live writer, and this unit wrote the items and the list (``stale_ids``
-    are the items the old list named that this write no longer does). ``image_absent``: the
-    store refused the images doc. ``failure``: a step raised."""
+    nothing was written and the photo is not reported stored (also: another repair of it is in
+    progress). ``repaired``: the doc existed incomplete with no live writer, and this unit created
+    the items no existing item stands for. ``image_absent``: the store refused the images doc.
+    ``failure``: a step raised."""
 
     images_indexed: int = 0
     duplicate: bool = False
@@ -140,7 +159,6 @@ class UnitResult:
     repaired: bool = False
     image_absent: bool = False
     failure: str | None = None
-    stale_ids: list[str] = field(default_factory=list)
     created: int = 0
     updated: int = 0
     preserved_human: int = 0
@@ -169,6 +187,10 @@ class _Unit:
     context: contextvars.Context
     future: asyncio.Future[UnitResult]
     repair: RepairTarget | None = None
+    lease: str | None = None
+    """The token of the repair lease this unit holds on its image, once it has taken it."""
+    to_create: list[dict[str, Any]] | None = None
+    """A repair's documents no existing item stands for (all of ``crop_docs`` otherwise)."""
     follows: _Unit | None = None
     """The unit of this flush that created the images doc this unit's create found (409): its
     answer is decided once that unit's items are written."""
@@ -357,26 +379,78 @@ class IngestWriter:
 
     async def _write_group(self, units: list[_Unit]) -> None:
         results = {id(u): UnitResult() for u in units}
-        try:
-            await self._write_images(units, results)
-            await self._write_items(units, results)
-            await self._write_lists(units, results)
-        except (OpenSearchException, SQLAlchemyError) as exc:
-            # What each unit got done stays in its result, so the caller knows whether its images
-            # doc exists; the units that had a step left fail.
-            logger.error('ingest_write_flush_failed', error=str(exc), n_images=len(units))
-            for unit in units:
-                results[id(unit)].failure = f'{type(exc).__name__}: {exc}'
+        if await self._attempt(units, results, self._write_images(units, results)):
+            repairs = [u for u in units if u.repair is not None]
+            began = [u for u in repairs if await self._begin_repair(u, results[id(u)])]
+            plain = [u for u in units if u.repair is None]
+            await self._attempt(plain, results, self._write_items(plain, results))
+            await self._attempt(began, results, self._create_missing(began, results))
+            for unit in began:
+                if not self._failed(results[id(unit)]):
+                    results[id(unit)].repaired = True
+                    await finish_repair(
+                        self._client, unit.images_index, str(unit.image_id), str(unit.lease)
+                    )
         for unit in units:
             result = results[id(unit)]
             if unit.follows is not None:
                 won = results[id(unit.follows)]
-                result.duplicate = not (won.failure or won.refused)
+                result.duplicate = not self._failed(won)
                 result.incomplete = not result.duplicate
-            if (result.failure or result.refused) and _stored_image(unit, result):
-                await mark_incomplete(self._client, unit.images_index, str(unit.image_id))
             if not unit.future.done():
                 unit.future.set_result(result)
+        # The answers are out; the notes on photos that failed are written together, best effort.
+        await run_all(
+            [
+                mark_incomplete(self._client, u.images_index, str(u.image_id), u.lease)
+                for u in units
+                if self._failed(results[id(u)]) and _stored_image(u, results[id(u)])
+            ]
+        )
+
+    @staticmethod
+    def _failed(result: UnitResult) -> bool:
+        return bool(result.failure or result.refused)
+
+    async def _attempt(self, units: list[_Unit], results: dict[int, UnitResult], step: Any) -> bool:
+        """Run ``step`` (one step for ``units``); a store failure fails those units and no
+        others. What each unit got done stays in its result, so the caller knows whether its
+        images doc exists."""
+        try:
+            await step
+        except (OpenSearchException, SQLAlchemyError) as exc:
+            logger.error('ingest_write_flush_failed', error=str(exc), n_images=len(units))
+            for unit in units:
+                results[id(unit)].failure = f'{type(exc).__name__}: {exc}'
+            return False
+        return True
+
+    async def _begin_repair(self, unit: _Unit, result: UnitResult) -> bool:
+        """Match the unit's detections to the items the image has, then take the lease and set
+        the list. False when the unit has nothing more to do: another repair holds the image
+        (``incomplete``), or a step failed (``failure``)."""
+        assert unit.repair is not None
+        target = unit.repair
+
+        async def begin() -> None:
+            plan = await plan_repair(
+                self._client, unit.items_index, target.image_id, target.listed, unit.crop_docs
+            )
+            token = await begin_repair(
+                self._client,
+                unit.images_index,
+                target.image_id,
+                existing_ids=plan.existing_ids,
+                planned_ids=[d['crop_id'] for d in plan.to_create],
+                repair_after_s=REPAIR_AFTER_S,
+            )
+            if token is None:
+                result.incomplete = True
+                return
+            unit.lease, unit.to_create = token, plan.to_create
+
+        await self._attempt([unit], {id(unit): result}, begin())
+        return unit.lease is not None and not self._failed(result)
 
     async def _write_images(self, units: list[_Unit], results: dict[int, UnitResult]) -> None:
         conflicted = await self._create_images([u for u in units if u.image_doc], results)
@@ -441,12 +515,7 @@ class IngestWriter:
         resp = await self._client.mget(
             index=units[0].images_index,
             body={'ids': [u.image_doc['image_id'] for u in units if u.image_doc]},
-            _source_includes=[
-                WRITE_ID_FIELD,
-                ITEM_IDS_FIELD,
-                INDEXED_AT_FIELD,
-                INCOMPLETE_MARK_FIELD,
-            ],
+            _source_includes=[WRITE_ID_FIELD, *STATE_FIELDS],
         )
         stored = {d['_id']: d for d in resp.get('docs', [])}
         winners = {u.image_doc[WRITE_ID_FIELD]: u for u in group if u.image_doc}
@@ -468,27 +537,25 @@ class IngestWriter:
                 unit.follows = winner  # created by a unit of this flush, whose items follow
             else:
                 others[image_id] = (unit, doc.get('_source') or {})
-        listed = {i: ids for i, (_, src) in others.items() if (ids := listed_item_ids(src))}
-        gaps = await missing_items(self._client, units[0].items_index, listed) if listed else {}
-        now = datetime.now(UTC)
+        states = await classify(
+            self._client,
+            units[0].items_index,
+            {i: src for i, (_, src) in others.items()},
+            repair_after_s=REPAIR_AFTER_S,
+        )
         for image_id, (unit, source) in others.items():
             result = results[id(unit)]
-            if image_id not in gaps:
+            if states[image_id] == 'complete':
                 result.duplicate = True
-            elif repairable(source, now=now, repair_after_s=REPAIR_AFTER_S):
-                unit.repair = RepairTarget(image_id, tuple(listed[image_id]))
-                result.repaired = True
+            elif states[image_id] == 'repair':
+                unit.repair = RepairTarget(image_id, tuple(listed_item_ids(source) or ()))
             else:
                 result.incomplete = True
 
     async def _write_items(self, units: list[_Unit], results: dict[int, UnitResult]) -> None:
         # Items only under an images doc this unit wrote (or, items-only, one that exists):
         # never under another copy's doc, nor under one that was refused.
-        units = [
-            u
-            for u in units
-            if u.image_doc is None or results[id(u)].images_indexed or results[id(u)].repaired
-        ]
+        units = [u for u in units if u.image_doc is None or results[id(u)].images_indexed]
         remaining = [d for u in units for d in u.crop_docs]
         if not remaining:
             return
@@ -525,18 +592,45 @@ class IngestWriter:
         for unit in units:
             self._settle(unit, results[id(unit)], outcomes)
 
-    async def _write_lists(self, units: list[_Unit], results: dict[int, UnitResult]) -> None:
-        """A repair's last write: the list names the items just written (and the failure mark
-        goes). Only when every item of the unit was stored."""
-        for unit in units:
-            result = results[id(unit)]
-            if unit.repair is None or result.refused:
-                continue
-            await set_item_ids(
-                self._client, unit.images_index, unit.repair.image_id, sorted(unit.ids)
-            )
-            result.repaired = True
-            result.stale_ids = [i for i in unit.repair.listed if i not in unit.ids]
+    async def _create_missing(self, units: list[_Unit], results: dict[int, UnitResult]) -> None:
+        """A repair's items: ``create`` each document no existing item stands for. A 409 means an
+        item with that id exists (whoever wrote it, a person included): it is left as it is and
+        counts as there."""
+        index = units[0].items_index if units else ''
+        todo = {d['crop_id']: (u, d) for u in units for d in u.to_create or ()}
+        created_by_image: dict[str, list[str]] = {}
+        for pause in (*RETRY_429_PAUSES_S, None):
+            if not todo:
+                break
+            body: list[dict[str, Any]] = []
+            for crop_id, (_unit, doc) in todo.items():
+                body += [{'create': {'_index': index, '_id': crop_id}}, doc]
+            try:
+                resp = await self._client.bulk(body=body, refresh=False)
+            except Exception as exc:
+                if _is_429(exc) and pause is not None:
+                    await asyncio.sleep(pause)
+                    continue
+                raise
+            retry: dict[str, tuple[_Unit, dict[str, Any]]] = {}
+            for (crop_id, (unit, doc)), item in zip(
+                todo.items(), resp.get('items', []), strict=False
+            ):
+                op = item.get('create') or {}
+                status = op.get('status', 500)
+                result = results[id(unit)]
+                if status < 300:
+                    result.created += 1
+                    result.created_ids.append(crop_id)
+                    created_by_image.setdefault(str(doc.get('image_id')), []).append(crop_id)
+                elif status == 429 and pause is not None:
+                    retry[crop_id] = (unit, doc)
+                elif status != 409:
+                    result.refused.append(f'item {crop_id}: {_reason(op)}')
+            todo = retry
+            if todo:
+                await asyncio.sleep(pause or 0)
+        await mark_items_created(self._client, index, list(created_by_image))
 
     @staticmethod
     def _settle(unit: _Unit, result: UnitResult, outcomes: dict[str, DocOutcome]) -> None:

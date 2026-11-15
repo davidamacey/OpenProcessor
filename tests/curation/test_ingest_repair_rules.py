@@ -1,0 +1,320 @@
+"""What a repair may touch (plan 13a, lane L0, after the independent review).
+
+A repair completes a photo a failed or killed ingest left without some of its items. It must not
+become a second writer of the items that exist: it CREATES the missing ones (a 409 leaves the
+stored item untouched, whoever wrote it), it skips every detection that overlaps an item the image
+already has (the detector is not bit-stable and a crop id hashes the box to 6 decimals), and only
+one repair runs on an image at a time (a lease on the images doc).
+"""
+
+from __future__ import annotations
+
+import asyncio
+import copy
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+import pytest
+from opensearchpy.exceptions import TransportError
+
+from curation.ingest_fakes import _jpeg_bytes, _make_service
+from curation.occ_fakes import FakeIngestOpenSearch
+from curation.test_ingest_concurrent_duplicates import _hold_writes_until_lookups
+from curation.test_ingest_whole_photo import PATH, TWO_BOXES, _image_id, _old, _writes_done
+from src.config import get_curation_config
+from src.services.curation.ingest_writer import REPAIR_AFTER_S, IngestWriter, RepairTarget
+from src.services.curation.item_delete import delete_items
+from src.services.near_duplicates.content_key import content_imohash
+
+
+def _shifted(boxes: list[tuple[float, ...]], by: float) -> list[tuple[float, ...]]:
+    """The same objects as the detector sees them on another run: boxes a hair apart, so the
+    6-decimal crop id differs."""
+    return [(x1 + by, y1 + by, x2 + by, y2 + by, s, c) for x1, y1, x2, y2, s, c in boxes]
+
+
+async def _incomplete(
+    svc: Any, os_fake: FakeIngestOpenSearch, data: bytes, *, keep: int = 1
+) -> tuple[str, list[str], list[str]]:
+    """Ingest ``data`` whole, then lose all but the first ``keep`` items (a kill between the two
+    bulks, or a failed items step) and make the doc older than a live writer can be.
+    Returns ``(image id, surviving ids, lost ids)``."""
+    await svc.ingest_one(data, PATH)
+    image_id = _image_id(data)
+    ids = sorted(os_fake.items)
+    lost = ids[keep:]
+    for item_id in lost:
+        del os_fake.items[item_id]
+    _old(os_fake, image_id)
+    return image_id, ids[:keep], lost
+
+
+@pytest.mark.asyncio
+async def test_a_repair_never_rewrites_an_item_that_exists_holdout_without_a_class() -> None:
+    svc, os_fake, _ = _make_service(detections=TWO_BOXES)
+    data = _jpeg_bytes(seed=61)
+    _, (survivor,), _ = await _incomplete(svc, os_fake, data)
+    doc = os_fake.items[survivor]
+    for field in ('class_source', 'label_source', 'class_validated', 'class_id', 'class_name'):
+        doc.pop(field, None)
+    doc.update(test_holdout=True, bbox_norm=[0.06, 0.06, 0.41, 0.41], blur_lap_var=123.0)
+    before = copy.deepcopy(doc)
+
+    assert (await svc.ingest_one(data, PATH)).status == 'success'
+
+    assert os_fake.items[survivor] == before
+
+
+@pytest.mark.asyncio
+async def test_a_repair_keeps_a_box_a_person_moved_and_its_vector() -> None:
+    svc, os_fake, _ = _make_service(detections=TWO_BOXES)
+    data = _jpeg_bytes(seed=62)
+    _, (survivor,), _ = await _incomplete(svc, os_fake, data)
+    os_fake.items[survivor].update(
+        geometry_source='human', bbox_norm=[0.07, 0.07, 0.42, 0.42], pe_embedding=[9.0, 9.0, 9.0]
+    )
+    before = copy.deepcopy(os_fake.items[survivor])
+
+    assert (await svc.ingest_one(data, PATH)).status == 'success'
+
+    assert os_fake.items[survivor] == before
+
+
+@pytest.mark.asyncio
+async def test_a_repair_keeps_the_machine_work_of_an_item_that_exists() -> None:
+    svc, os_fake, _ = _make_service(detections=TWO_BOXES)
+    data = _jpeg_bytes(seed=63)
+    _, (survivor,), lost = await _incomplete(svc, os_fake, data)
+    os_fake.items[survivor].update(vlm_class_name='machine-label', cluster_uid='c-1')
+    before = copy.deepcopy(os_fake.items[survivor])
+
+    assert (await svc.ingest_one(data, PATH)).status == 'success'
+
+    assert os_fake.items[survivor] == before
+    assert set(lost) <= set(os_fake.items), 'the lost items are created again'
+
+
+@pytest.mark.asyncio
+async def test_a_detection_that_differs_in_the_sixth_decimal_creates_no_second_item() -> None:
+    svc, os_fake, triton = _make_service(detections=TWO_BOXES)
+    data = _jpeg_bytes(seed=64)
+    image_id, (survivor,), lost = await _incomplete(svc, os_fake, data)
+    triton.detections = _shifted(TWO_BOXES, 3e-5)  # the same objects, other crop ids
+
+    assert (await svc.ingest_one(data, PATH)).status == 'success'
+
+    assert survivor in os_fake.items, 'the stored item is kept, not replaced by a new id'
+    assert len(os_fake.items) == 2, 'one item per object'
+    assert lost[0] not in os_fake.items, 'the lost object is created once, under its new id'
+    assert sorted(os_fake.items) == os_fake.images[image_id]['item_ids']
+
+
+@pytest.mark.asyncio
+async def test_two_repairs_of_one_image_at_once_leave_one_item_per_object(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    svc, os_fake, triton = _make_service(detections=TWO_BOXES)
+    data = _jpeg_bytes(seed=65)
+    image_id, _, _ = await _incomplete(svc, os_fake, data, keep=0)
+    runs = iter(range(1, 100))
+    real_infer = triton.infer
+
+    async def infer(model_name: str, inputs: list, outputs: list) -> Any:
+        triton.detections = _shifted(TWO_BOXES, next(runs) * 2e-5)  # each run: other ids
+        return await real_infer(model_name, inputs, outputs)
+
+    triton.infer = infer
+    _hold_writes_until_lookups(os_fake, 2, monkeypatch)
+
+    first, second = await asyncio.gather(
+        svc.ingest_one(data, '/a/x.jpg'), svc.ingest_one(data, '/b/x.jpg')
+    )
+
+    assert sorted((first.status, second.status)) == ['failed', 'success']
+    (held,) = [r for r in (first, second) if r.status == 'failed']
+    assert held.error_kind == 'incomplete_write'
+    assert len(os_fake.items) == 2, 'one item per object, not one set per repairer'
+    assert sorted(os_fake.items) == os_fake.images[image_id]['item_ids']
+    assert not os_fake.images[image_id].get('repair_started_at')
+
+
+@pytest.mark.asyncio
+async def test_a_repair_in_progress_holds_the_image_even_when_it_is_marked() -> None:
+    svc, os_fake, _ = _make_service(detections=TWO_BOXES)
+    data = _jpeg_bytes(seed=66)
+    image_id, _, _ = await _incomplete(svc, os_fake, data, keep=0)
+    os_fake.images[image_id].update(
+        ingest_incomplete=True, repair_started_at=datetime.now(UTC).isoformat()
+    )
+
+    held = await svc.ingest_one(data, PATH)
+
+    assert (held.status, held.error_kind) == ('failed', 'incomplete_write')
+    assert os_fake.items == {}
+    os_fake.images[image_id]['repair_started_at'] = (
+        datetime.now(UTC) - timedelta(seconds=REPAIR_AFTER_S + 60)
+    ).isoformat()
+    assert (await svc.ingest_one(data, PATH)).status == 'success', 'an old lease is a dead repair'
+
+
+@pytest.mark.asyncio
+async def test_a_repair_that_fails_gives_the_lease_back_and_marks_the_photo() -> None:
+    svc, os_fake, _ = _make_service(detections=TWO_BOXES)
+    data = _jpeg_bytes(seed=67)
+    image_id, _, _ = await _incomplete(svc, os_fake, data, keep=0)
+    real = os_fake.bulk
+    left = {'n': 1}
+
+    async def bulk(*, body: list[dict[str, Any]], **kw: Any) -> Any:
+        items_index = get_curation_config().items_index
+        if left['n'] and any(a.get('create', {}).get('_index') == items_index for a in body[0::2]):
+            left['n'] -= 1
+            raise TransportError(500, 'repair items bulk failed')
+        return await real(body=body, **kw)
+
+    os_fake.bulk = bulk
+
+    failed = await svc.ingest_one(data, PATH)
+    await _writes_done(svc)
+
+    assert (failed.status, failed.error_kind) == ('failed', 'bulk_index')
+    doc = os_fake.images[image_id]
+    assert doc['ingest_incomplete'] is True
+    assert not doc.get('repair_started_at')
+    assert (await svc.ingest_one(data, PATH)).status == 'success', 'the retry need not wait'
+
+
+@pytest.mark.asyncio
+async def test_an_item_deleted_while_it_is_repaired_is_not_listed_again() -> None:
+    svc, os_fake, _ = _make_service(detections=TWO_BOXES)
+    data = _jpeg_bytes(seed=68)
+    image_id, _, _ = await _incomplete(svc, os_fake, data, keep=0)
+    real = os_fake.bulk
+    deleted: list[str] = []
+
+    async def bulk(*, body: list[dict[str, Any]], **kw: Any) -> Any:
+        resp = await real(body=body, **kw)
+        items_index = get_curation_config().items_index
+        made = [
+            a['create']['_id']
+            for a in body[0::2]
+            if a.get('create', {}).get('_index') == items_index
+        ]
+        if made and not deleted:  # a re-detection removes one of them at once
+            deleted.append(made[0])
+            os_fake.bulk = real
+            await delete_items(
+                os_fake, [made[0]], items_index=items_index, crop_cache_dir=None,
+                deletable=_always,
+            )  # fmt: skip
+            os_fake.bulk = bulk
+        return resp
+
+    os_fake.bulk = bulk
+
+    assert (await svc.ingest_one(data, PATH)).status == 'success'
+
+    (gone,) = deleted
+    assert gone not in os_fake.items
+    assert gone not in os_fake.images[image_id]['item_ids']
+    os_fake.bulk = real
+    assert (await svc.ingest_one(data, PATH)).status == 'duplicate', 'not repaired again'
+
+
+async def _always(_crop_id: str, _doc: dict[str, Any]) -> bool:
+    return True
+
+
+def _kw() -> dict[str, Any]:
+    cfg = get_curation_config()
+    return {'images_index': cfg.images_index, 'items_index': cfg.items_index, 'guards': ()}
+
+
+def _doc(crop_id: str, image_id: str) -> dict[str, Any]:
+    return {'crop_id': crop_id, 'image_id': image_id, 'bbox_norm': [0.1, 0.1, 0.4, 0.4]}
+
+
+@pytest.mark.asyncio
+async def test_one_units_failed_repair_does_not_fail_a_whole_photo_of_its_flush() -> None:
+    old = (datetime.now(UTC) - timedelta(seconds=REPAIR_AFTER_S + 60)).isoformat()
+    os_fake = FakeIngestOpenSearch(
+        images={'b': {'image_id': 'b', 'item_ids': ['b0'], 'indexed_at': old}}
+    )
+    real = os_fake.bulk
+
+    async def bulk(*, body: list[dict[str, Any]], **kw: Any) -> Any:
+        if body[0].get('update', {}).get('_id') == 'b':
+            raise TransportError(503, 'the repair of b cannot be written')
+        return await real(body=body, **kw)
+
+    os_fake.bulk = bulk
+    writer = IngestWriter(os_fake)
+
+    whole, broken = await asyncio.gather(
+        writer.write({'image_id': 'a'}, [_doc('a1', 'a')], **_kw()),
+        writer.write(None, [_doc('b1', 'b')], repair=RepairTarget('b', ('b0',)), **_kw()),
+    )
+
+    assert whole.failure is None
+    assert whole.refused == []
+    assert broken.failure is not None
+    assert 'a1' in os_fake.items
+
+
+@pytest.mark.asyncio
+async def test_a_hanging_mark_does_not_hold_back_the_answers_of_its_flush() -> None:
+    os_fake = FakeIngestOpenSearch()
+    real = os_fake.bulk
+    release = asyncio.Event()
+    items_index = get_curation_config().items_index
+
+    async def bulk(*, body: list[dict[str, Any]], **kw: Any) -> Any:
+        if any(a.get('create', {}).get('_index') == items_index for a in body[0::2]):
+            raise TransportError(500, 'items bulk failed')
+        if body[0].get('update') and body[1]['doc'].get('ingest_incomplete') is True:
+            await release.wait()  # the store hangs on the mark
+        return await real(body=body, **kw)
+
+    os_fake.bulk = bulk
+    writer = IngestWriter(os_fake)
+
+    try:
+        result = await asyncio.wait_for(
+            writer.write({'image_id': 'a'}, [_doc('a1', 'a')], **_kw()), timeout=3
+        )
+    finally:
+        release.set()
+        await writer.close()
+
+    assert result.failure is not None
+
+
+@pytest.mark.asyncio
+async def test_a_holder_found_at_claim_time_is_a_duplicate_only_when_it_is_whole(
+    content_rows: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Another copy claimed between this photo's lookup and its claim; its images doc misses
+    items: the answer is not ``duplicate``."""
+    from src.services.curation.ingest_dedup import Resolved
+
+    svc, os_fake, _ = _make_service(detections=TWO_BOXES)
+    data = _jpeg_bytes(seed=69)
+    image_id = _image_id(data)
+    os_fake.images[image_id] = {
+        'image_id': image_id,
+        'image_path': '/elsewhere.jpg',
+        'item_ids': ['their-item'],
+        'indexed_at': datetime.now(UTC).isoformat(),
+    }
+    content_rows.rows[content_imohash(data)] = image_id
+
+    async def lookup_that_missed(imohash: str, _data: bytes) -> Resolved:
+        return Resolved(None, imohash)
+
+    monkeypatch.setattr(svc, '_lookup_image', lookup_that_missed)
+
+    result = await svc.ingest_one(data, PATH)
+
+    assert (result.status, result.error_kind) == ('failed', 'incomplete_write')
+    os_fake.items['their-item'] = {'crop_id': 'their-item', 'image_id': image_id}
+    assert (await svc.ingest_one(data, PATH)).status == 'duplicate'
