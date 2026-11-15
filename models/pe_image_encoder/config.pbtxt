@@ -1,9 +1,9 @@
-# PE-Core-L14-336 image encoder — whole-frame and per-crop embeddings.
+# PE-Core-L14-336 image encoder — whole-frame embeddings.
 #
 # Consumed by src/clients/pe_encoder.py (PEEncoder.encode_images); the
-# resulting vector is stored as the curation `pe_embedding` field and backs
-# semantic search, near-duplicate detection, clustering and the embedding
-# visualization. The tensor names below are a contract with that client.
+# resulting vector is stored as the curation frame `pe_embedding` field and backs
+# semantic search, near-duplicate detection and the embedding visualization.
+# The tensor names below are a contract with that client.
 #
 # Input:  images [B, 3, 336, 336] UINT8 RGB pixels,
 #         resized and center-cropped (see src/utils/pe_preprocess.py);

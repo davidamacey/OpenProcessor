@@ -41,6 +41,9 @@ services:
       # near-dup/uniqueness item scorers -- CURATION.md calls it required,
       # not optional, so it belongs in the default load list.
       - --load-model=pe_image_encoder
+      # The crop encoder: the same weights at a 224 input, one vector per object box
+      # (a model of its own, its own vector space; the frame engine's plan.crop_embed).
+      - --load-model=pe_crop_encoder
       # F-07 remainder (fresh-start E2E findings 2026-09-25): serving the
       # text tower here means every uvicorn worker shares ONE CPU instance
       # instead of each loading its own ~1.4 GB ONNX Runtime session --

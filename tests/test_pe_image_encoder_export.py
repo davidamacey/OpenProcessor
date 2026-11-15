@@ -186,12 +186,37 @@ class TestCli:
         args = pe_export.build_parser().parse_args([])
         assert args.method == 'perception-models'
         assert args.platform == 'tensorrt_plan'
+        pe_export.resolve_role(args)
         assert args.triton_name == PE_IMAGE_MODEL
         assert args.max_batch == 32
         assert args.image_size == PE_SIZE
         assert args.embedding_dim == PE_EMBEDDING_DIM
         assert args.write_config is True
         assert args.config_only is False
+
+    def test_crop_presets_the_crop_encoder_and_the_api_names_it(self) -> None:
+        """``--crop`` is the model the API calls ``PE_CROP_MODEL`` at its ``PE_CROP_SIZE``."""
+        from src.config.settings import TritonModelConfig
+
+        PE_CROP_MODEL, PE_CROP_SIZE = (
+            TritonModelConfig.PE_CROP_MODEL,
+            TritonModelConfig.PE_CROP_SIZE,
+        )
+        args = pe_export.build_parser().parse_args(['--crop'])
+        cfg = pe_export.config_from_args(args)
+        assert (args.triton_name, args.image_size) == (PE_CROP_MODEL, PE_CROP_SIZE)
+        assert args.onnx_out.name == f'{PE_CROP_MODEL}.onnx'
+        assert (cfg.model_name, cfg.image_size) == (PE_CROP_MODEL, PE_CROP_SIZE)
+        explicit = pe_export.build_parser().parse_args(['--crop', '--image-size', '280'])
+        assert pe_export.config_from_args(explicit).image_size == 280
+
+    def test_the_crop_config_describes_the_letterbox_square(self, tmp_path: Path) -> None:
+        rc = pe_export.main(['--crop', '--config-only', '--models-dir', str(tmp_path)])
+        assert rc == 0
+        text = (tmp_path / 'pe_crop_encoder' / 'config.pbtxt').read_text()
+        assert 'dims: [ 3, 224, 224 ]' in text
+        assert 'letterbox_crop_rgb' in text
+        assert 'center-cropped' not in text
 
     def test_no_write_config_flips_the_default(self) -> None:
         args = pe_export.build_parser().parse_args(['--no-write-config'])
@@ -428,14 +453,20 @@ class TestRotaryLayoutStep:
     """The perception-models export hands its ONNX to the rotary layout pass; the HF route does not."""
 
     @staticmethod
-    def _run(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, method: str) -> list[Path]:
+    def _run(
+        monkeypatch: pytest.MonkeyPatch, tmp_path: Path, method: str, *extra: str
+    ) -> list[tuple[Path, int]]:
         import pe_rope_layout
 
-        applied: list[Path] = []
+        applied: list[tuple[Path, int]] = []
         onnx_path = tmp_path / 'pe.onnx'
         monkeypatch.setattr(pe_export, 'export_via_perception_models', lambda path, **_: path)
         monkeypatch.setattr(pe_export, 'export_via_optimum', lambda path, **_: path)
-        monkeypatch.setattr(pe_rope_layout, 'apply_if_supported', lambda p: applied.append(Path(p)))
+        monkeypatch.setattr(
+            pe_rope_layout,
+            'apply_if_supported',
+            lambda p, geometry: applied.append((Path(p), geometry.seq_len)),
+        )
         rc = pe_export.main(
             [
                 '--onnx-out',
@@ -444,6 +475,7 @@ class TestRotaryLayoutStep:
                 method,
                 '--skip-validate',
                 '--no-write-config',
+                *extra,
             ]
         )
         assert rc == 0
@@ -452,7 +484,17 @@ class TestRotaryLayoutStep:
     def test_perception_models_export_applies_the_pass_to_its_onnx(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
-        assert self._run(monkeypatch, tmp_path, 'perception-models') == [tmp_path / 'pe.onnx']
+        assert self._run(monkeypatch, tmp_path, 'perception-models') == [
+            (tmp_path / 'pe.onnx', 577)
+        ]
+
+    def test_the_crop_export_hands_the_pass_its_own_token_count(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """A 224 input has 16 x 16 patches and a class token: a pass told 577 would skip the graph."""
+        assert self._run(monkeypatch, tmp_path, 'perception-models', '--crop') == [
+            (tmp_path / 'pe.onnx', 257)
+        ]
 
     def test_optimum_export_is_left_alone(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path

@@ -249,6 +249,7 @@ def test_pe_image_encoder_in_default_triton_load_list() -> None:
     every deployment to add by hand."""
     command = _services()['triton-server'].get('command') or []
     assert '--load-model=pe_image_encoder' in [str(c) for c in command]
+    assert '--load-model=pe_crop_encoder' in [str(c) for c in command]
 
 
 def test_triton_serves_partial_model_sets() -> None:

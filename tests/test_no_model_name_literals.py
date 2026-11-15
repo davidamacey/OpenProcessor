@@ -33,6 +33,7 @@ _LITERALS = (
     'ocr_pipeline',
     'scrfd_10g_bnkps',
     'pe_image_encoder',
+    'pe_crop_encoder',
     'pe_text_encoder',
 )
 

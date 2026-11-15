@@ -17,6 +17,14 @@ OUTPUT_TENSOR = 'image_embeddings'
 PE_VARIANT = 'PE-Core-L14-336'
 HF_MODEL_ID = 'facebook/PE-Core-L14-336-hf'
 IMAGE_SIZE = 336
+
+# The crop encoder is a model of its own: the same weights built at a 224 input (PE's own code
+# interpolates the absolute position embedding and rebuilds the RoPE grid for another input size:
+# core/vision_encoder/pe.py ``_sample_abs_posemb``, ``rope.update_grid``), 2.1 times the images per
+# second of the 336 build at equal crop quality, fed each box letterboxed whole. Its name and size
+# are the API's ``PE_CROP_MODEL`` / ``PE_CROP_SIZE`` (a test keeps them equal).
+CROP_TRITON_MODEL_NAME = 'pe_crop_encoder'
+CROP_IMAGE_SIZE = 224
 EMBEDDING_DIM = 1024
 
 # opset 17 is the floor for clean LayerNorm + dynamic-batch handling in the

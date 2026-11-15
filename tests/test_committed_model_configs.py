@@ -56,6 +56,9 @@ def test_pe_image_config_matches_the_renderer() -> None:
     from pe_image_triton_config import PETritonConfig, render_config
 
     assert committed('pe_image_encoder') == signature(render_config(PETritonConfig()))
+    assert committed('pe_crop_encoder') == signature(
+        render_config(PETritonConfig(model_name='pe_crop_encoder', image_size=224))
+    )
 
 
 def test_pe_text_config_matches_the_renderer() -> None:
