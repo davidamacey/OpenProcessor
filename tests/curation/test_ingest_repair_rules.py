@@ -318,3 +318,31 @@ async def test_a_holder_found_at_claim_time_is_a_duplicate_only_when_it_is_whole
     assert (result.status, result.error_kind) == ('failed', 'incomplete_write')
     os_fake.items['their-item'] = {'crop_id': 'their-item', 'image_id': image_id}
     assert (await svc.ingest_one(data, PATH)).status == 'duplicate'
+
+
+@pytest.mark.asyncio
+async def test_an_item_written_a_moment_ago_and_not_listed_is_matched_too() -> None:
+    """A person drew a box over an object a second before the repair: the search that finds the
+    image's unlisted items does not see a write the index has not refreshed yet, so the repair
+    publishes the index first; otherwise the matching detection is created beside the drawn box."""
+    svc, os_fake, _ = _make_service(
+        detections=TWO_BOXES, opensearch=FakeIngestOpenSearch(near_real_time_search=True)
+    )
+    data = _jpeg_bytes(seed=70)
+    await svc.ingest_one(data, PATH)
+    image_id = _image_id(data)
+    first, *_ = sorted(os_fake.items)
+    drawn_box = os_fake.items[first]['bbox_norm']
+    os_fake.items.clear()
+    _old(os_fake, image_id)
+    os_fake.items['drawn-1'] = {
+        'crop_id': 'drawn-1',
+        'image_id': image_id,
+        'bbox_norm': drawn_box,
+        'geometry_source': 'human',
+    }
+
+    assert (await svc.ingest_one(data, PATH)).status == 'success'
+
+    assert 'drawn-1' in os_fake.items
+    assert len(os_fake.items) == 2, 'the drawn box stands for its object; the other is created'
