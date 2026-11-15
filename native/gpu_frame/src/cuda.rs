@@ -17,6 +17,7 @@
 
 use std::ffi::{c_char, c_int, c_void};
 use std::fmt;
+use std::mem::MaybeUninit;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -174,6 +175,11 @@ impl Stream {
     /// The context the stream belongs to.
     pub fn context(&self) -> &Arc<Context> {
         &self.ctx
+    }
+
+    /// The driver handle, for libraries that take a `cudaStream_t` (the same handle).
+    pub(crate) fn raw(&self) -> sys::CUstream {
+        self.raw
     }
 
     /// Block until every command queued on the stream has completed.
@@ -364,6 +370,137 @@ impl Drop for PinnedBuf {
             // SAFETY: allocated by cuMemHostAlloc above, freed once; no copy is in flight because
             // every copy into it is waited for before its guard releases the borrow.
             let _ = unsafe { result::free_host(self.ptr.cast::<c_void>()) };
+        }
+    }
+}
+
+/// A stream-ordered memory pool of one device (`cuMemPoolCreate`).
+pub(crate) struct MemPool {
+    ctx: Arc<Context>,
+    raw: sys::CUmemoryPool,
+}
+
+// SAFETY: a memory pool is a driver handle usable from any thread; allocation and free calls on
+// it are thread safe (stream-ordered allocator documentation).
+unsafe impl Send for MemPool {}
+// SAFETY: as above.
+unsafe impl Sync for MemPool {}
+
+impl MemPool {
+    /// A pool of device memory on the context's device that keeps up to `keep_bytes` of freed
+    /// memory cached (`CU_MEMPOOL_ATTR_RELEASE_THRESHOLD`) instead of returning it at each
+    /// synchronisation.
+    pub(crate) fn new(ctx: &Arc<Context>, keep_bytes: u64) -> Result<MemPool, CudaError> {
+        ctx.bind()?;
+        // SAFETY: all-zero is a valid `CUmemPoolProps` (every enum has a zero variant, the
+        // pointer is null, the sizes are 0); the fields the pool needs are set below.
+        let mut props: sys::CUmemPoolProps = unsafe { MaybeUninit::zeroed().assume_init() };
+        props.allocType = sys::CUmemAllocationType::CU_MEM_ALLOCATION_TYPE_PINNED;
+        props.handleTypes = sys::CUmemAllocationHandleType::CU_MEM_HANDLE_TYPE_NONE;
+        props.location.type_ = sys::CUmemLocationType::CU_MEM_LOCATION_TYPE_DEVICE;
+        props.location.__bindgen_anon_1.id = ctx.ordinal() as c_int;
+        // SAFETY: `props` is a valid, fully initialised description.
+        let raw = ctx.check("cuMemPoolCreate", unsafe {
+            result::mem_pool::create(&props)
+        })?;
+        let pool = MemPool {
+            ctx: ctx.clone(),
+            raw,
+        };
+        let mut keep = keep_bytes;
+        // SAFETY: the release threshold attribute takes a `cuuint64_t`; `keep` lives for the call.
+        ctx.check("cuMemPoolSetAttribute", unsafe {
+            result::mem_pool::set_attribute(
+                pool.raw,
+                sys::CUmemPool_attribute::CU_MEMPOOL_ATTR_RELEASE_THRESHOLD,
+                (&mut keep as *mut u64).cast::<c_void>(),
+            )
+        })?;
+        Ok(pool)
+    }
+
+    /// Allocate `bytes` in stream order on `stream`.
+    ///
+    /// # Safety
+    /// The memory is uninitialised and usable in order after this call on `stream`; on another
+    /// stream only after `stream` was waited for. The caller frees it once with
+    /// [`MemPool::free_raw`].
+    pub(crate) unsafe fn alloc_raw(
+        &self,
+        bytes: usize,
+        stream: sys::CUstream,
+    ) -> Result<u64, CudaError> {
+        self.ctx.bind()?;
+        // SAFETY: the pool is live; the stream is the caller's live stream (this fn's contract).
+        self.ctx.check("cuMemAllocFromPoolAsync", unsafe {
+            result::mem_pool::alloc_async(self.raw, bytes, stream)
+        })
+    }
+
+    /// Free an allocation of this pool in stream order on `stream`.
+    ///
+    /// # Safety
+    /// `ptr` came from [`MemPool::alloc_raw`] of this pool and is freed once; work on other
+    /// streams that uses it has been waited for.
+    pub(crate) unsafe fn free_raw(&self, ptr: u64, stream: sys::CUstream) -> Result<(), CudaError> {
+        self.ctx.bind()?;
+        // SAFETY: the caller's contract above.
+        self.ctx
+            .check("cuMemFreeAsync", unsafe { result::free_async(ptr, stream) })
+    }
+
+    /// `bytes` from the pool in order on `stream`, freed in order on the same stream on drop.
+    pub(crate) fn alloc(
+        self: &Arc<Self>,
+        bytes: usize,
+        stream: &Arc<Stream>,
+    ) -> Result<PoolAlloc, CudaError> {
+        // SAFETY: the allocation is owned by the returned value, which keeps its stream and frees
+        // it once, on that stream, when dropped.
+        let ptr = unsafe { self.alloc_raw(bytes, stream.raw()) }?;
+        Ok(PoolAlloc {
+            pool: self.clone(),
+            stream: stream.clone(),
+            ptr,
+        })
+    }
+
+    pub(crate) fn context(&self) -> &Arc<Context> {
+        &self.ctx
+    }
+}
+
+/// One allocation of a [`MemPool`], owned: freed on its stream when dropped.
+pub(crate) struct PoolAlloc {
+    pool: Arc<MemPool>,
+    stream: Arc<Stream>,
+    ptr: u64,
+}
+
+impl PoolAlloc {
+    pub(crate) fn ptr(&self) -> u64 {
+        self.ptr
+    }
+
+    pub(crate) fn stream(&self) -> &Arc<Stream> {
+        &self.stream
+    }
+}
+
+impl Drop for PoolAlloc {
+    fn drop(&mut self) {
+        // SAFETY: `ptr` came from this pool and is freed once, in order on the stream it was
+        // allocated on; work on other streams was waited for by the owner (frame_pool.rs).
+        let _ = unsafe { self.pool.free_raw(self.ptr, self.stream.raw()) };
+    }
+}
+
+impl Drop for MemPool {
+    fn drop(&mut self) {
+        if self.ctx.bind().is_ok() {
+            // SAFETY: the pool is live and destroyed once; outstanding allocations keep the
+            // driver's resources until they are freed (cuMemPoolDestroy).
+            let _ = unsafe { result::mem_pool::destroy(self.raw) };
         }
     }
 }

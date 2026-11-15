@@ -3,6 +3,7 @@
 //!
 //! | Plan 17 item | Here |
 //! |---|---|
+//! | `FramePool::alloc` | [`frame_pool::FramePool::alloc`] |
 //! | `Admission::admit` | [`budget::Admission::admit`] |
 //!
 //! Under them: [`cuda`] (context, streams, copies, errors with their fault class) and [`pool`]
@@ -14,10 +15,12 @@
 
 pub mod budget;
 pub mod cuda;
+pub mod frame_pool;
 pub mod pool;
 
 pub use budget::{
     Admission, AdmitError, CapExceeded, Charge, DeviceCap, HostCount, OverloadCause, Permit,
 };
 pub use cuda::{Context, CudaError, DeviceRange, Fault, PinnedBuf, Stream};
+pub use frame_pool::{AllocError, DeviceBuf, FramePool};
 pub use pool::{CancelToken, JobError, JobHandle, PoolError, WorkerPool};
