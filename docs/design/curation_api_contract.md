@@ -1914,15 +1914,19 @@ under `store_coarse` cells are at most precision 15 and markers are rounded to 0
   `cancelled`, `interrupted`), `resumed`, `source`, `options`, `progress`
   (`discovered`, `discovery_complete`, `skipped`, `ingested`, `duplicates`,
   `failed`, `processed`, `crops_indexed`, `n_embedded`, `n_not_embedded`,
-  `n_embed_failed`, `in_flight`, `images_per_s`, `images_per_s_recent`, `eta_s`,
-  `elapsed_s`), `stage_s`, `decode_routes` (photos per decode route over the run, for
+  `n_embed_failed`, `in_flight`, `waiting`, `images_per_s`, `images_per_s_recent`, `eta_s`,
+  `elapsed_s`), `stage_s` (includes `retry_wait`, the seconds the run waited for files to be due), `decode_routes` (photos per decode route over the run, for
   example `gpu` and `cpu_progressive`), `attempts`, `can_cancel`, `can_resume`,
   `cancel_requested`, `error`, `started_at`, `finished_at`, `poll_after_s` (null once
   the run is over). `POST /ingest/bulk` starts a run, or continues the
   interrupted, cancelled, failed or partly failed run of the same source
   (`resumed: true`); `409 bulk_ingest_busy` (with `run_id`) while a run of the
   project is live. A run stops as `failed` after five batches in a row fail
-  entirely. `404 bulk_ingest_not_found` for an unknown run id.
+  entirely. A file that failed transiently (`engine_unavailable`, `database_busy`,
+  `incomplete_write`, or `busy` for a batch whose 503 or connection retries ran out) keeps its
+  attempts and waits for its `retry_at` (10 to 300 s, by kind and `Retry-After`); the run waits
+  for such files and ends when none waits, so none is `dead` by an outage. `404
+  bulk_ingest_not_found` for an unknown run id.
 - `GET /ingest/config`: `upload` (`enabled`, `max_images_per_request`,
   `max_bytes_per_request`, `accepted_extensions`, `persists_bytes`), `batch`
   (`enabled`, `max_items`, `source_roots`), `region_drain` (`poll_interval_s`,

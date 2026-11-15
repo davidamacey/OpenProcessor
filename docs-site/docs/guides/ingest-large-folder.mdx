@@ -192,6 +192,18 @@ curl -s "$B/<run_id>/failures?offset=0&limit=100"
 - **One run at a time per project:** a second start gets 409 `bulk_ingest_busy`.
 - **Automatic stop:** 5 batches in a row with every image failed ends the run as
   `failed` (detector or datastore down). Fix the cause and start again.
+- **Transient failures use no attempt.** A file fails three times and is `dead`, except when the
+  cause says nothing about the file: the engine or database was busy (`engine_unavailable`,
+  `database_busy`), the photo is stored incomplete and awaiting its repair (`incomplete_write`), or
+  a whole batch got a 503, or no connection to the API, until the sender's retries ran out
+  (`busy`). Such a file waits 10 to 300 seconds (the kind decides, and a `Retry-After` from the API
+  can lengthen it) and is sent again; the attempt count does not move. While files wait the run
+  stays `running`: `progress.waiting` counts them and `stage_s.retry_wait` counts the seconds.
+  The run ends when none waits, so a restart of the engine or the API during a run stores every
+  file. If it gives up on 5 batches in a row, the files stay `failed` (never `dead`) and a resume
+  sends them. A connection that breaks after the request went out (an API worker killed, a
+  read timeout) is not transient: it may be a file that crashes the worker, so it uses an
+  attempt; after an API restart the in-flight files have used at most one of three attempts.
 - **Skipped silently:** symbolic links, and directories that cannot be listed. If
   `discovered` is lower than the share, look there first.
 

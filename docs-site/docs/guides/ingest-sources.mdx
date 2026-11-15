@@ -219,6 +219,7 @@ costs a request per 1000 objects each pass; use the webhook there.
   | 5xx, throttling, timeout | `fetch_error` | `failed`, retried the same way |
   | over `OP_S3_MAX_OBJECT_MB` | `too_large` | `dead` |
   | not an accepted extension, empty or undecodable | decode `error_kind` | `dead` |
+  | engine or database busy, photo awaiting its repair, a batch that got no answer | `engine_unavailable`, `database_busy`, `incomplete_write`, `busy` | `failed`, **no attempt used**: sent again after 10 to 300 s while the run lasts, by a resume after that; never `dead` |
 
   `retry-dead` puts dead rows back to `pending`; a source with no trigger then needs **Run now**.
 - **Where to read failures:** `GET .../ingest/bulk/{run_id}/failures` and the source's `errors`.
