@@ -20,11 +20,11 @@ from src.config.settings import TritonModelConfig
 from src.core.exceptions import RequestRejectedError
 from src.core.logging import get_logger
 from src.core.wire_json import WireJSONResponse
+from src.domain.embedding_spaces import EmbeddingSpaceError
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.routers.curation._page_models import SearchSimilarResponse, SearchTextResponse
 from src.routers.curation._search_params import SearchWindowQuery, checked_filter_join
-from src.routers.curation._space_refusals import space_refusals
 from src.schemas.curation.config_common import ApiErrorResponse
 from src.schemas.curation.search_target import SearchTarget
 from src.services.curation import semantic_search
@@ -108,20 +108,19 @@ async def search_text(
             executor = None
 
         try:
-            async with space_refusals():
-                result = await semantic_search.semantic_text_search(
-                    opensearch=opensearch,
-                    pe_encoder=pe_encoder,
-                    executor=executor,
-                    query=q,
-                    tab=tab,
-                    item_filter=item_filter,
-                    image_join=join,
-                    target=target,
-                    cluster_uid=None if cluster_uid is None else str(cluster_uid),
-                    **window.service_kwargs(),
-                )
-        except (HTTPException, RequestRejectedError):
+            result = await semantic_search.semantic_text_search(
+                opensearch=opensearch,
+                pe_encoder=pe_encoder,
+                executor=executor,
+                query=q,
+                tab=tab,
+                item_filter=item_filter,
+                image_join=join,
+                target=target,
+                cluster_uid=None if cluster_uid is None else str(cluster_uid),
+                **window.service_kwargs(),
+            )
+        except (HTTPException, RequestRejectedError, EmbeddingSpaceError):
             raise
         except Exception as exc:
             logger.exception('semantic_search_failed')
@@ -178,20 +177,19 @@ async def search_similar(
 
     with bind_search_timer('similar') as timer:
         try:
-            async with space_refusals():
-                result = await semantic_search.semantic_similar_search(
-                    opensearch=opensearch,
-                    crop_id=crop_id,
-                    box_id=box_id,
-                    target=target,
-                    exclude_self=exclude_self,
-                    tab=tab,
-                    item_filter=item_filter,
-                    image_join=join,
-                    cluster_uid=None if cluster_uid is None else str(cluster_uid),
-                    **window.service_kwargs(),
-                )
-        except (HTTPException, RequestRejectedError):
+            result = await semantic_search.semantic_similar_search(
+                opensearch=opensearch,
+                crop_id=crop_id,
+                box_id=box_id,
+                target=target,
+                exclude_self=exclude_self,
+                tab=tab,
+                item_filter=item_filter,
+                image_join=join,
+                cluster_uid=None if cluster_uid is None else str(cluster_uid),
+                **window.service_kwargs(),
+            )
+        except (HTTPException, RequestRejectedError, EmbeddingSpaceError):
             raise
         except Exception as exc:
             logger.exception('similar_search_failed')

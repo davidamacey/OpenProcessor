@@ -14,12 +14,12 @@ from fastapi import File, Form, HTTPException, Query, Request, UploadFile
 
 from src.config import get_curation_config
 from src.core.exceptions import RequestRejectedError
+from src.domain.embedding_spaces import EmbeddingSpaceError
 from src.routers._errors import server_error
 from src.routers.curation._common import OpenSearchDep, router
 from src.routers.curation._item_filter_params import ItemFilterQuery
 from src.routers.curation._page_models import SearchImageResponse
 from src.routers.curation._search_params import SearchWindowQuery, checked_filter_join
-from src.routers.curation._space_refusals import space_refusals
 from src.routers.curation.search import _get_pe_encoder
 from src.schemas.curation.config_common import ApiErrorResponse
 from src.schemas.curation.search_target import SearchTarget
@@ -79,21 +79,20 @@ async def search_image(
             raise rejection(413, 'upload_too_large', f'picture exceeds {cap} bytes')
 
     try:
-        async with space_refusals():
-            return await semantic_search_image.semantic_image_search(
-                opensearch=opensearch,
-                pe_encoder=_get_pe_encoder(request),
-                data=data,
-                image_id=image_id,
-                box=semantic_search_image.parse_box(box),
-                target=target,
-                tab=tab,
-                item_filter=item_filter,
-                image_join=join,
-                cluster_uid=None if cluster_uid is None else str(cluster_uid),
-                **window.service_kwargs(),
-            )
-    except (HTTPException, RequestRejectedError):
+        return await semantic_search_image.semantic_image_search(
+            opensearch=opensearch,
+            pe_encoder=_get_pe_encoder(request),
+            data=data,
+            image_id=image_id,
+            box=semantic_search_image.parse_box(box),
+            target=target,
+            tab=tab,
+            item_filter=item_filter,
+            image_join=join,
+            cluster_uid=None if cluster_uid is None else str(cluster_uid),
+            **window.service_kwargs(),
+        )
+    except (HTTPException, RequestRejectedError, EmbeddingSpaceError):
         raise
     except Exception as exc:
         raise server_error(503, 'image search failed', exc) from exc

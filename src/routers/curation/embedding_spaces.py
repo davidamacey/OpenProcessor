@@ -34,7 +34,6 @@ from src.routers.curation._embedding_space_models import (
     EmbeddingSpaceStartResponse,
     EmbeddingSpaceView,
 )
-from src.routers.curation._space_refusals import space_refusals
 from src.routers.curation.projects import global_router
 from src.services.embedding_spaces import flip, spaces, start, views
 from src.services.embedding_spaces.capacity import OpenSearchCapacity, SpaceCapacity
@@ -142,12 +141,11 @@ async def list_space_evaluations(
 ) -> EmbeddingEvaluationListResponse:
     """The evaluation runs of a space against other spaces, newest first. 404 for another
     project's space."""
-    async with space_refusals():
-        found = await views.space_evaluations(session, current_project_id(), target, space_key)
-        if found is None:
-            raise EmbeddingSpaceError(
-                'embedding_space_not_found', f'no {target.value} space {space_key}', status=404
-            )
+    found = await views.space_evaluations(session, current_project_id(), target, space_key)
+    if found is None:
+        raise EmbeddingSpaceError(
+            'embedding_space_not_found', f'no {target.value} space {space_key}', status=404
+        )
     return EmbeddingEvaluationListResponse(
         space_key=found.space.space_key,
         target=found.space.target,
@@ -196,18 +194,17 @@ async def register_embedding_space(
 ) -> EmbeddingSpaceStartResponse:
     """Register a candidate space and start its build. 409 `embedding_space_exists`, 422
     `embedding_model_unavailable`, 409 `embedding_insufficient_storage` when the data path is short."""
-    async with space_refusals():
-        result = await start.register_and_build(
-            session,
-            current_project_id(),
-            capacity,
-            model_key=body.model_key,
-            version=body.model_version,
-            target=body.target,
-            dim=body.dim,
-            idempotency_key=idempotency_key,
-            requested_by=REQUESTER,
-        )
+    result = await start.register_and_build(
+        session,
+        current_project_id(),
+        capacity,
+        model_key=body.model_key,
+        version=body.model_version,
+        target=body.target,
+        dim=body.dim,
+        idempotency_key=idempotency_key,
+        requested_by=REQUESTER,
+    )
     return _started(result)
 
 
@@ -227,18 +224,17 @@ async def build_embedding_space(
 ) -> EmbeddingSpaceStartResponse:
     """Re-start a failed or cancelled build, or backfill documents a ready space lacks. 409
     `job_busy` while another job works on the space."""
-    async with space_refusals():
-        result = await start.build_again(
-            session,
-            current_project_id(),
-            capacity,
-            target=target,
-            key=space_key,
-            mode=ReindexMode(body.mode),
-            batch_size=body.batch_size,
-            idempotency_key=idempotency_key,
-            requested_by=REQUESTER,
-        )
+    result = await start.build_again(
+        session,
+        current_project_id(),
+        capacity,
+        target=target,
+        key=space_key,
+        mode=ReindexMode(body.mode),
+        batch_size=body.batch_size,
+        idempotency_key=idempotency_key,
+        requested_by=REQUESTER,
+    )
     return _started(result)
 
 
@@ -252,10 +248,7 @@ async def promote_embedding_space(
 ) -> EmbeddingPromoteResponse:
     """The fenced flip. 409 `embedding_space_not_ready` or `embedding_evaluation_missing`."""
     project = current_project_id()
-    async with space_refusals():
-        result = await flip.promote(
-            session, project, target=target, key=space_key, force=body.force
-        )
+    result = await flip.promote(session, project, target=target, key=space_key, force=body.force)
     await queue_dependents(session, project, result.primary, requested_by=REQUESTER)
     rows = [result.primary] + ([result.previous] if result.previous else [])
     shown = [_view(f) for f in await views.with_models(session, project, rows)]
@@ -276,10 +269,9 @@ async def retire_embedding_space(
     space_key: str, target: TargetQuery, session: DbSessionDep
 ) -> EmbeddingSpaceStartResponse:
     """Retire an optional space and queue its `clear` run. The primary cannot be retired."""
-    async with space_refusals():
-        result = await start.retire_and_clear(
-            session, current_project_id(), target=target, key=space_key, requested_by=REQUESTER
-        )
+    result = await start.retire_and_clear(
+        session, current_project_id(), target=target, key=space_key, requested_by=REQUESTER
+    )
     return _started(result)
 
 
@@ -312,10 +304,9 @@ async def cancel_embedding_reindex_run(
     ] = False,
 ) -> EmbeddingRunCancelResponse:
     """Cancel a run. Without `abandon` the space stays `building` (re-startable as a backfill)."""
-    async with space_refusals():
-        done = await start.cancel_run(
-            session, current_project_id(), run_id, abandon=abandon, requested_by=REQUESTER
-        )
+    done = await start.cancel_run(
+        session, current_project_id(), run_id, abandon=abandon, requested_by=REQUESTER
+    )
     return EmbeddingRunCancelResponse(
         run_id=str(done.run_id),
         job_status=done.job_status,
