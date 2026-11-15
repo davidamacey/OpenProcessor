@@ -40,3 +40,11 @@ unwrap_used = "deny"
 # which needs unwinding.
 [profile.release]
 panic = "unwind"
+
+# The golden tests hash tens of thousands of weight sets: unoptimised, the digest and the
+# weights' arithmetic dominate every test run.
+[profile.dev.package.frame_engine]
+opt-level = 2
+
+[profile.dev.package.sha2]
+opt-level = 3
