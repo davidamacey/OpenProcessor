@@ -36,17 +36,16 @@ call under the ingest profile, so those calls pay a few seconds once.
 The frame engine keeps a byte budget (`OP_FRAME_ENGINE_BUDGET_MIB`, default 2048). A photo
 reserves its decoded frame from it before decoding and waits its turn (at most
 `OP_FRAME_ENGINE_BUDGET_WAIT_SECONDS`, default 4) instead of failing a CUDA allocation. The
-budget is reserved when the engine starts: an engine that cannot hold it does not start and
-ingest decodes on the CPU; the route counters (`op_decode_route_total`) show it. A wait that
-times out is an overload answer: the API retries it three times and then decodes the photo on
-the CPU as `cpu_gpu_memory`. A photo that still hits a failed allocation or is larger than the
-budget is answered with a status and decoded on the CPU, counted in `op_decode_route_total` as
-`cpu_gpu_memory` or `cpu_over_budget`. The stage counter
-`op_frame_engine_stage_seconds_total{stage="budget"}` is the time spent waiting, and
+budget is reserved when the engine starts: an engine that cannot hold it does not start, and
+ingest answers 503 `engine_unavailable` until it does (there is no decode in the API to fall
+back to). A wait that times out is an overload answer: the API retries it three times and then
+the photo fails `engine_unavailable`, which a bulk run waits out and retries without using an
+attempt. A photo larger than the whole budget fails `decode_failed` (`over_budget`). The stage
+counter `op_frame_engine_stage_seconds_total{stage="budget"}` is the time spent waiting, and
 `op_frame_engine_overloads_total` counts the overload answers.
 
-A non-zero `cpu_gpu_memory` rate means the card is too full: use the profile below or unload
-models you do not use.
+A rising overload count means the card is too full: use the profile below or unload models you
+do not use. More in [The frame engine](./frame-engine.mdx).
 
 ## The opt-in profile
 

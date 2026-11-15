@@ -75,7 +75,10 @@ curl -X POST "http://localhost:4603/detect?model_name=yolo26_small_trt" -F "imag
 
 Set `YOLO_MODEL=yolo26_small_trt` to make it the default detector.
 Models load and unload at runtime through `POST /models/{name}/load` and
-`POST /models/{name}/unload`.
+`POST /models/{name}/unload`. Loading a model that is already loaded unloads it first, waits (up
+to 30 seconds) until it is no longer ready, then loads it: Triton in explicit mode crashed when a
+model was reloaded in place after its files changed. That model answers unavailable for a second
+or two; the export, promote, repair and setup steps follow the same rule.
 
 ## PE-Core encoders (required for curation)
 
