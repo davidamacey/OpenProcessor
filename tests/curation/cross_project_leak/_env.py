@@ -12,7 +12,8 @@ from _class_registry_fake import registry_of
 from integration.ingest_fakes import FakePEEncoder, FakeTritonPool
 from opensearchpy import AsyncOpenSearch
 
-from curation.cross_project_leak._constants import CLASS_NAMES
+from curation import _ingest_profile_world as ingest_profile_world
+from curation.cross_project_leak._constants import CLASS_NAMES, EMBED_DIM
 from curation.cross_project_leak._pg_rows import seed_pg_rows
 from curation.cross_project_leak._pg_world import seed_world_files
 from curation.cross_project_leak._seeded_files import _docs, _seed_files, _vec
@@ -24,6 +25,7 @@ from curation.cross_project_leak._transport import (
     _FakeTransport,
     _RecordingTransport,
 )
+from curation.engine_fakes import Engine
 from src.config.settings import TritonModelConfig
 
 
@@ -293,15 +295,27 @@ def leak_env(
     # Ingest runs end to end: a fake detector pool and PE encoder at the
     # service boundary (the same fakes the ingest integration tests use).
     class _LeakTritonPool(FakeTritonPool):
-        # An ingest-profile activation asks Triton whether its models are ready;
-        # the sweep has no server, which the route's `force` bypasses.
+        # The engine stage asks Triton whether the detector and PE encoder are loaded; an
+        # ingest-profile activation asks the same, and the sweep's `force` skips it.
         async def is_model_ready(self, _name: str) -> bool:
-            raise ConnectionError('triton disabled in the leak test')
+            return True
+
+        async def get_model_output_names(self, _name: str) -> list[str]:
+            return ingest_profile_world.FUSED
+
+        async def get_model_output_shape(self, _name: str, _output: str) -> tuple[int, ...]:
+            return (-1, 300, 6)
 
     monkeypatch.setattr(resources_module, 'get_async_triton_pool', _LeakTritonPool)
-    # photo ingest also asks for the frame engine's pool; its probe fails the same way, so the
-    # service takes the CPU decode path
-    monkeypatch.setattr(resources_module, 'get_frame_engine_pool', _LeakTritonPool)
+    # Every photo goes through the frame engine (a request it cannot take is 503 engine_unavailable,
+    # so the ingest routes would never run): the fake engine answers any bytes, and the detector
+    # and PE encoder read as loaded.
+    engine = Engine('ok', {})
+    engine.any_size = (64, 64)
+    engine.embed_dim = (
+        EMBED_DIM  # the seeded vectors' width, or the umap rebuild reads a mixed page
+    )
+    monkeypatch.setattr(resources_module, 'get_frame_engine_pool', lambda: engine)
 
     # The repository index is the server's own list of models; with no server the control
     # service fails closed (503 triton_unavailable), so the sweep serves an empty repository.

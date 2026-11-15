@@ -41,6 +41,12 @@ def _one_bytes(inp: Any) -> bytes:
     return bytes(raw[4 : 4 + n])
 
 
+def _axis(dim: int, index: int, value: float) -> np.ndarray:
+    out = np.zeros(dim, np.float32)
+    out[index] = value
+    return out
+
+
 def engine_result(
     plan: wire.EnginePlan,
     width: int,
@@ -50,6 +56,7 @@ def engine_result(
     failed_branch: str | None = None,
     route: str = 'gpu',
     det_class: int = 1,
+    embed_dim: int = 3,
 ) -> _Result:
     if status != 'ok':
         failed = {b: {'status': 'error', 'reason': 'image_failed'} for b in plan.branches}
@@ -74,7 +81,7 @@ def engine_result(
         'det_boxes': np.array([[16.0, 16.0, 192.0, 192.0]], np.float32),
         'det_scores': np.array([0.9], np.float32),
         'det_classes': np.array([det_class], np.int32),
-        'whole_embedding': np.array([0.0, 0.0, 2.0], np.float32),
+        'whole_embedding': _axis(embed_dim, embed_dim - 1, 2.0),
         # frame: n=100, sum=0, squares=500 -> 5.0 ; box: n=10, sum=10, squares=30 -> 2.0
         'blur_sums': np.array([[100, 0, 500], [10, 10, 30]], np.int64),
         'crop_jpegs': np.array([jpeg], dtype=np.object_),
@@ -82,9 +89,9 @@ def engine_result(
     if plan.runs('embed_crops'):
         # as the engine does: only the picked detections are embedded, their rows come first
         picked = plan.embed_classes is None or det_class in plan.embed_classes
-        out['crop_embeddings'] = np.array([[0.0, 3.0, 0.0]] if picked else [], np.float32).reshape(
-            -1, 3
-        )
+        out['crop_embeddings'] = np.array(
+            [_axis(embed_dim, 1, 3.0)] if picked else [], np.float32
+        ).reshape(-1, embed_dim)
         out['crop_embedded'] = np.array([picked])
     return _Result(out)
 
@@ -103,6 +110,9 @@ class Engine:
         self.route = 'gpu'
         self.gates: dict[bytes, asyncio.Event] = {}
         self.answered: list[bytes] = []
+        # a test that does not care which photo is which: every bytes is an image of this size
+        self.any_size: tuple[int, int] | None = None
+        self.embed_dim = 3
 
     async def is_model_ready(self, model: str) -> bool:
         assert model == wire.MODEL_NAME
@@ -119,12 +129,18 @@ class Engine:
         gate = self.gates.get(data)
         if gate is not None:
             await gate.wait()
-        if data not in self.sizes:  # bytes nobody registered are no image
+        if data not in self.sizes and self.any_size is None:  # bytes nobody registered are no image
             return engine_result(plan, 0, 0, 'corrupt')
-        w, h = self.sizes[data]
+        w, h = self.sizes.get(data) or self.any_size  # type: ignore[misc]
         self.answered.append(data)
         return engine_result(
-            plan, w, h, self.status, failed_branch=self.failed_branch, route=self.route
+            plan,
+            w,
+            h,
+            self.status,
+            failed_branch=self.failed_branch,
+            route=self.route,
+            embed_dim=self.embed_dim,
         )
 
 
