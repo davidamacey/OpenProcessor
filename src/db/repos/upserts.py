@@ -6,7 +6,9 @@ the table, its indexes and its HOT chain alone. PostgreSQL 18 INSERT: "ON CONFLI
 optional WHERE clause ... only rows for which the condition returns true will be updated"
 (https://www.postgresql.org/docs/18/sql-insert.html); ``IS DISTINCT FROM`` treats NULLs as equal
 (https://www.postgresql.org/docs/18/functions-comparison.html). Multi-row ``VALUES`` in chunks that stay
-under the 65,535-parameter limit of the wire protocol.
+under the 65,535-parameter limit of the wire protocol. The count is the INSERT command tag's, asked
+for with ``preserve_rowcount`` (https://docs.sqlalchemy.org/en/21/core/connections.html, ``Connection.execution_options``
+and ``CursorResult.rowcount``; https://www.postgresql.org/docs/18/sql-insert.html, "Outputs").
 """
 
 from __future__ import annotations
@@ -102,6 +104,10 @@ async def upsert_distinct(
             statement = insert.on_conflict_do_update(
                 index_elements=list(key), set_=assignments, where=where
             )
-        result = await session.execute(statement)
+        # SQLAlchemy keeps ``rowcount`` for UPDATE and DELETE only: an INSERT reports -1 unless the
+        # statement sets ``preserve_rowcount`` (CursorResult.rowcount, Connection.execution_options).
+        # PostgreSQL's INSERT command tag counts rows inserted or updated, not the rows the
+        # ``WHERE ... IS DISTINCT FROM`` skipped (INSERT, "Outputs"): one statement, an exact count.
+        result = await session.execute(statement.execution_options(preserve_rowcount=True))
         written += int(result.rowcount)  # type: ignore[attr-defined]  # a DML result
     return written
