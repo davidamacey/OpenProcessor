@@ -55,6 +55,10 @@ def test_the_runner_spawns_its_stage_tasks_through_the_crash_wrapper() -> None:
     from scripts.curation.worker import runner
 
     source = inspect.getsource(runner)
-    assert 'spawn_critical(stage_a_consumer' in source
-    assert 'spawn_critical(writer' in source
+    # every pipeline task is started by ``_spawn`` -> ``_spawn_into`` -> ``spawn_critical``
+    assert 'task = spawn_critical(coro, name=name)' in source
+    assert '_spawn(stage_a_consumer(' in source
+    assert '_spawn(writer(' in source
     assert 'create_task(stage_' not in source
+    assert 'create_task(writer' not in source
+    assert 'create_task(producer' not in source

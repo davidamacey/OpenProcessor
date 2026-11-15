@@ -33,6 +33,7 @@ def _run(status: str, **progress: Any) -> dict[str, Any]:
         'n_not_embedded': 0,
         'n_embed_failed': 0,
         'in_flight': 0,
+        'waiting': 0,
         'unreadable': 0,
         'unreadable_samples': [],
         'images_per_s': 12.0,
@@ -224,3 +225,10 @@ def test_the_estimate_is_shown_in_readable_units(
     cli: Any, low: float, high: float, shown: str
 ) -> None:
     assert cli._fmt_duration(low, high) == shown
+
+
+def test_the_progress_line_says_how_many_files_wait_for_a_retry(cli: Any) -> None:
+    """A run that waits for files must not look stalled."""
+    waiting = cli.progress_line(_run('running', waiting=3))
+    assert 'waiting 3' in waiting
+    assert 'waiting' not in cli.progress_line(_run('running'))
