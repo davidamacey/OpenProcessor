@@ -142,7 +142,3 @@ _.combine_label  # import and combine claim builders: wired by storage steps 2 t
 _.import_box  # import and combine claim builders: wired by storage steps 2 to 4; entry removed by that lane
 _.import_item  # import and combine claim builders: wired by storage steps 2 to 4; entry removed by that lane
 _.DEFAULT_PRECEDENCE  # the machine class precedence order: wired by storage steps 2 to 4; entry removed by that lane
-_.GEOMETRY_KINDS  # claim kind sets: read by the fold commit that follows; entry removed there
-_.PINNING_KINDS  # claim kind sets: read by the fold commit that follows; entry removed there
-_.CLASS_DECIDING_KINDS  # claim kind sets: read by the fold commit that follows; entry removed there
-_.actor_rank  # claim ranking: read by the claim row; entry removed with the fold commit
