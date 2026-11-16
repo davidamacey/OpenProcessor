@@ -82,6 +82,7 @@ fn bed_with(region: usize, window: usize, budget: u64, workers: u32) -> Bed {
             budget_wait: Duration::from_millis(200),
             slab_wait: Duration::from_millis(100),
             window,
+            keyed: Arc::new(read::KeyedRoots::none()),
         },
         metrics: Metrics::new(),
         colour: ColourStep::new(2, Gauge::default()),
@@ -96,7 +97,7 @@ fn bed() -> Bed {
 
 fn photo_of(image: Bytes, plan: &str) -> Photo {
     Photo {
-        image,
+        image: ImageInput::Bytes(image),
         plan: parse_plan(plan.as_bytes(), false).expect("plan"),
         boxes: None,
         request: Arc::new(RequestState::new(RequestClock::start(Instant::now(), 30.0))),
@@ -749,6 +750,8 @@ mod combined;
 mod faces;
 #[path = "host_tests.rs"]
 mod host;
+#[path = "tests_keyed.rs"]
+mod keyed;
 #[path = "tests_late.rs"]
 mod late_round;
 #[path = "tests_sources.rs"]

@@ -17,6 +17,7 @@ use frame_engine::engine::GpuPipeline;
 use frame_engine::front::{Front, FrontConfig, ServeConfig, serve};
 use frame_engine::health;
 use frame_engine::metrics::{self, Metrics};
+use frame_engine::photo::read::KeyedRoots;
 use frame_engine::pipeline::Pipeline;
 use frame_engine::self_check::{self, Models};
 use frame_engine::settings::Settings;
@@ -141,7 +142,12 @@ fn main() -> ExitCode {
                 run(settings, metrics, Arc::new(pipeline)).await
             }
             (None, Some(PipelineChoice::Stub) | None) => {
-                let stub = StubPipeline::new(args.stub_not_ready_file);
+                let roots = KeyedRoots::new(
+                    settings.landing_root.as_deref(),
+                    settings.source_root.as_deref(),
+                    u64::from(settings.max_message_mib) << 20,
+                )?;
+                let stub = StubPipeline::new(args.stub_not_ready_file).with_roots(roots);
                 run(settings, Metrics::new(), Arc::new(stub)).await
             }
         }

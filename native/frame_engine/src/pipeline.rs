@@ -16,6 +16,9 @@ use tokio::sync::Notify;
 use crate::admission::{Overload, RequestClock};
 use crate::wire::EnginePlan;
 use crate::wire::branch_status::BranchState;
+pub use crate::wire::request::ImageInput;
+use crate::wire::request::RequestError;
+use op_local_file::FileRef;
 
 /// One output tensor with its datatype; `shape` is the response's (`-1` never appears).
 #[derive(Debug, Clone, PartialEq)]
@@ -154,12 +157,13 @@ impl RequestState {
     }
 }
 
-/// One admitted photo: the encoded file (a slice of the request message), its validated plan and
-/// the stored boxes (`Some` when the request carried `boxes`, even with no rows).
+/// One admitted photo: the encoded file (a slice of the request message, or the file to read),
+/// its validated plan and the stored boxes (`Some` when the request carried `boxes`, even with no
+/// rows).
 #[derive(Debug)]
 pub struct Photo {
-    /// The encoded image file, a slice of the request message.
-    pub image: Bytes,
+    /// The encoded image file: a slice of the request message, or a file the pipeline reads.
+    pub image: ImageInput,
     /// The plan the request asked for, already validated.
     pub plan: EnginePlan,
     /// Stored boxes as `x1, y1, x2, y2`; `Some` when the request carried `boxes`, even with no rows.
@@ -186,6 +190,20 @@ pub trait Pipeline: Send + Sync + 'static {
     /// `OP_FRAME_ENGINE_HEALTH_SECONDS` and at once after a failed call; it refreshes what
     /// [`Pipeline::ready`] reads.
     fn check(&self) -> impl Future<Output = ()> + Send;
+
+    /// Whether this pipeline can read `file`: the engine has a root for its key. Checked before
+    /// the photo is admitted, with no disk access; the default refuses, so a pipeline that does
+    /// not read by key fails closed.
+    ///
+    /// # Errors
+    ///
+    /// `root_not_configured`, as `INVALID_ARGUMENT`.
+    fn check_source(&self, file: &FileRef) -> Result<(), RequestError> {
+        Err(RequestError(format!(
+            "root_not_configured: {} (this pipeline reads no files)",
+            crate::pyfmt::repr_str(file.root().as_str())
+        )))
+    }
 
     /// The answer for one admitted photo. The future is dropped when the request ends early.
     fn process(

@@ -6,7 +6,7 @@ const STORED: &str = r#"{"version": 1, "branches": ["embed_crops"], "crops": "in
 
 fn stored(plan: &str, boxes: Vec<[f64; 4]>) -> Photo {
     Photo {
-        image: jpeg(100, 100, 1),
+        image: ImageInput::Bytes(jpeg(100, 100, 1)),
         plan: parse_plan(plan.as_bytes(), true).expect("plan"),
         boxes: Some(boxes),
         request: Arc::new(RequestState::new(RequestClock::start(Instant::now(), 30.0))),

@@ -83,7 +83,13 @@ def test_the_two_engines_never_unregister_each_others_region() -> None:
     env = {n: services()[n]['environment'] for n in ('engine-native', 'engine-python')}
     instances = {n: e['OP_FRAME_ENGINE_INSTANCE'] for n, e in env.items()}
     assert instances == {'engine-native': 'fe-native', 'engine-python': 'fe-python'}
-    shared = {k: v for k, v in env['engine-native'].items() if k != 'OP_FRAME_ENGINE_INSTANCE'}
+    # the instance names differ, and only the native engine reads photos by key
+    native_only = {
+        'OP_FRAME_ENGINE_INSTANCE',
+        'OP_FRAME_ENGINE_LANDING_ROOT',
+        'OP_FRAME_ENGINE_SOURCE_ROOT',
+    }
+    shared = {k: v for k, v in env['engine-native'].items() if k not in native_only}
     assert shared == {
         k: v for k, v in env['engine-python'].items() if k != 'OP_FRAME_ENGINE_INSTANCE'
     }
@@ -215,3 +221,16 @@ def test_what_the_image_copies_from_the_context_exists_and_is_not_ignored(rel: s
 
     assert (REPO_ROOT / rel).exists()
     assert not is_ignored(load_rules('.'), f'{rel}/Cargo.toml' if rel == 'native' else rel)
+
+
+def test_only_the_native_engine_mounts_the_landing_zone_and_the_source_folder_and_only_to_read() -> (
+    None
+):
+    native, python = services()['engine-native'], services()['engine-python']
+    mounts = {':'.join(str(v).rsplit(':', 2)[1:]) for v in native['volumes']}
+    assert mounts == {'/data/landing:ro', '/data/source:ro'}
+    env = native['environment']
+    assert (env['OP_FRAME_ENGINE_LANDING_ROOT'], env['OP_FRAME_ENGINE_SOURCE_ROOT']) == (
+        '/data/landing', '/data/source')  # fmt: skip
+    assert 'volumes' not in python
+    assert not any('ROOT' in k for k in python['environment'])

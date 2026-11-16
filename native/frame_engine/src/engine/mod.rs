@@ -29,9 +29,12 @@ use crate::branches::ocr::ctc::{CtcDecoder, DICTIONARY_PATH};
 use crate::colour::ColourStep;
 use crate::metrics::{ByCause, ByCode, Metrics};
 use crate::photo::budget::GpuBudget;
+use crate::photo::read::KeyedRoots;
 use crate::photo::{PhotoFlow, PhotoSettings};
 use crate::pipeline::{Photo, PhotoAnswer, Pipeline, PipelineError};
 use crate::settings::{Settings, Transport, parse_bus_id};
+use crate::wire::request::RequestError;
+use op_local_file::FileRef;
 
 const MIB: u64 = 1 << 20;
 /// Region names start with this, then the card and the instance (`transport.REGION_PREFIX`).
@@ -78,6 +81,16 @@ pub fn identify(expect: Option<&str>) -> Result<(String, String), String> {
         ));
     }
     Ok((name, bus))
+}
+
+/// The roots a photo named by a key is read under, and the size no file may pass (the message
+/// limit a bytes request is held to).
+fn read_roots(s: &Settings) -> Result<KeyedRoots, String> {
+    KeyedRoots::new(
+        s.landing_root.as_deref(),
+        s.source_root.as_deref(),
+        u64::from(s.max_message_mib) * MIB,
+    )
 }
 
 /// The GPU pipeline.
@@ -187,6 +200,7 @@ impl GpuPipeline {
             gpu.nvjpeg_device().0 >> 20,
         );
         let budget_bytes = u64::from(s.budget_mib) * MIB;
+        let keyed = step("read-only roots", || read_roots(s))?;
         let flow = PhotoFlow {
             device: Arc::clone(&gpu),
             budget: GpuBudget::new(
@@ -202,6 +216,7 @@ impl GpuPipeline {
                 budget_wait: Duration::from_secs_f64(s.budget_wait_seconds),
                 slab_wait: Duration::from_secs_f64(s.slab_wait_seconds),
                 window: region_bytes / (s.workers as usize).max(1),
+                keyed: Arc::new(keyed),
             },
             colour: ColourStep::new(s.colour_tables as usize, metrics.colour_table_bytes.clone()),
             metrics,
@@ -249,6 +264,10 @@ impl Pipeline for GpuPipeline {
 
     fn wake(&self) -> &Notify {
         &self.gpu.wake
+    }
+
+    fn check_source(&self, file: &FileRef) -> Result<(), RequestError> {
+        self.flow.settings.keyed.check(file)
     }
 
     async fn check(&self) {

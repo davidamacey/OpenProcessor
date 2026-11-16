@@ -46,6 +46,32 @@ pub struct Contract {
     pub stages: Vec<String>,
     /// The metric families the engine serves.
     pub metrics: Vec<MetricFamily>,
+    /// The optional `source` input, by which the native engine reads a photo from a file.
+    pub read_by_key: ReadByKey,
+}
+
+/// The `read_by_key` extension: an input the Python engine does not have.
+#[derive(Debug, Deserialize)]
+pub struct ReadByKey {
+    /// The engines that have the input.
+    pub supported_by: Vec<String>,
+    /// The input beside `image`; exactly one of the two travels in a request.
+    pub input: InputTensor,
+    /// Refusals of a request that sends both or neither, with their message text.
+    pub request_rules: Vec<RequestRule>,
+    /// The faults a `source` document or the engine's settings can raise, in check order.
+    pub source_faults: Vec<String>,
+    /// The photo statuses a read can answer, and when.
+    pub photo_statuses: Vec<ReadStatus>,
+}
+
+/// A photo status of a read by key.
+#[derive(Debug, Deserialize)]
+pub struct ReadStatus {
+    /// The `status` output's value.
+    pub status: String,
+    /// When the engine answers it.
+    pub when: String,
 }
 
 /// One series family of the metrics endpoint.
@@ -163,6 +189,7 @@ impl Contract {
         let template = self
             .request_rules
             .iter()
+            .chain(&self.read_by_key.request_rules)
             .find(|r| r.id == rule)
             .map_or(rule, |r| r.message.as_str());
         if template.contains("'{name}'") {

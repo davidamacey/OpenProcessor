@@ -53,6 +53,18 @@ context refuses work as retryable, turns readiness false and exits for a restart
 has a deadline (`OP_FRAME_ENGINE_TRITON_TIMEOUT_SECONDS`) and every request one
 (`OP_FRAME_ENGINE_REQUEST_DEADLINE_SECONDS`); the API client's call timeout (120 s) is longer.
 
+**Reading a photo by key (native engine only).** Besides `image`, the Rust engine (`native/frame_engine`,
+not yet the one the stack runs) accepts an optional `source` input: a JSON document naming a
+landing-zone or source-folder key with the size and `imohash` the server holds for the file. The
+engine reads the file itself from a read-only mount, so the photo is not read into a request message
+and copied again. Exactly one of `image` and `source` travels in a request. The key rule and the
+rule that refuses a symlink leaving its root are `native/op_local_file`, the same copy the server
+uses. Set `OP_FRAME_ENGINE_LANDING_ROOT` and `OP_FRAME_ENGINE_SOURCE_ROOT` to the mount points; an
+engine with no root for a key refuses it. After the read the photo takes the path a bytes request
+takes. A file that is gone, changed since the claim, above `OP_FRAME_ENGINE_MAX_MESSAGE_MIB` or
+unreadable answers the photo status `missing`, `changed`, `too_large` or `unreadable`; the contract
+is `read_by_key` in `contracts/json/frame_engine_v1.json`.
+
 ## The API side
 
 `src/clients/frame_engine.py` is the client (one request per photo through the shared Triton pool

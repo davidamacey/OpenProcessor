@@ -22,6 +22,7 @@ use crate::photo::clock;
 use crate::pipeline::{Photo, Pipeline, RequestState, Tensor};
 use crate::settings::Settings;
 use crate::wire::parse_plan;
+use crate::wire::request::ImageInput;
 
 /// The models the plans name (the API's ingest plan, `ingest_gpu_decode.ingest_engine_plan`).
 #[derive(Debug, Clone)]
@@ -170,7 +171,7 @@ async fn run_plan(
     let clock = RequestClock::start(Instant::now(), settings.request_deadline_seconds);
     let request = Arc::new(RequestState::new(clock));
     let photo = Photo {
-        image: image.clone(),
+        image: ImageInput::Bytes(image.clone()),
         plan,
         boxes: None,
         request: Arc::clone(&request),

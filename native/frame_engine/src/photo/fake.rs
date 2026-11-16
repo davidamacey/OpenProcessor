@@ -121,6 +121,10 @@ pub struct Fake {
     pub frames: Arc<AtomicUsize>,
     pub lost: AtomicBool,
     pub wakes: AtomicUsize,
+    /// Host jobs (`Device::host`) running now.
+    host_active: Arc<AtomicUsize>,
+    /// The most host jobs that ran at once.
+    pub host_peak: Arc<AtomicUsize>,
     /// Vector width of both encoders.
     pub dim: usize,
 }
@@ -135,6 +139,8 @@ impl Fake {
             frames: Arc::new(AtomicUsize::new(0)),
             lost: AtomicBool::new(false),
             wakes: AtomicUsize::new(0),
+            host_active: Arc::new(AtomicUsize::new(0)),
+            host_peak: Arc::new(AtomicUsize::new(0)),
             dim: 8,
         })
     }
@@ -409,7 +415,13 @@ impl Device for Fake {
         f: impl FnOnce() -> T + Send + 'static,
         cancel: &CancelToken,
     ) -> JobResult<T> {
-        self.submit(cancel, move || Ok(f()))
+        let (active, peak) = (Arc::clone(&self.host_active), Arc::clone(&self.host_peak));
+        self.submit(cancel, move || {
+            peak.fetch_max(active.fetch_add(1, Ordering::SeqCst) + 1, Ordering::SeqCst);
+            let out = f();
+            active.fetch_sub(1, Ordering::SeqCst);
+            Ok(out)
+        })
     }
 
     fn colour_table(&self, host: &[u8]) -> Result<crate::colour::Table, GpuFault> {
