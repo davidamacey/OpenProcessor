@@ -13,6 +13,7 @@ use super::budget::GpuBudget;
 use super::fake::{Event, Fake};
 use super::*;
 use crate::admission::RequestClock;
+use crate::colour::ColourStep;
 use crate::pipeline::RequestState;
 use crate::wire::branch_status::MODEL_ERROR;
 use crate::wire::bytes_tensor::{pack, unpack};
@@ -80,6 +81,7 @@ fn bed_with(region: usize, window: usize, budget: u64, workers: u32) -> Bed {
             window,
         },
         metrics: Metrics::new(),
+        colour: ColourStep::new(2, Gauge::default()),
     };
     Bed { fake, flow }
 }
@@ -179,6 +181,8 @@ async fn the_hand_offs_come_in_the_python_order_and_each_stage_is_observed() {
             Event::Launch { .. } => "launch".into(),
             Event::Crop(_) => "crop".into(),
             Event::Warps(_) => "warps".into(),
+            Event::ColourTable(_) => "colour table".into(),
+            Event::Gather => "gather".into(),
             Event::Call { model, .. } => format!("call {model}"),
         })
         .collect();
@@ -692,17 +696,8 @@ async fn photos_no_decoder_takes_answer_without_a_decode() {
 }
 
 #[tokio::test]
-async fn stored_boxes_and_unbuilt_branches_are_refused_as_n0_says() {
+async fn unbuilt_branches_answer_unsupported_branch() {
     let b = bed();
-    let plan = r#"{"version": 1, "branches": ["embed_crops"], "crops": "none", "crop_embed": {"model": "pe_crop", "size": 224, "batch": 32}}"#;
-    let p = Photo {
-        image: jpeg(100, 100, 1),
-        plan: parse_plan(plan.as_bytes(), true).expect("plan"),
-        boxes: Some(vec![[0.1, 0.1, 0.5, 0.5]]),
-        request: Arc::new(RequestState::new(RequestClock::start(Instant::now(), 30.0))),
-    };
-    let failed = b.flow.process(p).await.expect_err("not built");
-    assert!(matches!(&failed, PipelineError::Engine(m) if m.contains("N1a")));
     let ocr = r#"{"version": 1, "branches": ["detect", "ocr"], "crops": "none", "detector": {"model": "det", "input_size": 640, "letterbox_fill": 114}, "ocr": {"detector": "ocr_det", "recogniser": "ocr_rec", "batch": 16, "max_lines": 50, "det_side": 960}}"#;
     let answer = b.flow.process(photo(ocr)).await.expect("answer");
     assert_eq!(
@@ -740,3 +735,7 @@ async fn the_crop_jpegs_are_packed_as_bytes_elements() {
 mod faces;
 #[path = "host_tests.rs"]
 mod host;
+#[path = "tests_late.rs"]
+mod late_round;
+#[path = "tests_sources.rs"]
+mod sources;

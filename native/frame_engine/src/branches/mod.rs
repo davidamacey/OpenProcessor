@@ -6,6 +6,7 @@
 //! Built: `detect`, `embed_frame` and `embed_crops` with `crops: inline` (N0), `faces` and
 //! `face_embed` (N1b); every other branch the protocol knows answers `unsupported_branch`.
 
+pub mod area;
 pub mod crops;
 pub mod detect;
 pub mod embed;

@@ -13,6 +13,9 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 GOLDEN = ROOT / 'native' / 'frame_engine' / 'tests' / 'golden'
 SCRIPT = ROOT / 'scripts' / 'codegen' / 'frame_engine_goldens.py'
+# written by their own generators: frame_engine_area_goldens.py, frame_engine_colour_goldens.py
+# and frame_engine_host_corpus.py
+OTHER_GENERATORS = {'area.json', 'colour.json', 'host'}
 
 
 @pytest.fixture(scope='module')
@@ -26,7 +29,7 @@ def rendered() -> dict[str, str]:
 
 
 def test_the_committed_files_are_what_the_generator_writes(rendered: dict[str, str]) -> None:
-    assert set(rendered) == {p.name for p in GOLDEN.iterdir()}
+    assert set(rendered) | OTHER_GENERATORS == {p.name for p in GOLDEN.iterdir()}
     for name, text in rendered.items():
         assert (GOLDEN / name).read_text(encoding='utf-8') == text, f'{name} is stale'
 

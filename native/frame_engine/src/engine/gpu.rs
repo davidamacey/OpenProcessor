@@ -17,16 +17,16 @@ use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use gpu_frame::{
-    CallError, CancelToken, Context, DecodeError, DeviceBuf, DeviceRange, FramePool, InferCall,
-    InputTensor, Lane, Lanes, ModelCalls, ModelServer, OutputTensor, SliceError, Stream,
-    WorkerPool,
+    AllocError, ByteCount, CallError, CancelToken, Context, DecodeError, DeviceBuf, DeviceRange,
+    FramePool, InferCall, InputTensor, Lane, Lanes, ModelCalls, ModelServer, OutputTensor,
+    SliceError, Stream, WorkerPool,
 };
 use tokio::sync::Notify;
 
 use crate::branches::InputSpec;
 use crate::branches::crops::{self, CropJpeg};
 use crate::branches::faces::warp::FaceWarpKernel;
-use crate::fault::GpuFault;
+use crate::fault::{GpuFault, note_memory_failure};
 use crate::kernels::{FrameRef, PrepKernels, Staging, WEIGHT_CACHE_BYTES, WeightCache, WeightSet};
 use crate::photo::clock::{DECODE, JobClock, SYNCED};
 use crate::photo::device::{
@@ -133,6 +133,7 @@ struct FinishThread {
     stream: Arc<Stream>,
     staging: Staging,
     encoder: turbojpeg::Compressor,
+    max_side: u32,
 }
 
 /// How the pools are sized and what they do.
@@ -146,6 +147,8 @@ pub struct GpuConfig {
     pub finish_threads: usize,
     /// JPEG quality (1 to 100) of the encoded crops, `OP_FRAME_ENGINE_JPEG_QUALITY`.
     pub jpeg_quality: u32,
+    /// `OP_FRAME_ENGINE_CROP_MAX_SIDE`: a crop's long side above it is shrunk before the encode.
+    pub crop_max_side: u32,
     /// Whether each GPU stage synchronises its stream before returning, so stage timings are exact.
     pub stage_sync: bool,
     /// Whether the inputs travel in the request body (`OP_FRAME_ENGINE_TRANSPORT=body`).
@@ -161,6 +164,7 @@ pub struct Gpu {
     finish: WorkerPool<FinishThread>,
     pub(super) server: Arc<ModelServer>,
     pub(super) wake: Notify,
+    nvjpeg_device: Arc<ByteCount>,
 }
 
 fn pool_failed<E: std::fmt::Display>(what: &str, e: E) -> GpuFault {
@@ -179,8 +183,9 @@ impl Gpu {
         server: ModelServer,
         cfg: &GpuConfig,
     ) -> Result<Self, GpuFault> {
-        let host = Arc::new(gpu_frame::HostCount::default());
-        let lanes = Lanes::new(&frames, &host, cfg.lanes, None)
+        let host = Arc::new(ByteCount::default());
+        let nvjpeg_device = Arc::new(ByteCount::default());
+        let lanes = Lanes::new(&frames, &host, &nvjpeg_device, cfg.lanes, None)
             .map_err(|e| pool_failed("decode lanes", e))?;
         let loader = gpu_frame::Kernels::new(ctx)?;
         let kernels = PrepKernels::load(&loader)?;
@@ -210,12 +215,14 @@ impl Gpu {
         let finish = {
             let ctx = Arc::clone(ctx);
             let quality = cfg.jpeg_quality;
+            let max_side = cfg.crop_max_side;
             WorkerPool::new("fe-finish", cfg.finish_threads, move |_| {
                 ctx.bind().map_err(|e| e.to_string())?;
                 Ok::<_, String>(FinishThread {
                     stream: Stream::new(&ctx).map_err(|e| e.to_string())?,
                     staging: Staging::new(&ctx),
                     encoder: crops::encoder(quality)?,
+                    max_side,
                 })
             })
             .map_err(|e| pool_failed("finish pool", e))?
@@ -228,7 +235,13 @@ impl Gpu {
             finish,
             server: Arc::new(server),
             wake: Notify::new(),
+            nvjpeg_device,
         })
+    }
+
+    /// nvJPEG's device bytes in use and their peak (the lanes' buffers, outside the frame cap).
+    pub fn nvjpeg_device(&self) -> (usize, usize) {
+        (self.nvjpeg_device.in_use(), self.nvjpeg_device.peak())
     }
 
     /// The CUDA context of the card all work runs on.
@@ -268,11 +281,16 @@ impl Gpu {
 /// `prep_budget.is_memory_error`, then the context: a decode failure is the photo's (`decoder`)
 /// only while the context still works (`engine._check_context`; the lane waits for its stream
 /// after an nvJPEG failure and reports a lost context instead).
-fn decode_refusal(e: DecodeError) -> Result<&'static str, GpuFault> {
+fn decode_refusal(e: DecodeError, size: (u32, u32)) -> Result<&'static str, GpuFault> {
     if e.is_context_lost() {
         return Err(GpuFault::ContextLost(e.to_string()));
     }
     if e.is_out_of_memory() {
+        let detail = match &e {
+            DecodeError::Alloc(AllocError::Cap(cap)) => cap.to_string(),
+            other => format!("the card's memory: {other}"),
+        };
+        note_memory_failure("decode", size, &detail);
         return Ok("gpu_memory");
     }
     match e {
@@ -332,18 +350,20 @@ fn weight_sets<I>(
 /// A decoded frame on the card, or the photo's status.
 type LaneFrame = Result<(DeviceBuf, u32, u32), &'static str>;
 
-/// nvJPEG, then the EXIF tag applied by `orient.cu`; a frame of another size is `decoder`.
+/// nvJPEG, then the EXIF tag applied by `orient.cu`; a frame of another size is `decoder`. Then
+/// the colour step's gather through `colour`, in place (`colour.cu`).
 fn nvjpeg_frame(
     shared: &Shared,
     lane: &mut Lane,
     image: bytes::Bytes,
     orientation: u32,
     size: (u32, u32),
+    colour: Option<&crate::colour::Table>,
 ) -> Result<LaneFrame, GpuFault> {
     let stream = Arc::clone(lane.stream());
     let d = match lane.decode(image) {
         Ok(d) => d,
-        Err(e) => return decode_refusal(e).map(Err),
+        Err(e) => return decode_refusal(e, size).map(Err),
     };
     let (w, h) = (d.frame.width(), d.frame.height());
     let frame = match shared.kernels.orient(
@@ -358,6 +378,10 @@ fn nvjpeg_frame(
     };
     if (frame.1, frame.2) != size {
         return Ok(Err("decoder"));
+    }
+    if let Some(table) = colour {
+        let pixels = frame.1 as usize * frame.2 as usize;
+        shared.kernels.colour(&stream, &frame.0, pixels, &**table)?;
     }
     Ok(Ok(frame))
 }
@@ -391,6 +415,7 @@ fn decode_on_lane(
         origin,
         size,
         writes,
+        colour,
         hold,
         request,
     } = job;
@@ -405,16 +430,19 @@ fn decode_on_lane(
         weight_sets(shared, &mut cache, &stream, &writes)?
     };
     let decoded = clock.time(DECODE, || match origin {
-        Origin::Gpu { orientation } => nvjpeg_frame(shared, lane, image, orientation, size),
+        Origin::Gpu { orientation } => {
+            nvjpeg_frame(shared, lane, image, orientation, size, colour.as_ref())
+        }
         Origin::Host => host_frame(shared, &stream, &image, size),
     })?;
     let (buf, width, height) = match decoded {
         Ok(frame) => frame,
         Err(status) => {
-            lane.synchronize().map_err(|e| match decode_refusal(e) {
-                Err(fault) => fault,
-                Ok(_) => GpuFault::Failed("the lane's stream wait failed".into()),
-            })?;
+            lane.synchronize()
+                .map_err(|e| match decode_refusal(e, size) {
+                    Err(fault) => fault,
+                    Ok(_) => GpuFault::Failed("the lane's stream wait failed".into()),
+                })?;
             return Ok(Decoded::Refused {
                 status,
                 stages: clock.stages,
@@ -520,6 +548,7 @@ fn crop_on_thread(
         stream,
         staging,
         encoder,
+        max_side,
     } = t;
     let started = Instant::now();
     let pinned = staging.at_least(width * height * 3)?;
@@ -537,7 +566,8 @@ fn crop_on_thread(
     // the copy was waited for: the frame may go
     drop(frame);
     let started = Instant::now();
-    let jpeg = crops::encode(encoder, pixels, width, height).map_err(GpuFault::Failed)?;
+    let jpeg = crops::encode_capped(encoder, pixels, (width, height), *max_side)
+        .map_err(GpuFault::Failed)?;
     Ok(CropJpeg {
         data: bytes::Bytes::from(jpeg),
         copy_seconds: copied,
@@ -597,6 +627,13 @@ impl Device for Gpu {
     ) -> JobResult<T> {
         self.finish
             .submit(cancel, move |_: &mut FinishThread| Ok(f()))
+    }
+
+    fn colour_table(&self, host: &[u8]) -> Result<crate::colour::Table, GpuFault> {
+        self.ctx.bind()?;
+        let stream = Stream::new(&self.ctx)?;
+        let table = self.shared.frames.upload(host, &stream)?;
+        Ok(Arc::new(table))
     }
 
     async fn infer(

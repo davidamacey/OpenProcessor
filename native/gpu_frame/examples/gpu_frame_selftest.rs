@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 use bytes::Bytes;
 use gpu_frame::model_server::RegistrationCause;
 use gpu_frame::{
-    CancelToken, Context, DeviceCap, DeviceRange, FramePool, HostCount, InferCall, InputTensor,
+    ByteCount, CancelToken, Context, DeviceCap, DeviceRange, FramePool, InferCall, InputTensor,
     KernelArg, Kernels, Lanes, LaunchConfig, ModelCalls, ModelServer, ModelServerConfig, PinnedBuf,
     Region, Stream,
 };
@@ -208,7 +208,8 @@ async fn run(args: Args) -> usize {
     );
     let (free_before, total) = ctx.memory_info().unwrap_or((0, 0));
     let cap = DeviceCap::new(args.cap_mib << 20);
-    let host = Arc::new(HostCount::default());
+    let host = Arc::new(ByteCount::default());
+    let nvjpeg_device = Arc::new(ByteCount::default());
     let frames = match FramePool::new(&ctx, cap.clone()) {
         Ok(f) => f,
         Err(e) => {
@@ -216,16 +217,17 @@ async fn run(args: Args) -> usize {
             return r.failed;
         }
     };
-    decode_checks(&mut r, &args, &ctx, &frames, &host).await;
+    decode_checks(&mut r, &args, &ctx, &frames, [&host, &nvjpeg_device]).await;
     kernel_checks(&mut r, &args, &ctx, &frames);
     region_checks(&mut r, &args, &ctx).await;
     let (free_after, _) = ctx.memory_info().unwrap_or((0, 0));
     r.line(
         "memory",
         Ok(format!(
-            "cap peak {} MiB of {}, pinned host peak {} MiB, device used by all processes {} MiB before and {} MiB after; per process: {}",
+            "cap peak {} MiB of {}, nvJPEG device peak {} MiB, pinned host peak {} MiB, device used by all processes {} MiB before and {} MiB after; per process: {}",
             cap.peak() >> 20,
             args.cap_mib,
+            nvjpeg_device.peak() >> 20,
             host.peak() >> 20,
             (total - free_before) >> 20,
             (total - free_after) >> 20,
@@ -235,12 +237,13 @@ async fn run(args: Args) -> usize {
     drop(frames);
     r.line(
         "counts return to zero",
-        if cap.in_use() == 0 && host.in_use() == 0 {
-            Ok("device cap 0 bytes, pinned host 0 bytes".into())
+        if cap.in_use() == 0 && host.in_use() == 0 && nvjpeg_device.in_use() == 0 {
+            Ok("device cap 0 bytes, nvJPEG device 0 bytes, pinned host 0 bytes".into())
         } else {
             Err(format!(
-                "device cap {} bytes, pinned host {} bytes still counted",
+                "device cap {} bytes, nvJPEG device {} bytes, pinned host {} bytes still counted",
                 cap.in_use(),
+                nvjpeg_device.in_use(),
                 host.in_use()
             ))
         },
@@ -261,9 +264,10 @@ async fn decode_checks(
     args: &Args,
     ctx: &Arc<Context>,
     frames: &FramePool,
-    host: &Arc<HostCount>,
+    [host, nvjpeg_device]: [&Arc<ByteCount>; 2],
 ) {
-    let lanes = match Lanes::new(frames, host, args.lanes, args.nvjpeg_dir.as_deref()) {
+    let dir = args.nvjpeg_dir.as_deref();
+    let lanes = match Lanes::new(frames, host, nvjpeg_device, args.lanes, dir) {
         Ok(l) => l,
         Err(e) => {
             r.line("lanes", Err(e.to_string()));

@@ -24,7 +24,7 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 
-use crate::budget::HostCount;
+use crate::budget::ByteCount;
 use crate::cuda::{CudaError, DeviceRange, Fault, Stream};
 use crate::frame_pool::{AllocError, DeviceBuf, FramePool};
 use crate::pool::{CancelToken, JobError, JobHandle, PoolError, WorkerPool};
@@ -274,8 +274,8 @@ impl fmt::Debug for Lanes {
 
 impl Lanes {
     /// Load nvJPEG (from `library_dir` first when given) and start `count` lanes whose frames
-    /// and nvJPEG device buffers come from `frames` (charged to its cap); nvJPEG's pinned bytes
-    /// are counted in `host`.
+    /// and nvJPEG device buffers come from `frames`' pool: frames charged to its cap, nvJPEG's
+    /// device bytes counted in `device` and its pinned bytes in `host`.
     ///
     /// # Errors
     ///
@@ -284,14 +284,15 @@ impl Lanes {
     /// cannot start.
     pub fn new(
         frames: &FramePool,
-        host: &Arc<HostCount>,
+        host: &Arc<ByteCount>,
+        device: &Arc<ByteCount>,
         count: usize,
         library_dir: Option<&Path>,
     ) -> Result<Lanes, DecodeError> {
         let ctx = frames.context().clone();
         ctx.bind().map_err(DecodeError::Cuda)?;
         let shared = Arc::new(
-            Shared::new(library_dir, &ctx, &frames.pool, frames.cap(), host)
+            Shared::new(library_dir, &ctx, &frames.pool, device, host)
                 .map_err(DecodeError::Library)?,
         );
         let version = shared.version();

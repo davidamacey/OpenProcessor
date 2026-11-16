@@ -37,6 +37,10 @@ pub struct Source {
     pub reserve: u64,
     /// `gpu` or `cpu_<reason>` (`src/domain/decode_route.py`).
     pub decode_route: String,
+    /// The embedded profile the colour step reads (`JpegHeader::icc`).
+    pub icc: Option<Vec<u8>>,
+    /// Colour components of the frame the profile describes (`JpegHeader::components`).
+    pub components: u32,
 }
 
 /// The source of `image` routed as `decided`, or the status that refuses it before any decode
@@ -64,6 +68,8 @@ pub fn decide(
                 need: budget::need_bytes(&h),
                 reserve: budget::reserve_bytes(&h, widths),
                 decode_route: "gpu".into(),
+                icc: h.icc,
+                components: h.components,
             })
         }
         Decoder::Cpu(reason) => {
@@ -75,6 +81,8 @@ pub fn decide(
                 need: admitted.need,
                 reserve: budget::host_reserve_bytes(admitted.size, widths),
                 decode_route: format!("cpu_{reason}"),
+                icc: None,
+                components: 0,
             })
         }
     }

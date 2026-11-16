@@ -26,8 +26,8 @@
 //! handle, the status names, the decoupled decode sequence and the drop order of states before
 //! their buffers. Changed: the CUDA runtime, NVRTC and driver tables are not taken (streams and
 //! memory come from cudarc, `cuda.rs`); handles are created with the V2 allocators so every byte
-//! nvJPEG allocates is counted (device bytes from the engine's pool against its cap, pinned host
-//! bytes in a [`HostCount`]); each lane keeps a pinned and a device buffer per backend state, as
+//! nvJPEG allocates is counted (device bytes from the engine's pool in one [`ByteCount`], pinned
+//! host bytes in another); each lane keeps a pinned and a device buffer per backend state, as
 //! the Python engine's `nvjpeg_lanes.py` does.
 //!
 //! Signatures are those of `nvjpeg.h` in the `nvidia-nvjpeg` 13.2.3.58 wheel the engine image
@@ -43,7 +43,7 @@ use std::sync::Arc;
 
 use cudarc::driver::{result, sys};
 
-use crate::budget::{DeviceCap, HostCount};
+use crate::budget::ByteCount;
 use crate::cuda::{Context, MemPool};
 use crate::nvjpeg::status::{Backend, NvjpegFailure, NvjpegStatus, check};
 
@@ -176,11 +176,30 @@ fn version_of(lib: &libloading::Library) -> Result<(i32, i32, i32), String> {
 struct Counters {
     ctx: Arc<Context>,
     pool: Arc<MemPool>,
-    cap: Arc<DeviceCap>,
-    host: Arc<HostCount>,
+    device: DeviceAccount,
+    host: Arc<ByteCount>,
 }
 
-/// Device bytes for nvJPEG: charged to the cap, taken from the engine's pool on nvJPEG's stream,
+/// Where nvJPEG's device bytes are accounted: counted exactly, never charged to the frame cap
+/// (the module documentation of `budget.rs` says why).
+struct DeviceAccount {
+    count: Arc<ByteCount>,
+}
+
+impl DeviceAccount {
+    /// Account `size` bytes nvJPEG asks for; the allocation itself may still fail on the card.
+    fn take(&self, size: usize) -> bool {
+        self.count.add(size);
+        true
+    }
+
+    /// Give back what [`DeviceAccount::take`] accounted.
+    fn give(&self, size: usize) {
+        self.count.sub(size);
+    }
+}
+
+/// Device bytes for nvJPEG: counted in the device count, taken from the engine's pool on nvJPEG's stream,
 /// usable on any stream once this returns (the allocating stream is waited for). Answers
 /// non-zero on failure, which nvJPEG reports as `NVJPEG_STATUS_ALLOCATOR_FAILURE`.
 unsafe extern "C" fn dev_malloc(
@@ -192,7 +211,7 @@ unsafe extern "C" fn dev_malloc(
     // SAFETY: `ctx` points at the `Counters` held by the `Shared` that created the handle, which
     // outlives every object of the handle (they hold the `Shared`); access is shared, read only.
     let c = unsafe { &*ctx.cast::<Counters>() };
-    if c.ctx.bind().is_err() || c.cap.reserve(size).is_err() {
+    if c.ctx.bind().is_err() || !c.device.take(size) {
         return 1;
     }
     let raw_stream = stream.cast::<sys::CUstream_st>();
@@ -201,7 +220,7 @@ unsafe extern "C" fn dev_malloc(
     let ptr = match unsafe { c.pool.alloc_raw(size.max(1), raw_stream) } {
         Ok(p) => p,
         Err(_) => {
-            c.cap.release(size);
+            c.device.give(size);
             return 1;
         }
     };
@@ -212,7 +231,7 @@ unsafe extern "C" fn dev_malloc(
         // Freed in order on the same stream; nvJPEG never saw the pointer.
         // SAFETY: `ptr` came from this pool just above and is freed once.
         let _ = unsafe { c.pool.free_raw(ptr, raw_stream) };
-        c.cap.release(size);
+        c.device.give(size);
         return 1;
     }
     // SAFETY: `out` is nvJPEG's valid out-parameter.
@@ -239,11 +258,11 @@ unsafe extern "C" fn dev_free(
         c.pool
             .free_raw(ptr as u64, stream.cast::<sys::CUstream_st>())
     };
-    c.cap.release(size);
+    c.device.give(size);
     if freed.is_ok() { 0 } else { 1 }
 }
 
-/// Pinned host bytes for nvJPEG, counted in the [`HostCount`].
+/// Pinned host bytes for nvJPEG, counted in the [`ByteCount`].
 unsafe extern "C" fn pinned_malloc(
     ctx: *mut c_void,
     out: *mut *mut c_void,
@@ -317,8 +336,8 @@ impl Shared {
         dir: Option<&Path>,
         ctx: &Arc<Context>,
         pool: &Arc<MemPool>,
-        cap: &Arc<DeviceCap>,
-        host: &Arc<HostCount>,
+        device: &Arc<ByteCount>,
+        host: &Arc<ByteCount>,
     ) -> Result<Shared, String> {
         let lib = open(NVJPEG_SONAME, dir)?;
         let version = version_of(lib)?;
@@ -332,7 +351,9 @@ impl Shared {
         let counters = Arc::new(Counters {
             ctx: ctx.clone(),
             pool: pool.clone(),
-            cap: cap.clone(),
+            device: DeviceAccount {
+                count: device.clone(),
+            },
             host: host.clone(),
         });
         // The callbacks only read through this pointer (atomics and shared handles).
@@ -653,5 +674,40 @@ mod tests {
     fn a_missing_library_is_an_error_value() {
         let dir = std::env::temp_dir().join("gpu_frame-no-such-dir");
         assert!(open("libgpu_frame_no_such_library.so.0", Some(&dir)).is_err());
+    }
+
+    const MIB: usize = 1 << 20;
+
+    #[test]
+    fn grown_lane_buffers_never_refuse_a_later_frame_that_fits_the_cap() {
+        // the hold's sequence: 24 lanes each grew to a 24 MP photo's buffers (about 350 MB),
+        // then a 24 MP photo with no detections needs its 72 MB frame from a 4096 MiB cap
+        let cap = crate::budget::DeviceCap::new(4096 * MIB);
+        let count = Arc::new(ByteCount::default());
+        let device = DeviceAccount {
+            count: count.clone(),
+        };
+        for lane in 0..24 {
+            assert!(
+                device.take(350 * MIB),
+                "lane {lane} could not grow its buffers"
+            );
+        }
+        let frame = 6000 * 4000 * 3;
+        let held = cap.charge(frame).expect("the frame fits the cap");
+        drop(held);
+        // a frame larger than the whole cap is still refused, as gpu_memory
+        assert!(cap.charge(4097 * MIB).is_err());
+        assert_eq!(cap.in_use(), 0, "nvJPEG's buffers are not in the frame cap");
+        assert_eq!(
+            (count.in_use(), count.peak()),
+            (24 * 350 * MIB, 24 * 350 * MIB)
+        );
+        device.give(350 * MIB);
+        assert_eq!(
+            count.in_use(),
+            23 * 350 * MIB,
+            "a freed buffer is counted out"
+        );
     }
 }

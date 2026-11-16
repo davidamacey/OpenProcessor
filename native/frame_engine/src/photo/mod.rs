@@ -9,16 +9,20 @@
 //!    `over_budget`.
 //! 2. Reserve the frame (`budget`): a worker slot and the frame's bytes, first come first served,
 //!    bounded by `OP_FRAME_ENGINE_BUDGET_WAIT_SECONDS`, then an overload.
-//! 3. Round 1: the slices of the inputs that need only the frame (`letterbox`, `embed_frame`),
-//!    then one job on a decode lane: nvJPEG and the orientation (or the host decode and its
-//!    upload), the size check, the fills and
-//!    resamples into those slices, one wait for the lane's stream. Every round-1 call goes out.
-//! 4. Settle: the detector's boxes, as frame rectangles.
-//! 5. Round 2: the crop squares in chunks of the plan's batch, staged within the photo's window
+//! 3. Round 1: the slices of the inputs that need only the frame (`letterbox`, `embed_frame`,
+//!    the face detector's passes), except those of the branches the plan makes late (`late`),
+//!    then one job on a decode lane: nvJPEG, the orientation and the colour step's gather (or the
+//!    host decode and its upload), the size check, the fills and resamples into those slices, one
+//!    wait for the lane's stream. Every round-1 call goes out.
+//! 4. Settle: the detector's boxes as frame rectangles, or the request's stored boxes in their
+//!    place (`cut`); the faces (anchor decode and NMS on the finish pool) unless they are late.
+//! 5. The late round: each late branch's condition against the detector's classes; those that
+//!    hold write their round-1 inputs from the frame by launch jobs and send their calls.
+//! 6. Round 2: the crop squares in chunks of the plan's batch, staged within the photo's window
 //!    (collecting its own oldest call when the next chunk would pass it), written with the blur
 //!    sums by one job on the launch pool; their calls go out; the crop JPEGs start on the finish
-//!    pool.
-//! 6. Finish: collect, outputs in the wire's order.
+//!    pool. Then the late branches' settle, and the face warps into recogniser batches.
+//! 7. Finish: collect, outputs in the wire's order.
 //!
 //! A model error fails its branch (`model_error`) and what needs it (`dependency_failed`), and the
 //! photo goes on; a model server that is gone, a deadline or a lost region fail the photo
@@ -30,8 +34,10 @@
 pub mod budget;
 pub mod calls;
 pub mod clock;
+pub mod cut;
 pub mod device;
 mod faces;
+pub mod late;
 mod rounds;
 pub mod source;
 
@@ -39,14 +45,17 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use gpu_frame::CancelToken;
+
 use self::calls::PhotoCalls;
 use self::clock::{BUDGET, DECODE, QUEUE, StageClock};
 use self::device::{DecodeJob, Decoded, Device, Write};
-use self::rounds::{Round2, Work};
-use self::source::Source;
+use self::rounds::Work;
+use self::source::{Origin, Source};
 use crate::admission::FrameBudget;
 use crate::branches::BUILT;
-use crate::fault::{GpuFault, job_failed};
+use crate::colour::{Colour, ColourError, ColourStep, Table, Upload};
+use crate::fault::{GpuFault, job_failed, note_memory_failure};
 use crate::jpeg_header::route;
 use crate::metrics::{ByImage, ByOutcome, Metrics};
 use crate::pipeline::{Photo, PhotoAnswer, PipelineError, Tensor};
@@ -61,6 +70,9 @@ use crate::wire::plan::Crops;
 pub enum Stop {
     /// A photo status that answers the photo (for example `over_budget` or `huge`) with every branch failed.
     Status(&'static str),
+    /// A device allocation was refused: the photo answers `gpu_memory`; the text says what was
+    /// asked and which limit refused it.
+    Memory(String),
     /// The request itself fails with this error.
     Fail(PipelineError),
 }
@@ -68,7 +80,7 @@ pub enum Stop {
 impl From<GpuFault> for Stop {
     fn from(f: GpuFault) -> Self {
         match f {
-            GpuFault::OutOfMemory(_) => Stop::Status("gpu_memory"),
+            GpuFault::OutOfMemory(detail) => Stop::Memory(detail),
             GpuFault::ContextLost(m) => Stop::Fail(PipelineError::ContextLost(m)),
             GpuFault::Failed(m) => Stop::Fail(PipelineError::Engine(m)),
         }
@@ -106,6 +118,8 @@ pub struct PhotoFlow<D, B> {
     pub settings: PhotoSettings,
     /// Where the flow's stage and outcome series are written.
     pub metrics: Arc<Metrics>,
+    /// The colour step's profile kinds and tables, shared by every photo.
+    pub colour: ColourStep,
 }
 
 /// The answer of a photo that decoded nothing: every reported branch `image_failed`, unbuilt ones
@@ -190,15 +204,10 @@ impl Answers {
         name: &'static str,
         state: BranchState,
     ) {
-        let dependents: &[&'static str] = match name {
-            "detect" => &["embed_crops"],
-            "faces" => &["face_embed"],
-            _ => &[],
-        };
         for (branch, st) in std::iter::once((name, state)).chain(
-            dependents
-                .iter()
-                .map(|d| (*d, BranchState::Error(DEPENDENCY_FAILED))),
+            late::dependents(name)
+                .into_iter()
+                .map(|d| (d, BranchState::Error(DEPENDENCY_FAILED))),
         ) {
             if self.stopped.contains(&branch) {
                 continue;
@@ -244,9 +253,14 @@ where
         let mut clock = StageClock::new(Arc::clone(&photo.request), Arc::clone(&self.metrics));
         clock.add(QUEUE, photo.request.arrived().elapsed().as_secs_f64());
         let plan = photo.plan.clone();
-        let answer = match self.run(&mut clock, photo).await {
+        let mut size = (0, 0);
+        let answer = match self.run(&mut clock, photo, &mut size).await {
             Ok(answer) => answer,
             Err(Stop::Status(status)) => refused(&plan, status),
+            Err(Stop::Memory(detail)) => {
+                note_memory_failure("the photo's work", size, &detail);
+                refused(&plan, "gpu_memory")
+            }
             Err(Stop::Fail(e)) => return Err(e),
         };
         self.metrics
@@ -311,12 +325,14 @@ where
         source: &Source,
         permit: B::Permit,
         writes: Vec<Write<D::Input>>,
+        colour: Option<Table>,
     ) -> Result<(Arc<D::Frame>, Vec<D::Input>), Stop> {
         let job = DecodeJob {
             image: source.image.clone(),
             origin: source.origin,
             size: work.size,
             writes,
+            colour,
             hold: Box::new(permit),
             request: Arc::clone(&work.request),
         };
@@ -347,22 +363,23 @@ where
         }
     }
 
-    async fn run(&self, clock: &mut StageClock, photo: Photo) -> Result<PhotoAnswer, Stop> {
+    async fn run(
+        &self,
+        clock: &mut StageClock,
+        photo: Photo,
+        seen: &mut (u32, u32),
+    ) -> Result<PhotoAnswer, Stop> {
         let s = &self.settings;
         if self.device.lost() {
             return Err(Stop::Fail(PipelineError::ContextLost(
                 "the CUDA context of this engine is lost; it is restarting".into(),
             )));
         }
-        if photo.boxes.is_some() {
-            return Err(engine(
-                "stored boxes are not built in this engine yet (plan 17 N1a)",
-            ));
-        }
         let plan = &photo.plan;
         let runs = Runs::of(plan);
         let (source, permit) = self.admit(clock, &photo, &runs).await?;
         let size = source.size;
+        *seen = size;
         let request = Arc::clone(&photo.request);
         let calls = PhotoCalls::new(
             Arc::clone(&self.device),
@@ -385,46 +402,34 @@ where
             size,
         };
 
-        let round1 = work.stage_round1(plan, &runs).await?;
+        let colour = self.colour_of(&source).await?;
+        let late = late::late(plan, &BUILT);
+        let mut round1 = work.stage_round1(plan, &runs, &late).await?;
+        let table = match &colour {
+            Some(Colour::Convert(t)) => Some(Arc::clone(t)),
+            Some(Colour::Srgb | Colour::Ignored) | None => None,
+        };
+        let writes = std::mem::take(&mut round1.writes);
         let (frame, inputs) = self
-            .decode(&mut work, &source, permit, round1.writes)
+            .decode(&mut work, &source, permit, writes, table)
             .await?;
-        let sent = work.send_round1(round1.calls, inputs);
-        let call_of = |owner: &str| sent.iter().find(|(o, _)| *o == owner).map(|(_, id)| *id);
-        let face_calls = sent
-            .iter()
-            .filter(|(o, _)| *o == "faces")
-            .map(|(_, id)| *id);
-
-        let found = work
-            .settle_detect(call_of("detect"), round1.canvas.as_ref())
-            .await?;
-        if found.is_none() && runs.embed_crops {
-            work.stop_crops_without_boxes();
+        if let Some(colour) = &colour {
+            self.metrics
+                .colour
+                .get_or_create(&ByOutcome {
+                    outcome: colour.label().into(),
+                })
+                .inc();
         }
-        let faces = work
-            .settle_faces(plan, round1.faces, face_calls.collect())
+        let calls = std::mem::take(&mut round1.calls);
+        let sent = work.send_round1(calls, inputs);
+        let after = work
+            .after_round1(&photo, &runs, round1, sent, &late, frame)
             .await?;
-        let round2 = match &found {
-            Some(d) => work.round2(plan, &runs, d, &frame).await?,
-            None => Round2 {
-                crop_calls: Vec::new(),
-                picked: Vec::new(),
-                blur: None,
-                jpegs: Vec::new(),
-            },
-        };
-        let face_round = match &faces {
-            Some(f) => Some(work.round2_faces(plan, &runs, f, &frame).await?),
-            None => None,
-        };
-        // the photo's own hold on the frame ends here; jobs still running keep it to their wait
-        drop(frame);
-
-        if let Some(r) = face_round {
+        if let Some(r) = after.faces {
             work.finish_faces(&runs, r).await?;
         }
-        work.finish(&runs, found.is_some(), round2, call_of("embed_frame"))
+        work.finish(&runs, after.cut, after.round2, after.embed_frame)
             .await?;
         Ok(PhotoAnswer {
             status: "ok".into(),
@@ -432,6 +437,37 @@ where
             branches: work.answers.states,
             outputs: ordered(plan, size, work.answers.out),
         })
+    }
+}
+
+impl<D: Device, B: FrameBudget> PhotoFlow<D, B> {
+    /// What the colour step does with the photo: its table built once per profile on the finish
+    /// pool (the job's handle is kept by a task of its own, since a dropped handle tells the pool
+    /// the job is unwanted), waited for here without holding any pool thread.
+    ///
+    /// `None` on the host route, whose frame no colour step touches.
+    async fn colour_of(&self, source: &Source) -> Result<Option<Colour>, Stop> {
+        if source.origin == Origin::Host {
+            return Ok(None);
+        }
+        let device = Arc::clone(&self.device);
+        let upload: Upload = Arc::new(move |host: &[u8]| device.colour_table(host));
+        let device = Arc::clone(&self.device);
+        let spawn = move |job: Box<dyn FnOnce() + Send>| {
+            let handle = device
+                .host(job, &CancelToken::new())
+                .map_err(|e| GpuFault::Failed(format!("colour table build: {e}")))?;
+            tokio::spawn(async move { drop(handle.wait().await) });
+            Ok(())
+        };
+        self.colour
+            .lookup(source.icc.as_deref(), source.components, &spawn, &upload)
+            .await
+            .map(Some)
+            .map_err(|e| match e {
+                ColourError::Overload(o) => Stop::Fail(PipelineError::Overload(o)),
+                ColourError::Fault(f) => f.into(),
+            })
     }
 }
 

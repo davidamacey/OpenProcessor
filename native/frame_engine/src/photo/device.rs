@@ -53,6 +53,9 @@ pub struct DecodeJob<I> {
     pub size: (u32, u32),
     /// The round-1 writes done after the decode, one per input slice.
     pub writes: Vec<Write<I>>,
+    /// The colour table gathered over the oriented frame before the writes, for a photo whose
+    /// profile converts (`colour.py`); held to the job's stream wait.
+    pub colour: Option<crate::colour::Table>,
     /// Held as long as the frame (the frame budget's permit).
     pub hold: Box<dyn Send + Sync>,
     /// The request the job belongs to, for its stage and cancel state.
@@ -210,6 +213,14 @@ pub trait Device: Send + Sync + 'static {
         f: impl FnOnce() -> T + Send + 'static,
         cancel: &CancelToken,
     ) -> JobResult<T>;
+
+    /// A colour table's bytes uploaded to the card, charged to the frame cap. Called on a pool
+    /// thread (it binds the context and waits for its own copy).
+    ///
+    /// # Errors
+    ///
+    /// The allocation is refused (`gpu_memory`) or the copy fails.
+    fn colour_table(&self, host: &[u8]) -> Result<crate::colour::Table, GpuFault>;
 
     /// Send one call; dropping the future cancels it and gives the slice back.
     fn infer(
