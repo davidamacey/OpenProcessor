@@ -41,6 +41,9 @@ DEFAULT_OUT = REPO_ROOT / 'native' / 'op_db' / 'schema' / 'head.sql'
 REVISION_PREFIX = '-- alembic revision: '
 DUMP_TIMEOUT_S = 300
 REVISION_TIMEOUT_S = 30
+# pg_dump 18 brackets a dump in `\restrict <key>` / `\unrestrict <key>` with a random key; a fixed
+# (alphanumeric) one keeps two dumps of one schema byte-equal, which `--check` compares.
+RESTRICT_KEY = 'opschemahead'
 
 
 class DumpError(RuntimeError):
@@ -119,6 +122,7 @@ def render(run: Callable[[Sequence[str], int], str], args: argparse.Namespace) -
             '--schema-only',
             '--no-owner',
             '--no-privileges',
+            f'--restrict-key={RESTRICT_KEY}',
             '-U',
             args.user,
             '-d',
