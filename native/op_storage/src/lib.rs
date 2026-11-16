@@ -3,6 +3,8 @@
 //! a local cache, delete and erase primitives, and the reconcile listing.
 #![forbid(unsafe_code)]
 
+pub mod cache;
+pub mod derived;
 pub mod durable;
 pub mod erase;
 pub mod error;
