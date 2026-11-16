@@ -46,6 +46,8 @@ pub struct Script {
     /// Face detector anchors that fire in the first input of every detector call: stride-8
     /// anchor, score, distances (in strides) and landmark offsets (in strides).
     pub face_fires: Vec<(usize, f32, [f32; 4], [f32; 10])>,
+    /// Bright bars `x0, x1, y0, y1, value` in the text detector's probability map.
+    pub text_bars: Vec<(usize, usize, usize, usize, f32)>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -163,6 +165,40 @@ fn tensor(name: &str, shape: Vec<i64>, values: &[f32]) -> OutputTensor {
                 .collect::<Vec<u8>>(),
         ),
     }
+}
+
+/// The text detector's probability map `[1, 1, h, w]` with `bars` lit.
+pub fn text_map(h: usize, w: usize, bars: &[(usize, usize, usize, usize, f32)]) -> OutputTensor {
+    let mut pred = vec![0f32; h * w];
+    for &(x0, x1, y0, y1, v) in bars {
+        for y in y0..y1.min(h) {
+            for x in x0..x1.min(w) {
+                pred[y * w + x] = v;
+            }
+        }
+    }
+    tensor("fetch_name_0", vec![1, 1, h as i64, w as i64], &pred)
+}
+
+/// The recogniser's answer for `n` lines: line `k` reads the dictionary's class `k % 5 + 1`.
+fn rec_answer(n: usize) -> Vec<OutputTensor> {
+    let steps = 3;
+    let indices: Vec<i32> = (0..n).flat_map(|k| [(k % 5 + 1) as i32, 0, 0]).collect();
+    let scores = vec![0.875f32; n * steps];
+    vec![
+        OutputTensor {
+            name: "indices".into(),
+            datatype: "INT32".into(),
+            shape: vec![n as i64, steps as i64],
+            data: Bytes::from(
+                indices
+                    .iter()
+                    .flat_map(|v| v.to_le_bytes())
+                    .collect::<Vec<u8>>(),
+            ),
+        },
+        tensor("scores", vec![n as i64, steps as i64], &scores),
+    ]
 }
 
 /// The nine SCRFD outputs for `batch` inputs of `net`: zeros, except `fires` at stride 8 of the
@@ -352,13 +388,14 @@ impl Device for Fake {
             region_in_use: self.slab.usage().in_use,
         });
         async move {
-            let (fail, hold, rows, fires) = {
+            let (fail, hold, rows, fires, bars) = {
                 let script = self.script.lock().expect("script");
                 (
                     script.fail.get(&call.model).cloned(),
                     script.call_hold,
                     script.detections.clone(),
                     script.face_fires.clone(),
+                    script.text_bars.clone(),
                 )
             };
             if let Some(hold) = hold {
@@ -371,6 +408,13 @@ impl Device for Fake {
             if call.outputs.first() == Some(&"score_8") {
                 let net = usize::try_from(call.input.shape[2]).unwrap_or(0);
                 return (Ok(scrfd_answer(n, net, &fires)), call.slice);
+            }
+            let [_, _, ih, iw] = call.input.shape.map(|d| usize::try_from(d).unwrap_or(0));
+            if call.outputs == ["fetch_name_0"] {
+                return (Ok(vec![text_map(ih, iw, &bars)]), call.slice);
+            }
+            if call.outputs == ["indices", "scores"] {
+                return (Ok(rec_answer(n)), call.slice);
             }
             if call.outputs == ["output"] {
                 let values: Vec<f32> = (0..n * self.dim).map(|v| (v + 1) as f32).collect();

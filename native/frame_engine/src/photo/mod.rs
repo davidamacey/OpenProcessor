@@ -15,7 +15,9 @@
 //! 5. Round 2: the crop squares in chunks of the plan's batch, staged within the photo's window
 //!    (collecting its own oldest call when the next chunk would pass it), written with the blur
 //!    sums by one job on the launch pool; their calls go out; the crop JPEGs start on the finish
-//!    pool.
+//!    pool. The face and text branches follow the same shape (`faces.rs`, `text.rs`: settle on
+//!    the finish pool, warps on the launch pool); the renditions (`renditions.rs`) go to the
+//!    launch pool after every round-2 call went out.
 //! 6. Finish: collect, outputs in the wire's order.
 //!
 //! A model error fails its branch (`model_error`) and what needs it (`dependency_failed`), and the
@@ -30,18 +32,23 @@ pub mod calls;
 pub mod clock;
 pub mod device;
 mod faces;
+mod renditions;
 mod rounds;
+mod text;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use self::calls::PhotoCalls;
+use self::calls::{CallId, PhotoCalls};
 use self::clock::{BUDGET, DECODE, QUEUE, StageClock};
 use self::device::{DecodeJob, Decoded, Device, Write};
-use self::rounds::{Round2, Work};
+use self::faces::FaceRound2;
+use self::renditions::RenditionsInFlight;
+use self::rounds::{Round1, Round2, Work};
+use self::text::TextRound2;
 use crate::admission::FrameBudget;
-use crate::branches::ocr::ctc::CtcDecoder;
+use crate::branches::ocr::{self, ctc::CtcDecoder};
 use crate::branches::{BUILT, derivatives};
 use crate::fault::{GpuFault, job_failed};
 use crate::jpeg_header::{Decoder, JpegHeader, oriented_size, route};
@@ -141,6 +148,8 @@ struct Runs {
     crops: bool,
     faces: bool,
     face_embed: bool,
+    ocr: bool,
+    derivatives: bool,
 }
 
 impl Runs {
@@ -152,11 +161,14 @@ impl Runs {
             crops: plan.crops == Crops::Inline,
             faces: plan.runs("faces") && plan.faces.is_some(),
             face_embed: plan.runs("face_embed") && plan.faces.is_some(),
+            ocr: plan.runs("ocr") && plan.ocr.is_some(),
+            derivatives: !plan.derivatives.is_empty(),
         }
     }
 
-    /// Output widths the round-1 and round-2 resamples write, for the scratch they reserve.
-    fn widths(&self, plan: &EnginePlan) -> Vec<u32> {
+    /// Output widths the round-1 and round-2 resamples of a `w x h` frame write, for the scratch
+    /// they reserve.
+    fn widths(&self, plan: &EnginePlan, (w, h): (u32, u32)) -> Vec<u32> {
         let mut out = Vec::new();
         if let (true, Some(d)) = (self.detect, &plan.detector) {
             out.push(d.input_size);
@@ -169,6 +181,11 @@ impl Runs {
         }
         if let (true, Some(f)) = (self.faces, &plan.faces) {
             out.push(f.input_size);
+        }
+        if let (true, Some(o)) = (self.ocr, &plan.ocr)
+            && let Ok((input, _)) = ocr::det_canvas(o, w, h)
+        {
+            out.push(u32::try_from(input.shape[3]).unwrap_or(u32::MAX));
         }
         out
     }
@@ -221,6 +238,8 @@ impl Answers {
                 "embed_crops" => runs.embed_crops,
                 "faces" => runs.faces,
                 "face_embed" => runs.face_embed,
+                "ocr" => runs.ocr,
+                "derivatives" => runs.derivatives,
                 _ => false,
             };
             if built && self.running(name) {
@@ -281,7 +300,7 @@ where
             return Err(Stop::Status("over_budget"));
         }
         let (w, h) = oriented_size(&header);
-        let mut widths = runs.widths(&photo.plan);
+        let mut widths = runs.widths(&photo.plan, (w, h));
         widths.extend(budget::rendition_widths(w, h, &sides));
         let reserve = budget::reserve_bytes(&header, &sides, &widths).min(s.budget_bytes);
         let permit = clock
@@ -387,17 +406,37 @@ where
             size,
         };
 
-        let round1 = work.stage_round1(plan, &runs).await?;
+        let mut round1 = work.stage_round1(plan, &runs).await?;
+        let writes = std::mem::take(&mut round1.writes);
         let (frame, inputs) = self
-            .decode(&mut work, &photo, &header, permit, round1.writes)
+            .decode(&mut work, &photo, &header, permit, writes)
             .await?;
-        let sent = work.send_round1(round1.calls, inputs);
+        let sent = work.send_round1(std::mem::take(&mut round1.calls), inputs);
+        self.settle_and_finish(&mut work, plan, &runs, round1, &sent, frame)
+            .await?;
+        Ok(PhotoAnswer {
+            status: "ok".into(),
+            decode_route: "gpu".into(),
+            branches: work.answers.states,
+            outputs: ordered(plan, size, work.answers.out),
+        })
+    }
+    /// Settle, round 2 and finish of every branch, in the Python branch order; the renditions go
+    /// out after the round-2 calls.
+    async fn settle_and_finish(
+        &self,
+        work: &mut Work<'_, D>,
+        plan: &EnginePlan,
+        runs: &Runs,
+        round1: Round1<'_, D::Input>,
+        sent: &[(&'static str, CallId)],
+        frame: Arc<D::Frame>,
+    ) -> Result<(), Stop> {
         let call_of = |owner: &str| sent.iter().find(|(o, _)| *o == owner).map(|(_, id)| *id);
         let face_calls = sent
             .iter()
             .filter(|(o, _)| *o == "faces")
             .map(|(_, id)| *id);
-
         let found = work
             .settle_detect(call_of("detect"), round1.canvas.as_ref())
             .await?;
@@ -407,8 +446,9 @@ where
         let faces = work
             .settle_faces(plan, round1.faces, face_calls.collect())
             .await?;
+        let text = work.settle_ocr(plan, call_of("ocr")).await?;
         let round2 = match &found {
-            Some(d) => work.round2(plan, &runs, d, &frame).await?,
+            Some(d) => work.round2(plan, runs, d, &frame).await?,
             None => Round2 {
                 crop_calls: Vec::new(),
                 picked: Vec::new(),
@@ -417,23 +457,61 @@ where
             },
         };
         let face_round = match &faces {
-            Some(f) => Some(work.round2_faces(plan, &runs, f, &frame).await?),
+            Some(f) => Some(work.round2_faces(plan, runs, f, &frame).await?),
             None => None,
+        };
+        let text_round = match text {
+            Some(t) => Some(work.round2_ocr(plan, t, &frame).await?),
+            None => None,
+        };
+        let later = Later {
+            round2,
+            faces: face_round,
+            text: text_round,
+            renditions: work.start_renditions(plan, &frame)?,
         };
         // the photo's own hold on the frame ends here; jobs still running keep it to their wait
         drop(frame);
+        later
+            .finish(
+                work,
+                runs,
+                found.is_some(),
+                call_of("embed_frame"),
+                &self.dictionary,
+            )
+            .await
+    }
+}
 
-        if let Some(r) = face_round {
-            work.finish_faces(&runs, r).await?;
+/// What round 2 left in flight, collected by the finish.
+struct Later {
+    round2: Round2,
+    faces: Option<FaceRound2>,
+    text: Option<TextRound2>,
+    renditions: Option<RenditionsInFlight>,
+}
+
+impl Later {
+    /// Finish in the Python branch order: faces, text, renditions, then the detector's branches.
+    async fn finish<D: Device>(
+        self,
+        work: &mut Work<'_, D>,
+        runs: &Runs,
+        detected: bool,
+        embed_frame: Option<CallId>,
+        dictionary: &CtcDecoder,
+    ) -> Result<(), Stop> {
+        if let Some(r) = self.faces {
+            work.finish_faces(runs, r).await?;
         }
-        work.finish(&runs, found.is_some(), round2, call_of("embed_frame"))
-            .await?;
-        Ok(PhotoAnswer {
-            status: "ok".into(),
-            decode_route: "gpu".into(),
-            branches: work.answers.states,
-            outputs: ordered(plan, size, work.answers.out),
-        })
+        if let Some(t) = self.text {
+            work.finish_ocr(t, dictionary).await?;
+        }
+        if let Some(job) = self.renditions {
+            work.finish_renditions(job).await?;
+        }
+        work.finish(runs, detected, self.round2, embed_frame).await
     }
 }
 

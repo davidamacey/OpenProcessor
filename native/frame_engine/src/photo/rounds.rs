@@ -119,6 +119,9 @@ impl<D: Device> Work<'_, D> {
         if let (true, Some(spec)) = (runs.faces, &plan.faces) {
             self.stage_faces(spec, &mut round).await?;
         }
+        if let (true, Some(spec)) = (runs.ocr, &plan.ocr) {
+            self.stage_ocr(spec, &mut round).await?;
+        }
         Ok(round)
     }
 

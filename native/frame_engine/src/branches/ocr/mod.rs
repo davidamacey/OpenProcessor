@@ -39,12 +39,16 @@ use crate::wire::plan::OcrSpec;
 pub const DET_INPUT: &str = "x";
 /// The text detector's probability map.
 pub const DET_OUTPUT: &str = "fetch_name_0";
+/// The text detector's outputs read back.
+pub const DET_OUTPUTS: [&str; 1] = [DET_OUTPUT];
 /// The recogniser's input tensor.
 pub const REC_INPUT: &str = "x";
 /// The recogniser's best class per step (INT32 `[B, T]`).
 pub const REC_INDICES: &str = "indices";
 /// The recogniser's probability of that class (FP32 `[B, T]`).
 pub const REC_SCORES: &str = "scores";
+/// The recogniser's outputs read back.
+pub const REC_OUTPUTS: [&str; 2] = [REC_INDICES, REC_SCORES];
 /// The widest recogniser input of the build's optimisation profile (`export_paddleocr_rec.py`).
 pub const REC_MAX_WIDTH: i64 = 2048;
 /// Written right of a line's resized width (`ocr/kernels.py` `PAD_VALUE`).

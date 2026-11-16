@@ -712,7 +712,7 @@ async fn photos_the_gpu_route_does_not_take_answer_without_a_decode() {
 }
 
 #[tokio::test]
-async fn stored_boxes_and_unbuilt_branches_are_refused_as_n0_says() {
+async fn stored_boxes_are_refused_as_n0_says() {
     let b = bed();
     let plan = r#"{"version": 1, "branches": ["embed_crops"], "crops": "none", "crop_embed": {"model": "pe_crop", "size": 224, "batch": 32}}"#;
     let p = Photo {
@@ -723,14 +723,22 @@ async fn stored_boxes_and_unbuilt_branches_are_refused_as_n0_says() {
     };
     let failed = b.flow.process(p).await.expect_err("not built");
     assert!(matches!(&failed, PipelineError::Engine(m) if m.contains("N1a")));
-    let ocr = r#"{"version": 1, "branches": ["detect", "ocr"], "crops": "none", "detector": {"model": "det", "input_size": 640, "letterbox_fill": 114}, "ocr": {"detector": "ocr_det", "recogniser": "ocr_rec", "batch": 16, "max_lines": 50, "det_side": 960}}"#;
-    let answer = b.flow.process(photo(ocr)).await.expect("answer");
-    assert_eq!(
-        answer.branches["ocr"],
-        BranchState::Error(UNSUPPORTED_BRANCH)
-    );
-    assert_eq!(answer.branches["detect"], BranchState::Ok);
-    assert!(answer.outputs.iter().all(|(n, _)| !n.starts_with("ocr")));
+}
+
+#[test]
+fn every_branch_the_contract_builds_is_built_here() {
+    let text = include_str!("../../../../contracts/json/frame_engine_v1.json");
+    let c: serde_json::Value = serde_json::from_str(text).expect("the contract");
+    let mut want: Vec<&str> = c["built_branches"]
+        .as_array()
+        .expect("built_branches")
+        .iter()
+        .map(|b| b.as_str().expect("a name"))
+        .collect();
+    let mut built = crate::branches::BUILT.to_vec();
+    want.sort_unstable();
+    built.sort_unstable();
+    assert_eq!(built, want);
 }
 
 #[tokio::test]
@@ -758,3 +766,6 @@ async fn the_crop_jpegs_are_packed_as_bytes_elements() {
 
 #[path = "faces_tests.rs"]
 mod faces;
+
+#[path = "text_tests.rs"]
+mod text;

@@ -4,7 +4,7 @@
 //! (`photo.rs`) schedules them and the device runs their kernels.
 //!
 //! Built: `detect`, `embed_frame` and `embed_crops` with `crops: inline` (N0), `faces` and
-//! `face_embed` (N1b); every other branch the protocol knows answers `unsupported_branch`.
+//! `face_embed` (N1b), `ocr` and the renditions (`derivatives`, N1c); every other branch the protocol knows answers `unsupported_branch`.
 
 pub mod crops;
 pub mod derivatives;
@@ -16,12 +16,14 @@ pub mod ocr;
 use gpu_frame::OutputTensor;
 
 /// The branches this engine builds, each a `branch_status` entry.
-pub const BUILT: [&str; 5] = [
+pub const BUILT: [&str; 7] = [
     "detect",
     "embed_frame",
     "embed_crops",
     "faces",
     "face_embed",
+    "ocr",
+    "derivatives",
 ];
 
 /// One model call's input tensor as the model server is told it: a uint8 CHW batch.
