@@ -31,6 +31,7 @@ CARGO_HOOKS = {
         'cargo clippy --manifest-path native/Cargo.toml --workspace --all-targets --locked'
         ' -- -D warnings'
     ),
+    'cargo-doc': 'cargo doc --manifest-path native/Cargo.toml --workspace --no-deps --locked',
     'cargo-test': 'cargo test --manifest-path native/Cargo.toml --workspace --locked',
     'cargo-deny': 'cargo deny --manifest-path native/Cargo.toml check licenses bans sources',
 }
