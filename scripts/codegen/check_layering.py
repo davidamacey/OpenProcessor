@@ -109,7 +109,8 @@ _ENGINE_MAY_IMPORT = ('src.domain', 'src.utils')
 # drifts. The goldens generator runs the Python geometry and routing functions the native engine
 # ports, so the goldens are what they answer; the host corpus generator records what the Python
 # engine answers for each corpus file; the answer goldens run the Python front's own response
-# builder to give the Rust client the bytes the Python engine sends; all go with the Python engine
+# builder to give the Rust client the bytes the Python engine sends; the parity goldens run its
+# settings reader and read its metrics registry; all go with the Python engine
 # (plan 17 N3). All are development fixtures, never part of the API.
 _ENGINE_STAND_INS = (
     'docker/test/fake_frame_engine.py',
@@ -118,6 +119,7 @@ _ENGINE_STAND_INS = (
     'scripts/codegen/frame_engine_face_goldens.py',
     'scripts/codegen/frame_engine_host_corpus.py',
     'scripts/codegen/frame_engine_text_goldens.py',
+    'scripts/codegen/frame_engine_parity_goldens.py',
 )
 
 

@@ -158,3 +158,31 @@ never bulk-deleted.
 - **Parity**: model outputs that depend on the server's batch composition do not qualify even for
   an engine against itself, so the vector rows pass on a floor, the Python engine against itself
   in the same hold (`gpu_prep_parity.py compare --floor-a ... --floor-b ...`).
+
+## Settings, metrics and lane parity (N2)
+
+Three generated files in `native/frame_engine/tests/golden/` keep the native engine swappable for
+the Python one. `scripts/codegen/frame_engine_parity_goldens.py` writes them (`--check` is the
+pre-commit hook `frame-engine-parity-goldens-drift`) and the Rust tests replay them:
+
+| File | Made from | Replayed by |
+|---|---|---|
+| `settings_cases.json` | the Python `EngineSettings.from_env` run on 278 environments (defaults, both ends of each range, one past, malformed, empty, relations); ranges are read from its source | `tests/parity_settings.rs`: same settings or the same refusal text |
+| `metrics_families.json` | the families of `EngineMetrics`' registry (name, type, label names; bucket bounds for a histogram) | `tests/parity_metrics.rs`: any difference outside the reviewed list fails |
+| `lane_budget.json` | `scripts/codegen/frame_engine_lane_budget.py` | `tests/lane_budget.rs` |
+
+The reviewed differences, each with its reason in the generated file: `OP_FRAME_ENGINE_SWITCH_INTERVAL_MS`
+(refused), the `OP_FRAME_ENGINE_LANES` default, `OP_FRAME_ENGINE_EXPECT_BUS_ID` (native only) and the two
+nvJPEG gauges (native only). A new setting or metric in either engine fails a test until it matches or is
+listed with a reason.
+
+The lane arithmetic is one function, `lanes_that_fit`: free card memory minus the pool cap, minus 10
+percent, divided by the bytes one lane holds for the largest photo (8,502,545 bytes per megapixel,
+from 5,305,587,712 bytes over 24 lanes at 26 MP), at least 1 and at most 256. To change the constant, edit
+the three measured numbers in both `frame_engine_lane_budget.py` and `native/frame_engine/src/lane_budget.rs`
+and regenerate; COCO and 20 MP measurements are still owed.
+
+The image's C libraries that no package manager lists (libjpeg-turbo, Little CMS, nvJPEG, NVRTC, the
+CUDA runtime) are in `docker/frame-engine-native/vendored-c-libraries.cdx.json`. Trivy's documentation
+names no way to embed it in an image, so the sweep scans it beside the image:
+`trivy sbom --severity HIGH,CRITICAL --exit-code 1 docker/frame-engine-native/vendored-c-libraries.cdx.json`.

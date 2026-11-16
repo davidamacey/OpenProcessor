@@ -115,6 +115,7 @@ comments is in `env.template`.
 | `OP_FRAME_ENGINE_URL` | `frame-engine:8001` | the engine runs elsewhere |
 | `OP_FRAME_ENGINE_WORKERS` | `16` | photos processed at once; lower it on a small card |
 | `OP_FRAME_ENGINE_MAX_IN_FLIGHT` | `128` | requests admitted at once; above it the engine answers overload and the API retries |
+| `OP_FRAME_ENGINE_LANES` | Python engine `16`; native engine: the CPU cores, lowered to what fits on the card | decode lanes; each one's nvJPEG memory grows to about 8.1 MiB per megapixel of the largest photo it decodes and is not part of the pool cap |
 | `OP_FRAME_ENGINE_BUDGET_MIB` | `2048` | decoded-frame memory; more for many 40 MP photos at once, less on a small card |
 | `OP_FRAME_ENGINE_REGION_MIB` | `1024` | the shared-memory region to Triton; a photo with hundreds of detections wants more |
 | `OP_FRAME_ENGINE_POOL_MIB` | `4096` | cap of the engine's device-memory pool |
@@ -126,8 +127,17 @@ comments is in `env.template`.
 | `OP_FRAME_ENGINE_TRANSPORT` | `cuda` | `body` sends inputs in the request when CUDA shared memory is unavailable (slower) |
 
 A value that is set but malformed or out of range stops the engine at start and the log names it.
-The rest (lanes, threads, waits, colour tables, ports, drain and health intervals) keep their
+The rest (threads, waits, colour tables, ports, drain and health intervals) keep their
 defaults; see `env.template`.
+
+The native engine reads the same variables with the same defaults and ranges, and its `/metrics`
+has the same series and labels, so dashboards and alerts keep working. Three differences: it
+refuses to start while `OP_FRAME_ENGINE_SWITCH_INTERVAL_MS` is set (that setting tuned Python's
+interpreter lock; remove it); its lane default is described above; and
+`OP_FRAME_ENGINE_EXPECT_BUS_ID` (a PCI bus id such as `0000:65:00.0`) refuses a start on any other
+card. It adds two gauges, `op_frame_engine_nvjpeg_in_use_bytes` and
+`op_frame_engine_nvjpeg_peak_bytes`, the memory of the decode lanes. It exposes counters in
+OpenMetrics text and writes no `_created` series.
 
 On the API side the ingest has its own limits: `OP_MAX_INGEST_CONCURRENCY` (photos in flight per
 request, 16), `OP_INGEST_INFLIGHT_MB`, `OP_INGEST_READ_THREADS`. See

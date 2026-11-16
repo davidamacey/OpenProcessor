@@ -5,7 +5,8 @@
 //! What differs from the Python engine, each by plan 17:
 //!
 //! * `OP_FRAME_ENGINE_LANES` defaults to the physical cores available to the process
-//!   (section 2.1; [`crate::cores`]), not 16.
+//!   (section 2.1; [`crate::cores`]), not 16, lowered at the start to the lanes whose nvJPEG
+//!   buffers fit on the card ([`crate::lane_budget`]); a value that is set is used as it is.
 //! * `OP_FRAME_ENGINE_SWITCH_INTERVAL_MS` means nothing here: a start with it set is refused
 //!   (section 1.1).
 
@@ -75,6 +76,9 @@ pub struct Settings {
     pub workers: u32,
     /// Decode lanes, `OP_FRAME_ENGINE_LANES`; defaults to the physical cores available to the process.
     pub lanes: u32,
+    /// Whether `OP_FRAME_ENGINE_LANES` was set; when not, `lanes` is only the cores and the start
+    /// lowers it to what fits on the card ([`crate::lane_budget`]).
+    pub lanes_set: bool,
     /// Finish-pool threads that copy and JPEG-encode crops, `OP_FRAME_ENGINE_ENCODE_THREADS`.
     pub encode_threads: u32,
     /// Requests admitted at once (running or queued); above it: overload.
@@ -134,6 +138,7 @@ impl Settings {
             request_deadline_seconds: 60.0,
             workers: 16,
             lanes: u32::try_from(lanes).unwrap_or(256).clamp(1, 256),
+            lanes_set: false,
             encode_threads: 8,
             max_in_flight: 128,
             pool_mib: 4096,
@@ -180,7 +185,9 @@ impl Settings {
         let env = Env(lookup);
         let d = Self::with_lanes(default_lanes);
         let (instance, expect_bus_id) = Self::read_identity(&env, d.instance.clone())?;
+        let lanes_set = env.raw("OP_FRAME_ENGINE_LANES").is_some();
         let s = Self {
+            lanes_set,
             triton_url: env
                 .raw("OP_FRAME_ENGINE_TRITON_URL")
                 .unwrap_or(d.triton_url),
@@ -501,6 +508,18 @@ mod tests {
         );
         // four budget waits (one try and the API's three retries) fit the old 20 s wait
         assert!(4.0 * s.budget_wait_seconds <= 20.0);
+    }
+
+    #[test]
+    fn the_lane_count_says_whether_it_was_set() {
+        assert!(!read(&[]).expect("defaults").lanes_set);
+        assert!(
+            !read(&[("OP_FRAME_ENGINE_LANES", " ")])
+                .expect("empty")
+                .lanes_set
+        );
+        let s = read(&[("OP_FRAME_ENGINE_LANES", "7")]).expect("set");
+        assert_eq!((s.lanes, s.lanes_set), (7, true));
     }
 
     #[test]

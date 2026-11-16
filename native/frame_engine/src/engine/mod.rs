@@ -27,6 +27,7 @@ use tokio::sync::Notify;
 pub use self::gpu::{Frame, Gpu, GpuConfig};
 use crate::branches::ocr::ctc::{CtcDecoder, DICTIONARY_PATH};
 use crate::colour::ColourStep;
+use crate::lane_budget;
 use crate::metrics::{ByCause, ByCode, Metrics};
 use crate::photo::budget::GpuBudget;
 use crate::photo::{PhotoFlow, PhotoSettings};
@@ -59,6 +60,42 @@ pub fn process_identity() -> String {
 /// 2.1): the physical cores over 6, at least 2.
 pub fn launch_threads(physical_cores: usize) -> usize {
     (physical_cores / 6).max(2)
+}
+
+/// Decode lanes to start: `OP_FRAME_ENGINE_LANES` when set, else the cores lowered to what fits in
+/// the card's free memory (the pool cap set aside; the region is already taken). The lane buffers
+/// sit outside the pool cap, so the count has to come from the card (plan 17 section 2.3).
+fn lane_count(s: &Settings, ctx: &Context) -> usize {
+    if s.lanes_set {
+        return s.lanes as usize;
+    }
+    let free = match ctx.memory_info() {
+        Ok((free, _total)) => free as u64,
+        Err(e) => {
+            tracing::warn!("free card memory unreadable ({e}): decode lanes follow the cores");
+            return s.lanes as usize;
+        }
+    };
+    let pool = u64::from(s.pool_mib) * MIB;
+    let sized = lane_budget::sized_megapixels(s.max_megapixels);
+    let fit = lane_budget::lanes_that_fit(free, pool, sized);
+    let lanes = lane_budget::default_lanes(s.lanes, fit);
+    if !fit.fits {
+        tracing::warn!(
+            "not even {} decode lane fits: {} MiB free after the region, {} MiB pool cap, \
+             photos up to {sized} MP; starting with {lanes}",
+            lane_budget::MIN_LANES,
+            free >> 20,
+            s.pool_mib
+        );
+    }
+    tracing::info!(
+        "decode lanes {lanes}: cores {}, fit in {} MiB free {}",
+        s.lanes,
+        free >> 20,
+        fit.lanes
+    );
+    lanes as usize
 }
 
 /// The card's name and bus id, refused when the expected card is another one.
@@ -158,8 +195,9 @@ impl GpuPipeline {
                 region,
             )
         })?;
+        let lanes = lane_count(s, &ctx);
         let cfg = GpuConfig {
-            lanes: s.lanes as usize,
+            lanes,
             launch_threads: launch_threads(crate::cores::physical_cores()),
             finish_threads: s.encode_threads as usize,
             jpeg_quality: s.jpeg_quality,

@@ -1,0 +1,51 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "container",
+      "name": "openprocessor-frame-engine-native",
+      "description": "C code and CUDA libraries in the native frame engine image that no package manager lists: Trivy cannot see them in the image. Scanned with `trivy sbom` (see docker/frame-engine-native/Dockerfile)."
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "libjpeg-turbo",
+      "version": "3.1.2",
+      "purl": "pkg:github/libjpeg-turbo/libjpeg-turbo@3.1.2",
+      "cpe": "cpe:2.3:a:libjpeg-turbo:libjpeg-turbo:3.1.2:*:*:*:*:*:*:*",
+      "description": "built static from the release tarball in the build stage (LIBJPEG_TURBO_VERSION)"
+    },
+    {
+      "type": "library",
+      "name": "lcms2",
+      "version": "2.19",
+      "purl": "pkg:github/mm2/Little-CMS@2.19",
+      "cpe": "cpe:2.3:a:littlecms:little_cms_color_engine:2.19:*:*:*:*:*:*:*",
+      "description": "vendored by the lcms2-sys crate (native/Cargo.lock), linked static; the version Pillow 13.0.0 bundles"
+    },
+    {
+      "type": "library",
+      "name": "nvjpeg",
+      "version": "13.2.3.58",
+      "purl": "pkg:pypi/nvidia-nvjpeg@13.2.3.58",
+      "description": "libnvjpeg.so from NVIDIA's wheel, copied to /opt/nvidia/lib (pin in docker/frame-engine/requirements.txt)"
+    },
+    {
+      "type": "library",
+      "name": "nvrtc",
+      "version": "13.2.86",
+      "purl": "pkg:pypi/nvidia-cuda-nvrtc@13.2.86",
+      "description": "libnvrtc and its builtins from NVIDIA's wheel, copied to /opt/nvidia/lib"
+    },
+    {
+      "type": "library",
+      "name": "cuda-runtime",
+      "version": "13.2.86",
+      "purl": "pkg:pypi/nvidia-cuda-runtime@13.2.86",
+      "description": "libcudart from NVIDIA's wheel, copied to /opt/nvidia/lib"
+    }
+  ]
+}

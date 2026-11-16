@@ -390,6 +390,15 @@ repos:
         pass_filenames: false
         files: ^(native/op_engine_client/tests/goldens/bytes_codec\.json|scripts/codegen/(frame_engine_bytes_goldens|frame_engine_goldens)\.py)$
 
+      # What the native engine must equal in settings, metrics and lane arithmetic, run through the
+      # Python engine's own settings and metrics registry (the venv has prometheus_client).
+      - id: frame-engine-parity-goldens-drift
+        name: native frame engine settings, metrics and lane goldens are in sync
+        entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/codegen/frame_engine_parity_goldens.py --check'
+        language: system
+        pass_filenames: false
+        files: ^(native/frame_engine/tests/golden/(settings_cases|metrics_families|lane_budget)\.json|frame_engine/(settings|stage_metrics)\.py|scripts/codegen/(frame_engine_parity_goldens|frame_engine_lane_budget|frame_engine_goldens)\.py)$
+
       # The plan texts the Python client writes, for op_engine_client's plan builder: runs the
       # real ingest and reprocess plan builders, so it needs the venv's dependencies.
       - id: frame-engine-plan-build-cases-drift
