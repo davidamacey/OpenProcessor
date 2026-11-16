@@ -24,14 +24,25 @@ use bytes::Bytes;
 use tokio::sync::Notify;
 
 use crate::admission::Overload;
+use crate::branches::detect::{self, Detections};
+use crate::geometry::{crop_rect, letterbox_geometry, undo_letterbox};
 use crate::pipeline::{Photo, PhotoAnswer, Pipeline, PipelineError, Tensor};
 use crate::wire::EnginePlan;
 use crate::wire::branch_status::{BranchState, IMAGE_FAILED};
 use crate::wire::contract::contract;
+use crate::wire::plan::DetectorSpec;
 
 const PREFIX: &[u8] = b"stub:";
 /// The number of detections the stub finds, and of faces, text lines and vectors it makes.
 const DETECTIONS: usize = 2;
+/// The stub's photo is this many pixels wide and high (the `size` answer).
+const FRAME: (u32, u32) = (96, 64);
+/// Width of the frame and crop vectors: the width of the API's `pe_embedding` index field
+/// (`encoder_embedding_dim` in `src/config/curation.py`). The real pipeline takes it from the
+/// encoder's answer; the stub has no encoder, so it must say the width the API stores.
+const ENCODER_DIM: usize = 1024;
+/// Width of the face vectors: the API's `embedding` field (`embedding_dim`, same file).
+const FACE_DIM: usize = 512;
 
 #[derive(Debug, Default, PartialEq, Eq)]
 struct Script {
@@ -83,52 +94,156 @@ fn fp32(shape: &[i64], value: f32) -> Tensor {
     }
 }
 
-fn int64_zeros(shape: &[i64]) -> Tensor {
-    let n: i64 = shape.iter().product();
-    Tensor::Int64 {
-        shape: shape.to_vec(),
-        data: vec![0; usize::try_from(n).unwrap_or(0)],
+/// `rows` unit-length vectors of width `dim`, each a different direction, so that a search over
+/// them has something to rank and the API's L2 normalisation divides by a non-zero norm.
+fn vectors(rows: usize, dim: usize) -> Vec<f32> {
+    (0..rows)
+        .flat_map(|r| (0..dim).map(move |c| if (c + r) % 2 == 0 { 1.0 } else { -1.0 }))
+        .collect()
+}
+
+fn embeddings(rows: usize, dim: usize) -> Tensor {
+    Tensor::Fp32 {
+        shape: vec![rows as i64, dim as i64],
+        data: vectors(rows, dim),
     }
 }
 
+/// The two detections of a frame: boxes in letterboxed input pixels inside the canvas, as the
+/// detector's `settle` keeps them, with the rectangles the blur sums read.
+fn detections(spec: &DetectorSpec) -> Result<Detections, PipelineError> {
+    let (w, h) = (f64::from(FRAME.0), f64::from(FRAME.1));
+    let lb = letterbox_geometry(
+        i64::from(FRAME.0),
+        i64::from(FRAME.1),
+        i64::from(spec.input_size),
+    )
+    .map_err(|e| PipelineError::Engine(format!("stub letterbox: {e}")))?;
+    let mut d = Detections {
+        boxes: Vec::new(),
+        scores: vec![0.9; DETECTIONS],
+        classes: vec![1, 2],
+        rects: Vec::new(),
+        letterbox: lb,
+    };
+    for [x1, y1, x2, y2] in [[0.1, 0.1, 0.5, 0.6], [0.5, 0.3, 0.9, 0.9]] {
+        let canvas = [
+            x1 * w * lb.scale + lb.pad_w,
+            y1 * h * lb.scale + lb.pad_h,
+            x2 * w * lb.scale + lb.pad_w,
+            y2 * h * lb.scale + lb.pad_h,
+        ];
+        d.rects.push(crop_rect(
+            undo_letterbox(canvas, lb.scale, (lb.pad_w, lb.pad_h)),
+            i64::from(FRAME.0),
+            i64::from(FRAME.1),
+        ));
+        d.boxes.push(canvas.map(|v| v as f32));
+    }
+    Ok(d)
+}
+
+/// Laplacian sums (sum, sum of squares) of a rectangle of `pixels`: a mean response of 8 and a
+/// variance of 36, a plausible sharp photo, so `(n * squares - sum^2) / n^2` is positive.
+fn sums_of(pixels: i64) -> [i64; 2] {
+    [8 * pixels, 100 * pixels]
+}
+
+fn detect_tensor(name: &str, d: &Detections) -> Option<Tensor> {
+    if let Some((_, t)) = detect::outputs(d).into_iter().find(|(n, _)| *n == name) {
+        return Some(t);
+    }
+    if name != "blur_sums" {
+        return None;
+    }
+    let (rects, clamped) = detect::blur_rects(d, FRAME.0, FRAME.1);
+    let sums: Vec<[i64; 2]> = rects
+        .iter()
+        .map(|[x1, y1, x2, y2]| sums_of((x2 - x1) * (y2 - y1)))
+        .collect();
+    detect::blur_sums(FRAME.0, FRAME.1, &clamped, &sums).ok()
+}
+
+/// The two faces, in frame pixels inside the frame, five landmarks inside each box, and the
+/// `[pixels, sum, squares]` rows of their rectangles.
+fn face_tensor(name: &str) -> Option<Tensor> {
+    let boxes = [[8.0_f32, 8.0, 40.0, 40.0], [48.0, 16.0, 88.0, 56.0]];
+    let d = DETECTIONS as i64;
+    Some(match name {
+        "face_boxes" => Tensor::Fp32 {
+            shape: vec![d, 4],
+            data: boxes.concat(),
+        },
+        "face_landmarks" => Tensor::Fp32 {
+            shape: vec![d, 10],
+            data: boxes
+                .iter()
+                .flat_map(|[x1, y1, x2, y2]| {
+                    let (cx, cy) = ((x1 + x2) / 2.0, (y1 + y2) / 2.0);
+                    [
+                        cx - 4.0,
+                        cy - 4.0,
+                        cx + 4.0,
+                        cy - 4.0,
+                        cx,
+                        cy,
+                        cx - 3.0,
+                        cy + 6.0,
+                        cx + 3.0,
+                        cy + 6.0,
+                    ]
+                })
+                .collect(),
+        },
+        "face_blur_sums" => Tensor::Int64 {
+            shape: vec![d, 3],
+            data: boxes
+                .iter()
+                .flat_map(|[x1, y1, x2, y2]| {
+                    let pixels = ((x2 - x1) * (y2 - y1)) as i64;
+                    let [s, q] = sums_of(pixels);
+                    [pixels, s, q]
+                })
+                .collect(),
+        },
+        _ => return None,
+    })
+}
+
 /// The stub's value for the tensor `name`; `rows` is the number of crops (the stored boxes, or
-/// the stub's detections).
-fn tensor(name: &str, rows: usize, plan: &EnginePlan) -> Tensor {
+/// the stub's detections); `det` the detections of a plan that has the `detect` branch.
+fn tensor(name: &str, rows: usize, plan: &EnginePlan, det: Option<&Detections>) -> Tensor {
     let n = i64::try_from(rows).unwrap_or(0);
     let d = i64::try_from(DETECTIONS).unwrap_or(0);
     let bytes =
         |items: &[&[u8]]| Tensor::Bytes(items.iter().map(|b| Bytes::copy_from_slice(b)).collect());
+    if let Some(t) = det
+        .and_then(|det| detect_tensor(name, det))
+        .or_else(|| face_tensor(name))
+    {
+        return t;
+    }
     match name {
-        "det_boxes" => fp32(&[d, 4], 1.0),
-        "det_scores" => fp32(&[d], 0.9),
-        "det_classes" => Tensor::Int32 {
-            shape: vec![d],
-            data: vec![1, 2],
-        },
-        "letterbox" => Tensor::Fp64 {
-            shape: vec![3],
-            data: vec![6.6, 0.0, 106.0],
-        },
-        "blur_sums" => int64_zeros(&[d + 1, 3]),
         "whole_embedding" => Tensor::Fp32 {
-            shape: vec![4],
-            data: vec![0.0, 1.0, 2.0, 3.0],
+            shape: vec![ENCODER_DIM as i64],
+            data: vectors(1, ENCODER_DIM),
         },
-        "crop_embeddings" => fp32(&[n, 4], 1.0),
+        "crop_embeddings" => embeddings(rows, ENCODER_DIM),
         "crop_embedded" => Tensor::Bool {
             shape: vec![n],
             data: vec![true; rows],
         },
-        "crop_jpegs" => bytes(&[b"\xff\xd8a".as_slice(), b"\xff\xd8bc".as_slice()][..rows.min(2)]),
-        "face_boxes" => fp32(&[d, 4], 1.0),
+        "crop_jpegs" => Tensor::Bytes(
+            (0..rows)
+                .map(|r| Bytes::from([b"\xff\xd8".as_slice(), r.to_string().as_bytes()].concat()))
+                .collect(),
+        ),
         "face_scores" => fp32(&[d], 0.9),
-        "face_landmarks" => fp32(&[d, 10], 0.0),
-        "face_blur_sums" => int64_zeros(&[d, 3]),
         "face_overflow" | "ocr_overflow" => Tensor::Int32 {
             shape: vec![1],
             data: vec![0],
         },
-        "face_embeddings" => fp32(&[d, 4], 1.0),
+        "face_embeddings" => embeddings(DETECTIONS, FACE_DIM),
         "face_embedded" => Tensor::Bool {
             shape: vec![d],
             data: vec![true; DETECTIONS],
@@ -150,22 +265,26 @@ fn tensor(name: &str, rows: usize, plan: &EnginePlan) -> Tensor {
     }
 }
 
-fn plain_answer(photo: &Photo) -> PhotoAnswer {
+fn plain_answer(photo: &Photo) -> Result<PhotoAnswer, PipelineError> {
     let plan = &photo.plan;
+    let det = plan.detector.as_ref().map(detections).transpose()?;
     let rows = photo.boxes.as_ref().map_or(DETECTIONS, Vec::len);
     let mut outputs = vec![(
         contract().size_output.clone(),
         Tensor::Int32 {
             shape: vec![2],
-            data: vec![96, 64],
+            data: vec![
+                i32::try_from(FRAME.0).unwrap_or(0),
+                i32::try_from(FRAME.1).unwrap_or(0),
+            ],
         },
     )];
     outputs.extend(
         plan.expected_outputs()
             .into_iter()
-            .map(|name| (name.to_owned(), tensor(name, rows, plan))),
+            .map(|name| (name.to_owned(), tensor(name, rows, plan, det.as_ref()))),
     );
-    PhotoAnswer {
+    Ok(PhotoAnswer {
         status: "ok".into(),
         decode_route: "gpu".into(),
         branches: plan
@@ -174,7 +293,7 @@ fn plain_answer(photo: &Photo) -> PhotoAnswer {
             .map(|b| (b, BranchState::Ok))
             .collect(),
         outputs,
-    }
+    })
 }
 
 fn refused_answer(plan: &EnginePlan, status: String) -> PhotoAnswer {
@@ -251,7 +370,7 @@ impl Pipeline for StubPipeline {
         }
         Ok(match script.status {
             Some(status) => refused_answer(&photo.plan, status),
-            None => plain_answer(&photo),
+            None => plain_answer(&photo)?,
         })
     }
 }
@@ -300,6 +419,84 @@ mod tests {
         }
     }
 
+    /// What the API does with an answer (`src/services/curation/ingest_gpu_decode.py`): it
+    /// divides by the blur pixel counts, L2-normalises the vectors and stores them in indexes of
+    /// fixed width, and indexes the crop JPEGs by detection row.
+    #[tokio::test]
+    async fn a_plain_answer_is_one_the_api_can_store() {
+        let stub = StubPipeline::new(None);
+        for plan in [FRAME, INGEST] {
+            let answer = stub
+                .process(photo(b"\xff\xd8x", plan, None))
+                .await
+                .expect("answer");
+            let get = |name: &str| {
+                answer
+                    .outputs
+                    .iter()
+                    .find(|(n, _)| n == name)
+                    .map(|(_, t)| t)
+            };
+            let Some(Tensor::Int32 { data: size, .. }) = get("size") else {
+                panic!("size")
+            };
+            let (w, h) = (i64::from(size[0]), i64::from(size[1]));
+            let Some(Tensor::Fp32 { data: whole, .. }) = get("whole_embedding") else {
+                panic!("whole_embedding")
+            };
+            assert_eq!(whole.len(), 1024, "the width of the pe_embedding index");
+            assert!(
+                whole.iter().any(|v| *v != 0.0),
+                "a zero vector has no direction"
+            );
+            let Some(Tensor::Int64 { shape, data: blur }) = get("blur_sums") else {
+                panic!("blur_sums")
+            };
+            let detections = usize::try_from(shape[0]).expect("rows") - 1;
+            for (i, row) in blur.chunks(3).enumerate() {
+                let [n, total, squares] = [row[0], row[1], row[2]];
+                assert!(n > 0, "row {i}: the API divides by the pixel count");
+                assert!(n <= w * h, "row {i}: more pixels than the frame has");
+                assert!(
+                    n * squares - total * total > 0,
+                    "row {i}: a flat photo, no variance"
+                );
+            }
+            let Some(Tensor::Fp64 { data: lb, .. }) = get("letterbox") else {
+                panic!("letterbox")
+            };
+            let canvas = 640.0;
+            let Some(Tensor::Fp32 { data: boxes, .. }) = get("det_boxes") else {
+                panic!("det_boxes")
+            };
+            assert_eq!(boxes.len(), 4 * detections);
+            for b in boxes.chunks(4) {
+                assert!(b[0] < b[2] && b[1] < b[3], "{b:?} is empty");
+                assert!(
+                    b.iter().all(|v| (0.0..=canvas).contains(&f64::from(*v))),
+                    "{b:?} is outside the canvas"
+                );
+                assert!(
+                    f64::from(b[0]) >= lb[1] && f64::from(b[1]) >= lb[2] - 1e-3,
+                    "{b:?} is in the padding"
+                );
+            }
+            let Some(Tensor::Fp32 { shape, data }) = get("crop_embeddings") else {
+                continue;
+            };
+            assert_eq!(shape, &vec![detections as i64, 1024]);
+            assert!(data.iter().any(|v| *v != 0.0));
+            let Some(Tensor::Bytes(jpegs)) = get("crop_jpegs") else {
+                panic!("crop_jpegs")
+            };
+            assert_eq!(
+                jpegs.len(),
+                detections,
+                "the API indexes the JPEGs by detection row"
+            );
+        }
+    }
+
     #[tokio::test]
     async fn the_rows_follow_the_stored_boxes_or_the_two_detections() {
         let stub = StubPipeline::new(None);
@@ -320,14 +517,14 @@ mod tests {
         assert_eq!(
             get("crop_embeddings"),
             Tensor::Fp32 {
-                shape: vec![3, 4],
-                data: vec![1.0; 12]
+                shape: vec![3, 1024],
+                data: vectors(3, 1024)
             }
         );
         let Tensor::Bytes(jpegs) = get("crop_jpegs") else {
             panic!("bytes")
         };
-        assert_eq!(jpegs.len(), 2, "the stub has two crop JPEGs to give");
+        assert_eq!(jpegs.len(), 3, "one crop JPEG per stored box");
         let answer = stub
             .process(photo(b"x", INGEST, None))
             .await
@@ -337,7 +534,7 @@ mod tests {
         else {
             panic!("crop_embeddings");
         };
-        assert_eq!(shape, &vec![2, 4]);
+        assert_eq!(shape, &vec![2, 1024]);
     }
 
     #[test]
