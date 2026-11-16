@@ -2,18 +2,19 @@
 
 | Field | Value |
 |---|---|
-| Status | plan, revision 1 (2026-11-15): the read map of plan 15 section 12, written after the gate A measurement at 1 and 10 million objects (8 clients held); revision 1 folds in the independent review of 15b and 15c and the coordinator's decisions on it (appendix "Review trace"): the summaries are a delta log (section 6). Companion of [15_storage_plan.md](15_storage_plan.md) and [15a_storage_schema.md](15a_storage_schema.md); the cut-over slices that build it are [15c_storage_slices.md](15c_storage_slices.md) |
+| Status | plan, revision 3 (2026-11-16; rows "Revision 2" and "Revision 3" below). Revision 1 (2026-11-15): the read map of plan 15 section 12, written after the gate A measurement at 1 and 10 million objects (8 clients held); revision 1 folds in the independent review of 15b and 15c and the coordinator's decisions on it (appendix "Review trace"): the summaries are a delta log (section 6). Companion of [15_storage_plan.md](15_storage_plan.md) and [15a_storage_schema.md](15a_storage_schema.md); the cut-over slices that build it are [15c_storage_slices.md](15c_storage_slices.md) |
 | Code base read | `int/storage` at `7cadf2968` (the integration code of `int/b4-stateless` plus storage step 1: `src/domain/claim*.py`, `fold*.py`, `results.py`, migration `0010_storage_record`, `src/db/repos/`, `src/services/record/apply.py`) |
 | Checklist | the storage inventory of 2026-11-13 (`artifacts_local/speed_1113/storage_inventory.md`, gitignored), section 3: shapes 1 to 80 with file:line. Its paths are relative to `src/services/curation/` unless they start with another directory; its line numbers were re-checked on this tree (same code) |
 | Measurement | gate A (`artifacts_local/speed_1113/v2_read_shapes/`, gitignored): `notes.md`, `queries_pg.sql`, `summary_pg.sql`, `raw/time_pg_1m.json`, `raw/time_os_1m.json`, `raw/time_pg_10m.json`, `raw/time_os_10m.partial.json` |
 | Decided by the coordinator | page fetches are SQL on the record; exact totals only from summary keys, else a capped count; dashboards read summary tables kept by the writer; cluster placement is the side table; text substring search is a trigram index; the search engine leaves the curation stack (section 1.2 of the inventory stays until phase 3); the fallback for a pending measurement that fails is additive (a search copy without vectors for the failing shapes only) |
 | Revision 2 (2026-11-16) | measurement round 3 folded in (`artifacts_local/speed_1113/m3_storage/results_round3.md`, `notes.md`, cells under `raw/`, gitignored). The 12 statements that had to change to run are corrected where they live (list in section 14.1). Every miss has its cause, options and one chosen change in section 14; round 4 (section 15) measures only what is still open; section 16 says what each Rust record slice of plan 18b takes from this file. The backend that builds this is Rust (plan 18 section 3.2): the statements here are its specification, the Python module names are where today's behaviour lives |
+| Revision 3 (2026-11-16) | fix pass after the independent review of revision 2 (`artifacts_local/speed_1113/m3_storage/plan15b_r2_review.md`, gitignored; 7 major, 13 minor; trace in the appendix). Binding constraint added: the same backend later runs on **managed PostgreSQL** (for example Amazon RDS or Aurora), where nobody is a superuser, so no role can be given `BYPASSRLS` and no function can be marked `LEAKPROOF` (section 8). Changed: fragment and word search read **owner-read search copies** in schema `txt` through definer functions owned by a role without any special attribute (section 8, replacing revision 2's `BYPASSRLS` role); the function runs as its own statement with a cap and a per-call plan; fuzzy over a defined alphabet with a switch; the strict project function and the tightened scope function are written out; the card table gains the drift check's statement, the touched-set statement and a full join for clusters with only pending deltas (6.5, 6.6, P7); the sort band now adds the guard's cost to the walk (section 7); round 4 rewritten (section 15); every slice item marked final or waiting (section 16) |
 
-**Revision 2 in one paragraph.** The delta log, the compactor, the rebuild, the capped counts and
+**Revision 2 in one paragraph** (text mechanism replaced by revision 3, section 8). The delta log, the compactor, the rebuild, the capped counts and
 the several-class pages met their bars at 10 million items. Changed by the measurement: cluster
 cards read one card row per cluster, kept by the compactor (P7, 6.1, 6.5); box text uses a B-tree
-for exact, variant and fuzzy matches and a narrow project-bound search function for fragments,
-because row security keeps the trigram index from being used (section 8); the sort path reads its
+for exact, variant and fuzzy matches and a search copy read through a project-bound function for
+fragments, because row security keeps the trigram index from being used (section 8); the sort path reads its
 key from `item_state` where a copy is there (section 7); compactor batch 10,000 every 0.2 s, count
 budget 50 ms, `item_state` fillfactor 90, GIN `fastupdate` on with a 512 kB pending list. Open until
 round 4: the sort threshold and the band where both sort paths are slow, the cards under an item
@@ -73,6 +74,9 @@ Settings and indexes of the spike: `notes.md` sections 2 and 3. Its tables (`obj
 measure the record's query.
 
 ### 1.2 Not measured yet at revision 1 (round 3 has since measured them: section 14)
+
+Kept as the record of revision 1; nothing in this table is pending any more. What is still open
+is section 15 (round 4), and section 16 says which slice item waits for which round 4 cell.
 
 | Pending | What it decides here | Until then |
 |---|---|---|
@@ -245,18 +249,28 @@ WITH pend AS (                      -- pending deltas of kinds 7 and 9 of the se
   FROM sum_deltas
   WHERE project_id = :p AND kind IN (7, 9) AND partition_id = :serving
   GROUP BY cluster_uid)
-SELECT c.cluster_uid, c.n_live + coalesce(d.n_live, 0) AS n, c.validated_live + coalesce(d.validated_live, 0) AS validated,
-       c.labelled_live + coalesce(d.labelled_live, 0) AS labelled,
+SELECT cluster_uid, coalesce(c.n_live, 0) + coalesce(d.n_live, 0) AS n,
+       coalesce(c.validated_live, 0) + coalesce(d.validated_live, 0) AS validated,
+       coalesce(c.labelled_live, 0) + coalesce(d.labelled_live, 0) AS labelled,
        greatest(c.max_updated_live, d.max_updated) AS max_updated,
-       (c.conf_sum_live + coalesce(d.conf_sum_live, 0)) / NULLIF(c.conf_n_live + coalesce(d.conf_n_live, 0), 0) AS avg_conf,
-       c.needs_review + coalesce(d.needs_review, 0) AS needs_review, c.review_n,
-       c.top_class_ids, c.top_class_n, c.top_det, c.dup_groups
-FROM sum_cluster_card c LEFT JOIN pend d USING (cluster_uid)
-WHERE c.partition_id = :serving AND c.n_live + coalesce(d.n_live, 0) > 0
+       (coalesce(c.conf_sum_live, 0) + coalesce(d.conf_sum_live, 0))
+         / NULLIF(coalesce(c.conf_n_live, 0) + coalesce(d.conf_n_live, 0), 0) AS avg_conf,
+       coalesce(c.needs_review, 0) + coalesce(d.needs_review, 0) AS needs_review,
+       coalesce(c.review_n, '{}') AS review_n, coalesce(c.top_class_ids, '{}') AS top_class_ids,
+       coalesce(c.top_class_n, '{}') AS top_class_n, coalesce(c.top_det, '') AS top_det,
+       coalesce(c.dup_groups, 0) AS dup_groups
+FROM (SELECT * FROM sum_cluster_card WHERE partition_id = :serving) c   -- revision 3: a full join, so a
+     FULL JOIN pend d USING (cluster_uid)                                -- cluster with only pending deltas shows
+WHERE coalesce(c.n_live, 0) + coalesce(d.n_live, 0) > 0
   AND <card filters: min_size, max_size, validation_state, needs_review, flag, dominant_class, detector_class>
 ORDER BY <card sort, tiebreak cluster_uid>
 LIMIT :max_clusters;
 ```
+
+A cluster whose only rows are pending deltas (new, or after a merge or a split) has no card row
+until the compactor's next batch creates it (6.5, at most one beat, 0.2 s); the full join shows it
+with exact counts and empty derived fields for that time (revision 3, review M6). The join
+condition is one equality on `cluster_uid`, which a hash join serves; R4-2 records the plan.
 
 The `m[]` positions follow the base columns of `sum_cluster` in 6.1. Counts on the card (size,
 validated, labelled, average confidence, the "to review" count) are exact: base row plus pending
@@ -361,7 +375,7 @@ acceptance; S1a-i, the summary machinery, owns no shape).
 | 3 | locate, own row (`list_locate.py:146`; callers `review.py:287`, `crops_list.py:~190`, `routers/curation/images_view.py:62`) | S1b-i | page | P5a; photos: `photos (project_id, image_id)` | `uq` of `items`, `photos` | to be measured |
 | 4 | locate, rank and total (`list_locate.py:153`, `:154`; `review.py:337`) | S1b-i | cap | P5b capped rank; total P3 or P4 | as row 1 | exact form `s9a` 48 / 1457, `s9c` 31.9 / 739; capped: to be measured |
 | 5 | locate, previous cursor (`list_locate.py:158`) | S1b-i | page | P5c | as row 1 | to be measured |
-| 6 | `GET /regions`, training candidates, suspected false positives, cohorts (`region_rows.py:222`; `cohorts.py:33`; `routers/curation/regions.py:255`, `:425`) | S4 | page | P9 (box predicate, text included, in both statements); `total_rows` P3 on `sum_box` for a state and/or detector filter, else P4; `total` (items) P4 | X6, X26, X27, X7 | spike `s8_deep` 194.7 / 593 and `s8_total` 600 / 2496; new design to be measured |
+| 6 | `GET /regions`, training candidates, suspected false positives, cohorts (`region_rows.py:222`; `cohorts.py:33`; `routers/curation/regions.py:255`, `:425`) | S4 | page | P9 (box predicate in both statements; a fragment as section 8's steps 1 to 3); `total_rows` P3 on `sum_box` for a state and/or detector filter, else P4; `total` (items) P4 | X6, X26, X27, X7 | spike `s8_deep` 194.7 / 593 and `s8_total` 600 / 2496; new design to be measured |
 | 7 | hidden counts (`hidden_counts.py:33`) | S1b-i | sum | P3 per hidden kind when the filter is summary keys, else P4 | `sum_items` | to be measured |
 | 8 | ordered crop pages `core_first` (`crop_orders.py:74`; `crops_list.py:100`, `:206`) | S6 | page | P8 on `m.score DESC` with the missing-last segment; pool count P4; `outliers` and `diverse` stream the pool's vectors (row 59) | X23 | to be measured |
 | 9 | page hydrate by ids (`crop_listing.py:120`) | S1b-i | page | P2 | `items` `uq`, primary keys | to be measured |
@@ -653,7 +667,8 @@ CREATE TABLE sum_cluster_card (partition_id uuid NOT NULL REFERENCES cluster_par
   dup_groups integer NOT NULL,                -- near-duplicate groups of the current run with live members
   PRIMARY KEY (partition_id, cluster_uid)
 ) WITH (fillfactor = 50);
--- revision 2: one cluster's pending deltas without scanning the kind's whole backlog (round 3, M2)
+-- revision 2: one cluster's pending deltas without scanning the kind's whole backlog (round 3, M2);
+-- in 0016 with the cluster kinds it serves (sum_deltas is filled then: CREATE INDEX CONCURRENTLY, 15a 2.6)
 CREATE INDEX ix_sum_deltas_cluster ON sum_deltas (partition_id, cluster_uid, kind) WHERE kind >= 7;
 ALTER TABLE near_dup_runs ADD COLUMN summaries_named_at timestamptz NULL;   -- 6.7
 ```
@@ -670,7 +685,8 @@ compactor cell, `m3`). `ix_sum_deltas_cluster` serves one cluster's reads (`pl_t
 cluster header): with 10,000 pending deltas a per-cluster probe without it scanned the kind's whole
 backlog (`m2` `b10000_p7_r8` 3,111 ms p50; with the index `b10000_p7_r8_idxcluster` 369.7 ms), and
 it showed no write cost at the noise (`m1` `label1_w30_delta_paced_idxcluster`: service p99 38.1 vs
-36.7 ms).
+36.7 ms). That is one cell inside a 28 % noise band (14.5 item 3), and round 3's compactor cells ran
+without the index, so every round 4 writer cell (R4-1, R4-2, R4-10) runs with it and records it.
 
 `sum_deltas` is vacuumed by count, threshold = the compactor batch measured by section 13 M3. Only
 with `security_invoker = true` does a view apply the invoking user's privileges and row-security
@@ -788,8 +804,16 @@ WITH batch AS (
   ON CONFLICT (project_id, source, class_id, class_source, label_source, class_validated, excluded, holdout)
   DO UPDATE SET n = s.n + EXCLUDED.n
 )  -- k2 .. k10: the same for each base table (cluster kinds: sums of m[], conf_sum, greatest(max_updated))
-SELECT count(*) FROM moved;
+, touched AS (                                -- revision 3: the clusters whose cards statement 2 rolls up
+  SELECT DISTINCT partition_id, cluster_uid FROM moved WHERE kind BETWEEN 7 AND 10
+)
+SELECT (SELECT count(*) FROM moved) AS n_moved,
+       (SELECT array_agg(partition_id ORDER BY partition_id, cluster_uid) FROM touched) AS touched_partitions,
+       (SELECT array_agg(cluster_uid ORDER BY partition_id, cluster_uid) FROM touched) AS touched_clusters;
 ```
+
+The two arrays are in key order and `NULL` when the batch moved no cluster kind (statement 2 is then
+skipped). Kinds 7 to 10 all carry `partition_id` and `cluster_uid` (6.1).
 
 The conflict target of each `kN` is the base table's primary key: `(project_id, <keys>)` for kinds 1
 to 5, the key alone for kinds 6 to 10 (`photo_counts (photo_key)` and the four cluster tables,
@@ -823,13 +847,15 @@ ON CONFLICT (partition_id, cluster_uid) DO UPDATE SET n_all = EXCLUDED.n_all, n_
 ```
 
 `:touched_*` are the `(partition_id, cluster_uid)` pairs of the moved rows of kinds 7 to 10, which
-the first statement returns beside its count. The roll-up reads base rows only (the moved deltas
+the first statement returns beside its count (`touched` above). The roll-up reads base rows only (the moved deltas
 are in them now), so the card equals the roll-up of its base rows at commit. Statement 2a locks the
 existing cards before 2b takes its snapshot (in read committed "each command" sees the data
 committed before it began, transaction isolation page): a second compactor waits in 2a for the
 first to commit, and its 2b then rolls up a snapshot that includes the first. A card two lapsed
-compactors create at once is the one case 2a cannot lock (no row yet); the drift check corrects it. The drift check (6.6)
-also compares every card with the roll-up of its base rows and rewrites a differing card. Cost: a
+compactors create at once is the one case 2a cannot lock (no row yet); the drift check corrects it. The drift check
+also compares every card with the roll-up of its base rows and rewrites a differing card, by the
+card check of 6.6 (its own read-committed step with 2a's lock, not inside the repeatable-read
+rebuild). Cost: a
 batch that labels inside one cluster touches one card; the compactor's rate with the refresh is
 timed in round 4 (R4-2) against twice M1's peak delta rate.
 
@@ -898,6 +924,38 @@ rebuilds; `max_updated_live` only grows between rebuilds (a leaving member keeps
 No lock is taken; the snapshot holds back vacuum for its duration (section 13 item M4). The nightly
 drift check is this rebuild: it logs the correcting rows and alerts when there are any.
 
+**Card check** (revision 3, review M6). The cards are not rewritten inside the repeatable-read
+transaction above: an `UPDATE` (or `INSERT ... ON CONFLICT DO UPDATE`) of a card a compactor changed
+after the snapshot fails there with a serialization error ([transaction isolation, repeatable
+read](https://www.postgresql.org/docs/18/transaction-iso.html#XACT-REPEATABLE-READ)), and a rewrite
+from that old snapshot in a later transaction would put an older roll-up over a newer card. After
+the rebuild commits and the compactor has folded its correcting deltas, the check walks the serving
+and pending partitions' cards in key order, 500 clusters per transaction, in **read committed**,
+with the compactor's own two statements: 2a locks the batch's existing cards `FOR UPDATE` in key
+order; 2b rolls them up from the base rows and writes only cards that differ:
+
+```sql
+-- 2a as in 6.5, :touched_* = the next 500 (partition_id, cluster_uid) in key order of the union of
+--   sum_cluster_card's keys and sum_cluster's distinct (partition_id, cluster_uid) (a missing card too)
+-- 2b as in 6.5, with the conflict action limited to a differing card and the rewrites counted
+INSERT INTO sum_cluster_card AS c (...) SELECT ... FROM touched t ORDER BY 1, 3
+ON CONFLICT (partition_id, cluster_uid) DO UPDATE SET n_all = EXCLUDED.n_all  -- ... every column
+  WHERE (c.n_all, c.n_live, c.labelled_live, c.validated_live, c.max_updated_live, c.conf_sum_live,
+         c.conf_n_live, c.needs_review, c.review_n, c.top_class_ids, c.top_class_n, c.top_det, c.dup_groups)
+        IS DISTINCT FROM (EXCLUDED.n_all, EXCLUDED.n_live, EXCLUDED.labelled_live, EXCLUDED.validated_live,
+         EXCLUDED.max_updated_live, EXCLUDED.conf_sum_live, EXCLUDED.conf_n_live, EXCLUDED.needs_review,
+         EXCLUDED.review_n, EXCLUDED.top_class_ids, EXCLUDED.top_class_n, EXCLUDED.top_det, EXCLUDED.dup_groups)
+RETURNING c.partition_id, c.cluster_uid;      -- the rewritten cards: logged, an alert when any
+```
+
+Why it never writes an older roll-up: in read committed each statement sees what was committed
+before it began (transaction isolation page). A compactor that committed before 2a is in 2b's
+roll-up; a compactor that commits later waits in its own 2a for this check's lock and then rolls up
+again over a snapshot that includes everything. Clusters with base rows but no card (the creation
+race of 6.5) are in that union and are created. `max_updated_live` is
+compared like the rest (the card takes the roll-up of its base rows). R4-2 injects a wrong card and
+a missing card and asserts one rewrite each.
+
 ### 6.7 Partition- and run-keyed summaries, filled before the pointer flips
 
 Cluster activation and a near-duplicate flip do not rebuild. The clustering job, after writing the
@@ -930,7 +988,7 @@ tests: 15c S1a-i and S6.
 ### 6.9 Cost per label write
 
 `store_states` replaces revision 0's two `tally_inputs` reads and per-table upserts with
-`RETURNING` on the writes it already makes, one `tally_context` read and one `INSERT`. A single
+`RETURNING` on the writes it already makes, `tally_context` (3 reads, below) and one `INSERT`. A single
 label is about **22 round trips** (round 3's prototype, `notes.md` section 3, section 14.1 item 7):
 scope setting, operation row, 2 registry reads, the items lock, the claims insert, 7 reads and writes
 for `load_item_inputs` and results, the `item_state` update, `tally_context` as 3 reads (photo
@@ -989,10 +1047,17 @@ Revision 2, from round 3 (section 14.2 "sort path" and "walk path"):
   row (sort path at 100,000 rows: 424 to 564 ms p50 for the joined sorts against 76 to 161 ms for
   the `item_state` sorts, `m7`). The walk path still walks the indexes of the table above (X28 to
   X32, X8).
-- **What decides the path.** When the filter is summary keys the exact total (P3) decides. Else the
-  sort path's read is itself the guard: it materialises at most `T_sort + 1` matching rows (`LIMIT`
-  inside the read) and switches to the walk when it got `T_sort + 1`; no second count runs. The
-  first page's choice rides in the cursor (section 4).
+- **What decides the path** (revision 3: three steps, cheapest first; review M5). (1) When the
+  filter is summary keys the exact total (P3) decides. (2) Else the page's own capped count (P4, cap
+  10,001, which page 1 runs anyway for its total) decides when it is not capped: at most 10,000
+  matches take the sort path. (3) A capped count says only "more than 10,000"; then the planner's
+  row estimate of the filter (`EXPLAIN` without `ANALYZE`, planning only) decides when it is far
+  from `T_sort`: above `3 x T_sort` the walk path runs at once, below `T_sort / 3` the sort path.
+  (4) In between, the sort path's read is the guard: it materialises at most `T_sort + 1` matching
+  rows (`LIMIT` inside the read) and switches to the walk when it got `T_sort + 1`. A wrong
+  estimate costs time, never a wrong page: both paths return the same rows. The first page's choice
+  rides in the cursor (section 4). Whether the estimate is good enough to skip the guard is R4-5's
+  question (estimate against actual for every filter it runs); if it is not, step 3 is dropped.
 - **`T_sort`** lies between 10,000 (every sort met: worst `created_at` 49 / 82 ms with its join)
   and 100,000 (none met); round 4 (R4-5) fixes it from the sort path at 20,000, 40,000 and 70,000
   rows on the `item_state` copies with a real class filter. Expected from the round 3 rates (about
@@ -1005,6 +1070,15 @@ Revision 2, from round 3 (section 14.2 "sort path" and "walk path"):
   75,000 matches at about 75 ms p50: matches between `T_sort` and about 100,000 miss the 50 ms p50 bar
   on both paths for `created_at`, `crop_area_norm`, `crop_rank_in_image`, `detector_confidence`,
   `blur_lap_ratio`, `detector_class_name` and `cluster_score` (estimate from cells; R4-5 measures it).
+  **What the person waits for just above `T_sort` is the sum** (revision 3, review M5): the capped
+  count (p99 13.7 to 18.0 ms, `m6a`), then the guard (about `T_sort` rows at about 1 µs, 40 to 50 ms
+  at `T_sort` = 40,000 to 50,000), then the walk (for a joined sort at 45,000 matches about 61 x
+  10.6 M / 45,000 = 14,400 entries at 8.7 µs = 125 ms; for `updated_at` on X1 at 1.7 µs, 24 ms).
+  First page estimates: about 190 ms for the joined sorts and about 90 ms for `updated_at`, so
+  the slow band is "from `T_sort` to about 100,000 matches, first page up to about 200 ms" for the
+  joined sorts, and `updated_at` misses the 50 ms bar there too unless step 3 skips the guard.
+  Deeper pages pay only the walk (the choice rides in the cursor). R4-5 times this composed path
+  (cells "guard then walk"); these sums are estimates from round 3's rates, not measurements.
   Sorts with no walk index (`validated`, `class_name`, `region_score`, audit `crop_id`,
   `detector_disagreement_default`) are bounded by the sort path alone: above `T_sort` matches they
   miss (100,000 rows: 88 to 161 ms p50, `m7`). Per coordinator answer 1 such sorts go to the owner
@@ -1020,107 +1094,306 @@ declared once in `src/domain/review_tabs.py`.
 Planner statistics for the correlated class columns (`st_item_state_class`, statistics target
 1,000 on `class_id`): 15a 2.6 ([extended statistics](https://www.postgresql.org/docs/18/planner-stats.html#PLANNER-STATS-EXTENDED)).
 
-## 8. Text search: a B-tree, the trigram index and row security
+## 8. Text search: B-trees for equality, owner-read search copies for fragments and words
+
+Revision 3 replaces revision 2's mechanism (a role with `BYPASSRLS` owning the fragment function),
+which cannot be set up on managed PostgreSQL and whose inner plan was never looked at (review M1,
+M2). What stays: X33 for every equality form, the variant list for fuzzy (now over a defined
+alphabet), the 3-character minimum for fragments.
 
 **Box text** (today the `text_fold` keyword and its `text_fold.sub` wildcard field,
 `region_text_search.py:1-11`; the review tab's case-insensitive wildcard). `box_state.text_fold` is
-already folded by `src/domain/region_text.py` (normalised, upper case, confusables mapped, one word),
-so case needs no `ILIKE`. Two indexes: X7, `CREATE INDEX ix_box_state_text_trgm ON box_state USING
-gin (text_fold gin_trgm_ops) WITH (fastupdate = on, gin_pending_list_limit = 512) WHERE text_fold IS
-NOT NULL`, for fragments; and X33 (revision 2), `CREATE INDEX ix_box_state_text ON box_state
-(project_id, text_fold) WHERE text_fold IS NOT NULL`, for every equality form. Migration `0011`
-runs `CREATE EXTENSION IF NOT EXISTS pg_trgm` before X7 (round 3 found the database without it,
-section 14.1 item 8).
+already folded by `src/domain/region_text.py` (`normalize` keeps letters and decimal digits, folds
+Latin accents, upper-cases; then the profile's confusable map), so case needs no `ILIKE` and a folded
+value holds no space, `%`, `_` or `\`. X33, `CREATE INDEX ix_box_state_text ON box_state
+(project_id, text_fold) WHERE text_fold IS NOT NULL`, serves every equality form on `box_state`
+itself. The trigram indexes X7 and X25 sit on the search copies below. `pg_trgm` is installed by
+`0010`'s bootstrap step (15a section 12; "trusted", installable by a non-superuser with `CREATE` on
+the database, [pg_trgm](https://www.postgresql.org/docs/18/pgtrgm.html)); round 3's spike database
+lacked it (section 14.1 item 8), so `0011` only checks that it is there.
 
-**Row security decides which index a text match can use** (round 3, section 14.2 "text"). The
-record's tables have forced row security (02a 1.4). "The system will enforce conditions from
-security policies ... before any user-supplied conditions from the query itself that contain
-non-leakproof functions", and only "functions and operators marked as leakproof ... may be executed
-before conditions from security policies"; only a superuser can mark one ([CREATE FUNCTION,
-`LEAKPROOF`](https://www.postgresql.org/docs/18/sql-createfunction.html), [CREATE POLICY,
-notes](https://www.postgresql.org/docs/18/sql-createpolicy.html)). An index condition is evaluated
-before the policy's filter, so a non-leakproof operator such as `LIKE` or pg_trgm's `%` stays a
-filter after a sequential scan: round 3's plan of the fragment count (`m6a` `p4_text_gin_r1`) is a
-sequential scan of `box_state` with the policy and `text_fold ~~ '%ZTNP%'` in one filter, 5,099,275
-rows removed for 12, 1,661 ms, while the equality form (text `=` is leakproof) used an index and met
-its bar (3.7 / 6.3 ms, `m9` `exact_first_r8`). Round 4 (R4-3) confirms the mechanism from
-`pg_proc.proleakproof` and the same plan as a role that bypasses row security.
+**Why row security keeps `LIKE` off an index.** "An index scan cannot be selected for queries on
+security barrier views (or tables with row-level security policies) if an operator used in the
+`WHERE` clause is associated with the operator family of the index, but its underlying function is
+not marked `LEAKPROOF`" ([rules and privileges](https://www.postgresql.org/docs/18/rules-privileges.html));
+"the system will enforce conditions from security policies ... before any user-supplied conditions
+from the query itself that contain non-leakproof functions" ([CREATE FUNCTION,
+`LEAKPROOF`](https://www.postgresql.org/docs/18/sql-createfunction.html)). Round 3's plans agree:
+both text counts (`m6a` `p4_text_gin_r1`, `p4_text_exists_r1`) are sequential scans of `box_state`
+with the policy and `text_fold ~~ '%ZTNP%'` in one filter, 5,099,275 rows removed for 12. Not
+shown yet: a control plan without row security, and the `proleakproof` flags; the equality form's
+index use (3.7 / 6.3 ms, `m9` `exact_first_r8`) is inferred from timing, since `m9` recorded no plan.
+So the cause is documented and consistent with the plans; R4-3 records the control and the flags.
+
+**Binding constraint: managed PostgreSQL.** The backend must also run on a managed service such as
+Amazon RDS or Aurora for PostgreSQL, where nobody is a superuser. The most privileged user there is
+`CREATE ROLE postgres WITH LOGIN NOSUPERUSER INHERIT CREATEDB CREATEROLE NOREPLICATION`, a member of
+`rds_superuser`, which may add supported extensions, create roles and grant privileges ([Amazon RDS,
+the rds_superuser role](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Appendix.PostgreSQL.CommonDBATasks.Roles.rds_superuser.html)).
+PostgreSQL: "`CREATEROLE` does not confer the ability to grant or revoke the `BYPASSRLS` privilege"
+([role attributes](https://www.postgresql.org/docs/18/role-attributes.html)); "only superuser roles
+or roles with `BYPASSRLS` can specify `BYPASSRLS`" ([CREATE ROLE](https://www.postgresql.org/docs/18/sql-createrole.html));
+`LEAKPROOF` "can only be set by the superuser" (CREATE FUNCTION). So on such a service no role of
+ours can bypass row security and no function can be marked leakproof. The AWS pages do not say this
+in one sentence; it follows from the master role's attributes and the PostgreSQL rules, and the
+cloud check C-1 (section 15) confirms it on a real instance. A mechanism that needs either is not
+chosen unless nothing else meets the bar.
+
+**The mechanisms** (review: "do not simply patch the definer function"). Sizes and rates from the
+spike data: about 2.65 M boxes with text at 10 M items (text on 80 % of plate and OCR boxes, which
+are 65 % of 5.1 M boxes; 5 to 8 characters A to Z and 0 to 9; gate A `notes.md` section 1), X7 108 MB
+(`m3_sizes_10m.json`), box writers 1,470 to 1,524 boxes per second (`m9` `gin_insert_*`).
+
+| | (a) definer function owned by a `BYPASSRLS` role (revision 2) | (b) mark the operator functions `LEAKPROOF` | (c) posting table `(project_id, trigram, item_key)` probed by equality, `LIKE` as a recheck | (d) owner-read search copy (**chosen**) |
+|---|---|---|---|---|
+| How the index becomes usable | the role bypasses every policy, `FORCE` included ([row security](https://www.postgresql.org/docs/18/ddl-rowsecurity.html)) | `textlike` and pg_trgm's operator functions treated as leakproof, so `LIKE` may run before the policy | only equality on `uuid`, `integer`, `bigint` in index conditions (leakproof, R4-3 checks `uuid_eq`, `int4eq`, `int8eq`) | the copy's owner "normally bypass[es] row security" when the table is not `FORCE`d (row security page), and a definer function runs "with the privileges of the user that owns it" (CREATE FUNCTION), so no policy applies inside it |
+| Isolation, fail closed | `project_id = op_bound_project_strict()` inside; raises unbound | the policy still applies to every caller | the policy applies to every caller (the table is an ordinary forced table); unbound raises in the policy | inside the function `project_id = op_bound_project_strict()` (raises unbound or outside project scope); every direct read and write of `op_app` goes through the policy (it is not the owner) |
+| Bootstrap and migration, self-hosted | bootstrap (`op_super`) creates the role; changing a function's owner needs `SET ROLE` to the new owner and its `CREATE` on the schema ([ALTER FUNCTION](https://www.postgresql.org/docs/18/sql-alterfunction.html)), which revision 2 did not grant | superuser `ALTER FUNCTION ... LEAKPROOF` on system and extension functions, outside any migration | none beyond today's | bootstrap creates a role with no attributes and its schema; the migration (`op_owner`) creates the objects under `SET ROLE` (below) |
+| Managed | impossible (no `BYPASSRLS`) | impossible (no superuser) | works | works: the same statements, the bootstrap run by the master user |
+| Plan and bound | a GIN read inside a fence; bound as (d) once written so | as a plain query | per fragment of `k` characters, `k - 2` posting lists read and intersected; bounded only by the longest list (plate digit groups repeat) | one statement per call, planned with the actual fragment and project, at most `max_items` rows read from the heap (below) |
+| Write cost | none beyond X7 | none | about 4.5 interior trigrams per text: about 12 M rows at 10 M, about 0.7 GB heap and 0.55 GB B-tree (60 and 46 B a row), against X7's 108 MB; about 6,800 row inserts per second at round 3's box rate | one upsert of one row per item whose box texts change, plus its GIN entries (about X7's); about 2.65 M rows at most, about 0.16 GB heap and 0.06 GB key |
+| Verdict | not chosen: cannot be set up on managed PostgreSQL | not chosen: superuser only, and wrong by definition: `LIKE` raises on some patterns, and "a function which throws an error message for some argument values but not others ... is not leakproof" (CREATE FUNCTION) | fallback if (d) misses R4-3: no privilege change at all, but a hand-made trigram search 12 times X7's size | chosen: the documented GIN index, no special attribute, the same on both platforms |
+
+Also considered: a `security_barrier` view (the same leakproof rule applies to it, rules page);
+`btree_gin` to put `project_id` into the GIN index (does not lift the rule); partitioning by project
+(DDL per project, rejected in 15a section 1).
+
+**Roles and objects of (d)** (02a 1.5 has the role table; 02c section 6 the restore). The role
+`op_text_owner` is `NOLOGIN` with no attribute; it owns schema `txt`, the two copies and their
+functions, and holds nothing else but `REFERENCES (item_key)` on `items` and `EXECUTE` on
+`op_bound_project_strict()`. `op_app` is not a member of it.
+
+```sql
+-- bootstrap (src/db/roles.py: ensure_roles, prepare_database), idempotent; self-hosted as op_super,
+-- managed as the service's master user (CREATEROLE: the creator gets ADMIN on the new role, "SET FALSE",
+-- role attributes page, so it grants itself SET before creating the schema owned by the role)
+CREATE ROLE op_text_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+GRANT op_text_owner TO CURRENT_USER WITH SET TRUE;                       -- needed on managed only
+CREATE SCHEMA IF NOT EXISTS txt AUTHORIZATION op_text_owner;
+GRANT op_text_owner TO op_owner WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;   -- migrations SET ROLE to it
+
+-- 0011, as op_owner (owner of public's tables and of the scope functions)
+CREATE OR REPLACE FUNCTION op_scope_project() ...   -- 02a 1.4, tightened: 'project' with an empty id raises
+CREATE FUNCTION op_bound_project_strict() RETURNS uuid
+  LANGUAGE plpgsql STABLE SET search_path = pg_catalog, pg_temp AS $f$
+DECLARE pid text := current_setting('op.project_id', true);
+BEGIN
+  IF coalesce(current_setting('op.scope', true), '') <> 'project' THEN
+    RAISE EXCEPTION 'project_scope_required' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  IF coalesce(pid, '') = '' THEN
+    RAISE EXCEPTION 'project_not_bound' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+  RETURN pid::uuid;
+END $f$;
+REVOKE ALL ON FUNCTION op_bound_project_strict() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION op_bound_project_strict() TO op_app, op_text_owner;
+GRANT REFERENCES (item_key) ON items TO op_text_owner;
+SET ROLE op_text_owner;                                  -- everything below is owned by op_text_owner
+CREATE TABLE txt.item_box_text (                         -- one row per item with box text (S4, R7)
+  item_key bigint PRIMARY KEY REFERENCES public.items(item_key) ON DELETE CASCADE,
+  project_id uuid NOT NULL,                              -- deleted with its items (02a 1.2's batched delete)
+  folds text NOT NULL                                    -- the item's box text_fold values, ' '-separated, by box_id
+);
+CREATE TABLE txt.item_line_text (                        -- one row per item with OCR lines (today item_text_tokens)
+  item_key bigint PRIMARY KEY REFERENCES public.items(item_key) ON DELETE CASCADE,
+  project_id uuid NOT NULL,
+  words text NOT NULL                                    -- item_text_tokens of the item's lines, ' '-separated
+);
+-- both: ENABLE ROW LEVEL SECURITY without FORCE (the one exception to 02a 1.4, see the tests);
+-- policy p_<table>_project exactly as 02a 1.4; GRANT SELECT, INSERT, UPDATE, DELETE TO op_app
+CREATE INDEX ix_item_box_text_trgm ON txt.item_box_text USING gin (folds public.gin_trgm_ops)    -- X7
+  WITH (fastupdate = on, gin_pending_list_limit = 512);
+CREATE INDEX ix_item_line_text_trgm ON txt.item_line_text USING gin (words public.gin_trgm_ops)  -- X25
+  WITH (fastupdate = on, gin_pending_list_limit = 512);
+
+-- the functions and their grants: in the migration's one transaction, as the definer page asks
+-- ("create it and set the privileges within a single transaction")
+CREATE FUNCTION txt.fragment_items(frag text, max_items integer) RETURNS SETOF bigint
+  LANGUAGE plpgsql STABLE SECURITY DEFINER PARALLEL UNSAFE
+  SET search_path = pg_catalog, pg_temp SET plan_cache_mode = force_custom_plan AS $f$
+DECLARE p uuid := public.op_bound_project_strict();     -- raises before anything is read
+BEGIN
+  IF frag IS NULL OR length(frag) < 3 OR max_items IS NULL OR max_items NOT BETWEEN 1 AND 10001
+     OR strpos(frag, '%') > 0 OR strpos(frag, '_') > 0 OR strpos(frag, '\') > 0 OR strpos(frag, ' ') > 0 THEN
+    RAISE EXCEPTION 'text_fragment_invalid' USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  RETURN QUERY SELECT t.item_key FROM txt.item_box_text t
+               WHERE t.project_id = p AND t.folds LIKE '%' || frag || '%'
+               LIMIT max_items;
+END $f$;
+CREATE FUNCTION txt.word_items(words text[], max_items integer) RETURNS SETOF bigint
+  LANGUAGE plpgsql STABLE SECURITY DEFINER PARALLEL UNSAFE
+  SET search_path = pg_catalog, pg_temp SET plan_cache_mode = force_custom_plan AS $f$
+DECLARE p uuid := public.op_bound_project_strict(); longest text;
+BEGIN
+  SELECT w INTO longest FROM unnest(words) w ORDER BY length(w) DESC, w LIMIT 1;
+  IF longest IS NULL OR length(longest) < 3 OR max_items IS NULL OR max_items NOT BETWEEN 1 AND 10001
+     OR EXISTS (SELECT 1 FROM unnest(words) w WHERE w IS NULL OR w = '' OR strpos(w, '%') > 0
+                OR strpos(w, '_') > 0 OR strpos(w, '\') > 0 OR strpos(w, ' ') > 0) THEN
+    RAISE EXCEPTION 'text_words_invalid' USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  RETURN QUERY SELECT t.item_key FROM txt.item_line_text t
+               WHERE t.project_id = p
+                 AND t.words LIKE '%' || longest || '%'                       -- the GIN condition
+                 AND NOT EXISTS (SELECT 1 FROM unnest(words) w                -- every word starts a token
+                                 WHERE strpos(' ' || t.words, ' ' || w) = 0)
+               LIMIT max_items;
+END $f$;
+CREATE FUNCTION txt.fuzzy_items(key text, threshold real, max_items integer)
+  RETURNS TABLE (item_key bigint, folds text)
+  LANGUAGE plpgsql STABLE SECURITY DEFINER PARALLEL UNSAFE
+  SET search_path = pg_catalog, pg_temp SET plan_cache_mode = force_custom_plan
+  SET pg_trgm.word_similarity_threshold = 0.6 AS $f$
+DECLARE p uuid := public.op_bound_project_strict();
+BEGIN
+  IF key IS NULL OR key = '' OR threshold IS NULL OR threshold NOT BETWEEN 0.1 AND 1
+     OR max_items IS NULL OR max_items NOT BETWEEN 1 AND 10001
+     OR strpos(key, '%') > 0 OR strpos(key, '_') > 0 OR strpos(key, '\') > 0 OR strpos(key, ' ') > 0 THEN
+    RAISE EXCEPTION 'text_fuzzy_invalid' USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  -- local to the function: the SET clause above restores the value at exit (CREATE FUNCTION, SET)
+  PERFORM set_config('pg_trgm.word_similarity_threshold', threshold::text, true);
+  RETURN QUERY SELECT t.item_key, t.folds FROM txt.item_box_text t
+               WHERE t.project_id = p AND key OPERATOR(public.<%) t.folds
+               LIMIT max_items;
+END $f$;
+REVOKE ALL ON FUNCTION txt.fragment_items(text, integer), txt.word_items(text[], integer),
+                       txt.fuzzy_items(text, real, integer) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION txt.fragment_items(text, integer), txt.word_items(text[], integer),
+                          txt.fuzzy_items(text, real, integer) TO op_app;
+RESET ROLE;                                              -- back to op_owner for the rest of 0011
+```
+
+`0011` writes the body of `op_scope_project` once (02a 1.4 with the `'project'` branch raising
+`project_not_bound` on an empty id instead of returning `NULL`, review M7): with `NULL` a policy
+compares `project_id = NULL` and returns nothing, silently. The search path of both definer
+functions is `pg_catalog, pg_temp` and every other name is schema-qualified, as the definer page
+asks ("`pg_temp` as the last entry"); `LIKE`, `strpos` and `unnest` are in `pg_catalog`, the
+operator class and `<%` are named with their schema (`public` keeps `USAGE` for every role by
+default, so `op_text_owner` needs no grant there). `SET ROLE` makes the objects owned by
+`op_text_owner` without the `ALTER ... OWNER` step revision 2 could not perform; it needs only the
+membership `WITH SET` from the bootstrap, and no session setting of the role ("does not process
+session variables", [SET ROLE](https://www.postgresql.org/docs/18/sql-set-role.html)) matters here:
+the copies are empty and their indexes are built in the migration (15a 2.6).
+
+**The plan inside, and its bound** (review M2). A PL/pgSQL statement is prepared once and may get
+a generic plan "not dependent on specific parameter values"; a fresh plan "can use the current
+parameter values" ([PL/pgSQL plan caching](https://www.postgresql.org/docs/18/plpgsql-implementation.html#PLPGSQL-PLAN-CACHING));
+`SET plan_cache_mode = force_custom_plan` on the function makes every call a custom plan with the
+actual fragment and project ([PREPARE](https://www.postgresql.org/docs/18/sql-prepare.html),
+[plan_cache_mode](https://www.postgresql.org/docs/18/runtime-config-query.html#GUC-PLAN-CACHE-MODE)).
+One row per item means no `DISTINCT`, so `LIMIT max_items` stops the heap phase at `max_items` rows:
+the expected plan is a bitmap scan of X7 (cost: the posting lists of the fragment's `k - 2`
+trigrams, compressed in GIN) and at most `max_items` heap rows with their `LIKE` recheck. The
+planner may instead pick a sequential scan with `LIMIT` when it expects many matches; R4-3 records
+the inner plan of every call through `auto_explain` with `log_nested_statements` ("statements
+executed inside a function", [auto_explain](https://www.postgresql.org/docs/18/auto-explain.html)),
+and if any inner plan reads more than ten times `max_items` rows sequentially the functions get
+`SET enable_seqscan = off` ([planner method configuration](https://www.postgresql.org/docs/18/runtime-config-query.html#RUNTIME-CONFIG-QUERY-ENABLE)).
+`PARALLEL UNSAFE` is the default and is declared on purpose: the function runs as its own statement
+(below), so it forces no caller's plan to be serial (the `PARALLEL` paragraph of CREATE FUNCTION);
+its `ROWS` estimate has no consumer for the same reason.
+
+**How a page, a count and a sort use it** (review M3). The function is never a subquery of P1, P4,
+P8 or P9; the reader calls it first, as its own statement, with `max_items` = 10,001 (the list cap
+plus one), in the page's transaction:
+
+1. `SELECT k FROM txt.fragment_items(:frag, 10001) k` (or `word_items`) returns `:text_keys`.
+2. **Narrow** (at most 10,000 keys): the text predicate is `s.item_key = ANY(:text_keys)` (P1, P8),
+   `b.item_key = ANY(:text_keys)` (P9's first statement); the total is the number of keys, exact,
+   with no count statement (P4 is not run); the page takes the sort path over these keys
+   (section 7), whose bar met at 10,000 rows (`m7`).
+3. **Broad** (10,001 keys): the total is "10,000+" (`total_capped`, no count statement); the page
+   takes the walk path of its sort with the text test as a per-item filter, `EXISTS (SELECT 1 FROM
+   txt.item_box_text t WHERE t.item_key = s.item_key AND t.folds LIKE :like)` (`:like` =
+   `'%' || frag || '%'`); here the policy applies (the reader is `op_app`), the index condition is
+   the primary key's `bigint` equality and `LIKE` is a filter on one row. A broad match fills a page
+   after few entries (section 7, walk path).
+
+P9's second statement, the matching boxes of the page's items, applies the text test to `box_state`
+rows already bounded by the keys (at most 61 items, at most 74 boxes each; section 9):
+`... WHERE b.project_id = :p AND b.item_key = ANY(:keys) AND b.text_fold LIKE :like ORDER BY
+b.item_key DESC, b.ordinal` (a filter after the policy on those rows). R4-3 times steps 1 to 3
+inside P1, P4, P8 and P9 at three selectivities.
 
 | Match (`TextMatch`) | SQL | Index |
 |---|---|---|
 | `exact` | `b.text_fold = :key` | X33 |
-| `fuzzy` (`FUZZY_FUZZINESS = 1`, transpositions, `region_text_search.py:29-30`), any length | `b.text_fold = ANY(:variants)`: every string at Damerau-Levenshtein distance at most 1 from the key over the folded alphabet of `region_text.py`, built by one domain function | X33 (one index probe per variant) |
-| `fragment` (3 characters or more) | `b.item_key IN (SELECT op_text_fragment(:frag_escaped))` (`%`, `_`, `\` escaped by the caller) | X7, inside the function below |
+| `fuzzy` (`FUZZY_FUZZINESS = 1`, transpositions, `region_text_search.py:29-30`) | closed alphabet: `b.text_fold = ANY(:variants)`; otherwise the trigram form below | X33; X7 through `txt.fuzzy_items` |
+| `fragment` (3 characters or more, after `fold`) | `txt.fragment_items`, then steps 2 and 3 above | X7 |
 | `same_text_as` (`same_text_key`, `region_text_search.py:37`) | the box's own `text_fold` by `(item_key, box_id)` (`uq_box_state_item_box`), then `exact` | X33 |
+| item text words (`?item_text=`, `item_text.py:110-121`) | `txt.word_items` with the query's words (`normalize_tokens`), then steps 2 and 3 | X25 |
 
-**Fuzzy is the variant list for every length** (revision 2). A key of `n` characters over an
-alphabet of `A` folded characters has at most `n(A - 1)` substitutions, `(n + 1)A` insertions, `n`
-deletions and `n - 1` transpositions: 546 strings for a 7-character plate over 36 characters, each
-one B-tree probe of X33. The variants are exact matches, so no distance check follows and no
-plate at distance 1 is missed by construction. pg_trgm itself notes that its indexes "may not be as
-efficient as regular B-tree indexes for equality operator" ([pg_trgm](https://www.postgresql.org/docs/18/pgtrgm.html)),
-and round 3's variant lists on X7 took 64 to 170 ms p50 (`m9` `var1` to `var3`); the trigram
-similarity form (`%` with a derived threshold, revision 1) is not built, since `%` cannot use X7
-under row security (fuzzy 4.7 to 5.3 s, `m9` `fuzzy4` to `fuzzy9`). A unit test checks the variant
-generator against a brute-force distance on generated plates; R4-3 times it for 1 to 10 characters.
+**Fuzzy: the variant list, its alphabet and its switch** (review M4). A key of `n` characters over
+an alphabet `A` has at most `n(|A| - 1)` substitutions, `(n + 1)|A|` insertions, `n` deletions and
+`n - 1` transpositions, each one probe of X33. `A` is defined per profile revision by one domain
+function: the characters `c` with `fold(c) = c` (so no confusable-map key, which never occurs in a
+folded value: `confusables_issue` keeps the fold idempotent) that match the profile's one-character
+regex `text_charset` (`src/config/detection_profile.py:111-114`), taken from the letters and
+decimal digits `normalize` keeps. The list is used when `text_charset` is set, `|A|` is at most 40
+and the key at most 12 characters: at most 12 x 39 + 13 x 40 + 23 = 1,011 probes (the spike: `A` =
+A to Z and 0 to 9, 36 characters, 546 strings for 7 characters). Otherwise (`text_charset` empty,
+which keeps every non-space character; a larger alphabet; a longer key) the search switches to
+`txt.fuzzy_items(key, threshold, 10001)` (above): pg_trgm's word similarity `key <% t.folds`
+(served by X7, pg_trgm page) with the threshold the domain function derives from the key's length,
+returning candidates with their `folds`; the domain function then keeps exactly the items with a
+word at Damerau-Levenshtein distance at most 1. The threshold formula is R4-3's (recall against a
+brute-force distance on the spike's texts must be 100 % for keys of 1 to 12 characters). When
+10,001 candidates come back, the page shows the matches among them and marks the total unknown
+(`total_unknown`, section 5); R4-3 reports how often that happens on the spike. A box text read by a human or another reader that
+holds a character outside `A` is found by `exact`, `fragment` and the trigram form, not by the
+variant list (stated, tested). A unit test checks the variant generator and the alphabet function
+against a brute-force distance on generated texts.
 
-**Fragments go through one project-bound search function** (revision 2). The only operators X7
-serves are non-leakproof, so the fragment read runs where row security is not applied, inside a
-function that applies the project itself and fails closed:
+**A named product change** (review M4): today's fuzzy query stops at `FUZZY_MAX_EXPANSIONS = 50`
+(`region_text_search.py:30`, `:80`); both forms here return every stored text within distance 1, a
+superset of today's results when more than 50 stored texts are that close. The pins of the 50 go:
+`tests/region_text/test_plate_search.py:31` and `tests/curation/golden/item_filter_clauses_golden.json:713`.
 
-```sql
--- 0011, run by the migrator (a superuser: only a superuser can create a role with BYPASSRLS)
-CREATE ROLE op_text_search NOLOGIN BYPASSRLS;
-GRANT SELECT (project_id, item_key, text_fold) ON box_state TO op_text_search;
-GRANT SELECT (project_id, item_key, text) ON text_lines TO op_text_search;
-BEGIN;
-CREATE FUNCTION op_text_fragment(frag text) RETURNS SETOF bigint
-  LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp ROWS 1000 AS $f$
-  SELECT DISTINCT b.item_key FROM box_state b
-  WHERE b.project_id = op_bound_project_strict()      -- the setting the policies read; raises when unbound
-    AND b.text_fold IS NOT NULL AND b.text_fold LIKE '%' || frag || '%'
-$f$;
-ALTER FUNCTION op_text_fragment(text) OWNER TO op_text_search;
-REVOKE ALL ON FUNCTION op_text_fragment(text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION op_text_fragment(text) TO op_app;
-COMMIT;
--- op_text_word(w text): the same for text_lines, lower(l.text) ~ ('\m' || w), index X25
-```
+**Words** (today `item_text_tokens`, a prefix query per word, `src/domain/item_text.py:89-121`). The
+copy holds exactly today's tokens (each word of each line plus the joined line, `item_text_tokens`),
+so "every word of `q` is a prefix of some token" is `strpos(' ' || words, ' ' || w) > 0` for every
+word, as in `word_items`. Words have only letters and digits (`normalize_tokens`), so no escaping is
+needed; the function refuses anything else. **Short words** (review M7): pg_trgm extracts no trigram
+from fewer than three characters and "a pattern with no extractable trigrams will degenerate to a
+full-index scan" (pg_trgm page). A query whose longest word has one or two characters takes the walk
+path directly (step 3, with every word as the `strpos` test on `txt.item_line_text` by primary key),
+so today's one- and two-character prefixes keep working; a fragment under three characters is
+refused with 400 `text_too_short` (revision 1, 15c contract addendum).
 
-This follows the documented pattern for definer functions: a fixed `search_path` ending in
-`pg_temp`, execute revoked from `PUBLIC` and granted in the same transaction ([CREATE FUNCTION,
-writing `SECURITY DEFINER` functions safely](https://www.postgresql.org/docs/18/sql-createfunction.html#SQL-CREATEFUNCTION-SECURITY));
-`BYPASSRLS` is the role attribute that skips policies ([CREATE ROLE](https://www.postgresql.org/docs/18/sql-createrole.html)).
-`op_bound_project_strict()` reads the same transaction setting as the policies (02a 1.4) and raises
-when no project is bound or the scope is not a project, so the function cannot answer for another
-project or for none. The owner role has column-level `SELECT` on three columns and nothing else.
-Tests (`db` feature of the slice that builds it): bound to project A it never returns an item of
-B; unbound it raises; `op_app` cannot alter it; its result equals the `LIKE` over the same rows run
-by the owner. Options considered: marking `textlike` and pg_trgm's operators `LEAKPROOF` (needs a
-superuser change to system functions that a dump does not carry, and `LIKE` raises on some
-patterns, which the definition of leakproof excludes); an n-gram table on B-trees (about 15 rows
-per plate, hand-made trigram search); both rejected. Write cost of the chosen forms: X33 adds one
-B-tree entry per box with text (a text change is already not HOT, X7 holds `text_fold`); the
-function costs nothing on writes.
-
-Items are `SELECT DISTINCT b.item_key ...` (or the function's rows), used as an `EXISTS` or `IN`
-predicate inside P1, P4, P8 and P9. "A pattern with no extractable trigrams will degenerate to a
-full-index scan" (pg_trgm page): a fragment shorter than three characters is refused with 400
-`text_too_short` as a served sentence (15c contract addendum). The GIN index carries no project
-column; the project test is a recheck inside the function.
+**Who writes the copies.** `store_states` (6.2), the only writer of `box_state`, rewrites
+`txt.item_box_text` for each item whose box `text_fold` values changed, in the same transaction
+after step 2, ordered by `item_key`: an `INSERT ... SELECT b.item_key, :p, string_agg(b.text_fold,
+' ' ORDER BY b.box_id) FROM box_state b WHERE b.item_key = ANY(:changed) AND b.text_fold IS NOT NULL
+GROUP BY 1 ORDER BY 1 ON CONFLICT (item_key) DO UPDATE SET folds = EXCLUDED.folds WHERE t.folds IS
+DISTINCT FROM EXCLUDED.folds`, and a `DELETE` of the changed items that have no text left. The
+repository that writes `text_lines` rows with an `item_key` (`src/db/repos/text_search.py`, new)
+rewrites `txt.item_line_text` the same way from `item_text_tokens`. Deletes cascade from `items`.
+The ratchet of 6.2 (`tests/storage/test_counted_writers.py`) also names the writer of each copy.
+Write cost: one row and its GIN entries per changed item; `box_state` keeps X33, so a text change
+there is not HOT (as before).
 
 **GIN pending list** (round 3, M9): `fastupdate` on with `gin_pending_list_limit` 512 kB gave the
 lowest insert p99 under 30 box writers (service 8.2 / 17.3 ms p50 / p99, against 14.3 / 40.6 ms with
-`fastupdate` off, H; 21.1 at 4 MB, H; 28.3 at 16 MB, H; `m9` `gin_insert_*`). A pending-list flush
-runs inside an ordinary insert and readers scan the pending list too ([GIN fast
-update](https://www.postgresql.org/docs/18/gin.html#GIN-FAST-UPDATE)); the reader side of that
-setting was not measured, so R4-3 times fragment reads while the box writers run.
+`fastupdate` off, H; 21.1 at 4 MB, H; 28.3 at 16 MB, H; `m9` `gin_insert_*`), one 60 s cell each at
+different host loads, and two identical cells of round 3 differ by 28 % (14.5 item 3), more than the
+gap between 512 kB and 4 MB: the numbers do not choose 512 kB over 4 MB. The choice rests on the
+documentation: readers scan the pending list too, and a larger list means a longer cleanup inside
+an ordinary insert ([GIN fast update](https://www.postgresql.org/docs/18/gin.html#GIN-FAST-UPDATE));
+512 kB is the small end that met. The storage parameter is in kilobytes ([CREATE INDEX](https://www.postgresql.org/docs/18/sql-createindex.html)).
+R4-3 times fragment reads in 30 s windows alternating with and without 30 box writers (the windowed
+method of 14.4); if the reads with writers miss the page bar, the fallback is `fastupdate = off`.
 
-**Item text lines** (today `item_text_tokens` with a `prefix` per word, `src/domain/item_text.py:89`,
-`:110`): `text_lines.text` of an item, index X25 `gin (lower(text) gin_trgm_ops) WITH (fastupdate =
-on, gin_pending_list_limit = 512) WHERE item_key IS NOT NULL`; a word `w` matches through
-`op_text_word(w)` (word-start regular expression `~`, served by the same index, non-leakproof like
-`LIKE`). `item_text_tokens` goes (15a 5.2).
+**Tests** (`db` feature of the slice that builds it, R1b and R7). Bound to project A the functions
+never return an item of B while B has matching rows; with no project bound, an empty project id or
+a scope other than `project` they raise; `op_app` cannot read B's copy rows directly, cannot alter or
+drop the functions or the copies, and is not a member of `op_text_owner`; `pg_roles` shows
+`op_text_owner` without login and without `rolbypassrls`; the copies are the only tables with
+`relrowsecurity` and not `relforcerowsecurity`, and every other table with a `project_id` is forced
+(02a 1.4); both functions are `prosecdef` with `search_path` and `plan_cache_mode` in `proconfig`;
+each function's result equals the `LIKE` (or prefix) test over the source rows run by the owner; the
+6.8 property test asserts after every step that each copy equals its source.
 
 ## 9. Box rows: the index and the page
 
@@ -1132,7 +1405,11 @@ Design: items **newest first**, one ordered index per box filter shape, since on
 column before the sort column bounds an ordered range (multicolumn indexes page): X6 `(project_id,
 state, detector, item_key DESC)`, X26 `(project_id, state, item_key DESC)`, X27 `(project_id,
 detector, item_key DESC)` (M6; box rows change far less often than item rows). `<box predicate>` is
-the same text in both statements: state, detector and the text match of section 8.
+state, detector and the text match of section 8. For `exact`, `fuzzy` and `same_text_as` it is the
+same text in both statements. For a fragment (revision 3, review M3) the first statement takes
+`b.item_key = ANY(:text_keys)` (narrow) or the walk with the per-item `EXISTS` on
+`txt.item_box_text` (broad), and the second statement takes `b.text_fold LIKE :like` on the rows
+already bounded by `b.item_key = ANY(:keys)`, so only the boxes that match are returned (section 8).
 
 ```sql
 -- the page's items: distinct items with a matching box, newest first
@@ -1149,7 +1426,7 @@ ORDER BY b.item_key DESC, b.ordinal;
 
 The index delivers `item_key` in order inside the equality prefix, so `DISTINCT` is a unique step
 over sorted input that stops after the page's items (an item holds at most 74 boxes). A text-only
-filter takes the GIN candidates (section 8) and orders their items (a bitmap read, sorted); a filter
+filter takes the keys of section 8's steps 1 to 3 and orders their items; a filter
 with neither state, detector nor text walks X1-ordered items with an `EXISTS` on
 `uq_box_state_item_box`. Inside one box cluster the order is the box membership score (X22), as
 today's cluster branch (`regions.py:120-135`). `total_rows` is exact from `sum_box` for a state or
@@ -1321,7 +1598,8 @@ a filter (subject scope, blur, confidence, class, dates; `clusterListController.
 card's "N to review" chip (`needs_review_count`, which is `review_counts.all`, `types.ts:275`), its
 sort and its filter. Numbers: 6,095 / 7,209 ms for the `all` count of 200 cards, 6,081 / 7,400
 filtered, one statement with a `LATERAL` per card no faster (6,067 / 7,122; `m10` `p13_*`); about
-30 ms per card. Cause: the statement runs once per card over that card's members; the 200 largest
+30 ms per card. Cause (inferred: `m10` holds no plan of the P13 cells, only of `p7_cards_r8`; R4-9
+records plans): the statement runs once per card over that card's members; the 200 largest
 clusters hold many members, and the grid needs the numbers for every card it sorts, not only those
 on screen. Options: per-card P13 for the 24 visible cards only (about 0.7 s, and the sort and filter
 of the grid cannot be served); one set-based statement over the filtered members grouped by cluster
@@ -1344,22 +1622,34 @@ plan's form through X32 (no write cost; X32 exists for the sort); (2) the detect
 `sum_items`, making the total exact (more base rows, no extra delta rows); (3) a sixth B-tree on
 `item_state` (every label inserts one more index entry, `m5`: labels are never HOT). **Chosen: (1)**;
 round 4 R4-4 times it with its plan. If it misses, (2) is the candidate for the next change, not (3).
+Risk stated (review m3): a capped count through X32 still probes `item_state` for up to 10,001
+candidates (the rest of the filter and the policy); round 3's text count plan shows 0.05 to 0.07 ms
+per such probe cold (`m6a` `p4_text_gin_r1`, `item_state_pkey`), which would be 500 to 700 ms for
+10,001 probes if they stay cold, so (2) may well be needed; R4-4 shows which.
 
 **Text counts and text pages: fragment, fuzzy and variant matches.** Screens: the regions review tab
 and every list with a plate-text filter. Numbers: text counts 1,824.6 / 7,140.4 ms (`EXISTS` form)
 and 1,304.5 / 2,417.2 (trigram form), 100 % cancelled at every budget (`m6a`); fragment pages 410 to
-1,593 ms p50, fuzzy 4,651 to 5,291, variant lists 64 to 170 (`m9`). Cause: row security. The plan of
-the fragment count (`p4_text_gin_r1`) is a sequential scan with the policy and the `LIKE` in one
-filter, and the documented rule (section 8) keeps a non-leakproof operator from running before the
-policy; only the equality form, whose operator is leakproof, used an index (3.7 / 6.3 ms). The `m9`
+1,593 ms p50, fuzzy 4,651 to 5,291, variant lists 64 to 170 (`m9`). Cause: row security, as
+documented ("an index scan cannot be selected ... if ... its underlying function is not marked
+`LEAKPROOF`", rules and privileges page, section 8) and consistent with the plans: the plan of the
+fragment count (`p4_text_gin_r1`) is a sequential scan with the policy and the `LIKE` in one
+filter. Not yet shown by a control (a plan of the same count without row security), and the
+equality form's index use (3.7 / 6.3 ms) is inferred from timing: R4-3 records both. The `m9`
 cells recorded no plan; their shape agrees: a 3-character fragment (many matches, the scan stops
-early) is faster than a 4-character one (410 vs 1,593 ms), and fuzzy costs a whole scan. Options:
-mark the operators leakproof (rejected, section 8); an n-gram table on B-trees (rejected, hand-made
-trigram search); a B-tree for every equality form plus one project-bound definer function for
-fragments (no write cost beyond one B-tree entry per text box). **Chosen: the last** (section 8:
-X33, the variant list for fuzzy at every length, `op_text_fragment`, `op_text_word`). Round 4 R4-3:
-the mechanism from `pg_proc.proleakproof` and the plan as a role that bypasses row security; every
-form with its plan against 50 / 200 ms, and fragment reads while 30 box writers fill the pending list.
+early) is faster than a 4-character one (410 vs 1,593 ms), and fuzzy costs a whole scan. Options
+(revision 3, section 8's table, with the binding constraint that the backend must also run on
+managed PostgreSQL, where no role can bypass row security and no function can be marked
+leakproof): (a) a definer function owned by a `BYPASSRLS` role (revision 2's choice; impossible on
+managed); (b) mark the operators leakproof (superuser only, and `LIKE` is not leakproof by the
+definition); (c) a posting table probed by equality (works everywhere, about 1.3 GB at 10 M against
+X7's 108 MB, hand-made trigram search); (d) an owner-read search copy read through project-bound
+definer functions owned by a role without any special attribute. **Chosen: (d)** with X33 for
+equality and the variant list for fuzzy over a defined alphabet (section 8: `txt.item_box_text`,
+`txt.item_line_text`, `txt.fragment_items`, `txt.word_items`, `txt.fuzzy_items`); (c) is the
+fallback if (d) misses R4-3. Round 4 R4-3: the leakproof flags and a control plan; the functions'
+inner plans; every form inside P1, P4, P8 and P9 at three selectivities against 50 / 200 ms; reads
+while 30 box writers fill the pending list.
 
 **Sort path from 100,000 rows; walk path at 0.1 %.** Screens: every list with a sort other than the
 filter's own index order. Numbers: sort path at 100,000 rows 76 to 564 ms p50 (all 17 sorts miss);
@@ -1372,9 +1662,13 @@ which met at 10,000 for every sort. The stand-ins (section 14.1 item 11) read co
 kinder than a real filter's scattered rows. Options: the sort path from `item_state`'s copies (no
 write cost: the columns exist); more indexes on `item_state` (each a non-HOT insert per label;
 rejected by 15a 2.6's five-index rule); a bar change for the band. **Chosen:** the sort path reads
-`item_state`'s copies, the path is decided by the exact total or the sort path's own guard (section
-7), `T_sort` from R4-5, and the remaining band goes to the owner (question 2). Round 4 R4-5: real
-class filters of 10,000 to 100,000 matches; the 6 missing cells.
+`item_state`'s copies, the path is decided by the exact total, the page's capped count, the
+planner's estimate or the sort path's own guard (section 7, cheapest first), `T_sort` from R4-5,
+and the remaining band goes to the owner (question 2). Revision 3 (review M5): just above `T_sort`
+the person waits for the count, the guard and the walk together, estimated up to about 190 ms for
+the joined sorts (section 7). Round 4 R4-5: real class filters of 10,000 to 100,000 matches on the
+copies, the composed "guard then walk" path, the planner's estimates against the actual counts; the
+6 missing cells.
 
 **Review by score (`pl2`), p99.** Screen: a review queue sorted by cluster fit. Numbers: p50 66.9 /
 34.3 ms, p99 5,315.1 / 4,631.4 ms (first / deep), p95 5,123 and 4,405: bimodal (`m10`). Cause: the
@@ -1398,7 +1692,12 @@ take `updated_at` out of the indexes (the default list order goes) or fewer labe
 the highest that met (heap 3.20 GB against 2.91 GB at 100 and 3.61 GB at 80, `m3_sizes_10m.json`).
 Its mixed 300 s cell (labels and region writes together, where label versions also take page room)
 ran at 100 and 80 only, and those cells re-labelled already labelled rows: round 4 R4-7 runs it at
-90 with fresh rows; if region HOT falls under 90 % there, the fillfactor is 80.
+90 with fresh rows; if region HOT falls under 90 % there, the fillfactor is 80. Revision 3 (review
+m5): every `m5` cell updated about 45,000 scattered rows of 10.6 M, so pages never ran short of room;
+the bar and fillfactor 90 hold for sparse updates. A region re-run of a whole detector writes many
+versions per page in batches, where 10 % free space is used up before pruning frees it; R4-7 adds
+that dense cell, and if its region HOT share falls under 90 % the fillfactor question goes to the
+coordinator with both numbers (80 costs 0.41 GB more heap at 10 M, `m3_sizes_10m.json`).
 
 **Label p99 at 30 writers against 1, closed loop.** Numbers: closed loop 58.97 / 29.21 ms = 2.02
 (H, the engine at 100 % of 8 CPUs); paced at the design rate 89.3 / 82.5 ms response = 1.08
@@ -1416,7 +1715,8 @@ changes** for chunks: (a) a bulk job's throughput is reported, not held to a rat
 label's paced response p99 stays within 2x of its value with no bulk job running, while `K`
 `label_op` chunk jobs run at once; `K` is the per-deployment concurrency limit of that job kind,
 fixed by round 4 R4-8 (candidates 1, 2, 4, 8). The person is not worse off: today a bulk label also
-runs as a job.
+runs as a job (job kind `label_op`, `src/config/job_kinds/families_a.py:46`, in the exclusive group
+`label_op` at `:53`, registered in `src/tasks/jobs_a.py:96`; checked in revision 3, review m8).
 
 ### 14.3 Questions only the owner can answer
 
@@ -1430,18 +1730,28 @@ runs as a job.
    membership changes, and a label pays about two more reads; (b) count the label-state signals
    only (VLM unmatched or new class pending, combine conflict, VLM empty or medium / low, cluster
    outlier, no class): exact and free, but the chip can be smaller than the `all` list it opens;
-   (c) drop the chip, its sort and its filter. Recommendation: (a), because the chip is how a person
+   (c) drop the chip, its sort and its filter; (d) keep today's meaning but count it per probe batch:
+   after each batch the probe job (and the vector writer) recomputes the `all` count of the
+   clusters its batch touched and writes it to the card, with no item lock and nothing added to a
+   label, so the chip can lag the list by one batch; (e) show (b)'s count on the card and the exact
+   `all` count when the cluster is opened (one P13 for one cluster, about 30 ms, `m10`).
+   Recommendation: (a), because the chip is how a person
    picks the next cluster and a count that disagrees with the list it opens erodes trust; the cost
    lands on the probe job, not on the person.
-2. **Sorts in the band at 10 M items.** For a filter matching about 40,000 to 100,000 items, seven
-   sorts (creation time, crop area, rank in photo, detector confidence (the to-label tab's default),
-   blur, detector class, cluster score) are estimated at about 75 ms for the first page (bar 50 ms);
+2. **Sorts in the band at 10 M items.** For a filter matching from `T_sort` (about 40,000) to about
+   100,000 items, seven sorts (creation time, crop area, rank in photo, detector confidence (the
+   to-label tab's default), blur, detector class, cluster score) are estimated at up to about 190 ms
+   for the first page once the count and the guard are added to the walk (section 7; bar 50 ms);
    sorts with no walk index (validated, class name, region score (the regions tab's default), the
    audit order, detector disagreement) take 90 to 160 ms at 100,000 matches and about 1 s at 1 M.
    Options: (a) accept a slower first page for these, up to 200 ms p50 and 400 ms p99, deeper pages
    at the normal bar; (b) grey out such a sort when the filter is that large, with the reason; (c) an
-   index per sort (each costs every label or region write an index entry). Recommendation: (a) up to
-   100,000 matches, (b) above it, except the two tab defaults, which round 4 R4-5 times at real
+   index per sort (each costs every label or region write an index entry); (d) sort within a
+   bounded window: the first 10,000 matches in the filter's own index order, sorted, with a notice
+   "sorted among the first 10,000"; (e) a precomputed order per saved filter, kept by a job and
+   shown with its time. These numbers are estimates: the question is put to you with R4-5's
+   measured first-page times per sort, so it cannot be decided before round 4. Recommendation: (a) up
+   to 100,000 matches, (b) above it, except the two tab defaults, which round 4 R4-5 times at real
    queue sizes before you decide.
 3. **The cluster grid under a broad item filter** (for example "largest object per photo" over the
    whole project, matching millions). One aggregation over those members takes seconds at 10 M (gate
@@ -1449,8 +1759,9 @@ runs as a job.
    (a) accept it with a loading state the person can cancel; (b) make the subject scope (largest,
    two largest per photo) a key of the cluster summaries, so that control is exact and instant
    (cluster summary rows up to three times as many; a rank change emits cluster deltas); (c) refuse
-   item filters on the grid above a size and ask to narrow. Recommendation: (a) now, (b) if the
-   subject scope is used daily.
+   item filters on the grid above a size and ask to narrow; (d) a cached grid per filter, refreshed
+   by a background job and shown with its "as of" time, instant once computed and stale until the
+   next refresh. Recommendation: (a) now, (b) if the subject scope is used daily.
 
 ### 14.4 Bars given a checkable definition
 
@@ -1458,9 +1769,9 @@ runs as a job.
 |---|---|---|
 | M1 "label p99 at 30 writers at most 2x its 1-writer p99" | closed loop measures CPU queueing | paced cells at 15 labels per second per writer: response p99 at 30 writers at most 2x the 1-writer paced response p99, cell load under 16 at start and end. Met: 1.08 (`m1`) |
 | M1 "ingest writers scale (plan 13 ingest table not below)" | no factor; the table does not exist | storage never limits ingest: at 8 writers at least 1,000 photos per second committed (10x the 100 photos per second target of [13_backend_speed_plan.md](13_backend_speed_plan.md)), at 30 writers not below the 8-writer rate; warm cells of at least 60 s and 200 transactions. Round 3's small cells gave 1,125 and 1,472 (recomputed from `wall_s`): R4-10 confirms |
-| M3, M4 "writer p99 within 10 % of M1" | two identical control cells differ by 28 % | inside one cell, 30 s windows alternating with and without the compactor (or rebuild): the median window p99 with it at most the larger of 1.10x and +10 ms of the median without. M4 met even against M1 (+3.3 %) |
+| M3, M4 "writer p99 within 10 % of M1" | two identical control cells differ by 28 % | inside one cell, 30 s windows alternating with and without the compactor (or rebuild): the median window **response** p99 (from the scheduled start, what the person waits for; about 89 to 114 ms in round 3, so +10 ms is about 10 %) with it at most the larger of 1.10x and +10 ms of the median without. M4 met even against M1 (+3.3 %) |
 | chunks | 14.2 | single-label paced response p99 with `K` chunk jobs at most 2x without; throughput reported |
-| gate A "reads while 1,000 objects per second are relabelled" (plan 15 section 6) | not run: readers and writers never shared a cell | every page and dashboard shape meets its bar while 30 paced writers label 450 items per second (single labels) plus one chunk job (about 500 items per second) and the compactor runs; the writers' paced bar holds at the same time. R4-1 |
+| gate A "reads while 1,000 objects per second are relabelled" (plan 15 section 6) | not run: readers and writers never shared a cell | every page and dashboard shape meets its bar while 30 paced writers label 450 items per second (single labels, half of them on items with a serving cluster membership, so cluster deltas and card refreshes happen) plus one chunk job (about 500 items per second), 10 paced box writers (5 transactions per second of 10 boxes with text each), 10 paced ingest writers (0.3 groups of 50 photos per second each) and the compactor run; the writers' paced bar holds at the same time. Engine CPU is recorded, not a pass condition; a miss with the engine at 95 % or more of its CPUs is marked "saturated" (a closed system measures queueing, 14.2). R4-1 (revision 3, review m9) |
 
 ### 14.5 What the round 3 data does not reconcile
 
@@ -1479,60 +1790,115 @@ runs as a job.
 
 ## 15. Measurement round 4
 
-Only what decides an open choice or closes a gap. Same engine, database `v2_10m`, schema `m3` as
-round 3 left it (after the M6 drain and its restore, 0 mismatches), same runner. Each item is a step
-of the chain under its own exclusive hold, load below 16 at start, as round 3:
+Only what decides an open choice or closes a gap; revision 3 gives every choice this file leaves
+"to measurement" its cell (list at the end). Same engine, database `v2_10m`, schema `m3` as round 3
+left it (after the M6 drain and its restore, 0 mismatches), same runner. Each item is a step of the
+chain under its own exclusive hold, load below 16 at start, as round 3:
 
 ```bash
 cd artifacts_local/speed_1113/m3_storage
 flock -o -w 21600 <the lock path chain.sh sets> ./hold.sh r4_<n> 585 m3_run.py r4_<n> 10m --budget 500
 ```
 
-**Harness changes** (`m3_run.py`, `m3_readers.py`, `m3_sql.py`, before the window; dry-run each on
-`v2_1m`): register `r4_0` to `r4_10` in `ITEMS`; pass `explains=` for every card, text, count and
-routed-sort form so each cell records `EXPLAIN (ANALYZE, BUFFERS)`; a reader-and-writer cell (`rwcell`:
-`wcell` writers and `rcell` readers forked together, both recorded); a windowed writer cell that
-starts and stops the compactor every 30 s; a sort generator over real class filters of known size
-(classes picked from `sum_items` by count, so the matched rows are scattered as a real filter's) in
-place of `item_key BETWEEN` and `item_key % m`; a backlog generator from real label transactions
-over at least 5,000 clusters (not +1 / -1 pairs on 200 keys); `pg_stat_checkpointer` in the writer
-records. Delete the 3 stale M7 records first (`results_round3.md` section 3).
+**Harness changes** (`m3_run.py`, `m3_readers.py`, `m3_sql.py`, `m3_build.sql`, before the window;
+dry-run each on `v2_1m`, which is not part of the window's time): register `r4_0` to `r4_10` in
+`ITEMS`; pass `explains=` for every card, text, count and routed-sort form so each cell records
+`EXPLAIN (ANALYZE, BUFFERS)` of the outer statement; **nested plans**: a second login role
+`m3_app_explain` (same grants as `m3_app`) on which the superuser sets `session_preload_libraries =
+'auto_explain'`, `auto_explain.log_min_duration = 0`, `log_analyze`, `log_buffers`,
+`log_nested_statements` on and `log_format = json` (these settings are superuser-only,
+[auto_explain](https://www.postgresql.org/docs/18/auto-explain.html)); a few calls of each function
+form run on that role and the harness copies the logged plans from the server log into the cell
+record; timed cells stay on `m3_app`, so the logging does not slow them. A reader-and-writer cell
+(`rwcell`: writers and readers forked together, both recorded, the readers tagged by window); a
+windowed writer cell that starts and stops the compactor, or the box writers, every 30 s; a sort
+generator over real class filters of known size (classes picked from `sum_items` by count, so the
+matched rows are scattered as a real filter's) in place of `item_key BETWEEN` and `item_key % m`;
+a backlog generator from real label transactions over at least 5,000 clusters (not +1 / -1 pairs on
+200 keys); `pg_stat_checkpointer` in the writer records. **Sample rule**: a p99 is reported only
+for a cell with at least 100 finished queries; a cell with fewer reports p50 and the maximum with
+its count `n` (round 3 reported p99s of 6 to 60 samples, which are maxima). Delete the 3 stale M7
+records first (`results_round3.md` section 3).
+
+**Text set-up** (R4-0, for R4-3): role `m3_text_owner` and schema `txt` in `v2_10m` as section 8
+(`txt.item_box_text` filled from `m3.box_state` by one `INSERT ... SELECT ... string_agg ... GROUP
+BY item_key`, then X7 on it; the three functions; `m3.op_bound_project_strict`; the tightened
+`m3.op_scope_project`). The spike's texts are uniform over A to Z and 0 to 9, so a 3-character
+fragment matches about 2.65 M x 4.5 / 46,656 = about 260 boxes and no fragment is broad: R4-3
+plants two groups absent from the data, one in the copy rows and `text_fold` of 3,000 random items
+(mid) and one in 50,000 (broad), and removes them at its end (shared hold, under a minute). The spike
+has no item text lines, so `word_items` is timed by the first wave sweep after its slice on set P
+(section 1.3); R4-3 times the same mechanism on box text.
 
 | Item | Question | Bar | Data and set-up | Cells | Time |
 |---|---|---|---|---|---|
-| R4-0 set-up (shared hold) | | | `sum_cluster_card` filled by the roll-up of 6.5; `ix_sum_cluster_det`, `ix_sum_deltas_cluster`; X33 on `box_state`; role `op_text_search` and `op_text_fragment`, `op_bound_project_strict` (superuser connection); `ANALYZE` | none | about 4 min (round 3: kinds 7 to 10 rebuild 67 s idle; X33 over 5 M rows estimated 1 min) |
-| R4-1 reads under writers | do the page and dashboard bars hold while labels are written? | 14.4 last row | 8 readers cycling P1 class page (deep), P3 class total, P4 class and dates, P7 (2,000 cards), P8 routed, exact text, fragment; 30 paced label writers, one chunk writer, compactor 10,000 / 0.2 s | 1 cell of 180 s; the same readers alone 60 s | 5 min |
-| R4-2 cluster cards | does the card row form meet the dashboard bar, and does the compactor keep its rate with the refresh? | P7 200 / 800 ms at 10,000 pending; compactor at least 26,382 rows/s; 0 mismatches after | P7 with 2,000 cards, sort drawn per query from `size_desc`, `needs_review_desc`, `dominant_class`, `updated_desc`; backlog 0 / 100 / 10,000 real deltas; detector form; compactor with refresh alone on a 1 M real backlog and under 30 paced writers; consistency check | 3 backlogs x 30 s at 8 readers, 3 x 20 s at 1 reader, detector 30 s, compactor 2 x 60 s, first cell repeated at the end | 6 min |
-| R4-3 text | is row security the cause, and do X33 and the function meet the page bar, also while boxes are inserted? | 50 / 200 ms; insert p99 not above round 3's 512 kB cell (17.3 ms) | `SELECT proname, proleakproof FROM pg_proc WHERE proname IN ('textlike', 'texteq', 'similarity_op', 'textregexeq')`; the fragment count's plan as `m3_app` and as a role with `BYPASSRLS`; exact; fuzzy variants for 1 to 10 characters; fragment 3 / 4 / 5 characters first and deep; text counts (P4) by function and by variants; fragment readers with 30 box writers at 512 kB | about 18 reader cells x 20 s, 1 mixed cell 60 s | 8 min |
-| R4-4 detector count | does the plan's form (EXISTS through X32) meet the page bar? | 50 / 200 ms | P4 cap 10,001 with `detector_class_name` as `EXISTS` on `detections`, alone and with a class; 1 and 8 readers | 4 x 20 s | 1.5 min |
-| R4-5 sorts | where is `T_sort`; how wide and how slow is the band; the 6 missing cells | 50 / 200 ms per cell; outputs `T_sort` and the band per sort | the 6 cells of `photos_unlabeled_count` (round 3 section 3); sort path on `item_state` copies for `created_at`, `crop_area_norm`, `crop_rank_in_image`, `detector_confidence`, `detector_class_name` at 10,000 / 20,000 / 40,000 / 70,000 / 100,000 matches; walk path (planner settings unforced) at 40,000 / 70,000 / 100,000 for those plus `blur_lap_ratio`, `cluster_score`; sort path for `validated`, `class_name`, `region_score` at 20,000 / 40,000 / 70,000; the to-label and regions queues at the sizes the data holds; first and deep, 8 readers | about 116 cells x 3 s plus 6 | 2 holds, 11 min |
-| R4-6 review by score | does the routed P8 meet the page bar in every confidence band? | 50 / 200 ms | `pl2`'s predicate, 4 bands, routed by the counted tab's total else the sort path's guard; plans per band | 8 x 20 s | 3.5 min |
-| R4-7 fillfactor | does fillfactor 90 keep region-only updates at least 90 % HOT when labels run beside them? | 90 % HOT | `item_state_ff90`, 15 label + 15 region writers paced, labels on fresh rows, 300 s; checkpoint counters | 1 cell | 5 min, then restore and consistency check 3 min (shared hold) |
-| R4-8 chunks | how many `label_op` chunk jobs may run at once? | 14.4 chunks row | 8 paced single-label writers alone, then beside K = 1, 2, 4, 8 chunk writers | 5 x 60 s | 5 min |
-| R4-9 filtered cards | up to which matched size does the set-based P13 meet the dashboard bar? | 200 / 800 ms | filters matching about 10,000, 100,000 and 1 M items, and subject scope "largest object per photo" over the project; 8 readers for the first two, 1 reader (at most 6 queries) for the others | 4 cells, 30 to 60 s | 3.5 min |
-| R4-10 defined bars | the windowed compactor bar and ingest throughput | 14.4 | 30 paced writers, 6 x 30 s windows alternating the compactor; ingest at 1, 8, 30 writers, 20 s warm-up, 60 s cells | 1 + 3 cells | 7 min |
+| R4-0 set-up (shared hold) | | | `sum_cluster_card` filled by the roll-up of 6.5; `ix_sum_cluster_det`, `ix_sum_deltas_cluster`; X33 on `box_state`; the text set-up above (its fill time is also the restore refill time of 02c section 6); `m3_app_explain`; `ANALYZE` | none | 6 min (round 3: kinds 7 to 10 rebuild 67 s idle; X33 and the copy with X7 about 1 min each, estimated) |
+| R4-3 text | is row security the cause; do X33, the variant list and the owner-read functions meet the page bar inside every shape that uses them, also while boxes are written; what plan runs inside the functions | 50 / 200 ms per shape; recall 100 %; box write service p99 not above round 3's 512 kB cell (17.3 ms) by more than the windowed rule of 14.4 | `proleakproof` of `texteq`, `textlike`, `int4eq`, `int8eq`, `uuid_eq`, `textregexeq`, `similarity`, `similarity_op`, `word_similarity_op` and the operator families of `gin_trgm_ops` and the B-tree `text_ops` (the SQL behind `\dAo+`, rules and privileges page); control: the fragment count of round 3 as the superuser (no row security) and as `m3_app`; inner plans of `fragment_items` and `fuzzy_items` for every form below (nested statements); `fragment_items` alone at 3, 4 and 5 characters (narrow), mid and broad; the text predicate inside P1 (class page by `updated_at`), P4 (count), P8 (review by score) and P9 (both statements), each narrow, mid and broad (section 8 steps 1 to 3), P1 and P9 also deep at broad (the walk); exact first and deep; variant list at 1, 2, 4, 7, 10, 12 characters; `fuzzy_items` at 3, 7, 10, 12 characters with recall against a brute-force distance over every distinct text, and how often 10,001 candidates come back; fragment and exact readers in 6 x 30 s windows alternating with and without 30 paced box writers (512 kB list), the writers also upserting the copy as `store_states` does | 31 reader cells x 20 s at 8 readers, the windowed cell 180 s, plans and flags without timing | 19 min |
+| R4-7 fillfactor | does fillfactor 90 keep region-only updates at least 90 % HOT beside labels, and in a dense region re-run? | 90 % HOT | `item_state_ff90`: (1) 15 label + 15 region writers paced, labels on fresh rows, 300 s; (2) dense: 10 writers re-running the region columns of one detector's items in `item_key` order, batches of 1,000, 300 s; checkpoint counters | 2 cells | 10 min, then restore and consistency check 4 min (round 3: rebuild 163 s, `m3_m5_restore_10m.json`; check 79 s) |
+| R4-4 detector count | does the plan's form (EXISTS through X32) meet the page bar? | 50 / 200 ms | P4 cap 10,001 with `detector_class_name` as `EXISTS` on `detections`, alone and with a class; 1 and 8 readers; plans | 4 x 20 s | 2 min |
+| R4-5 sorts | where is `T_sort`; how slow is the composed path just above it; does the planner's estimate decide well enough to skip the guard (section 7 step 3); the 6 missing cells | 50 / 200 ms per cell; outputs `T_sort`, the band per sort, estimate against actual | the 6 cells of `photos_unlabeled_count` (round 3 section 3); sort path on `item_state` copies for `created_at`, `crop_area_norm`, `crop_rank_in_image`, `detector_confidence`, `detector_class_name` at 10,000 / 20,000 / 40,000 / 70,000 / 100,000 matches; walk path (planner settings unforced) at 40,000 / 70,000 / 100,000 for those plus `updated_at`, `blur_lap_ratio`, `cluster_score`; sort path for `validated`, `class_name`, `region_score` at 20,000 / 40,000 / 70,000; the to-label and regions queues at the sizes the data holds; first and deep, 8 readers. Then, with `T_sort` computed by the script (the largest size where every copy sort meets), **guard then walk** (the page's capped count, the guard to `T_sort + 1`, the walk) for `updated_at` and the seven joined sorts at `T_sort` + 1 %, + 10 % and 2 x, first page; for every filter the `EXPLAIN` row estimate beside the actual count | about 111 cells x 3 s plus 24 composed cells x 5 s plus 6 | 2 holds, 13 min |
+| R4-6 review by score | does the routed P8 meet the page bar in every confidence band? | 50 / 200 ms | `pl2`'s predicate, 4 bands, routed by the counted tab's total else the steps of section 7; plans per band | 8 x 20 s | 3.5 min |
+| R4-9 filtered cards | up to which matched size does the set-based P13 meet the dashboard bar? | 200 / 800 ms | filters matching about 10,000 and 100,000 items at 8 readers (30 s each, at least 100 queries); about 1 M items and the subject scope "largest object per photo" over the project at 1 reader, 10 queries each (p50 and maximum with `n`, sample rule); plans of every form (the P13 cause is inferred until then, 14.2) | 4 cells | 4 min |
+| R4-2 cluster cards | does the card row form meet the dashboard bar; does the compactor keep its rate with the card refresh; does the card check find and fix a wrong or missing card | P7 200 / 800 ms at 10,000 pending; compactor at least 26,382 rows/s; 0 mismatches after; one rewrite per injected card | seed a 1 M-row backlog from real label transactions over at least 5,000 clusters (about 168,000 transactions at round 3's 1,133 per second, 2.5 min), compact to each size; P7 (full join) with 2,000 cards, sort drawn per query from `size_desc`, `needs_review_desc`, `dominant_class`, `updated_desc`, at 0 / 100 / 10,000 pending; detector form; compactor with refresh alone on the 1 M backlog and under 30 paced writers; the card check of 6.6 with one wrong and one missing card injected; consistency check; first cell repeated at the end (14.5 item 1) | 3 x 30 s at 8 readers, 3 x 20 s at 1 reader (p50 and maximum), detector 30 s, compactor 2 x 60 s, card check, repeat 30 s | 11 min |
+| R4-1 reads under writers | do the page and dashboard bars hold while labels, boxes and ingest are written? | 14.4 last row | 8 readers cycling P1 class page (deep), P3 class total, P4 class and dates, P7 (2,000 cards), P8 routed, exact text, fragment (narrow); writers as 14.4's last row (30 paced label writers, half on items with a serving membership, one chunk writer, 10 box writers, 10 ingest writers, compactor 10,000 / 0.2 s with `ix_sum_deltas_cluster`); engine CPU recorded | 1 cell of 180 s; the same readers alone 60 s | 5 min |
+| R4-8 chunks | how many `label_op` chunk jobs may run at once? | 14.4 chunks row | 8 paced single-label writers alone, then beside K = 1, 2, 4, 8 chunk writers | 5 x 60 s | 6 min |
+| R4-10 defined bars | the windowed compactor bar and ingest throughput | 14.4 | 30 paced writers, 6 x 30 s windows alternating the compactor (response p99, `ix_sum_deltas_cluster` present); ingest at 1, 8, 30 writers, 20 s warm-up, 60 s cells | 1 + 3 cells | 7.5 min |
+| final check (shared hold) | | 0 mismatches | consistency check of every `_now` view and every card | none | 1.5 min |
 
-Total: about 63 minutes of holds (estimated from round 3's cell durations), about 80 minutes with
-start-up and the shared steps; one quiet window of **90 minutes**, with the chain's 4-minute load
-gate per cell as the only reason to run longer. Order keeps the data clean: R4-0, the read-only
-items (R4-3, R4-4, R4-5, R4-6, R4-9), R4-2, then the writing items (R4-1, R4-8, R4-10), R4-7 last
-with its restore and the consistency check. Every cell writes `raw/m4_<item>_10m.json`; the
-write-up follows `results_round3.md`'s form (outcome per bar, the file and field of every number).
+**Total and window.** About 92 minutes of steps (the "Time" column, from round 3's cell durations
+and the estimates named there), about 105 minutes with the chain's start and stop around each item;
+the round fits one quiet window of **two hours**, provided no other heavy work runs on the host:
+the chain's load gate waits up to 4 minutes per cell at load 16 or more, and round 3 lost six holds
+of M7 to loads of 21 to 31 (`results_round3.md` section 3). The dry-runs on `v2_1m` happen before
+the window. Order (keeps the data clean and runs first what the first slice waits for): R4-0, R4-3,
+R4-7 with its restore, then R4-4, R4-5, R4-6, R4-9, R4-2, R4-1, R4-8, R4-10, the final check. Every
+cell writes `raw/m4_<item>_10m.json`; the write-up follows `results_round3.md`'s form.
+
+**Must run before the first record slice (R1b) builds its waiting parts:** R4-0, R4-3, R4-7 (about
+39 minutes of steps). **Can run later, each before the slice that waits for it (section 16):** R4-4,
+R4-5, R4-1 (R4, gallery reads); R4-6, R4-8 (R5); R4-2, R4-9 (R8); R4-10 (changes only constants of
+R1b's compactor). If the window is cut short, the chain stops after a finished item and resumes.
+
+**Cloud check C-1** (outside the window; it needs a managed instance, so the coordinator schedules
+it): on an Amazon RDS for PostgreSQL 18 instance, as the master user, run the bootstrap of section 8
+and 02a 1.5 and `0011`'s text part as `op_owner`. Expected: `CREATE ROLE ... BYPASSRLS` fails (the
+evidence that (a) is impossible there); `op_text_owner`, schema `txt`, the copies, the functions and
+the isolation tests of section 8 pass; `pg_trgm` installs. Needed before R1b's bootstrap part merges;
+the self-hosted path does not wait for it.
+
+**Every choice left to measurement and its cell:** the text mechanism's confirmation, the inner
+plans and the `enable_seqscan` setting of the functions, the fuzzy threshold, the `fastupdate`
+fallback (R4-3); `item_state` fillfactor 90 or 80 (R4-7); the detector-class count form (R4-4);
+`T_sort`, the planner-estimate step, the band (R4-5); the routed review queue (R4-6); the filtered
+card size limit (R4-9); the card form, the compactor rate with the refresh, the card check (R4-2);
+the bars under writers and the write cost of `ix_sum_deltas_cluster` (R4-1, R4-2, R4-10); `K`
+(R4-8); the windowed compactor bar and ingest (R4-10); managed set-up (C-1).
 
 ## 16. What the Rust record slices take from this revision
 
 Slice codes and names are those of plan 18b; "takes" lists the read shapes, indexes, summary tables,
-settings and statements each builds from this file, with the section here.
+settings and statements each builds from this file, with the section here. Revision 3 marks every
+item **final** (build it now) or **waits** for the named cell; a slice builds its final items first
+and a waiting item only after its cell, so nothing is built that round 4 may change. Owner questions
+are marked the same way.
 
-| Slice (18b) | Takes from 15b revision 2 | Open until round 4 or the owner |
+| Slice (18b) | Final (build now) | Waits for round 4 or the owner |
 |---|---|---|
-| R1b, the record and the fold | `0011`: X1 to X21, X24 to X33 (15a 2.6), `CREATE EXTENSION pg_trgm`, X7 and X25 with `fastupdate` on and a 512 kB pending list (8); the summary tables, `sum_deltas`, the `_now` views, `ix_sum_deltas_cluster` (6.1); role `op_text_search`, `op_bound_project_strict`, `op_text_fragment`, `op_text_word` (8); `item_state` fillfactor 90, `sum_deltas` vacuum threshold 10,000 (6.1, 6.5, 14.2); `store_states` with aliased `RETURNING` pairs (6.2); the tally (6.2); the compactor for all ten kinds, key-only conflict targets for kinds 6 to 10, ordered upserts, batch 10,000, beat 0.2 s, built table-driven so R8 adds the card refresh as a second statement without changing the first (6.5); the drift check over ten kinds with float sums in double precision (6.6); the label transaction's statements (6.9) | fillfactor 90 or 80 (R4-7); the compactor's rate with the card refresh (R4-2, read by R8) |
-| R4, gallery reads | P1 with up to 16 class branches, P2, P4 with a 50 ms budget, P5, P6, P15 (2, 5); the cursor with typed binding and the chosen path (4); sorts reading `item_state`'s copies, the path decided by the exact total or the sort path's guard (7); capped totals (5) | `T_sort` and the band (R4-5, owner question 2); the detector-class count form (R4-4); reads under writers (R4-1) |
-| R5, labelling, review, class counts | counted review tabs (6.2); P3 totals; the review queue P8 with the routed choice (2, 7); class counts from `sum_items` (row 16); chunks of 1,000 with a concurrency limit `K` on `label_op` (14.2) | `K` (R4-8); the routed review queue (R4-6); the "to review" definition (owner question 1) |
-| R7, regions and boxes | P9 with X6, X26, X27 (9, met); the text forms of section 8 (X33 for exact, fuzzy and same-text; `op_text_fragment` for fragments; the 3-character minimum) | text bars and the pending list under writers (R4-3). 18b's R6b row names `0015` as the place of the `fastupdate` choice; X7 is created in `0011` with it (coordinator to align 18b) |
-| R8, clustering and the cluster screens | `0016`: the four cluster summary tables, `ix_sum_cluster_det`, `sum_cluster_card` (6.1); the compactor's kinds 7 to 10 and the card refresh (6.5); the partition fill with the card roll-up (6.7); P7, P8 inside a cluster, P13 set-based (2); facets and placement reads (met) | P7 against its bar (R4-2); filtered cards (R4-9, owner question 3); the "to review" count (owner question 1) |
-| R10, machine helpers | only if the owner answers question 1 with (a): the probe job and the embedding re-index report membership changes through `store_states` | owner question 1 |
-| R6a, R6b, R9, R2b | nothing new beyond revision 1 (6.7's run-keyed fill for R6b) | none from this revision |
+| R1b, the record and the fold | `0011`: X1 to X6, X8 to X21, X24, X26 to X33 (15a 2.6; X33 on `box_state`); the summary tables, `sum_deltas`, the `_now` views (6.1); `op_bound_project_strict` and the tightened `op_scope_project` (8); the bootstrap's `op_text_owner`, schema `txt` and `op_owner`'s membership `WITH SET` (8; 02a 1.5) for self-hosted; `sum_deltas` vacuum threshold 10,000 (6.1, 6.5); `store_states` with aliased `RETURNING` pairs (6.2); the tally (6.2); the compactor for all ten kinds, key-only conflict targets for kinds 6 to 10, ordered upserts, batch 10,000, beat 0.2 s, built table-driven so R8 adds the card refresh as a second statement and the touched-set output without changing the first (6.5); the drift check over ten kinds with float sums in double precision (6.6); the label transaction's statements (6.9) | both text copies, X7, X25, `fragment_items`, `word_items`, `fuzzy_items` and `store_states`' copy upsert (8): R4-3 (and the posting-table fallback if it misses); `item_state` fillfactor 90 or 80: R4-7; the bootstrap on a managed service: C-1; batch and beat constants: R4-10 (constants only) |
+| R4, gallery reads | P1 with up to 16 class branches, P2, P4 with a 50 ms budget, P5, P6, P15 (2, 5); the cursor with typed binding and the chosen path (4); sorts reading `item_state`'s copies; the path decision's steps 1, 2 and 4 (7); capped totals (5) | `T_sort` and step 3 (planner estimate): R4-5; the band: owner question 2, asked with R4-5's numbers; the detector-class count form: R4-4; the text predicate inside P1, P4, P8 (8 steps 1 to 3): R4-3; reads under writers: R4-1 (a miss goes back as code work) |
+| R5, labelling, review, class counts | counted review tabs (6.2); P3 totals; class counts from `sum_items` (row 16); chunks of 1,000 under the job kind `label_op` (14.2) | the routed review queue: R4-6; `K` above 1 (today's exclusive group): R4-8; the "to review" definition: owner question 1 |
+| R7, regions and boxes | P9 with X6, X26, X27 (9, met); `exact` and `same_text_as` on X33; the variant list and its alphabet function, the switch rule (8); the 3-character minimum for fragments; the dropped `max_expansions` pins (8) | P9 with fragments and `fuzzy_items`' threshold: R4-3; the pending-list setting under writers: R4-3; the `text_lines` copy writer (`src/db/repos/text_search.py`) and word search: R4-3 for the mechanism, then the wave sweep on set P (no item text in the spike) |
+| R8, clustering and the cluster screens | `0016`: the four cluster summary tables, `ix_sum_cluster_det`, `ix_sum_deltas_cluster` (moved here from R1b, revision 3), `sum_cluster_card` (6.1); the compactor's kinds 7 to 10, the touched-set output and the card refresh (6.5); the card check (6.6); the partition fill with the card roll-up (6.7); P8 inside a cluster, facets and placement reads (met) | P7 (full join) against its bar and the compactor's rate with the refresh: R4-2; filtered cards (P13 set-based): R4-9 and owner question 3; the "to review" count: owner question 1 |
+| R10, machine helpers | nothing yet | only if the owner answers question 1 with (a) or (d): the probe job and the embedding re-index report membership changes (through `store_states` for (a), per probe batch for (d)) |
+| R6a, R6b, R9, R2b | nothing new beyond revision 1 (6.7's run-keyed fill for R6b); R6b sets no GIN setting (18b correction below) | none |
+
+**Correction for 18b** (on `int/native`, not edited here; for the coordinator): (1) section 3,
+row R6b, column "Revision": "`0015_near_dup_cutover` (writes 15b M9's `fastupdate` choice)" becomes
+"`0015_near_dup_cutover`"; (2) section R1b, **Builds**: "indexes X1 to X21 and X24 to X32" becomes
+"indexes X1 to X6, X8 to X21, X24 and X26 to X33, the schema `txt` search copies with X7 and X25
+(`fastupdate = on, gin_pending_list_limit = 512`) and their functions, `op_bound_project_strict`
+and the tightened `op_scope_project` (15b section 8)", and "fillfactors from 15b M5" stays; (3) row
+R8: `0016` also creates `ix_sum_deltas_cluster` (15b 6.1).
 
 ## Appendix. Review trace
 
@@ -1567,3 +1933,28 @@ One row per finding of the review of 15b and 15c (2026-11-15) and the place that
 | m10 mixed-direction sorts | section 4; section 7 table |
 | m11 capped-total classification | section 5 rules 1 and 9 |
 | Jobs (question 6 of the review) | section 10 |
+
+**Review of revision 2** (2026-11-16, 0 blocker, 7 major, 13 minor), answered by revision 3:
+
+| Finding | Answered in |
+|---|---|
+| M1 the `BYPASSRLS` role cannot be created or made owner as `0011` said | section 8 (mechanism (a) not chosen: impossible on managed PostgreSQL; (d) needs a role with no attribute, created by the bootstrap, objects created under `SET ROLE`); 02a 1.5 (role table, self-hosted and managed, tests); 02c section 6 (backup and restore order); section 15 C-1 |
+| M2 the fragment function a planner fence with an unseen plan, no cap, `ROWS 1000`, parallel unsafe | section 8 ("the plan inside, and its bound": per-call custom plan, `max_items`, one row per item, standalone statement); R4-3 inner plans through `auto_explain` nested statements |
+| M3 text never timed inside its shapes; P9's second statement for fragments | section 8 steps 1 to 3; section 9; R4-3 cells inside P1, P4, P8, P9 at three selectivities |
+| M4 the variant list's alphabet; superset of today's 50 expansions | section 8 "Fuzzy" (alphabet from `text_charset` and the fold, bounds 40 and 12, switch to `fuzzy_items`) and "A named product change" (the two pins dropped) |
+| M5 the guard paid again by the walk; no composed cell; copies not timed | section 7 (decision steps, the summed band); 14.2 sort entry; owner question 2; R4-5 composed cells and estimates |
+| M6 card consistency: check statement, serialization, touched set, pending-only clusters | 6.6 card check (read committed, 2a's lock); 6.5 `touched` output; P7 full join; R4-2 |
+| M7 strict scope function, word function body, partial index predicate, short words, `ix_sum_deltas_cluster`'s migration | section 8 (DDL of `op_bound_project_strict`, `op_scope_project` tightened, `word_items` body, copies without a partial predicate, short-word rule); 6.1 and section 16 (`ix_sum_deltas_cluster` in `0016`) |
+| m1 cause cited from the weaker pages; no control; operator list | section 8 (rules and privileges sentence, "consistent, not yet controlled"); 14.2 text entry; R4-3 flags of nine functions, operator families, control plan |
+| m2 card cost breakdown verified | stands: verified, nothing to change |
+| m3 detector stand-in, probe cost | 14.2 detector entry (500 to 700 ms risk, fallback (2)); R4-4 |
+| m4 two causes without plans | 14.2 (P13 marked inferred; `pl2` already marked); R4-6, R4-9 record plans |
+| m5 fillfactor dense regime; stale rationale | 14.2 label entry; R4-7 dense cell; 15a fillfactor row |
+| m6 GIN numbers do not choose 512 kB over 4 MB | section 8 "GIN pending list" (the choice rests on the documentation; windowed cell; fallback `fastupdate = off`) |
+| m7 X33 for every equality form | stands: X7 leaves `box_state` (section 8), so exact and same-text need X33 too |
+| m8 windowed bar service or response; `label_op` today | 14.4 (response p99); 14.2 chunks entry (job kind checked in the code) |
+| m9 writers in R4-1; CPU; six-sample p99 | 14.4 last row; R4-1; section 15 sample rule; R4-9 |
+| m10 run time without seeding, restore, load gate | section 15 "Total and window" (92 minutes of steps, two-hour window, groups) |
+| m11 owner questions' options | 14.3 (options (d), (e) added; question 2 put with R4-5's numbers) |
+| m12 stale text | header status; section 1.2 note; 6.9; 15a fillfactor row |
+| m13 `ix_sum_deltas_cluster` write cost on one cell | 6.1 note; R4-1, R4-2, R4-10 run with it |
