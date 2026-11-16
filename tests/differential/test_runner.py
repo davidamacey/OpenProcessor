@@ -462,3 +462,20 @@ def test_the_command_line_exits_two_when_the_run_cannot_start(
     assert 'unknown family' in capsys.readouterr().err
     assert runner.main(['--out', str(tmp_path / 'y.jsonl')]) == 2
     assert runner.main(['--dry-run', '--modes', 'weird', '--out', str(tmp_path / 'z.jsonl')]) == 2
+
+
+def test_the_operation_lines_carry_the_fingerprints_so_two_dry_runs_can_be_compared(
+    tmp_path: Path,
+) -> None:
+    def fingerprints(sub: str, seed: int) -> dict[str, list[str]]:
+        _, lines = go(
+            None, None, paths=tiny_paths(tmp_path, sub), options=settings(dry_run=True, seed=seed)
+        )
+        return {
+            line['label']: line['fingerprints'] for line in lines if line['type'] == 'operation'
+        }
+
+    first = fingerprints('a', 1)
+    assert all(first.values())
+    assert first == fingerprints('b', 1)
+    assert first != fingerprints('c', 2)

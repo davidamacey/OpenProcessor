@@ -317,6 +317,7 @@ def operation_record(generated: cases.Generated) -> dict[str, Any]:
         'family': generated.family,
         'cases': len(generated.cases),
         'by_mode': by_mode,
+        'fingerprints': [case.fingerprint for case in generated.cases],
         'notes': generated.notes,
     }
 
