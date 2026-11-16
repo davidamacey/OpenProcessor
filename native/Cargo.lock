@@ -905,6 +905,7 @@ dependencies = [
  "futures-util",
  "gpu_frame",
  "nvml-wrapper",
+ "op_engine_client",
  "prost",
  "protox",
  "serde",
@@ -2160,6 +2161,24 @@ dependencies = [
 [[package]]
 name = "op_engine_client"
 version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "bytes",
+ "fastrand",
+ "frame_engine",
+ "op_config",
+ "prost",
+ "protox",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "tonic-prost",
+ "tonic-prost-build",
+ "tracing",
+]
 
 [[package]]
 name = "op_ingest"

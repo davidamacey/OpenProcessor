@@ -35,6 +35,7 @@ crossbeam-channel = "=0.5.17"
 crc32fast = "=1.5.5"
 cudarc = { version = "=0.19.10", default-features = false, features = ["std", "driver", "nvrtc", "cuda-13020", "dynamic-loading"] }
 deadpool-postgres = { version = "=0.14.2", default-features = false, features = ["rt_tokio_1"] }
+fastrand = "=2.5.0"
 futures-util = { version = "=0.3.34", default-features = false }
 http-body-util = "=0.1.5"
 hyper = { version = "=1.12.0", default-features = false }

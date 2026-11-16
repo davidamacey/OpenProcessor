@@ -13,7 +13,8 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::Bytes;
+use op_engine_client::codec::{pack_bytes, unpack_bytes};
 use serde_json::Value;
 use tonic::transport::{Channel, Endpoint};
 
@@ -75,27 +76,6 @@ pub async fn connect(url: &str, channels: usize, timeout: Duration) -> Result<Ve
         );
     }
     Ok(clients)
-}
-
-/// One BYTES element as KServe's raw contents carry it.
-pub fn pack_bytes(item: &[u8]) -> Bytes {
-    let mut out = BytesMut::with_capacity(4 + item.len());
-    out.put_u32_le(u32::try_from(item.len()).unwrap_or(u32::MAX));
-    out.put_slice(item);
-    out.freeze()
-}
-
-/// The elements of a BYTES tensor's raw contents; `None` when it is cut short.
-pub fn unpack_bytes(raw: &[u8]) -> Option<Vec<&[u8]>> {
-    let mut items = Vec::new();
-    let mut at = 0usize;
-    while at < raw.len() {
-        let size = u32::from_le_bytes(raw.get(at..at + 4)?.try_into().ok()?) as usize;
-        at += 4;
-        items.push(raw.get(at..at.checked_add(size)?)?);
-        at += size;
-    }
-    Some(items)
 }
 
 fn bytes_input(name: &str) -> InferInputTensor {
