@@ -59,6 +59,7 @@ DENIED_INTERNAL_SERVICES: frozenset[str] = frozenset(
         'frame-engine',
         'triton-sdk',
         'api',
+        'api-py',
         'op-api',
         'segmenter',
         'curation-detection-worker',

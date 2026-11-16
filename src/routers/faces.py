@@ -87,7 +87,7 @@ class FaceVerifyResponse(BaseModel):
     total_time_ms: float | None = Field(default=None, description='Processing time in ms')
 
 
-class FaceSearchResult(BaseModel):
+class FaceImageSearchResult(BaseModel):
     """Single face search result."""
 
     face_id: str = Field(..., description='Face document ID')
@@ -100,11 +100,11 @@ class FaceSearchResult(BaseModel):
     confidence: float = Field(..., description='Original detection confidence')
 
 
-class FaceSearchResponse(BaseModel):
+class FaceImageSearchResponse(BaseModel):
     """Response for face similarity search."""
 
     query_face: FaceBox = Field(..., description='Query face used for search')
-    results: list[FaceSearchResult] = Field(default_factory=list, description='Search results')
+    results: list[FaceImageSearchResult] = Field(default_factory=list, description='Search results')
     total_results: int = Field(..., description='Number of results returned')
     search_time_ms: float | None = Field(default=None, description='Search execution time')
     total_time_ms: float | None = Field(default=None, description='Total processing time')
@@ -350,7 +350,7 @@ def verify_faces(
         raise HTTPException(500, f'Face verification failed: {e!s}') from e
 
 
-@router.post('/search', response_model=FaceSearchResponse)
+@router.post('/search', response_model=FaceImageSearchResponse)
 async def search_faces(
     search_service: VisualSearchDep,
     image: UploadFile = File(..., description='Image file with face to search'),
@@ -377,7 +377,7 @@ async def search_faces(
         le=0.99,
         description='Minimum face detection confidence',
     ),
-) -> FaceSearchResponse:
+) -> FaceImageSearchResponse:
     """
     Find similar faces in the indexed database.
 
@@ -408,9 +408,9 @@ async def search_faces(
             min_score=min_score,
             confidence=confidence,
         )
-        results = [FaceSearchResult(**m) for m in matches]
+        results = [FaceImageSearchResult(**m) for m in matches]
 
-        return FaceSearchResponse(
+        return FaceImageSearchResponse(
             query_face=FaceBox(**query_face),
             results=results,
             total_results=len(results),

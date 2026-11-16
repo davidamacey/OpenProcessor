@@ -14,12 +14,14 @@
 //! without a read; the in-flight cap bounds the buffers, and the finish pool's threads bound the
 //! files open at once.
 
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{self, Read};
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
 use bytes::Bytes;
 use op_local_file::{CanonicalDirError, FileRef, KeyError, Root, canonical_dir, resolve_under};
+use rustix::fs::OFlags;
 
 use crate::pyfmt::repr_str;
 use crate::wire::request::RequestError;
@@ -142,6 +144,12 @@ impl KeyedRoots {
     }
 }
 
+fn open_nonblocking(path: &Path) -> io::Result<File> {
+    let flags = i32::try_from(OFlags::NONBLOCK.bits())
+        .map_err(|_| io::Error::other("O_NONBLOCK does not fit an i32"))?;
+    OpenOptions::new().read(true).custom_flags(flags).open(path)
+}
+
 fn resolve_refusal(e: KeyError) -> Refusal {
     match &e {
         KeyError::Unresolvable { source, .. }
@@ -163,11 +171,14 @@ fn io_refusal(e: &io::Error) -> Refusal {
     }
 }
 
-/// Opens `path`, compares the size of the open file with the claim before reading it, reads it
+/// Opens `path` with `O_NONBLOCK`, so that opening a named pipe returns at once instead of
+/// waiting for a writer (fifo(7), open(2)); the flag has no effect on a regular file. The type is
+/// then checked on the open descriptor, which leaves no gap between the check and the open.
+/// Compares the size of the open file with the claim before reading it, reads it
 /// into one buffer (a byte more than claimed, to see a file that grew) and checks the claim.
 fn read_checked(path: &Path, file: &FileRef) -> Result<Bytes, Refusal> {
     let claim = file.claim();
-    let open = File::open(path).map_err(|e| io_refusal(&e))?;
+    let open = open_nonblocking(path).map_err(|e| io_refusal(&e))?;
     let meta = open.metadata().map_err(|e| io_refusal(&e))?;
     if !meta.is_file() {
         return Err(refuse("unreadable", "the key does not name a regular file"));

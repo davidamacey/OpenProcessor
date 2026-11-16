@@ -84,20 +84,18 @@ class Spec:
     max_batch: int
     preferred: tuple[int, ...]
     delay_us: int
-    #: the real model this one stands for, whose config the null model repeats
-    real: str
     default_instances: int
     profile: tuple[int, int, int]
 
 
 SPECS: tuple[Spec, ...] = (
     Spec('detector', 'null_detector_640', 'capture_detector_640', 640, 'output0',
-         (DETECTOR_ROWS_MAX, 6), 64, (8, 16, 32, 64), 25_000, 'yolov11_small_trt_end2end', 2,
+         (DETECTOR_ROWS_MAX, 6), 64, (8, 16, 32, 64), 25_000, 2,
          DETECTOR_PROFILE),
     Spec('encoder', 'null_encoder_336', 'capture_encoder_336', 336, 'image_embeddings',
-         (VECTOR_DIM,), 32, (4, 8, 16, 32), 15_000, 'pe_image_encoder', 1, ENCODER_PROFILE),
+         (VECTOR_DIM,), 32, (4, 8, 16, 32), 15_000, 1, ENCODER_PROFILE),
     Spec('encoder', 'null_encoder_224', 'capture_encoder_224', 224, 'image_embeddings',
-         (VECTOR_DIM,), 32, (4, 8, 16, 32), 15_000, 'pe_crop_encoder', 1, ENCODER_PROFILE),
+         (VECTOR_DIM,), 32, (4, 8, 16, 32), 15_000, 1, ENCODER_PROFILE),
 )  # fmt: skip
 
 

@@ -47,11 +47,9 @@ SOURCES = [
     'src/services/curation/reprocess_gpu_embed.py',
     'scripts/codegen/frame_engine_plan_cases.py',
 ]
-#: ``(image model, crop model, crop size)`` the encoder settings take.
-ENCODERS = [
-    ('pe_image_encoder', 'pe_crop_encoder', 224),
-    ('image_enc', 'crop_enc', 336),
-]
+#: ``(image model, crop model, crop size)`` besides the settings' own, which ``render`` reads from the
+#: settings module the plan builder reads.
+OTHER_ENCODERS = [('image_enc', 'crop_enc', 336)]
 LABELS = ['gadget', 'widget', 'gizmo', 'sprocket']
 STRINGS = [
     'plain',
@@ -121,7 +119,7 @@ def _strings(wire: Any) -> list[dict[str, str]]:
     return out
 
 
-def _ingest(ingest_gpu_decode: Any) -> list[dict[str, Any]]:
+def _ingest(ingest_gpu_decode: Any, encoders: list[tuple[str, str, int]]) -> list[dict[str, Any]]:
     from src.config import DetectionProfile
     from src.services.curation.ingest_policy import DetectFilter, EmbeddingPolicy, IngestPolicy
 
@@ -146,7 +144,7 @@ def _ingest(ingest_gpu_decode: Any) -> list[dict[str, Any]]:
         labels = Path(tmp) / 'labels.txt'
         labels.write_text('\n'.join(LABELS) + '\n')
         os.environ['OP_TRITON_MODEL_REPO'] = tmp
-        for image_model, crop_model, crop_size in ENCODERS:
+        for image_model, crop_model, crop_size in encoders:
             ingest_gpu_decode.PE_IMAGE_MODEL = image_model
             ingest_gpu_decode.PE_CROP_MODEL = crop_model
             ingest_gpu_decode.PE_CROP_SIZE = crop_size
@@ -186,7 +184,9 @@ def _ingest(ingest_gpu_decode: Any) -> list[dict[str, Any]]:
     return out
 
 
-def _stored_boxes(reprocess: Any, ingest_gpu_decode: Any) -> list[dict[str, Any]]:
+def _stored_boxes(
+    reprocess: Any, ingest_gpu_decode: Any, encoders: list[tuple[str, str, int]]
+) -> list[dict[str, Any]]:
     """The plan ``embed_on_gpu`` hands to the engine call, captured from the real function."""
     captured: list[Any] = []
 
@@ -200,7 +200,7 @@ def _stored_boxes(reprocess: Any, ingest_gpu_decode: Any) -> list[dict[str, Any]
     reprocess.call_frame_engine = capture
     out = []
     try:
-        for image_model, crop_model, crop_size in ENCODERS:
+        for image_model, crop_model, crop_size in encoders:
             ingest_gpu_decode.PE_IMAGE_MODEL = image_model
             ingest_gpu_decode.PE_CROP_MODEL = crop_model
             ingest_gpu_decode.PE_CROP_SIZE = crop_size
@@ -234,13 +234,14 @@ def render() -> str:
         ingest_gpu_decode.PE_CROP_MODEL,
         ingest_gpu_decode.PE_CROP_SIZE,
     )
+    encoders = [saved, *OTHER_ENCODERS]
     try:
         body = {
             'generated_by': SCRIPT,
             'sources': SOURCES,
             'parsed': _parsed(wire),
-            'ingest': _ingest(ingest_gpu_decode),
-            'stored_boxes': _stored_boxes(reprocess_gpu_embed, ingest_gpu_decode),
+            'ingest': _ingest(ingest_gpu_decode, encoders),
+            'stored_boxes': _stored_boxes(reprocess_gpu_embed, ingest_gpu_decode, encoders),
             'strings': _strings(wire),
             'floats': _floats(),
         }

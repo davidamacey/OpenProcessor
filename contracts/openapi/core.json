@@ -121,7 +121,7 @@
           "image": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/src__schemas__detection__ImageMetadata"
+                "$ref": "#/components/schemas/ImageMetadata"
               },
               {
                 "type": "null"
@@ -497,7 +497,7 @@
           "image": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/src__schemas__detection__ImageMetadata"
+                "$ref": "#/components/schemas/ImageMetadata"
               },
               {
                 "type": "null"
@@ -681,7 +681,7 @@
           "image": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/src__schemas__detection__ImageMetadata"
+                "$ref": "#/components/schemas/ImageMetadata"
               },
               {
                 "type": "null"
@@ -1070,7 +1070,7 @@
           "image": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/src__schemas__detection__ImageMetadata"
+                "$ref": "#/components/schemas/ImageMetadata"
               },
               {
                 "type": "null"
@@ -3563,7 +3563,7 @@
           "image": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/src__schemas__detection__ImageMetadata"
+                "$ref": "#/components/schemas/ImageMetadata"
               },
               {
                 "type": "null"
@@ -3732,6 +3732,136 @@
         "title": "FaceIdentifyResult",
         "type": "object"
       },
+      "FaceImageSearchResponse": {
+        "description": "Response for face similarity search.",
+        "properties": {
+          "query_face": {
+            "$ref": "#/components/schemas/FaceBox",
+            "description": "Query face used for search"
+          },
+          "results": {
+            "description": "Search results",
+            "items": {
+              "$ref": "#/components/schemas/FaceImageSearchResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "search_time_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Search execution time",
+            "title": "Search Time Ms"
+          },
+          "total_results": {
+            "description": "Number of results returned",
+            "title": "Total Results",
+            "type": "integer"
+          },
+          "total_time_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Total processing time",
+            "title": "Total Time Ms"
+          }
+        },
+        "required": [
+          "query_face",
+          "total_results"
+        ],
+        "title": "FaceImageSearchResponse",
+        "type": "object"
+      },
+      "FaceImageSearchResult": {
+        "description": "Single face search result.",
+        "properties": {
+          "box": {
+            "description": "Face box in source image",
+            "items": {
+              "type": "number"
+            },
+            "title": "Box",
+            "type": "array"
+          },
+          "confidence": {
+            "description": "Original detection confidence",
+            "title": "Confidence",
+            "type": "number"
+          },
+          "face_id": {
+            "description": "Face document ID",
+            "title": "Face Id",
+            "type": "string"
+          },
+          "image_id": {
+            "description": "Source image ID",
+            "title": "Image Id",
+            "type": "string"
+          },
+          "image_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Source image path",
+            "title": "Image Path"
+          },
+          "person_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Person ID if assigned",
+            "title": "Person Id"
+          },
+          "person_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Person name if known",
+            "title": "Person Name"
+          },
+          "score": {
+            "description": "Similarity score",
+            "title": "Score",
+            "type": "number"
+          }
+        },
+        "required": [
+          "face_id",
+          "image_id",
+          "score",
+          "box",
+          "confidence"
+        ],
+        "title": "FaceImageSearchResult",
+        "type": "object"
+      },
       "FaceRecognizeResponse": {
         "description": "Response for face recognition endpoint (detection + embeddings).",
         "properties": {
@@ -3757,7 +3887,7 @@
           "image": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/src__schemas__detection__ImageMetadata"
+                "$ref": "#/components/schemas/ImageMetadata"
               },
               {
                 "type": "null"
@@ -3847,6 +3977,161 @@
           "score"
         ],
         "title": "FaceResult",
+        "type": "object"
+      },
+      "FaceSearchResponse": {
+        "description": "Response for face similarity search with query face info.",
+        "properties": {
+          "query_face": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Query face info (box, landmarks, score)",
+            "title": "Query Face"
+          },
+          "query_type": {
+            "default": "face",
+            "description": "Type of search performed",
+            "title": "Query Type",
+            "type": "string"
+          },
+          "results": {
+            "description": "Search results ordered by score",
+            "items": {
+              "$ref": "#/components/schemas/FaceSearchResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "search_time_ms": {
+            "description": "Search execution time in milliseconds",
+            "minimum": 0.0,
+            "title": "Search Time Ms",
+            "type": "number"
+          },
+          "status": {
+            "description": "Request status",
+            "enum": [
+              "success",
+              "error"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "total_results": {
+            "description": "Number of results returned",
+            "minimum": 0.0,
+            "title": "Total Results",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "total_results",
+          "search_time_ms"
+        ],
+        "title": "FaceSearchResponse",
+        "type": "object"
+      },
+      "FaceSearchResult": {
+        "description": "Extended search result for face similarity search.",
+        "properties": {
+          "box": {
+            "description": "Face bounding box [x1, y1, x2, y2] normalized [0,1]",
+            "items": {
+              "type": "number"
+            },
+            "title": "Box",
+            "type": "array"
+          },
+          "confidence": {
+            "description": "Original detection confidence",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "face_id": {
+            "description": "Unique face identifier",
+            "title": "Face Id",
+            "type": "string"
+          },
+          "image_id": {
+            "description": "Unique image identifier",
+            "title": "Image Id",
+            "type": "string"
+          },
+          "image_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "File path to the image",
+            "title": "Image Path"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Additional image metadata",
+            "title": "Metadata"
+          },
+          "person_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Person cluster ID if assigned",
+            "title": "Person Id"
+          },
+          "person_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Person name if known",
+            "title": "Person Name"
+          },
+          "score": {
+            "description": "Similarity score (cosine similarity)",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Score",
+            "type": "number"
+          }
+        },
+        "required": [
+          "image_id",
+          "score",
+          "face_id",
+          "box",
+          "confidence"
+        ],
+        "title": "FaceSearchResult",
         "type": "object"
       },
       "FaceVerifyResponse": {
@@ -4007,6 +4292,27 @@
         "title": "ImageEmbeddingResponse",
         "type": "object"
       },
+      "ImageMetadata": {
+        "description": "Original image metadata.",
+        "properties": {
+          "height": {
+            "description": "Original image height in pixels",
+            "title": "Height",
+            "type": "integer"
+          },
+          "width": {
+            "description": "Original image width in pixels",
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "width",
+          "height"
+        ],
+        "title": "ImageMetadata",
+        "type": "object"
+      },
       "ImageNearDuplicateCandidates": {
         "description": "The near-duplicate candidates of one image of a batch.",
         "properties": {
@@ -4083,7 +4389,7 @@
           "metadata": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/src__schemas__query__ImageMetadata"
+                "$ref": "#/components/schemas/StoredImageMetadata"
               },
               {
                 "type": "null"
@@ -4212,7 +4518,7 @@
           "image": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/src__schemas__detection__ImageMetadata"
+                "$ref": "#/components/schemas/ImageMetadata"
               },
               {
                 "type": "null"
@@ -5540,7 +5846,7 @@
           "image": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/src__schemas__detection__ImageMetadata"
+                "$ref": "#/components/schemas/ImageMetadata"
               },
               {
                 "type": "null"
@@ -6068,6 +6374,153 @@
         "title": "SearchResult",
         "type": "object"
       },
+      "StoredImageMetadata": {
+        "description": "Stored image metadata.",
+        "properties": {
+          "cluster_distance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Distance to cluster centroid",
+            "title": "Cluster Distance"
+          },
+          "cluster_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Assigned cluster ID",
+            "title": "Cluster Id"
+          },
+          "duplicate_group_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Duplicate group if assigned",
+            "title": "Duplicate Group Id"
+          },
+          "duplicate_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Similarity to primary",
+            "title": "Duplicate Score"
+          },
+          "file_size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "File size in bytes",
+            "title": "File Size Bytes"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Image height in pixels",
+            "title": "Height"
+          },
+          "image_id": {
+            "description": "Image identifier",
+            "title": "Image Id",
+            "type": "string"
+          },
+          "image_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Original file path",
+            "title": "Image Path"
+          },
+          "imohash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Content hash for deduplication",
+            "title": "Imohash"
+          },
+          "indexed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Indexing timestamp",
+            "title": "Indexed At"
+          },
+          "is_duplicate_primary": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether this is the primary",
+            "title": "Is Duplicate Primary"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Image width in pixels",
+            "title": "Width"
+          }
+        },
+        "required": [
+          "image_id"
+        ],
+        "title": "StoredImageMetadata",
+        "type": "object"
+      },
       "TestInferenceResponse": {
         "description": "Response for test inference.",
         "properties": {
@@ -6326,459 +6779,6 @@
           "type"
         ],
         "title": "ValidationError",
-        "type": "object"
-      },
-      "src__routers__faces__FaceSearchResponse": {
-        "description": "Response for face similarity search.",
-        "properties": {
-          "query_face": {
-            "$ref": "#/components/schemas/FaceBox",
-            "description": "Query face used for search"
-          },
-          "results": {
-            "description": "Search results",
-            "items": {
-              "$ref": "#/components/schemas/src__routers__faces__FaceSearchResult"
-            },
-            "title": "Results",
-            "type": "array"
-          },
-          "search_time_ms": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Search execution time",
-            "title": "Search Time Ms"
-          },
-          "total_results": {
-            "description": "Number of results returned",
-            "title": "Total Results",
-            "type": "integer"
-          },
-          "total_time_ms": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Total processing time",
-            "title": "Total Time Ms"
-          }
-        },
-        "required": [
-          "query_face",
-          "total_results"
-        ],
-        "title": "FaceSearchResponse",
-        "type": "object"
-      },
-      "src__routers__faces__FaceSearchResult": {
-        "description": "Single face search result.",
-        "properties": {
-          "box": {
-            "description": "Face box in source image",
-            "items": {
-              "type": "number"
-            },
-            "title": "Box",
-            "type": "array"
-          },
-          "confidence": {
-            "description": "Original detection confidence",
-            "title": "Confidence",
-            "type": "number"
-          },
-          "face_id": {
-            "description": "Face document ID",
-            "title": "Face Id",
-            "type": "string"
-          },
-          "image_id": {
-            "description": "Source image ID",
-            "title": "Image Id",
-            "type": "string"
-          },
-          "image_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Source image path",
-            "title": "Image Path"
-          },
-          "person_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Person ID if assigned",
-            "title": "Person Id"
-          },
-          "person_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Person name if known",
-            "title": "Person Name"
-          },
-          "score": {
-            "description": "Similarity score",
-            "title": "Score",
-            "type": "number"
-          }
-        },
-        "required": [
-          "face_id",
-          "image_id",
-          "score",
-          "box",
-          "confidence"
-        ],
-        "title": "FaceSearchResult",
-        "type": "object"
-      },
-      "src__routers__search__models__FaceSearchResponse": {
-        "description": "Response for face similarity search with query face info.",
-        "properties": {
-          "query_face": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Query face info (box, landmarks, score)",
-            "title": "Query Face"
-          },
-          "query_type": {
-            "default": "face",
-            "description": "Type of search performed",
-            "title": "Query Type",
-            "type": "string"
-          },
-          "results": {
-            "description": "Search results ordered by score",
-            "items": {
-              "$ref": "#/components/schemas/src__routers__search__models__FaceSearchResult"
-            },
-            "title": "Results",
-            "type": "array"
-          },
-          "search_time_ms": {
-            "description": "Search execution time in milliseconds",
-            "minimum": 0.0,
-            "title": "Search Time Ms",
-            "type": "number"
-          },
-          "status": {
-            "description": "Request status",
-            "enum": [
-              "success",
-              "error"
-            ],
-            "title": "Status",
-            "type": "string"
-          },
-          "total_results": {
-            "description": "Number of results returned",
-            "minimum": 0.0,
-            "title": "Total Results",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "status",
-          "total_results",
-          "search_time_ms"
-        ],
-        "title": "FaceSearchResponse",
-        "type": "object"
-      },
-      "src__routers__search__models__FaceSearchResult": {
-        "description": "Extended search result for face similarity search.",
-        "properties": {
-          "box": {
-            "description": "Face bounding box [x1, y1, x2, y2] normalized [0,1]",
-            "items": {
-              "type": "number"
-            },
-            "title": "Box",
-            "type": "array"
-          },
-          "confidence": {
-            "description": "Original detection confidence",
-            "maximum": 1.0,
-            "minimum": 0.0,
-            "title": "Confidence",
-            "type": "number"
-          },
-          "face_id": {
-            "description": "Unique face identifier",
-            "title": "Face Id",
-            "type": "string"
-          },
-          "image_id": {
-            "description": "Unique image identifier",
-            "title": "Image Id",
-            "type": "string"
-          },
-          "image_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "File path to the image",
-            "title": "Image Path"
-          },
-          "metadata": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Additional image metadata",
-            "title": "Metadata"
-          },
-          "person_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Person cluster ID if assigned",
-            "title": "Person Id"
-          },
-          "person_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Person name if known",
-            "title": "Person Name"
-          },
-          "score": {
-            "description": "Similarity score (cosine similarity)",
-            "maximum": 1.0,
-            "minimum": 0.0,
-            "title": "Score",
-            "type": "number"
-          }
-        },
-        "required": [
-          "image_id",
-          "score",
-          "face_id",
-          "box",
-          "confidence"
-        ],
-        "title": "FaceSearchResult",
-        "type": "object"
-      },
-      "src__schemas__detection__ImageMetadata": {
-        "description": "Original image metadata.",
-        "properties": {
-          "height": {
-            "description": "Original image height in pixels",
-            "title": "Height",
-            "type": "integer"
-          },
-          "width": {
-            "description": "Original image width in pixels",
-            "title": "Width",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "width",
-          "height"
-        ],
-        "title": "ImageMetadata",
-        "type": "object"
-      },
-      "src__schemas__query__ImageMetadata": {
-        "description": "Stored image metadata.",
-        "properties": {
-          "cluster_distance": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Distance to cluster centroid",
-            "title": "Cluster Distance"
-          },
-          "cluster_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Assigned cluster ID",
-            "title": "Cluster Id"
-          },
-          "duplicate_group_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Duplicate group if assigned",
-            "title": "Duplicate Group Id"
-          },
-          "duplicate_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Similarity to primary",
-            "title": "Duplicate Score"
-          },
-          "file_size_bytes": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "File size in bytes",
-            "title": "File Size Bytes"
-          },
-          "height": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Image height in pixels",
-            "title": "Height"
-          },
-          "image_id": {
-            "description": "Image identifier",
-            "title": "Image Id",
-            "type": "string"
-          },
-          "image_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Original file path",
-            "title": "Image Path"
-          },
-          "imohash": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Content hash for deduplication",
-            "title": "Imohash"
-          },
-          "indexed_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Indexing timestamp",
-            "title": "Indexed At"
-          },
-          "is_duplicate_primary": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Whether this is the primary",
-            "title": "Is Duplicate Primary"
-          },
-          "width": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Image width in pixels",
-            "title": "Width"
-          }
-        },
-        "required": [
-          "image_id"
-        ],
-        "title": "ImageMetadata",
         "type": "object"
       }
     }
@@ -8069,7 +8069,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__routers__faces__FaceSearchResponse"
+                  "$ref": "#/components/schemas/FaceImageSearchResponse"
                 }
               }
             },
@@ -10013,7 +10013,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__routers__search__models__FaceSearchResponse"
+                  "$ref": "#/components/schemas/FaceSearchResponse"
                 }
               }
             },
@@ -11657,7 +11657,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__routers__faces__FaceSearchResponse"
+                  "$ref": "#/components/schemas/FaceImageSearchResponse"
                 }
               }
             },
@@ -13421,7 +13421,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/src__routers__search__models__FaceSearchResponse"
+                  "$ref": "#/components/schemas/FaceSearchResponse"
                 }
               }
             },

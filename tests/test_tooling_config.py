@@ -76,18 +76,63 @@ def test_mypy_override_modules_are_importable_names(module: str) -> None:
     assert importlib.util.find_spec(top) is not None or (REPO_ROOT / top).is_dir()
 
 
+_PATH_TOKEN = re.compile(r'[A-Za-z0-9_-][A-Za-z0-9_./-]*')
+
+
+def _alternative_end(text: str, i: int) -> int:
+    """Index of the ``|`` or unmatched ``)`` that ends the alternative running through ``i``."""
+    depth = 0
+    while i < len(text):
+        char = text[i]
+        if char == '(':
+            depth += 1
+        elif char == ')' and depth == 0:
+            return i
+        elif char == ')':
+            depth -= 1
+        elif char == '|' and depth == 0:
+            return i
+        i += 1
+    return i
+
+
 def _literal_prefixes(regex: str) -> list[str]:
-    """Leading literal path of every top-level alternative of a (possibly verbose) regex."""
+    """Leading literal path of every alternative of a (possibly verbose) regex. A group that follows
+    literal path text continues that path (``src/(a/|b/)`` is ``src/a/`` and ``src/b/``)."""
     text = re.sub(r'\(\?x\)', '', regex)
     text = re.sub(r'\s+', '', text).replace('\\.', '.')
     found: list[str] = []
-    for match in re.finditer(r'(?:^|[(|])\^?([A-Za-z0-9_-][A-Za-z0-9_./-]*)', text):
-        token = match.group(1)
-        after = text[match.end() : match.end() + 1]
-        if after in {'*', '+', '?', '['}:
+
+    def alternatives(i: int, base: str) -> int:
+        while True:
+            i = alternative(i, base)
+            if i < len(text) and text[i] == '|':
+                i += 1
+                continue
+            return i
+
+    def group(i: int, base: str) -> int:
+        """Parse the group opened at ``i``; returns the index after its ``)``."""
+        i += 3 if text.startswith('(?:', i) else 1
+        return alternatives(i, base) + 1
+
+    def alternative(i: int, base: str) -> int:
+        i += text.startswith('^', i)
+        if text.startswith('(', i):
+            return _alternative_end(text, group(i, base))
+        match = _PATH_TOKEN.match(text, i)
+        token = match.group(0) if match else ''
+        i += len(token)
+        quantified = text[i : i + 1] in {'*', '+', '?', '['}
+        if quantified:
             token = token.rsplit('/', 1)[0] + '/' if '/' in token else ''
         if '/' in token:
-            found.append(token)
+            found.append(base + token)
+        if token and not quantified and text.startswith('(', i):
+            i = group(i, base + token)
+        return _alternative_end(text, i)
+
+    alternatives(0, '')
     return found
 
 
@@ -123,3 +168,21 @@ def test_literal_prefix_extraction_reads_alternations() -> None:
     ]
     assert _literal_prefixes('(?x)^(\n  a/b/|\n  c\\.d/\n)') == ['a/b/', 'c.d/']
     assert _literal_prefixes(r'^(.*\.md|security-reports/)') == ['security-reports/']
+
+
+def test_literal_prefix_extraction_joins_a_group_that_follows_a_literal() -> None:
+    """``src/(routers/curation/(a|b)|core/(c))\\.py`` is the paths ``src/routers/curation/a`` ...,
+    not the root-level paths ``routers/curation/`` and ``core/``: a group that follows literal path
+    text continues that path."""
+    assert _literal_prefixes(
+        r'^(src/(routers/curation/(ingest|upload)|core/(limits|disk))\.py)$'
+    ) == [
+        'src/',
+        'src/routers/curation/',
+        'src/core/',
+    ]
+    assert _literal_prefixes(r'^native/(.*/)?Cargo\.toml$|^scripts/(a|b/c)\.py$') == [
+        'native/',
+        'scripts/',
+        'scripts/b/c',
+    ]

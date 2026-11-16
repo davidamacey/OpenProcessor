@@ -7,7 +7,7 @@ from opensearchpy.exceptions import NotFoundError
 
 from src.clients.opensearch.names import IndexName
 from src.config.faces import faces_enabled
-from src.schemas.query import DeleteImageResponse, ImageMetadata, ImageQueryResponse
+from src.schemas.query import DeleteImageResponse, ImageQueryResponse, StoredImageMetadata
 
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,7 @@ async def fetch_image_data(
         )
 
     # Build metadata
-    metadata = ImageMetadata(
+    metadata = StoredImageMetadata(
         image_id=image_id,
         image_path=source.get('image_path'),
         width=source.get('width'),

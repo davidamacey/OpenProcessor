@@ -660,12 +660,13 @@ sweep on the merged tree; speed rows recorded under the evidence clause.
   the 20 MP set and set P is owed to N2's first GPU hold and comes before the profile files; the 12 GB card starting inside its memory
   and running plan A on the mix with failed 0, the accounting asserted against NVML there; the
   profile files, the installer mirror, its test and the sizing page changed together.
-- Reading a photo by key (plan 18 section 12): an optional input beside `image` (as `boxes` is
-  optional in protocol version 1), or a protocol revision, decided here. It names a landing-zone or
-  source key and the content claim (size, imohash); the engine resolves it under configured
-  read-only roots, answers new statuses for a missing or changed file and plan faults for an
-  unknown root or a bad key, in the generator of `contracts/json/frame_engine_v1.json` and the plan
-  cases; compose mounts the landing zone and source roots read-only into `frame-engine`. The engine
+- Reading a photo by key (plan 18 section 12): decided: the optional input `source` (BYTES, shape [1], exclusive
+  with `image`), a JSON document of `key`, `size` and `imohash` (`read_by_key` in
+  `contracts/json/frame_engine_v1.json`). The engine resolves the key under configured read-only
+  roots (`landing`, `source`; the rule and the resolve are in `native/op_local_file`), answers the
+  photo statuses `missing`, `changed`, `too_large` and `unreadable`, and the request faults
+  `bad_source_json`, `bad_source_field`, `bad_key`, `unknown_root`, `bad_claim` and
+  `root_not_configured`, in the generator of that file and the plan cases; compose mounts the landing zone and source roots read-only into `frame-engine`. The engine
   still never talks to S3. Its priority comes from plan 18's path-mode spike (M3). Also from plan
   18 section 12: hardware JPEG decode tested on the L4 (the cloud example host), and the KServe
   protos moved to a neutral directory first if `gpu_frame` leaves the workspace.

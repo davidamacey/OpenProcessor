@@ -1045,6 +1045,7 @@ dependencies = [
  "prost",
  "prost-types",
  "protox",
+ "rustix",
  "serde",
  "serde_json",
  "sha2",

@@ -162,23 +162,34 @@ CRATE_DEPENDENCIES: dict[str, frozenset[str]] = {
             'op_jobs',
             'op_ingest',
             'op_api',
-            'op_contracts',
             'op_domain',
             'op_store',
         }
     ),
     'op_upload_loadgen': frozenset({'frame_engine_loadgen'}),
-    'op_contracts': frozenset({'op_api'}),
     'op_domain': frozenset(),
     'op_store': frozenset({'op_db', 'op_domain'}),
 }
+# Crates the table already has a row for that a later slice creates (plan 18a section 2.2); a
+# row for any other crate that is not in the workspace is stale.
+PLANNED_CRATES = frozenset({'op_domain', 'op_store'})
 NATIVE_MANIFEST = 'native/Cargo.toml'
 
 
 def crate_violations(metadata: dict[str, Any]) -> list[str]:
     """Problems in ``cargo metadata --no-deps`` output against :data:`CRATE_DEPENDENCIES`."""
     members = {package['name'] for package in metadata['packages']}
+    known = members | PLANNED_CRATES
     problems: list[str] = []
+    for name, allowed in CRATE_DEPENDENCIES.items():
+        if name not in known:
+            problems.append(
+                f'{name}: a row in CRATE_DEPENDENCIES for a crate that is not in the workspace'
+            )
+        problems.extend(
+            f'{name} -> {dep}: a crate in the allowed set that is not in the workspace'
+            for dep in sorted(allowed - known)
+        )
     for package in metadata['packages']:
         name = package['name']
         if name not in CRATE_DEPENDENCIES:

@@ -189,3 +189,37 @@ fn a_root_that_is_no_directory_or_does_not_exist_refuses_the_start() {
     let absent = KeyedRoots::new(None, Some(&d.base.join("absent")), LIMIT).unwrap_err();
     assert!(absent.contains("source root") && absent.contains("not usable"));
 }
+
+/// Runs the read on another thread; a read that blocks fails the test after a few seconds.
+fn read_bounded(roots: KeyedRoots, file: FileRef, what: &str) -> &'static str {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(roots.read(&file).expect_err("refused").status);
+    });
+    rx.recv_timeout(std::time::Duration::from_secs(5))
+        .unwrap_or_else(|_| {
+            panic!("reading {what} blocked: a key must not open a non-regular file for ever")
+        })
+}
+
+#[test]
+fn a_named_pipe_a_socket_and_a_folder_are_unreadable_without_blocking() {
+    use rustix::fs::{CWD, FileType, Mode, mknodat};
+    let d = disk();
+    mknodat(
+        CWD,
+        d.base.join("source/pipe.jpg"),
+        FileType::Fifo,
+        Mode::RUSR | Mode::WUSR,
+        0,
+    )
+    .expect("a named pipe");
+    let _socket = std::os::unix::net::UnixListener::bind(d.base.join("source/sock.jpg"))
+        .expect("a socket file");
+    let claim = FileClaim::of(&photo(100));
+    for key in ["source/pipe.jpg", "source/sock.jpg", "source/trip"] {
+        let file = FileRef::new(key, claim).unwrap();
+        let roots = d.roots.clone();
+        assert_eq!(read_bounded(roots, file, key), "unreadable", "{key}");
+    }
+}
