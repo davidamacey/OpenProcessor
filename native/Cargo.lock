@@ -2152,6 +2152,7 @@ version = "0.1.0"
 name = "op_config"
 version = "0.1.0"
 dependencies = [
+ "rustls",
  "serde",
  "serde_json",
 ]
