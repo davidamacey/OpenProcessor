@@ -8,6 +8,8 @@ from the same set as ``force_allowed``, never from another validator's set.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from curation._ingest_profile_world import Pool, body
@@ -33,7 +35,7 @@ async def test_ingest_profile_triton_outage_is_marked_bypassable() -> None:
     from src.services.config_store.ingest_profile_validation import validate_ingest_profile
 
     class DownPool(Pool):
-        async def is_model_ready(self, _name: str) -> bool:
+        async def probe_model_ready(self, _name: str, **_kw: Any) -> bool:
             raise OSError('connection refused')
 
     pool = DownPool()

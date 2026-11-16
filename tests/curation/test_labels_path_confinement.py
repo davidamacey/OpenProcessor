@@ -15,7 +15,7 @@ from src.schemas.curation.ingest_profile import IngestDetectorSpec
 
 
 class _Pool:
-    async def is_model_ready(self, _name: str) -> bool:
+    async def probe_model_ready(self, _name: str, **_kw: Any) -> bool:
         return True
 
     async def get_model_output_names(self, _name: str) -> list[str]:
