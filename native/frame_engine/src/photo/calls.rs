@@ -31,6 +31,7 @@ use crate::pipeline::PipelineError;
 /// A call's answer as the branches see it.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Answer {
+    /// The call's output tensors.
     Outputs(Vec<OutputTensor>),
     /// The server answered the call with an error: its branch fails (`model_error`), the photo
     /// goes on.
@@ -62,6 +63,7 @@ enum Slot<I> {
     Cancelled,
 }
 
+/// The model calls of one photo: the slices they hold, the ones in flight and the window of region bytes they may hold together.
 pub struct PhotoCalls<D: Device> {
     device: Arc<D>,
     metrics: Arc<Metrics>,
@@ -87,6 +89,7 @@ fn status_code(tonic: &str) -> String {
 }
 
 impl<D: Device> PhotoCalls<D> {
+    /// The calls of one photo; `window` is the region bytes it may hold at once.
     pub fn new(
         device: Arc<D>,
         metrics: Arc<Metrics>,
@@ -121,6 +124,10 @@ impl<D: Device> PhotoCalls<D> {
     }
 
     /// A slice for one call's input; the waits for room count in `stage`.
+    ///
+    /// # Errors
+    ///
+    /// The slice is larger than the whole region (`Stop::Status("over_budget")`), the region stays full for `slab_wait` (a `slab` overload), or an earlier call that was waited on for room failed.
     pub async fn stage(
         &mut self,
         clock: &mut StageClock,
@@ -182,6 +189,10 @@ impl<D: Device> PhotoCalls<D> {
 
     /// The call's answer, waited for in its stage. A server that is gone, a deadline or a region
     /// it cannot find fail the photo (`UNAVAILABLE`, retried by the API).
+    ///
+    /// # Errors
+    ///
+    /// The call itself failed in a way that fails the photo, or the id was never sent or was cancelled (an engine fault).
     pub async fn result(&mut self, clock: &mut StageClock, id: CallId) -> Result<Answer, Stop> {
         if let Some(Slot::Open { stage, .. }) = self.slots.get(id.0) {
             let stage = *stage;

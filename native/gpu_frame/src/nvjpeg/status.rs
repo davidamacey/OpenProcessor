@@ -8,7 +8,9 @@ use std::fmt;
 /// on the GPU first (baseline JPEGs), then on the calling thread.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Backend {
+    /// Huffman decoding on the GPU (`NVJPEG_BACKEND_GPU_HYBRID`); baseline JPEGs only.
     GpuHybrid,
+    /// Huffman decoding on the calling thread (`NVJPEG_BACKEND_HYBRID`), the rest on the GPU.
     Hybrid,
 }
 
@@ -68,7 +70,9 @@ impl fmt::Display for NvjpegStatus {
 /// A failed nvJPEG call.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NvjpegFailure {
+    /// The nvJPEG function that failed, as `nvjpeg.h` names it.
     pub call: &'static str,
+    /// The status code it answered.
     pub status: NvjpegStatus,
 }
 

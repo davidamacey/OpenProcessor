@@ -32,43 +32,67 @@ fn refuse<T>(text: String) -> Result<T, SettingsError> {
     Err(SettingsError(text))
 }
 
+/// How photos reach the model server: the input travels by CUDA shared memory (`OP_FRAME_ENGINE_TRANSPORT`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Transport {
+    /// Inputs are written into a registered CUDA shared-memory region on the card; the only transport built.
     Cuda,
 }
 
+/// Every setting of one engine process, read from `OP_FRAME_ENGINE_*`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
+    /// `host:port` of the model server's gRPC endpoint, `OP_FRAME_ENGINE_TRITON_URL`.
     pub triton_url: String,
+    /// How inputs reach the model server, `OP_FRAME_ENGINE_TRANSPORT`.
     pub transport: Transport,
     /// Size of the one CUDA shared-memory region, MiB.
     pub region_mib: u32,
     /// Names this process's region with the card: one engine slot per card by default.
     pub instance: String,
+    /// The card's index as the model server numbers it, used when registering the region, `OP_FRAME_ENGINE_TRITON_DEVICE_ID`.
     pub triton_device_id: u32,
+    /// gRPC channels to the model server, `OP_FRAME_ENGINE_TRITON_CHANNELS`.
     pub triton_channels: u32,
     /// Deadline of one model-server call, also capped by what is left of the request.
     pub triton_timeout_seconds: f64,
     /// Every request is answered by then (`DEADLINE_EXCEEDED` if the photo is still running).
     pub request_deadline_seconds: f64,
+    /// Photos in work at once past admission, each holding a frame and region slices, `OP_FRAME_ENGINE_WORKERS`.
     pub workers: u32,
+    /// Decode lanes, `OP_FRAME_ENGINE_LANES`; defaults to the physical cores available to the process.
     pub lanes: u32,
+    /// Finish-pool threads that copy and JPEG-encode crops, `OP_FRAME_ENGINE_ENCODE_THREADS`.
     pub encode_threads: u32,
     /// Requests admitted at once (running or queued); above it: overload.
     pub max_in_flight: u32,
+    /// Device memory the frame pool may hold, MiB, `OP_FRAME_ENGINE_POOL_MIB`.
     pub pool_mib: u32,
+    /// Decoded-frame bytes photos may reserve together, MiB, `OP_FRAME_ENGINE_BUDGET_MIB`; at most the pool.
     pub budget_mib: u32,
+    /// How long a photo waits for the frame budget before an overload, seconds, `OP_FRAME_ENGINE_BUDGET_WAIT_SECONDS`.
     pub budget_wait_seconds: f64,
+    /// How long a photo waits for room in the region before an overload, seconds, `OP_FRAME_ENGINE_SLAB_WAIT_SECONDS`.
     pub slab_wait_seconds: f64,
+    /// Cached profile-to-sRGB colour tables on the card, `OP_FRAME_ENGINE_COLOUR_TABLES`.
     pub colour_tables: u32,
+    /// Images below this many megapixels decode on the host, `OP_FRAME_ENGINE_MIN_MEGAPIXELS`.
     pub min_megapixels: f64,
+    /// Images above this many megapixels are refused as `huge`, `OP_FRAME_ENGINE_MAX_MEGAPIXELS`.
     pub max_megapixels: f64,
+    /// JPEG quality, 1 to 100, of the encoded crops, `OP_FRAME_ENGINE_JPEG_QUALITY`.
     pub jpeg_quality: u32,
+    /// Whether kernel stages wait for their stream so stage seconds are exact, `OP_FRAME_ENGINE_STAGE_SYNC`.
     pub stage_sync: bool,
+    /// TCP port of the gRPC service, `OP_FRAME_ENGINE_PORT`.
     pub port: u16,
+    /// TCP port of the metrics endpoint, `OP_FRAME_ENGINE_METRICS_PORT`.
     pub metrics_port: u16,
+    /// Largest gRPC message in either direction, MiB, `OP_FRAME_ENGINE_MAX_MESSAGE_MIB`.
     pub max_message_mib: u32,
+    /// Seconds in-flight photos get to finish on shutdown, `OP_FRAME_ENGINE_DRAIN_SECONDS`.
     pub drain_seconds: f64,
+    /// Seconds between the engine's readiness checks of the model server, `OP_FRAME_ENGINE_HEALTH_SECONDS`.
     pub health_seconds: f64,
     /// `OP_FRAME_ENGINE_EXPECT_BUS_ID`: the PCI bus id of the card this engine must run on; the
     /// start is refused on any other (unset: no check).
@@ -116,11 +140,19 @@ impl Settings {
     }
 
     /// The settings of this process's environment.
+    ///
+    /// # Errors
+    ///
+    /// A variable is malformed or out of range, a retired or unbuilt option is set, or the settings contradict each other (budget above pool, model-call timeout above the request deadline).
     pub fn from_env() -> Result<Self, SettingsError> {
         Self::from_lookup(&|name| std::env::var(name).ok())
     }
 
     /// The settings read through `lookup` (a variable's text, or `None` when unset).
+    ///
+    /// # Errors
+    ///
+    /// A variable is malformed or out of range, a retired or unbuilt option is set, or the settings contradict each other (budget above pool, model-call timeout above the request deadline).
     pub fn from_lookup(lookup: &dyn Fn(&str) -> Option<String>) -> Result<Self, SettingsError> {
         Self::read(lookup, cores::physical_cores())
     }

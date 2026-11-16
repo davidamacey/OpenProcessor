@@ -10,5 +10,12 @@
     missing_docs,
     reason = "generated code"
 )]
+#![cfg_attr(
+    doc,
+    expect(
+        rustdoc::invalid_html_tags,
+        reason = "the comments of the generated messages are Triton's, with bare angle brackets"
+    )
+)]
 
 tonic::include_proto!("inference");

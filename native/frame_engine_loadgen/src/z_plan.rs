@@ -14,7 +14,9 @@ use crate::plan::PlanFile;
 /// One model call.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CallSpec {
+    /// The model's name on the model server.
     pub model: String,
+    /// The output tensor's name.
     pub output: &'static str,
     /// `[batch, 3, side, side]`.
     pub shape: [i64; 4],
@@ -33,7 +35,9 @@ impl CallSpec {
 /// The calls of one photo, by round.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PhotoCalls {
+    /// The detector and frame-encoder calls, all in flight together.
     pub round1: Vec<CallSpec>,
+    /// The crop-encoder calls, one per chunk of the photo's crops, all in flight together after round 1.
     pub round2: Vec<CallSpec>,
 }
 
@@ -61,6 +65,10 @@ pub fn chunks(crops: usize, batch: usize) -> Vec<usize> {
 }
 
 /// The calls for a photo that has `crops` crops to embed (0 for a plan without crops).
+///
+/// # Errors
+///
+/// Returns `Err` when the plan names a branch without its model, or calls no model in round 1.
 pub fn photo_calls(plan: &PlanFile, crops: usize) -> Result<PhotoCalls, String> {
     let mut round1 = Vec::new();
     if plan.branches.iter().any(|b| b == "detect") {
@@ -98,13 +106,19 @@ pub fn photo_calls(plan: &PlanFile, crops: usize) -> Result<PhotoCalls, String> 
 /// The crop counts a parity run recorded for one list, in list order.
 #[derive(Debug, Deserialize)]
 pub struct CropCounts {
+    /// SHA-256 of the list file the counts were recorded for.
     pub list_sha256: String,
+    /// Crops of each photo, in list order.
     pub crops: Vec<usize>,
 }
 
 impl CropCounts {
     /// Parse and check against the list that is about to be replayed: a count file recorded for
     /// another list would be a silent error, so it is refused.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` when the text is not a crop-count file, was recorded for another list, or holds a different number of photos than `photos`.
     pub fn parse(text: &str, list_sha256: &str, photos: usize) -> Result<CropCounts, String> {
         let counts: CropCounts =
             serde_json::from_str(text).map_err(|e| format!("crop counts: {e}"))?;

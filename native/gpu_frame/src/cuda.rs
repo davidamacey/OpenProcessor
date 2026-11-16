@@ -10,10 +10,10 @@
 //! [`Fault::ContextLost`] for the codes after which "the process must be terminated and
 //! relaunched", [`Fault::OutOfMemory`] for `CUDA_ERROR_OUT_OF_MEMORY` (plan 17 sections 1.3, 2.3).
 //!
-//! Driver API reference: https://docs.nvidia.com/cuda/cuda-driver-api/index.html (context
+//! Driver API reference: <https://docs.nvidia.com/cuda/cuda-driver-api/index.html> (context
 //! management, stream management, memory management, stream-ordered memory allocator, module
-//! management, execution control); NVRTC: https://docs.nvidia.com/cuda/nvrtc/index.html;
-//! cudarc 0.19.10: https://docs.rs/cudarc/0.19.10/cudarc/driver/result/index.html.
+//! management, execution control); NVRTC: <https://docs.nvidia.com/cuda/nvrtc/index.html>;
+//! cudarc 0.19.10: <https://docs.rs/cudarc/0.19.10/cudarc/driver/result/index.html>.
 
 use std::ffi::{CString, c_char, c_int, c_uint, c_void};
 use std::fmt;
@@ -52,6 +52,11 @@ impl fmt::Debug for Context {
 impl Context {
     /// Retain the primary context of device `ordinal` (as `CUDA_VISIBLE_DEVICES` numbers it)
     /// and bind it to the calling thread.
+    ///
+    /// # Errors
+    ///
+    /// [`CudaError::LibraryMissing`] when libcuda cannot be loaded, [`CudaError::Driver`] when the
+    /// driver cannot retain the device's primary context (a bad ordinal, a lost card).
     pub fn new(ordinal: usize) -> Result<Arc<Context>, CudaError> {
         // SAFETY: probing the loader has no precondition; it only tries to open the library.
         if !unsafe { sys::is_culib_present() } {
@@ -67,6 +72,11 @@ impl Context {
     }
 
     /// Make this context current on the calling thread (cudarc's `bind_to_thread`).
+    ///
+    /// # Errors
+    ///
+    /// [`CudaError::Driver`] when the driver refuses the call (cuCtxSetCurrent); a sticky code
+    /// marks the context lost.
     pub fn bind(&self) -> Result<(), CudaError> {
         self.check("cuCtxSetCurrent", self.inner.bind_to_thread())
     }
@@ -77,21 +87,41 @@ impl Context {
     }
 
     /// The device's compute capability (major, minor).
+    ///
+    /// # Errors
+    ///
+    /// [`CudaError::Driver`] when the driver refuses the call (cuDeviceGetAttribute); a sticky code
+    /// marks the context lost.
     pub fn compute_capability(&self) -> Result<(i32, i32), CudaError> {
         self.check("cuDeviceGetAttribute", self.inner.compute_capability())
     }
 
     /// The device's name.
+    ///
+    /// # Errors
+    ///
+    /// [`CudaError::Driver`] when the driver refuses the call (cuDeviceGetName); a sticky code
+    /// marks the context lost.
     pub fn device_name(&self) -> Result<String, CudaError> {
         self.check("cuDeviceGetName", self.inner.name())
     }
 
     /// The device's PCI bus id (`0000:65:00.0`), which names the card whatever the ordinal.
+    ///
+    /// # Errors
+    ///
+    /// [`CudaError::Driver`] when the driver refuses the call (the PCI bus id query); a sticky code
+    /// marks the context lost.
     pub fn pci_bus_id(&self) -> Result<String, CudaError> {
         bus_id_of(self.inner.cu_device()).inspect_err(|e| self.note(e))
     }
 
     /// Free and total device memory in bytes (`cuMemGetInfo`), for the whole device.
+    ///
+    /// # Errors
+    ///
+    /// [`CudaError::Driver`] when the driver refuses the call (cuMemGetInfo or the binding of the
+    /// context); a sticky code marks the context lost.
     pub fn memory_info(&self) -> Result<(usize, usize), CudaError> {
         self.bind()?;
         self.check("cuMemGetInfo", result::mem_get_info())
@@ -99,6 +129,11 @@ impl Context {
 
     /// Wait for all work of the context (`cuCtxSynchronize`): the probe that tells a photo's
     /// failure from a lost context.
+    ///
+    /// # Errors
+    ///
+    /// [`CudaError::Driver`] when the driver refuses the call (cuCtxSynchronize or the binding of
+    /// the context); a sticky code marks the context lost.
     pub fn synchronize(&self) -> Result<(), CudaError> {
         self.bind()?;
         self.check("cuCtxSynchronize", result::ctx::synchronize())
@@ -148,7 +183,12 @@ fn bus_id_of(device: sys::CUdevice) -> Result<String, CudaError> {
 /// without creating a context: nothing is allocated on the card, so a process can check it was
 /// given the card it expects before it takes any memory there (`cuInit`, `cuDeviceGet`,
 /// `cuDeviceGetName`, `cuDeviceGetPCIBusId` need no context:
-/// https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__DEVICE.html).
+/// <https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__DEVICE.html>).
+///
+/// # Errors
+///
+/// [`CudaError::LibraryMissing`] when libcuda cannot be loaded, [`CudaError::Driver`] when `cuInit`
+/// or a device query fails, [`CudaError::Invalid`] when `ordinal` does not fit a C int.
 pub fn device_identity(ordinal: usize) -> Result<(String, String), CudaError> {
     // SAFETY: probing the loader has no precondition; it only tries to open the library.
     if !unsafe { sys::is_culib_present() } {
@@ -185,6 +225,10 @@ impl fmt::Debug for Stream {
 impl Stream {
     /// A new stream that does not synchronise with the legacy default stream
     /// (`CU_STREAM_NON_BLOCKING`).
+    ///
+    /// # Errors
+    ///
+    /// [`CudaError::Driver`] when the context cannot be bound or the driver refuses the stream.
     pub fn new(ctx: &Arc<Context>) -> Result<Arc<Stream>, CudaError> {
         ctx.bind()?;
         let raw = ctx.check(
@@ -208,6 +252,10 @@ impl Stream {
     }
 
     /// Block until every command queued on the stream has completed.
+    ///
+    /// # Errors
+    ///
+    /// [`CudaError::Driver`] when the context cannot be bound or a queued command failed.
     pub fn synchronize(&self) -> Result<(), CudaError> {
         self.ctx.bind()?;
         // SAFETY: the stream is live (owned by this value).
@@ -217,6 +265,11 @@ impl Stream {
     }
 
     /// Fill `len` bytes of `dst` from `offset` with `value`, in stream order.
+    ///
+    /// # Errors
+    ///
+    /// [`CudaError::Invalid`] when `offset + len` leaves `dst`; [`CudaError::Driver`] when the
+    /// driver refuses the memset.
     pub fn memset(
         &self,
         dst: &dyn DeviceRange,
@@ -235,7 +288,12 @@ impl Stream {
     /// Copy `src` from host memory into `dst` at `offset`, in stream order. A pageable source is
     /// staged by the driver before this returns, so `src` may be reused at once; the device
     /// write completes only in stream order ("API synchronization behavior",
-    /// https://docs.nvidia.com/cuda/cuda-driver-api/api-sync-behavior.html).
+    /// <https://docs.nvidia.com/cuda/cuda-driver-api/api-sync-behavior.html>).
+    ///
+    /// # Errors
+    ///
+    /// [`CudaError::Invalid`] when `src` does not fit `dst` at `offset`; [`CudaError::Driver`] when
+    /// the driver refuses the copy.
     pub fn copy_from_host(
         &self,
         dst: &dyn DeviceRange,
@@ -253,6 +311,11 @@ impl Stream {
 
     /// Copy `dst.len()` bytes of `src` from `offset` into pinned host memory. The bytes are
     /// readable through the returned guard once the stream was waited for.
+    ///
+    /// # Errors
+    ///
+    /// [`CudaError::Invalid`] when `len` is larger than `dst` or the range leaves `src`;
+    /// [`CudaError::Driver`] when the driver refuses the copy.
     pub fn copy_to_pinned<'a>(
         &'a self,
         src: &dyn DeviceRange,
@@ -286,8 +349,13 @@ impl Stream {
     /// and the next ones `src_pitch` bytes apart, into the front of pinned host memory with the
     /// rows packed (`width_bytes` apart): one `cuMemcpy2DAsync` for a crop of a frame, where a
     /// copy per row or of the whole row band would move many more bytes over the bus
-    /// (https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__MEM.html, `cuMemcpy2DAsync`).
+    /// (<https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__MEM.html>, `cuMemcpy2DAsync`).
     /// The bytes are readable through the returned guard once the stream was waited for.
+    ///
+    /// # Errors
+    ///
+    /// [`CudaError::Invalid`] when the rectangle does not fit the pitch, overflows, or is larger
+    /// than `dst`, or leaves `src`; [`CudaError::Driver`] when the driver refuses the copy.
     pub fn copy_rect_to_pinned<'a>(
         &'a self,
         src: &dyn DeviceRange,
@@ -374,6 +442,11 @@ pub struct PendingCopy<'a> {
 
 impl<'a> PendingCopy<'a> {
     /// Wait for the stream, then read the copied bytes.
+    ///
+    /// # Errors
+    ///
+    /// [`CudaError::Driver`] when the stream wait fails; [`CudaError::Invalid`] when the copy was
+    /// already collected.
     pub fn wait(mut self) -> Result<&'a [u8], CudaError> {
         self.stream.synchronize()?;
         match self.buf.take() {
@@ -400,6 +473,10 @@ pub trait DeviceRange {
     fn byte_len(&self) -> usize;
 
     /// The address of `[offset, offset + len)`, refused when it leaves the range.
+    ///
+    /// # Errors
+    ///
+    /// [`CudaError::Invalid`] when `offset + len` overflows or passes [`DeviceRange::byte_len`].
     fn checked_addr(&self, offset: usize, len: usize) -> Result<u64, CudaError> {
         match offset.checked_add(len) {
             Some(end) if end <= self.byte_len() => Ok(self.device_addr() + offset as u64),
@@ -425,6 +502,10 @@ unsafe impl Sync for PinnedBuf {}
 
 impl PinnedBuf {
     /// `len` bytes of pinned host memory (at least one).
+    ///
+    /// # Errors
+    ///
+    /// [`CudaError::Driver`] when the context cannot be bound or the page-locked allocation fails.
     pub fn new(ctx: &Arc<Context>, len: usize) -> Result<PinnedBuf, CudaError> {
         ctx.bind()?;
         // SAFETY: flags 0 is a plain page-locked allocation; the pointer is owned from here on.

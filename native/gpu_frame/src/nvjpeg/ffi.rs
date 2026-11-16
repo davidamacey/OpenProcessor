@@ -32,7 +32,7 @@
 //!
 //! Signatures are those of `nvjpeg.h` in the `nvidia-nvjpeg` 13.2.3.58 wheel the engine image
 //! ships (`NVJPEG_VER` 13.2.3.58); handles are pointers, enums C `int`s. nvJPEG documentation:
-//! https://docs.nvidia.com/cuda/nvjpeg/index.html (1.3 thread safety: the handle is shared,
+//! <https://docs.nvidia.com/cuda/nvjpeg/index.html> (1.3 thread safety: the handle is shared,
 //! states, streams and buffers are per thread, user allocators must be thread safe; 2.2.8 and
 //! 2.2.11 the V2 allocators; 2.3.1.6 `nvjpegCreateExV2`; decoupled decoding).
 

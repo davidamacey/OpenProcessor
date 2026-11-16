@@ -25,6 +25,10 @@ impl BytesError {
 
 /// The elements of `raw`, each a slice of it (reference counted, never copied: a photo is up to
 /// tens of MB).
+///
+/// # Errors
+///
+/// The bytes are not a sequence of length-prefixed elements, or an element runs past the end.
 pub fn unpack(raw: &Bytes) -> Result<Vec<Bytes>, BytesError> {
     let mut out = Vec::new();
     let n = raw.len();

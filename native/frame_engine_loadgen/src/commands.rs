@@ -18,6 +18,7 @@ use crate::plan::PlanFile;
 use crate::row::{EngineEvidence, Row};
 use crate::z_mode;
 
+/// The subcommand: which measurement or readiness check to run.
 #[derive(Debug, Subcommand)]
 pub enum Command {
     /// Measure an engine at an address: a closed loop of photos in flight, protocol version 1.
@@ -42,8 +43,10 @@ pub struct Common {
     /// Photos in flight.
     #[arg(long)]
     pub in_flight: usize,
+    /// Seconds of load before the window opens; those photos are not measured.
     #[arg(long, default_value_t = 5.0)]
     pub warmup_s: f64,
+    /// Seconds of the measured window.
     #[arg(long, default_value_t = 20.0)]
     pub window_s: f64,
     /// Name of this arm, recorded in the row.
@@ -63,11 +66,13 @@ pub struct Common {
         required_unless_present = "no_stats"
     )]
     pub stats_url: Option<String>,
+    /// Take no statistics from the model server: the row has no `model_server` evidence.
     #[arg(long)]
     pub no_stats: bool,
     /// The card to sample (its PCI bus id as NVML names it, for example `00000000:C1:00.0`).
     #[arg(long, conflicts_with = "no_gpu", required_unless_present = "no_gpu")]
     pub gpu_bus_id: Option<String>,
+    /// Sample no GPU: the row has no `gpu` evidence.
     #[arg(long)]
     pub no_gpu: bool,
     /// Exit 0 even when photos failed (fault runs); the row still counts them.
@@ -75,8 +80,10 @@ pub struct Common {
     pub allow_failures: bool,
 }
 
+/// Arguments of the `engine` mode.
 #[derive(Debug, Args)]
 pub struct EngineArgs {
+    /// The arguments every measured row takes.
     #[command(flatten)]
     pub common: Common,
     /// The engine's gRPC address.
@@ -90,8 +97,10 @@ pub struct EngineArgs {
     pub timeout_s: f64,
 }
 
+/// Arguments of the `z` (models alone) mode.
 #[derive(Debug, Args)]
 pub struct ZArgs {
+    /// The arguments every measured row takes.
     #[command(flatten)]
     pub common: Common,
     /// Each photo's crop count as a parity run recorded it (required when the plan embeds crops).
@@ -111,17 +120,21 @@ pub struct ZArgs {
     pub channels: usize,
 }
 
+/// Arguments of the `ready` check.
 #[derive(Debug, Args)]
 pub struct ReadyArgs {
+    /// The gRPC address to ask.
     #[arg(long)]
     pub url: String,
     /// The model asked after: `frame_engine` for an engine, a model's name for the model server.
     #[arg(long, default_value = client::MODEL)]
     pub model: String,
+    /// Seconds to wait for each call.
     #[arg(long, default_value_t = 5.0)]
     pub timeout_s: f64,
 }
 
+/// Arguments of the `regions` check.
 #[derive(Debug, Args)]
 pub struct RegionsArgs {
     /// The model server's gRPC address.
@@ -130,6 +143,7 @@ pub struct RegionsArgs {
     /// The prefix of the engine's regions (`op-fe-`).
     #[arg(long, default_value = "op-fe-")]
     pub prefix: String,
+    /// Seconds to wait for each call.
     #[arg(long, default_value_t = 5.0)]
     pub timeout_s: f64,
 }
@@ -137,6 +151,11 @@ pub struct RegionsArgs {
 /// An error in the command line's meaning or a source that cannot be opened: nothing measured.
 pub type Failure = String;
 
+/// A positive, finite number of seconds as a `Duration`; `label` names the option in the error.
+///
+/// # Errors
+///
+/// Returns `Err` when `v` is zero, negative, infinite or NaN.
 pub fn secs(label: &str, v: f64) -> Result<Duration, Failure> {
     if v.is_finite() && v > 0.0 {
         Ok(Duration::from_secs_f64(v))
@@ -145,6 +164,11 @@ pub fn secs(label: &str, v: f64) -> Result<Duration, Failure> {
     }
 }
 
+/// Run one subcommand and give the process exit code: 0 on success (for a measured row, no failed photo unless `--allow-failures`), 1 for a not-ready server or a missing region prefix, 3 for failed photos.
+///
+/// # Errors
+///
+/// Returns `Err` when an option is invalid, an input cannot be opened, the server cannot be reached or is not ready for a measured mode, or the row cannot be written.
 pub async fn run(command: Command, argv: Vec<String>) -> Result<ExitCode, Failure> {
     match command {
         Command::Engine(a) => engine(*a, argv).await,
@@ -187,15 +211,27 @@ async fn regions(a: &RegionsArgs) -> Result<ExitCode, Failure> {
 
 /// The inputs every mode shares, read before any clock starts.
 pub struct Prepared {
+    /// The photos, held in memory, with the hash of their list file.
     pub list: PhotoList,
+    /// The plan every photo carries.
     pub plan: PlanFile,
+    /// How long the loop runs before the window opens.
     pub warmup: Duration,
+    /// How long the measured window lasts.
     pub window: Duration,
+    /// The measured process's cgroup, when `--cpu-stat` is given.
     pub cgroup: Option<Cgroup>,
+    /// The model server's address and one channel to it, when `--stats-url` is given.
     pub stats: Option<(String, Client)>,
+    /// The sampled card and the sampler that reads it, when `--gpu-bus-id` is given.
     pub gpu: Option<Gpu>,
 }
 
+/// Read the list and the plan, connect the statistics channel and start the GPU sampler, all before any clock starts.
+///
+/// # Errors
+///
+/// Returns `Err` when `--in-flight` is 0, a duration is not positive, the list or the plan cannot be loaded, the model server cannot be connected, or the card cannot be opened.
 pub async fn prepare(c: &Common) -> Result<Prepared, Failure> {
     if c.in_flight == 0 {
         return Err("--in-flight must be at least 1".into());
@@ -270,6 +306,10 @@ async fn engine(a: EngineArgs, argv: Vec<String>) -> Result<ExitCode, Failure> {
 }
 
 /// Write the row, say it in one line on stderr, and decide the exit code.
+///
+/// # Errors
+///
+/// Returns `Err` when the row cannot be serialised or the `--out` file cannot be opened or written.
 pub fn finish(c: &Common, row: Row) -> Result<ExitCode, Failure> {
     let line = serde_json::to_string(&row).map_err(|e| format!("row: {e}"))?;
     println!("{line}");

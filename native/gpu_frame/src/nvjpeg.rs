@@ -94,10 +94,12 @@ pub struct DeviceFrame {
 }
 
 impl DeviceFrame {
+    /// Width in pixels.
     pub fn width(&self) -> u32 {
         self.width
     }
 
+    /// Height in pixels.
     pub fn height(&self) -> u32 {
         self.height
     }
@@ -131,9 +133,11 @@ impl DeviceRange for DeviceFrame {
 /// What a decode produced.
 #[derive(Debug)]
 pub struct Decoded {
+    /// The RGB frame on the device, owned by this value.
     pub frame: DeviceFrame,
     /// Colour components in the file (1 for greyscale, 3 for colour); the frame is RGB either way.
     pub components: u32,
+    /// The nvJPEG backend that decoded it.
     pub backend: Backend,
 }
 
@@ -169,6 +173,11 @@ impl Lane {
 
     /// Queue the decode of `data` on the lane's stream (no wait). `data` is held until
     /// [`Lane::synchronize`].
+    ///
+    /// # Errors
+    ///
+    /// [`DecodeError::Unsupported`] when no backend decodes the stream; [`DecodeError::Nvjpeg`],
+    /// [`DecodeError::Alloc`] or [`DecodeError::Cuda`] when a call or the frame's allocation fails.
     pub fn decode(&mut self, data: Bytes) -> Result<Decoded, DecodeError> {
         self.held.push(data.clone());
         let info = self
@@ -203,6 +212,10 @@ impl Lane {
     }
 
     /// Wait for the lane's stream, then release the encoded inputs nvJPEG read.
+    ///
+    /// # Errors
+    ///
+    /// [`DecodeError::Cuda`] when the stream wait fails; the encoded inputs are then kept.
     pub fn synchronize(&mut self) -> Result<(), DecodeError> {
         let waited = self.stream.synchronize();
         if waited.is_ok() {
@@ -263,6 +276,12 @@ impl Lanes {
     /// Load nvJPEG (from `library_dir` first when given) and start `count` lanes whose frames
     /// and nvJPEG device buffers come from `frames` (charged to its cap); nvJPEG's pinned bytes
     /// are counted in `host`.
+    ///
+    /// # Errors
+    ///
+    /// [`DecodeError::Library`] when nvJPEG cannot be loaded, [`DecodeError::Cuda`] or
+    /// [`DecodeError::Nvjpeg`] when a lane's setup fails, [`DecodeError::Job`] when a lane thread
+    /// cannot start.
     pub fn new(
         frames: &FramePool,
         host: &Arc<HostCount>,
@@ -302,6 +321,11 @@ impl Lanes {
     }
 
     /// Decode `data` on the next free lane and wait for its stream.
+    ///
+    /// # Errors
+    ///
+    /// [`JobError::Cancelled`] when `cancel` is already set and [`JobError::Closed`] when the lanes
+    /// are shut down; decode failures arrive through the handle.
     pub fn decode(
         &self,
         data: Bytes,
@@ -316,6 +340,11 @@ impl Lanes {
 
     /// Run `job` on the next free lane (decode, then the caller's own work on the lane's
     /// stream, then one wait).
+    ///
+    /// # Errors
+    ///
+    /// [`JobError::Cancelled`] when `cancel` is already set and [`JobError::Closed`] when the lanes
+    /// are shut down.
     pub fn run<T, F>(&self, cancel: &CancelToken, job: F) -> Result<JobHandle<T>, JobError>
     where
         T: Send + 'static,

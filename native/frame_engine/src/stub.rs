@@ -317,6 +317,7 @@ pub struct StubPipeline {
 }
 
 impl StubPipeline {
+    /// A stub whose health check reports not ready while `not_ready_file` is set and exists.
     pub fn new(not_ready_file: Option<PathBuf>) -> Self {
         Self {
             ready: AtomicBool::new(true),

@@ -26,27 +26,41 @@ use crate::statistics;
 
 /// The card's sampler and what names the card.
 pub struct Gpu {
+    /// Samples the card from before the first photo until the row is built; stopped when dropped.
     pub sampler: Sampler,
+    /// Names the card, recorded in the row.
     pub identity: Identity,
 }
 
 /// Everything a row is made of besides the loop's result.
 pub struct Setup {
+    /// The row's mode: `engine` or `z`.
     pub mode: &'static str,
+    /// The arm's name, recorded in the row.
     pub label: String,
+    /// The command line as given, recorded in the row.
     pub command: Vec<String>,
+    /// The photos to send, round robin.
     pub list: PhotoList,
+    /// The plan every photo carries.
     pub plan: PlanFile,
+    /// The plan file's path, recorded in the row.
     pub plan_path: String,
+    /// Photos in flight at all times.
     pub in_flight: usize,
+    /// Length of the unmeasured warm-up.
     pub warmup: Duration,
+    /// Length of the measured window.
     pub window: Duration,
     /// The cgroup of the measured process: the engine, or in `z` mode the model server.
     pub cgroup: Option<Cgroup>,
     /// The model server's address and a channel to it, for the statistics deltas.
     pub stats: Option<(String, Client)>,
+    /// The sampled card, when GPU evidence is wanted.
     pub gpu: Option<Gpu>,
+    /// Engine evidence for an `engine` row; `None` in `z` mode.
     pub engine: Option<EngineEvidence>,
+    /// Models-alone evidence for a `z` row; `None` in `engine` mode.
     pub z: Option<ZEvidence>,
 }
 

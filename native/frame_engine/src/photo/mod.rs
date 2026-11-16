@@ -54,7 +54,9 @@ use crate::wire::plan::Crops;
 /// Why a photo stops before its branches finish: a photo status, or a failure of the request.
 #[derive(Debug)]
 pub enum Stop {
+    /// A photo status that answers the photo (for example `over_budget` or `huge`) with every branch failed.
     Status(&'static str),
+    /// The request itself fails with this error.
     Fail(PipelineError),
 }
 
@@ -75,11 +77,15 @@ fn engine(m: impl std::fmt::Display) -> Stop {
 /// What the flow reads from the settings.
 #[derive(Debug, Clone)]
 pub struct PhotoSettings {
+    /// Smallest image, in megapixels, that goes to the GPU decoder; smaller ones decode on the host.
     pub min_megapixels: f64,
+    /// Largest image, in megapixels, that is decoded at all; a larger one answers `huge`.
     pub max_megapixels: f64,
     /// `OP_FRAME_ENGINE_BUDGET_MIB` in bytes: a photo needing more answers `over_budget`.
     pub budget_bytes: u64,
+    /// How long a photo waits for the frame budget, `OP_FRAME_ENGINE_BUDGET_WAIT_SECONDS`.
     pub budget_wait: Duration,
+    /// How long a photo waits for room in the shared-memory region, `OP_FRAME_ENGINE_SLAB_WAIT_SECONDS`.
     pub slab_wait: Duration,
     /// Region bytes one photo may hold with calls in flight.
     pub window: usize,
@@ -87,9 +93,13 @@ pub struct PhotoSettings {
 
 /// The photo flow over a device and a frame budget.
 pub struct PhotoFlow<D, B> {
+    /// The card the jobs run on.
     pub device: Arc<D>,
+    /// The decoded-frame budget a photo reserves from before decoding.
     pub budget: B,
+    /// The limits the flow works to.
     pub settings: PhotoSettings,
+    /// Where the flow's stage and outcome series are written.
     pub metrics: Arc<Metrics>,
 }
 
@@ -211,6 +221,10 @@ where
     B::Permit: Sync,
 {
     /// The answer for one admitted photo.
+    ///
+    /// # Errors
+    ///
+    /// The request fails as a whole: an overload, a lost CUDA context, an unreachable model server or an engine fault. A photo that is merely refused is an `Ok` answer with its status.
     pub async fn process(&self, photo: Photo) -> Result<PhotoAnswer, PipelineError> {
         let mut clock = StageClock::new(Arc::clone(&photo.request), Arc::clone(&self.metrics));
         clock.add(QUEUE, photo.request.arrived().elapsed().as_secs_f64());

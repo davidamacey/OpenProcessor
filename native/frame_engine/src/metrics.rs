@@ -27,36 +27,51 @@ use tokio::net::TcpListener;
 /// The content type of [`Metrics::render`] (OpenMetrics 1.0).
 pub const CONTENT_TYPE: &str = "application/openmetrics-text; version=1.0.0; charset=utf-8";
 
+/// Label set of a series split by pipeline stage.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct ByStage {
+    /// Stage name, one of the contract's `stages`.
     pub stage: String,
 }
 
+/// Label set of a series split by outcome.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct ByOutcome {
+    /// Outcome of the wait or conversion, for example `admitted` or `timeout`.
     pub outcome: String,
 }
 
+/// Label set of a series split by cause.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct ByCause {
+    /// What caused the event, for example the overload cause or the registration cause.
     pub cause: String,
 }
 
+/// Label set of a series split by CUDA error code.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct ByCode {
+    /// The `cudaError` code of the sticky error.
     pub code: String,
 }
 
+/// Label set of a failed model-server call.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct ByModelCall {
+    /// Name of the model that was called.
     pub model: String,
+    /// gRPC status code of the failure.
     pub code: String,
+    /// `deadline` when no answer arrived in time, `rejected` when the server answered an error.
     pub reason: String,
 }
 
+/// Label set of an answered image.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct ByImage {
+    /// `ok` or the reason the image failed.
     pub status: String,
+    /// How the image was decoded, from the contract's `decode_routes`.
     pub decode_route: String,
 }
 
@@ -66,21 +81,37 @@ type Seconds = Counter<f64, AtomicU64>;
 /// (`in_flight`, `overloads`, `deadlines`), the pipeline the rest.
 pub struct Metrics {
     registry: Registry,
+    /// Wall seconds spent per stage, summed over images (`op_frame_engine_stage_seconds`).
     pub stage_seconds: Family<ByStage, Seconds>,
+    /// Images that ran each stage (`op_frame_engine_stage_observations`).
     pub stage_observations: Family<ByStage, Counter>,
+    /// Requests admitted and not yet answered.
     pub in_flight: Gauge,
+    /// Bytes of the shared-memory region handed out.
     pub slab_in_use: Gauge,
+    /// Most bytes of the region handed out so far.
     pub slab_peak: Gauge,
+    /// Requests that waited for room in the region.
     pub slab_waits: Gauge,
+    /// Bytes of the decoded-frame budget held by requests.
     pub budget_in_use: Gauge,
+    /// Requests that waited for the frame budget, by outcome (`admitted` or `timeout`).
     pub budget_waits: Family<ByOutcome, Counter>,
+    /// Shared-memory region registrations with the model server, by cause.
     pub registrations: Family<ByCause, Counter>,
+    /// Failed model-server calls, by model, gRPC status and reason.
     pub triton_errors: Family<ByModelCall, Counter>,
+    /// Requests answered `DEADLINE_EXCEEDED`, by the stage they were last in.
     pub deadlines: Family<ByStage, Counter>,
+    /// Images answered, by status and decode route.
     pub outcomes: Family<ByImage, Counter>,
+    /// CUDA contexts lost to a sticky error, by error code.
     pub context_lost: Family<ByCode, Counter>,
+    /// Requests answered with the overload status, by cause.
     pub overloads: Family<ByCause, Counter>,
+    /// Decoded frames by what their colour profile asked: `srgb`, `converted` or `ignored`.
     pub colour: Family<ByOutcome, Counter>,
+    /// Device bytes held by the cached profile-to-sRGB tables.
     pub colour_table_bytes: Gauge,
 }
 
@@ -208,6 +239,7 @@ fn register_request_series(registry: &mut Registry, m: &Metrics) {
 }
 
 impl Metrics {
+    /// A registry with every series registered at zero, plus the process series.
     pub fn new() -> Arc<Self> {
         let mut registry = Registry::default();
         let m = Self {
@@ -236,6 +268,10 @@ impl Metrics {
     }
 
     /// The exposition text of every series.
+    ///
+    /// # Panics
+    ///
+    /// Never in practice: the encoder only writes to a `String`, which cannot fail.
     pub fn render(&self) -> String {
         let mut text = String::new();
         encode(&mut text, &self.registry).expect("writing to a String does not fail");
@@ -349,6 +385,10 @@ impl Collector for ProcessSeries {
 
 /// Serves the exposition on `listener` to every GET, whatever the path (as the Python engine's
 /// `start_http_server` does), until `stop` completes.
+///
+/// # Panics
+///
+/// Never in practice: building the response with one valid header cannot fail.
 pub async fn serve(listener: TcpListener, metrics: Arc<Metrics>, stop: impl Future<Output = ()>) {
     tokio::pin!(stop);
     loop {

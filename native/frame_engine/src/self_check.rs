@@ -26,8 +26,11 @@ use crate::wire::parse_plan;
 /// The models the plans name (the API's ingest plan, `ingest_gpu_decode.ingest_engine_plan`).
 #[derive(Debug, Clone)]
 pub struct Models {
+    /// Model name the detector check calls.
     pub detector: String,
+    /// Model name the frame-embedding check calls.
     pub frame_encoder: String,
+    /// Model name the crop-embedding check calls.
     pub crop_encoder: String,
 }
 
@@ -59,6 +62,10 @@ pub fn plans(m: &Models) -> [(&'static str, String); 2] {
 }
 
 /// The built-in photo: a 640 x 480 pattern of gradients and blocks, JPEG at quality 90.
+///
+/// # Errors
+///
+/// The built-in photo cannot be encoded.
 pub fn built_in_photo() -> Result<Bytes, String> {
     let (w, h) = (640usize, 480usize);
     let mut px = Vec::with_capacity(w * h * 3);

@@ -19,7 +19,9 @@ use crate::pyfmt::format_g;
 /// (`in_flight`, `budget`, `slab`, `colour`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Overload {
+    /// Which limit was hit: `in_flight`, `budget`, `slab` or `colour`; the label of the overload counter.
     pub cause: String,
+    /// Human-readable text for the `RESOURCE_EXHAUSTED` message; empty when the cause says it all.
     pub detail: String,
 }
 
@@ -41,8 +43,10 @@ impl std::error::Error for Overload {}
 /// until the permit is dropped. `Err` is [`Overload`] with cause `budget`; a need larger than the
 /// whole budget is the pipeline's `over_budget` status, decided before it asks.
 pub trait FrameBudget: Send + Sync + 'static {
+    /// What the reservation holds; dropping it gives the bytes back.
     type Permit: Send + 'static;
 
+    /// Reserves `bytes` of decoded frame, waiting no later than `deadline`.
     fn admit(
         &self,
         bytes: u64,
@@ -59,6 +63,7 @@ pub struct InFlightCap {
 }
 
 impl InFlightCap {
+    /// A cap of `cap` photos in flight, shared by the front and every permit it hands out.
     pub fn new(cap: u32) -> Arc<Self> {
         Arc::new(Self {
             count: AtomicU32::new(0),
@@ -67,15 +72,21 @@ impl InFlightCap {
         })
     }
 
+    /// The most photos admitted at once (`OP_FRAME_ENGINE_MAX_IN_FLIGHT`).
     pub fn cap(&self) -> u32 {
         self.cap
     }
 
+    /// Photos in flight at this moment.
     pub fn current(&self) -> u32 {
         self.count.load(Ordering::Acquire)
     }
 
     /// Admits one photo, or says how many are in flight when the cap is reached. Never waits.
+    ///
+    /// # Errors
+    ///
+    /// The cap is reached; the error is the number of photos in flight.
     pub fn try_admit(self: &Arc<Self>) -> Result<InFlightPermit, u32> {
         self.count
             .try_update(Ordering::AcqRel, Ordering::Acquire, |n| {
@@ -113,12 +124,15 @@ impl Drop for InFlightPermit {
 /// The deadline of one request: `OP_FRAME_ENGINE_REQUEST_DEADLINE_SECONDS` after it arrived.
 #[derive(Debug, Clone, Copy)]
 pub struct RequestClock {
+    /// When the request reached the front.
     pub arrived: Instant,
+    /// When the request must be answered by, `arrived` plus the deadline seconds.
     pub deadline: Instant,
     seconds: f64,
 }
 
 impl RequestClock {
+    /// A clock for a request that `arrived`, with `deadline_seconds` to spend.
     pub fn start(arrived: Instant, deadline_seconds: f64) -> Self {
         Self {
             arrived,

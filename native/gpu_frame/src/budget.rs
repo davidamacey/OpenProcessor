@@ -15,7 +15,7 @@
 //!   covers 4 TiB), first come first served, each wait bounded by a deadline. It is tokio's
 //!   semaphore, which is fair also across `acquire_many`: a large request at the head of the
 //!   queue holds back later small ones, so a large photo is never starved
-//!   (https://docs.rs/tokio/1.54.1/tokio/sync/struct.Semaphore.html).
+//!   (<https://docs.rs/tokio/1.54.1/tokio/sync/struct.Semaphore.html>).
 
 use std::fmt;
 use std::sync::Arc;
@@ -35,8 +35,11 @@ pub struct DeviceCap {
 /// A charge refused by the cap: the allocation answers out-of-memory (`gpu_memory`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CapExceeded {
+    /// Bytes the refused charge asked for.
     pub need: usize,
+    /// Bytes already counted against the cap when it was refused.
     pub in_use: usize,
+    /// The cap in bytes.
     pub limit: usize,
 }
 
@@ -53,6 +56,7 @@ impl fmt::Display for CapExceeded {
 impl std::error::Error for CapExceeded {}
 
 impl DeviceCap {
+    /// A cap of `limit` bytes with nothing counted, shared by every holder of the returned `Arc`.
     pub fn new(limit: usize) -> Arc<DeviceCap> {
         Arc::new(DeviceCap {
             limit,
@@ -62,6 +66,10 @@ impl DeviceCap {
     }
 
     /// Count `bytes` against the cap, or refuse them without counting.
+    ///
+    /// # Errors
+    ///
+    /// [`CapExceeded`] when `bytes` more would pass the cap (or overflow `usize`).
     pub fn reserve(&self, bytes: usize) -> Result<(), CapExceeded> {
         let mut current = self.in_use.load(Ordering::Relaxed);
         loop {
@@ -96,6 +104,10 @@ impl DeviceCap {
     }
 
     /// [`DeviceCap::reserve`] as a value that releases on drop.
+    ///
+    /// # Errors
+    ///
+    /// [`CapExceeded`] when `bytes` more would pass the cap; nothing is counted then.
     pub fn charge(self: &Arc<Self>, bytes: usize) -> Result<Charge, CapExceeded> {
         self.reserve(bytes)?;
         Ok(Charge {
@@ -104,14 +116,17 @@ impl DeviceCap {
         })
     }
 
+    /// The cap in bytes.
     pub fn limit(&self) -> usize {
         self.limit
     }
 
+    /// Bytes counted against the cap now.
     pub fn in_use(&self) -> usize {
         self.in_use.load(Ordering::Acquire)
     }
 
+    /// The highest `in_use` value reached since creation, in bytes.
     pub fn peak(&self) -> usize {
         self.peak.load(Ordering::Acquire)
     }
@@ -125,6 +140,7 @@ pub struct Charge {
 }
 
 impl Charge {
+    /// The bytes this charge holds against the cap.
     pub fn bytes(&self) -> usize {
         self.bytes
     }
@@ -145,19 +161,23 @@ pub struct HostCount {
 }
 
 impl HostCount {
+    /// Count `bytes` of pinned host memory as in use, and raise the peak when needed.
     pub fn add(&self, bytes: usize) {
         let now = self.in_use.fetch_add(bytes, Ordering::AcqRel) + bytes;
         self.peak.fetch_max(now, Ordering::Relaxed);
     }
 
+    /// Stop counting `bytes` that were counted with [`HostCount::add`].
     pub fn sub(&self, bytes: usize) {
         self.in_use.fetch_sub(bytes, Ordering::AcqRel);
     }
 
+    /// Pinned host bytes counted now.
     pub fn in_use(&self) -> usize {
         self.in_use.load(Ordering::Acquire)
     }
 
+    /// The highest `in_use` value reached since creation, in bytes.
     pub fn peak(&self) -> usize {
         self.peak.load(Ordering::Acquire)
     }
@@ -259,6 +279,11 @@ impl Admission {
 
     /// Take `count` units and `bytes`, waiting in line until `deadline` at the latest. A
     /// deadline already passed takes them only if they are free at once.
+    ///
+    /// # Errors
+    ///
+    /// [`AdmitError::NeverFits`] when `bytes` (as whole KiB) or `count` is larger than the whole
+    /// bound; [`AdmitError::Overload`] when the bound was not free by `deadline`.
     pub async fn admit(
         &self,
         count: u32,
@@ -297,10 +322,12 @@ impl Admission {
         self.held.kib.load(Ordering::Acquire) * 1024
     }
 
+    /// The count bound given at creation.
     pub fn max_count(&self) -> u32 {
         self.max_count
     }
 
+    /// The byte bound in bytes, rounded down to whole KiB.
     pub fn budget_bytes(&self) -> u64 {
         u64::from(self.total_kib) * 1024
     }

@@ -2,7 +2,7 @@
 //! (the interval the bake-off's sampler and the throwaway pipeline used). The device is opened by
 //! its PCI bus id, so a row can only describe the card it names. The window arithmetic is pure
 //! and tested with a fake source; the NVML source is the thin shell around it
-//! (https://docs.rs/nvml-wrapper/0.13.0/nvml_wrapper/struct.Device.html).
+//! (<https://docs.rs/nvml-wrapper/0.13.0/nvml_wrapper/struct.Device.html>).
 //!
 //! `utilization_rates().gpu` is NVML's "percent of time over the past sample period during which
 //! one or more kernels was executing": the mean of the samples inside the window is the card's
@@ -27,50 +27,72 @@ const MIB: u64 = 1 << 20;
 /// One process's device memory at one sample.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcessMem {
+    /// The host process id NVML reports.
     pub pid: u32,
+    /// Device memory the process holds, in bytes.
     pub used_bytes: u64,
 }
 
 /// One read of the card.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reading {
+    /// Share of the last sample period in which a kernel ran, in percent (0 to 100).
     pub busy_pct: u32,
+    /// Device memory in use on the whole card, in bytes.
     pub mem_used_bytes: u64,
+    /// Per-process device memory of the compute processes on the card.
     pub processes: Vec<ProcessMem>,
 }
 
 /// Where readings come from.
 pub trait Source: Send + 'static {
+    /// Read the card once.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` with the reason when the card cannot be read.
     fn read(&mut self) -> Result<Reading, String>;
 }
 
 /// What identifies the card and its link, recorded in every row.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Identity {
+    /// The card's product name.
     pub name: String,
+    /// The PCI bus id as NVML reports it.
     pub bus_id: String,
+    /// The driver version; empty when NVML does not give it.
     pub driver_version: String,
+    /// Current PCIe link generation; null when NVML does not give it.
     pub pcie_link_gen: Option<u32>,
+    /// Current PCIe link width in lanes; null when NVML does not give it.
     pub pcie_link_width: Option<u32>,
 }
 
 /// One process's peak device memory inside a window.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ProcessPeak {
+    /// The host process id NVML reports.
     pub pid: u32,
+    /// Largest device memory the process held in any sample of the window, in MiB.
     pub peak_mib: u64,
 }
 
 /// What the card did inside a window.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct GpuWindow {
+    /// Sampling interval, in milliseconds.
     pub interval_ms: u64,
+    /// Samples that fell inside the window.
     pub samples: usize,
+    /// Mean of the samples' busy share, in percent.
     pub busy_pct_mean: f64,
+    /// Largest busy share of any sample, in percent.
     pub busy_pct_max: u32,
     /// Card memory in use before the first window sample, in the sampler's first read (the idle
     /// baseline when the sampler starts before any load).
     pub mem_used_mib_idle: u64,
+    /// Largest card memory in use of any sample in the window, in MiB.
     pub mem_used_mib_peak: u64,
     /// Peak per process, largest first.
     pub processes: Vec<ProcessPeak>,
@@ -138,6 +160,7 @@ pub struct Sampler {
 }
 
 impl Sampler {
+    /// Start the thread that reads `source` every `interval`; the thread stops when the sampler is dropped. A failed read is kept for `read_errors`.
     pub fn start<S: Source>(mut source: S, interval: Duration) -> Sampler {
         let samples = Arc::new(Mutex::new(Vec::new()));
         let stop = Arc::new(AtomicBool::new(false));
@@ -198,6 +221,10 @@ pub struct NvmlSource {
 
 impl NvmlSource {
     /// Open NVML (`libnvidia-ml.so.1`, loaded at run time) and the card at `bus_id`.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` when NVML cannot be loaded or initialised, no card has `bus_id`, or the card's name or PCI information cannot be read.
     pub fn open(bus_id: &str) -> Result<(NvmlSource, Identity), String> {
         let nvml = Nvml::builder()
             .lib_path(std::ffi::OsStr::new("libnvidia-ml.so.1"))
@@ -260,11 +287,15 @@ impl Source for NvmlSource {
 /// container. Both are empty when the process is gone.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ProcessLabel {
+    /// The host process id NVML reports.
     pub pid: u32,
+    /// The process's `comm` name; empty when the process is gone.
     pub command: String,
+    /// The first line of the process's `/proc/<pid>/cgroup`; empty when the process is gone.
     pub cgroup: String,
 }
 
+/// The command and cgroup of host process `pid`, read from `/proc`.
 pub fn label(pid: u32) -> ProcessLabel {
     let read = |file: &str| fs::read_to_string(format!("/proc/{pid}/{file}")).unwrap_or_default();
     ProcessLabel {

@@ -29,9 +29,17 @@ pub fn aligned(bytes: usize) -> Option<usize> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SliceError {
     /// No room within the wait: a retryable overload (`RESOURCE_EXHAUSTED`).
-    Overload { need: usize },
+    Overload {
+        /// Bytes asked for.
+        need: usize,
+    },
     /// Larger than the whole region: a size setting, never load (`over_budget`).
-    TooLarge { need: usize, region: usize },
+    TooLarge {
+        /// Bytes asked for.
+        need: usize,
+        /// The whole region's size in bytes.
+        region: usize,
+    },
 }
 
 impl fmt::Display for SliceError {
@@ -98,14 +106,17 @@ impl FirstFit {
         }
     }
 
+    /// The slab's total size in bytes.
     pub fn size(&self) -> usize {
         self.size
     }
 
+    /// Bytes handed out now, after rounding up to the alignment.
     pub fn in_use(&self) -> usize {
         self.in_use
     }
 
+    /// The highest `in_use` value reached since creation, in bytes.
     pub fn peak(&self) -> usize {
         self.peak
     }
@@ -128,14 +139,18 @@ pub struct Slab {
 /// What the slab holds now, for metrics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SlabUsage {
+    /// The slab's total size in bytes.
     pub size: usize,
+    /// Bytes handed out now.
     pub in_use: usize,
+    /// The highest bytes handed out at once since creation.
     pub peak: usize,
     /// Requests that had to wait at least once.
     pub waits: u64,
 }
 
 impl Slab {
+    /// A slab of `size` bytes, or `None` when `size` is not a positive multiple of [`ALIGN`].
     pub fn new(size: usize) -> Option<Slab> {
         Some(Slab {
             list: Mutex::new(FirstFit::new(size)?),
@@ -163,6 +178,11 @@ impl Slab {
     }
 
     /// The offset of `bytes` (rounded up to [`ALIGN`]), waiting at most `wait`; for async callers.
+    ///
+    /// # Errors
+    ///
+    /// [`SliceError::TooLarge`] when the rounded size is larger than the slab;
+    /// [`SliceError::Overload`] when no block was free within `wait`.
     pub async fn take(&self, bytes: usize, wait: Duration) -> Result<usize, SliceError> {
         let n = self.need(bytes)?;
         let deadline = tokio::time::Instant::now() + wait;
@@ -186,6 +206,11 @@ impl Slab {
     }
 
     /// The same for a pool thread: blocks the calling thread at most `wait`.
+    ///
+    /// # Errors
+    ///
+    /// [`SliceError::TooLarge`] when the rounded size is larger than the slab;
+    /// [`SliceError::Overload`] when no block was free within `wait`.
     pub fn take_blocking(&self, bytes: usize, wait: Duration) -> Result<usize, SliceError> {
         let n = self.need(bytes)?;
         let deadline = std::time::Instant::now() + wait;
@@ -220,6 +245,7 @@ impl Slab {
         self.notify.notify_waiters();
     }
 
+    /// A snapshot of the slab's size, use, peak and wait count.
     pub fn usage(&self) -> SlabUsage {
         let list = self.lock();
         SlabUsage {

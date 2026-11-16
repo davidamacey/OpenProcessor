@@ -33,14 +33,22 @@ pub fn parse_paths(text: &str) -> Vec<PathBuf> {
 /// A list held in memory.
 #[derive(Debug)]
 pub struct PhotoList {
+    /// The list file as given on the command line.
     pub path: PathBuf,
+    /// Lowercase hexadecimal SHA-256 of the list file's bytes, so a row names the exact list.
     pub sha256: String,
     /// One entry per photo: the encoded file.
     pub photos: Vec<Bytes>,
+    /// Summed size of the photo files, in bytes.
     pub total_bytes: u64,
 }
 
 impl PhotoList {
+    /// Read the list at `path` and every photo it names into memory.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` when the list or a photo cannot be read, the list is not UTF-8, or it names no photo.
     pub fn load(path: &Path) -> io::Result<PhotoList> {
         let raw = fs::read(path)?;
         let text = String::from_utf8(raw.clone())
