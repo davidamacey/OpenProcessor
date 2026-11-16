@@ -407,7 +407,7 @@ CREATE TABLE item_state (                    -- one narrow row per item (plan 15
   region_seen_seq integer NOT NULL DEFAULT 0,   -- fold output (Q9): the machine-box generation the fold shows; the claim writer stores it as a claim's region_seq
   geometry_pinned boolean NOT NULL DEFAULT false,   -- fold output (Q11): bbox is the box a person saw, exactly while today's is_locked_item holds
   moved_partition_id uuid NULL, moved_cluster_uid uuid NULL,   -- a live class_moved (layer 5): read only while that partition serves
-  created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL   -- updated_at: see the write rules below
+  created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL   -- created_at: copy of items.created_at (15b section 7 sort path); updated_at: see the write rules below
 );  -- no UNIQUE (project_id, crop_id): items holds it, the copy here is for sort order only (m3)
 -- 0011 adds fold outputs that summary keys and review tabs count (15b 6.2), not indexed:
 --   detector_class_name text NULL, detector_confidence real NULL   (the detection used for machine geometry, 3.4 step 6)
@@ -567,7 +567,7 @@ writer (15b section 6). "Spike" names the gate A index the row comes from (`note
 | X4 | `item_state` | `project_id, class_confidence, crop_id` | `NOT class_validated AND NOT excluded AND review_dismissed_at IS NULL` (the rows that need review; it shrinks as the queue drains) | 2 (every queue's capped count and its sort path, `check_machine`), 1 (`confidence` sort on review-predicate lists) | spike `o_review_conf`, re-keyed: new | at most 7 M rows x 52 B ≈ 0.4 GB |
 | X5 | `item_state` | `class_op_id` | `class_op_id IS NOT NULL` | 46 (section 2.4, `0010`) | `0010`, kept | ≈ 0.1 GB |
 | X6 | `box_state` | `project_id, state, detector, item_key DESC` | | 6 (box rows, 15b section 9), 52 | new | 5 M x 60 B ≈ 0.3 GB |
-| X7 | `box_state` | GIN `text_fold gin_trgm_ops` | `text_fold IS NOT NULL` | 2, 6 and 1 text predicates, 53 (15b section 8) | spike `b_text_trgm` (`pg_ext`, 10 M pending) | ≈ 0.1 GB |
+| X7 | `txt.item_box_text` (the owner-read search copy of the items' box texts, 15b section 8, revision 3.1) | GIN `(project_id, folds gin_trgm_ops)` (`btree_gin` for the uuid column), `fastupdate = on`, `gin_pending_list_limit = 512` | none (the copy holds only items with text) | fragment and open-alphabet fuzzy predicates of 2, 6 and 1, through `txt.fragment_items` and `txt.fuzzy_items` (row security keeps `LIKE` off an index on `box_state`; the copy's owner reads it without a policy) | round 3 M9 (108 MB on `box_state` at 10 M) | ≈ 0.1 GB, plus the copy ≈ 0.2 GB |
 | X8 | `detections` | `project_id, analyser_id, confidence DESC NULLS LAST, item_key DESC` | | `detector_confidence` sort, `to_label` default (15b section 7) | new | 10 M x 48 B ≈ 0.55 GB |
 | X9 | `photos` | `project_id, photo_key` | | 24 (`indexed_at` sorts as insert order), 51, 55, 58 and every photo walk (`analysers.photos_needing`) | new | 3 M x 36 B ≈ 0.15 GB |
 | X10 | `photos` | BRIN `created_at` | | 31d (ingest status, 14 days), 79 (new photos since) | new ([BRIN](https://www.postgresql.org/docs/18/brin-intro.html): insert-ordered time) | < 1 MB |
@@ -585,14 +585,15 @@ writer (15b section 6). "Spike" names the gate A index the row comes from (`note
 | X22 | `cluster_memberships` | `partition_id, cluster_uid, score DESC NULLS LAST, subject_key DESC` (one direction: a backward scan serves the ascending form, 15b P8) | | 1 cluster filter, 10 rebuild, 12, 13, 41, 77, 6 inside a box cluster; replaces 02d `ix_cluster_memberships_cluster` | spike `pl_cluster` (`pg_pl` pending) | per retained partition 10 M x 44 B ≈ 0.5 GB |
 | X23 | `cluster_memberships` | `partition_id, score, subject_key` | | 2 (cluster-fit sorts), 8 (`core_first`) | spike `pl_score` (`pg_pl` pending) | ≈ 0.45 GB per partition |
 | X24 | `photo_counts` | `project_id, unlabeled DESC, photo_key DESC` | | 24 (`unlabeled_count` sorts, `label_state` filter) | new | 0.15 GB |
-| X25 | `text_lines` | GIN `lower(text) gin_trgm_ops` | `item_key IS NOT NULL` | item text predicate of 1 and 2 (15b section 8) | new | small |
+| X25 | `txt.item_line_text` (the owner-read search copy of the items' OCR tokens, 15b section 8, revision 3.1) | GIN `(project_id, words gin_trgm_ops)`, `fastupdate = on`, `gin_pending_list_limit = 512` | none (the copy holds only items with lines) | item text predicate of 1 and 2, through `txt.word_items` | new | small |
 | X26 | `box_state` | `project_id, state, item_key DESC` | | 6 with a state and no detector | new (review M6) | 0.25 GB |
 | X27 | `box_state` | `project_id, detector, item_key DESC` | | 6 with a detector and no state | new (review M6) | 0.25 GB |
 | X28 | `items` | `project_id, created_at DESC, crop_id DESC` | | `created_at` sorts | new (review M3) | 0.6 GB |
 | X29 | `items` | `project_id, sort_area, crop_id` | | `crop_area_norm` sorts | new (review M3) | 0.5 GB |
 | X30 | `items` | `project_id, sort_rank, crop_id` | | `crop_rank_in_image` sorts | new (review M3) | 0.45 GB |
 | X31 | `detections` | `project_id, analyser_id, blur_lap_ratio, item_key` | | `blur_lap_ratio` sorts | new (review M3) | 0.5 GB |
-| X32 | `detections` | `project_id, analyser_id, class_name, item_key` | | `detector_class_name` sorts | new (review M3) | 0.55 GB |
+| X32 | `detections` | `project_id, analyser_id, class_name, item_key` | | `detector_class_name` sorts; the detector-class filter and its capped count (`EXISTS` on `detections`, 15b P1) | new (review M3) | 0.55 GB |
+| X33 | `box_state` | `project_id, text_fold` | `text_fold IS NOT NULL` | exact, fuzzy (the distance-1 variant list) and same-text predicates of 2, 6 and 1 (15b section 8, revision 2; revision 3: X7 left `box_state`, so every equality form needs X33) | round 3 M9: equality on X7 under row security 64 to 170 ms for variant lists | 5 M x 40 B ≈ 0.2 GB |
 
 **`item_state` holds exactly five B-trees besides its key** (X1 to X5). Sort values a label never
 changes live on `items` and `detections` and are indexed there (X8, X28 to X32), where a label
@@ -613,7 +614,8 @@ modified"): the price of the default "Recently updated" order; machine-only chan
 **Summary tables**: base rows, the insert-only delta log `sum_deltas`, the `_now` views, the
 compactor and the rebuild are in 15b section 6. `sum_items`, `sum_review`, `sum_region`, `sum_box`,
 `sum_photos`, `photo_counts`, `sum_deltas` and their views are created by `0011`; `sum_cluster`,
-`sum_cluster_class`, `sum_cluster_review`, `sum_cluster_dup` with X22 and X23 by
+`sum_cluster_class`, `sum_cluster_review`, `sum_cluster_dup`, the card rows `sum_cluster_card` (15b
+revision 2) with X22 and X23 by
 `0016_cluster_cutover`, because they need `cluster_memberships.subject_key` (section 2.3). Writers
 only insert delta rows, so no summary row and no advisory lock enters the lock order of section 7.
 
@@ -625,7 +627,7 @@ classes in the most-common-values list) ([CREATE STATISTICS](https://www.postgre
 
 | Table | fillfactor | autovacuum | Reason |
 |---|---|---|---|
-| `item_state` | 100 until 15b section 13 M5 | `0010`'s: scale factor 0.01, threshold 1,000, cost limit 2,000 | a person-visible change moves `updated_at` (X1, X2) and is never HOT; machine-only changes can be HOT (2.4) only with free space on the page, so S1a-i sets the fillfactor from M5's HOT share; dead versions arrive at label rate, hence vacuum at 1 % with ten times the default work ([autovacuum](https://www.postgresql.org/docs/18/runtime-config-vacuum.html)) |
+| `item_state` | 90 (15b section 14.2: region-only updates 100 % HOT at 90, 6.2 % at 100, sparse updates; 80 if round 4 R4-7 shows under 90 % HOT beside labels; a dense region re-run under 90 % goes to the coordinator, 15b 14.2) | `0010`'s: scale factor 0.01, threshold 1,000, cost limit 2,000 | a person-visible change moves `updated_at` (X1, X2) and is never HOT; machine-only changes can be HOT (2.4) only with free space on the page, so the fillfactor is round 3 M5's (90), confirmed or lowered by R4-7 in the sparse and the dense regime; dead versions arrive at label rate, hence vacuum at 1 % with ten times the default work ([autovacuum](https://www.postgresql.org/docs/18/runtime-config-vacuum.html)) |
 | `box_state` | 90 | `0010`'s | a region re-run that moves a box or changes its score without a state, detector or text change touches no indexed column and can stay HOT |
 | `class_opinions`, `item_region_results`, `probe_predictions`, `item_scores`, `item_projections`, `assist_answers` | 90 | default | a re-run replaces values that no index holds (status leaves X15 only when pending ends) |
 | `analysis_ledger` | 90 | default | `updated_at`, `reason`, `analyser_id` change on re-runs; `state` leaves X16 when done |
@@ -635,7 +637,14 @@ classes in the most-common-values list) ([CREATE STATISTICS](https://www.postgre
 | `photo_counts` | 90 | default | `unlabeled` is in X24, so a label is not HOT here; 90 keeps the new version on the page |
 | `claims`, `photos`, `detections`, `text_lines`, vector tables | 100 | `claims` insert scale factor 0.01 (`0010`) | insert-mostly |
 
-**Migration `0011_storage_indexes`** (slice S1a-i, 15c): X1 to X21, X24 to X32; the drop of
+**Migration `0011_storage_indexes`** (slice S1a-i, 15c; Rust slice R1b): checks that `pg_trgm` is
+installed (the bootstrap installs it with `0010`, section 12); X1 to X6, X8 to X21, X24, X26 to X33;
+`op_bound_project_strict` and the tightened `op_scope_project` (an empty project id raises); under
+`SET ROLE op_text_owner`, schema `txt`'s search copies `item_box_text` and `item_line_text` with
+row security enabled and not forced, X7 and X25 on them, and the seven definer functions
+(`fragment_items`, `word_items`, `fuzzy_items`, `box_text_has`, `line_text_has`, `put_box_text`,
+`put_line_text`), all from the one file `src/db/sql/txt_search.sql` (15b section 8, revision 3.1; the
+role, the schema and the extensions come from the bootstrap, 02a 1.5); the drop of
 `ix_item_state_project_id`; the `items` and `item_state` columns of 2.3 and 2.4; the summary tables,
 `sum_deltas` and views above with RLS(02a); the statistics object and the column target; the
 fillfactor and autovacuum settings. The tables are empty when it runs (the
@@ -1343,7 +1352,7 @@ CREATE TABLE erasure_jobs (
 |---|---|
 | `photos` | the root delete |
 | `photo_provenance`, `analysis_ledger`, `photo_capture`, `items`, `detections`, `text_lines`, `faces`, `claims` (`photo_key`), `photo_state`, `photo_files`, `photo_derivatives`, `photo_signals`, `photo_places` | `ON DELETE CASCADE` on `photo_key` |
-| `class_opinions`, `item_region_results`, `region_boxes`, `box_texts`, `probe_predictions`, `item_scores`, `item_projections`, `assist_answers`, `item_notes`, `item_state`, `box_state`, `face_state` | cascade through `items` / `faces` |
+| `class_opinions`, `item_region_results`, `region_boxes`, `box_texts`, `probe_predictions`, `item_scores`, `item_projections`, `assist_answers`, `item_notes`, `item_state`, `box_state`, `face_state`, `txt.item_box_text`, `txt.item_line_text` (the search copies, 15b section 8: foreign keys `ON DELETE CASCADE` to `items` and to `projects`, same transaction as the `items` rows; erased text stays in dead tuples and the GIN pending list until vacuum, as in any table, and the erasure record says so) | cascade through `items` / `faces` |
 | vector tables (`embedding_spaces.vector_table`), by `target` | `DELETE ... WHERE subject_key = ANY(photo, item, box and face keys)`, before the photo delete |
 | `vector_gaps`, `cluster_memberships`, `near_dup_members`, `near_dup_edges`, `holdout_near_dup_moves`, `entity_edges`, `membership_state` | explicit delete by subject key (no foreign key by design) |
 | `claims` that name the photo without `photo_key` (`subject_pair_id`, or `subject_crop_id` of a pair) | explicit delete by wire id |
@@ -1356,11 +1365,11 @@ A **person**: its `entities` row and what cascades from it (`entity_state`, `ent
 `membership_state`, claims by `subject_entity_key`), the faces assigned or merged to it with their
 vectors, `face_state` and claims (`subject_face_id`), exclusion rules and memories about it, cached
 face crops; the photos stay. A **project**: today's batched delete plus `DROP TABLE` of its `vec`
-tables. **Tests**: `test_erasure_catalogue_complete` fails when a table with a column named
+tables. **Tests**: `test_erasure_catalogue_complete` scans every schema of the database that holds application tables (`public` and `txt`) and fails when a table with a column named
 `photo_key`, `item_key`, `box_key`, `face_key`, `entity_key`, `subject_key`, `subject_*_id`,
 `image_id`, `crop_id`, `face_id` or `member_id`, or a vector table named by `embedding_spaces`, is
 missing from the catalogue; `test_erasure_leaves_nothing` erases a seeded photo and person and finds
-no row, no file and no nearest-neighbour hit on a deleted vector (photo_library 15 exit criterion).
+no row (the two search copies included), no file, no hit from `txt.fragment_items` or `txt.word_items` and no nearest-neighbour hit on a deleted vector (photo_library 15 exit criterion).
 
 ## 9. Migration
 
@@ -1370,7 +1379,7 @@ section 0).
 
 | Revision | Lane (plan 15 section 10) | Creates or changes |
 |---|---|---|
-| `0010_storage_record` | step 1 | `CREATE EXTENSION IF NOT EXISTS vector` and `pg_trgm` (m5: the image is the pgvector project's `pgvector/pgvector:0.8.7-pg18-trixie`, pinned in 01 (decided in the database lane, round 3); `pg_trgm` is a trusted contrib module, [pg_trgm](https://www.postgresql.org/docs/18/pgtrgm.html); a test runs both statements as `op_owner` on the real image, and if pgvector needs more, `db-migrate`'s bootstrap step creates it as `op_super`); schema `vec` with `CREATE` for `op_vector` only; every table of sections 2 and 8 with its keys, foreign-key indexes, policies and triggers (`claims_append_only`, `analysers_immutable`, the erasure guard `op_erasure_allows`); the `claim_kinds` rows; the `label_operations` changes; `dataset_imports.dataset_name`; the `embedding_spaces`, `cluster_memberships`, `near_dup_*`, `holdout_near_dup_moves`, `dataset_import_images` changes; grants to `op_app`. The role `op_vector` is created by `db-migrate`'s bootstrap with the other roles (02a 1.5), from its own secret file. Existing space rows are reset to `pending`, so the embedding-space job creates their tables (data is re-ingested). The indexes of section 2.6 come in the revision the physical-design pass writes |
+| `0010_storage_record` | step 1 | `CREATE EXTENSION IF NOT EXISTS vector`, `pg_trgm` and `btree_gin` (m5: the image is the pgvector project's `pgvector/pgvector:0.8.7-pg18-trixie`, pinned in 01 (decided in the database lane, round 3); `pg_trgm` is a trusted contrib module, [pg_trgm](https://www.postgresql.org/docs/18/pgtrgm.html); a test runs both statements as `op_owner` on the real image, and if pgvector needs more, `db-migrate`'s bootstrap step creates it as `op_super`); schema `vec` with `CREATE` for `op_vector` only; every table of sections 2 and 8 with its keys, foreign-key indexes, policies and triggers (`claims_append_only`, `analysers_immutable`, the erasure guard `op_erasure_allows`); the `claim_kinds` rows; the `label_operations` changes; `dataset_imports.dataset_name`; the `embedding_spaces`, `cluster_memberships`, `near_dup_*`, `holdout_near_dup_moves`, `dataset_import_images` changes; grants to `op_app`. The role `op_vector` is created by `db-migrate`'s bootstrap with the other roles (02a 1.5), from its own secret file. Existing space rows are reset to `pending`, so the embedding-space job creates their tables (data is re-ingested). The indexes of section 2.6 come in the revision the physical-design pass writes |
 | `0011_ingest_cutover` | step 2 | drops `image_contents` |
 | `0012_claims_cutover` | step 3 | drops `label_operation_members`, `near_dup_decisions` |
 | `0013_results_cutover` | step 4 | drops `search_projection_tasks` |
@@ -1498,7 +1507,7 @@ failed at `CREATE SCHEMA vec` (`permission denied for database`).
 
 | Decision | Rule now | Answered in |
 |---|---|---|
-| Placement of the privileged steps | the owner role has no `CREATE` on the database, so the superuser bootstrap (`src/db/roles.py`: `ensure_roles`, `prepare_database`) creates the role `op_vector` (secret `OP_DB_VECTOR_PASSWORD_FILE`), installs `pg_trgm` and, when the image offers it, `vector`, and creates the schema `vec` owned by `op_owner`; `apply_grants` (as the owner) gives `op_vector` `USAGE, CREATE` on `vec` and `REFERENCES (id)` on `projects`; the migration creates none of them, checks them, and fails naming the bootstrap step | 6.1; 12 `0010_storage_record` step 1; 02a 1.5 |
+| Placement of the privileged steps | the owner role has no `CREATE` on the database, so the superuser bootstrap (`src/db/roles.py`: `ensure_roles`, `prepare_database`) creates the role `op_vector` (secret `OP_DB_VECTOR_PASSWORD_FILE`), installs `pg_trgm`, `btree_gin` and, when the image offers it, `vector`, and creates the schema `vec` owned by `op_owner`; `apply_grants` (as the owner) gives `op_vector` `USAGE, CREATE` on `vec` and `REFERENCES (id)` on `projects`; the migration creates none of them, checks them, and fails naming the bootstrap step. Revision 3 of 15b adds to the same bootstrap the role `op_text_owner` (no login, no attribute), the schema `txt` owned by it and `op_owner`'s membership in it `WITH SET`, and revision 3.1 the extension `btree_gin` (15b section 8); on a managed service the bootstrap runs as the master user, and no step needs a superuser (02a 1.5) | 6.1; 12 `0010_storage_record` step 1; 02a 1.5 |
 | `vec` outlives a downgrade | the schema belongs to the bootstrap, so `downgrade()` no longer drops it | 6.1 |
 
 ### Reads and slices review

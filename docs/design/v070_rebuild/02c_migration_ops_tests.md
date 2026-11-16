@@ -340,11 +340,98 @@ under its own project name; because no service has a `container_name`, the harne
 
 | Command | Does |
 |---|---|
-| `openprocessor db backup [--out <dir>]` | `docker compose -p <p> exec -T postgres pg_dump -U op_owner -d openprocessor -Fc` to `${OP_DB_BACKUP_DIR:-<install>/backups/postgres}/openprocessor-<utc>.dump` (`OP_DB_BACKUP_DIR` may name another mount or disk, so a backup does not share the failure of the data volume; the directory must be writable by the backup user and `db verify` reports a backup directory on the same filesystem as the Postgres volume; custom format: compressed, restorable selectively; consistent without blocking writers: [pg_dump](https://www.postgresql.org/docs/current/app-pgdump.html)); keeps the newest `OP_DB_BACKUP_KEEP` (default 7) |
-| `openprocessor db restore <file> [--yes]` | stops the API and workers, runs `db-migrate`'s role bootstrap (so `op_owner` and `op_app` exist on a fresh host), `pg_restore --clean --if-exists --no-owner --no-privileges --role=op_owner -d openprocessor` (review fix R-13: no grant is restored before its role exists), runs `db-migrate` (it re-applies the grants and upgrades a dump from an older schema), **`TRUNCATE events`** (D-73: `events.xid` defaults to `pg_current_xact_id()`, which belongs to one cluster's transaction counter and does not carry across a restore into a new cluster, so old cursors would compare wrongly; the rows are only the 24-hour UI feed and the tables of each topic are the record), runs `openprocessor db verify`, starts the stack |
-| `openprocessor db verify` | the D-47 class reconciliation, `project_indexes` vs OpenSearch, `storage_key` existence for promotions and training runs; report only |
+| `openprocessor db backup [--out <dir>]` | `docker compose -p <p> exec -T postgres pg_dump -U op_owner -d openprocessor -Fc --exclude-schema=txt --exclude-extension='*'` ([pg_dump](https://www.postgresql.org/docs/18/app-pgdump.html): both options leave their objects out: the `txt` search copies are derived from `box_state` and `text_lines` and rebuilt on restore, 15b section 8; the extensions come from the bootstrap, so `pg_restore` never has to drop or create one as `op_owner`). **Managed service**, where `op_owner` has no `BYPASSRLS`: the same command plus `--enable-row-security`, run with `PGOPTIONS='-c op.scope=deployment'` on a direct connection to the instance, under which every policy admits every row (02a 1.4); without the option pg_dump sets `row_security` off and "an error is thrown" for a table the role cannot bypass, which is the fail-closed behaviour wanted. A test (02a 1.4) asserts that a deployment-scope count equals the owner's count on every table, so the dump cannot silently omit rows. Output to `${OP_DB_BACKUP_DIR:-<install>/backups/postgres}/openprocessor-<utc>.dump` (`OP_DB_BACKUP_DIR` may name another mount or disk, so a backup does not share the failure of the data volume; the directory must be writable by the backup user and `db verify` reports a backup directory on the same filesystem as the Postgres volume; custom format: compressed, restorable selectively; consistent without blocking writers); keeps the newest `OP_DB_BACKUP_KEEP` (default 7) |
+| `openprocessor db restore <file> [--yes]` | the numbered procedure below; the stack is down from step 1 to step 11 |
+| `openprocessor db verify` | the D-47 class reconciliation, `project_indexes` vs OpenSearch, `storage_key` existence for promotions and training runs; report only, except the isolation checks of restore step 10, which are fatal |
 | `openprocessor upgrade` | always takes a backup first when Postgres exists |
 | optional beat task | `op.periodic.db_backup` when `OP_DB_BACKUP_INTERVAL_H` is set (off by default) |
+
+**Restore, step by step** (`openprocessor db restore`; second review of 15b, B1 and M2; decision 2).
+The same eleven steps run on a self-hosted and on a managed service; they differ only in the backup
+flags above and in who runs the bootstrap (02a 1.5). **Design.** A full restore (schema and data)
+creates each table itself and loads its rows before row security is switched on: `pg_dump` writes a
+table's `ALTER TABLE ... FORCE ROW LEVEL SECURITY` with the table, and its `ENABLE ROW LEVEL
+SECURITY` and policies as post-data entries (`pg_dump.c`: the "ROW SECURITY" and "POLICY" entries
+are post-data; `pg_restore --list` shows them after every `TABLE DATA` entry), and a table whose
+`relrowsecurity` is false is not subject to row security whoever owns it, `FORCE` included
+(`check_enable_rls`, `rls.c`). So the load needs neither `BYPASSRLS` nor the deployment scope, and
+`FORCE` is never switched off: isolation is relaxed at no moment. The review read `pg_restore`'s
+`--enable-row-security` note ("`COPY FROM` does not support row security"; [COPY](https://www.postgresql.org/docs/18/sql-copy.html):
+"`COPY FROM` is not supported for tables with row-level security"), which applies to a data-only
+restore into tables that already have it on; the page says the option "is relevant only when
+restoring the contents of a table which has row security" ([pg_restore](https://www.postgresql.org/docs/18/app-pgrestore.html)).
+The ordering is read from the source, not from a documentation sentence: a test asserts it on every
+dump of the test suite (`pg_restore --list`: no `ROW SECURITY` entry before the last `TABLE DATA`),
+and C-1 (15b section 15) restores on a real managed instance.
+
+1. Stop the API and workers. Refuse to go on if `pg_stat_activity` shows any session of `op_app`:
+   nobody but the restore connections can read or write while the steps run.
+2. **Bootstrap** as `op_super` (managed: the master user): the roles, `pg_trgm`, `btree_gin`,
+   `vector`, the schema `vec`, the roles' memberships (02a 1.5). Then
+   `SET ROLE op_text_owner; DROP SCHEMA IF EXISTS txt CASCADE; RESET ROLE;` and the bootstrap's
+   `CREATE SCHEMA txt AUTHORIZATION op_text_owner` again: the copies hold foreign keys to `items`,
+   so `pg_restore --clean` would fail at `DROP TABLE items` while they exist, and they are derived
+   (unverified in the documentation: the restore-over-a-live-database test and C-1 run it). Then,
+   as `op_owner`, `ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC` ([ALTER DEFAULT
+   PRIVILEGES](https://www.postgresql.org/docs/18/sql-alterdefaultprivileges.html): "for all functions
+   subsequently created by" the role), so the functions step 3 creates start without the
+   default `EXECUTE` for `PUBLIC` ([CREATE FUNCTION](https://www.postgresql.org/docs/18/sql-createfunction.html)).
+   The page does not say `pg_restore` honours it; step 10 checks `proacl` whatever it does.
+3. `pg_restore --clean --if-exists --no-owner --no-privileges --role=op_owner --exit-on-error -j <n>
+   -d openprocessor <file>` (review fix R-13: no grant is restored before its role exists; the dump
+   holds no `txt` object and no extension). No `--enable-row-security`, no `--single-transaction`
+   (the page: incompatible with `-j`). **`--no-privileges` drops every grant of the dump**; step 5
+   gives them back.
+4. `alembic upgrade head` as `op_owner` (a dump from an older revision is upgraded; `0011`, if it
+   runs, runs the SQL file of 15b section 8 whole).
+5. **`apply_grants`** as `op_owner`, the whole list of 02a 1.5, including the ones `txt` depends on and
+   that sit outside the file: `EXECUTE` on `op_bound_project_strict` to `op_app` and `op_text_owner`;
+   `SELECT (item_key, project_id)` and `REFERENCES (item_key)` on `items` and `REFERENCES (id)` on
+   `projects` to `op_text_owner`. They must exist before step 6, whose foreign keys need them.
+6. **The `txt` step**: the file `src/db/sql/txt_search.sql` (the one place the function text lives,
+   15b section 8), part `tables` then part `functions`, each under `SET ROLE op_text_owner`. The
+   functions part is one transaction: create, `REVOKE ... FROM PUBLIC`, `GRANT USAGE` on `txt` and
+   `EXECUTE` to `op_app`, so a recreated function is never executable by `PUBLIC`, not for an
+   instant ([CREATE FUNCTION](https://www.postgresql.org/docs/18/sql-createfunction.html): "create it
+   and set the privileges within a single transaction"). The indexes are not built yet.
+7. **Refill** (`text_search.refill`), run as **`op_app`** (the CLI in the api image; the API itself
+   stays down): for each project, inside `project_tx`, keyset batches of 5,000 items calling
+   `txt.put_box_text` (the arrays built by the same SQL `store_states` uses) and `txt.put_line_text`
+   (tokens from the domain tokeniser). `op_app` is the role because it is the only one with
+   `EXECUTE` on the writers (it has nothing on the tables), so every row passes the same project
+   checks as a live write.
+8. Part `indexes` of the file, as `op_text_owner`: X7 and X25 are built once over the filled copies,
+   which is far cheaper than a GIN insert per row (R4-0 times the build); then `ANALYZE` of the
+   copies and of the restored tables (the `pg_restore` page: "it may be useful to run `ANALYZE`").
+9. `TRUNCATE events` (D-73: `events.xid` defaults to `pg_current_xact_id()`, which belongs to one
+   cluster's transaction counter and does not carry across a restore into a new cluster, so old
+   cursors would compare wrongly; the rows are only the 24-hour UI feed and the tables of each topic
+   are the record).
+10. `openprocessor db verify`, whose failures here are fatal and stop step 11: every table with a
+    policy has `relrowsecurity` and `relforcerowsecurity` except the two copies, which have the
+    first and not the second; no function of `public` or `txt` that is `SECURITY DEFINER` has a
+    `PUBLIC` entry in `proacl`; every object of `txt` is owned by `op_text_owner`; the `prosrc` of
+    each `txt` function equals the file's; `op_app` holds exactly `USAGE` on `txt`, `EXECUTE` on its
+    functions and nothing on its tables; each copy's row count per project equals its source's. The
+    API's start check runs the same flag and `proacl` queries and refuses to start otherwise.
+11. Start the stack.
+
+**Weighed** (decision 2). (A) The procedure above: no relaxation, `COPY` speed, parallel (`-j`).
+(B) `NO FORCE` around a *data-only* restore into existing tables, the fallback if C-1 meets
+"COPY FROM not supported": `ALTER TABLE ... NO FORCE ROW LEVEL SECURITY` on every table of a list
+recorded first, restore, `FORCE` again from the list ([ALTER TABLE](https://www.postgresql.org/docs/18/sql-altertable.html)).
+`FORCE` binds only the table's owner; `op_app` is bound by the policy either way ([row
+security](https://www.postgresql.org/docs/18/ddl-rowsecurity.html): "table owners normally bypass
+row security ... unless `FORCE`"), so the window relaxes the check for `op_owner` alone, which can
+set the deployment scope in any case; it runs with the stack down, `op_app` set `NOLOGIN` and its
+sessions ended, and a crash leaves the tables unforced, which step 10 and the API's start check
+refuse. Cost: an `ACCESS EXCLUSIVE` lock per table, otherwise (A)'s speed. (C) `pg_dump
+--rows-per-insert=1000 --enable-row-security`, `pg_restore --enable-row-security` under the
+deployment scope: `FORCE` never off, but the pg_dump page says INSERT format "will make
+restoration very slow" and every row passes the policy function; the documentation gives no figure
+for 10 M items (about 10 tables of that size). (A) is chosen because it needs neither. Restore time
+at 10 M items is not in any documentation: C-1 times each phase on 1 M items and extrapolates
+(15b section 15); (C) is timed only if (A) fails.
 
 **Recovery point, stated plainly.** After a failure you get back the state of the **last `pg_dump`**: with the default (a backup at each `openprocessor upgrade`, plus `op.periodic.db_backup` when `OP_DB_BACKUP_INTERVAL_H` is set, off by default) that can be hours or days old, and everything written since is lost. **Point-in-time recovery (continuous WAL archiving) is a conscious non-goal for v0.7.0**: it needs an archive target, a base-backup schedule and a restore drill that this release does not budget; it is a candidate for v0.8.0 multi-host. The 0.6.0 upgrade also `TRUNCATE`s `events` after the load (the table is new in 0.7.0; the rule is the same as for restore, so no code path depends on a cursor from another cluster).
 
@@ -385,6 +472,7 @@ Required `db` tests (each red first where it guards a behaviour):
 - `tests/db/test_reaper_rules.py`: rules a-g, including two reapers at once (no double requeue).
 - `tests/db/test_events_cursor.py`: two transactions commit their events out of id order; a reader
   that polls between the commits emits every event exactly once; the global stream (`project_id IS NULL`) has its own case and its own `EXPLAIN` index check.
+- `tests/db/test_restore_isolation.py` (second review of 15b, B1 and M2): `db backup` and `db restore` on a database with data in two projects, **run twice**: once with `op_owner` holding `BYPASSRLS` (self-hosted) and once with `op_owner` created `NOBYPASSRLS` and the dump taken with `--enable-row-security` under the deployment scope (the managed shape); the restore runs over a live database that already holds the copies; assert `pg_restore` ends without error, `pg_restore --list` has no `ROW SECURITY` entry before the last `TABLE DATA`, `relforcerowsecurity` was never off (a probe on the catalogue between steps), every function without a `PUBLIC` entry in `proacl` after step 6, the refill makes each copy equal its source, restore step 10's checks pass, and the matrix test of 15b section 8 passes afterwards.
 - `tests/db/test_events_restore_resume.py` (D-73): write events, `pg_dump`, `pg_restore` into a **second cluster** (a second test container), run `db restore`'s truncate, write new events there, and assert a reader resumed with a cursor from the first cluster gets the `reset` event once and then every new event exactly once.
 - `tests/db/test_role_settings.py` and `tests/db/test_jobs_hot_updates.py` of [02a](02a_postgres_schema.md) sections 1.5.1 and 5; `tests/tasks/test_poison_redelivery.py` of [02b](02b_jobs_locking_events.md) section 7.1.1.
 - `tests/db/test_class_registry.py`: 10 concurrent `ensure_class` for 50 names: 50 classes, unique
