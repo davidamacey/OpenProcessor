@@ -24,6 +24,17 @@ use tokio::net::TcpListener;
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::{Request, Response, Status};
 
+/// An address that refuses every connection for as long as the returned socket lives: the socket
+/// is bound and never listens. A port taken from a listener that is then dropped is free again,
+/// and any process on the host can be given it before the test connects (seen once in a workspace
+/// run beside another crate's socket tests: the call reached that server and ended `Cancelled`).
+pub fn refusing_address() -> (tokio::net::TcpSocket, SocketAddr) {
+    let socket = tokio::net::TcpSocket::new_v4().unwrap();
+    socket.bind("127.0.0.1:0".parse().unwrap()).unwrap();
+    let addr = socket.local_addr().unwrap();
+    (socket, addr)
+}
+
 /// A file of the repository, by its path from the root.
 pub fn repo_file(path: &str) -> String {
     let full = PathBuf::from(env!("CARGO_MANIFEST_DIR"))

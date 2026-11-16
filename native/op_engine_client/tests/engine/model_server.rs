@@ -10,7 +10,7 @@ use op_engine_client::{
 use tonic::{Code, Status};
 
 use crate::answers::{case_named, plan_of};
-use crate::support::{Counts, Fake, Reply, serve_fake, settings};
+use crate::support::{Counts, Fake, Reply, refusing_address, serve_fake, settings};
 
 fn detector() -> DetectorSpec {
     DetectorSpec {
@@ -46,9 +46,8 @@ async fn the_server_says_whether_a_model_is_ready() {
 
 #[tokio::test]
 async fn a_server_that_cannot_be_asked_has_no_model_ready() {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let url = listener.local_addr().unwrap().to_string();
-    drop(listener);
+    let (_held, addr) = refusing_address();
+    let url = addr.to_string();
     let server = ModelServer::connect_lazy(&ModelServerSettings { url }).unwrap();
     assert!(!server.is_model_ready("pe").await);
     let error = server.load_model("pe").await.unwrap_err();

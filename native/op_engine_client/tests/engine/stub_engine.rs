@@ -12,7 +12,7 @@ use op_engine_client::{
 };
 use tonic::Code;
 
-use crate::support::{Counts, Stub, settings};
+use crate::support::{Counts, Stub, refusing_address, settings};
 
 const PHOTO: &[u8] = b"a plain photo: the stub answers every plain photo alike";
 
@@ -278,9 +278,7 @@ async fn the_engine_says_whether_it_is_ready() {
 
 #[tokio::test]
 async fn an_engine_that_cannot_be_reached_is_undelivered_after_three_tries() {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-    drop(listener);
+    let (_held, addr) = refusing_address();
     let client = EngineClient::new(&settings(addr), None).unwrap();
     let started = Instant::now();
     let readiness = client.probe_ready(MODEL).await;
