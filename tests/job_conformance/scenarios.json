@@ -1,0 +1,1221 @@
+{
+ "version": 1,
+ "about": "Job conformance scenarios (plan 18a section 3.5). Replayed by the Rust runner (native/op_jobs, in memory and, behind the db feature, on PostgreSQL) and by the Python claim loop in its database tier; both must give the same row states. Jobs are named by alias; `token` is current (the latest claim's fencing token) or first (the first claim's); `reap` runs reaper rule a (expired leases) then rule b (interrupted auto_resume jobs, settle 0 s) in separate transactions; `expire_lease` moves a lease into the past.",
+ "ops": {
+  "insert": "start a job of `kind` (project alias optional, params optional): created | busy (names `active`) | existing",
+  "claim": "a runner claims up to `limit` jobs of `kinds`: the aliases claimed, in claim order",
+  "heartbeat": "renew the lease with a token: ok (cancel_requested / pause_requested as the row says) | lost",
+  "conclude": "the one fenced write that ends a run: how = finish:<status> | interrupt | pause | yield; ok with status_after, or lost",
+  "cancel": "the route's cancel: the status after, or none",
+  "request_pause": "the route's pause: the status after, or none",
+  "resume": "the route's resume: queued | not_resumable | busy",
+  "expire_lease": "test hook: the lease of a running job ends in the past",
+  "reap": "expired: aliases ended by rule a; requeued and failed: counts of rule b",
+  "expect": "fields of the row: status, attempt, fencing_token, retry_count, owner (runner or null), pause_reason, error_code, attempts (outcome per attempt, null while running)"
+ },
+ "scenarios": [
+  {
+   "id": "claim_race_two_runners",
+   "description": "Two runners ask for one queued job: exactly one gets it, with attempt 1, fencing token 1 and its own owner.",
+   "steps": [
+    {
+     "op": "insert",
+     "job": "a",
+     "kind": "noop",
+     "expect": "created"
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "noop"
+     ],
+     "limit": 1,
+     "expect": [
+      "a"
+     ]
+    },
+    {
+     "op": "claim",
+     "runner": "r2",
+     "kinds": [
+      "noop"
+     ],
+     "limit": 1,
+     "expect": []
+    },
+    {
+     "op": "expect",
+     "job": "a",
+     "status": "running",
+     "attempt": 1,
+     "fencing_token": 1,
+     "retry_count": 0,
+     "owner": "r1",
+     "attempts": [
+      null
+     ]
+    }
+   ]
+  },
+  {
+   "id": "claim_only_the_kinds_a_runner_registers",
+   "description": "A runner claims only the kinds it was started with.",
+   "steps": [
+    {
+     "op": "insert",
+     "job": "a",
+     "kind": "noop",
+     "expect": "created"
+    },
+    {
+     "op": "insert",
+     "job": "b",
+     "kind": "persons_cluster",
+     "expect": "created"
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "persons_cluster"
+     ],
+     "limit": 5,
+     "expect": [
+      "b"
+     ]
+    },
+    {
+     "op": "expect",
+     "job": "a",
+     "status": "queued"
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "noop"
+     ],
+     "limit": 5,
+     "expect": [
+      "a"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "claim_follows_queue_order",
+   "description": "Jobs are claimed oldest first, and a claim takes no more than its limit.",
+   "steps": [
+    {
+     "op": "insert",
+     "job": "a",
+     "kind": "noop",
+     "expect": "created"
+    },
+    {
+     "op": "insert",
+     "job": "b",
+     "kind": "noop",
+     "expect": "created"
+    },
+    {
+     "op": "insert",
+     "job": "c",
+     "kind": "noop",
+     "expect": "created"
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "noop"
+     ],
+     "limit": 1,
+     "expect": [
+      "a"
+     ]
+    },
+    {
+     "op": "claim",
+     "runner": "r2",
+     "kinds": [
+      "noop"
+     ],
+     "limit": 2,
+     "expect": [
+      "b",
+      "c"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "lease_expiry_takeover_and_the_dead_workers_late_write",
+   "description": "A worker dies: its lease expires, the reaper interrupts the job (attempt lost) and resumes it, another runner takes it, and the first worker's late writes with the old fencing token are refused.",
+   "steps": [
+    {
+     "op": "insert",
+     "job": "a",
+     "kind": "project_delete",
+     "params": {
+      "slug": "x1"
+     },
+     "expect": "created"
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "project_delete"
+     ],
+     "limit": 1,
+     "expect": [
+      "a"
+     ]
+    },
+    {
+     "op": "expire_lease",
+     "job": "a"
+    },
+    {
+     "op": "reap",
+     "expect": {
+      "expired": [
+       "a"
+      ],
+      "requeued": 1,
+      "failed": 0
+     }
+    },
+    {
+     "op": "expect",
+     "job": "a",
+     "status": "queued",
+     "retry_count": 1,
+     "owner": null,
+     "attempts": [
+      "lost"
+     ]
+    },
+    {
+     "op": "claim",
+     "runner": "r2",
+     "kinds": [
+      "project_delete"
+     ],
+     "limit": 1,
+     "expect": [
+      "a"
+     ]
+    },
+    {
+     "op": "expect",
+     "job": "a",
+     "status": "running",
+     "attempt": 2,
+     "fencing_token": 2,
+     "owner": "r2",
+     "attempts": [
+      "lost",
+      null
+     ]
+    },
+    {
+     "op": "conclude",
+     "job": "a",
+     "token": "first",
+     "how": "finish:completed",
+     "expect": "lost"
+    },
+    {
+     "op": "heartbeat",
+     "job": "a",
+     "token": "first",
+     "expect": "lost"
+    },
+    {
+     "op": "expect",
+     "job": "a",
+     "status": "running",
+     "fencing_token": 2,
+     "owner": "r2"
+    },
+    {
+     "op": "heartbeat",
+     "job": "a",
+     "token": "current",
+     "expect": "ok"
+    },
+    {
+     "op": "conclude",
+     "job": "a",
+     "token": "current",
+     "how": "finish:completed",
+     "expect": "ok",
+     "status_after": "completed"
+    },
+    {
+     "op": "expect",
+     "job": "a",
+     "status": "completed",
+     "attempts": [
+      "lost",
+      "completed"
+     ],
+     "owner": null
+    }
+   ]
+  },
+  {
+   "id": "cancel_running_job",
+   "description": "Cancelling a running job makes it cancelling; the holder sees the request at its next heartbeat; whatever it then returns, the row ends cancelled.",
+   "steps": [
+    {
+     "op": "insert",
+     "job": "a",
+     "kind": "noop",
+     "expect": "created"
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "noop"
+     ],
+     "limit": 1,
+     "expect": [
+      "a"
+     ]
+    },
+    {
+     "op": "cancel",
+     "job": "a",
+     "expect": "cancelling"
+    },
+    {
+     "op": "heartbeat",
+     "job": "a",
+     "token": "current",
+     "expect": "ok",
+     "cancel_requested": true
+    },
+    {
+     "op": "conclude",
+     "job": "a",
+     "token": "current",
+     "how": "finish:completed",
+     "expect": "ok",
+     "status_after": "cancelled"
+    },
+    {
+     "op": "expect",
+     "job": "a",
+     "status": "cancelled",
+     "retry_count": 0,
+     "attempts": [
+      "cancelled"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "cancel_queued_job_at_once",
+   "description": "A queued job is cancelled by a database write alone and is never claimed; cancelling a finished job does nothing.",
+   "steps": [
+    {
+     "op": "insert",
+     "job": "a",
+     "kind": "noop",
+     "expect": "created"
+    },
+    {
+     "op": "cancel",
+     "job": "a",
+     "expect": "cancelled"
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "noop"
+     ],
+     "limit": 1,
+     "expect": []
+    },
+    {
+     "op": "expect",
+     "job": "a",
+     "status": "cancelled"
+    },
+    {
+     "op": "cancel",
+     "job": "a",
+     "expect": "none"
+    }
+   ]
+  },
+  {
+   "id": "pause_a_running_pausable_job_and_resume_it",
+   "description": "A pause request is seen at the next heartbeat; the handler stops at a boundary and the row is paused with its reason; resume queues it again and the next claim is attempt 2 with no retry spent.",
+   "steps": [
+    {
+     "op": "insert",
+     "job": "a",
+     "kind": "autolabel",
+     "project": "p1",
+     "expect": "created"
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "autolabel"
+     ],
+     "limit": 1,
+     "expect": [
+      "a"
+     ]
+    },
+    {
+     "op": "request_pause",
+     "job": "a",
+     "expect": "running"
+    },
+    {
+     "op": "heartbeat",
+     "job": "a",
+     "token": "current",
+     "expect": "ok",
+     "pause_requested": true
+    },
+    {
+     "op": "conclude",
+     "job": "a",
+     "token": "current",
+     "how": "pause",
+     "expect": "ok",
+     "status_after": "paused"
+    },
+    {
+     "op": "expect",
+     "job": "a",
+     "status": "paused",
+     "pause_reason": "user",
+     "retry_count": 0,
+     "owner": null,
+     "attempts": [
+      "paused"
+     ]
+    },
+    {
+     "op": "resume",
+     "job": "a",
+     "expect": "queued"
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "autolabel"
+     ],
+     "limit": 1,
+     "expect": [
+      "a"
+     ]
+    },
+    {
+     "op": "expect",
+     "job": "a",
+     "status": "running",
+     "attempt": 2,
+     "fencing_token": 2,
+     "retry_count": 0,
+     "pause_reason": null
+    }
+   ]
+  },
+  {
+   "id": "pause_cycles_never_spend_attempts",
+   "description": "A job paused and resumed three times is still claimable: a pause never spends the retry budget.",
+   "steps": [
+    {
+     "op": "insert",
+     "job": "a",
+     "kind": "autolabel",
+     "project": "p1",
+     "expect": "created"
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "autolabel"
+     ],
+     "limit": 1,
+     "expect": [
+      "a"
+     ]
+    },
+    {
+     "op": "request_pause",
+     "job": "a",
+     "expect": "running"
+    },
+    {
+     "op": "conclude",
+     "job": "a",
+     "token": "current",
+     "how": "pause",
+     "expect": "ok",
+     "status_after": "paused"
+    },
+    {
+     "op": "resume",
+     "job": "a",
+     "expect": "queued"
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "autolabel"
+     ],
+     "limit": 1,
+     "expect": [
+      "a"
+     ]
+    },
+    {
+     "op": "request_pause",
+     "job": "a",
+     "expect": "running"
+    },
+    {
+     "op": "conclude",
+     "job": "a",
+     "token": "current",
+     "how": "pause",
+     "expect": "ok",
+     "status_after": "paused"
+    },
+    {
+     "op": "resume",
+     "job": "a",
+     "expect": "queued"
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "autolabel"
+     ],
+     "limit": 1,
+     "expect": [
+      "a"
+     ]
+    },
+    {
+     "op": "request_pause",
+     "job": "a",
+     "expect": "running"
+    },
+    {
+     "op": "conclude",
+     "job": "a",
+     "token": "current",
+     "how": "pause",
+     "expect": "ok",
+     "status_after": "paused"
+    },
+    {
+     "op": "resume",
+     "job": "a",
+     "expect": "queued"
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "autolabel"
+     ],
+     "limit": 1,
+     "expect": [
+      "a"
+     ]
+    },
+    {
+     "op": "expect",
+     "job": "a",
+     "status": "running",
+     "attempt": 4,
+     "fencing_token": 4,
+     "retry_count": 0
+    }
+   ]
+  },
+  {
+   "id": "pause_a_queued_job_at_once",
+   "description": "A queued job pauses by a database write alone and is not claimed until resumed.",
+   "steps": [
+    {
+     "op": "insert",
+     "job": "a",
+     "kind": "autolabel",
+     "project": "p1",
+     "expect": "created"
+    },
+    {
+     "op": "request_pause",
+     "job": "a",
+     "expect": "paused"
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "autolabel"
+     ],
+     "limit": 1,
+     "expect": []
+    },
+    {
+     "op": "expect",
+     "job": "a",
+     "status": "paused",
+     "pause_reason": "user"
+    },
+    {
+     "op": "resume",
+     "job": "a",
+     "expect": "queued"
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "autolabel"
+     ],
+     "limit": 1,
+     "expect": [
+      "a"
+     ]
+    },
+    {
+     "op": "expect",
+     "job": "a",
+     "status": "running",
+     "pause_reason": null
+    }
+   ]
+  },
+  {
+   "id": "yield_requeues_behind_other_work_without_a_retry",
+   "description": "A sliced job that yields goes back to queued behind work that arrived meanwhile, keeps its retry budget, and its attempt ends yielded.",
+   "steps": [
+    {
+     "op": "insert",
+     "job": "a",
+     "kind": "assist_loop",
+     "project": "p1",
+     "expect": "created"
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "assist_loop"
+     ],
+     "limit": 1,
+     "expect": [
+      "a"
+     ]
+    },
+    {
+     "op": "insert",
+     "job": "b",
+     "kind": "assist_loop",
+     "project": "p2",
+     "expect": "created"
+    },
+    {
+     "op": "conclude",
+     "job": "a",
+     "token": "current",
+     "how": "yield",
+     "expect": "ok",
+     "status_after": "queued"
+    },
+    {
+     "op": "expect",
+     "job": "a",
+     "status": "queued",
+     "retry_count": 0,
+     "owner": null,
+     "attempts": [
+      "yielded"
+     ]
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "assist_loop"
+     ],
+     "limit": 1,
+     "expect": [
+      "b"
+     ]
+    },
+    {
+     "op": "claim",
+     "runner": "r2",
+     "kinds": [
+      "assist_loop"
+     ],
+     "limit": 1,
+     "expect": [
+      "a"
+     ]
+    },
+    {
+     "op": "expect",
+     "job": "a",
+     "attempt": 2,
+     "fencing_token": 2
+    }
+   ]
+  },
+  {
+   "id": "exclusive_group_refuses_a_second_active_job",
+   "description": "A second active job of the same group and scope is refused at insert and names the active one; another scope or another group is fine; a cancelled job frees the group.",
+   "steps": [
+    {
+     "op": "insert",
+     "job": "a",
+     "kind": "persons_cluster",
+     "expect": "created"
+    },
+    {
+     "op": "insert",
+     "job": "b",
+     "kind": "persons_cluster",
+     "expect": "busy",
+     "active": "a"
+    },
+    {
+     "op": "insert",
+     "job": "c",
+     "kind": "project_delete",
+     "params": {
+      "slug": "x1"
+     },
+     "expect": "created"
+    },
+    {
+     "op": "insert",
+     "job": "d",
+     "kind": "project_delete",
+     "params": {
+      "slug": "x2"
+     },
+     "expect": "created"
+    },
+    {
+     "op": "insert",
+     "job": "e",
+     "kind": "project_delete",
+     "params": {
+      "slug": "x1"
+     },
+     "expect": "busy",
+     "active": "c"
+    },
+    {
+     "op": "insert",
+     "job": "f",
+     "kind": "reprocess",
+     "project": "p1",
+     "expect": "created"
+    },
+    {
+     "op": "insert",
+     "job": "g",
+     "kind": "reprocess",
+     "project": "p1",
+     "expect": "busy",
+     "active": "f"
+    },
+    {
+     "op": "insert",
+     "job": "h",
+     "kind": "reprocess",
+     "project": "p2",
+     "expect": "created"
+    },
+    {
+     "op": "cancel",
+     "job": "a",
+     "expect": "cancelled"
+    },
+    {
+     "op": "insert",
+     "job": "b2",
+     "kind": "persons_cluster",
+     "expect": "created"
+    }
+   ]
+  },
+  {
+   "id": "an_interrupted_job_does_not_hold_its_group_and_its_resume_is_then_refused",
+   "description": "interrupted is not active: a new job of the group may start, and resuming the interrupted one is refused while the new one is active.",
+   "steps": [
+    {
+     "op": "insert",
+     "job": "a",
+     "kind": "persons_cluster",
+     "expect": "created"
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "persons_cluster"
+     ],
+     "limit": 1,
+     "expect": [
+      "a"
+     ]
+    },
+    {
+     "op": "conclude",
+     "job": "a",
+     "token": "current",
+     "how": "interrupt",
+     "expect": "ok",
+     "status_after": "interrupted"
+    },
+    {
+     "op": "expect",
+     "job": "a",
+     "status": "interrupted",
+     "retry_count": 1,
+     "attempts": [
+      "interrupted"
+     ],
+     "owner": null
+    },
+    {
+     "op": "insert",
+     "job": "b",
+     "kind": "persons_cluster",
+     "expect": "created"
+    },
+    {
+     "op": "resume",
+     "job": "a",
+     "expect": "busy"
+    },
+    {
+     "op": "expect",
+     "job": "a",
+     "status": "interrupted"
+    },
+    {
+     "op": "cancel",
+     "job": "b",
+     "expect": "cancelled"
+    },
+    {
+     "op": "resume",
+     "job": "a",
+     "expect": "queued"
+    }
+   ]
+  },
+  {
+   "id": "auto_resume_after_an_interruption",
+   "description": "The reaper puts an interrupted auto_resume job back to queued; a kind without auto_resume stays interrupted.",
+   "steps": [
+    {
+     "op": "insert",
+     "job": "a",
+     "kind": "project_delete",
+     "params": {
+      "slug": "x1"
+     },
+     "expect": "created"
+    },
+    {
+     "op": "insert",
+     "job": "b",
+     "kind": "persons_cluster",
+     "expect": "created"
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "project_delete",
+      "persons_cluster"
+     ],
+     "limit": 2,
+     "expect": [
+      "a",
+      "b"
+     ]
+    },
+    {
+     "op": "conclude",
+     "job": "a",
+     "token": "current",
+     "how": "interrupt",
+     "expect": "ok",
+     "status_after": "interrupted"
+    },
+    {
+     "op": "conclude",
+     "job": "b",
+     "token": "current",
+     "how": "interrupt",
+     "expect": "ok",
+     "status_after": "interrupted"
+    },
+    {
+     "op": "reap",
+     "expect": {
+      "expired": [],
+      "requeued": 1,
+      "failed": 0
+     }
+    },
+    {
+     "op": "expect",
+     "job": "a",
+     "status": "queued",
+     "retry_count": 1
+    },
+    {
+     "op": "expect",
+     "job": "b",
+     "status": "interrupted"
+    },
+    {
+     "op": "claim",
+     "runner": "r2",
+     "kinds": [
+      "project_delete"
+     ],
+     "limit": 1,
+     "expect": [
+      "a"
+     ]
+    },
+    {
+     "op": "conclude",
+     "job": "a",
+     "token": "current",
+     "how": "finish:completed",
+     "expect": "ok",
+     "status_after": "completed"
+    }
+   ]
+  },
+  {
+   "id": "auto_resume_waits_while_the_group_is_active",
+   "description": "An interrupted auto_resume job is not resumed while another job of its group is active.",
+   "steps": [
+    {
+     "op": "insert",
+     "job": "a",
+     "kind": "near_dup_core_group",
+     "expect": "created"
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "near_dup_core_group"
+     ],
+     "limit": 1,
+     "expect": [
+      "a"
+     ]
+    },
+    {
+     "op": "conclude",
+     "job": "a",
+     "token": "current",
+     "how": "interrupt",
+     "expect": "ok",
+     "status_after": "interrupted"
+    },
+    {
+     "op": "insert",
+     "job": "b",
+     "kind": "near_dup_core_group",
+     "expect": "created"
+    },
+    {
+     "op": "reap",
+     "expect": {
+      "expired": [],
+      "requeued": 0,
+      "failed": 0
+     }
+    },
+    {
+     "op": "expect",
+     "job": "a",
+     "status": "interrupted"
+    }
+   ]
+  },
+  {
+   "id": "a_spent_retry_budget_ends_failed",
+   "description": "Three interruptions spend the budget of three: the reaper then fails the job with attempts_exhausted instead of queueing it.",
+   "steps": [
+    {
+     "op": "insert",
+     "job": "a",
+     "kind": "project_delete",
+     "params": {
+      "slug": "x1"
+     },
+     "expect": "created"
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "project_delete"
+     ],
+     "limit": 1,
+     "expect": [
+      "a"
+     ]
+    },
+    {
+     "op": "conclude",
+     "job": "a",
+     "token": "current",
+     "how": "interrupt",
+     "expect": "ok",
+     "status_after": "interrupted"
+    },
+    {
+     "op": "reap",
+     "expect": {
+      "expired": [],
+      "requeued": 1,
+      "failed": 0
+     }
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "project_delete"
+     ],
+     "limit": 1,
+     "expect": [
+      "a"
+     ]
+    },
+    {
+     "op": "conclude",
+     "job": "a",
+     "token": "current",
+     "how": "interrupt",
+     "expect": "ok",
+     "status_after": "interrupted"
+    },
+    {
+     "op": "reap",
+     "expect": {
+      "expired": [],
+      "requeued": 1,
+      "failed": 0
+     }
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "project_delete"
+     ],
+     "limit": 1,
+     "expect": [
+      "a"
+     ]
+    },
+    {
+     "op": "conclude",
+     "job": "a",
+     "token": "current",
+     "how": "interrupt",
+     "expect": "ok",
+     "status_after": "interrupted"
+    },
+    {
+     "op": "reap",
+     "expect": {
+      "expired": [],
+      "requeued": 0,
+      "failed": 1
+     }
+    },
+    {
+     "op": "expect",
+     "job": "a",
+     "status": "failed",
+     "retry_count": 3,
+     "error_code": "attempts_exhausted",
+     "attempts": [
+      "interrupted",
+      "interrupted",
+      "interrupted"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "interrupting_a_cancelling_job_cancels_it",
+   "description": "A worker that shuts down while a cancel is pending ends the job cancelled, not interrupted.",
+   "steps": [
+    {
+     "op": "insert",
+     "job": "a",
+     "kind": "noop",
+     "expect": "created"
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "noop"
+     ],
+     "limit": 1,
+     "expect": [
+      "a"
+     ]
+    },
+    {
+     "op": "cancel",
+     "job": "a",
+     "expect": "cancelling"
+    },
+    {
+     "op": "conclude",
+     "job": "a",
+     "token": "current",
+     "how": "interrupt",
+     "expect": "ok",
+     "status_after": "cancelled"
+    },
+    {
+     "op": "expect",
+     "job": "a",
+     "status": "cancelled",
+     "retry_count": 1,
+     "attempts": [
+      "interrupted"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "a_failed_run_keeps_its_error",
+   "description": "A handler failure ends the row failed with the handler's code and spends no retry.",
+   "steps": [
+    {
+     "op": "insert",
+     "job": "a",
+     "kind": "noop",
+     "expect": "created"
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "noop"
+     ],
+     "limit": 1,
+     "expect": [
+      "a"
+     ]
+    },
+    {
+     "op": "conclude",
+     "job": "a",
+     "token": "current",
+     "how": "finish:failed",
+     "expect": "ok",
+     "status_after": "failed",
+     "error_code": "handler_error"
+    },
+    {
+     "op": "expect",
+     "job": "a",
+     "status": "failed",
+     "error_code": "handler_error",
+     "retry_count": 0,
+     "attempts": [
+      "failed"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "an_expired_lease_of_a_cancelling_job_cancels_it",
+   "description": "If the holder of a job being cancelled dies, the reaper cancels the job; it does not resurrect it.",
+   "steps": [
+    {
+     "op": "insert",
+     "job": "a",
+     "kind": "noop",
+     "expect": "created"
+    },
+    {
+     "op": "claim",
+     "runner": "r1",
+     "kinds": [
+      "noop"
+     ],
+     "limit": 1,
+     "expect": [
+      "a"
+     ]
+    },
+    {
+     "op": "cancel",
+     "job": "a",
+     "expect": "cancelling"
+    },
+    {
+     "op": "expire_lease",
+     "job": "a"
+    },
+    {
+     "op": "reap",
+     "expect": {
+      "expired": [
+       "a"
+      ],
+      "requeued": 0,
+      "failed": 0
+     }
+    },
+    {
+     "op": "expect",
+     "job": "a",
+     "status": "cancelled",
+     "retry_count": 0,
+     "attempts": [
+      "lost"
+     ]
+    }
+   ]
+  }
+ ]
+}
