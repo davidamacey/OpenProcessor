@@ -56,7 +56,7 @@ _SCANNED_ROOTS = ('src', 'frame_engine', 'scripts', 'docker', 'export')
 # ``require`` (``env.require::<u16>("OP_X")``), or a ``const NAME: &str = "OP_X"`` the crate keeps
 # its key names in. Only code outside tests counts: a file under ``tests/`` is skipped, and a
 # source file is cut at its trailing ``#[cfg(test)]`` module, whose literals are fixtures.
-_RUST_ENV_READ_RE = re.compile(r'\.(?:get|require)(?:::<[^>(]*>)?\(\s*"(OP_[A-Z0-9_]+)"')
+_RUST_ENV_READ_RE = re.compile(r'\.(?:get|require|raw)(?:::<[^>(]*>)?\(\s*"(OP_[A-Z0-9_]+)"')
 _RUST_ENV_CONSTANT_RE = re.compile(
     r"\bconst\s+[A-Z0-9_]+\s*:\s*&(?:'static\s+)?str\s*=\s*\"(OP_[A-Z0-9_]+)\""
 )

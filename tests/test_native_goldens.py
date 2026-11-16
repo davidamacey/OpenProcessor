@@ -22,6 +22,7 @@ SCRIPTS = (
     'frame_engine_text_goldens',
     'frame_engine_area_goldens',
     'frame_engine_colour_goldens',
+    'frame_engine_parity_goldens',
 )
 HOST_SCRIPT = 'frame_engine_host_corpus'
 
