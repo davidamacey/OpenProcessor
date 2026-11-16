@@ -54,6 +54,7 @@ PROTOCOL = json.loads((CONTRACTS / 'frame_engine_v1.json').read_text(encoding='u
 CASES = json.loads((CONTRACTS / 'frame_engine_plan_cases.json').read_text(encoding='utf-8'))[
     'cases'
 ]
+READ_BY_KEY = PROTOCOL['read_by_key']
 
 
 class Triton:
@@ -253,7 +254,7 @@ def _violations() -> dict[str, tuple[Any, str]]:
     unknown = good()
     tensor(unknown, 'extra', 'BYTES', [1], _bytes_element(b'x'))
     missing = service_pb2.ModelInferRequest(model_name='frame_engine')
-    tensor(missing, wire.PLAN, 'BYTES', [1], _bytes_element(FRAME.encode()))
+    tensor(missing, wire.IMAGE, 'BYTES', [1], _bytes_element(b'\xff\xd8'))
     shape = good()
     shape.inputs[0].shape[0] = 2
     elements = good()
@@ -268,7 +269,7 @@ def _violations() -> dict[str, tuple[Any, str]]:
     tensor(size, wire.BOXES, 'FP64', [2, 4], b'\x00' * 32)
     return {
         'raw_contents_count': (counts, ''), 'unknown_input': (unknown, 'extra'),
-        'missing_input': (missing, wire.IMAGE), 'bytes_input_shape': (shape, wire.IMAGE),
+        'missing_input': (missing, wire.PLAN), 'bytes_input_shape': (shape, wire.IMAGE),
         'bytes_input_one_element': (elements, wire.IMAGE), 'bytes_length_prefix': (prefix, ''),
         'bytes_element_overrun': (overrun, ''), 'boxes_datatype_shape': (datatype, ''),
         'boxes_byte_size': (size, ''),
@@ -486,8 +487,10 @@ async def test_metadata_is_the_contracts_tensors_and_platform(
     def table(side: list[dict[str, Any]]) -> list[tuple[str, str, list[int]]]:
         return [(t['name'], t['datatype'], [int(d) for d in t.get('shape', [])]) for t in side]
 
+    # the native engine alone has the read-by-key input, listed after the protocol's own
+    extension = [READ_BY_KEY['input']] if kind == 'rust' else []
     assert table(meta['inputs']) == [
-        (t['name'], t['datatype'], t['shape']) for t in PROTOCOL['inputs']
+        (t['name'], t['datatype'], t['shape']) for t in [*PROTOCOL['inputs'], *extension]
     ]
     assert table(meta['outputs']) == [
         (t['name'], t['datatype'], t['shape']) for t in PROTOCOL['outputs']
@@ -720,3 +723,119 @@ async def test_an_engine_that_refuses_connections_is_judged_undelivered_within_t
         await made.close()
     assert readiness.outcome == client.PROBE_UNDELIVERED
     assert elapsed < 2.0
+
+
+# ----------------------------------------------------------------------- read by key (native only)
+# The Python engine does not have the ``source`` input (``tests/test_frame_engine_contract.py``
+# pins that), so these run against the native binary alone, on a landing and a source directory.
+
+
+def _source_request(image: bytes | None, source: dict[str, Any] | str | None) -> Any:
+    request = service_pb2.ModelInferRequest(model_name='frame_engine')
+    elements = []
+    if image is not None:
+        elements.append((wire.IMAGE, image))
+    if source is not None:
+        text = source if isinstance(source, str) else json.dumps(source)
+        elements.append(('source', text.encode()))
+    elements.append((wire.PLAN, FRAME.encode()))
+    for name, value in elements:
+        t = request.inputs.add()
+        t.name, t.datatype = name, 'BYTES'
+        t.shape.append(1)
+        request.raw_input_contents.append(_bytes_element(value))
+    return request
+
+
+def _claim(key: str, content: bytes) -> dict[str, Any]:
+    import io
+
+    import imohash  # the package the Rust port is held to
+
+    return {
+        'key': key,
+        'size': len(content),
+        'imohash': imohash.hashfileobject(io.BytesIO(content)).hex(),
+    }
+
+
+async def _answer_status(engine: Engine, request: Any) -> str:
+    answer = await engine.stub().ModelInfer(request)
+    at = [o.name for o in answer.outputs].index('status')
+    return answer.raw_output_contents[at][4:].decode()
+
+
+async def test_a_photo_named_by_key_is_read_from_the_root_and_a_bad_file_is_a_status(
+    start: StartEngine, tmp_path: Path
+) -> None:
+    landing, source = tmp_path / 'landing', tmp_path / 'source'
+    (landing / '7').mkdir(parents=True)
+    source.mkdir()
+    photo = PHOTO + b'-by-key'
+    (landing / '7' / 'a.0').write_bytes(photo)
+    engine = await start(
+        'rust',
+        extra_env={
+            'OP_FRAME_ENGINE_LANDING_ROOT': str(landing),
+            'OP_FRAME_ENGINE_SOURCE_ROOT': str(source),
+        },
+    )
+    plain = await engine.stub().ModelInfer(_source_request(photo, None))
+    keyed = await engine.stub().ModelInfer(_source_request(None, _claim('landing/7/a.0', photo)))
+    assert list(keyed.raw_output_contents) == list(plain.raw_output_contents)
+    assert (
+        await _answer_status(engine, _source_request(None, _claim('source/gone.jpg', photo)))
+        == 'missing'
+    )
+    (source / 'a.jpg').write_bytes(photo + b'x')
+    assert (
+        await _answer_status(engine, _source_request(None, _claim('source/a.jpg', photo)))
+        == 'changed'
+    )
+    over = {**_claim('source/a.jpg', photo), 'size': 2**40}
+    assert await _answer_status(engine, _source_request(None, over)) == 'too_large'
+
+
+@pytest.mark.parametrize(
+    ('image', 'source', 'message'),
+    [
+        (
+            b'x',
+            {'key': 'source/a', 'size': 1, 'imohash': '0' * 32},
+            'image and source are exclusive: send one',
+        ),
+        (None, None, "missing input 'image' or 'source'"),
+        (None, {'key': 'source/../a', 'size': 1, 'imohash': '0' * 32}, "bad_key: 'source/../a'"),
+        (
+            None,
+            {'key': 'projects/1/a', 'size': 1, 'imohash': '0' * 32},
+            "unknown_root: 'projects/1/a'",
+        ),
+        (None, '{', None),
+        (None, {'key': 'landing/7/a.0', 'size': 1, 'imohash': '0' * 32}, None),
+    ],
+    ids=['both', 'neither', 'bad_key', 'unknown_root', 'bad_json', 'no_root_configured'],
+)
+async def test_a_source_the_engine_cannot_accept_is_invalid_argument_with_its_own_text(
+    start: StartEngine, image: bytes | None, source: Any, message: str | None
+) -> None:
+    engine = await start('rust')
+    code, details = await raw_call(engine, _source_request(image, source))
+    assert code == grpc.StatusCode.INVALID_ARGUMENT
+    if message is not None:
+        assert details == message
+    else:
+        assert details.split(':')[0] in READ_BY_KEY['source_faults']
+
+
+async def test_the_source_faults_the_contract_names_are_the_ones_the_engine_answers(
+    start: StartEngine,
+) -> None:
+    engine = await start('rust')
+    for case in json.loads((CONTRACTS / 'frame_engine_source_cases.json').read_text())['cases']:
+        if 'fault' not in case:
+            continue
+        code, details = await raw_call(engine, _source_request(None, case['text']))
+        assert code == grpc.StatusCode.INVALID_ARGUMENT, case['id']
+        assert details == case.get('message', details), case['id']
+        assert details.split(':')[0] == case['fault'], case['id']

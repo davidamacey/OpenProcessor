@@ -127,12 +127,15 @@ _ENGINE_STAND_INS = (
 # section 2.2, "May depend on"; the engine crates are plan 17's. A new crate adds its row here.
 CRATE_DEPENDENCIES: dict[str, frozenset[str]] = {
     'gpu_frame': frozenset(),
-    'frame_engine': frozenset({'gpu_frame'}),
-    'frame_engine_loadgen': frozenset({'gpu_frame', 'op_engine_client'}),
+    'frame_engine': frozenset({'gpu_frame', 'op_local_file'}),
+    'frame_engine_loadgen': frozenset({'gpu_frame', 'op_engine_client', 'op_local_file'}),
     'op_config': frozenset(),
-    'op_storage': frozenset({'op_config'}),
-    'op_media': frozenset({'op_config'}),
-    'op_engine_client': frozenset({'op_config', 'frame_engine'}),
+    # The key rule, the canonical-prefix resolve and the content claim the server and the engine
+    # share (plan 17 N2): no dependency on a server crate, so the engine can use it.
+    'op_local_file': frozenset(),
+    'op_storage': frozenset({'op_config', 'op_local_file'}),
+    'op_media': frozenset({'op_config', 'op_local_file'}),
+    'op_engine_client': frozenset({'op_config', 'frame_engine', 'op_local_file'}),
     'op_db': frozenset({'op_config'}),
     'op_jobs': frozenset({'op_db', 'op_config'}),
     # `op_config` for the settings (R1u reads its limits through `op_config::Env`); the load

@@ -26,11 +26,15 @@ use tokio::sync::Notify;
 use crate::admission::Overload;
 use crate::branches::detect::{self, Detections};
 use crate::geometry::{crop_rect, letterbox_geometry, undo_letterbox};
-use crate::pipeline::{Photo, PhotoAnswer, Pipeline, PipelineError, Tensor};
+use crate::photo::read::KeyedRoots;
+use crate::pipeline::{ImageInput, Photo, PhotoAnswer, Pipeline, PipelineError, Tensor};
 use crate::wire::EnginePlan;
 use crate::wire::branch_status::{BranchState, IMAGE_FAILED};
 use crate::wire::contract::contract;
 use crate::wire::plan::DetectorSpec;
+use crate::wire::request::RequestError;
+use op_local_file::FileRef;
+use std::sync::Arc;
 
 const PREFIX: &[u8] = b"stub:";
 /// The number of detections the stub finds, and of faces, text lines and vectors it makes.
@@ -314,6 +318,7 @@ pub struct StubPipeline {
     ready: AtomicBool,
     not_ready_file: Option<PathBuf>,
     wake: Notify,
+    roots: Arc<KeyedRoots>,
 }
 
 impl StubPipeline {
@@ -323,7 +328,29 @@ impl StubPipeline {
             ready: AtomicBool::new(true),
             not_ready_file,
             wake: Notify::new(),
+            roots: Arc::new(KeyedRoots::none()),
         }
+    }
+
+    /// The same stub, reading photos named by a key under `roots` (a file's bytes steer the stub
+    /// as a request's do). The read runs on tokio's blocking pool: the stub has no finish pool,
+    /// and a stand-in for the contract test is not the product's CPU path.
+    #[must_use]
+    pub fn with_roots(mut self, roots: KeyedRoots) -> Self {
+        self.roots = Arc::new(roots);
+        self
+    }
+
+    async fn image_of(&self, photo: &Photo) -> Result<Result<Bytes, &'static str>, PipelineError> {
+        let file = match &photo.image {
+            ImageInput::Bytes(bytes) => return Ok(Ok(bytes.clone())),
+            ImageInput::File(file) => file.clone(),
+        };
+        let roots = Arc::clone(&self.roots);
+        let read = tokio::task::spawn_blocking(move || roots.read(&file))
+            .await
+            .map_err(|e| PipelineError::Engine(format!("stub read: {e}")))?;
+        Ok(read.map_err(|refusal| refusal.status))
     }
 }
 
@@ -345,8 +372,16 @@ impl Pipeline for StubPipeline {
         self.ready.store(!blocked, Ordering::Release);
     }
 
+    fn check_source(&self, file: &FileRef) -> Result<(), RequestError> {
+        self.roots.check(file)
+    }
+
     async fn process(&self, photo: Photo) -> Result<PhotoAnswer, PipelineError> {
-        let script = script(&photo.image)?;
+        let image = match self.image_of(&photo).await? {
+            Ok(image) => image,
+            Err(status) => return Ok(refused_answer(&photo.plan, status.to_owned())),
+        };
+        let script = script(&image)?;
         if let Some(hold) = script.hold {
             photo.request.enter(script.stage.unwrap_or("detect"));
             tokio::time::sleep(hold).await;
@@ -392,7 +427,7 @@ mod tests {
     fn photo(image: &[u8], plan: &str, boxes: Option<Vec<[f64; 4]>>) -> Photo {
         let clock = RequestClock::start(Instant::now(), 30.0);
         Photo {
-            image: Bytes::copy_from_slice(image),
+            image: ImageInput::Bytes(Bytes::copy_from_slice(image)),
             plan: parse_plan(plan.as_bytes(), boxes.is_some()).expect("plan"),
             boxes,
             request: Arc::new(RequestState::new(clock)),

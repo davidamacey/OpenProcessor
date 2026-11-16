@@ -330,3 +330,23 @@ def test_the_compare_inputs_command_exits_nonzero_on_a_difference(
     assert par.main(['compare-inputs', str(a), str(a)]) == 0
     assert par.main(['compare-inputs', str(a), str(b)]) == 1
     assert json.loads(capsys.readouterr().out.split('\n}\n{', 1)[0] + '\n}')['equal'] is True
+
+
+def test_the_source_document_is_the_text_the_rust_client_writes_for_every_built_case() -> None:
+    cases = json.loads((REPO / 'contracts/json/frame_engine_source_cases.json').read_text())[
+        'cases'
+    ]
+    built = [c for c in cases if 'built' in c and c['key'].startswith('source/')]
+    assert len(built) >= 4
+    for case in built:
+        # a file of the size and hash the case claims is not at hand: the document of a real one
+        data = bytes(range(256)) * 3
+        root = Path('/data/photos')
+        text = par.source_document(root / case['key'].removeprefix('source/'), root, data)
+        doc = json.loads(text)
+        assert doc['key'] == case['key']
+        assert (doc['size'], len(doc['imohash'])) == (len(data), 32)
+        assert text == json.dumps(doc, sort_keys=True)
+        assert list(doc) == ['imohash', 'key', 'size'], (
+            'sorted keys, as the Rust builder writes them'
+        )

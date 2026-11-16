@@ -9,6 +9,7 @@ use std::time::Duration;
 
 use frame_engine::front::{Front, FrontConfig, FrontHandle, ServeConfig, serve};
 use frame_engine::metrics::Metrics;
+use frame_engine::photo::read::KeyedRoots;
 use frame_engine::stub::StubPipeline;
 use op_engine_client::proto::grpc_inference_service_server::{
     GrpcInferenceService, GrpcInferenceServiceServer,
@@ -156,9 +157,18 @@ pub struct Stub {
 
 impl Stub {
     pub async fn start(not_ready_file: Option<PathBuf>, max_in_flight: u32) -> Self {
+        Self::start_reading(not_ready_file, max_in_flight, KeyedRoots::none()).await
+    }
+
+    /// A stub that also reads photos named by a key under `roots`.
+    pub async fn start_reading(
+        not_ready_file: Option<PathBuf>,
+        max_in_flight: u32,
+        roots: KeyedRoots,
+    ) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        let pipeline = Arc::new(StubPipeline::new(not_ready_file));
+        let pipeline = Arc::new(StubPipeline::new(not_ready_file).with_roots(roots));
         let config = FrontConfig {
             max_in_flight,
             request_deadline_seconds: 30.0,

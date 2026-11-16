@@ -39,6 +39,8 @@ pub struct PhotoList {
     pub sha256: String,
     /// One entry per photo: the encoded file.
     pub photos: Vec<Bytes>,
+    /// The path of each photo, in the same order.
+    pub files: Vec<PathBuf>,
     /// Summed size of the photo files, in bytes.
     pub total_bytes: u64,
 }
@@ -54,12 +56,14 @@ impl PhotoList {
         let text = String::from_utf8(raw.clone())
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         let mut photos = Vec::new();
+        let mut files = Vec::new();
         let mut total_bytes = 0u64;
         for file in parse_paths(&text) {
             let data = fs::read(&file)
                 .map_err(|e| io::Error::new(e.kind(), format!("{}: {e}", file.display())))?;
             total_bytes += data.len() as u64;
             photos.push(Bytes::from(data));
+            files.push(file);
         }
         if photos.is_empty() {
             return Err(io::Error::new(
@@ -71,6 +75,7 @@ impl PhotoList {
             path: path.to_path_buf(),
             sha256: sha256_hex(&raw),
             photos,
+            files,
             total_bytes,
         })
     }

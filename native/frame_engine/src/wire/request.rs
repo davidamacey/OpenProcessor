@@ -2,15 +2,22 @@
 //! plan and the stored boxes (`parse_request` in `frame_engine/front.py`). Every refusal is
 //! `INVALID_ARGUMENT`; the texts are the contract's request rules and the plan fault text, and
 //! the first fault in the Python order wins.
+//!
+//! The native engine adds one optional input beside `image`, `source` (`read_by_key` in the
+//! contract): a key and the claim for the file it names, read by the engine itself. Exactly one of
+//! the two travels in a request; what it makes of a request without `source` is the Python
+//! engine's, but for the message of a request that has neither.
 
 use std::collections::HashMap;
 use std::fmt;
 
 use bytes::Bytes;
+use op_local_file::FileRef;
 
 use super::bytes_tensor::unpack;
 use super::contract::contract;
 use super::plan::{EnginePlan, PlanError, parse_plan};
+use super::source::parse_source;
 use crate::proto::ModelInferRequest;
 use crate::proto::model_infer_request::InferInputTensor;
 
@@ -32,12 +39,22 @@ impl From<PlanError> for RequestError {
     }
 }
 
-/// The image (a slice of the request message), the plan and the stored boxes: `Some` when the
-/// request carries the `boxes` input, even with zero rows (a reprocess sends `(0, 4)`).
+/// Where a photo's encoded bytes come from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ImageInput {
+    /// The `image` input: a slice of the request message.
+    Bytes(Bytes),
+    /// The `source` input: a file the engine reads itself under one of its read-only roots.
+    File(FileRef),
+}
+
+/// The image (a slice of the request message, or the file to read), the plan and the stored
+/// boxes: `Some` when the request carries the `boxes` input, even with zero rows (a reprocess
+/// sends `(0, 4)`).
 #[derive(Debug)]
 pub struct ParsedRequest {
-    /// The encoded image, a slice of the request message.
-    pub image: Bytes,
+    /// The encoded image, or the file that holds it.
+    pub image: ImageInput,
     /// The validated plan.
     pub plan: EnginePlan,
     /// Stored boxes as float64 `x1, y1, x2, y2` rows, as the request sent them.
@@ -89,15 +106,15 @@ fn stored_boxes(tensor: &InferInputTensor, raw: &Bytes) -> Result<Vec<[f64; 4]>,
         .collect())
 }
 
-/// The image, the plan and the stored boxes of `request`.
+/// The image or source, the plan and the stored boxes of `request`.
 ///
 /// # Errors
 ///
-/// An input is unknown or missing, the raw contents do not match the inputs, a tensor has the wrong datatype or shape, or the plan is invalid.
+/// An input is unknown or missing, the raw contents do not match the inputs, a tensor has the wrong datatype or shape, both or neither of `image` and `source` is sent, the `source` document is invalid, or the plan is invalid.
 ///
 /// # Panics
 ///
-/// Never in practice: both lookups follow a check that the two required inputs are present.
+/// Never in practice: both lookups follow a check that the inputs they read are present.
 pub fn parse_request(request: &ModelInferRequest) -> Result<ParsedRequest, RequestError> {
     let c = contract();
     if request.raw_input_contents.len() != request.inputs.len() {
@@ -110,33 +127,49 @@ pub fn parse_request(request: &ModelInferRequest) -> Result<ParsedRequest, Reque
         .enumerate()
         .map(|(k, t)| (t.name.as_str(), k))
         .collect();
+    let source_name = c.read_by_key.input.name.as_str();
     let mut unknown: Vec<&str> = inputs
         .keys()
         .copied()
-        .filter(|name| !c.inputs.iter().any(|t| t.name == *name))
+        .filter(|name| *name != source_name && !c.inputs.iter().any(|t| t.name == *name))
         .collect();
     unknown.sort_unstable();
     if let Some(first) = unknown.first() {
         return Err(rule("unknown_input", first));
     }
-    for name in [&c.inputs[0].name, &c.inputs[1].name] {
-        if !inputs.contains_key(name.as_str()) {
-            return Err(rule("missing_input", name));
-        }
+    let (image_name, plan_name) = (c.inputs[0].name.as_str(), c.inputs[1].name.as_str());
+    let (has_image, has_source) = (
+        inputs.contains_key(image_name),
+        inputs.contains_key(source_name),
+    );
+    if !has_image && !has_source {
+        return Err(rule("image_or_source_missing", ""));
+    }
+    if !inputs.contains_key(plan_name) {
+        return Err(rule("missing_input", plan_name));
+    }
+    if has_image && has_source {
+        return Err(rule("image_and_source", ""));
     }
     let at = |name: &str| {
         inputs
             .get(name)
             .map(|&k| (&request.inputs[k], &request.raw_input_contents[k]))
     };
-    let (image_tensor, image_raw) = at(&c.inputs[0].name).expect("checked present");
-    let (plan_tensor, plan_raw) = at(&c.inputs[1].name).expect("checked present");
-    let image = one_element(image_tensor, image_raw)?;
+    let (image_tensor, image_raw) =
+        at(if has_image { image_name } else { source_name }).expect("checked present");
+    let (plan_tensor, plan_raw) = at(plan_name).expect("checked present");
+    let element = one_element(image_tensor, image_raw)?;
     let plan_text = one_element(plan_tensor, plan_raw)?;
     let boxes = at(&c.inputs[2].name)
         .map(|(t, raw)| stored_boxes(t, raw))
         .transpose()?;
     let plan = parse_plan(&plan_text, boxes.is_some())?;
+    let image = if has_image {
+        ImageInput::Bytes(element)
+    } else {
+        ImageInput::File(parse_source(&element)?)
+    };
     Ok(ParsedRequest { image, plan, boxes })
 }
 
@@ -186,7 +219,10 @@ mod tests {
     #[test]
     fn a_good_request_is_read() {
         let parsed = parse_request(&good()).expect("good");
-        assert_eq!(parsed.image.as_ref(), b"\xff\xd8");
+        assert_eq!(
+            parsed.image,
+            ImageInput::Bytes(Bytes::from_static(b"\xff\xd8"))
+        );
         assert!(parsed.plan.runs("detect"));
         assert!(parsed.boxes.is_none());
     }
@@ -218,7 +254,17 @@ mod tests {
             &[1],
             pack(&[PLAN.as_bytes()]),
         );
-        assert_eq!(refusal(&missing), "missing input 'image'");
+        assert_eq!(refusal(&missing), "missing input 'image' or 'source'");
+
+        let mut no_plan = ModelInferRequest::default();
+        tensor(
+            &mut no_plan,
+            "image",
+            "BYTES",
+            &[1],
+            pack(&[b"x".as_slice()]),
+        );
+        assert_eq!(refusal(&no_plan), "missing input 'plan'");
 
         let mut shape = good();
         shape.inputs[0].shape[0] = 2;
@@ -348,8 +394,69 @@ mod tests {
             pack(&[b"second".as_slice()]),
         );
         assert_eq!(
-            parse_request(&r).expect("two images").image.as_ref(),
-            b"second"
+            parse_request(&r).expect("two images").image,
+            ImageInput::Bytes(Bytes::from_static(b"second"))
         );
+    }
+
+    const HASH: &str = "8e0124d8a93f5a1b7c6d2e3f40516273";
+
+    fn source_doc(key: &str) -> Bytes {
+        pack(&[format!(r#"{{"key": "{key}", "size": 7, "imohash": "{HASH}"}}"#).as_bytes()])
+    }
+
+    fn keyed() -> ModelInferRequest {
+        let mut r = good();
+        r.inputs.remove(0);
+        r.raw_input_contents.remove(0);
+        tensor(&mut r, "source", "BYTES", &[1], source_doc("source/a.jpg"));
+        r
+    }
+
+    #[test]
+    fn a_source_stands_in_for_the_image() {
+        let parsed = parse_request(&keyed()).expect("keyed");
+        let ImageInput::File(file) = parsed.image else {
+            panic!("a file, not bytes");
+        };
+        assert_eq!((file.key(), file.claim().size), ("source/a.jpg", 7));
+        assert!(parsed.plan.runs("detect"));
+    }
+
+    #[test]
+    fn both_and_neither_of_image_and_source_are_each_their_own_refusal() {
+        let mut both = good();
+        tensor(
+            &mut both,
+            "source",
+            "BYTES",
+            &[1],
+            source_doc("source/a.jpg"),
+        );
+        assert_eq!(refusal(&both), "image and source are exclusive: send one");
+        let mut neither = keyed();
+        neither.inputs.remove(neither.inputs.len() - 1);
+        neither.raw_input_contents.pop();
+        assert_eq!(refusal(&neither), "missing input 'image' or 'source'");
+    }
+
+    #[test]
+    fn the_source_is_checked_like_the_image_and_its_document_like_the_plan() {
+        let mut shape = keyed();
+        shape.inputs[1].shape[0] = 2;
+        assert_eq!(refusal(&shape), "source must be BYTES [1]");
+        let mut elements = keyed();
+        elements.raw_input_contents[1] = pack(&[b"a".as_slice(), b"b".as_slice()]);
+        assert_eq!(refusal(&elements), "source must hold one element");
+        let mut bad_key = keyed();
+        bad_key.raw_input_contents[1] = source_doc("source/../a.jpg");
+        assert_eq!(refusal(&bad_key), "bad_key: 'source/../a.jpg'");
+        let mut root = keyed();
+        root.raw_input_contents[1] = source_doc("projects/1/a");
+        assert_eq!(refusal(&root), "unknown_root: 'projects/1/a'");
+        // the plan is read first: a request with a bad plan and a bad source names the plan
+        let mut both_bad = bad_key;
+        both_bad.raw_input_contents[0] = pack(&[b"{".as_slice()]);
+        assert!(refusal(&both_bad).starts_with("bad_json"));
     }
 }

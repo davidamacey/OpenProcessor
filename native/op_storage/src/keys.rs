@@ -1,13 +1,15 @@
 //! The key layout of plan 18 section 4.3: by project and content.
 //!
-//! A [`StorageKey`] is a `/`-separated relative key whose first segment is a root. It is
-//! validated with [`object_store::path::Path::parse`] (no `.`, `..`, empty segments or control
-//! characters) and is refused when it is not in its canonical form, so what is stored in the
-//! record and what the object store sees are the same string.
+//! A [`StorageKey`] is a `/`-separated relative key whose first segment is a root. The rule it
+//! must satisfy is `op_local_file::validate_key`, the one copy the frame engine reads local
+//! files by too; it is at least as strict as [`object_store::path::Path::parse`], so what is
+//! stored in the record and what the object store sees are the same string.
 
 use std::fmt;
 
 use object_store::path::Path;
+pub use op_local_file::Root;
+use op_local_file::validate_key;
 use uuid::Uuid;
 
 use crate::error::KeyError;
@@ -76,51 +78,6 @@ impl DerivedKind {
     }
 }
 
-/// The first segment of a key.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub enum Root {
-    /// The landing zone on local fast disk (never in the object store).
-    Landing,
-    /// Source roots read in place; never written or erased.
-    Source,
-    /// Everything a project owns in the object store.
-    Projects,
-    /// Models.
-    Models,
-    /// Bake-off results.
-    BakeoffResults,
-    /// Caches.
-    Cache,
-}
-
-impl Root {
-    const ALL: [Self; 6] = [
-        Self::Landing,
-        Self::Source,
-        Self::Projects,
-        Self::Models,
-        Self::BakeoffResults,
-        Self::Cache,
-    ];
-
-    /// The key segment of this root.
-    #[must_use]
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Landing => "landing",
-            Self::Source => "source",
-            Self::Projects => "projects",
-            Self::Models => "models",
-            Self::BakeoffResults => "bakeoff_results",
-            Self::Cache => "cache",
-        }
-    }
-
-    fn from_segment(segment: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|r| r.as_str() == segment)
-    }
-}
-
 /// A validated storage key, or a prefix of keys (for delete by prefix).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct StorageKey {
@@ -137,27 +94,13 @@ impl StorageKey {
     /// [`KeyError::UnknownRoot`] when the first segment is not a root, [`KeyError::Invalid`] for
     /// every other refusal.
     pub fn parse(key: &str) -> Result<Self, KeyError> {
-        let invalid = |reason: &str| KeyError::Invalid {
+        let root = validate_key(key)?;
+        // `validate_key` is at least as strict as `Path::parse`; the property test in
+        // `tests/key_resolution.rs` holds it to that
+        let path = Path::parse(key).map_err(|e| KeyError::Invalid {
             key: key.to_owned(),
-            reason: reason.to_owned(),
-        };
-        if key.is_empty() {
-            return Err(invalid("a key must not be empty"));
-        }
-        if key.contains('\\') {
-            return Err(invalid("a backslash is not allowed"));
-        }
-        let path = Path::parse(key).map_err(|e| invalid(&e.to_string()))?;
-        if path.as_ref() != key {
-            return Err(invalid("a leading or trailing '/' is not allowed"));
-        }
-        let (first, rest) = key.split_once('/').unwrap_or((key, ""));
-        let root = Root::from_segment(first).ok_or_else(|| KeyError::UnknownRoot {
-            key: key.to_owned(),
+            reason: e.to_string(),
         })?;
-        if rest.is_empty() {
-            return Err(invalid("a root with nothing under it is not an object"));
-        }
         Ok(Self { path, root })
     }
 
@@ -338,30 +281,6 @@ mod tests {
             names,
             ["crops", "thumbs", "exports", "training", "snapshots"]
         );
-    }
-
-    #[test]
-    fn parse_refuses_what_could_leave_a_root() {
-        for bad in [
-            "",
-            "source",
-            "source/",
-            "/source/a",
-            "source/a/",
-            "source//a",
-            "source/../a",
-            "source/./a",
-            "source/a/..",
-            "source/a\\b",
-            "source/a\0b",
-            "source/a\nb",
-            "projects/1/originals/../../x",
-        ] {
-            assert!(
-                matches!(StorageKey::parse(bad), Err(KeyError::Invalid { .. })),
-                "{bad:?} must be refused"
-            );
-        }
     }
 
     #[test]

@@ -6,6 +6,7 @@
 //! | Module | Concern |
 //! |---|---|
 //! | [`codec`] | the BYTES tensor of KServe raw contents |
+//! | [`input`] | how a photo is named in a request: its bytes, or the file the engine reads itself |
 //! | [`plan`] | the `plan` input: the plan types, the ingest and stored-boxes plans, the JSON text as Python writes it |
 //! | [`answer`] | the answer to one photo, typed: status, route, branch states, tensors |
 //! | [`client`] | the channel pool, the in-flight cap, a deadline on every call, retries, readiness |
@@ -19,6 +20,7 @@ mod channel;
 pub mod client;
 pub mod codec;
 pub mod error;
+pub mod input;
 pub mod model_server;
 pub mod observer;
 pub mod plan;
@@ -33,6 +35,7 @@ pub use answer::{
 };
 pub use client::{EngineClient, MODEL, Readiness};
 pub use error::{ConfigError, EngineError};
+pub use input::PhotoInput;
 pub use model_server::{LoadError, ModelServer};
 pub use observer::{CallObserver, ProbeOutcome};
 pub use plan::{

@@ -11,9 +11,15 @@
 //!   (section 1.1).
 
 use std::fmt;
+use std::path::PathBuf;
 
 use crate::cores;
 use crate::pyfmt::{format_g, repr_str};
+
+/// The directory a `landing/...` key is read under (reading a photo by key, plan 17 N2).
+const LANDING_ROOT: &str = "OP_FRAME_ENGINE_LANDING_ROOT";
+/// The directory a `source/...` key is read under.
+const SOURCE_ROOT: &str = "OP_FRAME_ENGINE_SOURCE_ROOT";
 
 /// The text of a refusal, naming the variable.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -116,6 +122,12 @@ pub struct Settings {
     /// `OP_FRAME_ENGINE_EXPECT_BUS_ID`: the PCI bus id of the card this engine must run on; the
     /// start is refused on any other (unset: no check).
     pub expect_bus_id: Option<String>,
+    /// `OP_FRAME_ENGINE_LANDING_ROOT`: the directory a `landing/...` key is read under, mounted
+    /// read-only (unset: the engine refuses landing keys).
+    pub landing_root: Option<PathBuf>,
+    /// `OP_FRAME_ENGINE_SOURCE_ROOT`: the directory a `source/...` key is read under, mounted
+    /// read-only (unset: the engine refuses source keys).
+    pub source_root: Option<PathBuf>,
 }
 
 /// What an unset variable means, apart from `lanes` (derived from the cores).
@@ -157,6 +169,8 @@ impl Settings {
             drain_seconds: 30.0,
             health_seconds: 2.0,
             expect_bus_id: None,
+            landing_root: None,
+            source_root: None,
         }
     }
 
@@ -273,6 +287,8 @@ impl Settings {
                 600.0,
             )?,
             expect_bus_id,
+            landing_root: env.raw(LANDING_ROOT).map(PathBuf::from),
+            source_root: env.raw(SOURCE_ROOT).map(PathBuf::from),
         };
         s.check_relations()?;
         Ok(s)
@@ -718,5 +734,20 @@ mod tests {
         assert_eq!(parse_py_float("1e-2"), Some(0.01));
         assert!(parse_py_float("nan").is_some_and(f64::is_nan));
         assert_eq!(parse_py_float("1._5"), None);
+    }
+
+    #[test]
+    fn the_two_roots_of_a_read_by_key_are_unset_by_default_and_read_as_paths() {
+        let none = read(&[]).expect("defaults");
+        assert_eq!((none.landing_root, none.source_root), (None, None));
+        let both = read(&[
+            ("OP_FRAME_ENGINE_LANDING_ROOT", " /data/landing "),
+            ("OP_FRAME_ENGINE_SOURCE_ROOT", "/data/source"),
+        ])
+        .expect("roots");
+        assert_eq!(both.landing_root, Some(PathBuf::from("/data/landing")));
+        assert_eq!(both.source_root, Some(PathBuf::from("/data/source")));
+        let empty = read(&[("OP_FRAME_ENGINE_LANDING_ROOT", "  ")]).expect("empty is unset");
+        assert_eq!(empty.landing_root, None);
     }
 }

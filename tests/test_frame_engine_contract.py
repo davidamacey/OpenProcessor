@@ -29,6 +29,10 @@ PROTOCOL = json.loads((CONTRACTS / 'frame_engine_v1.json').read_text(encoding='u
 CASES = json.loads((CONTRACTS / 'frame_engine_plan_cases.json').read_text(encoding='utf-8'))[
     'cases'
 ]
+SOURCE_CASES = json.loads(
+    (CONTRACTS / 'frame_engine_source_cases.json').read_text(encoding='utf-8')
+)['cases']
+READ_BY_KEY = PROTOCOL['read_by_key']
 PLAN = json.dumps(
     {
         'version': 1,
@@ -294,3 +298,126 @@ def test_the_stages_and_the_metric_families_are_the_engines() -> None:
     for metric in PROTOCOL['metrics']:
         collector = collectors.get(metric['name'])
         assert metric['labels'] == list(getattr(collector, '_labelnames', ())), metric['name']
+
+
+# ---------------------------------------------------------------------------- read by key
+# The native engine's optional ``source`` input (plan 17 N2). The Python engine does not have it,
+# so no Python function says what a ``source`` document means: the cases are a table, and the
+# reference below is a second, independent reading of the rules written out in the generator's
+# docstring, so a wrong row of the table fails here before it can mislead the Rust sides.
+
+_LOCAL_ROOTS = frozenset(READ_BY_KEY['local_roots'])
+_OBJECT_STORE_ROOTS = frozenset({'projects', 'models', 'bakeoff_results', 'cache'})
+_FIELDS = ('key', 'size', 'imohash')
+_MAX_SIZE = 2**53 - 1
+
+
+def _no_repeats(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for name, value in pairs:
+        if name in out:
+            raise ValueError(name)
+        out[name] = value
+    return out
+
+
+def _refuse_constant(name: str) -> Any:
+    raise ValueError(name)
+
+
+def _key_fault(key: str) -> str | None:
+    parts = key.split('/')
+    structural = (
+        not key
+        or '\\' in key
+        or any(p in ('', '.', '..') or any(ord(c) < 32 or ord(c) == 127 for c in p) for p in parts)
+    )
+    if structural:
+        return 'bad_key'
+    if parts[0] not in _LOCAL_ROOTS | _OBJECT_STORE_ROOTS:
+        return 'unknown_root'
+    if len(parts) == 1:
+        return 'bad_key'
+    return None if parts[0] in _LOCAL_ROOTS else 'unknown_root'
+
+
+def _field_fault(doc: dict[str, Any]) -> str | None:
+    """The first field that is not allowed, missing or of the wrong type, in that order."""
+    for name in doc:
+        if name not in _FIELDS:
+            return name
+    for name in _FIELDS:
+        if name not in doc:
+            return name
+    kinds = {'key': str, 'size': int, 'imohash': str}
+    for name in _FIELDS:
+        value = doc[name]
+        if not isinstance(value, kinds[name]) or isinstance(value, bool):
+            return name
+    return None
+
+
+def _reference_source(text: str) -> dict[str, Any]:
+    try:
+        doc = json.loads(text, object_pairs_hook=_no_repeats, parse_constant=_refuse_constant)
+    except ValueError:
+        doc = None
+    if not isinstance(doc, dict):
+        return {'fault': 'bad_source_json'}
+    if (field := _field_fault(doc)) is not None:
+        return {'fault': 'bad_source_field', 'message': f'bad_source_field: {field!r}'}
+    if (fault := _key_fault(doc['key'])) is not None:
+        return {'fault': fault, 'message': f'{fault}: {doc["key"]!r}'}
+    digest = doc['imohash']
+    claim_fault = (
+        'size'
+        if not 0 <= doc['size'] <= _MAX_SIZE
+        else 'imohash'
+        if len(digest) != 32 or any(c not in '0123456789abcdef' for c in digest)
+        else None
+    )
+    if claim_fault is not None:
+        return {'fault': 'bad_claim', 'message': f'bad_claim: {claim_fault!r}'}
+    return {'key': doc['key'], 'size': doc['size'], 'imohash': digest}
+
+
+def _with_source(request: Any) -> Any:
+    tensor = request.inputs.add()
+    tensor.name, tensor.datatype = 'source', 'BYTES'
+    tensor.shape.append(1)
+    request.raw_input_contents.append(_bytes(b'{}'))
+    return request
+
+
+def test_the_python_engine_has_no_source_input_and_the_contract_says_so() -> None:
+    assert READ_BY_KEY['supported_by'] == ['native']
+    assert READ_BY_KEY['input']['name'] not in {t['name'] for t in PROTOCOL['inputs']}
+    assert _bad_request_detail(_with_source(_request())) == "unknown input 'source'"
+    assert {r['id'] for r in READ_BY_KEY['request_rules']}.isdisjoint(
+        r['id'] for r in PROTOCOL['request_rules']
+    )
+
+
+def test_the_new_photo_statuses_are_not_ones_the_python_engine_answers() -> None:
+    new = [s['status'] for s in READ_BY_KEY['photo_statuses']]
+    assert len(set(new)) == len(new)
+    assert set(new).isdisjoint(PROTOCOL['photo_statuses'])
+
+
+@pytest.mark.parametrize('case', SOURCE_CASES, ids=lambda c: c['id'])
+def test_each_source_case_is_what_the_rules_say(case: dict[str, Any]) -> None:
+    got = _reference_source(case['text'])
+    if 'fault' in case:
+        assert got.get('fault') == case['fault']
+        assert got.get('message') == case.get('message')
+    else:
+        assert got == {k: case[k] for k in _FIELDS}
+        assert json.loads(case['built']) == got
+        assert case['built'] == json.dumps(got, sort_keys=True)
+
+
+def test_every_document_fault_has_a_case_and_the_root_fault_is_the_engines_own() -> None:
+    faults = READ_BY_KEY['source_faults']
+    assert faults[-1] == 'root_not_configured'
+    assert {c['fault'] for c in SOURCE_CASES if 'fault' in c} == set(faults[:-1])
+    assert sum('fault' not in c for c in SOURCE_CASES) >= 5

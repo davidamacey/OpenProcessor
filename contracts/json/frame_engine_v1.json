@@ -583,6 +583,78 @@
     "ocr_max_batch": 16,
     "ocr_max_det_side": 1920
   },
+  "read_by_key": {
+    "document_fields": [
+      {
+        "name": "key",
+        "type": "string"
+      },
+      {
+        "max": 9007199254740991,
+        "min": 0,
+        "name": "size",
+        "type": "integer"
+      },
+      {
+        "form": "32 lowercase hexadecimal characters",
+        "name": "imohash",
+        "type": "string"
+      }
+    ],
+    "input": {
+      "datatype": "BYTES",
+      "name": "source",
+      "required": false,
+      "shape": [
+        1
+      ]
+    },
+    "local_roots": [
+      "landing",
+      "source"
+    ],
+    "photo_statuses": [
+      {
+        "status": "missing",
+        "when": "no file has the key under the configured root"
+      },
+      {
+        "status": "changed",
+        "when": "the file has another size than the claim, or the claimed size and another sampled hash"
+      },
+      {
+        "status": "too_large",
+        "when": "the claimed size is above the message limit; nothing is opened"
+      },
+      {
+        "status": "unreadable",
+        "when": "the key resolves outside its root, names no regular file, or the read fails"
+      }
+    ],
+    "replaces_input": "image",
+    "request_rules": [
+      {
+        "id": "image_and_source",
+        "message": "image and source are exclusive: send one"
+      },
+      {
+        "id": "image_or_source_missing",
+        "message": "missing input 'image' or 'source'"
+      }
+    ],
+    "size_limit": "OP_FRAME_ENGINE_MAX_MESSAGE_MIB",
+    "source_faults": [
+      "bad_source_json",
+      "bad_source_field",
+      "bad_key",
+      "unknown_root",
+      "bad_claim",
+      "root_not_configured"
+    ],
+    "supported_by": [
+      "native"
+    ]
+  },
   "request_rules": [
     {
       "id": "raw_contents_count",
@@ -627,7 +699,8 @@
     "src/domain/decode_route.py",
     "src/clients/frame_engine.py",
     "frame_engine/front.py",
-    "scripts/codegen/frame_engine_plan_cases.py"
+    "scripts/codegen/frame_engine_plan_cases.py",
+    "scripts/codegen/frame_engine_source_cases.py"
   ],
   "stages": [
     "queue",

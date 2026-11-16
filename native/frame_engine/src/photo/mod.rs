@@ -43,6 +43,7 @@ pub mod device;
 mod faces;
 pub mod late;
 mod phases;
+pub mod read;
 mod renditions;
 mod rounds;
 pub mod source;
@@ -52,6 +53,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use bytes::Bytes;
 use gpu_frame::CancelToken;
 
 use self::calls::PhotoCalls;
@@ -66,7 +68,7 @@ use crate::colour::{Colour, ColourError, ColourStep, Table, Upload};
 use crate::fault::{GpuFault, job_failed, note_memory_failure};
 use crate::jpeg_header::route;
 use crate::metrics::{ByImage, ByOutcome, Metrics};
-use crate::pipeline::{Photo, PhotoAnswer, PipelineError, Tensor};
+use crate::pipeline::{ImageInput, Photo, PhotoAnswer, PipelineError, Tensor};
 use crate::wire::EnginePlan;
 use crate::wire::branch_status::{
     BranchState, DEPENDENCY_FAILED, IMAGE_FAILED, UNSUPPORTED_BRANCH,
@@ -114,6 +116,8 @@ pub struct PhotoSettings {
     pub slab_wait: Duration,
     /// Region bytes one photo may hold with calls in flight.
     pub window: usize,
+    /// The read-only roots a photo named by a key is read from.
+    pub keyed: Arc<read::KeyedRoots>,
 }
 
 /// The photo flow over a device and a frame budget.
@@ -301,14 +305,15 @@ where
         &self,
         clock: &mut StageClock,
         photo: &Photo,
+        image: &Bytes,
         runs: &Runs,
     ) -> Result<(Source, B::Permit), Stop> {
         let s = &self.settings;
         let source = clock
             .time(DECODE, || {
-                let decided = route(&photo.image, s.min_megapixels, s.max_megapixels);
+                let decided = route(image, s.min_megapixels, s.max_megapixels);
                 source::decide(
-                    &photo.image,
+                    image,
                     decided,
                     s.max_megapixels,
                     &derivatives::sides(&photo.plan.derivatives),
@@ -339,6 +344,30 @@ where
             .inc();
         let permit = permit.map_err(|o| Stop::Fail(PipelineError::Overload(o)))?;
         Ok((source, permit))
+    }
+
+    /// The photo's encoded bytes: the request's own, or the file its key names, read on the
+    /// finish pool (never on the network runtime; the pool's threads bound the files open at
+    /// once) and checked against the claim. A refusal answers the photo with its status.
+    async fn load(&self, clock: &mut StageClock, photo: &Photo) -> Result<Bytes, Stop> {
+        let file = match &photo.image {
+            ImageInput::Bytes(bytes) => return Ok(bytes.clone()),
+            ImageInput::File(file) => file.clone(),
+        };
+        let roots = Arc::clone(&self.settings.keyed);
+        let handle = self
+            .device
+            .host(move || roots.read(&file), photo.request.cancel_token())
+            .map_err(|e| Stop::Fail(job_failed(DECODE, &e)))?;
+        match clock.wait(DECODE, handle.wait()).await {
+            Ok(Ok(Ok(bytes))) => Ok(bytes),
+            Ok(Ok(Err(refusal))) => {
+                tracing::warn!("{}: {}", refusal.status, refusal.detail);
+                Err(Stop::Status(refusal.status))
+            }
+            Ok(Err(fault)) => Err(fault.into()),
+            Err(e) => Err(Stop::Fail(job_failed(DECODE, &e))),
+        }
     }
 
     /// The decode job on a lane: the frame and the slices of the round-1 writes.
@@ -400,7 +429,8 @@ where
         }
         let plan = &photo.plan;
         let runs = Runs::of(plan);
-        let (source, permit) = self.admit(clock, &photo, &runs).await?;
+        let image = self.load(clock, &photo).await?;
+        let (source, permit) = self.admit(clock, &photo, &image, &runs).await?;
         let size = source.size;
         *seen = size;
         let request = Arc::clone(&photo.request);

@@ -493,9 +493,11 @@ async fn metadata_is_the_contracts_tensors_and_an_unknown_model_is_not_found() {
         want(
             c.inputs
                 .iter()
+                .chain([&c.read_by_key.input])
                 .map(|t| (&t.name, &t.datatype, &t.shape))
                 .collect()
-        )
+        ),
+        "the protocol's inputs, then the read-by-key extension's"
     );
     assert_eq!(
         table(&answer.outputs),
@@ -578,5 +580,88 @@ async fn a_tensor_of_the_wrong_type_is_the_engines_own_failure() {
     assert_eq!(
         status.message(),
         "frame engine: output nope is not in protocol version 1"
+    );
+}
+
+fn keyed_request(key: &str, bytes: &[u8]) -> ModelInferRequest {
+    use op_local_file::{FileClaim, FileRef};
+    let file = FileRef::new(key, FileClaim::of(bytes)).expect("a local key");
+    let claim = file.claim();
+    let document = format!(
+        r#"{{"key": "{key}", "size": {}, "imohash": "{}"}}"#,
+        claim.size,
+        claim.imohash.to_hex()
+    );
+    let mut r = request(b"", FRAME);
+    r.inputs[0].name = "source".into();
+    r.raw_input_contents[0] = pack(&[document.as_bytes()]);
+    r
+}
+
+#[tokio::test]
+async fn a_keyed_request_is_refused_as_invalid_when_the_engine_has_no_root_for_it() {
+    let (front, _) = front(8, 30.0);
+    let status = refused(infer(&front, keyed_request("landing/7/a.0", b"x")).await);
+    assert_eq!(status.code(), Code::InvalidArgument);
+    assert!(
+        status
+            .message()
+            .starts_with("root_not_configured: 'landing'"),
+        "{}",
+        status.message()
+    );
+}
+
+#[tokio::test]
+async fn a_keyed_request_to_an_engine_with_a_root_reads_the_file_and_answers_like_bytes() {
+    use crate::photo::read::KeyedRoots;
+    let dir = tempfile::tempdir().expect("dir");
+    let landing = dir.path().join("landing");
+    std::fs::create_dir_all(landing.join("7")).expect("landing");
+    let bytes = b"\xff\xd8 a plain photo";
+    std::fs::write(landing.join("7/a.0"), bytes).expect("file");
+    let roots = KeyedRoots::new(Some(&landing), None, 1 << 20).expect("roots");
+    let config = FrontConfig {
+        max_in_flight: 8,
+        request_deadline_seconds: 30.0,
+    };
+    let (front, _) = Front::new(
+        Arc::new(StubPipeline::new(None).with_roots(roots)),
+        Metrics::new(),
+        config,
+    );
+    let keyed = infer(&front, keyed_request("landing/7/a.0", bytes))
+        .await
+        .expect("keyed answer");
+    let plain = infer(&front, request(bytes, FRAME))
+        .await
+        .expect("bytes answer");
+    assert_eq!(keyed.raw_output_contents, plain.raw_output_contents);
+    assert_eq!(
+        keyed.outputs.iter().map(|o| &o.name).collect::<Vec<_>>(),
+        plain.outputs.iter().map(|o| &o.name).collect::<Vec<_>>()
+    );
+    // a file that is gone is a photo status, not a gRPC error
+    std::fs::remove_file(landing.join("7/a.0")).expect("remove");
+    let gone = infer(&front, keyed_request("landing/7/a.0", bytes))
+        .await
+        .expect("answered");
+    let status = gone
+        .outputs
+        .iter()
+        .position(|o| o.name == "status")
+        .expect("a status");
+    assert_eq!(&gone.raw_output_contents[status][4..], b"missing");
+    // both, then neither
+    let mut both = keyed_request("landing/7/a.0", bytes);
+    both.inputs.push(request(bytes, FRAME).inputs.remove(0));
+    both.raw_input_contents.push(pack(&[bytes.as_slice()]));
+    let status = refused(infer(&front, both).await);
+    assert_eq!(
+        (status.code(), status.message()),
+        (
+            Code::InvalidArgument,
+            "image and source are exclusive: send one"
+        )
     );
 }

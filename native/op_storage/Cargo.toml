@@ -17,6 +17,7 @@ futures-util = { workspace = true }
 # licence, which native/deny.toml does not allow.
 object_store = { workspace = true, features = ["aws-base", "fs", "reqwest", "ring"] }
 op_config = { path = "../op_config" }
+op_local_file = { path = "../op_local_file" }
 reqwest = { workspace = true, features = ["rustls-no-provider"] }
 rustix = { workspace = true, features = ["fs"] }
 sha2 = { workspace = true }

@@ -1,0 +1,367 @@
+{
+  "cases": [
+    {
+      "built": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"landing/7/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.00000000-0000-4000-8000-000000000abc.3\", \"size\": 6812345}",
+      "id": "landing_key",
+      "imohash": "8e0124d8a93f5a1b7c6d2e3f40516273",
+      "key": "landing/7/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.00000000-0000-4000-8000-000000000abc.3",
+      "size": 6812345,
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"landing/7/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.00000000-0000-4000-8000-000000000abc.3\", \"size\": 6812345}"
+    },
+    {
+      "built": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source/trip/IMG_1.jpg\", \"size\": 6812345}",
+      "id": "source_key",
+      "imohash": "8e0124d8a93f5a1b7c6d2e3f40516273",
+      "key": "source/trip/IMG_1.jpg",
+      "size": 6812345,
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source/trip/IMG_1.jpg\", \"size\": 6812345}"
+    },
+    {
+      "built": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source/empty.jpg\", \"size\": 0}",
+      "id": "empty_file",
+      "imohash": "8e0124d8a93f5a1b7c6d2e3f40516273",
+      "key": "source/empty.jpg",
+      "size": 0,
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source/empty.jpg\", \"size\": 0}"
+    },
+    {
+      "built": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source/big.jpg\", \"size\": 9007199254740991}",
+      "id": "largest_size",
+      "imohash": "8e0124d8a93f5a1b7c6d2e3f40516273",
+      "key": "source/big.jpg",
+      "size": 9007199254740991,
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source/big.jpg\", \"size\": 9007199254740991}"
+    },
+    {
+      "built": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source/caf\\u00e9/\\u00e9 1.jpg\", \"size\": 1234}",
+      "id": "non_ascii_key_escaped",
+      "imohash": "8e0124d8a93f5a1b7c6d2e3f40516273",
+      "key": "source/café/é 1.jpg",
+      "size": 1234,
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source/caf\\u00e9/\\u00e9 1.jpg\", \"size\": 1234}"
+    },
+    {
+      "built": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source/caf\\u00e9/\\u00e9 1.jpg\", \"size\": 1234}",
+      "id": "non_ascii_key_literal",
+      "imohash": "8e0124d8a93f5a1b7c6d2e3f40516273",
+      "key": "source/café/é 1.jpg",
+      "size": 1234,
+      "text": "{\"key\": \"source/café/é 1.jpg\", \"size\": 1234, \"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\"}"
+    },
+    {
+      "built": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source/a.jpg\", \"size\": 7}",
+      "id": "fields_in_any_order",
+      "imohash": "8e0124d8a93f5a1b7c6d2e3f40516273",
+      "key": "source/a.jpg",
+      "size": 7,
+      "text": "{\"size\": 7, \"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source/a.jpg\"}"
+    },
+    {
+      "built": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source/a.jpg\", \"size\": 7}",
+      "id": "whitespace_around",
+      "imohash": "8e0124d8a93f5a1b7c6d2e3f40516273",
+      "key": "source/a.jpg",
+      "size": 7,
+      "text": " \n{ \"key\" : \"source/a.jpg\" , \"size\" : 7 , \"imohash\" : \"8e0124d8a93f5a1b7c6d2e3f40516273\" }\n"
+    },
+    {
+      "built": "{\"imohash\": \"00000000000000000000000000000000\", \"key\": \"source/a.jpg\", \"size\": 7}",
+      "id": "hash_with_digits_only",
+      "imohash": "00000000000000000000000000000000",
+      "key": "source/a.jpg",
+      "size": 7,
+      "text": "{\"imohash\": \"00000000000000000000000000000000\", \"key\": \"source/a.jpg\", \"size\": 7}"
+    },
+    {
+      "fault": "bad_source_json",
+      "id": "empty_text",
+      "text": ""
+    },
+    {
+      "fault": "bad_source_json",
+      "id": "truncated_json",
+      "text": "{\"key\": \"source/a.jpg\""
+    },
+    {
+      "fault": "bad_source_json",
+      "id": "not_an_object",
+      "text": "[\"source/a.jpg\", 7]"
+    },
+    {
+      "fault": "bad_source_json",
+      "id": "a_string",
+      "text": "\"source/a.jpg\""
+    },
+    {
+      "fault": "bad_source_json",
+      "id": "repeated_key",
+      "text": "{\"key\": \"source/a.jpg\", \"size\": 7, \"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"size\": 8}"
+    },
+    {
+      "fault": "bad_source_json",
+      "id": "nan_literal",
+      "text": "{\"key\": \"source/a.jpg\", \"size\": NaN, \"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\"}"
+    },
+    {
+      "fault": "bad_source_field",
+      "id": "missing_key",
+      "message": "bad_source_field: 'key'",
+      "text": "{\"size\": 7, \"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\"}"
+    },
+    {
+      "fault": "bad_source_field",
+      "id": "missing_size",
+      "message": "bad_source_field: 'size'",
+      "text": "{\"key\": \"source/a.jpg\", \"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\"}"
+    },
+    {
+      "fault": "bad_source_field",
+      "id": "missing_imohash",
+      "message": "bad_source_field: 'imohash'",
+      "text": "{\"key\": \"source/a.jpg\", \"size\": 7}"
+    },
+    {
+      "fault": "bad_source_field",
+      "id": "unknown_field",
+      "message": "bad_source_field: 'mtime'",
+      "text": "{\"key\": \"source/a.jpg\", \"size\": 7, \"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"mtime\": 5}"
+    },
+    {
+      "fault": "bad_source_field",
+      "id": "unknown_field_before_a_missing_one",
+      "message": "bad_source_field: 'mtime'",
+      "text": "{\"key\": \"source/a.jpg\", \"mtime\": 5}"
+    },
+    {
+      "fault": "bad_source_field",
+      "id": "key_is_a_number",
+      "message": "bad_source_field: 'key'",
+      "text": "{\"key\": 5, \"size\": 7, \"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\"}"
+    },
+    {
+      "fault": "bad_source_field",
+      "id": "size_is_a_string",
+      "message": "bad_source_field: 'size'",
+      "text": "{\"key\": \"source/a.jpg\", \"size\": \"7\", \"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\"}"
+    },
+    {
+      "fault": "bad_source_field",
+      "id": "size_is_a_float",
+      "message": "bad_source_field: 'size'",
+      "text": "{\"key\": \"source/a.jpg\", \"size\": 7.0, \"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\"}"
+    },
+    {
+      "fault": "bad_source_field",
+      "id": "size_is_a_bool",
+      "message": "bad_source_field: 'size'",
+      "text": "{\"key\": \"source/a.jpg\", \"size\": true, \"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\"}"
+    },
+    {
+      "fault": "bad_source_field",
+      "id": "imohash_is_null",
+      "message": "bad_source_field: 'imohash'",
+      "text": "{\"key\": \"source/a.jpg\", \"size\": 7, \"imohash\": null}"
+    },
+    {
+      "fault": "bad_source_field",
+      "id": "missing_before_wrong_type",
+      "message": "bad_source_field: 'imohash'",
+      "text": "{\"key\": 5, \"size\": 7}"
+    },
+    {
+      "fault": "bad_source_field",
+      "id": "wrong_types_in_field_order",
+      "message": "bad_source_field: 'key'",
+      "text": "{\"imohash\": 5, \"key\": 5, \"size\": 7}"
+    },
+    {
+      "fault": "bad_source_field",
+      "id": "imohash_is_a_number",
+      "message": "bad_source_field: 'imohash'",
+      "text": "{\"key\": \"source/a.jpg\", \"size\": 7, \"imohash\": 5}"
+    },
+    {
+      "fault": "bad_key",
+      "id": "empty_key",
+      "message": "bad_key: ''",
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"\", \"size\": 7}"
+    },
+    {
+      "fault": "bad_key",
+      "id": "root_only",
+      "message": "bad_key: 'source'",
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source\", \"size\": 7}"
+    },
+    {
+      "fault": "bad_key",
+      "id": "root_and_slash",
+      "message": "bad_key: 'source/'",
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source/\", \"size\": 7}"
+    },
+    {
+      "fault": "bad_key",
+      "id": "leading_slash",
+      "message": "bad_key: '/source/a.jpg'",
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"/source/a.jpg\", \"size\": 7}"
+    },
+    {
+      "fault": "bad_key",
+      "id": "trailing_slash",
+      "message": "bad_key: 'source/a/'",
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source/a/\", \"size\": 7}"
+    },
+    {
+      "fault": "bad_key",
+      "id": "empty_segment",
+      "message": "bad_key: 'source//a.jpg'",
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source//a.jpg\", \"size\": 7}"
+    },
+    {
+      "fault": "bad_key",
+      "id": "dot_dot_segment",
+      "message": "bad_key: 'source/../a.jpg'",
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source/../a.jpg\", \"size\": 7}"
+    },
+    {
+      "fault": "bad_key",
+      "id": "dot_segment",
+      "message": "bad_key: 'source/./a.jpg'",
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source/./a.jpg\", \"size\": 7}"
+    },
+    {
+      "fault": "bad_key",
+      "id": "landing_traversal",
+      "message": "bad_key: 'landing/7/../../etc/passwd'",
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"landing/7/../../etc/passwd\", \"size\": 7}"
+    },
+    {
+      "fault": "bad_key",
+      "id": "backslash",
+      "message": "bad_key: 'source/a\\\\b.jpg'",
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source/a\\\\b.jpg\", \"size\": 7}"
+    },
+    {
+      "fault": "bad_key",
+      "id": "nul_byte",
+      "message": "bad_key: 'source/a\\x00b.jpg'",
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source/a\\u0000b.jpg\", \"size\": 7}"
+    },
+    {
+      "fault": "bad_key",
+      "id": "newline",
+      "message": "bad_key: 'source/a\\nb.jpg'",
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source/a\\nb.jpg\", \"size\": 7}"
+    },
+    {
+      "fault": "bad_key",
+      "id": "delete_character",
+      "message": "bad_key: 'source/a\\x7fb.jpg'",
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source/a\\u007fb.jpg\", \"size\": 7}"
+    },
+    {
+      "fault": "unknown_root",
+      "id": "unknown_root",
+      "message": "unknown_root: 'upload/a.jpg'",
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"upload/a.jpg\", \"size\": 7}"
+    },
+    {
+      "fault": "unknown_root",
+      "id": "miscased_root",
+      "message": "unknown_root: 'Source/a.jpg'",
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"Source/a.jpg\", \"size\": 7}"
+    },
+    {
+      "fault": "unknown_root",
+      "id": "object_store_root",
+      "message": "unknown_root: 'projects/1/originals/ab/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'",
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"projects/1/originals/ab/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\", \"size\": 7}"
+    },
+    {
+      "fault": "unknown_root",
+      "id": "models_root",
+      "message": "unknown_root: 'models/a.onnx'",
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"models/a.onnx\", \"size\": 7}"
+    },
+    {
+      "fault": "unknown_root",
+      "id": "cache_root",
+      "message": "unknown_root: 'cache/a'",
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"cache/a\", \"size\": 7}"
+    },
+    {
+      "fault": "bad_key",
+      "id": "bad_key_before_bad_claim",
+      "message": "bad_key: 'source/../a'",
+      "text": "{\"imohash\": \"x\", \"key\": \"source/../a\", \"size\": -1}"
+    },
+    {
+      "fault": "unknown_root",
+      "id": "unknown_root_before_bad_claim",
+      "message": "unknown_root: 'projects/1/a'",
+      "text": "{\"imohash\": \"x\", \"key\": \"projects/1/a\", \"size\": -1}"
+    },
+    {
+      "fault": "bad_claim",
+      "id": "negative_size",
+      "message": "bad_claim: 'size'",
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source/a.jpg\", \"size\": -1}"
+    },
+    {
+      "fault": "bad_claim",
+      "id": "size_past_the_json_safe_range",
+      "message": "bad_claim: 'size'",
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source/a.jpg\", \"size\": 9007199254740992}"
+    },
+    {
+      "fault": "bad_claim",
+      "id": "size_past_sixty_four_bits",
+      "message": "bad_claim: 'size'",
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f40516273\", \"key\": \"source/a.jpg\", \"size\": 18446744073709551616}"
+    },
+    {
+      "fault": "bad_claim",
+      "id": "hash_too_short",
+      "message": "bad_claim: 'imohash'",
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f4051627\", \"key\": \"source/a.jpg\", \"size\": 7}"
+    },
+    {
+      "fault": "bad_claim",
+      "id": "hash_too_long",
+      "message": "bad_claim: 'imohash'",
+      "text": "{\"imohash\": \"8e0124d8a93f5a1b7c6d2e3f405162730\", \"key\": \"source/a.jpg\", \"size\": 7}"
+    },
+    {
+      "fault": "bad_claim",
+      "id": "hash_uppercase",
+      "message": "bad_claim: 'imohash'",
+      "text": "{\"imohash\": \"8E0124D8A93F5A1B7C6D2E3F40516273\", \"key\": \"source/a.jpg\", \"size\": 7}"
+    },
+    {
+      "fault": "bad_claim",
+      "id": "hash_not_hex",
+      "message": "bad_claim: 'imohash'",
+      "text": "{\"imohash\": \"gggggggggggggggggggggggggggggggg\", \"key\": \"source/a.jpg\", \"size\": 7}"
+    },
+    {
+      "fault": "bad_claim",
+      "id": "hash_empty",
+      "message": "bad_claim: 'imohash'",
+      "text": "{\"imohash\": \"\", \"key\": \"source/a.jpg\", \"size\": 7}"
+    },
+    {
+      "fault": "bad_claim",
+      "id": "size_checked_before_hash",
+      "message": "bad_claim: 'size'",
+      "text": "{\"imohash\": \"x\", \"key\": \"source/a.jpg\", \"size\": -1}"
+    }
+  ],
+  "generated_by": "scripts/codegen/export_api_contracts.py",
+  "sources": [
+    "src/domain/frame_engine_wire.py",
+    "src/domain/decode_route.py",
+    "src/clients/frame_engine.py",
+    "frame_engine/front.py",
+    "scripts/codegen/frame_engine_plan_cases.py",
+    "scripts/codegen/frame_engine_source_cases.py"
+  ]
+}

@@ -33,7 +33,7 @@ use self::response::{build_response, failure_status};
 pub use self::serve::{ServeConfig, serve};
 use crate::admission::{InFlightCap, RequestClock};
 use crate::metrics::Metrics;
-use crate::pipeline::{Photo, Pipeline, RequestState};
+use crate::pipeline::{ImageInput, Photo, Pipeline, RequestState};
 use crate::proto::grpc_inference_service_server::GrpcInferenceService;
 use crate::proto::model_metadata_response::TensorMetadata;
 use crate::proto::{
@@ -201,6 +201,7 @@ impl<P: Pipeline> GrpcInferenceService for Front<P> {
             inputs: c
                 .inputs
                 .iter()
+                .chain([&c.read_by_key.input])
                 .map(|t| tensor_metadata(&t.name, &t.datatype, &t.shape))
                 .collect(),
             outputs: c
@@ -223,6 +224,12 @@ impl<P: Pipeline> GrpcInferenceService for Front<P> {
         }
         let parsed =
             parse_request(&request).map_err(|e| Status::invalid_argument(e.to_string()))?;
+        if let ImageInput::File(file) = &parsed.image {
+            state
+                .pipeline
+                .check_source(file)
+                .map_err(|e| Status::invalid_argument(e.to_string()))?;
+        }
         if !state.ready() {
             return Err(Status::unavailable("frame engine not ready"));
         }

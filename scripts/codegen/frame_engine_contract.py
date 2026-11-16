@@ -13,6 +13,11 @@ Two files under ``contracts/json/``, read by the native engine and by its contra
   answer ``parse_plan`` gives (the parsed plan, or the fault and, but for ``bad_json``, the message
   the front sends as the status details).
 
+A third file, ``frame_engine_source_cases.json``, holds the cases of the one thing the Python
+engine does not have: the native engine's optional ``source`` input (``read_by_key`` in the first
+file), which names a file the engine reads itself. No Python function defines it, so the cases
+are a table (``frame_engine_source_cases.py``) that both Rust sides are held to.
+
 ``src/domain/frame_engine_wire.py`` stays the one definition. The native parser is compared with it
 on every case.
 """
@@ -24,6 +29,7 @@ import typing
 from typing import TYPE_CHECKING, Any
 
 from frame_engine_plan_cases import plan_cases
+from frame_engine_source_cases import FAULTS as SOURCE_FAULTS, message, source_cases
 
 
 if TYPE_CHECKING:
@@ -37,6 +43,7 @@ SOURCES = [
     'src/clients/frame_engine.py',
     'frame_engine/front.py',
     'scripts/codegen/frame_engine_plan_cases.py',
+    'scripts/codegen/frame_engine_source_cases.py',
 ]
 
 #: Tensor shapes (``-1`` is a free dimension), the table ``frame_engine/front.py`` serves in
@@ -99,6 +106,41 @@ REQUEST_RULES: list[dict[str, str]] = [
     {'id': 'boxes_datatype_shape', 'message': 'boxes must be FP64 [n, 4]'},
     {'id': 'boxes_byte_size', 'message': 'boxes byte size does not match its shape'},
 ]
+
+#: The native engine's optional ``source`` input (plan 17, N2): the photo is named by a key and
+#: the claim the server made for its file, and the engine reads the file itself from a read-only
+#: root. Exactly one of ``image`` and ``source`` travels in a request. The Python engine does not
+#: have the input (it refuses it as an unknown input; ``tests/test_frame_engine_contract.py``),
+#: so nothing here is in ``inputs`` or ``request_rules`` above, which the Python front is held to.
+READ_BY_KEY: dict[str, Any] = {
+    'supported_by': ['native'],
+    'input': {'name': 'source', 'datatype': 'BYTES', 'shape': [1], 'required': False},
+    'replaces_input': 'image',
+    'document_fields': [
+        {'name': 'key', 'type': 'string'},
+        {'name': 'size', 'type': 'integer', 'min': 0, 'max': 2**53 - 1},
+        {'name': 'imohash', 'type': 'string', 'form': '32 lowercase hexadecimal characters'},
+    ],
+    'local_roots': ['landing', 'source'],
+    'size_limit': 'OP_FRAME_ENGINE_MAX_MESSAGE_MIB',
+    'request_rules': [
+        {'id': 'image_and_source', 'message': 'image and source are exclusive: send one'},
+        {'id': 'image_or_source_missing', 'message': "missing input 'image' or 'source'"},
+    ],
+    # every one answers INVALID_ARGUMENT with "<fault>: <repr of the subject>"; the first five are
+    # the document's, in the order the checks run, the last one is the engine's settings
+    'source_faults': [*SOURCE_FAULTS, 'root_not_configured'],
+    # answered as the photo's ``status`` (the answer is a normal one, no gRPC error)
+    'photo_statuses': [
+        {'status': 'missing', 'when': 'no file has the key under the configured root'},
+        {'status': 'changed', 'when': 'the file has another size than the claim, or the claimed '
+                                      'size and another sampled hash'},
+        {'status': 'too_large', 'when': 'the claimed size is above the message limit; '
+                                        'nothing is opened'},
+        {'status': 'unreadable', 'when': 'the key resolves outside its root, names no regular '
+                                         'file, or the read fails'},
+    ],
+}  # fmt: skip
 
 #: The server side of the ping policy (``frame_engine.front.SERVER_OPTIONS``; pinned by
 #: ``tests/test_frame_engine_contract.py``): it accepts a ping with no call in flight, this far
@@ -198,6 +240,7 @@ def render_protocol() -> dict[str, Any]:
         'check_order': CHECK_ORDER,
         'request_rules': REQUEST_RULES,
         'boxes_zero_rows_allowed': True,
+        'read_by_key': READ_BY_KEY,
         'failure_statuses': FAILURE_STATUSES,
         'stages': STAGES,
         'metrics': METRICS,
@@ -271,9 +314,31 @@ def render_plan_cases() -> dict[str, Any]:
     return {'generated_by': SCRIPT_REL, 'sources': SOURCES, 'cases': cases}
 
 
+def render_source_cases() -> dict[str, Any]:
+    cases = []
+    for raw in source_cases():
+        case = dict(raw)
+        if 'fault' in case:
+            detail = message(case)
+            if detail is not None:
+                case['message'] = detail
+            case.pop('subject', None)
+        else:
+            case['built'] = json.dumps(
+                {'imohash': case['imohash'], 'key': case['key'], 'size': case['size']},
+                sort_keys=True,
+            )
+        cases.append(case)
+    return {'generated_by': SCRIPT_REL, 'sources': SOURCES, 'cases': cases}
+
+
 def render_protocol_json() -> str:
     return _dump(render_protocol())
 
 
 def render_plan_cases_json() -> str:
     return _dump(render_plan_cases())
+
+
+def render_source_cases_json() -> str:
+    return _dump(render_source_cases())

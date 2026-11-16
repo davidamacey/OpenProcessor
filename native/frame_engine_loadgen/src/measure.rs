@@ -350,6 +350,7 @@ mod tests {
                 path: "/lists/coco.txt".into(),
                 sha256: "ab".repeat(32),
                 photos: vec![bytes::Bytes::from_static(b"x"); 3],
+                files: vec![],
                 total_bytes: 3,
             },
             plan: PlanFile::parse(

@@ -360,7 +360,7 @@ repos:
         entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/codegen/export_api_contracts.py --check'
         language: system
         pass_filenames: false
-        files: ^(src/.*\.py|contracts/json/(item_wire|frame_engine_v1|frame_engine_plan_cases|job_kinds)\.json|contracts/openapi/(curation|core)\.json|contracts/ts/(itemWire|classSources|classNames)\.ts|scripts/codegen/(export_api_contracts|_contract_runtime|frame_engine_contract|frame_engine_plan_cases|job_kinds_contract)\.py)$
+        files: ^(src/.*\.py|contracts/json/(item_wire|frame_engine_v1|frame_engine_plan_cases|frame_engine_source_cases|job_kinds)\.json|contracts/openapi/(curation|core)\.json|contracts/ts/(itemWire|classSources|classNames)\.ts|scripts/codegen/(export_api_contracts|_contract_runtime|frame_engine_contract|frame_engine_plan_cases|frame_engine_source_cases|job_kinds_contract)\.py)$
 
       # The Rust duplicate hash (native/op_media) is held to the Python `imohash` package by
       # goldens; the generator imports the package, so it runs under the project venv when one exists.

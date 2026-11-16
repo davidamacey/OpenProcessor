@@ -12,6 +12,7 @@ publish.workspace = true
 bytes = { workspace = true }
 fastrand = { workspace = true }
 op_config = { path = "../op_config" }
+op_local_file = { path = "../op_local_file" }
 prost = { workspace = true }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { workspace = true }
@@ -25,6 +26,7 @@ base64 = "=0.22.1"
 # the engine's own front and stub pipeline, in this process: the round-trip tests (no GPU)
 frame_engine = { path = "../frame_engine" }
 sha2 = "=0.11.1"
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "time"] }
 tokio-stream = { version = "=0.1.19", features = ["net"] }
 tonic = { workspace = true, features = ["router", "server"] }

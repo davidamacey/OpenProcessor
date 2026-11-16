@@ -22,6 +22,9 @@
 # N0_STAND_IN_DIR, a second repository (scripts/bench/frame_engine_stand_ins.py generate). The
 # capture models write the rows they receive into N0_CAPTURE_DIR.
 #
+# The native engine alone reads photos by key: it mounts the landing zone (OP_LANDING_ROOT_HOST) and the
+# source folder (OP_SOURCE_ROOT_HOST) read-only; the Python engine has no such input and mounts nothing.
+#
 # The two engines carry different OP_FRAME_ENGINE_INSTANCE names: a region's name starts with the
 # card and the instance, and an engine unregisters every region of its own prefix at start, so two
 # engines with one instance name would unregister each other's region.
@@ -120,6 +123,13 @@ services:
     environment:
       <<: *engine-settings
       OP_FRAME_ENGINE_INSTANCE: fe-native
+      # reading a photo by key (plan 17 N2): the landing zone and the source folder, read-only,
+      # under the names the server's keys use
+      OP_FRAME_ENGINE_LANDING_ROOT: /data/landing
+      OP_FRAME_ENGINE_SOURCE_ROOT: /data/source
+    volumes:
+      - ${OP_LANDING_ROOT_HOST:-../../data/landing}:/data/landing:ro
+      - ${OP_SOURCE_ROOT_HOST:-../../data/source}:/data/source:ro
     ulimits:
       memlock: -1
     deploy:

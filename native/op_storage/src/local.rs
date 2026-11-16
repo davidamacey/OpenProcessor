@@ -3,8 +3,7 @@
 //! The engine and ExifTool need a file path. Two kinds of key have one: landing keys and `source/`
 //! keys. A key is validated as a [`StorageKey`], joined to its configured root, canonicalised
 //! (which follows every symlink), and refused unless the result is inside the canonical root.
-//! `object_store`'s `LocalFileSystem` follows symlinks that leave its root, which is why this
-//! check lives here and the key layout never creates a symlink.
+//! The rule is `op_local_file::resolve_under`, the one copy the frame engine reads files by too.
 
 use std::error::Error;
 use std::fmt;
@@ -12,6 +11,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use op_config::{Env, EnvError};
+
+use op_local_file::{CanonicalDirError, canonical_dir as canonical, resolve_under};
 
 use crate::error::KeyError;
 use crate::keys::{Root, StorageKey};
@@ -117,33 +118,19 @@ impl LocalRoots {
                 });
             }
         };
-        let joined = key.segments().fold(root.clone(), |p, seg| p.join(seg));
-        let resolved = std::fs::canonicalize(&joined).map_err(|source| KeyError::Unresolvable {
-            key: key.to_string(),
-            source,
-        })?;
-        if resolved.starts_with(root) {
-            Ok(resolved)
-        } else {
-            Err(KeyError::OutsideRoot {
-                key: key.to_string(),
-            })
-        }
+        resolve_under(root, key.as_str())
     }
 }
 
 fn canonical_dir(role: &'static str, path: &Path) -> Result<PathBuf, RootsError> {
-    let fail = |source| RootsError::Root {
+    canonical(path).map_err(|e| RootsError::Root {
         role,
         path: path.to_path_buf(),
-        source,
-    };
-    let canonical = std::fs::canonicalize(path).map_err(|e| fail(Some(e)))?;
-    if canonical.is_dir() {
-        Ok(canonical)
-    } else {
-        Err(fail(None))
-    }
+        source: match e {
+            CanonicalDirError::Io(e) => Some(e),
+            CanonicalDirError::NotADirectory => None,
+        },
+    })
 }
 
 #[cfg(test)]

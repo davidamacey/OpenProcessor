@@ -88,13 +88,14 @@ fn bytes_input(name: &str) -> InferInputTensor {
     }
 }
 
-/// The request for one photo: `image` then `plan`, both already packed.
-pub fn infer_request(id: usize, image: &Bytes, plan: &Bytes) -> ModelInferRequest {
+/// The request for one photo: `image` (or `source`, the native engine's read by key) then
+/// `plan`, both already packed.
+pub fn infer_request(id: usize, input: &str, photo: &Bytes, plan: &Bytes) -> ModelInferRequest {
     ModelInferRequest {
         model_name: MODEL.to_string(),
         id: id.to_string(),
-        inputs: vec![bytes_input("image"), bytes_input("plan")],
-        raw_input_contents: vec![image.clone(), plan.clone()],
+        inputs: vec![bytes_input(input), bytes_input("plan")],
+        raw_input_contents: vec![photo.clone(), plan.clone()],
         ..Default::default()
     }
 }
@@ -166,8 +167,11 @@ pub fn grpc_key(status: &tonic::Status) -> String {
 pub struct EngineClient {
     clients: Vec<Client>,
     next: AtomicUsize,
-    /// Each photo packed once, so a request clones a reference, never the photo.
+    /// Each photo packed once, so a request clones a reference, never the photo: its bytes, or
+    /// for a run by key the `source` document that names its file.
     images: Vec<Bytes>,
+    /// The input the elements travel in: `image`, or `source` for a run by key.
+    input: &'static str,
     plan: Bytes,
     timeout: Duration,
 }
@@ -179,6 +183,25 @@ impl EngineClient {
             clients,
             next: AtomicUsize::new(0),
             images: photos.iter().map(|p| pack_bytes(p)).collect(),
+            input: "image",
+            plan: pack_bytes(plan.as_bytes()),
+            timeout,
+        }
+    }
+
+    /// The same client asking the engine to read each photo itself: `documents` are the
+    /// `source` documents of the list's photos, in the list's order.
+    pub fn by_key(
+        clients: Vec<Client>,
+        documents: &[String],
+        plan: &str,
+        timeout: Duration,
+    ) -> Self {
+        EngineClient {
+            clients,
+            next: AtomicUsize::new(0),
+            images: documents.iter().map(|d| pack_bytes(d.as_bytes())).collect(),
+            input: "source",
             plan: pack_bytes(plan.as_bytes()),
             timeout,
         }
@@ -191,8 +214,12 @@ impl EngineClient {
 
 impl Exchange for EngineClient {
     async fn exchange(&self, index: usize) -> Outcome {
-        let mut request =
-            tonic::Request::new(infer_request(index, &self.images[index], &self.plan));
+        let mut request = tonic::Request::new(infer_request(
+            index,
+            self.input,
+            &self.images[index],
+            &self.plan,
+        ));
         request.set_timeout(self.timeout);
         let mut client = self.channel();
         match tokio::time::timeout(self.timeout, client.model_infer(request)).await {

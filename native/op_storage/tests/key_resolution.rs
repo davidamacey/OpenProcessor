@@ -96,6 +96,18 @@ proptest! {
     }
 
     #[test]
+    fn the_shared_key_rule_is_at_least_as_strict_as_the_object_stores(
+        raw in "[ -~\\x00-\\x1f\\x7f/.\\\\\u{e9}]{0,14}",
+    ) {
+        if op_local_file::validate_key(&raw).is_ok() {
+            let path = object_store::path::Path::parse(&raw);
+            prop_assert!(path.is_ok(), "{raw:?} passes the shared rule but not Path::parse");
+            let parsed = path.unwrap();
+            prop_assert_eq!(parsed.as_ref(), raw.as_str());
+        }
+    }
+
+    #[test]
     fn a_parsed_key_has_no_dot_segment_and_prints_back_as_given(raw in key()) {
         if let Ok(key) = StorageKey::parse(&raw) {
             prop_assert_eq!(key.as_str(), raw.as_str());
