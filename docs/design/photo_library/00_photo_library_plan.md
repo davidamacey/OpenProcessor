@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | plan, written 2026-11-13 on branch `plan/photo-library` (tree of `int/b4-stateless`), revised the same day after an independent review. Nothing here is built. Executes phase by phase on the owner's go |
+| Status | Note: written before the decision of 2026-11-15 to move the backend to Rust; where this plan names Celery, Alembic Python migrations, FastAPI handlers or OpenSearch as the place of new work, read plan 18 (the Rust backend) instead; a re-base of this plan is listed in the roadmap (stage 3). Plan, written 2026-11-13 on branch `plan/photo-library` (tree of `int/b4-stateless`), revised the same day after an independent review. Nothing here is built. Executes phase by phase on the owner's go |
 | Read first | [VISION_AND_GOALS.md](../../VISION_AND_GOALS.md), [engineering_standards.md](../engineering_standards.md), the inputs [01_feature_research.md](01_feature_research.md) and [02_current_system_gap.md](02_current_system_gap.md) |
 | Files in this folder | `00` (this file); [05_p2a0_metadata.md](05_p2a0_metadata.md) (P2a-0), [10_p2a1_organise.md](10_p2a1_organise.md) (P2a-1), [15_p2a2_people.md](15_p2a2_people.md) (P2a-2), [20_p2b_curate.md](20_p2b_curate.md), [30_p2c_create.md](30_p2c_create.md) (lane-ready phase specs); [40_p3_p4_video_outline.md](40_p3_p4_video_outline.md) (short outline); [90_owner_questions.md](90_owner_questions.md) (decisions for the owner) |
 | Where this file and a phase file disagree | order and scope: this file wins; task detail: the phase file wins |
