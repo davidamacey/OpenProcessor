@@ -39,6 +39,7 @@ from src.clients.pe_text_backends import (
     PE_TEXT_CHECKPOINT,
     PE_TEXT_CONTEXT_LENGTH,
     PE_TEXT_TRITON_MODEL,
+    UNAVAILABLE_RETRIES,
     TritonTextBackend,
     trim_text_tokens,
 )
@@ -54,6 +55,7 @@ from src.utils.pe_preprocess import (
     to_chw_into,
     whole_frame_rgb_from_image,
 )
+from src.utils.retry import retry_sync
 from src.utils.search_timing import search_annotate
 from src.utils.stage_timing import stage_timer
 
@@ -324,7 +326,9 @@ class PEEncoder:
     def _triton_backend(self) -> TritonTextBackend:
         try:
             client = self._make_triton_client()
-            ready = client.is_model_ready(self._text_triton_model)
+            ready = retry_sync(
+                client.is_model_ready, self._text_triton_model, max_retries=UNAVAILABLE_RETRIES
+            )
         except Exception as exc:
             raise TextModelNotReady(
                 f'Triton is unreachable, so its text model {self._text_triton_model!r} is not '
