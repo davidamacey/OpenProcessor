@@ -113,6 +113,10 @@ pub struct Metrics {
     pub colour: Family<ByOutcome, Counter>,
     /// Device bytes held by the cached profile-to-sRGB tables.
     pub colour_table_bytes: Gauge,
+    /// Device bytes nvJPEG's lane buffers hold now (counted, outside the frame cap).
+    pub nvjpeg_in_use: Gauge,
+    /// The most device bytes nvJPEG's lane buffers held since start.
+    pub nvjpeg_peak: Gauge,
 }
 
 /// Registers a family; the encoder ends each help text with a full stop, so the text given
@@ -236,6 +240,18 @@ fn register_request_series(registry: &mut Registry, m: &Metrics) {
         "Device bytes held by the cached profile-to-sRGB tables.",
         m.colour_table_bytes.clone(),
     );
+    register(
+        registry,
+        "op_frame_engine_nvjpeg_in_use_bytes",
+        "Device bytes held by the decode lanes' nvJPEG buffers (grow-only, outside the frame cap).",
+        m.nvjpeg_in_use.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_nvjpeg_peak_bytes",
+        "Most device bytes the decode lanes' nvJPEG buffers held.",
+        m.nvjpeg_peak.clone(),
+    );
 }
 
 impl Metrics {
@@ -259,6 +275,8 @@ impl Metrics {
             overloads: Family::default(),
             colour: Family::default(),
             colour_table_bytes: Gauge::default(),
+            nvjpeg_in_use: Gauge::default(),
+            nvjpeg_peak: Gauge::default(),
             registry: Registry::default(),
         };
         register_work_series(&mut registry, &m);
@@ -507,6 +525,22 @@ mod tests {
                 family.name
             );
         }
+    }
+
+    #[test]
+    fn the_nvjpeg_lane_bytes_are_exposed_beside_the_contracts_families() {
+        let m = Metrics::new();
+        m.nvjpeg_in_use.set(5);
+        m.nvjpeg_peak.set(7);
+        let text = m.render();
+        assert!(
+            text.contains("op_frame_engine_nvjpeg_in_use_bytes 5\n"),
+            "{text}"
+        );
+        assert!(
+            text.contains("op_frame_engine_nvjpeg_peak_bytes 7\n"),
+            "{text}"
+        );
     }
 
     /// A registry with one sample in every labelled family (a family with no child has no line).

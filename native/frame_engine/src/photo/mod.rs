@@ -41,7 +41,7 @@ use self::device::{DecodeJob, Decoded, Device, Write};
 use self::rounds::{Round2, Work};
 use crate::admission::FrameBudget;
 use crate::branches::BUILT;
-use crate::fault::{GpuFault, job_failed};
+use crate::fault::{GpuFault, job_failed, note_memory_failure};
 use crate::jpeg_header::{Decoder, JpegHeader, oriented_size, route};
 use crate::metrics::{ByImage, ByOutcome, Metrics};
 use crate::pipeline::{Photo, PhotoAnswer, PipelineError, Tensor};
@@ -56,6 +56,9 @@ use crate::wire::plan::Crops;
 pub enum Stop {
     /// A photo status that answers the photo (for example `over_budget` or `huge`) with every branch failed.
     Status(&'static str),
+    /// A device allocation was refused: the photo answers `gpu_memory`; the text says what was
+    /// asked and which limit refused it.
+    Memory(String),
     /// The request itself fails with this error.
     Fail(PipelineError),
 }
@@ -63,7 +66,7 @@ pub enum Stop {
 impl From<GpuFault> for Stop {
     fn from(f: GpuFault) -> Self {
         match f {
-            GpuFault::OutOfMemory(_) => Stop::Status("gpu_memory"),
+            GpuFault::OutOfMemory(detail) => Stop::Memory(detail),
             GpuFault::ContextLost(m) => Stop::Fail(PipelineError::ContextLost(m)),
             GpuFault::Failed(m) => Stop::Fail(PipelineError::Engine(m)),
         }
@@ -229,9 +232,14 @@ where
         let mut clock = StageClock::new(Arc::clone(&photo.request), Arc::clone(&self.metrics));
         clock.add(QUEUE, photo.request.arrived().elapsed().as_secs_f64());
         let plan = photo.plan.clone();
-        let answer = match self.run(&mut clock, photo).await {
+        let mut size = (0, 0);
+        let answer = match self.run(&mut clock, photo, &mut size).await {
             Ok(answer) => answer,
             Err(Stop::Status(status)) => refused(&plan, status),
+            Err(Stop::Memory(detail)) => {
+                note_memory_failure("the photo's work", size, &detail);
+                refused(&plan, "gpu_memory")
+            }
             Err(Stop::Fail(e)) => return Err(e),
         };
         self.metrics
@@ -331,7 +339,12 @@ where
         }
     }
 
-    async fn run(&self, clock: &mut StageClock, photo: Photo) -> Result<PhotoAnswer, Stop> {
+    async fn run(
+        &self,
+        clock: &mut StageClock,
+        photo: Photo,
+        seen: &mut (u32, u32),
+    ) -> Result<PhotoAnswer, Stop> {
         let s = &self.settings;
         if self.device.lost() {
             return Err(Stop::Fail(PipelineError::ContextLost(
@@ -347,6 +360,7 @@ where
         let runs = Runs::of(plan);
         let (header, permit) = self.admit(clock, &photo, &runs).await?;
         let size = oriented_size(&header);
+        *seen = size;
         let request = Arc::clone(&photo.request);
         let calls = PhotoCalls::new(
             Arc::clone(&self.device),

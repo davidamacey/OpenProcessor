@@ -85,7 +85,12 @@ pub struct GpuPipeline {
     ready: AtomicBool,
     lost_counted: AtomicBool,
     registrations: [AtomicU64; 3],
+    /// nvJPEG's device peak last logged, in steps of [`NVJPEG_LOG_STEP`].
+    nvjpeg_logged: AtomicU64,
 }
+
+/// The nvJPEG device peak is logged each time it passes another step of this many bytes.
+const NVJPEG_LOG_STEP: u64 = 256 * MIB;
 
 const CAUSES: [RegistrationCause; 3] = [
     RegistrationCause::Start,
@@ -149,7 +154,9 @@ impl GpuPipeline {
         let (major, minor, patch) = gpu.nvjpeg_version();
         tracing::info!(
             "frame engine on {bus}: {} decode lanes (nvJPEG {major}.{minor}.{patch}), {} launch \
-             and {} finish threads, region {} MiB ({}), budget {} MiB, pool {} MiB, workers {}",
+             and {} finish threads, region {} MiB ({}), budget {} MiB, pool {} MiB, workers {}; \
+             nvJPEG lane buffers {} MiB, counted outside the pool (grow-only, \
+             op_frame_engine_nvjpeg_peak_bytes)",
             gpu.lane_count(),
             cfg.launch_threads,
             cfg.finish_threads,
@@ -158,6 +165,7 @@ impl GpuPipeline {
             s.budget_mib,
             s.pool_mib,
             s.workers,
+            gpu.nvjpeg_device().0 >> 20,
         );
         let budget_bytes = u64::from(s.budget_mib) * MIB;
         let flow = PhotoFlow {
@@ -184,6 +192,7 @@ impl GpuPipeline {
             ready: AtomicBool::new(false),
             lost_counted: AtomicBool::new(false),
             registrations: Default::default(),
+            nvjpeg_logged: AtomicU64::new(0),
         })
     }
 
@@ -245,6 +254,18 @@ impl Pipeline for GpuPipeline {
         m.slab_in_use.set(gauge(usage.in_use as u64));
         m.slab_peak.set(gauge(usage.peak as u64));
         m.slab_waits.set(gauge(usage.waits));
+        let (nvjpeg, nvjpeg_peak) = self.gpu.nvjpeg_device();
+        m.nvjpeg_in_use.set(gauge(nvjpeg as u64));
+        m.nvjpeg_peak.set(gauge(nvjpeg_peak as u64));
+        let step = nvjpeg_peak as u64 / NVJPEG_LOG_STEP;
+        if self.nvjpeg_logged.fetch_max(step, Ordering::AcqRel) < step {
+            tracing::info!(
+                "nvJPEG lane buffers: peak {} MiB, {} MiB now, over {} lanes (outside the pool)",
+                nvjpeg_peak >> 20,
+                nvjpeg >> 20,
+                self.gpu.lane_count()
+            );
+        }
     }
 
     async fn process(&self, photo: Photo) -> Result<PhotoAnswer, PipelineError> {

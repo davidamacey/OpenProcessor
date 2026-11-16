@@ -1,16 +1,21 @@
-//! Byte accounting and admission: the device cap, the pinned host count, and the fair admission
+//! Byte accounting and admission: the device cap, the byte counts, and the fair admission
 //! by count and bytes (plan 17 sections 2.2 and 2.3).
 //!
 //! * [`DeviceCap`] is the hard cap on every device allocation the engine makes except the region
-//!   (`OP_FRAME_ENGINE_POOL_MIB`): frames, nvJPEG's lane buffers, weight sets, scratch. A charge
-//!   past it fails at once as an out-of-memory error; nothing waits on it.
-//! * [`HostCount`] counts pinned host bytes (nvJPEG's pinned buffers). They are reported, not
-//!   charged to the device cap. Their bound is structural: each lane holds one pinned buffer per
+//!   and nvJPEG's lane buffers (`OP_FRAME_ENGINE_POOL_MIB`): frames, weight sets, scratch. A
+//!   charge past it fails at once as an out-of-memory error; nothing waits on it.
+//! * [`ByteCount`] counts what is reported, not capped: nvJPEG's device buffers and its pinned
+//!   host buffers, each in its own count. nvJPEG's device buffers only grow (a lane keeps the
+//!   largest it needed), so their total is bounded by lanes x the largest photo the route admits;
+//!   charged to the cap they would fill it for good once enough lanes saw a large photo and refuse
+//!   later photos that fit (`gpu_memory`), which the Python engine, whose lanes allocate outside
+//!   its pool limit, never does. Their peak sizes the lane count per card (plan 17 N2). The pinned
+//!   bound is structural too: each lane holds one pinned buffer per
 //!   backend state, and nvJPEG grows a buffer only to what one photo's host phase needs (its
 //!   encoded bytes for `GPU_HYBRID`; its entropy-decoded coefficients for `HYBRID`, which nvJPEG
 //!   does not size in its documentation). So the total stays under lanes x 2 x the largest photo
 //!   the route admits (`OP_FRAME_ENGINE_MAX_MEGAPIXELS`, `OP_FRAME_ENGINE_MAX_MESSAGE_MIB`), and
-//!   the peak is measured, not assumed ([`HostCount::peak`], reported by the GPU self-test).
+//!   the peak is measured, not assumed ([`ByteCount::peak`], reported by the GPU self-test).
 //! * [`Admission`] gives out permits by count and by bytes (in KiB, so a 32-bit permit count
 //!   covers 4 TiB), first come first served, each wait bounded by a deadline. It is tokio's
 //!   semaphore, which is fair also across `acquire_many`: a large request at the head of the
@@ -47,7 +52,7 @@ impl fmt::Display for CapExceeded {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{} device bytes asked with {} of {} in use (the engine's cap)",
+            "{} device bytes asked with {} of {} in use (the frame cap, OP_FRAME_ENGINE_POOL_MIB)",
             self.need, self.in_use, self.limit
         )
     }
@@ -152,27 +157,27 @@ impl Drop for Charge {
     }
 }
 
-/// Pinned host bytes in use and their peak (reported; see the module documentation for their
-/// bound).
+/// Bytes in use and their peak, counted and reported but not capped (see the module
+/// documentation for the bound of each count).
 #[derive(Debug, Default)]
-pub struct HostCount {
+pub struct ByteCount {
     in_use: AtomicUsize,
     peak: AtomicUsize,
 }
 
-impl HostCount {
-    /// Count `bytes` of pinned host memory as in use, and raise the peak when needed.
+impl ByteCount {
+    /// Count `bytes` as in use, and raise the peak when needed.
     pub fn add(&self, bytes: usize) {
         let now = self.in_use.fetch_add(bytes, Ordering::AcqRel) + bytes;
         self.peak.fetch_max(now, Ordering::Relaxed);
     }
 
-    /// Stop counting `bytes` that were counted with [`HostCount::add`].
+    /// Stop counting `bytes` that were counted with [`ByteCount::add`].
     pub fn sub(&self, bytes: usize) {
         self.in_use.fetch_sub(bytes, Ordering::AcqRel);
     }
 
-    /// Pinned host bytes counted now.
+    /// Bytes counted now.
     pub fn in_use(&self) -> usize {
         self.in_use.load(Ordering::Acquire)
     }

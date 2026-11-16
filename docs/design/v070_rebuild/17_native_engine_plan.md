@@ -294,15 +294,15 @@ budget and slices instead of starting work (the Python front cancels a queued ph
    JPEG bytes become `Bytes` in the response without a copy.
 
 The engine's own byte count is the cap (review D6: a hard cap, not a release threshold).
-`OP_FRAME_ENGINE_POOL_MIB` caps every device allocation the engine makes except the region; an
-allocation past it fails as an out-of-memory error; `CUDA_ERROR_OUT_OF_MEMORY` (2) and nvJPEG status
+`OP_FRAME_ENGINE_POOL_MIB` caps every device allocation the engine makes except the region and
+nvJPEG's lane buffers; an allocation past it fails as an out-of-memory error; `CUDA_ERROR_OUT_OF_MEMORY` (2) and nvJPEG status
 5 (allocator failure) answer `gpu_memory`, as `prep_budget.is_memory_error` does. The pool's release
 threshold only keeps freed memory cached.
 
 | Class | Size | Charged to |
 |---|---|---|
 | Region | `OP_FRAME_ENGINE_REGION_MIB`, fixed at start | outside the cap, reported at start |
-| Lane buffers | grow with the largest photo a lane decoded (pipeline: about 360 MB per lane at 20 MP including its frame and scratch) | the cap: nvJPEG's device allocations go through a counting allocator passed as `nvjpegDevAllocator_t` to `nvjpegCreateEx` (nvJPEG docs, `nvjpegDevAllocator_t`) |
+| Lane buffers | grow-only: each lane keeps the largest buffers it needed, so the total is bounded by lanes times the largest accepted photo's need (pipeline: about 360 MB per lane at 20 MP including its frame and scratch) | counted exactly but outside the cap: nvJPEG's device allocations go through a counting allocator passed as `nvjpegDevAllocatorV2_t` to `nvjpegCreateExV2` (nvJPEG docs, `nvjpegDevAllocatorV2_t`), reported as `op_frame_engine_nvjpeg_in_use_bytes` and `_peak_bytes`. Charged to the cap they filled it for good once enough lanes had seen a large photo and refused later photos that fit (`gpu_memory`, N0 shakedown, 2026-11-15); the Python engine's lanes allocate outside its pool limit too. The lane count bounds them (N2, profiles) |
 | Frame and its oriented copy | w x h x 3, twice while an EXIF orientation is applied | the frame budget (and so the cap) |
 | Resample scratch | rows x width x 12 bytes per model input being written (about 28 MB for a 20 MP detector letterbox) | the frame budget (a term the Python budget leaves out) |
 | Weight sets | small; a byte-capped least-recently-used cache (the pipeline's grew without a bound) | the cap |
@@ -311,7 +311,8 @@ threshold only keeps freed memory cached.
 | Crop pixel staging | pinned host memory per finish thread, reused | host, not the card |
 
 The GPU tier asserts on the 12 GB profile that NVML's per-process device memory stays within the
-context baseline (measured idle) plus the region plus `OP_FRAME_ENGINE_POOL_MIB`.
+context baseline (measured idle) plus the region plus `OP_FRAME_ENGINE_POOL_MIB` plus the nvJPEG
+peak.
 
 ### 2.4 Channel settings, both directions
 
@@ -636,7 +637,10 @@ sweep on the merged tree; speed rows recorded under the evidence clause.
   non-root; G6 and G7.
 - Settings: every `OP_FRAME_ENGINE_*` with the Python ranges (1.1); `env.template` and the sizing
   page say the new `OP_FRAME_ENGINE_LANES` default.
-- Profiles (E4): sizes per profile from measured memory, the 12 GB card starting inside its memory
+- Profiles (E4): sizes per profile from measured memory; the lane count per GPU profile is
+  derived from the measured nvJPEG bytes per megapixel (`op_frame_engine_nvjpeg_peak_bytes`) and
+  the card's memory, since lane buffers sit outside the frame cap (a 16 GB card cannot hold 24
+  lanes at 20 MP); the 12 GB card starting inside its memory
   and running plan A on the mix with failed 0, the accounting asserted against NVML there; the
   profile files, the installer mirror, its test and the sizing page changed together.
 - Faults: 50 kills at 32 in flight; a model-server restart (engine ready within 15 s of the server's

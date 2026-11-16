@@ -17,15 +17,15 @@ use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use gpu_frame::{
-    CallError, CancelToken, Context, DecodeError, DeviceBuf, DeviceRange, FramePool, InferCall,
-    InputTensor, Lane, Lanes, ModelCalls, ModelServer, OutputTensor, SliceError, Stream,
-    WorkerPool,
+    AllocError, ByteCount, CallError, CancelToken, Context, DecodeError, DeviceBuf, DeviceRange,
+    FramePool, InferCall, InputTensor, Lane, Lanes, ModelCalls, ModelServer, OutputTensor,
+    SliceError, Stream, WorkerPool,
 };
 use tokio::sync::Notify;
 
 use crate::branches::InputSpec;
 use crate::branches::crops::{self, CropJpeg};
-use crate::fault::GpuFault;
+use crate::fault::{GpuFault, note_memory_failure};
 use crate::kernels::{FrameRef, PrepKernels, Staging, WEIGHT_CACHE_BYTES, WeightCache, WeightSet};
 use crate::photo::clock::{DECODE, JobClock, SYNCED};
 use crate::photo::device::{
@@ -121,6 +121,7 @@ pub struct Gpu {
     finish: WorkerPool<FinishThread>,
     pub(super) server: Arc<ModelServer>,
     pub(super) wake: Notify,
+    nvjpeg_device: Arc<ByteCount>,
 }
 
 fn pool_failed<E: std::fmt::Display>(what: &str, e: E) -> GpuFault {
@@ -139,8 +140,9 @@ impl Gpu {
         server: ModelServer,
         cfg: &GpuConfig,
     ) -> Result<Self, GpuFault> {
-        let host = Arc::new(gpu_frame::HostCount::default());
-        let lanes = Lanes::new(&frames, &host, cfg.lanes, None)
+        let host = Arc::new(ByteCount::default());
+        let nvjpeg_device = Arc::new(ByteCount::default());
+        let lanes = Lanes::new(&frames, &host, &nvjpeg_device, cfg.lanes, None)
             .map_err(|e| pool_failed("decode lanes", e))?;
         let kernels = PrepKernels::load(&gpu_frame::Kernels::new(ctx)?)?;
         let shared = Arc::new(Shared {
@@ -186,7 +188,13 @@ impl Gpu {
             finish,
             server: Arc::new(server),
             wake: Notify::new(),
+            nvjpeg_device,
         })
+    }
+
+    /// nvJPEG's device bytes in use and their peak (the lanes' buffers, outside the frame cap).
+    pub fn nvjpeg_device(&self) -> (usize, usize) {
+        (self.nvjpeg_device.in_use(), self.nvjpeg_device.peak())
     }
 
     /// The CUDA context of the card all work runs on.
@@ -226,11 +234,16 @@ impl Gpu {
 /// `prep_budget.is_memory_error`, then the context: a decode failure is the photo's (`decoder`)
 /// only while the context still works (`engine._check_context`; the lane waits for its stream
 /// after an nvJPEG failure and reports a lost context instead).
-fn decode_refusal(e: DecodeError) -> Result<&'static str, GpuFault> {
+fn decode_refusal(e: DecodeError, size: (u32, u32)) -> Result<&'static str, GpuFault> {
     if e.is_context_lost() {
         return Err(GpuFault::ContextLost(e.to_string()));
     }
     if e.is_out_of_memory() {
+        let detail = match &e {
+            DecodeError::Alloc(AllocError::Cap(cap)) => cap.to_string(),
+            other => format!("the card's memory: {other}"),
+        };
+        note_memory_failure("decode", size, &detail);
         return Ok("gpu_memory");
     }
     match e {
@@ -315,7 +328,7 @@ fn decode_on_lane(
         || -> Result<Result<(DeviceBuf, u32, u32), &'static str>, GpuFault> {
             let d = match lane.decode(image) {
                 Ok(d) => d,
-                Err(e) => return decode_refusal(e).map(Err),
+                Err(e) => return decode_refusal(e, size).map(Err),
             };
             let (w, h) = (d.frame.width(), d.frame.height());
             let frame = match shared.kernels.orient(
@@ -337,10 +350,11 @@ fn decode_on_lane(
     let (buf, width, height) = match decoded {
         Ok(frame) => frame,
         Err(status) => {
-            lane.synchronize().map_err(|e| match decode_refusal(e) {
-                Err(fault) => fault,
-                Ok(_) => GpuFault::Failed("the lane's stream wait failed".into()),
-            })?;
+            lane.synchronize()
+                .map_err(|e| match decode_refusal(e, size) {
+                    Err(fault) => fault,
+                    Ok(_) => GpuFault::Failed("the lane's stream wait failed".into()),
+                })?;
             return Ok(Decoded::Refused {
                 status,
                 stages: clock.stages,
