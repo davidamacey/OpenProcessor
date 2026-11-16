@@ -7,14 +7,23 @@
 //! one with a fraction or an exponent is a float (`1e0` is `1.0`, so it is not the version `1`).
 //! Objects keep their key order, which decides which of two faults is reported first.
 //!
+//! The reader is this module's own, over text already known to be UTF-8, because `serde_json`
+//! hands a number to a visitor as `u64`, `i64` or `f64` unless its `arbitrary_precision`
+//! feature is on, and that feature breaks internally tagged enums and `#[serde(flatten)]`
+//! for every crate of the workspace (Cargo unions features across one build; the test in
+//! `op_config/tests/workspace_features.rs` guards it). `serde_json` still decodes each string
+//! literal and words the fault in a text the reader refuses, so the messages are as ever.
+//!
 //! Python also reads UTF-16 and UTF-32 text (`json.detect_encoding`) and lone surrogate escapes;
 //! only UTF-8, with or without its byte order mark, is read here, and any other text is
 //! `bad_json`. A client never sends them: the API writes `json.dumps` of ASCII.
 
 use std::collections::HashSet;
 use std::fmt;
+use std::ops::Range;
 
-use serde::de::{DeserializeSeed, Deserializer, Error as _, MapAccess, SeqAccess, Visitor};
+use serde::Deserialize;
+use serde::de::{Deserializer, MapAccess, SeqAccess, Visitor};
 
 use crate::pyfmt::{repr_float, repr_str};
 
@@ -107,99 +116,324 @@ impl fmt::Display for JsonError {
 pub fn parse(bytes: &[u8]) -> Result<Json, JsonError> {
     let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes);
     let text = std::str::from_utf8(bytes).map_err(|e| JsonError(e.to_string()))?;
-    let mut checked = serde_json::Deserializer::from_str(text);
-    Unique
-        .deserialize(&mut checked)
-        .map_err(|e| JsonError(e.to_string()))?;
-    checked.end().map_err(|e| JsonError(e.to_string()))?;
-    let value: serde_json::Value =
-        serde_json::from_str(text).map_err(|e| JsonError(e.to_string()))?;
-    Ok(convert(&value))
-}
-
-fn convert(value: &serde_json::Value) -> Json {
-    use serde_json::Value;
-    match value {
-        Value::Null => Json::Null,
-        Value::Bool(b) => Json::Bool(*b),
-        Value::Number(n) => {
-            let text = n.to_string();
-            if text.contains(['.', 'e', 'E']) {
-                Json::Float(text.parse().unwrap_or(f64::NAN))
-            } else if text == "-0" {
-                Json::Int("0".into())
-            } else {
-                Json::Int(text)
-            }
-        }
-        Value::String(s) => Json::Str(s.clone()),
-        Value::Array(items) => Json::List(items.iter().map(convert).collect()),
-        Value::Object(map) => {
-            Json::Object(map.iter().map(|(k, v)| (k.clone(), convert(v))).collect())
-        }
+    let mut reader = Reader {
+        text,
+        at: 0,
+        depth: 0,
+        overflows: Vec::new(),
+    };
+    match reader.document() {
+        Ok(value) => Ok(value),
+        Err(Stop::Duplicate(message)) => Err(JsonError(message)),
+        Err(Stop::Invalid) => Err(JsonError(syntax_error(text, &reader.overflows))),
     }
 }
 
-/// Walks a document and fails on a repeated key. With `arbitrary_precision` a number arrives as
-/// a one-entry map; that is a map without a repeat, so it passes.
-struct Unique;
-
-impl<'de> DeserializeSeed<'de> for Unique {
-    type Value = ();
-
-    fn deserialize<D: Deserializer<'de>>(self, d: D) -> Result<(), D::Error> {
-        d.deserialize_any(self)
+/// `serde_json`'s words for the fault in a text the reader refused. Without `arbitrary_precision`
+/// it reads a number into an `f64` and calls one that overflows a fault (`1e400` is `inf` to
+/// Python and to the reader), which would hide the fault the reader found. So each overflowing
+/// number the reader passed is overwritten by a `0` and spaces of the same length: no offset moves
+/// and the words are those of the text as written.
+fn syntax_error(text: &str, overflows: &[Range<usize>]) -> String {
+    let mut bytes = text.as_bytes().to_vec();
+    for span in overflows {
+        bytes[span.clone()].fill(b' ');
+        bytes[span.start] = b'0';
+    }
+    let text = String::from_utf8(bytes).unwrap_or_else(|_| text.to_owned());
+    match serde_json::from_str::<Walk>(&text) {
+        Err(e) => e.to_string(),
+        Ok(Walk) => "the JSON reader and serde_json disagree about this text".into(),
     }
 }
 
-impl<'de> Visitor<'de> for Unique {
-    type Value = ();
+/// Walks a document and keeps nothing: it is `serde_json`'s reading of the grammar.
+struct Walk;
+
+impl<'de> Deserialize<'de> for Walk {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        d.deserialize_any(Self)
+    }
+}
+
+impl<'de> Visitor<'de> for Walk {
+    type Value = Self;
 
     fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("a JSON value")
     }
 
-    fn visit_bool<E>(self, _: bool) -> Result<(), E> {
-        Ok(())
+    fn visit_bool<E>(self, _: bool) -> Result<Self, E> {
+        Ok(Self)
     }
 
-    fn visit_i64<E>(self, _: i64) -> Result<(), E> {
-        Ok(())
+    fn visit_i64<E>(self, _: i64) -> Result<Self, E> {
+        Ok(Self)
     }
 
-    fn visit_u64<E>(self, _: u64) -> Result<(), E> {
-        Ok(())
+    fn visit_u64<E>(self, _: u64) -> Result<Self, E> {
+        Ok(Self)
     }
 
-    fn visit_f64<E>(self, _: f64) -> Result<(), E> {
-        Ok(())
+    fn visit_f64<E>(self, _: f64) -> Result<Self, E> {
+        Ok(Self)
     }
 
-    fn visit_str<E>(self, _: &str) -> Result<(), E> {
-        Ok(())
+    fn visit_str<E>(self, _: &str) -> Result<Self, E> {
+        Ok(Self)
     }
 
-    fn visit_unit<E>(self) -> Result<(), E> {
-        Ok(())
+    fn visit_unit<E>(self) -> Result<Self, E> {
+        Ok(Self)
     }
 
-    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<(), A::Error> {
-        while seq.next_element_seed(Unique)?.is_some() {}
-        Ok(())
+    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self, A::Error> {
+        while seq.next_element::<Self>()?.is_some() {}
+        Ok(Self)
     }
 
-    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<(), A::Error> {
-        let mut seen = HashSet::new();
-        while let Some(key) = map.next_key::<String>()? {
-            if !seen.insert(key.clone()) {
-                return Err(A::Error::custom(format!(
-                    "duplicate key {}",
-                    repr_str(&key)
-                )));
-            }
-            map.next_value_seed(Unique)?;
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self, A::Error> {
+        while map.next_key::<String>()?.is_some() {
+            map.next_value::<Self>()?;
         }
-        Ok(())
+        Ok(Self)
+    }
+}
+
+/// Why the reader stopped.
+enum Stop {
+    /// A key the object already has, with the message ready.
+    Duplicate(String),
+    /// The text breaks the grammar; `syntax_error` words it.
+    Invalid,
+}
+
+/// `serde_json` reads 127 nested arrays or objects and refuses the 128th
+/// (`recursion limit exceeded`); the reader stops at the same depth, so a text too deep is
+/// worded by `serde_json` and a repeated key before it is reported first, as ever.
+const MAX_DEPTH: usize = 127;
+
+/// A reader of one JSON document over UTF-8 text. It accepts what `serde_json` accepts and
+/// nothing else (RFC 8259 and no more: no comments, no trailing commas, no `NaN`), keeps number
+/// text as written and objects in source order, and stops at the first repeated key.
+struct Reader<'a> {
+    text: &'a str,
+    at: usize,
+    depth: usize,
+    /// Where the numbers that overflow `f64` stand, for `syntax_error`.
+    overflows: Vec<Range<usize>>,
+}
+
+impl Reader<'_> {
+    fn document(&mut self) -> Result<Json, Stop> {
+        let value = self.value()?;
+        self.skip_space();
+        if self.at == self.text.len() {
+            Ok(value)
+        } else {
+            Err(Stop::Invalid)
+        }
+    }
+
+    fn peek(&self) -> Option<u8> {
+        self.text.as_bytes().get(self.at).copied()
+    }
+
+    fn skip_space(&mut self) {
+        while matches!(self.peek(), Some(b' ' | b'\n' | b'\t' | b'\r')) {
+            self.at += 1;
+        }
+    }
+
+    /// Takes `byte` after any white space, or fails.
+    fn expect(&mut self, byte: u8) -> Result<(), Stop> {
+        self.skip_space();
+        if self.peek() == Some(byte) {
+            self.at += 1;
+            Ok(())
+        } else {
+            Err(Stop::Invalid)
+        }
+    }
+
+    fn value(&mut self) -> Result<Json, Stop> {
+        self.skip_space();
+        match self.peek() {
+            Some(b'{') => self.nested(Self::object),
+            Some(b'[') => self.nested(Self::array),
+            Some(b'"') => self.string().map(Json::Str),
+            Some(b't') => self.word("true", Json::Bool(true)),
+            Some(b'f') => self.word("false", Json::Bool(false)),
+            Some(b'n') => self.word("null", Json::Null),
+            Some(b'-' | b'0'..=b'9') => self.number(),
+            _ => Err(Stop::Invalid),
+        }
+    }
+
+    fn nested(&mut self, read: fn(&mut Self) -> Result<Json, Stop>) -> Result<Json, Stop> {
+        self.depth += 1;
+        if self.depth > MAX_DEPTH {
+            return Err(Stop::Invalid);
+        }
+        let value = read(self);
+        self.depth -= 1;
+        value
+    }
+
+    fn word(&mut self, word: &str, value: Json) -> Result<Json, Stop> {
+        if self.text[self.at..].starts_with(word) {
+            self.at += word.len();
+            Ok(value)
+        } else {
+            Err(Stop::Invalid)
+        }
+    }
+
+    fn array(&mut self) -> Result<Json, Stop> {
+        self.at += 1;
+        let mut items = Vec::new();
+        self.skip_space();
+        if self.peek() == Some(b']') {
+            self.at += 1;
+            return Ok(Json::List(items));
+        }
+        loop {
+            items.push(self.value()?);
+            self.skip_space();
+            match self.peek() {
+                Some(b',') => self.at += 1,
+                Some(b']') => {
+                    self.at += 1;
+                    return Ok(Json::List(items));
+                }
+                _ => return Err(Stop::Invalid),
+            }
+        }
+    }
+
+    fn object(&mut self) -> Result<Json, Stop> {
+        self.at += 1;
+        let mut pairs: Vec<(String, Json)> = Vec::new();
+        let mut seen = HashSet::new();
+        self.skip_space();
+        if self.peek() == Some(b'}') {
+            self.at += 1;
+            return Ok(Json::Object(pairs));
+        }
+        loop {
+            self.skip_space();
+            let key = self.string()?;
+            self.skip_space();
+            if !seen.insert(key.clone()) {
+                return Err(Stop::Duplicate(self.duplicate_message(&key)));
+            }
+            self.expect(b':')?;
+            pairs.push((key, self.value()?));
+            self.skip_space();
+            match self.peek() {
+                Some(b',') => self.at += 1,
+                Some(b'}') => {
+                    self.at += 1;
+                    return Ok(Json::Object(pairs));
+                }
+                _ => return Err(Stop::Invalid),
+            }
+        }
+    }
+
+    /// The words `serde_json` adds to a custom error, where its reader stands when the error
+    /// comes out: past the key, the white space after it and, because it closes the object it was
+    /// reading before it reports, a `}` that follows. The place is a line and the count of bytes
+    /// since the last line break.
+    fn duplicate_message(&self, key: &str) -> String {
+        let read = self.at + usize::from(self.peek() == Some(b'}'));
+        let before = &self.text.as_bytes()[..read];
+        let line = 1 + before.iter().filter(|b| **b == b'\n').count();
+        let column = before.iter().rev().take_while(|b| **b != b'\n').count();
+        format!(
+            "duplicate key {} at line {line} column {column}",
+            repr_str(key)
+        )
+    }
+
+    /// A string literal, decoded by `serde_json` (its escapes, surrogate pairs and refusals).
+    fn string(&mut self) -> Result<String, Stop> {
+        if self.peek() != Some(b'"') {
+            return Err(Stop::Invalid);
+        }
+        let bytes = self.text.as_bytes();
+        let mut end = self.at + 1;
+        loop {
+            match bytes.get(end) {
+                None | Some(0..=0x1F) => return Err(Stop::Invalid),
+                Some(b'"') => break,
+                Some(b'\\') => end += 2,
+                Some(_) => end += 1,
+            }
+        }
+        let literal = &self.text[self.at..=end];
+        let decoded = serde_json::from_str(literal).map_err(|_| Stop::Invalid)?;
+        self.at = end + 1;
+        Ok(decoded)
+    }
+
+    /// A number as RFC 8259 writes it: an integer stays its digits (any size), one with a
+    /// fraction or an exponent is a float, and `-0` is the integer `0` as Python's is.
+    fn number(&mut self) -> Result<Json, Stop> {
+        let start = self.at;
+        if self.peek() == Some(b'-') {
+            self.at += 1;
+        }
+        match self.peek() {
+            Some(b'0') => self.at += 1,
+            Some(b'1'..=b'9') => self.digits(),
+            _ => return Err(Stop::Invalid),
+        }
+        let mut is_float = false;
+        if self.peek() == Some(b'.') {
+            self.at += 1;
+            self.some_digits()?;
+            is_float = true;
+        }
+        if matches!(self.peek(), Some(b'e' | b'E')) {
+            self.at += 1;
+            if matches!(self.peek(), Some(b'+' | b'-')) {
+                self.at += 1;
+            }
+            self.some_digits()?;
+            is_float = true;
+        }
+        let text = &self.text[start..self.at];
+        if is_float || text.len() > 308 {
+            let value: f64 = text.parse().unwrap_or(f64::NAN);
+            if value.is_infinite() {
+                self.overflows.push(start..self.at);
+            }
+            if is_float {
+                return Ok(Json::Float(value));
+            }
+        }
+        Ok(if text == "-0" {
+            Json::Int("0".into())
+        } else {
+            Json::Int(text.into())
+        })
+    }
+
+    fn digits(&mut self) {
+        while self.peek().is_some_and(|b| b.is_ascii_digit()) {
+            self.at += 1;
+        }
+    }
+
+    fn some_digits(&mut self) -> Result<(), Stop> {
+        let from = self.at;
+        self.digits();
+        if self.at == from {
+            Err(Stop::Invalid)
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -642,6 +876,50 @@ mod tests {
         (
             b"{\"a\": 1, \"A\": 2}",
             r##"Ok(Object([("a", Int("1")), ("A", Int("2"))]))"##,
+        ),
+        (
+            br#"{"a": 1, "a" 2}"#,
+            r##"Err(JsonError("duplicate key 'a' at line 1 column 13"))"##,
+        ),
+        (
+            br#"{"a": 1, "a"}"#,
+            r##"Err(JsonError("duplicate key 'a' at line 1 column 13"))"##,
+        ),
+        (
+            br#"{"a": 1, "a"   : 2}"#,
+            r##"Err(JsonError("duplicate key 'a' at line 1 column 15"))"##,
+        ),
+        (
+            br#"{"a": 1, "a",}"#,
+            r##"Err(JsonError("duplicate key 'a' at line 1 column 12"))"##,
+        ),
+        (
+            b"{\"a\": 1, \"a\"\n\n}",
+            r##"Err(JsonError("duplicate key 'a' at line 3 column 1"))"##,
+        ),
+        (
+            b"[1e400, x]",
+            r##"Err(JsonError("expected value at line 1 column 9"))"##,
+        ),
+        (
+            br#"{"a": 1e400, "a": 1e400}"#,
+            r##"Err(JsonError("duplicate key 'a' at line 1 column 16"))"##,
+        ),
+        (
+            b"[1e400 x]",
+            r##"Err(JsonError("expected `,` or `]` at line 1 column 8"))"##,
+        ),
+        (
+            b"[1e400.5]",
+            r##"Err(JsonError("expected `,` or `]` at line 1 column 7"))"##,
+        ),
+        (
+            b"[-1e400-]",
+            r##"Err(JsonError("expected `,` or `]` at line 1 column 8"))"##,
+        ),
+        (
+            b"[2e400, 01]",
+            r##"Err(JsonError("invalid number at line 1 column 10"))"##,
         ),
     ];
 
