@@ -99,6 +99,15 @@ def test_the_server_image_is_multi_stage_slim_non_root_and_carries_exiftool() ->
     runtime = dockerfile.split('AS build', 1)[1].split('FROM ', 1)[1]
     assert re.search(r'^USER\s+(?!root)\S+', runtime, flags=re.M)
     assert 'libimage-exiftool-perl' in runtime
+    # What the binary needs at run time: ExifTool and Perl (the package depends on perl),
+    # `setpriv` (util-linux) which starts every ExifTool child with --pdeathsig, and the CA
+    # certificates rustls's platform verifier reads for S3 (debian slim ships none). No libssl:
+    # TLS is rustls with ring, and Cargo.lock holds no openssl crate.
+    install = runtime.split('apt-get install', 1)[1].split('&&', 1)[0]
+    assert 'ca-certificates' in install
+    assert 'util-linux' in install
+    assert 'libssl' not in install
+    assert 'openssl' not in install
     assert 'ENTRYPOINT ["op-server"]' in runtime
     assert 'HEALTHCHECK' in runtime
     assert 'cargo build --release --locked' in dockerfile

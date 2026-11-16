@@ -17,7 +17,8 @@
 #            for development.
 #   runtime  Debian slim, a non-root user, the binary, ExifTool and Perl (the capture-metadata
 #            reader of the ingest path, run by path as a `-stay_open` pool; the API image installs
-#            the same Debian package). Nothing else: no shell tools beyond the base image.
+#            the same Debian package), util-linux for `setpriv` and ca-certificates for S3 over
+#            rustls. Nothing else: no shell tools beyond the base image.
 # =============================================================================
 
 # -- Stage 1: the binary ----------------------------------------------------------------------
@@ -39,9 +40,13 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 # -- Stage 2: runtime -------------------------------------------------------------------------
 FROM debian:trixie-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2
 
-# Debian point-release security fixes, then ExifTool (libimage-exiftool-perl brings Perl).
+# Debian point-release security fixes, then what the binary needs at run time: ExifTool
+# (libimage-exiftool-perl depends on Perl), util-linux (`setpriv --pdeathsig` starts every ExifTool
+# child so it dies with the server; already in the base, named so a base change cannot drop it)
+# and ca-certificates (rustls's platform verifier reads the system roots for S3; the slim base has
+# none). No libssl: TLS is rustls with the ring provider and the lock file holds no openssl crate.
 RUN apt-get update && apt-get upgrade -y \
-    && apt-get install -y --no-install-recommends libimage-exiftool-perl \
+    && apt-get install -y --no-install-recommends libimage-exiftool-perl util-linux ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean \
     && groupadd -r opserver \
