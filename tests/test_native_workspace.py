@@ -109,6 +109,17 @@ def _offline_selectors() -> dict[str, list[str]]:
     return found
 
 
+def _leaves_out(expression: str, marker: str) -> bool:
+    """Whether a ``-m`` expression is a plain conjunction with ``not <marker>`` among its terms.
+
+    The place of the term does not matter: a marker added after it (``... and not differential``)
+    leaves the tier out just the same.
+    """
+    if ' or ' in expression or '(' in expression:
+        return False
+    return f'not {marker}' in expression.split(' and ')
+
+
 @pytest.mark.parametrize(
     'source',
     [
@@ -124,7 +135,25 @@ def test_every_offline_selector_leaves_out_native(source: str) -> None:
     expressions = _offline_selectors()[source]
     assert expressions, f'{source} has no offline pytest selector'
     for expression in expressions:
-        assert expression.endswith('and not native'), (source, expression)
+        assert _leaves_out(expression, 'native'), (source, expression)
+
+
+@pytest.mark.parametrize(
+    ('expression', 'expected'),
+    [
+        ('not live and not native', True),
+        ('not live and not native and not differential', True),
+        ('not native', True),
+        ('not live and not families', False),
+        ('not live and not native_gpu', False),
+        ('not live and native', False),
+        ('not live or not native', False),
+    ],
+)
+def test_a_selector_leaves_a_marker_out_only_as_a_term_of_its_conjunction(
+    expression: str, expected: bool
+) -> None:
+    assert _leaves_out(expression, 'native') is expected
 
 
 def test_contributing_documents_the_native_tier() -> None:
