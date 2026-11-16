@@ -92,7 +92,7 @@ connection pooler for PostgreSQL.
 |---|---|---|---|
 | `triton-server` | none | 4600 HTTP, 4601 gRPC, 4602 metrics | TensorRT models, explicit model control |
 | `frame-engine` | none | 4613 metrics (gRPC internal) | Decodes each photo once on the GPU and runs every model branch from that frame, calling the Triton models as a client (`frame_engine/`); must share Triton's card (`FRAME_ENGINE_GPU_ID`); ingest answers 503 `engine_unavailable` while it is down |
-| `api` | none | 4603 | The Rust front (`op-server api`): answers the routes ported to Rust (`/live`, `/metrics`), forwards every other request, bodies and event streams included, to `api-py` |
+| `api` | none | 4603 | The Rust front (`op-server api`): answers the routes ported to Rust (`/live`, its own metrics on `/metrics/front`; `/metrics` is the Python API's and is forwarded), forwards every other request, bodies and event streams included, to `api-py` |
 | `api-py` | none | | The Python FastAPI app behind the front, port 4613 inside the compose network, not published; `docker compose exec`, the CLI's Python commands and the dev source mounts address this service |
 | `opensearch` | none | 4607 | k-NN store for items, images and vectors (control data is in PostgreSQL) |
 | `postgres`, `valkey` | none | | PostgreSQL 18 (projects, classes, configs, jobs, events, spaces, partitions) and the Valkey 9 task broker; internal only, passwords from `secrets/` |

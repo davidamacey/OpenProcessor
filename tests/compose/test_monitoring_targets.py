@@ -51,6 +51,15 @@ def test_api_and_triton_are_scraped_by_dns_so_every_replica_is_a_target() -> Non
         assert any(rule.get('target_label') == 'service' for rule in jobs[name]['relabel_configs'])
 
 
+def test_each_api_job_scrapes_the_path_its_process_serves() -> None:
+    """The Python API's series are on `/metrics`, which the front forwards to it; the front's own
+    registry is on `/metrics/front`. Both jobs must not read the same text (a scrape of `api:8000`
+    on `/metrics` is the Python API's, so `api-front` would count its series twice)."""
+    jobs = _prometheus_jobs()
+    assert jobs['api']['metrics_path'] == '/metrics'
+    assert jobs['api-front']['metrics_path'] == '/metrics/front'
+
+
 def test_every_queue_consumer_and_api_has_a_log_rule() -> None:
     wanted = {name for names in consumers(_services()).values() for name in names}
     wanted |= {'api', 'api-py', 'triton-server', 'postgres', 'valkey', *ARBITER}

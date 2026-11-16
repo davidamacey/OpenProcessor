@@ -10,9 +10,9 @@ Phases (``--phases``, comma list), merged into one JSON document like ``baseline
   configs are restored afterwards). One run of the phase per image set gives the high-resolution
   numbers: point ``--manifest`` and ``--images`` at set B.
 * ``stages``: per-endpoint cost of the stages ingest does not call (faces, OCR, the combined
-  analyze route) and of detection/embedding, as images/s, API and Triton CPU per image, and the
+  analyze route) and of detection/embedding, as images/s, Python API, front and Triton CPU per image, and the
   Triton model time per image.
-* ``attrib``: py-spy sampling of the API container while ingest runs, aggregated into where the
+* ``attrib``: py-spy sampling of the Python API container (``api-py``) while ingest runs, aggregated into where the
   Python-side CPU goes.
 
     ingest_sweep_suite.py --manifest scripts/datasets/manifests/coco_bench_2000.json \\
@@ -63,7 +63,15 @@ from scripts.bench.ingest_sweep_probes import (
 )
 from scripts.bench.suite_ingest import ingest_rep
 from scripts.bench.suite_lib import SCHEMA, summarize_runs, triton_stats_delta
-from scripts.bench.suite_probes import cgroup_cpu_s, phase_env, run_cmd, triton_snapshot, wait_idle
+from scripts.bench.suite_probes import (
+    PYTHON_API,
+    api_cpu_fields,
+    container_cpu_s,
+    phase_env,
+    run_cmd,
+    triton_snapshot,
+    wait_idle,
+)
 from scripts.datasets.bench_set import load_pin
 
 
@@ -285,7 +293,7 @@ def stages_once(args: argparse.Namespace) -> dict[str, Any]:
                 wait_idle(args.project)
                 for _ in range(args.reps):
                     before = triton_snapshot(client, args.triton_url)
-                    cpu0 = {c: cgroup_cpu_s(f'{args.project}-{c}') for c in ('api', 'triton')}
+                    cpu0 = container_cpu_s(args.project)
                     lat: list[float] = []
                     failures = 0
 
@@ -313,7 +321,7 @@ def stages_once(args: argparse.Namespace) -> dict[str, Any]:
                     ):
                         list(pool.map(one, blobs))
                     wall = time.monotonic() - started
-                    cpu = {c: cgroup_cpu_s(f'{args.project}-{c}') - cpu0[c] for c in cpu0}
+                    cpu = {c: v - cpu0[c] for c, v in container_cpu_s(args.project).items()}
                     delta = triton_stats_delta(before, triton_snapshot(client, args.triton_url))
                     n = len(blobs)
                     flat = {
@@ -322,7 +330,7 @@ def stages_once(args: argparse.Namespace) -> dict[str, Any]:
                         'failed': float(failures),
                         'p50_ms': statistics.median(lat) * 1000,
                         'p95_ms': percentile(lat, 95) * 1000,
-                        'api_cpu_s_per_image': cpu['api'] / n,
+                        **api_cpu_fields(cpu, n),
                         'triton_cpu_s_per_image': cpu['triton'] / n,
                         'host_busy_pct': gauges.result()['host_busy_pct'],
                     }
@@ -352,7 +360,7 @@ def delayed_census(container: str, delay_s: float, seconds: float) -> dict[str, 
 def phase_attrib(args: argparse.Namespace) -> dict[str, Any]:
     pin = load_pin(args.manifest)
     files = [args.images / r['file_name'] for r in pin['images']][: args.limit or None]
-    container = f'{args.project}-api'
+    container = f'{args.project}-{PYTHON_API}'
     image = run_cmd(['docker', 'inspect', '--format', '{{.Config.Image}}', container]).strip()
     out_dir = args.perf_dir / 'pyspy'
     results: dict[str, Any] = {

@@ -1,4 +1,4 @@
-//! The front's Prometheus series, from one registry served on `/metrics`.
+//! The front's Prometheus series, from one registry served on [`crate::health::FRONT_METRICS_PATH`].
 //!
 //! `http_request_duration_seconds{method, route, status}` has the name, labels and buckets of
 //! `src/core/metrics.py`. A request is observed by the process that answers it: the front observes

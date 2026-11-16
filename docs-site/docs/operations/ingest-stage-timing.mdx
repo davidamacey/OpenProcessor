@@ -95,7 +95,8 @@ stack:
   the API under-driven; use 4 for throughput).
 - `ingest_profile.py` wraps it with the fixed measurement protocol (3
   repetitions, cache dropped, GPU sampled every 0.5 s, policy `all`, stage
-  `ingest`) and adds the API container's CPU seconds and the Triton
+  `ingest`) and adds the CPU seconds of the Python API container (`api-py`)
+  and of the Rust front (`api`), each under its own name, and the Triton
   container's CPU.
 
 ```bash
@@ -104,7 +105,7 @@ stack:
   --triton-metrics-url http://127.0.0.1:4602/metrics \
   --frame-engine-metrics-url http://127.0.0.1:4613/metrics \
   --path-map HOST_DIR=CONTAINER_DIR \
-  --api-container NAME --triton-container NAME \
+  --api-container NAME --front-container NAME --triton-container NAME \
   --out-root artifacts_local/bench/v070/sp0
 
 .venv/bin/python scripts/bench/ingest_profile.py table \

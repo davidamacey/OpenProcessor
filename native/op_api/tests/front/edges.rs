@@ -37,12 +37,12 @@ async fn a_wrong_method_on_an_owned_route_is_refused_here_and_not_forwarded() {
 }
 
 #[tokio::test]
-async fn metrics_hold_the_owned_routes_and_not_the_forwarded_ones() {
+async fn the_fronts_own_series_are_on_the_front_path_and_hold_the_owned_routes_only() {
     let (stub, _control) = start_stub().await;
     let front = start_front(stub, &[]).await;
     get_path(&front, "/live").await;
     get_path(&front, "/echo").await;
-    let answer = get_path(&front, "/metrics").await;
+    let answer = get_path(&front, "/metrics/front").await;
     assert_eq!(
         answer.headers["content-type"],
         "application/openmetrics-text; version=1.0.0; charset=utf-8"
@@ -58,6 +58,21 @@ async fn metrics_hold_the_owned_routes_and_not_the_forwarded_ones() {
         !text.contains("route=\"/echo\""),
         "a forwarded request is the Python API's to count: {text}"
     );
+    front.stop().await;
+}
+
+#[tokio::test]
+async fn metrics_on_the_public_path_are_the_python_apis_forwarded_like_any_other_path() {
+    let (stub, _control) = start_stub().await;
+    let front = start_front(stub, &[]).await;
+    let answer = get_path(&front, "/metrics").await;
+    assert_eq!(answer.status, StatusCode::OK);
+    let seen = answer.json();
+    assert_eq!(
+        seen["target"], "/metrics",
+        "the Python API answered: {seen}"
+    );
+    assert_eq!(answer.headers["x-from-upstream"], "yes");
     front.stop().await;
 }
 
@@ -230,7 +245,7 @@ async fn the_request_over_the_limit_is_a_503_at_once_and_the_one_in_flight_finis
     control.hold.add_permits(1);
     let finished = first.await.unwrap();
     assert_eq!(finished.status, StatusCode::OK);
-    let metrics = get_path(&front, "/metrics").await;
+    let metrics = get_path(&front, "/metrics/front").await;
     let text = String::from_utf8_lossy(&metrics.body);
     assert!(text.contains("op_api_requests_shed_total 1"), "{text}");
     front.stop().await;

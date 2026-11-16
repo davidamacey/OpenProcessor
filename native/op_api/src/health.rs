@@ -1,8 +1,10 @@
-//! `/live`, `/metrics` and the probe the container's health check runs.
+//! `/live`, the front's metrics path and the probe the container's health check runs.
 //!
 //! `/live` answers `{"status": "alive"}` as the Python API's route of the same name does: the
-//! process is up, no dependency is asked. `/metrics` serves the front's own registry
-//! ([`crate::metrics`]); the Python API's series are scraped from the Python API.
+//! process is up, no dependency is asked. [`FRONT_METRICS_PATH`] serves the front's own registry
+//! ([`crate::metrics`]). `/metrics` is not here: it stays the Python API's and is forwarded like
+//! any other path, so every reader of the Python series on the API port (bulk ingest, the bench
+//! scripts) gets them as before.
 
 use std::error::Error;
 use std::fmt;
@@ -24,11 +26,14 @@ use crate::errors::ApiError;
 use crate::metrics::CONTENT_TYPE as METRICS_CONTENT_TYPE;
 use crate::state::AppState;
 
+/// Where the front's own series are served. Prometheus scrapes it as the job `api-front`.
+pub const FRONT_METRICS_PATH: &str = "/metrics/front";
+
 /// The routes of this module, for [`crate::routes`].
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/live", get(live))
-        .route("/metrics", get(metrics))
+        .route(FRONT_METRICS_PATH, get(metrics))
 }
 
 async fn live() -> axum::Json<serde_json::Value> {

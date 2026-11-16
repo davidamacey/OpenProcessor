@@ -49,6 +49,21 @@ def test_sweep_table_reports_median_range_and_api_cores() -> None:
     assert two[3].startswith('| pe=2 | 32 x 16 |')
 
 
+def test_sweep_table_names_both_api_containers() -> None:
+    runs = [run(20.0, 0.2), run(22.0, 0.2), run(21.0, 0.2)]
+    flat = {
+        'images_per_s': [20.0, 22.0, 21.0],
+        'api_cpu_s_per_image': [0.2, 0.2, 0.2],
+        'front_cpu_s_per_image': [0.004, 0.004, 0.004],
+    }
+    block = {'summary': summary_of(flat), 'runs': runs}
+    doc = {'sweep': {'arms': {'shipped': {'points': {'b32_c16': {'upload': block}}}}}}
+    lines = r.sweep_table(doc, '2').splitlines()
+    assert 'Python API CPU s/image' in lines[0]
+    assert 'Front CPU s/image' in lines[0]
+    assert '| 0.200 (0.200-0.200) | 0.004 (0.004-0.004) |' in lines[2]
+
+
 def test_opensearch_table_renders_one_row_per_arm() -> None:
     flat = {
         k: [1.0, 2.0, 3.0]

@@ -11,7 +11,7 @@ use crate::settings::ApiSettings;
 /// balancer need nothing from each other.
 #[derive(Clone)]
 pub struct AppState {
-    /// The registry served on `/metrics`.
+    /// The registry served on the front's metrics path.
     pub metrics: Arc<Metrics>,
     /// Sends the requests Rust does not own to the Python API.
     pub forwarder: Forwarder,

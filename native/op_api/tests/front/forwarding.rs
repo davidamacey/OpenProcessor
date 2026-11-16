@@ -169,7 +169,7 @@ async fn an_upstream_that_cannot_be_reached_is_a_503_with_retry_after_and_is_cou
         body["request_id"],
         answer.headers["x-request-id"].to_str().unwrap()
     );
-    let metrics = get_path(&front, "/metrics").await;
+    let metrics = get_path(&front, "/metrics/front").await;
     let text = String::from_utf8_lossy(&metrics.body);
     assert!(
         text.contains("op_api_forward_failures_total{reason=\"connect\"} 1"),

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 def _ns(tmp_path: Path, manifest: Path, **over: object):
     argv = [
         'run', 'setB', str(manifest), '--api-url', 'http://api.test',
-        '--api-container', 'a', '--triton-container', 't', '--out-root', str(tmp_path),
+        '--api-container', 'a', '--front-container', 'f', '--triton-container', 't', '--out-root', str(tmp_path),
         '--triton-metrics-url', 'http://tr.test/metrics',
         '--frame-engine-metrics-url', 'http://fe.test/metrics', '--path-map', '/h=/c',
     ]  # fmt: skip
@@ -38,25 +38,26 @@ def test_the_protocol_values_are_fixed(manifest: Path, tmp_path: Path) -> None:
     assert args.frame_engine_metrics_url == 'http://fe.test/metrics'
 
 
-def test_observer_reports_api_cpu_delta_and_mean_triton_cpu() -> None:
-    usage = iter([2_000_000, 7_500_000])
+def test_observer_reports_each_api_container_by_name_and_mean_triton_cpu() -> None:
+    usage = {'a': iter([2_000_000, 7_500_000]), 'f': iter([1_000_000, 1_400_000])}
 
     def runner(*argv: str) -> str:
         if argv[0] == 'exec':
-            return f'user_usec 1\nusage_usec {next(usage)}\nsystem_usec 2\n'
+            return f'user_usec 1\nusage_usec {next(usage[argv[1]])}\nsystem_usec 2\n'
         return '200.00%\n'
 
-    obs = ip.ContainerObserver('a', 't', runner=runner, every=0.01)
+    obs = ip.ContainerObserver('a', 'f', 't', runner=runner, every=0.01)
     obs.start()
     obs.sample_triton()  # at least one sample regardless of the sampler thread's timing
     out = obs.stop()
     assert out['api_cpu_s'] == pytest.approx(5.5)
+    assert out['front_cpu_s'] == pytest.approx(0.4)
     assert out['triton_cpu_pct_mean'] == 200.0
     assert out['triton_cpu_samples'] >= 1.0
 
 
 def test_a_cgroup_file_without_usage_is_an_error() -> None:
-    obs = ip.ContainerObserver('a', 't', runner=lambda *_a: 'nr_periods 1\n', every=3600.0)
+    obs = ip.ContainerObserver('a', 'f', 't', runner=lambda *_a: 'nr_periods 1\n', every=3600.0)
     with pytest.raises(ValueError, match='no usage_usec'):
         obs.start()
 
@@ -67,7 +68,7 @@ def test_a_failed_triton_sample_is_left_out_of_the_mean() -> None:
             return 'usage_usec 1\n'
         raise subprocess.CalledProcessError(1, 'docker')
 
-    obs = ip.ContainerObserver('a', 't', runner=runner, every=0.01)
+    obs = ip.ContainerObserver('a', 'f', 't', runner=runner, every=0.01)
     obs.start()
     out = obs.stop()
     assert 'triton_cpu_pct_mean' not in out

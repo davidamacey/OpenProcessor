@@ -35,7 +35,7 @@ The compose profile, every monitoring service and its port override are in [Moni
 | Loki | http://localhost:4606 | - |
 | Triton Metrics | http://localhost:4602/metrics | - |
 
-The API job (`api:8000/metrics`) is scraped once and already aggregates every API worker (multiprocess mode, `PROMETHEUS_MULTIPROC_DIR` on a tmpfs in compose).
+The API job (`api-py:4613/metrics`; the front also forwards `http://localhost:4603/metrics` to it) is scraped once and already aggregates every API worker (multiprocess mode, `PROMETHEUS_MULTIPROC_DIR` on a tmpfs in compose).
 
 ## Dashboards
 

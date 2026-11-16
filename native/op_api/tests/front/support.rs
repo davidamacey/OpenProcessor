@@ -81,6 +81,7 @@ fn stub_router(state: StubState) -> Router {
     Router::new()
         .route("/echo", any(echo))
         .route("/echo/{*rest}", any(echo))
+        .route("/metrics", any(echo))
         .route("/stream-echo", any(stream_echo))
         .route("/events", get(events))
         .route("/hold", get(hold))

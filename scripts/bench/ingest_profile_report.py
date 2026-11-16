@@ -128,6 +128,11 @@ def render_row(name: str, reports: list[dict[str, Any]], gpu_index: str = '0') -
         for h, r in zip(host, reports, strict=True)
         if h.get('api_cpu_s')
     ]
+    front_cpu = [
+        h['front_cpu_s'] / r['ingest']['images']
+        for h, r in zip(host, reports, strict=True)
+        if h.get('front_cpu_s')
+    ]
     cores = [h['triton_cpu_pct_mean'] / 100 for h in host if 'triton_cpu_pct_mean' in h]
     crops = _median(
         [r['ingest']['items'] / r['ingest']['images'] for r in reports if r['ingest']['images']]
@@ -153,7 +158,11 @@ def render_row(name: str, reports: list[dict[str, Any]], gpu_index: str = '0') -
                     'Triton cores (docker stats)',
                     f'{_median(cores):.2f}' if cores else 'not recorded',
                 ),
-                ('API CPU-s per image', f'{_median(cpu):.4f}' if cpu else 'not recorded'),
+                ('Python API CPU-s per image', f'{_median(cpu):.4f}' if cpu else 'not recorded'),
+                (
+                    'Front CPU-s per image',
+                    f'{_median(front_cpu):.4f}' if front_cpu else 'not recorded',
+                ),
                 (
                     '1-minute load at start (max)',
                     f'{max(r["host"]["loadavg_start"][0] for r in reports):.1f}',

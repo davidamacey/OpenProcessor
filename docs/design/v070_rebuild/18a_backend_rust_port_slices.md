@@ -430,7 +430,7 @@ with a drift hook); `op_api`: `routes.rs` (one line per family, alphabetical), `
 (tower-http request id on `x-request-id`, CORS from the settings `src/core/cors.py` reads, the HTTP
 metric names and labels of `src/app/factory.py`, tracing JSON logs with `request_id`, a concurrency
 limit with load shedding at today's 512 answering 503, keep-alive 75 s, graceful shutdown 30 s),
-`errors` (the error shapes of 18 section 2.4), `health` (`/live`; `/metrics` with the Rust registry),
+`errors` (the error shapes of 18 section 2.4), `health` (`/live`; the Rust registry on `/metrics/front`, because `/metrics` stays the Python API's and is forwarded until it is gone),
 `forward` (an axum `fallback` that forwards to `OP_PY_API_URL` over hyper-util's client with
 streaming bodies both ways, server-sent events included, forwarding `x-request-id`,
 `x-forwarded-for`, `x-forwarded-proto` and `host` so `src/core/request_origin.py` sees what it sees
