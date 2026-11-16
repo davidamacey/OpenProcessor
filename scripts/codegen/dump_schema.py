@@ -62,7 +62,20 @@ def _run(argv: Sequence[str], timeout_s: int) -> str:
 
 
 def _exec(project: str, service: str, *command: str) -> list[str]:
-    return ['docker', 'compose', '-p', project, 'exec', '-T', service, *command]
+    # The statement timeout rides in PGOPTIONS: a `SET ...; SELECT ...` in one `-c` makes psql
+    # print the `SET` command tag as a second line of output.
+    return [
+        'docker',
+        'compose',
+        '-p',
+        project,
+        'exec',
+        '-T',
+        '-e',
+        'PGOPTIONS=-c statement_timeout=5s',
+        service,
+        *command,
+    ]
 
 
 def read_revision(
@@ -82,7 +95,7 @@ def read_revision(
             '-d',
             args.database,
             '-c',
-            "SET statement_timeout='5s'; SELECT version_num FROM alembic_version",
+            'SELECT version_num FROM alembic_version',
         ),
         REVISION_TIMEOUT_S,
     )

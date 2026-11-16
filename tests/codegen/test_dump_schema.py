@@ -24,7 +24,11 @@ class Fake:
 
     def __call__(self, argv: Sequence[str], timeout_s: int) -> str:
         self.calls.append((list(argv), timeout_s))
-        return self.dump if 'pg_dump' in argv else self.revision
+        if 'pg_dump' in argv:
+            return self.dump
+        # psql -c "SET ...; SELECT ..." prints the command tag of the SET before the rows.
+        echoed = 'SET\n' * argv[-1].count('SET ')
+        return echoed + self.revision
 
 
 def _main(tmp_path: Path, fake: Fake, *extra: str) -> int:
@@ -44,8 +48,8 @@ def test_each_database_call_is_one_short_statement_in_the_named_project(tmp_path
     _main(tmp_path, fake)
     revision_call, dump_call = fake.calls
     assert revision_call[0][:6] == ['docker', 'compose', '-p', 'harness', 'exec', '-T']
-    assert "SET statement_timeout='5s'" in revision_call[0][-1]
-    assert revision_call[0][-1].count(';') == 1
+    assert 'PGOPTIONS=-c statement_timeout=5s' in revision_call[0]
+    assert ';' not in revision_call[0][-1]
     assert {'--schema-only', '--no-owner', '--no-privileges'} <= set(dump_call[0])
     assert dump_call[1] > revision_call[1]
 
