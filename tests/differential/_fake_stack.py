@@ -18,9 +18,11 @@ Answer = Callable[[httpx.Request], httpx.Response]
 
 
 def json_answer(body: Any, status: int = 200, raw: str | None = None) -> httpx.Response:
+    # A body given as a stream, not as `content`: only a response the client reads and closes learns its
+    # `elapsed`, which Schemathesis reads when it checks an answer against the schema.
     return httpx.Response(
         status,
-        content=(raw if raw is not None else json.dumps(body)).encode(),
+        stream=httpx.ByteStream((raw if raw is not None else json.dumps(body)).encode()),
         headers={'content-type': 'application/json'},
     )
 
