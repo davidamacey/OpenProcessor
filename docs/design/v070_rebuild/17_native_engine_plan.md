@@ -568,7 +568,7 @@ on a pool thread; cancellation at each hand-off.
 | Hold | Rows |
 |---|---|
 | S0 smoke, as soon as `detect` runs (90 s) | region registered; one plan-F request on 3 COCO photos; the capture model's canvas digests equal the Python engine's; idle 65 s then a request with no GOAWAY in the model server's log. A failure here stops N0 for a fix before anything else is built |
-| H1 parity | `gpu_prep_parity.py` at 1 and 32 in flight, plans F and C, 200 COCO, 100 of the 20 MP set and the set P list; Python against itself twice for the floors; `compare-inputs` on 50 frames per set with the capture models |
+| H1 parity | `gpu_prep_parity.py` at 1 and 32 in flight, plans F and C, 200 photos of the COCO 500 list, 100 of the 120-photo public large-photo list and the set P 200 list; Python against itself twice for the floors; `compare-inputs` on 50 frames per set with the capture models |
 | H2 rate and ceiling | plans F and C at 1, 8, 32, 64, 128 in flight on COCO, 20 MP, set P; both engines, two runs per arm, alternating; Z rows for F and C at 32 and 64; the native input-only row for d (G1) |
 | H3 capacity | null models, plans F and C, COCO and 20 MP, 32, 64, 128 in flight, both engines; Z0 rows |
 | H4 sweeps | lanes at 0.5x, 0.75x, 1x of the physical cores and the NUMA arm (4.4); server windows fixed or adaptive (4.9); thread counts by role (4.2, 4.10) |
