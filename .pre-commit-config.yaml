@@ -354,6 +354,15 @@ repos:
         pass_filenames: false
         files: ^(src/.*\.py|contracts/json/(item_wire|frame_engine_v1|frame_engine_plan_cases)\.json|contracts/openapi/curation\.json|contracts/ts/(itemWire|classSources|classNames)\.ts|scripts/codegen/(export_api_contracts|_contract_runtime|frame_engine_contract|frame_engine_plan_cases)\.py)$
 
+      # The Rust duplicate hash (native/op_media) is held to the Python `imohash` package by
+      # goldens; the generator imports the package, so it runs under the project venv when one exists.
+      - id: imohash-goldens-drift
+        name: imohash goldens for the Rust port are in sync with the Python package
+        entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/codegen/imohash_goldens.py --check'
+        language: system
+        pass_filenames: false
+        files: ^(native/op_media/tests/goldens/imohash\.json|scripts/codegen/imohash_goldens\.py|requirements\.txt|native/frame_engine/tests/golden/host/.*|tests/fixtures/.*|frontend/e2e/fixtures/ingest/.*)$
+
   # Commit message linting (conventional commits). Scope stays optional.
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v4.4.0
