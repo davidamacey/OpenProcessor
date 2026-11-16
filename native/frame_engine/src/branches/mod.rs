@@ -9,6 +9,7 @@
 pub mod crops;
 pub mod detect;
 pub mod embed;
+pub mod faces;
 
 use gpu_frame::OutputTensor;
 

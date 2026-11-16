@@ -45,3 +45,13 @@ def test_the_goldens_cover_what_the_native_tests_rely_on(rendered: dict[str, str
         'gpu:', 'refused:corrupt', 'refused:huge', 'cpu:not_jpeg', 'cpu:precision',
         'cpu:components', 'cpu:progressive', 'cpu:truncated', 'cpu:small',
     } <= routes  # fmt: skip
+
+
+def test_the_face_goldens_cover_ties_tiles_and_degenerate_landmarks(
+    rendered: dict[str, str],
+) -> None:
+    faces = json.loads(rendered['faces.json'])
+    assert any(any(p[6:] != [0, 0, 0, 0] for p in c['passes']) for c in faces['passes']), 'tiles'
+    assert any(c['want']['overflow'] > 0 for c in faces['photos']), 'the cap'
+    assert {r['ok'] for r in faces['align']} == {True, False}, 'a degenerate landmark set'
+    assert len({r['taps'] for r in faces['align']}) > 8, 'reduced faces'
