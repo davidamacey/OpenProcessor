@@ -19,6 +19,21 @@ the others wait on a `fcntl` lock (the recipe of the pytest-xdist how-to, "Makin
 fixtures execute only once"). The other session fixtures only read, or reset a mode no isolated
 module sets.
 
+## Stack guard (return code 4)
+
+Around every test of a stack-acting module (`_classes.STACK_ACTING`) the autouse fixture
+`stack_healthy_around_stack_acting_tests` (`conftest.py`, logic in `_heal.py`) checks that `api`,
+`jobs-worker`, `periodic-worker` and `jobs-beat` run and are healthy. If not, it heals once
+(unpause, `up -d`, wait for health; every step is tried even when an earlier one times out) within
+about 6 minutes, and otherwise ends the session with `pytest.exit(..., returncode=4)` and a table of
+each service's State, Health and ExitCode. Preflight refusals stay code 3. Stack-acting modules run
+without xdist (second command above); in an xdist worker the guard fails the test instead of
+exiting, because the xdist docs do not say what `pytest.exit` does in a worker.
+
+When you see code 4: check the Docker daemon first (`docker info`; a stalled daemon makes compose
+calls hit their timeout), then the service the message names (`docker compose -p <project> ps -a`,
+its logs). A job wait that times out while the job is `queued` prints the same service table.
+
 ## Classes
 
 (a) isolated: its own project only, data read by its project or a unique id.

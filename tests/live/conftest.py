@@ -217,7 +217,25 @@ def wait_job(
         assert resp.status_code == 200, resp.text
         return resp.json()
 
-    return wait_for_state(fetch, lambda job: job['status'] in JOB_TERMINAL, timeout=timeout)
+    job = wait_for_state(fetch, lambda job: job['status'] in JOB_TERMINAL, timeout=timeout)
+    if job['status'] == 'queued':
+        pytest.fail(
+            f'job {job_id} still queued after {timeout:.0f} s; {worker_states_note()}\n{job}',
+            pytrace=False,
+        )
+    return job
+
+
+def worker_states_note() -> str:
+    """Compose state of the services that run jobs, for a failure message (one call, never per poll)."""
+    from tests.live._heal import STACK_SERVICES, service_table
+
+    try:
+        from tests.live._compose import service_states
+
+        return 'worker services:\n' + service_table(service_states(), STACK_SERVICES)
+    except Exception as exc:
+        return f'worker services unknown ({type(exc).__name__}: {exc})'
 
 
 def probe_vlm_endpoint(api: Any, name: str) -> None:
@@ -388,6 +406,20 @@ def stack_restored_after_scale_overlay(harness_safety_guard: None) -> Any:
     from tests.live._scale import restore_base_stack  # circular at import time
 
     restore_base_stack()
+
+
+@pytest.fixture(autouse=True)
+def stack_healthy_around_stack_acting_tests(request: pytest.FixtureRequest) -> Iterator[None]:
+    """A stack-acting test starts and ends on a healthy stack, or the session ends (return code 4)."""
+    from tests.live._classes import STACK_ACTING
+    from tests.live._heal import require_healthy_stack
+
+    if request.module.__name__.rsplit('.', 1)[-1] not in STACK_ACTING:
+        yield
+        return
+    require_healthy_stack(where=f'before {request.node.nodeid}')
+    yield
+    require_healthy_stack(where=f'after {request.node.nodeid}')
 
 
 @pytest.fixture(scope='session')
