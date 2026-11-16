@@ -29,7 +29,7 @@ class Fake:
             # pg_dump 18 brackets the dump in \restrict/\unrestrict with a random key unless given one.
             key = next((a.split('=', 1)[1] for a in argv if a.startswith('--restrict-key=')), None)
             key = key or uuid.uuid4().hex
-            return f'\\restrict {key}\n{self.dump}\\unrestrict {key}\n'
+            return f'\\restrict {key}\n{self.dump}\\unrestrict {key}\n\n'
         # psql -c "SET ...; SELECT ..." prints the command tag of the SET before the rows.
         echoed = 'SET\n' * argv[-1].count('SET ')
         return echoed + self.revision
@@ -45,6 +45,15 @@ def test_the_first_line_names_the_revision_and_the_rest_is_the_dump(tmp_path: Pa
     text = (tmp_path / 'schema' / 'head.sql').read_text(encoding='utf-8')
     assert text.splitlines()[0] == '-- alembic revision: 0009_ingest_retry_at'
     assert DUMP in text
+
+
+def test_the_file_ends_in_exactly_one_newline(tmp_path: Path) -> None:
+    # pg_dump ends with a blank line, which the repo's end-of-file hook would strip, leaving the
+    # committed file different from a fresh dump.
+    assert _main(tmp_path, Fake()) == 0
+    text = (tmp_path / 'schema' / 'head.sql').read_text(encoding='utf-8')
+    assert text.endswith('\n')
+    assert not text.endswith('\n\n')
 
 
 def test_each_database_call_is_one_short_statement_in_the_named_project(tmp_path: Path) -> None:

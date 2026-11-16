@@ -132,7 +132,7 @@ def render(run: Callable[[Sequence[str], int], str], args: argparse.Namespace) -
     )
     if 'CREATE TABLE public.jobs' not in dump:
         raise DumpError('the dump has no jobs table; is this the OpenProcessor database?')
-    return f'{REVISION_PREFIX}{revision}\n{dump}'
+    return f'{REVISION_PREFIX}{revision}\n{dump.rstrip()}\n'
 
 
 def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
