@@ -1884,6 +1884,16 @@ version = "0.1.0"
 [[package]]
 name = "op_jobs"
 version = "0.1.0"
+dependencies = [
+ "op_config",
+ "op_db",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "uuid",
+]
 
 [[package]]
 name = "op_media"
