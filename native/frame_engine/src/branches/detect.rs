@@ -15,7 +15,7 @@ use super::{InputSpec, fp32_output};
 use crate::geometry::{
     GeometryError, Letterbox, blur_rect, crop_rect, letterbox_geometry, undo_letterbox,
 };
-use crate::kernels::Resample;
+use crate::kernels::{Filter, Resample};
 use crate::pipeline::Tensor;
 use crate::wire::plan::DetectorSpec;
 
@@ -48,6 +48,7 @@ pub fn canvas(spec: &DetectorSpec, w: u32, h: u32) -> Result<Canvas, GeometryErr
             dst_offset: offset,
             plane: net * net,
             row_stride: net,
+            filter: Filter::Antialias,
         },
         letterbox: lb,
     })
