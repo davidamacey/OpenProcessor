@@ -27,6 +27,10 @@ function bodies). Contracts:
    stand-in (:data:`_ENGINE_STAND_INS`), which runs the engine's own gRPC front, and the
    generator of the native engine's goldens, which runs the Python functions it ports.
 
+9. ``--crates``: the Rust workspace ``native/`` (read from ``cargo metadata --no-deps``) may only
+   have the dependencies between its own crates that :data:`CRATE_DEPENDENCIES` lists (plan 18a
+   section 2.2); a workspace crate without a row fails, so the slice that adds a crate adds its row.
+
 There is no baseline: a violation fails. The one permanent exception is
 :data:`PERMANENT_EXCEPTIONS`, with its reason; an exception whose import is gone
 fails as stale.
@@ -36,9 +40,12 @@ from __future__ import annotations
 
 import argparse
 import ast
+import json
+import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -110,6 +117,108 @@ _ENGINE_STAND_INS = (
     'scripts/codegen/frame_engine_host_corpus.py',
     'scripts/codegen/frame_engine_text_goldens.py',
 )
+
+
+# Rust workspace crate -> the workspace crates it may depend on (any dependency kind). Plan 18a
+# section 2.2, "May depend on"; the engine crates are plan 17's. A new crate adds its row here.
+CRATE_DEPENDENCIES: dict[str, frozenset[str]] = {
+    'gpu_frame': frozenset(),
+    'frame_engine': frozenset({'gpu_frame'}),
+    'frame_engine_loadgen': frozenset({'gpu_frame'}),
+    'op_config': frozenset(),
+    'op_storage': frozenset({'op_config'}),
+    'op_media': frozenset({'op_config'}),
+    'op_engine_client': frozenset({'op_config'}),
+    'op_db': frozenset({'op_config'}),
+    'op_jobs': frozenset({'op_db', 'op_config'}),
+    'op_ingest': frozenset({'op_storage', 'op_media', 'op_engine_client', 'op_jobs', 'op_store'}),
+    'op_api': frozenset({'op_config', 'op_db', 'op_storage', 'op_ingest', 'op_jobs', 'op_store'}),
+    'op_server': frozenset(
+        {
+            'op_config',
+            'op_storage',
+            'op_media',
+            'op_engine_client',
+            'op_db',
+            'op_jobs',
+            'op_ingest',
+            'op_api',
+            'op_contracts',
+            'op_domain',
+            'op_store',
+        }
+    ),
+    'op_upload_loadgen': frozenset({'frame_engine_loadgen'}),
+    'op_contracts': frozenset({'op_api'}),
+    'op_domain': frozenset(),
+    'op_store': frozenset({'op_db', 'op_domain'}),
+}
+NATIVE_MANIFEST = 'native/Cargo.toml'
+
+
+def crate_violations(metadata: dict[str, Any]) -> list[str]:
+    """Problems in ``cargo metadata --no-deps`` output against :data:`CRATE_DEPENDENCIES`."""
+    members = {package['name'] for package in metadata['packages']}
+    problems: list[str] = []
+    for package in metadata['packages']:
+        name = package['name']
+        if name not in CRATE_DEPENDENCIES:
+            problems.append(f'{name}: a workspace crate with no row in CRATE_DEPENDENCIES')
+            continue
+        # A path marks a workspace dependency; a registry crate of the same name is not one.
+        used = {
+            dep['name']
+            for dep in package['dependencies']
+            if dep.get('path') and dep['name'] in members
+        }
+        problems.extend(
+            f'{name} -> {dep}: not an allowed dependency between workspace crates'
+            for dep in sorted(used - CRATE_DEPENDENCIES[name])
+        )
+    return problems
+
+
+def cargo_metadata(repo_root: Path) -> dict[str, Any]:
+    env = {
+        **os.environ,
+        'PATH': f'{Path.home() / ".cargo" / "bin"}{os.pathsep}{os.environ["PATH"]}',
+    }
+    out = subprocess.run(  # nosec B603 B607  fixed argv, cargo from PATH
+        [
+            'cargo',
+            'metadata',
+            '--no-deps',
+            '--format-version',
+            '1',
+            '--manifest-path',
+            NATIVE_MANIFEST,
+        ],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=True,
+        env=env,
+    ).stdout
+    metadata: dict[str, Any] = json.loads(out)
+    return metadata
+
+
+def run_crate_rule(repo_root: Path, metadata_file: Path | None) -> int:
+    metadata = (
+        json.loads(metadata_file.read_text(encoding='utf-8'))
+        if metadata_file
+        else cargo_metadata(repo_root)
+    )
+    problems = crate_violations(metadata)
+    if problems:
+        sys.stderr.write(
+            'ERROR: crate layering failed (plan 18a section 2.2; edit CRATE_DEPENDENCIES only '
+            'for a crate the plan lists).\n'
+        )
+        for problem in problems:
+            sys.stderr.write(f'  {problem}\n')
+        return 1
+    return 0
 
 
 def tracked_python(repo_root: Path) -> list[str]:
@@ -190,7 +299,13 @@ def scan(repo_root: Path, files: list[str] | None = None) -> tuple[dict[str, int
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=REPO_ROOT)
+    parser.add_argument('--crates', action='store_true', help='check the Rust crate rule instead')
+    parser.add_argument(
+        '--metadata', type=Path, help='cargo metadata JSON file (default: run cargo)'
+    )
     args = parser.parse_args(argv)
+    if args.crates:
+        return run_crate_rule(args.root, args.metadata)
 
     found, broken = scan(args.root)
     errors = [f'{rel}: cannot be parsed, so its imports are unchecked' for rel in broken]

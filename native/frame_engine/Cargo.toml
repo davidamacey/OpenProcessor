@@ -36,8 +36,8 @@ prometheus-client = "=0.26.0"
 procfs = { version = "=0.18.0", default-features = false }
 prost = { workspace = true }
 serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { workspace = true }
 sha2 = "=0.11.1"
-serde_json = { version = "=1.0.154", features = ["arbitrary_precision", "preserve_order"] }
 # CMYK TIFF ink samples, converted as Pillow converts them (`host/formats.rs`).
 tiff = { workspace = true }
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }

@@ -1,0 +1,12 @@
+[package]
+name = "op_storage"
+description = "Key layout, landing zone, local read paths, streaming SHA-256, the durable object store, the mover, derived files and cache, delete and erase primitives, and reconcile listing."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

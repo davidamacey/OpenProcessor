@@ -122,6 +122,13 @@ repos:
         pass_filenames: false
         files: ^(src|scripts|frame_engine)/.*\.py$
 
+      - id: check-crate-layering
+        name: Crate layering (native/ workspace crates depend only as plan 18a section 2.2 allows)
+        entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/codegen/check_layering.py --crates'
+        language: system
+        pass_filenames: false
+        files: ^native/(.*/)?Cargo\.toml$|^scripts/codegen/check_layering\.py$
+
       # Both ratchets run ruff from the project interpreter, so they use the pinned version.
       - id: check-ruff-ratchet
         name: Complexity (per function) and broad-except (per file) ratchets

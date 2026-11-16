@@ -127,7 +127,9 @@ fn first_element(response: &ModelInferResponse, name: &str) -> Option<String> {
 }
 
 /// How the engine's answer to photo `id` ended: `status` `ok` and no branch in error is a
-/// success; everything else is a failure under a key a reader can group by.
+/// success; everything else is a failure under a key a reader can group by. When several
+/// branches are in error the key names the first by name (`serde_json`'s plain object map is
+/// sorted), so the same answer always lands under the same key.
 pub fn outcome_of(response: &ModelInferResponse, id: usize) -> Outcome {
     let failed = |key: String| Outcome::Failed { key };
     if response.id != id.to_string() {
@@ -271,4 +273,54 @@ pub async fn cuda_regions(client: &mut Client, timeout: Duration) -> Result<Vec<
     let mut names: Vec<String> = response.regions.into_keys().collect();
     names.sort();
     Ok(names)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::proto::model_infer_response::InferOutputTensor;
+
+    fn answer(branch_status: &str) -> ModelInferResponse {
+        let outputs = [
+            ("status", "ok"),
+            ("decode_route", "device"),
+            ("branch_status", branch_status),
+        ];
+        ModelInferResponse {
+            id: "7".into(),
+            outputs: outputs
+                .iter()
+                .map(|(name, _)| InferOutputTensor {
+                    name: (*name).into(),
+                    ..Default::default()
+                })
+                .collect(),
+            raw_output_contents: outputs
+                .iter()
+                .map(|(_, text)| pack_bytes(text.as_bytes()))
+                .collect(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn an_answer_with_no_branch_in_error_is_a_success() {
+        let response = answer(r#"{"detect": {"status": "ok"}}"#);
+        assert!(matches!(
+            outcome_of(&response, 7),
+            Outcome::Ok { ref route, .. } if route == "device"
+        ));
+    }
+
+    #[test]
+    fn several_branches_in_error_are_named_by_the_first_by_name() {
+        let response = answer(
+            r#"{"vectors": {"status": "error", "reason": "late"},
+                "faces": {"status": "error", "reason": "early"}}"#,
+        );
+        assert!(matches!(
+            outcome_of(&response, 7),
+            Outcome::Failed { ref key } if key == "branch:faces:early"
+        ));
+    }
 }

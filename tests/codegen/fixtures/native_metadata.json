@@ -1,0 +1,18 @@
+{
+  "packages": [
+    {"name": "gpu_frame", "dependencies": [{"name": "serde", "kind": null, "path": null}]},
+    {"name": "frame_engine", "dependencies": [{"name": "gpu_frame", "kind": null, "path": "/w/native/gpu_frame"}]},
+    {"name": "op_config", "dependencies": [{"name": "serde", "kind": "dev", "path": null}]},
+    {"name": "op_storage", "dependencies": [{"name": "op_config", "kind": null, "path": "/w/native/op_config"}]},
+    {"name": "op_db", "dependencies": [{"name": "op_config", "kind": null, "path": "/w/native/op_config"}]},
+    {"name": "op_jobs", "dependencies": [
+      {"name": "op_db", "kind": null, "path": "/w/native/op_db"},
+      {"name": "op_config", "kind": null, "path": "/w/native/op_config"},
+      {"name": "tokio", "kind": null, "path": null}
+    ]},
+    {"name": "op_upload_loadgen", "dependencies": [
+      {"name": "frame_engine_loadgen", "kind": null, "path": "/w/native/frame_engine_loadgen"}
+    ]},
+    {"name": "frame_engine_loadgen", "dependencies": [{"name": "gpu_frame", "kind": null, "path": "/w/native/gpu_frame"}]}
+  ]
+}
