@@ -32,7 +32,7 @@
 //!
 //! Signatures are those of `nvjpeg.h` in the `nvidia-nvjpeg` 13.2.3.58 wheel the engine image
 //! ships (`NVJPEG_VER` 13.2.3.58); handles are pointers, enums C `int`s. nvJPEG documentation:
-//! https://docs.nvidia.com/cuda/nvjpeg/index.html (1.3 thread safety: the handle is shared,
+//! <https://docs.nvidia.com/cuda/nvjpeg/index.html> (1.3 thread safety: the handle is shared,
 //! states, streams and buffers are per thread, user allocators must be thread safe; 2.2.8 and
 //! 2.2.11 the V2 allocators; 2.3.1.6 `nvjpegCreateExV2`; decoupled decoding).
 
@@ -94,7 +94,7 @@ pub const NVJPEG_SONAME: &str = "libnvjpeg.so.13";
 /// first that is missing.
 macro_rules! fn_table {
     ($table:ident { $($name:ident : fn($($arg:ty),*) -> $ret:ty;)* }) => {
-        #[allow(non_snake_case)]
+        #[expect(non_snake_case, reason = "the fields are the C entry points, named as nvJPEG names them")]
         struct $table {
             $($name: unsafe extern "C" fn($($arg),*) -> $ret,)*
         }

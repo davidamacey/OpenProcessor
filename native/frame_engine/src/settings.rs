@@ -32,43 +32,67 @@ fn refuse<T>(text: String) -> Result<T, SettingsError> {
     Err(SettingsError(text))
 }
 
+/// How photos reach the model server: the input travels by CUDA shared memory (`OP_FRAME_ENGINE_TRANSPORT`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Transport {
+    /// Inputs are written into a registered CUDA shared-memory region on the card; the only transport built.
     Cuda,
 }
 
+/// Every setting of one engine process, read from `OP_FRAME_ENGINE_*`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
+    /// `host:port` of the model server's gRPC endpoint, `OP_FRAME_ENGINE_TRITON_URL`.
     pub triton_url: String,
+    /// How inputs reach the model server, `OP_FRAME_ENGINE_TRANSPORT`.
     pub transport: Transport,
     /// Size of the one CUDA shared-memory region, MiB.
     pub region_mib: u32,
     /// Names this process's region with the card: one engine slot per card by default.
     pub instance: String,
+    /// The card's index as the model server numbers it, used when registering the region, `OP_FRAME_ENGINE_TRITON_DEVICE_ID`.
     pub triton_device_id: u32,
+    /// gRPC channels to the model server, `OP_FRAME_ENGINE_TRITON_CHANNELS`.
     pub triton_channels: u32,
     /// Deadline of one model-server call, also capped by what is left of the request.
     pub triton_timeout_seconds: f64,
     /// Every request is answered by then (`DEADLINE_EXCEEDED` if the photo is still running).
     pub request_deadline_seconds: f64,
+    /// Photos in work at once past admission, each holding a frame and region slices, `OP_FRAME_ENGINE_WORKERS`.
     pub workers: u32,
+    /// Decode lanes, `OP_FRAME_ENGINE_LANES`; defaults to the physical cores available to the process.
     pub lanes: u32,
+    /// Finish-pool threads that copy and JPEG-encode crops, `OP_FRAME_ENGINE_ENCODE_THREADS`.
     pub encode_threads: u32,
     /// Requests admitted at once (running or queued); above it: overload.
     pub max_in_flight: u32,
+    /// Device memory the frame pool may hold, MiB, `OP_FRAME_ENGINE_POOL_MIB`.
     pub pool_mib: u32,
+    /// Decoded-frame bytes photos may reserve together, MiB, `OP_FRAME_ENGINE_BUDGET_MIB`; at most the pool.
     pub budget_mib: u32,
+    /// How long a photo waits for the frame budget before an overload, seconds, `OP_FRAME_ENGINE_BUDGET_WAIT_SECONDS`.
     pub budget_wait_seconds: f64,
+    /// How long a photo waits for room in the region before an overload, seconds, `OP_FRAME_ENGINE_SLAB_WAIT_SECONDS`.
     pub slab_wait_seconds: f64,
+    /// Cached profile-to-sRGB colour tables on the card, `OP_FRAME_ENGINE_COLOUR_TABLES`.
     pub colour_tables: u32,
+    /// Images below this many megapixels decode on the host, `OP_FRAME_ENGINE_MIN_MEGAPIXELS`.
     pub min_megapixels: f64,
+    /// Images above this many megapixels are refused as `huge`, `OP_FRAME_ENGINE_MAX_MEGAPIXELS`.
     pub max_megapixels: f64,
+    /// JPEG quality, 1 to 100, of the encoded crops, `OP_FRAME_ENGINE_JPEG_QUALITY`.
     pub jpeg_quality: u32,
+    /// Whether kernel stages wait for their stream so stage seconds are exact, `OP_FRAME_ENGINE_STAGE_SYNC`.
     pub stage_sync: bool,
+    /// TCP port of the gRPC service, `OP_FRAME_ENGINE_PORT`.
     pub port: u16,
+    /// TCP port of the metrics endpoint, `OP_FRAME_ENGINE_METRICS_PORT`.
     pub metrics_port: u16,
+    /// Largest gRPC message in either direction, MiB, `OP_FRAME_ENGINE_MAX_MESSAGE_MIB`.
     pub max_message_mib: u32,
+    /// Seconds in-flight photos get to finish on shutdown, `OP_FRAME_ENGINE_DRAIN_SECONDS`.
     pub drain_seconds: f64,
+    /// Seconds between the engine's readiness checks of the model server, `OP_FRAME_ENGINE_HEALTH_SECONDS`.
     pub health_seconds: f64,
     /// `OP_FRAME_ENGINE_EXPECT_BUS_ID`: the PCI bus id of the card this engine must run on; the
     /// start is refused on any other (unset: no check).
@@ -116,11 +140,19 @@ impl Settings {
     }
 
     /// The settings of this process's environment.
+    ///
+    /// # Errors
+    ///
+    /// A variable is malformed or out of range, a retired or unbuilt option is set, or the settings contradict each other (budget above pool, model-call timeout above the request deadline).
     pub fn from_env() -> Result<Self, SettingsError> {
         Self::from_lookup(&|name| std::env::var(name).ok())
     }
 
     /// The settings read through `lookup` (a variable's text, or `None` when unset).
+    ///
+    /// # Errors
+    ///
+    /// A variable is malformed or out of range, a retired or unbuilt option is set, or the settings contradict each other (budget above pool, model-call timeout above the request deadline).
     pub fn from_lookup(lookup: &dyn Fn(&str) -> Option<String>) -> Result<Self, SettingsError> {
         Self::read(lookup, cores::physical_cores())
     }
@@ -131,53 +163,7 @@ impl Settings {
     ) -> Result<Self, SettingsError> {
         let env = Env(lookup);
         let d = Self::with_lanes(default_lanes);
-        if env.raw("OP_FRAME_ENGINE_SWITCH_INTERVAL_MS").is_some() {
-            return refuse(
-                "OP_FRAME_ENGINE_SWITCH_INTERVAL_MS is set: it tunes Python's interpreter lock \
-                 and means nothing to the native engine; unset it"
-                    .into(),
-            );
-        }
-        let transport = env.raw("OP_FRAME_ENGINE_TRANSPORT");
-        match transport.as_deref() {
-            None | Some("cuda") => {}
-            Some("body") => {
-                return refuse(
-                    "OP_FRAME_ENGINE_TRANSPORT='body' is not built in this engine yet (plan 17 N1a)"
-                        .into(),
-                );
-            }
-            Some(other) => {
-                return refuse(format!(
-                    "OP_FRAME_ENGINE_TRANSPORT={}: one of cuda, body",
-                    repr_str(other)
-                ));
-            }
-        }
-        let instance = env.raw("OP_FRAME_ENGINE_INSTANCE").unwrap_or(d.instance);
-        let stripped: String = instance.replace('-', "");
-        if stripped.is_empty() || !stripped.chars().all(char::is_alphanumeric) {
-            return refuse(format!(
-                "OP_FRAME_ENGINE_INSTANCE={}: letters, digits and dashes only",
-                repr_str(&instance)
-            ));
-        }
-        let expect_bus_id = env.raw("OP_FRAME_ENGINE_EXPECT_BUS_ID");
-        if let Some(text) = &expect_bus_id
-            && parse_bus_id(text).is_none()
-        {
-            return refuse(format!(
-                "OP_FRAME_ENGINE_EXPECT_BUS_ID={}: a PCI bus id such as 0000:65:00.0",
-                repr_str(text)
-            ));
-        }
-        let crop_max_side: u32 = env.int("OP_FRAME_ENGINE_CROP_MAX_SIDE", 0, 0, 65_535)?;
-        if crop_max_side != 0 {
-            return refuse(
-                "OP_FRAME_ENGINE_CROP_MAX_SIDE above 0 is not built in this engine yet (plan 17 N1)"
-                    .into(),
-            );
-        }
+        let (instance, expect_bus_id) = Self::read_identity(&env, d.instance.clone())?;
         let s = Self {
             triton_url: env
                 .raw("OP_FRAME_ENGINE_TRITON_URL")
@@ -264,6 +250,71 @@ impl Settings {
             )?,
             expect_bus_id,
         };
+        s.check_relations()?;
+        Ok(s)
+    }
+
+    /// The settings that name something rather than size it, and the ones this engine refuses
+    /// because a feature is not built: the instance name and the expected bus id.
+    fn read_identity(
+        env: &Env<'_>,
+        default_instance: String,
+    ) -> Result<(String, Option<String>), SettingsError> {
+        if env.raw("OP_FRAME_ENGINE_SWITCH_INTERVAL_MS").is_some() {
+            return refuse(
+                "OP_FRAME_ENGINE_SWITCH_INTERVAL_MS is set: it tunes Python's interpreter lock \
+                 and means nothing to the native engine; unset it"
+                    .into(),
+            );
+        }
+        let transport = env.raw("OP_FRAME_ENGINE_TRANSPORT");
+        match transport.as_deref() {
+            None | Some("cuda") => {}
+            Some("body") => {
+                return refuse(
+                    "OP_FRAME_ENGINE_TRANSPORT='body' is not built in this engine yet (plan 17 N1a)"
+                        .into(),
+                );
+            }
+            Some(other) => {
+                return refuse(format!(
+                    "OP_FRAME_ENGINE_TRANSPORT={}: one of cuda, body",
+                    repr_str(other)
+                ));
+            }
+        }
+        let instance = env
+            .raw("OP_FRAME_ENGINE_INSTANCE")
+            .unwrap_or(default_instance);
+        let stripped: String = instance.replace('-', "");
+        if stripped.is_empty() || !stripped.chars().all(char::is_alphanumeric) {
+            return refuse(format!(
+                "OP_FRAME_ENGINE_INSTANCE={}: letters, digits and dashes only",
+                repr_str(&instance)
+            ));
+        }
+        let expect_bus_id = env.raw("OP_FRAME_ENGINE_EXPECT_BUS_ID");
+        if let Some(text) = &expect_bus_id
+            && parse_bus_id(text).is_none()
+        {
+            return refuse(format!(
+                "OP_FRAME_ENGINE_EXPECT_BUS_ID={}: a PCI bus id such as 0000:65:00.0",
+                repr_str(text)
+            ));
+        }
+        let crop_max_side: u32 = env.int("OP_FRAME_ENGINE_CROP_MAX_SIDE", 0, 0, 65_535)?;
+        if crop_max_side != 0 {
+            return refuse(
+                "OP_FRAME_ENGINE_CROP_MAX_SIDE above 0 is not built in this engine yet (plan 17 N1)"
+                    .into(),
+            );
+        }
+        Ok((instance, expect_bus_id))
+    }
+
+    /// Settings that must agree with each other.
+    fn check_relations(&self) -> Result<(), SettingsError> {
+        let s = self;
         if s.budget_mib > s.pool_mib {
             return refuse(format!(
                 "OP_FRAME_ENGINE_BUDGET_MIB {} exceeds OP_FRAME_ENGINE_POOL_MIB {}",
@@ -278,7 +329,7 @@ impl Settings {
                 format_g(s.request_deadline_seconds)
             ));
         }
-        Ok(s)
+        Ok(())
     }
 }
 

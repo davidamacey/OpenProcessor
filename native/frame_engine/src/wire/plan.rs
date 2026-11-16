@@ -19,24 +19,38 @@ use super::json::{Json, parse};
 
 /// The fault names of the contract (`plan.faults`).
 pub mod fault {
+    /// The plan text is not JSON.
     pub const BAD_JSON: &str = "bad_json";
+    /// `version` is missing or is not the protocol version.
     pub const BAD_VERSION: &str = "bad_version";
+    /// A field the plan does not define.
     pub const UNKNOWN_FIELD: &str = "unknown_field";
+    /// A field the plan requires is absent.
     pub const MISSING_FIELD: &str = "missing_field";
+    /// A field has the wrong type or a value out of range.
     pub const BAD_FIELD: &str = "bad_field";
+    /// `branches` is empty.
     pub const EMPTY_PLAN: &str = "empty_plan";
+    /// `branches` names a branch outside the vocabulary.
     pub const UNKNOWN_BRANCH: &str = "unknown_branch";
+    /// `branches` names a branch twice.
     pub const DUPLICATE_BRANCH: &str = "duplicate_branch";
+    /// A branch needs another that the plan does not run (`embed_crops` and `crops: inline` need `detect` or `boxes`; `face_embed` needs `faces`).
     pub const MISSING_DEPENDENCY: &str = "missing_dependency";
+    /// `if_detected` names a branch that is not conditional or not in the plan.
     pub const CONDITION_ON_UNCONDITIONAL: &str = "condition_on_unconditional";
+    /// The request carries `boxes` and the plan also runs `detect`.
     pub const BOXES_WITH_DETECT: &str = "boxes_with_detect";
+    /// The request carries `boxes` and the plan has no crop work to use them.
     pub const UNUSED_BOXES: &str = "unused_boxes";
 }
 
 /// A plan the engine refuses as a whole (gRPC `INVALID_ARGUMENT`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlanError {
+    /// Which fault, one of the `fault` names.
     pub fault: &'static str,
+    /// The field or value at fault; empty when the fault name says it all.
     pub detail: String,
 }
 
@@ -64,64 +78,107 @@ impl std::error::Error for PlanError {}
 
 type Parsed<T> = Result<T, PlanError>;
 
+/// The detector model and its network input.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct DetectorSpec {
+    /// Detector model name on the model server.
     pub model: String,
+    /// Side of the square network input, pixels.
     pub input_size: u32,
+    /// Letterbox padding value, 0 to 255.
     pub letterbox_fill: u32,
 }
 
+/// The whole-frame embedding model.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct EmbedSpec {
+    /// Encoder model name on the model server.
     pub model: String,
+    /// Side of the square input, pixels.
     pub size: u32,
+    /// How the frame is fitted to the square, one of the contract's `frame_recipes`.
     pub frame_recipe: String,
 }
 
+/// The crop embedding model, with its own size, preprocessing and vector space.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct CropEmbedSpec {
+    /// Encoder model name on the model server.
     pub model: String,
+    /// Side of each square crop input, pixels.
     pub size: u32,
+    /// Crops sent per model call.
     pub batch: u32,
+    /// How a crop is fitted to the square, one of the contract's `crop_recipes`.
     pub crop_recipe: String,
+    /// Letterbox padding value, 0 to 255.
     pub fill: u32,
 }
 
+/// The `faces` and `face_embed` branches: a face detector and a recogniser.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct FaceSpec {
+    /// Face detector model name.
     pub detector: String,
+    /// Side of the detector's square input, pixels.
     pub input_size: u32,
+    /// Face recogniser model name.
     pub recogniser: String,
+    /// Aligned faces sent per recogniser call.
     pub batch: u32,
+    /// Detector score below which a face is dropped.
     pub score_min: f64,
+    /// IoU above which overlapping faces are merged.
     pub nms: f64,
+    /// Faces kept per photo; the rest are counted as overflow.
     pub max_faces: u32,
+    /// Side in pixels of an extra pass over the whole frame; 0 for none.
     pub coarse: u32,
+    /// Longer side in pixels of the scaled frame cut into tiles; 0 for no tiles.
     pub tile_side: u32,
+    /// Input pixels shared by neighbouring tiles; 0 for none.
     pub overlap: u32,
 }
 
+/// The `ocr` branch: a text detector and a recogniser.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct OcrSpec {
+    /// Text detector model name.
     pub detector: String,
+    /// Text recogniser model name.
     pub recogniser: String,
+    /// Lines sent per recogniser call.
     pub batch: u32,
+    /// Most lines kept per photo; the lowest-scoring are dropped and counted.
     pub max_lines: u32,
+    /// Side in pixels the detector's resize aims at, by `det_limit`.
     pub det_side: u32,
+    /// `min` raises the shorter side to `det_side`, `max` caps the longer side at it.
     pub det_limit: String,
+    /// Largest side in pixels of the detector input.
     pub det_max_side: u32,
+    /// Whether the shrink to the detector input is antialiased.
     pub det_antialias: bool,
+    /// Probability threshold of the detector's binarised map.
     pub thresh: f64,
+    /// Minimum mean score for a detected box to be kept.
     pub box_thresh: f64,
+    /// Expansion ratio applied to each detected box.
     pub unclip_ratio: f64,
+    /// Samples per axis per recogniser pixel at most; 1 reads the pixel centre.
     pub taps: u32,
 }
 
+/// One stored rendition of the photo.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct RenditionSpec {
+    /// Name the rendition is answered under.
     pub name: String,
+    /// Pixels the long side is fitted to; never enlarged.
     pub side: u32,
+    /// Encoder quality, 1 to 100.
     pub quality: u32,
+    /// Encoded format, one of the contract's `derivatives.formats`.
     pub format: String,
 }
 
@@ -129,7 +186,9 @@ pub struct RenditionSpec {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Crops {
+    /// Each detection's JPEG is answered as `crop_jpegs`.
     Inline,
+    /// No crop JPEGs.
     None,
 }
 
@@ -137,30 +196,40 @@ pub enum Crops {
 /// `EnginePlan.to_json`).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct EnginePlan {
+    /// Plan protocol version, always the contract's.
     pub version: u32,
     /// In the vocabulary's order, whatever order the text had.
     pub branches: Vec<String>,
+    /// Whether crop JPEGs are answered.
     pub crops: Crops,
+    /// Detector settings; present when `detect` runs.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detector: Option<DetectorSpec>,
+    /// Whole-frame encoder settings; present when `embed_frame` runs.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub embed: Option<EmbedSpec>,
+    /// Crop encoder settings; present when `embed_crops` runs.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub crop_embed: Option<CropEmbedSpec>,
     /// Detector class ids that get a crop vector; `None` means every detection.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub embed_classes: Option<BTreeSet<u32>>,
+    /// For each conditional branch, the detector class ids that make it run on the photo.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub if_detected: BTreeMap<String, Vec<u32>>,
+    /// Face settings; present when `faces` runs.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub faces: Option<FaceSpec>,
+    /// OCR settings; present when `ocr` runs.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ocr: Option<OcrSpec>,
+    /// The renditions asked for, in request order.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub derivatives: Vec<RenditionSpec>,
 }
 
 impl EnginePlan {
+    /// Whether the plan lists `branch`.
     pub fn runs(&self, branch: &str) -> bool {
         self.branches.iter().any(|b| b == branch)
     }
@@ -603,6 +672,10 @@ const TOP_FIELDS: [&str; 11] = [
 
 /// The plan in `text` exactly as written, or the fault. `has_boxes` says whether the request
 /// carries the `boxes` input: stored boxes stand in for the detector and so exclude `detect`.
+///
+/// # Errors
+///
+/// The text is not valid JSON, or breaks a plan rule: version, fields, branch vocabulary, per-branch settings, dependencies, or boxes use. The error names the fault and the field.
 pub fn parse_plan(text: &[u8], has_boxes: bool) -> Parsed<EnginePlan> {
     let c = contract();
     let document = parse(text).map_err(|e| PlanError::new(fault::BAD_JSON, e.to_string()))?;

@@ -20,24 +20,39 @@ use crate::wire::branch_status::BranchState;
 /// One output tensor with its datatype; `shape` is the response's (`-1` never appears).
 #[derive(Debug, Clone, PartialEq)]
 pub enum Tensor {
+    /// BOOL tensor.
     Bool {
+        /// Dimensions as the response states them.
         shape: Vec<i64>,
+        /// Elements in row-major order, as many as the shape's product.
         data: Vec<bool>,
     },
+    /// INT32 tensor.
     Int32 {
+        /// Dimensions as the response states them.
         shape: Vec<i64>,
+        /// Elements in row-major order, as many as the shape's product.
         data: Vec<i32>,
     },
+    /// INT64 tensor.
     Int64 {
+        /// Dimensions as the response states them.
         shape: Vec<i64>,
+        /// Elements in row-major order, as many as the shape's product.
         data: Vec<i64>,
     },
+    /// FP32 tensor.
     Fp32 {
+        /// Dimensions as the response states them.
         shape: Vec<i64>,
+        /// Elements in row-major order, as many as the shape's product.
         data: Vec<f32>,
     },
+    /// FP64 tensor.
     Fp64 {
+        /// Dimensions as the response states them.
         shape: Vec<i64>,
+        /// Elements in row-major order, as many as the shape's product.
         data: Vec<f64>,
     },
     /// BYTES, one element per entry (`crop_jpegs`, `ocr_texts`); the shape is `[len]`.
@@ -90,12 +105,14 @@ pub struct PhotoAnswer {
 /// photo holds instead of starting work.
 #[derive(Debug)]
 pub struct RequestState {
+    /// The request's deadline and arrival time.
     pub clock: RequestClock,
     stage: Mutex<&'static str>,
     cancelled: CancelToken,
 }
 
 impl RequestState {
+    /// A state for a request with `clock`, in stage `queue`, not cancelled.
     pub fn new(clock: RequestClock) -> Self {
         Self {
             clock,
@@ -111,14 +128,17 @@ impl RequestState {
         }
     }
 
+    /// The stage the request last entered; `queue` before any.
     pub fn stage(&self) -> &'static str {
         self.stage.lock().map_or("queue", |s| *s)
     }
 
+    /// Marks the caller gone, so queued pool jobs of the request end without running.
     pub fn cancel(&self) {
         self.cancelled.cancel();
     }
 
+    /// Whether the caller is gone.
     pub fn cancelled(&self) -> bool {
         self.cancelled.is_cancelled()
     }
@@ -128,6 +148,7 @@ impl RequestState {
         &self.cancelled
     }
 
+    /// When the request reached the front.
     pub fn arrived(&self) -> Instant {
         self.clock.arrived
     }
@@ -137,12 +158,17 @@ impl RequestState {
 /// the stored boxes (`Some` when the request carried `boxes`, even with no rows).
 #[derive(Debug)]
 pub struct Photo {
+    /// The encoded image file, a slice of the request message.
     pub image: Bytes,
+    /// The plan the request asked for, already validated.
     pub plan: EnginePlan,
+    /// Stored boxes as `x1, y1, x2, y2`; `Some` when the request carried `boxes`, even with no rows.
     pub boxes: Option<Vec<[f64; 4]>>,
+    /// The request's deadline, stage and cancel state.
     pub request: std::sync::Arc<RequestState>,
 }
 
+/// What the front calls to answer a photo and to learn whether it can take work.
 pub trait Pipeline: Send + Sync + 'static {
     /// Whether the pipeline can take work: the model server answers, the region is registered and
     /// the context is not lost. One atomic read; never waits (the API asks before every photo).

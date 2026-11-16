@@ -18,18 +18,22 @@ use crate::region::Slice;
 /// One input tensor read from a region slice.
 #[derive(Debug)]
 pub struct InputTensor<'a> {
+    /// The input's name in the model's configuration.
     pub name: &'a str,
     /// The KServe datatype (`UINT8`, `FP32`, ...).
     pub datatype: &'a str,
     /// The shape, batch first.
     pub shape: &'a [i64],
+    /// The region bytes sent as this input; the slice stays borrowed for the call.
     pub slice: &'a Slice,
 }
 
 /// One model call.
 #[derive(Debug)]
 pub struct InferCall<'a> {
+    /// The model's name on the server.
     pub model: &'a str,
+    /// The input tensors, in the model's input order.
     pub inputs: &'a [InputTensor<'a>],
     /// The outputs to return, in this order.
     pub outputs: &'a [&'a str],
@@ -41,9 +45,13 @@ pub struct InferCall<'a> {
 /// One output tensor: its raw little-endian bytes as the server sent them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OutputTensor {
+    /// The output's name in the model's configuration.
     pub name: String,
+    /// The KServe datatype (`UINT8`, `FP32`, ...).
     pub datatype: String,
+    /// The shape, batch first.
     pub shape: Vec<i64>,
+    /// The raw little-endian tensor bytes, `shape` times the datatype's size.
     pub data: Bytes,
 }
 
@@ -55,7 +63,12 @@ pub enum CallError {
     /// No answer within the call's bound.
     Deadline,
     /// The server answered the call with an error: the branch fails.
-    Model { code: String, message: String },
+    Model {
+        /// The server's error code.
+        code: String,
+        /// The server's error message.
+        message: String,
+    },
     /// The server does not know the region and it could not be registered again.
     RegionUnknown(String),
 }

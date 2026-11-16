@@ -11,22 +11,32 @@ use serde::Deserialize;
 
 use crate::list::sha256_hex;
 
+/// The plan's detector model.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Detector {
+    /// The detector's model name on the model server.
     pub model: String,
+    /// Side of the square detector input, in pixels.
     pub input_size: u32,
 }
 
+/// The plan's frame encoder.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Embed {
+    /// The encoder's model name on the model server.
     pub model: String,
+    /// Side of the square encoder input, in pixels.
     pub size: u32,
 }
 
+/// The plan's crop encoder.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct CropEmbed {
+    /// The encoder's model name on the model server.
     pub model: String,
+    /// Side of the square encoder input, in pixels.
     pub size: u32,
+    /// Most crops one model call carries.
     pub batch: u32,
 }
 
@@ -42,15 +52,26 @@ struct Fields {
 /// A plan text and the parts of it the models-alone mode replays.
 #[derive(Debug, Clone)]
 pub struct PlanFile {
+    /// The plan JSON exactly as sent with every photo, without the trailing newline.
     pub text: String,
+    /// Lowercase hexadecimal SHA-256 of `text`.
     pub sha256: String,
+    /// The plan's branch names, for example `detect` and `embed_frame`.
     pub branches: Vec<String>,
+    /// Present when the plan has a detector.
     pub detector: Option<Detector>,
+    /// Present when the plan embeds the whole frame.
     pub embed: Option<Embed>,
+    /// Present when the plan embeds crops.
     pub crop_embed: Option<CropEmbed>,
 }
 
 impl PlanFile {
+    /// Read the parts the models-alone mode needs from the plan JSON `text`.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` when `text` is not the plan JSON or its `version` is not 1.
     pub fn parse(text: &str) -> Result<PlanFile, String> {
         let f: Fields = serde_json::from_str(text).map_err(|e| format!("plan JSON: {e}"))?;
         if f.version != 1 {
@@ -69,6 +90,11 @@ impl PlanFile {
         })
     }
 
+    /// Read the plan at `path`, ignoring trailing newlines.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` when the file cannot be read or does not parse as a plan.
     pub fn load(path: &Path) -> io::Result<PlanFile> {
         let text = fs::read_to_string(path)?;
         PlanFile::parse(text.trim_end_matches('\n')).map_err(|e| {

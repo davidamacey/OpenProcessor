@@ -423,43 +423,22 @@ fn kernel_checks(r: &mut Report, args: &Args, ctx: &Arc<Context>, frames: &Frame
     r.line("kernel launch", outcome);
 }
 
-async fn region_checks(r: &mut Report, args: &Args, ctx: &Arc<Context>) {
-    let region = match Region::new(ctx, args.region_mib << 20) {
-        Ok(reg) => reg,
-        Err(e) => {
-            r.line("region", Err(e.to_string()));
-            return;
-        }
-    };
-    let exported = region.raw_handle().iter().any(|b| *b != 0);
-    r.line(
-        "region",
-        if exported {
-            Ok(format!("{} MiB exported", args.region_mib))
-        } else {
-            Err("empty IPC handle".into())
-        },
-    );
-    let Some(url) = args.server.clone() else {
-        println!("SKIP model server: no --server given");
-        return;
-    };
-    let pid = std::process::id();
-    let cfg = |name: String, prefix: String| ModelServerConfig {
-        url: url.clone(),
-        channels: 4,
-        call_timeout: Duration::from_secs(10),
-        region_prefix: prefix,
-        region_name: name,
-        device_id: 0,
-    };
-    // A predecessor that dies without unregistering: its region stays registered (and its
-    // memory to process exit), so the next start must purge it.
+/// A predecessor that dies without unregistering: its region stays registered (and its memory to
+/// process exit), so the next start must purge it.
+async fn predecessor_check(
+    r: &mut Report,
+    args: &Args,
+    ctx: &Arc<Context>,
+    cfg: &impl Fn(String, String) -> ModelServerConfig,
+) {
     let dead = Region::new(ctx, 1 << 20)
         .map_err(|e| e.to_string())
         .and_then(|reg| {
             ModelServer::new(
-                cfg(format!("{}dead-{pid}", args.prefix), args.prefix.clone()),
+                cfg(
+                    format!("{}dead-{}", args.prefix, std::process::id()),
+                    args.prefix.clone(),
+                ),
                 reg,
             )
             .map_err(|e| e.to_string())
@@ -481,6 +460,83 @@ async fn region_checks(r: &mut Report, args: &Args, ctx: &Arc<Context>) {
             r.line("predecessor registered", Err(e));
         }
     }
+}
+
+/// The server forgets the live region (a restart): a call and then the health tick register it
+/// again.
+async fn recovery_checks(
+    r: &mut Report,
+    args: &Args,
+    ctx: &Arc<Context>,
+    cfg: &impl Fn(String, String) -> ModelServerConfig,
+    server: &ModelServer,
+    name: &str,
+) {
+    if let Some(model) = &args.model {
+        knock_out(ctx, cfg, name).await;
+        r.line(
+            "infer (re-registers a region the server lost)",
+            infer_once(args, ctx, server, model).await,
+        );
+        let n = server.registrations(RegistrationCause::RegionUnknown);
+        r.line(
+            "re-register on region unknown",
+            if n == 1 {
+                Ok("1 registration".into())
+            } else {
+                Err(format!("{n}"))
+            },
+        );
+    }
+    knock_out(ctx, cfg, name).await;
+    let h = server.check().await;
+    let n = server.registrations(RegistrationCause::ServerLostRegion);
+    r.line(
+        "re-register on the health tick",
+        if h.ready() && n == 1 {
+            Ok(format!("{h:?}"))
+        } else {
+            Err(format!("{h:?}, {n} registrations"))
+        },
+    );
+}
+
+async fn region_checks(r: &mut Report, args: &Args, ctx: &Arc<Context>) {
+    let region = match Region::new(ctx, args.region_mib << 20) {
+        Ok(reg) => reg,
+        Err(e) => {
+            r.line("region", Err(e.to_string()));
+            return;
+        }
+    };
+    let exported = region.raw_handle().iter().any(|b| *b != 0);
+    r.line(
+        "region",
+        if exported {
+            Ok(format!("{} MiB exported", args.region_mib))
+        } else {
+            Err("empty IPC handle".into())
+        },
+    );
+    server_checks(r, args, ctx, region).await;
+}
+
+/// The checks that need a model server: registration, purge, recovery and release of the region.
+async fn server_checks(r: &mut Report, args: &Args, ctx: &Arc<Context>, region: Region) {
+    let Some(url) = args.server.clone() else {
+        println!("SKIP model server: no --server given");
+        return;
+    };
+    let pid = std::process::id();
+    let cfg = |name: String, prefix: String| ModelServerConfig {
+        url: url.clone(),
+        channels: 4,
+        call_timeout: Duration::from_secs(10),
+        region_prefix: prefix,
+        region_name: name,
+        device_id: 0,
+    };
+    predecessor_check(r, args, ctx, &cfg).await;
     let name = format!("{}live-{pid}", args.prefix);
     let server = match ModelServer::new(cfg(name.clone(), args.prefix.clone()), region.clone()) {
         Ok(s) => s,
@@ -501,33 +557,7 @@ async fn region_checks(r: &mut Report, args: &Args, ctx: &Arc<Context>) {
             Err(format!("{h:?}"))
         },
     );
-    if let Some(model) = &args.model {
-        knock_out(ctx, &cfg, &name).await;
-        r.line(
-            "infer (re-registers a region the server lost)",
-            infer_once(args, ctx, &server, model).await,
-        );
-        let n = server.registrations(RegistrationCause::RegionUnknown);
-        r.line(
-            "re-register on region unknown",
-            if n == 1 {
-                Ok("1 registration".into())
-            } else {
-                Err(format!("{n}"))
-            },
-        );
-    }
-    knock_out(ctx, &cfg, &name).await;
-    let h = server.check().await;
-    let n = server.registrations(RegistrationCause::ServerLostRegion);
-    r.line(
-        "re-register on the health tick",
-        if h.ready() && n == 1 {
-            Ok(format!("{h:?}"))
-        } else {
-            Err(format!("{h:?}, {n} registrations"))
-        },
-    );
+    recovery_checks(r, args, ctx, &cfg, &server, &name).await;
     let freed = server.close().await;
     r.line(
         "unregister then free",

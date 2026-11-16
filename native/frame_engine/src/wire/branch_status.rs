@@ -6,14 +6,21 @@ use std::collections::BTreeMap;
 /// A branch's state; `error` carries a reason.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BranchState {
+    /// The branch ran and its outputs are valid.
     Ok,
+    /// The branch is reported without having run (its entry is `not_run`).
     NotRun,
+    /// The branch failed, with one of the reason codes below.
     Error(&'static str),
 }
 
+/// Reason: this engine does not build the branch.
 pub const UNSUPPORTED_BRANCH: &str = "unsupported_branch";
+/// Reason: the model call for the branch was answered with an error.
 pub const MODEL_ERROR: &str = "model_error";
+/// Reason: a branch the plan makes this one depend on failed.
 pub const DEPENDENCY_FAILED: &str = "dependency_failed";
+/// Reason: the photo could not be decoded or sized.
 pub const IMAGE_FAILED: &str = "image_failed";
 
 /// `{"detect": {"status": "ok"}, "ocr": {"reason": "model_error", "status": "error"}}`.
