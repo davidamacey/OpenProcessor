@@ -15,7 +15,9 @@ class Pool:
         self.shapes: dict[str, tuple[int, ...]] = {}
         self.default_ready = True
 
-    async def is_model_ready(self, name: str) -> bool:
+    async def probe_model_ready(
+        self, name: str, *, channel: int = 0, timeout: float | None = None
+    ) -> bool:
         return self.ready.get(name, self.default_ready)
 
     async def get_model_output_names(self, name: str) -> list[str]:

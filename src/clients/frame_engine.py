@@ -155,8 +155,9 @@ class Readiness:
         return self.outcome in (PROBE_READY, PROBE_RECOVERED)
 
 
-async def probe_ready(pool: AsyncTritonPool) -> Readiness:
-    """Whether the engine says it is ready, asked until it answers or the budget is spent."""
+async def probe_ready(pool: AsyncTritonPool, model: str = wire.MODEL_NAME) -> Readiness:
+    """Whether the server says ``model`` (the engine by default) is ready, asked until it answers
+    or the budget is spent."""
     attempts = 0
     answered = False
     failure: BaseException | None = None
@@ -171,7 +172,7 @@ async def probe_ready(pool: AsyncTritonPool) -> Readiness:
             with attempt:
                 attempts = attempt.retry_state.attempt_number
                 answered = await pool.probe_model_ready(
-                    wire.MODEL_NAME, channel=attempts - 1, timeout=PROBE_TIMEOUT_S
+                    model, channel=attempts - 1, timeout=PROBE_TIMEOUT_S
                 )
     except _CALL_ERRORS as exc:  # RuntimeError among them: the pool is not open
         failure = exc
