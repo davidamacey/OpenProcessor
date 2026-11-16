@@ -13,9 +13,11 @@ use op_storage::keys::{DerivedKind, ProjectId, StorageKey};
 
 use crate::support::{World, world};
 
+const DAY: Duration = Duration::from_secs(86_400);
+
 fn derived(w: &World, cap: Option<u64>) -> Derived {
     let durable = Durable::from_store(Arc::new(InMemory::new()), Backend::Streamed, true);
-    let cache = cap.map(|c| DiskCache::new(&w.base.join("cache"), c).unwrap());
+    let cache = cap.map(|c| DiskCache::new(&w.base.join("cache"), c, DAY).unwrap());
     Derived::new(durable, cache)
 }
 
@@ -103,7 +105,7 @@ async fn a_replaced_file_is_never_served_from_the_cache() {
 async fn a_file_erased_behind_the_cache_is_not_served_and_its_copy_is_dropped() {
     let w = world();
     let durable = Durable::from_store(Arc::new(InMemory::new()), Backend::Streamed, true);
-    let cache = DiskCache::new(&w.base.join("cache"), 1 << 20).unwrap();
+    let cache = DiskCache::new(&w.base.join("cache"), 1 << 20, DAY).unwrap();
     let writer = Derived::new(durable.clone(), None);
     let reader = Derived::new(durable, Some(cache));
     let key = thumb(1, "a.jpg");
@@ -145,7 +147,7 @@ async fn deleting_by_prefix_empties_this_processs_cache_for_it() {
 #[tokio::test]
 async fn the_cache_evicts_the_files_read_longest_ago_at_its_cap() {
     let w = world();
-    let cache = DiskCache::new(&w.base.join("cache"), 3_600).unwrap();
+    let cache = DiskCache::new(&w.base.join("cache"), 3_600, DAY).unwrap();
     let d = Derived::new(
         Durable::from_store(Arc::new(InMemory::new()), Backend::Streamed, true),
         Some(cache),
@@ -163,7 +165,8 @@ async fn the_cache_evicts_the_files_read_longest_ago_at_its_cap() {
             .write(true)
             .open(cache_file(&w, key))
             .unwrap();
-        f.set_modified(now - Duration::from_secs(100 - 10 * i as u64))
+        let read_at = now - Duration::from_secs(100 - 10 * i as u64);
+        f.set_times(fs::FileTimes::new().set_accessed(read_at))
             .unwrap();
     }
     d.get(&keys[0]).await.unwrap();
@@ -197,6 +200,14 @@ fn an_s3_store_with_a_cache_needs_its_own_cache_root_and_creates_nothing_in_land
     let root = w.base.join("derived_cache");
     let env = Env::from_pairs([(CACHE_ROOT_KEY, root.to_str().unwrap())]);
     Derived::from_settings(&env, s3_durable(&w)).unwrap();
+    let zero_age = Env::from_pairs([
+        (CACHE_ROOT_KEY, root.to_str().unwrap()),
+        ("OP_STORAGE_CACHE_MAX_AGE_S", "0"),
+    ]);
+    let err = Derived::from_settings(&zero_age, s3_durable(&w))
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("OP_STORAGE_CACHE_MAX_AGE_S"), "{err}");
     assert!(root.is_dir());
     assert_eq!(fs::read_dir(w.base.join("landing")).unwrap().count(), 0);
 }
@@ -209,4 +220,113 @@ fn the_cache_root_is_ignored_for_a_local_store_or_a_zero_cap() {
     let off = Env::from_pairs([(CACHE_MAX_BYTES_KEY, "0")]);
     Derived::from_settings(&off, s3_durable(&w)).unwrap();
     assert_eq!(fs::read_dir(w.base.join("landing")).unwrap().count(), 0);
+}
+
+fn age_file(path: &std::path::Path, by: Duration) {
+    let f = fs::File::options().write(true).open(path).unwrap();
+    f.set_modified(SystemTime::now() - by).unwrap();
+}
+
+fn shared_cache(w: &World, max_age: Duration) -> DiskCache {
+    DiskCache::new(&w.base.join("cache"), 1 << 20, max_age).unwrap()
+}
+
+#[tokio::test]
+async fn erasing_through_one_process_removes_the_copy_every_process_of_the_host_shares() {
+    let w = world();
+    let durable = Durable::from_store(Arc::new(InMemory::new()), Backend::Streamed, true);
+    let first = Derived::new(durable.clone(), Some(shared_cache(&w, DAY)));
+    let second = Derived::new(durable, Some(shared_cache(&w, DAY)));
+    let key = thumb(1, "a.jpg");
+    first.put(&key, Bytes::from_static(b"face")).await.unwrap();
+    first.get(&key).await.unwrap();
+    assert!(cache_file(&w, &key).exists());
+
+    let prefix = StorageKey::derived_prefix(ProjectId(1), DerivedKind::Thumbs, 1);
+    second.delete_prefix(&prefix).await.unwrap();
+
+    assert!(!cache_file(&w, &key).exists(), "the shared copy is gone");
+    assert!(matches!(
+        first.get(&key).await,
+        Err(StorageError::NotFound { .. })
+    ));
+}
+
+#[tokio::test]
+async fn a_file_older_than_the_max_age_is_removed_by_the_scan() {
+    let w = world();
+    let durable = Durable::from_store(Arc::new(InMemory::new()), Backend::Streamed, true);
+    let d = Derived::new(durable, Some(shared_cache(&w, Duration::from_secs(1_000))));
+    let (old, young) = (thumb(1, "a.jpg"), thumb(2, "a.jpg"));
+    for key in [&old, &young] {
+        d.put(key, Bytes::from_static(b"x")).await.unwrap();
+        d.get(key).await.unwrap();
+    }
+    age_file(&cache_file(&w, &old), Duration::from_secs(2_000));
+
+    // Another process's scan, over the same directory, with room to spare under the cap.
+    shared_cache(&w, Duration::from_secs(1_000)).evict().await;
+
+    assert!(!cache_file(&w, &old).exists());
+    assert!(cache_file(&w, &young).exists());
+}
+
+#[tokio::test]
+async fn a_read_of_an_older_file_confirms_it_with_the_store_and_rewrites_it() {
+    let w = world();
+    let d = Derived::new(
+        Durable::from_store(Arc::new(InMemory::new()), Backend::Streamed, true),
+        Some(shared_cache(&w, Duration::from_secs(1_000))),
+    );
+    let key = thumb(1, "a.jpg");
+    d.put(&key, Bytes::from_static(b"photo")).await.unwrap();
+    d.get(&key).await.unwrap();
+    let path = cache_file(&w, &key);
+    age_file(&path, Duration::from_secs(2_000));
+
+    assert_eq!(d.get(&key).await.unwrap(), "photo");
+
+    let age = SystemTime::now()
+        .duration_since(fs::metadata(&path).unwrap().modified().unwrap())
+        .unwrap();
+    assert!(
+        age < Duration::from_secs(1_000),
+        "rewritten, now {age:?} old"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn processes_writing_reading_and_evicting_in_one_directory_never_see_a_bad_file() {
+    let w = world();
+    let durable = Durable::from_store(Arc::new(InMemory::new()), Backend::Streamed, true);
+    let caches: Vec<Arc<Derived>> = (0..2)
+        .map(|_| {
+            let cache = DiskCache::new(&w.base.join("cache"), 4_500, DAY).unwrap();
+            Arc::new(Derived::new(durable.clone(), Some(cache)))
+        })
+        .collect();
+    let body = |i: i64| Bytes::from(vec![u8::try_from(i).unwrap(); 1_000]);
+    let mut tasks = tokio::task::JoinSet::new();
+    for who in 0..4_usize {
+        let d = Arc::clone(&caches[who % 2]);
+        tasks.spawn(async move {
+            for round in 0..40_i64 {
+                let i = (round + who as i64) % 8 + 1;
+                let key = thumb(i, "a.jpg");
+                d.put(&key, body(i)).await.unwrap();
+                assert_eq!(d.get(&key).await.unwrap(), body(i), "key {i}");
+            }
+        });
+    }
+    while let Some(done) = tasks.join_next().await {
+        done.unwrap();
+    }
+    let leftovers = fs::read_dir(w.base.join("cache").join("projects/1/derived/thumbs/1"))
+        .map(|d| {
+            d.flatten()
+                .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
+                .count()
+        })
+        .unwrap_or(0);
+    assert_eq!(leftovers, 0);
 }
