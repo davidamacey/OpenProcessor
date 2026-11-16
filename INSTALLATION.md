@@ -207,6 +207,19 @@ It puts PgBouncer in transaction mode in front of every pooled connection
 (`OP_DB_POOLER=pgbouncer`); the beat lock and `db-migrate` keep a direct connection because
 session advisory locks need a session.
 
+**Encrypted database connections.** `OP_DB_SSLMODE` takes libpq's six values
+([libpq SSL support](https://www.postgresql.org/docs/18/libpq-ssl.html)); the default `prefer` encrypts
+only when the server offers TLS and checks nothing, which suits the bundled PostgreSQL on a private
+network. `require` always encrypts; `verify-ca` also checks the certificate chain; `verify-full` also
+checks the host name and is the mode for a managed service such as Amazon RDS. The Rust server
+reads `OP_DB_SSLROOTCERT`, a PEM file of CA certificates that then is the only trust root (Amazon
+publishes one per region, see [Using SSL/TLS to encrypt a connection to a DB instance](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html));
+unset, the platform's root certificates are trusted. With a roots file `require` checks the chain
+too, as libpq does. A mode the server cannot honour, an unreadable roots file, or a roots file with
+`disable`, `allow` or `prefer` stops it at startup, naming the variable. Client certificates are
+not supported yet. The Python processes hand `OP_DB_SSLMODE` to libpq, which reads its roots from
+`PGSSLROOTCERT` or `~/.postgresql/root.crt` and ignores `OP_DB_SSLROOTCERT`.
+
 **Backup and restore.** `./openprocessor db backup [--out DIR]` writes a `pg_dump` custom-format
 dump to `OP_DB_BACKUP_DIR` (default `./backups/postgres`; point it at a disk other than the
 PostgreSQL volume's). `OP_DB_BACKUP_INTERVAL_H` makes the periodic worker take one on a schedule.
