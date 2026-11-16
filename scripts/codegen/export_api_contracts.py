@@ -15,6 +15,8 @@ Writes, under ``contracts/`` (or ``--out-dir``):
 * ``json/frame_engine_v1.json`` and ``json/frame_engine_plan_cases.json`` — the frame engine's
   protocol version 1 and every plan text with the answer of ``parse_plan``
   (``frame_engine_contract.py``); the native engine is held to both.
+* ``json/job_kinds.json`` — the job kind table, the job state machine and the lease timing the
+  Rust job runner reads (``job_kinds_contract.py``).
 
 These need the app import, so the script re-runs itself under the
 project interpreter with a whitelisted environment (see
@@ -42,6 +44,7 @@ from typing import TYPE_CHECKING, Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import _contract_runtime
 import frame_engine_contract
+import job_kinds_contract
 
 
 if TYPE_CHECKING:
@@ -62,6 +65,7 @@ OPENAPI_JSON = Path('openapi/curation.json')
 KEYMAP_ACTIONS_JSON = Path('json/keymap_actions.json')
 FRAME_ENGINE_JSON = Path('json/frame_engine_v1.json')
 FRAME_ENGINE_CASES_JSON = Path('json/frame_engine_plan_cases.json')
+JOB_KINDS_JSON = Path('json/job_kinds.json')
 
 
 def _ts_header(source: str) -> str:
@@ -395,6 +399,7 @@ GENERATORS: dict[str, Callable[[], dict[Path, str]]] = {
         FRAME_ENGINE_JSON: frame_engine_contract.render_protocol_json(),
         FRAME_ENGINE_CASES_JSON: frame_engine_contract.render_plan_cases_json(),
     },
+    'job-kinds': lambda: {JOB_KINDS_JSON: job_kinds_contract.render_job_kinds_json()},
 }
 
 
