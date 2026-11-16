@@ -128,13 +128,32 @@ def build_plan(
 # ------------------------------------------------------------------------- capturing
 
 
+def source_document(path: Path, root: Path, data: bytes) -> str:
+    """The ``source`` input of the native engine's read by key (``read_by_key`` in
+    ``contracts/json/frame_engine_v1.json``): the key ``source/<path below root>`` and the size and
+    ``imohash`` of ``data`` (the Python package the Rust port is held to), written as the Rust
+    client writes it (``frame_engine_source_cases.json``, ``built``)."""
+    import imohash
+
+    return json.dumps(
+        {
+            'imohash': imohash.hashfileobject(io.BytesIO(data)).hex(),
+            'key': f'source/{path.relative_to(root).as_posix()}',
+            'size': len(data),
+        },
+        sort_keys=True,
+    )
+
+
 async def _one(
-    client: Any, data: bytes, plan: str, sem: asyncio.Semaphore
+    client: Any, data: bytes, plan: str, sem: asyncio.Semaphore, source: str | None = None
 ) -> dict[str, np.ndarray]:
+    """One photo: its bytes as ``image``, or the document ``source`` names it by."""
     from tritonclient.grpc import InferInput
 
     inputs = []
-    for name, value in (('image', data), ('plan', plan.encode())):
+    first = ('source', source.encode()) if source is not None else ('image', data)
+    for name, value in (first, ('plan', plan.encode())):
         inp = InferInput(name, [1], 'BYTES')
         inp.set_data_from_numpy(np.array([value], dtype=np.object_))
         inputs.append(inp)
@@ -144,16 +163,22 @@ async def _one(
 
 
 async def capture(
-    url: str, images: list[Path], concurrency: int, plan: str
+    url: str, images: list[Path], concurrency: int, plan: str, keys_root: Path | None = None
 ) -> list[dict[str, np.ndarray]]:
+    """Every photo's answer. With ``keys_root`` each photo is named by its key under that
+    directory (the engine has it mounted as its source root) instead of being sent."""
     from tritonclient.grpc.aio import InferenceServerClient
 
     client = InferenceServerClient(url=url)
     sem = asyncio.Semaphore(concurrency)
+
+    def one(path: Path) -> Any:
+        data = path.read_bytes()
+        source = source_document(path, keys_root, data) if keys_root is not None else None
+        return _one(client, data, plan, sem, source)
+
     try:
-        return list(
-            await asyncio.gather(*(_one(client, p.read_bytes(), plan, sem) for p in images))
-        )
+        return list(await asyncio.gather(*(one(p) for p in images)))
     finally:
         await client.close()
 
@@ -518,6 +543,12 @@ def main(argv: list[str] | None = None) -> int:
     cap.add_argument('--concurrency', type=int, default=1)
     cap.add_argument('--out', type=Path, required=True)
     cap.add_argument('--crop-counts-out', type=Path, help="record each photo's crop count")
+    cap.add_argument(
+        '--keys-root',
+        type=Path,
+        help='native engine only: name each photo by its key under this directory, which the '
+        'engine has mounted as its source root, instead of sending its bytes',
+    )
     plan = sub.add_parser('plan', help='write the plan text the load generator sends')
     _plan_args(plan)
     plan.add_argument('--out', type=Path, required=True)
@@ -540,7 +571,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.crop_counts_out and args.limit:
             ap.error('--crop-counts-out records the whole list: do not combine it with --limit')
         images = read_list(args.images)[: args.limit or None]
-        rows = asyncio.run(capture(args.url, images, args.concurrency, _plan_of(args)))
+        rows = asyncio.run(
+            capture(args.url, images, args.concurrency, _plan_of(args), args.keys_root)
+        )
         save(args.out, images, rows)
         if args.crop_counts_out:
             write_crop_counts(args.crop_counts_out, args.images, rows)

@@ -2,12 +2,14 @@
 
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::Duration;
 
 use clap::{Args, Subcommand};
+use op_engine_client::input::source_document;
+use op_local_file::{FileClaim, FileRef};
 
 use crate::cgroup::Cgroup;
 use crate::client::{self, Client, EngineClient};
@@ -95,6 +97,11 @@ pub struct EngineArgs {
     /// One photo's timeout (the API's is 120 s).
     #[arg(long, default_value_t = 120.0)]
     pub timeout_s: f64,
+    /// Ask the engine to read each photo itself (native engine only): the directory the list's
+    /// photos are under, which the engine has mounted as its source root. A photo
+    /// `<DIR>/a/b.jpg` is sent as the key `source/a/b.jpg` with its size and imohash.
+    #[arg(long)]
+    pub keys_root: Option<PathBuf>,
 }
 
 /// Arguments of the `z` (models alone) mode.
@@ -268,6 +275,25 @@ pub async fn prepare(c: &Common) -> Result<Prepared, Failure> {
     })
 }
 
+/// The `source` document of each photo of `list` as a file under `root`: the key
+/// `source/<path below root>` and the size and imohash of the photo's bytes.
+fn source_documents(list: &PhotoList, root: &Path) -> Result<Vec<String>, Failure> {
+    let mut out = Vec::with_capacity(list.files.len());
+    for (file, bytes) in list.files.iter().zip(&list.photos) {
+        let below = file.strip_prefix(root).map_err(|_| {
+            format!(
+                "{} is not under --keys-root {}",
+                file.display(),
+                root.display()
+            )
+        })?;
+        let key = format!("source/{}", below.display());
+        let reference = FileRef::new(&key, FileClaim::of(bytes)).map_err(|e| e.to_string())?;
+        out.push(source_document(&reference).map_err(|e| e.to_string())?);
+    }
+    Ok(out)
+}
+
 async fn engine(a: EngineArgs, argv: Vec<String>) -> Result<ExitCode, Failure> {
     let timeout = secs("--timeout-s", a.timeout_s)?;
     let p = prepare(&a.common).await?;
@@ -275,12 +301,13 @@ async fn engine(a: EngineArgs, argv: Vec<String>) -> Result<ExitCode, Failure> {
     if !client::is_ready(&mut clients[0], client::MODEL, Duration::from_secs(5)).await? {
         return Err(format!("{} is not ready: nothing measured", a.url));
     }
-    let exchange = Arc::new(EngineClient::new(
-        clients,
-        &p.list.photos,
-        &p.plan.text,
-        timeout,
-    ));
+    let exchange = Arc::new(match &a.keys_root {
+        Some(root) => {
+            let documents = source_documents(&p.list, root)?;
+            EngineClient::by_key(clients, &documents, &p.plan.text, timeout)
+        }
+        None => EngineClient::new(clients, &p.list.photos, &p.plan.text, timeout),
+    });
     let setup = Setup {
         mode: "engine",
         label: a.common.label.clone(),
@@ -335,6 +362,8 @@ pub fn finish(c: &Common, row: Row) -> Result<ExitCode, Failure> {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
 
     #[test]
@@ -352,5 +381,38 @@ mod tests {
         assert!(secs("x", 0.0).is_err());
         assert!(secs("x", -1.0).is_err());
         assert!(secs("x", f64::NAN).is_err());
+    }
+
+    #[test]
+    fn a_run_by_key_names_each_photo_below_the_root_with_its_size_and_hash() {
+        let dir = std::env::temp_dir().join(format!("op-fe-loadgen-keys-{}", std::process::id()));
+        fs::create_dir_all(dir.join("set/sub")).unwrap();
+        fs::write(dir.join("set/a.jpg"), b"aaaa").unwrap();
+        fs::write(dir.join("set/sub/b.jpg"), b"bbbbbb").unwrap();
+        let text = format!(
+            "{}\n{}\n",
+            dir.join("set/a.jpg").display(),
+            dir.join("set/sub/b.jpg").display()
+        );
+        fs::write(dir.join("list.txt"), text).unwrap();
+        let list = PhotoList::load(&dir.join("list.txt")).unwrap();
+        let documents = source_documents(&list, &dir.join("set")).unwrap();
+        let hash = |bytes: &[u8]| FileClaim::of(bytes).imohash.to_hex();
+        assert_eq!(
+            documents,
+            [
+                format!(
+                    r#"{{"imohash": "{}", "key": "source/a.jpg", "size": 4}}"#,
+                    hash(b"aaaa")
+                ),
+                format!(
+                    r#"{{"imohash": "{}", "key": "source/sub/b.jpg", "size": 6}}"#,
+                    hash(b"bbbbbb")
+                ),
+            ]
+        );
+        let outside = source_documents(&list, &dir.join("elsewhere")).unwrap_err();
+        assert!(outside.contains("is not under --keys-root"), "{outside}");
+        fs::remove_dir_all(&dir).unwrap();
     }
 }
