@@ -118,6 +118,7 @@ history of this codebase and was never published. This release is `[0.6.0]`.
 
 ### Fixed
 
+- **The native frame engine no longer stalls a thread on a named pipe when it reads a photo by key.** A key that names a named pipe (FIFO) under a source folder made the open wait for a writer for ever; the file is now opened with `O_NONBLOCK` and its type checked on the open file, so a pipe, a socket and a folder answer the photo status `unreadable` at once.
 - **A text search no longer fails once after the stack sat idle.** The harness's fake model server answered the API's idle keepalive pings with GOAWAY `too_many_pings` (the `503 semantic search unavailable` of the 2026-11-15 sweep); it now permits them as the compose files' Triton flags do, a test pins both to the API's channel options, and a text search and its readiness check try once more when the channel was closed under them.
 - A job refused by the wrong-space guard (reprocess, re-index, dataset import) ends `failed` with `error_code` `embedding_model_unavailable` and the whole refusal text (project, space, both builds, the remedy) as its error. The embed reprocess used to count every image failed with no reason, and the dataset import retried the refusal on six chunks and cut the text to 300 characters.
 - The ExifTool pool removes its `op-exiftool-*` temporary directory when it ends (close, garbage collection, interpreter exit, Celery pool-child shutdown); it was left in `/tmp` before.
