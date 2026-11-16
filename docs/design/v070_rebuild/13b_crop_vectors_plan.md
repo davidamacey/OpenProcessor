@@ -147,7 +147,7 @@ spaces), the frame vector is unchanged (cosine to today's 0.999995 minimum on 20
 The crop rule is letterbox with the resample antialiased when the box is larger than the square and plain bilinear when smaller (Pillow `BILINEAR`; the first build used plain bilinear everywhere and missed COCO at 32 px by 0.03 and at 512 px by 0.4 on five seeds). Open: the installer group that builds `pe_crop_encoder`; a start-up check that a project's
 primary item and box spaces name the configured crop model.
 
-Measured: the crop model takes 750 MiB of device memory on the model server (NVML, model-server process, one instance, max batch 32, dynamic batching 4/8/16/32; unchanged at the peak of a 32-in-flight run). `GPU_MIB_PER_INSTANCE` (`openprocessor gpu plan`) is 768 MiB, the next 256 up. Frame 1,536 MiB plus crop 768 MiB is 2.25 GB; the installer's `pe_need` stays 2 (whole GB) and the profile budgets are unchanged.
+Measured: the crop model takes 750 MiB of device memory on the model server (NVML, model-server process, one instance, max batch 32, dynamic batching 4/8/16/32; unchanged at the peak of a 32-in-flight run). `GPU_MIB_PER_INSTANCE` (`openprocessor gpu plan`) is 768 MiB, the next 256 up. Frame 1,536 MiB plus crop 768 MiB is 2.25 GB; the installer's `pe_need` is 2 (whole GB) at the default 224 input and the profile budgets are unchanged (the 336 choice: section 9).
 
 ## 8. Measurement C2 result: no smaller encoder replaces today's for crops
 
@@ -189,8 +189,8 @@ Decisions:
    ten-label accuracy below the 336 input. The bar of section 6 point 3 (1 point on any set or
    size) is therefore missed on that set, and this decision accepts the miss in writing for the
    default.
-3. Open to the owner: a 336 crop build as a supported choice for deployments whose classes are of
-   that kind (its own space, since vectors of two input sizes are not comparable).
+3. A 336 crop build is a supported choice for deployments whose classes are of that kind (its own
+   space, since vectors of two input sizes are not comparable): section 9.
 4. Cheaper crops through a smaller model are closed on this evidence. The remaining levers on the
    card's time per photo are both cards for the encoders and the model build settings
    (plan 17, the native engine plan, section "the card budget").
@@ -198,3 +198,37 @@ Decisions:
 Not measured: the private set's labelled classes (the sample on the host carries no labels);
 Stanford Dogs (download refused); detector box jitter on birds and aircraft (ground-truth boxes).
 
+## 9. The 336 choice
+
+What it is. `PE_CROP_SIZE=336` builds the crop encoder (`pe_crop_encoder`, the same weights and the
+same letterbox rule) at a 336 input instead of 224. Its vectors are their own embedding space,
+`pe_core_l14_crop336` (catalog version 1), as `pe_core_l14_crop224` is the 224 one: the two are not
+comparable, so the wrong-space guard compares the input size as well as the model name. The size is
+a deployment setting with exactly two values; a new project registers the space of the size set
+when it is created.
+
+When to choose it. Choose 336 when the classes to label differ in fine detail, the kind the aircraft
+variants are: the 224 default misses the section 6 bar on that set (see section 8). Keep 224 for
+car models, birds and anything coarser, where the two are equal within the bar and 224 costs half
+the card's time.
+
+The measured trade (section 8, the same engines, letterbox rule and ten paired k-means seeds):
+
+| | 224 (default) | 336 |
+|---|---|---|
+| Ten-label accuracy, aircraft variants | 0.747 | 0.775 |
+| Cluster NMI gap on aircraft, 336 as the reference | -1.4 to -2.2 points | 0 |
+| Cars, birds | equal within the bar | equal |
+| GPU per crop (model server counters) | 2.1 to 2.3 ms | 4.5 to 4.8 ms |
+| Model alone, device memory | 735 MiB | 929 MiB |
+| `GPU_MIB_PER_INSTANCE` planning figure | 768 (measured, 750 rounded up) | 1,024 (an upper estimate, to be replaced by a measurement on the model server) |
+
+Frame 1,536 MiB plus crop 1,024 MiB is 2.5 GB, which the installer's whole-GB gate counts as 3
+(nearest, half up; 2 at 224). On a single card of 10 to 11 GB, or of 12 GB with nothing else on it,
+that takes the curation tier out of the recommendation; cards of 16 GB and more are unchanged.
+
+Switching size. There is no per-project switch and no migration: the vectors of a project's photos
+were made at one size. Change `PE_CROP_SIZE`, rebuild the engine (`./openprocessor models install
+--only pe`: the engine stamp records the input size, so the change rebuilds and a stamp of the
+other size is never taken for a finished build), and re-ingest the photos into a new project. A
+project of the other size is refused with that remedy until then.

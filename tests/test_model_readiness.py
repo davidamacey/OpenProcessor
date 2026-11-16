@@ -113,6 +113,13 @@ def test_a_crop_engine_built_at_another_size_is_named_with_both_sizes() -> None:
         assert part in why
 
 
+def test_the_rebuild_hint_is_a_command_that_exists() -> None:
+    why = mr.crop_input_problem(_config(['3', '336', '336']), 'pe_crop_encoder', 224)
+    assert why is not None
+    assert './openprocessor models install --only pe' in why
+    assert 'make pe-build-crop-trt' not in why
+
+
 @pytest.mark.parametrize(
     'config',
     [None, {}, {'input': []}, _config(['3', '224', '224'], name='pixels'), _config(['3', '224'])],

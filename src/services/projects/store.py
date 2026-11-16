@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from src.clients import pe_encoder
+from src.config.crop_encoder import CROP_ENCODERS
 from src.db.repos import embedding_spaces as spaces_repo, projects as repo
 from src.db.session import async_session_factory, deployment_tx
 from src.services.embedding_spaces import spaces as embedding_spaces
@@ -79,10 +81,17 @@ async def get_row(slug: str) -> repo.ProjectRow:
     return await run_repo('read a project', read)
 
 
-#: The encoder version of each default space: the frame vectors, and the vectors of items and boxes
-#: (object crops, a model of their own with its own space).
+#: The encoder version of the frame space; item and box spaces take the crop encoder's
+#: (:func:`crop_encoder`).
 FRAME_ENCODER = ('pe_core_l14_336', 1)
-CROP_ENCODER = ('pe_core_l14_crop224', 1)
+
+
+def crop_encoder() -> tuple[str, int]:
+    """The catalog version a NEW project's item and box spaces are registered for: the crop
+    space of the size this deployment's crop engine is built at (``PE_CROP_SIZE``). A project
+    keeps it for life; under a deployment of the other size its writers refuse it
+    (:func:`~src.services.embedding_spaces.encoder_guard.require_encoder_for`)."""
+    return CROP_ENCODERS[pe_encoder.PE_CROP_SIZE]
 
 
 class DefaultEncoderMissingError(RuntimeError):
@@ -109,7 +118,7 @@ async def create_with_default_spaces(
         return found
 
     frame = await version_of(FRAME_ENCODER)
-    crop = await version_of(CROP_ENCODER)
+    crop = await version_of(crop_encoder())
     await spaces_repo.add_spaces(
         session,
         embedding_spaces.default_space_rows(

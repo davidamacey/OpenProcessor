@@ -86,5 +86,9 @@ def _on_worker_process_init(**_: Any) -> None:
 
 @worker_process_shutdown.connect(weak=False)
 def _on_worker_process_shutdown(pid: int, **_: Any) -> None:
-    """A pool child is leaving (``--max-tasks-per-child`` or a stop): drop its live-gauge files."""
+    """A pool child is leaving (``--max-tasks-per-child`` or a stop): drop its live-gauge files
+    and close its ExifTool processes (the child ends with ``os._exit``, which runs no ``atexit``)."""
     forget_process(pid)
+    from src.services.curation.capture_read import shutdown_capture_pool
+
+    shutdown_capture_pool()

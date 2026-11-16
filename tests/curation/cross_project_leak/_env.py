@@ -300,6 +300,9 @@ def leak_env(
         async def is_model_ready(self, _name: str) -> bool:
             return True
 
+        async def probe_model_ready(self, _name: str, **_kw: Any) -> bool:
+            return True
+
         async def get_model_output_names(self, _name: str) -> list[str]:
             return ingest_profile_world.FUSED
 

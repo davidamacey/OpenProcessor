@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic import ValidationError
 from tritonclient.utils import InferenceServerException
 
+from src.clients.frame_engine import PROBE_UNDELIVERED, probe_ready
 from src.clients.model_adapters import FUSED_OUTPUT, is_fused_shape
 from src.schemas.curation.config_common import ValidationReport
 from src.schemas.curation.ingest_profile import IngestProfileBody
@@ -80,8 +81,19 @@ def _shape_issues(body: dict[str, Any]) -> list[ValidationIssue]:
 async def _servable_issues(
     pool: Any, model: str, required: Sequence[str], field: str, *, fused: bool = False
 ) -> list[ValidationIssue]:
+    # ``pool.is_model_ready`` reads a call that never arrived as "not ready"; the probe tells them apart.
+    readiness = await probe_ready(pool, model)
+    if readiness.outcome == PROBE_UNDELIVERED:
+        return [
+            _issue(
+                'triton_unreachable',
+                'error',
+                f'Triton could not be asked about {model!r}: {readiness.error}',
+                field=field,
+            )
+        ]
+    ready = readiness.ready
     try:
-        ready = await pool.is_model_ready(model)
         outputs = set(await pool.get_model_output_names(model)) if ready else set()
         shape = (
             await pool.get_model_output_shape(model, FUSED_OUTPUT)

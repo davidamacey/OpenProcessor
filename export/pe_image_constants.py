@@ -3,6 +3,7 @@
 The tensor and model names are a hard contract with ``src/clients/pe_encoder.py``.
 """
 
+import os
 from pathlib import Path
 
 from trt_build_settings import max_batch
@@ -22,9 +23,30 @@ IMAGE_SIZE = 336
 # interpolates the absolute position embedding and rebuilds the RoPE grid for another input size:
 # core/vision_encoder/pe.py ``_sample_abs_posemb``, ``rope.update_grid``), 2.1 times the images per
 # second of the 336 build at equal crop quality, fed each box letterboxed whole. Its name and size
-# are the API's ``PE_CROP_MODEL`` / ``PE_CROP_SIZE`` (a test keeps them equal).
+# are the API's ``PE_CROP_MODEL`` / ``PE_CROP_SIZE`` (a test keeps them equal). The input can also be
+# 336 (the owner's choice for classes that differ in fine detail); the export tree cannot import
+# ``src`` (importing ``src.config`` loads the whole settings module, and the host build runs
+# without it), so the sizes are listed here and a test keeps them equal to ``CROP_ENCODERS``.
 CROP_TRITON_MODEL_NAME = 'pe_crop_encoder'
-CROP_IMAGE_SIZE = 224
+CROP_IMAGE_SIZES = (224, 336)
+DEFAULT_CROP_IMAGE_SIZE = 224
+
+
+def crop_image_size(environ: dict[str, str] | None = None) -> int:
+    """The crop encoder's input size: ``PE_CROP_SIZE`` (224 or 336), 224 when unset or blank.
+
+    Anything else raises, as the API does at start-up: a build must never pick a size by guessing.
+    """
+    raw = (os.environ if environ is None else environ).get('PE_CROP_SIZE', '').strip()
+    if not raw:
+        return DEFAULT_CROP_IMAGE_SIZE
+    if raw not in {str(s) for s in CROP_IMAGE_SIZES}:
+        raise ValueError(
+            f'PE_CROP_SIZE must be one of {", ".join(map(str, CROP_IMAGE_SIZES))}, got {raw!r}'
+        )
+    return int(raw)
+
+
 EMBEDDING_DIM = 1024
 
 # opset 17 is the floor for clean LayerNorm + dynamic-batch handling in the
@@ -37,8 +59,11 @@ ONNX_OPSET_VERSION = 17
 DEFAULT_MAX_BATCH = max_batch('pe_image_encoder', 32)
 # GPU memory of one warm instance at max batch, with headroom (gpu plan and the installer read it).
 PE_GPU_MIB_PER_INSTANCE = 1536
-# The crop encoder (224 input), measured: 750 MiB of model-server device memory, rounded up to 256.
-PE_CROP_GPU_MIB_PER_INSTANCE = 768
+# The crop encoder by its input size. 224 is measured: 750 MiB of model-server device memory,
+# rounded up to 256. 336 is an upper estimate (the model alone is 929 MiB against 735 at 224, plus
+# the same activations) pending a measurement on the model server. Three readers keep the table:
+# this one, scripts/lib/cli_gpu.sh and setup-openprocessor.sh (a test keeps them equal).
+PE_CROP_GPU_MIB_PER_INSTANCE = {224: 768, 336: 1024}
 
 # Triton platform identifiers for the two serving paths.
 TRT_PLATFORM = 'tensorrt_plan'

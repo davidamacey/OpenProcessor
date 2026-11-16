@@ -6,7 +6,7 @@ endpoint (see ``src.config.project_context``'s module docstring).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, cast
 
 from fastapi import Path, Request
 from fastapi.responses import JSONResponse
@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from src.config.project_context import set_bound_project, try_current_project
 from src.config.projects import ProjectRecord
 from src.core.logging import get_logger
+from src.domain.embedding_spaces import EmbeddingSpaceError
 from src.routers.curation._api_error import api_error
 from src.schemas.curation.config_common import ConfigErrorDetail
 from src.services.projects.registry import get_project_registry
@@ -121,6 +122,17 @@ def install_project_exception_handlers(app: FastAPI) -> None:
         detail = ConfigErrorDetail(error='config_store_unavailable', message=str(exc))
         return JSONResponse(status_code=503, content={'detail': detail.model_dump()})
 
+    async def _embedding_space_refusal(_request: Request, exc: Exception) -> JSONResponse:
+        # One rule for every route: a refused space or vector write answers its own status and
+        # stable code (the encoder guard's 409 ``embedding_model_unavailable`` included).
+        refusal = cast('EmbeddingSpaceError', exc)
+        logger.info(
+            'embedding_space_refused', code=refusal.code, status=refusal.status, error=str(exc)
+        )
+        body = {'error': refusal.code, 'message': refusal.detail}
+        return JSONResponse(status_code=refusal.status, content={'detail': body})
+
+    app.add_exception_handler(EmbeddingSpaceError, _embedding_space_refusal)
     app.add_exception_handler(IngestProfileUnresolvedError, _ingest_profile_unresolved)
     app.add_exception_handler(CrossProjectAccess, _isolation_error)
     app.add_exception_handler(ProjectNotBound, _isolation_error)

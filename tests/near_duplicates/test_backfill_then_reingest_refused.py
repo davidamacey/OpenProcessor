@@ -74,7 +74,7 @@ class _Ctx:
 
 
 @pytest.fixture
-def bound(monkeypatch: pytest.MonkeyPatch):
+def job_binding(monkeypatch: pytest.MonkeyPatch):
     from contextlib import asynccontextmanager
 
     state: dict[str, Any] = {}
@@ -92,11 +92,11 @@ def bound(monkeypatch: pytest.MonkeyPatch):
     return state
 
 
+@pytest.mark.usefixtures('bound')  # the registered project a request is bound to: its spaces
 async def test_an_upgraded_image_is_refused_after_the_backfill(
-    pg_registry, bound, tmp_path: Path
+    pg_registry, job_binding, project, tmp_path: Path
 ) -> None:
-    project = await make_project()
-    bound['project'] = project
+    job_binding['project'] = project
     data = _jpeg_bytes(seed=21)
     stored = tmp_path / 'old.jpg'
     stored.write_bytes(data)

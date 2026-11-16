@@ -48,9 +48,9 @@ def target_space_keys() -> frozenset[str]:
     """The space keys a new target will have: its default encoders' (every project is created
     with the default spaces: the frame encoder's and the crop encoder's)."""
     from src.domain.embedding_spaces import space_key
-    from src.services.projects.store import CROP_ENCODER, FRAME_ENCODER
+    from src.services.projects.store import FRAME_ENCODER, crop_encoder
 
-    return frozenset({space_key(*FRAME_ENCODER), space_key(*CROP_ENCODER)})
+    return frozenset({space_key(*FRAME_ENCODER), space_key(*crop_encoder())})
 
 
 def report_of(issues: list[CombineIssue]) -> ValidationReport:

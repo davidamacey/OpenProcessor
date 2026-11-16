@@ -41,6 +41,16 @@ _compose_service_running() {
         --filter "label=com.docker.compose.service=$2" 2>/dev/null)" ]]
 }
 
+# _gpu_crop_floor_mib: the planning figure of the crop encoder at the configured PE_CROP_SIZE (MiB).
+# export/pe_image_constants.py holds the same table (a test keeps them equal). A recorded or
+# measured figure below it is a reading of the other size's engine and is never used.
+_gpu_crop_floor_mib() {
+    case "$(_env_value PE_CROP_SIZE)" in
+        336) echo 1024 ;;
+        *) echo 768 ;;
+    esac
+}
+
 # Explain where the PE encoders run and refuse a TRITON_GPU_ID that this
 # host cannot honour (missing card, mixed architectures, no room).
 _gpu_plan_placement() {
@@ -55,7 +65,10 @@ _gpu_plan_placement() {
     local frame_mib crop_mib
     frame_mib="$(_gpu_model_mib pe_image_encoder)"
     crop_mib="$(_gpu_model_mib pe_crop_encoder)"
-    pe_mib=$(( ${frame_mib:-1536} + ${crop_mib:-768} ))
+    local crop_floor
+    crop_floor="$(_gpu_crop_floor_mib)"
+    (( ${crop_mib:-0} >= crop_floor )) || crop_mib="$crop_floor"
+    pe_mib=$(( ${frame_mib:-1536} + crop_mib ))
     project="$(_env_value COMPOSE_PROJECT_NAME)"
     if command -v docker &> /dev/null \
         && _compose_service_running "${project:-openprocessor}" triton-server; then

@@ -217,7 +217,156 @@ def test_the_workspace_and_batch_of_a_pe_build_come_from_the_trt_settings(
 
 def test_the_build_script_and_the_installer_agree_on_each_input_size() -> None:
     build = (REPO_ROOT / 'export/build_pe_trt.sh').read_text()
+    default = {'frame': r'(\d+)', 'crop': r'"\$\{PE_CROP_SIZE:-(\d+)\}"'}
     for role, model in (('frame', FRAME), ('crop', CROP)):
-        m = re.search(rf'{role}\)\s+MODEL_NAME="{model}";\s+DEFAULT_IMAGE_SIZE=(\d+)', build)
+        m = re.search(
+            rf'{role}\)\s+MODEL_NAME="{model}";\s+DEFAULT_IMAGE_SIZE={default[role]}', build
+        )
         assert m, role
         assert int(m.group(1)) == _config_input_size(model), role
+
+
+# ---- PE_CROP_SIZE: the crop engine's input is 224 (default) or 336 ----
+
+OPENPROCESSOR = REPO_ROOT / 'openprocessor'
+CLI_CORE = REPO_ROOT / 'scripts/lib/cli_core.sh'
+CROP_STAMP_224 = (
+    f'{CROP}\tfp16\t\tv110100\t8.6\t{ONNX_SHA}\t'
+    'min1/opt8/max32 224x224 target=default workspace=4G strongly-typed input=uint8\n'
+)
+CROP_STAMP_336 = CROP_STAMP_224.replace('224x224', '336x336')
+
+
+def test_the_default_size_is_224_and_a_valid_336_is_read_from_the_environment(bash) -> None:
+    out = bash(
+        f'source {LIB}; _ms_pe_size {CROP}; PE_CROP_SIZE=336; _ms_pe_size {CROP}; '
+        f'_ms_pe_size {FRAME}; PE_CROP_SIZE=""; _ms_pe_size {CROP}'
+    ).stdout.split()
+    assert out == ['224', '336', '336', '224']
+
+
+@pytest.mark.parametrize('bad', ['300', '448', '0', 'abc', '224.0'])
+def test_an_invalid_crop_size_is_refused_and_the_frame_size_is_unaffected(bad: str, bash) -> None:
+    out = bash(
+        f'source {LIB}; PE_CROP_SIZE={bad}; _ms_pe_size {CROP}; echo "rc=$?"; _ms_pe_size {FRAME}'
+    )
+    assert 'rc=1' in out.stdout
+    assert out.stdout.splitlines()[-1] == '336'
+    assert 'PE_CROP_SIZE must be 224 or 336' in out.stderr + out.stdout
+
+
+def test_an_invalid_crop_size_stops_the_group_before_any_step_runs(tmp_path: Path, bash) -> None:
+    out = bash(
+        _group_script(tmp_path).replace(
+            'model_setup_run_group pe', 'PE_CROP_SIZE=300; model_setup_run_group pe'
+        )
+    )
+    assert 'rc=0' not in out.stdout
+    assert not (tmp_path / 'calls.log').exists()
+    assert 'PE_CROP_SIZE must be 224 or 336' in out.stdout + out.stderr
+
+
+def test_a_group_run_at_336_builds_and_stamps_the_crop_engine_at_336(tmp_path: Path, bash) -> None:
+    out = bash(
+        _group_script(tmp_path).replace(
+            'model_setup_run_group pe', 'PE_CROP_SIZE=336; model_setup_run_group pe'
+        )
+    ).stdout
+    assert 'rc=0' in out
+    crop = next(c for c in _calls(tmp_path) if f'--saveEngine=/models/{CROP}/1/model.plan' in c)
+    for shape in ('min', 'opt', 'max'):
+        assert re.search(rf'--{shape}Shapes=images:\d+x3x336x336\b', crop)
+    assert '224' not in crop
+    assert '336x336' in _rows(tmp_path)[CROP][6]
+    assert any(
+        '-e PE_CROP_SIZE=336' in c and 'export_pe_image_encoder.py --crop' in c
+        for c in _calls(tmp_path)
+    )
+
+
+def test_a_group_run_without_a_size_passes_none_to_the_export_containers(
+    tmp_path: Path, bash
+) -> None:
+    bash(_group_script(tmp_path))
+    assert not any('PE_CROP_SIZE' in c for c in _calls(tmp_path))
+
+
+def test_a_224_stamp_is_stale_under_336_and_the_group_rebuilds(tmp_path: Path, bash) -> None:
+    script = _installed(tmp_path, crop_stamp=CROP_STAMP_224)
+    out = bash(script + 'PE_CROP_SIZE=336; model_setup_run_group pe').stdout
+    assert 'up to date, skipped' not in out
+    assert 'built at input 224x224, now 336x336' in out
+
+
+def test_a_336_stamp_is_stale_under_the_default_size(tmp_path: Path, bash) -> None:
+    out = bash(_installed(tmp_path, crop_stamp=CROP_STAMP_336) + 'model_setup_run_group pe').stdout
+    assert 'up to date, skipped' not in out
+    assert 'built at input 336x336, now 224x224' in out
+
+
+def test_the_same_size_skips_at_336(tmp_path: Path, bash) -> None:
+    out = bash(
+        _installed(tmp_path, crop_stamp=CROP_STAMP_336)
+        + 'PE_CROP_SIZE=336; model_setup_run_group pe'
+    ).stdout
+    assert 'up to date, skipped' in out
+
+
+def test_the_frame_stamp_is_not_judged_by_the_crop_size(tmp_path: Path, bash) -> None:
+    out = bash(
+        _installed(tmp_path, crop_stamp=CROP_STAMP_336)
+        + f'PE_CROP_SIZE=336; model_setup_stamp_stale {FRAME} pytorch_models/{FRAME}.onnx; echo "rc=$?"'
+    ).stdout
+    assert 'rc=1' in out
+
+
+def _models_install(tmp_path: Path, bash, env_text: str | None, shell_env: str = '') -> str:
+    lib = tmp_path / 'lib'
+    lib.mkdir()
+    (lib / 'model_setup.sh').write_text(
+        'model_setup_run_groups() { echo "groups pe_crop_size=[${PE_CROP_SIZE-unset}]"; }\n'
+    )
+    if env_text is not None:
+        (tmp_path / '.env').write_text(env_text)
+    return bash(
+        f'source {CLI_CORE}; eval "$(sed -n "/^_env_value() {{/,/^}}/p" {OPENPROCESSOR})"; '
+        f'SCRIPT_DIR="{tmp_path}"; PROJECT_DIR="{tmp_path}"; '
+        'dc() { :; }; log_info() { :; }; log_success() { :; }; log_error() { echo "$*" >&2; }; '
+        f'{shell_env} cmd_models_install pe'
+    ).stdout
+
+
+def test_models_install_reads_the_crop_size_from_env_through_the_one_helper(
+    tmp_path: Path, bash
+) -> None:
+    assert 'pe_crop_size=[336]' in _models_install(tmp_path, bash, 'PE_CROP_SIZE=336\nOTHER=1\n')
+
+
+def test_models_install_leaves_the_size_unset_when_env_has_none(tmp_path: Path, bash) -> None:
+    assert 'pe_crop_size=[]' in _models_install(tmp_path, bash, 'OTHER=1\n')
+
+
+def test_a_size_in_the_shell_beats_env_in_models_install(tmp_path: Path, bash) -> None:
+    out = _models_install(tmp_path, bash, 'PE_CROP_SIZE=224\n', shell_env='PE_CROP_SIZE=336;')
+    assert 'pe_crop_size=[336]' in out
+
+
+def test_the_installer_reads_the_crop_size_from_env_through_read_env_var(
+    tmp_path: Path, bash
+) -> None:
+    env = tmp_path / '.env'
+    env.write_text('OTHER=1\nPE_CROP_SIZE=336\n')
+    out = bash(
+        f'OP_SOURCE_ONLY=1 source "{REPO_ROOT / "setup-openprocessor.sh"}"; ENV_FILE="{env}"; '
+        'echo "env=[$(crop_size_setting)]"; PE_CROP_SIZE=224; echo "shell=[$(crop_size_setting)]"; '
+        f'unset PE_CROP_SIZE; ENV_FILE="{tmp_path}/none"; echo "none=[$(crop_size_setting)]"'
+    ).stdout
+    assert out.split() == ['env=[336]', 'shell=[224]', 'none=[]']
+
+
+def test_the_installer_exports_the_size_before_the_model_setup_runs() -> None:
+    text = (REPO_ROOT / 'setup-openprocessor.sh').read_text()
+    assert text.index('PE_CROP_SIZE="$(crop_size_setting)"') < text.index(
+        'model_setup_run_groups "$SELECTED_TIERS"'
+    )
+    assert 'export PE_CROP_SIZE' in text

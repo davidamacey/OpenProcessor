@@ -23,6 +23,7 @@
 #   GPU_PROFILE           minimal|small|standard|full (preflight's config pass); small builds
 #                         engines with the small target (scripts/lib/trt_settings.sh)
 #   OP_TRT_BUILD_TARGET / OP_TRT_WORKSPACE_GB   optional overrides of the build target / workspace
+#   PE_CROP_SIZE                                crop encoder input, 224 (default) or 336
 
 [[ -n "${_MODEL_SETUP_SH_LOADED:-}" ]] && return 0
 _MODEL_SETUP_SH_LOADED=1
@@ -286,7 +287,7 @@ _ms_export() { dc run --rm --no-deps -T -w /app "${_MS_TRT_ENV[@]}" model-export
 # a `while read` loop that stamps the next engine.
 _ms_triton() { dc run --rm --no-deps -T triton-server "$@" </dev/null; }
 
-# _ms_trt_env: the build target and workspace the one-shot export containers must see.
+# _ms_trt_env: the build target, workspace and crop encoder size the one-shot export containers must see.
 # `dc run` does not inherit this shell's environment, so they are passed with -e; the
 # target is always explicit (GPU_PROFILE=small resolves to small here, once).
 _ms_trt_env() {
@@ -294,6 +295,7 @@ _ms_trt_env() {
     target="$(trt_target)" || return 1
     _MS_TRT_ENV=(-e "OP_TRT_BUILD_TARGET=${target}")
     [[ -n "${OP_TRT_WORKSPACE_GB:-}" ]] && _MS_TRT_ENV+=(-e "OP_TRT_WORKSPACE_GB=${OP_TRT_WORKSPACE_GB}")
+    [[ -n "${PE_CROP_SIZE:-}" ]] && _MS_TRT_ENV+=(-e "PE_CROP_SIZE=${PE_CROP_SIZE}")
     return 0
 }
 _MS_TRT_ENV=()
@@ -439,6 +441,8 @@ _ms_run_group_steps() {
             "$runner" ocr_stamp _ms_record_group_stamps ocr || return 1
             ;;
         pe)
+            # Refuse a bad PE_CROP_SIZE now, not after the frame engine's build.
+            _ms_pe_size pe_crop_encoder > /dev/null || return 1
             "$runner" pe_weights _ms_export python /app/export/download_pe_weights.py || return 1
             "$runner" pe_image_onnx _ms_export python /app/export/export_pe_image_encoder.py || return 1
             "$runner" pe_image_trt _ms_pe_build_engine pe_image_encoder || return 1

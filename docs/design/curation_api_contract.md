@@ -215,7 +215,11 @@ deployment's encoders' (`pe_crop_encoder` for both). For a project made before t
 crop encoder it is `{message, spaces[]}` with one `{target, space_key,
 registered_model, encoder_model, message}` per space of the other model, derived
 at read time from the registered spaces and never stored. That project's writers
-refuse with the same `message` (`409 embedding_model_unavailable`; a drawn or
+refuse with the same `message`: every ingest route (`/ingest/image`, `/ingest/batch`,
+`/ingest/upload`, `/ingest/objects`) answers `409` with
+`{"detail": {"error": "embedding_model_unavailable", "message": ...}}` and stores nothing, and a job that
+writes vectors (reprocess, re-index, dataset import) ends `failed` with `error_code`
+`embedding_model_unavailable` and the same text as its `error_message`, once, with no retry; a drawn or
 moved box is kept and served `embedding_state: deferred` with it) and the
 detection worker writes no box vectors for it. There is no migration: the
 remedy is a new project.

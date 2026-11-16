@@ -138,30 +138,31 @@ async def insert_events_async(
     return [InsertedEvent(id=new_id, project_id=project_id) for new_id in result.scalars().all()]
 
 
+# ``xid::text AS xid`` makes the bare name ``xid`` in ORDER BY mean the OUTPUT column (PostgreSQL
+# SELECT docs, "ORDER BY": an output name wins over an input name), a text that sorts '10003'
+# before '9998'. Every ORDER BY below names ``events.xid``, the xid8 column.
 # Static statements: the project and global forms differ only in the project filter, and each
 # is kept whole so the planner-facing text is greppable (and the EXPLAIN test can run it).
 _PAGE_PROJECT = (
     'SELECT xid::text AS xid, id, type, payload FROM events '
     'WHERE project_id = :project_id AND (xid, id) > (CAST(:xid AS xid8), :id) '
-    'AND xid < pg_snapshot_xmin(pg_current_snapshot()) ORDER BY xid, id LIMIT :limit'
+    'AND xid < pg_snapshot_xmin(pg_current_snapshot()) ORDER BY events.xid, events.id LIMIT :limit'
 )
 _PAGE_GLOBAL = (
     'SELECT xid::text AS xid, id, type, payload FROM events '
     'WHERE project_id IS NULL AND (xid, id) > (CAST(:xid AS xid8), :id) '
-    'AND xid < pg_snapshot_xmin(pg_current_snapshot()) ORDER BY xid, id LIMIT :limit'
+    'AND xid < pg_snapshot_xmin(pg_current_snapshot()) ORDER BY events.xid, events.id LIMIT :limit'
 )
 _HEAD_PROJECT = (
     'SELECT xid::text AS xid, id FROM events WHERE project_id = :project_id '
-    'AND xid < pg_snapshot_xmin(pg_current_snapshot()) ORDER BY xid DESC, id DESC LIMIT 1'
+    'AND xid < pg_snapshot_xmin(pg_current_snapshot()) ORDER BY events.xid DESC, events.id DESC LIMIT 1'
 )
 _HEAD_GLOBAL = (
     'SELECT xid::text AS xid, id FROM events WHERE project_id IS NULL '
-    'AND xid < pg_snapshot_xmin(pg_current_snapshot()) ORDER BY xid DESC, id DESC LIMIT 1'
+    'AND xid < pg_snapshot_xmin(pg_current_snapshot()) ORDER BY events.xid DESC, events.id DESC LIMIT 1'
 )
-_OLDEST_PROJECT = 'SELECT xid::text AS xid, id FROM events WHERE project_id = :project_id ORDER BY xid, id LIMIT 1'
-_OLDEST_GLOBAL = (
-    'SELECT xid::text AS xid, id FROM events WHERE project_id IS NULL ORDER BY xid, id LIMIT 1'
-)
+_OLDEST_PROJECT = 'SELECT xid::text AS xid, id FROM events WHERE project_id = :project_id ORDER BY events.xid, events.id LIMIT 1'
+_OLDEST_GLOBAL = 'SELECT xid::text AS xid, id FROM events WHERE project_id IS NULL ORDER BY events.xid, events.id LIMIT 1'
 
 
 def _page_sql(project_id: uuid.UUID | None) -> str:

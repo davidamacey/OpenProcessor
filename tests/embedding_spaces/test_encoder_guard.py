@@ -10,9 +10,12 @@ from __future__ import annotations
 import pytest
 from _embedding_registry_fake import new_space
 
-from src.clients.pe_encoder import PE_CROP_MODEL, PE_IMAGE_MODEL
-from src.domain.embedding_spaces import EmbeddingSpaceError, Target, require_encoder
+from src.clients.pe_encoder import PE_CROP_MODEL, PE_CROP_SIZE, PE_IMAGE_MODEL
+from src.domain.embedding_spaces import EmbeddingSpaceError, EncoderBuild, Target, require_encoder
 from src.services.embedding_spaces.encoder_guard import require_encoder_for
+
+
+CROP = EncoderBuild(PE_CROP_MODEL, PE_CROP_SIZE)
 
 
 def test_a_space_of_the_serving_encoder_passes() -> None:
@@ -20,8 +23,8 @@ def test_a_space_of_the_serving_encoder_passes() -> None:
         project='p',
         space_key='k',
         target=Target.ITEM,
-        space_model=PE_CROP_MODEL,
-        served_model=PE_CROP_MODEL,
+        space_build=CROP,
+        served_build=CROP,
     )
 
 
@@ -31,8 +34,8 @@ def test_the_refusal_names_project_space_and_both_models_and_the_remedy() -> Non
             project='old-cars',
             space_key='pe_core_l14_336_v1',
             target=Target.BOX,
-            space_model=PE_IMAGE_MODEL,
-            served_model=PE_CROP_MODEL,
+            space_build=EncoderBuild(PE_IMAGE_MODEL, 336),
+            served_build=CROP,
         )
     assert err.value.code == 'embedding_model_unavailable'
     text = err.value.detail
@@ -47,8 +50,8 @@ def test_a_space_with_no_registered_model_is_refused() -> None:
             project='p',
             space_key='k',
             target=Target.ITEM,
-            space_model=None,
-            served_model=PE_CROP_MODEL,
+            space_build=None,
+            served_build=CROP,
         )
 
 

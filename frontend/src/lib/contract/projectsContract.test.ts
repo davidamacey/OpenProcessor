@@ -35,6 +35,7 @@ const SUMMARY = {
   updated_at: true,
   counts: true,
   origin: true,
+  encoder_mismatch: true,
 } satisfies Record<keyof T.ProjectSummary, true>;
 
 const CASES: [string, string[]][] = [
@@ -45,6 +46,20 @@ const CASES: [string, string[]][] = [
       keyof T.ProjectRecordResponse,
       true
     >),
+  ],
+  [
+    'EncoderMismatch',
+    keys({ message: true, spaces: true } satisfies Record<keyof T.EncoderMismatch, true>),
+  ],
+  [
+    'EncoderMismatchSpace',
+    keys({
+      target: true,
+      space_key: true,
+      registered_model: true,
+      encoder_model: true,
+      message: true,
+    } satisfies Record<keyof T.EncoderMismatchSpace, true>),
   ],
   [
     'ProjectCounts',

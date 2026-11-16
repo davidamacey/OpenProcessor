@@ -24,6 +24,7 @@ import httpx
 import pytest
 
 from tests.live import _compose
+from tests.live._heal import heal_stack
 from tests.live._jobs import (
     StartFailedError,
     get_job,
@@ -86,8 +87,7 @@ def _states(events: list[dict[str, Any]]) -> list[str]:
 
 def _ensure_stack(api: httpx.Client) -> None:
     """Every service up, database and queue ready, and a noop completes (the worker consumes)."""
-    for service in ('postgres', 'valkey', 'jobs-worker', 'periodic-worker', 'jobs-beat'):
-        _compose.up(service)
+    heal_stack(extra=('postgres', 'valkey'))
     assert _wait_service(api, 'database', True, 90), 'database not ready'
     assert _wait_service(api, 'queue', True, 90), 'queue not ready'
     job_id = start_infra_job('noop')

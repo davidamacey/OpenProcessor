@@ -26,6 +26,7 @@ questions and standards they consult.
 | 8 | [08_research_prototype_track.md](08_research_prototype_track.md) | short prototype runs during W2-W4 (about 10 GPU hours) |
 | 9a-9h | [09a embeddings](09a_research_embeddings_search.md), [09b clustering](09b_research_clustering.md), [09c clustering protocol](09c_research_clustering_protocol.md), [09d near-duplicates](09d_research_near_duplicates.md), [09e auto-label](09e_research_auto_label_assist.md), [09f spatial](09f_research_spatial_attributes.md), [09g GPU pipeline](09g_research_gpu_pipeline.md), [09h plate text](09h_research_plate_text.md) | the research designs behind the seams and lanes above |
 | 12 | [12_review_workflow_audit.md](12_review_workflow_audit.md), [12a interfaces](12a_workflow_interfaces.md), [12b wave 2](12b_wave2_lane_specs.md), [12c wave 3](12c_wave3_lane_specs.md), [12d wave 4](12d_wave4_lane_specs.md), [12e execution order and acceptance walk](12e_workflow_execution_order.md), [12f UX refinement](12f_ux_refinement_plan.md) | the Cropwright workflow rebuild (added 2026-11-09, runs after W4 on the same integration branch) |
+| 13-17 | [14_roadmap.md](14_roadmap.md) (the map of every track after and beside these waves: start there), [13 speed](13_backend_speed_plan.md), [13a ingest on the engine](13a_ingest_on_engine_plan.md), [13b crop vectors](13b_crop_vectors_plan.md), [15 storage](15_storage_plan.md), [15a storage schema](15a_storage_schema.md), [17 native engine](17_native_engine_plan.md); the storage reads (15b) and slices (15c) are on branch `int/storage` | the speed, storage and native-engine tracks (added 2026-11-13 to 2026-11-15); order and state in the roadmap |
 | 10 | [10_v080_platform_breadth.md](10_v080_platform_breadth.md) | after the tag: v0.8.0 |
 | 11 | [11_side_track_issue_42_small_gpu.md](11_side_track_issue_42_small_gpu.md) | side track #42 (GPU 1, never blocks) |
 | ref | [reference/](reference/): [decision_register](reference/decision_register.md), [owner_questions](reference/owner_questions.md), [traceability](reference/traceability.md), [review_1](reference/review_1_control_plane.md), [review_2](reference/review_2_research.md), [environment_and_setup](reference/environment_and_setup.md), [standards_and_libraries](reference/standards_and_libraries.md), [risks_cleanup_host](reference/risks_cleanup_host.md), [github_actions](reference/github_actions.md), [prior_plans_reconciliation](reference/prior_plans_reconciliation.md), [b0_close_out_done](reference/b0_close_out_done.md) | consulted by every wave |
@@ -49,7 +50,7 @@ the new names; the list stays for the files still to be converted.
 | Status | plan, written 2026-11-04, status as of 2026-11-05: the whole plan set is on `main` (PRs #478, #481, #482, #485); restructured the same day under the no-rework rule (D-84, section 3a) and the model and effort split (D-85, section 7). Executes wave by wave on the owner's go |
 | What this file is | the **execution order**: every wave from now to the v0.7.0 tag, its lanes, file ownership, sources, issues, folded-in decided items, tests, sweep, exit gate, GPU window, and what codes in parallel. It links to the batch files for task detail and never restates it |
 | What it is not | the decision register and the legends: those are [decision_register.md](reference/decision_register.md) (section 6 is the register, section 11 the ID legend, section 2.1 the plain-words map). Where this file and a batch file disagree on order, this file wins; on task content, the batch file wins |
-| Traceability | [traceability.md](reference/traceability.md): every original task, ID and open issue mapped to its wave and lane, or retired with a reason; the fold-in record; the GitHub actions (approved 2026-11-04, D-68) |
+| Traceability | [traceability.md](reference/traceability.md): every original task, ID and open issue mapped to its wave and lane, or retired with a reason; the fold-in record; the GitHub actions (approved 2026-11-04, D-68). Every track after and beside these waves (speed, the native engine, storage, clustering, the gallery, the API port, deploy, release) is mapped to its plan, state and order in [14_roadmap.md](14_roadmap.md) |
 | Review | [review_1_control_plane.md](reference/review_1_control_plane.md): the independent review (R-1..R-38) and, in its section 5, the planner's response to each finding. Every finding is applied in the plan files; this file carries the wave and lane consequences |
 | Owner answers applied | 2026-11-04, after the review: every service requires PostgreSQL, Valkey and OpenSearch, no degraded mode (D-69, which replaced D-64 the same day); event wake-ups over Valkey pub/sub (D-65); kombu and redis-py held (D-66; reversed on 2026-11-05: the latest releases at bump time, Celery 5.7.0, kombu 5.7.0, redis-py 8.1.0); pins part A as its own PR first (D-67, wave W2.0); every open B2 recommendation accepted as a block; `postgres:18.6-trixie`; the security lane in W4 and the typed-response lanes in W5a-W5c (filler lanes since D-84); near-duplicate groups held out together; research experiments after the tag; #42 to v0.8.0 if unrun; the GitHub actions of the traceability file (D-68) |
 | Research integration | 2026-11-04 on `research/master` (from `research/integration` = `main` + the seven research plans): every research seam is folded into the lane that owns its file (tables in [02d](02d_research_seam_schema.md); the seam-to-lane map, the cross-topic resolutions X-1..X-20 and the issue map in [traceability](reference/traceability.md) section 5); new lanes 1F, ES-A, ES-B, ES-C, 4F, ND-A, ND-B, ND-C, `b4/capture-metadata`, a W2.0 gate lane; a new wave W5e for registration-plate text ([06e](06e_w5e_plate_text.md)); the research prototype track and the post-tag research waves RW-1..RW-6 ([08](08_research_prototype_track.md)); the 80 de-duplicated research owner questions ([owner_questions](reference/owner_questions.md)). Final pass the same day: the research review ([review_2_research.md](reference/review_2_research.md), every finding answered in its Planner responses) and the owner's answers (11 rows approved, among them every seam now, W2.3 split in two, GPS stored per project policy, short prototype runs capped at about 10 GPU hours); 69 questions stayed open; on 2026-11-05 the owner answered 62 as recommended and the plate-text and plate-detector questions, 7 stay open, none before W4 (section 9.3) |
@@ -61,30 +62,27 @@ Ultralytics version), B4 (stateless API), B5 (speed), R-final (release acceptanc
 
 ---
 
-## 1. Where things stand (2026-11-12)
+## 1. Where things stand (2026-11-15)
 
 The goal every remaining step serves is the user's job in
 [VISION_AND_GOALS.md](../../VISION_AND_GOALS.md) ("The user's job"): an existing detector finds the
 objects, the user labels them in their own classes cluster by cluster (optionally with the assist
-loop's VLM), then trains a model on those classes. Nothing is pushed: `main` is unchanged since the
-plan set, and everything below is on the local integration branch `int/b4-stateless`.
+loop's VLM), then trains a model on those classes; a gallery sits on the same record.
 
-| Item | State |
-|---|---|
-| B2 control plane (W2.1-W2.4), B3 one Ultralytics version (W3), B4 stateless API (W4) | done and swept green on `int/b4-stateless` |
-| B5 speed | W5a baseline recorded on the GPU stack; the GPU bundle (decode geometry, crops) merged; W5b-W5d and the processing plans (06d, #67) move to the dedicated speed-research session; W5e plate-text jobs held for the plate-text research numbers |
-| Workflow rebuild (files 12-12e) | waves 1-4 merged and swept; the live acceptance walk of 12e is still to run on the final head |
-| UX wave (owner UI review, 2026-11-12) | wave 1 merged (backend read paths, detector class as a machine label, crop preview, cohort summary, the design system and Lucide icons); wave 2 (Workspace and Review, page layouts) coding |
-| Versions | `VERSION`, `pyproject.toml` and `frontend/package.json` stay 0.6.0 until release prep (07 section 3) |
+The single map of all remaining work, with every track's state, order and open gaps, is
+[14_roadmap.md](14_roadmap.md); where it and this file disagree on order, it wins. In short:
 
-The remaining order (one merge and one sweep per step; reds go back to one fix lane):
-
-1. Merge UX wave 2 and its fix lane; one confirmation sweep on the merged head; build the images once.
-2. Refresh the live GPU stack on those images and run the 12e acceptance walk (checks 1-19), with
-   screenshots at 1600 and 430 px, including every item of the owner's UI review.
-3. The user's job end to end on a real vehicle photo set (12e check 19).
-4. The speed-research session (B5 rest: #40, #67, #220, the processing plans), from that green head.
-5. R-final (07) and the tag, on the owner's word; then the PRs to `main`.
+- Done on the integration branch `int/b4-stateless`: the control plane (W2), one Ultralytics version
+  (W3), the stateless API (W4), the workflow rebuild (files 12 to 12f), ingest on the engine and its
+  reliability rerun (plan 13a; [13](13_backend_speed_plan.md) section 10), crop vectors (13b).
+- In progress on their own branches: the native Rust frame engine, `int/native`
+  ([17](17_native_engine_plan.md), phase N0 in part); the storage rebuild with PostgreSQL as the
+  record, `int/storage` ([15](15_storage_plan.md), step 1 built).
+- Order from here: the roadmap's section 2 (map) and section 3 (what must not start yet). The
+  owner's four answers of 2026-11-15 (roadmap section 9) set the release: no 0.7.0 tag until the
+  whole programme is done; no in-place upgrade from 0.6.0; no authentication for now.
+- Versions: `VERSION`, `pyproject.toml` and `frontend/package.json` stay 0.6.0 until release prep
+  (07 section 3). Nothing is on `main` yet.
 
 ## 2. The waves in one table
 

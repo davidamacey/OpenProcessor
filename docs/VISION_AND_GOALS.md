@@ -125,38 +125,34 @@ release.
   touching data integrity, isolation, or security — an independent review
   before it lands, not batched into one release-day merge.
 
-## The next release: where it stands (2026-11-12)
+## The next release: where it stands (2026-11-15)
 
-v0.6.0 is the latest published release; `VERSION` stays 0.6.0 until the next
-release prep. The work for the next release is implemented and tested on the integration
-branch `int/b4-stateless`, not yet on `main`; `CHANGELOG.md` `[Unreleased]`
-lists it.
+v0.6.0 is the latest published release; `VERSION` stays 0.6.0 until release prep. The work for
+the next release (0.7.0) is on the integration branch `int/b4-stateless`, not yet on `main`;
+`CHANGELOG.md` `[Unreleased]` lists it. The single map of what remains is
+[`docs/design/v070_rebuild/14_roadmap.md`](design/v070_rebuild/14_roadmap.md).
 
 Done on the integration branch:
 
 - **Foundation.** PostgreSQL for control data, every long job on Celery and
-  Valkey, one Ultralytics version, a stateless API that runs as N replicas
-  (B2, B3, B4 in the master plan).
-- **The labelling workflow in Cropwright.** One Workspace (Gallery, Clusters,
-  Detections, Review, Table, Map, Embedding) over one shared filter; served
+  Valkey, one Ultralytics version, a stateless API that runs as N replicas.
+- **The labelling workflow in Cropwright.** One Workspace over one shared filter; served
   next steps; label operations with undo; the image editor; near-duplicates;
   training cohorts.
-- **The detector's class as a machine label.** Ingest gives each detected box
-  the detector's class as a non-confident machine label (new classes created
-  by name), so items are named and still clustered and reviewed; "Adopt
-  detector classes" does the same for items already stored.
+- **The detector's class as a machine label** at ingest, so items are named and still
+  clustered and reviewed.
 
-Left, in order (the master plan section 1 has the detail):
+Decided by the owner on 2026-11-15:
 
-1. The UX wave from the owner's UI review (design system, icons, Workspace and
-   page layouts), its merge, and one confirmation sweep.
-2. The live acceptance walk, then the user's job end to end on a real vehicle
-   photo set: detector labels, cluster labelling of make and model, the assist
-   loop, review, export, train, promote, serve.
-3. The speed work in its own session: the zero-copy GPU pipeline (#40),
-   request-driven processing plans (#67), faces and OCR on resident crops
-   (#220).
-4. Release acceptance (R-final) and the tag, on the owner's word.
+- **No 0.7.0 tag until the whole programme is done:** the backend rewrite (native Rust engine,
+  PostgreSQL as the record, the API where measured), the frontend updated for it with the
+  gallery mode, and the roadmap's features. Pushes after green sweeps continue; a tag does not.
+- **No in-place upgrade from 0.6.0.** 0.7.0 is a new build for speed; a 0.6.0 installation
+  moves its work by exporting and importing labelled datasets.
+- **No authentication for now.** The API stays unpublished beyond loopback, a LAN or a private
+  network.
+- **A trained model is kept when a photo of its training set is erased later;** the missing
+  photo is recorded.
 
 Still not shipped in any release:
 

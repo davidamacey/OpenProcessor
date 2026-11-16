@@ -62,7 +62,7 @@ def crop_input_problem(config: dict[str, Any] | None, model: str, size: int) -> 
     if built != (size, size):
         return (
             f'{model} is built at {built[0]}x{built[1]} but PE_CROP_SIZE is {size}: '
-            'set PE_CROP_SIZE to the size of the engine, or rebuild it (make pe-build-crop-trt)'
+            'set PE_CROP_SIZE to the size of the engine, or rebuild it at that size (./openprocessor models install --only pe)'
         )
     return None
 

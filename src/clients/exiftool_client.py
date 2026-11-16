@@ -52,6 +52,7 @@ import tempfile
 import threading
 import time
 import warnings
+import weakref
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
@@ -187,6 +188,12 @@ def _feed_pipe(path: Path, data: bytes, done: threading.Event, deadline: float) 
             os.close(fd)
 
 
+def _remove_tree(directory: Path, owner_pid: int) -> None:
+    """Remove ``directory`` unless this is a forked child of the process that made it."""
+    if os.getpid() == owner_pid:
+        shutil.rmtree(directory, ignore_errors=True)
+
+
 class ExifToolClient:
     """One shared ``-stay_open`` ExifTool process; ``read`` returns the capture tags of a file."""
 
@@ -197,6 +204,7 @@ class ExifToolClient:
         self._helper: ExifToolHelper | None = None
         self._aborted = threading.Event()
         self._pipe_path: Path | None = None
+        self._pipe_cleanup: weakref.finalize | None = None
 
     def _process(self) -> subprocess.Popen[bytes] | None:
         # PyExifTool exposes no handle on its subprocess; the watchdog needs it to kill a hung one.
@@ -241,6 +249,9 @@ class ExifToolClient:
             rows = helper.get_tags(path, [*EXIFTOOL_TAGS, FILE_ERROR_KEY], params=list(_ARGS))
         finally:
             timer.cancel()
+            # The timer's thread holds ``self._abort`` until it exits; wait for it so a read never
+            # returns while a thread still keeps the client (and its pipe directory) alive.
+            timer.join()
         return dict(rows[0]) if rows else {}
 
     def _abort(self) -> None:
@@ -284,9 +295,11 @@ class ExifToolClient:
     def _pipe(self) -> Path:
         """This process's named pipe, in a private directory made on first use."""
         if self._pipe_path is None or not self._pipe_path.exists():
-            if self._pipe_path is not None:
-                shutil.rmtree(self._pipe_path.parent, ignore_errors=True)
+            self._drop_pipe()
             directory = Path(tempfile.mkdtemp(prefix='op-exiftool-'))  # mode 0700
+            # Removed at close, at garbage collection and at interpreter exit (weakref.finalize
+            # runs its callback at exit by default); not in a forked child, which does not own it.
+            self._pipe_cleanup = weakref.finalize(self, _remove_tree, directory, os.getpid())
             self._pipe_path = directory / 'photo'
             os.mkfifo(self._pipe_path, 0o600)
         return self._pipe_path
@@ -318,9 +331,10 @@ class ExifToolClient:
             return self._attempts(lambda: self._run_fed(data))
 
     def _drop_pipe(self) -> None:
-        if self._pipe_path is not None:
-            shutil.rmtree(self._pipe_path.parent, ignore_errors=True)
-            self._pipe_path = None
+        if self._pipe_cleanup is not None:
+            self._pipe_cleanup()
+            self._pipe_cleanup = None
+        self._pipe_path = None
 
     def strip_gps(self, src: str | Path, dest: str | Path) -> None:
         """Write ``dest`` as ``src`` without any GPS tag, losslessly (no re-encode; every other

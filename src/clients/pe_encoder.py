@@ -45,9 +45,10 @@ from src.clients.pe_text_backends import (
 from src.config.env import env_str
 from src.config.settings import TritonModelConfig
 from src.core.logging import get_logger
-from src.domain.embedding_spaces import Target
+from src.domain.embedding_spaces import EncoderBuild, Target
 from src.utils.cpu_pool import run_cpu
 from src.utils.pe_preprocess import (
+    PE_SIZE,
     letterbox_crop_rgb,
     to_chw,
     to_chw_into,
@@ -75,10 +76,16 @@ PE_CROP_MODEL = TritonModelConfig.PE_CROP_MODEL
 PE_CROP_SIZE = TritonModelConfig.PE_CROP_SIZE
 
 
-def image_model_for(target: Target) -> str:
-    """The Triton image encoder whose vectors fill a space of ``target``: the frame encoder for
-    frame vectors, the crop encoder for the vectors of items and boxes."""
-    return PE_IMAGE_MODEL if target is Target.FRAME else PE_CROP_MODEL
+def crop_encoder_build() -> EncoderBuild:
+    """The crop encoder as this deployment runs it: its model at ``PE_CROP_SIZE``."""
+    return EncoderBuild(PE_CROP_MODEL, PE_CROP_SIZE)
+
+
+def served_encoder_for(target: Target) -> EncoderBuild:
+    """The image encoder build whose vectors fill a space of ``target``: the frame encoder (its
+    336 input) for frame vectors, the crop encoder for the vectors of items and boxes. A space is
+    registered for one such build and takes no other."""
+    return EncoderBuild(PE_IMAGE_MODEL, PE_SIZE) if target is Target.FRAME else crop_encoder_build()
 
 
 PE_EMBEDDING_DIM = 1024

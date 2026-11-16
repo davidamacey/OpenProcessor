@@ -13,7 +13,7 @@ import json
 import re
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Any, Literal, NamedTuple
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -141,6 +141,34 @@ def input_spec_sha256(input_spec: dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
+class EncoderBuild(NamedTuple):
+    """One build of an image encoder: its Triton model and the side of the square it takes.
+
+    The same weights built at two input sizes are two builds whose vectors cannot be compared, so
+    the pair is what a space is registered for and what a deployment serves."""
+
+    model: str
+    size: int | None
+
+    def label(self) -> str:
+        side = 'an unknown input size' if self.size is None else f'a {self.size}x{self.size} input'
+        return f'{self.model!r} at {side}'
+
+
+def image_input_size(input_spec: dict[str, Any]) -> int | None:
+    """The side of the square image input of an encoder ``input_spec`` (``None`` when it has no
+    image input or its size is not a fixed square)."""
+    size = (input_spec.get('image') or {}).get('size')
+    if (
+        isinstance(size, list | tuple)
+        and len(size) == 2
+        and all(isinstance(d, int) and not isinstance(d, bool) for d in size)
+        and size[0] == size[1]
+    ):
+        return int(size[0])
+    return None
+
+
 @dataclass(frozen=True)
 class ResolvedSpace:
     """What a reader needs to query or write one space; every name comes from the registry."""
@@ -157,6 +185,16 @@ class ResolvedSpace:
     triton_image_model: str | None
     triton_text_model: str | None
     knn_method: KnnMethodSpec
+    #: Side of the square image input the version's ``input_spec`` declares (``None``: no image
+    #: input, or not a fixed square).
+    input_size: int | None
+
+    @property
+    def encoder_build(self) -> EncoderBuild | None:
+        """The image encoder build this space's vectors come from (``None``: no image model)."""
+        if self.triton_image_model is None:
+            return None
+        return EncoderBuild(self.triton_image_model, self.input_size)
 
 
 class EmbeddingSpaceError(Exception):
@@ -174,17 +212,20 @@ def encoder_mismatch_message(
     project: str,
     space_key: str,
     target: Target,
-    space_model: str | None,
-    served_model: str,
+    space_build: EncoderBuild | None,
+    served_build: EncoderBuild,
 ) -> str | None:
-    """Why a vector of ``served_model`` does not belong in the space registered for
-    ``space_model`` (``None`` when it does): names the project, the space and both models, and the
-    remedy (nothing is migrated between models, so the photos are re-ingested into a new project)."""
-    if space_model == served_model:
+    """Why a vector of ``served_build`` does not belong in the space registered for
+    ``space_build`` (``None`` when it does): names the project, the space and both builds (model
+    and input size), and the remedy (nothing is migrated between builds, so the photos are
+    re-ingested into a new project)."""
+    if space_build == served_build:
         return None
+    registered = 'no image model' if space_build is None else space_build.label()
     return (
         f'project {project}: the {target.value} space {space_key} holds vectors of '
-        f'{space_model!r}, but this encoder makes {target.value} vectors with {served_model!r}; '
+        f'{registered}, but this encoder makes {target.value} vectors with '
+        f'{served_build.label()}; '
         f'they are not comparable and nothing is migrated: re-ingest the photos into a new project'
     )
 
@@ -194,11 +235,11 @@ def require_encoder(
     project: str,
     space_key: str,
     target: Target,
-    space_model: str | None,
-    served_model: str,
+    space_build: EncoderBuild | None,
+    served_build: EncoderBuild,
     status: int = 409,
 ) -> None:
-    """Refuse a vector of ``served_model`` for a space registered for ``space_model``.
+    """Refuse a vector of ``served_build`` for a space registered for ``space_build``.
 
     The one check every writer, the re-index job and search by picture make before they put a
     vector of the encoder they hold next to the vectors of a space; the project record serves the
@@ -208,8 +249,8 @@ def require_encoder(
         project=project,
         space_key=space_key,
         target=target,
-        space_model=space_model,
-        served_model=served_model,
+        space_build=space_build,
+        served_build=served_build,
     )
     if msg is not None:
         raise EmbeddingSpaceError('embedding_model_unavailable', msg, status=status)

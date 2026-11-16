@@ -28,6 +28,25 @@ export interface ProjectOrigin {
   sources?: string[];
 }
 
+/** One item or box space whose vectors are not of this deployment's encoder. */
+export interface EncoderMismatchSpace {
+  target: 'item' | 'box';
+  space_key: string;
+  /** The Triton image model the space's vectors came from; `null` when none is recorded. */
+  registered_model: string | null;
+  /** The model this deployment's encoder makes them with. */
+  encoder_model: string;
+  message: string;
+}
+
+/** Served on a project whose item or box vectors are of another model than this deployment's
+ *  encoders (made before the crop encoder, or at the other crop size): its writers refuse.
+ *  `message` names the remedy, a new project. */
+export interface EncoderMismatch {
+  message: string;
+  spaces: EncoderMismatchSpace[];
+}
+
 /** One entry of `GET {globalApi()}/projects`'s `projects` list. */
 export interface ProjectSummary {
   slug: string;
@@ -65,6 +84,8 @@ export interface ProjectSummary {
   updated_at: string;
   counts: ProjectCounts;
   origin?: ProjectOrigin | null;
+  /** Derived at read time; absent or `null` when the project's spaces are the encoders'. */
+  encoder_mismatch?: EncoderMismatch | null;
 }
 
 export interface ProjectCapacity {

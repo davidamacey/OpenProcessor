@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from src.config import get_curation_config
 from src.core.logging import get_logger
+from src.domain.embedding_spaces import EmbeddingSpaceError
 from src.services.curation.ingest_policy_store import get_ingest_policy
 from src.services.curation.reprocess_detect import redetect_image
 from src.services.curation.reprocess_embed import ALL_PARTS, new_image_gate, reembed_items
@@ -110,7 +111,8 @@ async def embed_image_chunk(
     chunk's already-read targets (:func:`read_chunk`); read here when absent.
     ``gpu`` embeds large photos on the GPU decode; ``gate`` is the pass's shared in-flight bound
     of images. An encoder failure counts
-    every image of the chunk as failed."""
+    every image of the chunk as failed; a refusal of the project's space (``EmbeddingSpaceError``:
+    another encoder or size) is not a failure of the images, it ends the job with its text."""
     try:
         if isinstance(targets, BaseException):
             raise targets
@@ -125,6 +127,8 @@ async def embed_image_chunk(
             gpu=gpu,
             gate=gate,
         )
+    except EmbeddingSpaceError:
+        raise
     except Exception as exc:
         logger.warning('reprocess_embed_failed', error=str(exc))
         res.failed += len(docs)

@@ -280,3 +280,23 @@ def test_response_carries_the_image_boxes_and_counts(world: Any) -> None:
     assert {b['crop_id'] for b in out['image_boxes']} == {'det-1', out['item']['crop_id']}
     assert out['image_counts']['items'] == 2
     assert out['image_counts']['validated'] == 1
+
+
+def test_a_project_of_another_encoder_keeps_the_drawn_item_deferred_with_the_refusal(
+    world: Any, embedding_registry: Any
+) -> None:
+    """The refusal is not an error of the request: the object is saved (201), served ``deferred``
+    with the remedy text, and no vector is written."""
+    from _embedding_registry_fake import new_space
+
+    from src.domain.embedding_spaces import Target
+
+    embedding_registry.add(new_space(Target.ITEM, 'older_encoder'), primary=True)
+    fake, _ = world
+    resp = _post(_client(fake, FakePE()), _body())
+    assert resp.status_code == 201, resp.text
+    out = resp.json()
+    assert out['embedding_state'] == 'deferred', out
+    for part in ('older_encoder_image', 'pe_crop_encoder', 'new project'):
+        assert part in out['embedding_message'], out
+    assert 'pe_embedding' not in fake.docs(ITEMS)[out['item']['crop_id']]
