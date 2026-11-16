@@ -31,7 +31,11 @@ import struct
 import sys
 import types
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -484,19 +488,23 @@ def render() -> dict[str, str]:
     }
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(
+    argv: list[str] | None = None,
+    make: Callable[[], dict[str, str]] = render,
+    script: str = 'scripts/codegen/frame_engine_goldens.py',
+) -> int:
+    """Write the files ``make`` renders, or with ``--check`` compare them with the committed ones
+    (the text goldens' script runs its own renderer through this)."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--check', action='store_true', help='compare with the committed files')
     parser.add_argument('--out', type=Path, default=OUT)
     args = parser.parse_args(argv)
-    files = render()
+    files = make()
     if args.check:
         stale = [n for n, text in files.items() if not (args.out / n).is_file()
                  or (args.out / n).read_text(encoding='utf-8') != text]  # fmt: skip
         for name in stale:
-            sys.stderr.write(
-                f'{args.out / name} is stale: run scripts/codegen/frame_engine_goldens.py\n'
-            )
+            sys.stderr.write(f'{args.out / name} is stale: run {script}\n')
         return 1 if stale else 0
     args.out.mkdir(parents=True, exist_ok=True)
     for name, text in files.items():

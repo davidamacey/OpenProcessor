@@ -10,6 +10,7 @@ fn letterbox() -> Resample {
         dst_offset: 80 * 640,
         plane: 640 * 640,
         row_stride: 640,
+        filter: Filter::Antialias,
     }
 }
 
@@ -83,6 +84,7 @@ fn a_crop_reads_from_its_rectangle_and_the_scratch_starts_at_the_filters_first_r
         dst_offset: 3 * 224 * 224 + 37 * 224,
         plane: 224 * 224,
         row_stride: 224,
+        filter: Filter::Antialias,
     };
     let shape = resample_shape(&r, 12, 90).expect("shape");
     assert_eq!(
@@ -130,6 +132,32 @@ fn the_written_window_must_lie_inside_its_slice() {
 }
 
 #[test]
+fn reversed_planes_write_below_their_offset_and_stay_inside_the_slice() {
+    // the OCR detector's BGR input of 64 x 32: red written into the last plane
+    let plane = 64 * 32;
+    let r = Resample {
+        roi: [0, 0, 640, 320],
+        size: [64, 32],
+        window: [0, 0, 64, 32],
+        dst_offset: 2 * plane as usize,
+        plane: -plane,
+        row_stride: 64,
+        filter: Filter::Bilinear,
+    };
+    assert_eq!((r.first_byte(), r.extent()), (0, Some(3 * plane as usize)));
+    let early = Resample {
+        dst_offset: plane as usize,
+        ..r
+    };
+    assert_eq!(
+        early.extent(),
+        None,
+        "the blue plane would start before the slice"
+    );
+    assert_eq!(letterbox().first_byte(), 80 * 640);
+}
+
+#[test]
 fn the_filter_keys_follow_each_axis() {
     let r = Resample {
         roi: [0, 0, 1000, 750],
@@ -138,6 +166,7 @@ fn the_filter_keys_follow_each_axis() {
         dst_offset: 0,
         plane: 336 * 336,
         row_stride: 336,
+        filter: Filter::Antialias,
     };
     assert_eq!(
         r.x_key(),
@@ -145,7 +174,8 @@ fn the_filter_keys_follow_each_axis() {
             n_in: 1000,
             n_out: 448,
             left: 56,
-            take: 336
+            take: 336,
+            filter: Filter::Antialias,
         }
     );
     assert_eq!(
@@ -154,7 +184,8 @@ fn the_filter_keys_follow_each_axis() {
             n_in: 750,
             n_out: 336,
             left: 0,
-            take: 336
+            take: 336,
+            filter: Filter::Antialias,
         }
     );
     let w = r.x_key().weights().expect("weights");
@@ -171,6 +202,7 @@ fn key(n_out: i64) -> WeightKey {
         n_out,
         left: 0,
         take: n_out,
+        filter: Filter::Antialias,
     }
 }
 
@@ -235,6 +267,7 @@ fn an_upload_that_fails_is_the_callers_error_and_caches_nothing() {
         n_out: 5,
         left: 5,
         take: 3,
+        filter: Filter::Antialias,
     };
     assert!(matches!(
         cache.get(empty, |b: &[u8]| Ok::<_, GpuFault>(b.to_vec())),

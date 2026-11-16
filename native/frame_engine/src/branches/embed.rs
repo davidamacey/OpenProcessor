@@ -14,7 +14,7 @@ use gpu_frame::OutputTensor;
 
 use super::{InputSpec, fp32_output};
 use crate::geometry::{GeometryError, letterbox_geometry, whole_square_geometry};
-use crate::kernels::Resample;
+use crate::kernels::{Filter, Resample};
 use crate::pipeline::Tensor;
 use crate::wire::plan::{CropEmbedSpec, EmbedSpec};
 
@@ -45,6 +45,7 @@ pub fn frame_square(
             dst_offset: 0,
             plane: t * t,
             row_stride: t,
+            filter: Filter::Antialias,
         },
     ))
 }
@@ -100,6 +101,7 @@ pub fn crop_plan(
                 dst_offset: k * square + usize_of(g.top * t + g.left)?,
                 plane: t * t,
                 row_stride: t,
+                filter: Filter::Antialias,
             });
         }
         chunks.push(Chunk {

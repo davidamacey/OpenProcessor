@@ -233,6 +233,26 @@ used only for code, ids, hashes and paths.
 - **License:** IJG License, Modified (3-clause) BSD License and zlib License, as the library's
   `LICENSE.md` sets out; the binary carries the library unmodified
 
+### OpenCV (text boxes of `native/frame_engine`)
+- **Files:** `native/frame_engine/src/branches/ocr/contours.rs`, `min_rect.rs`, `fill.rs`
+- **Source:** OpenCV 5.0.0 (https://github.com/opencv/opencv, tag `5.0.0`):
+  `modules/imgproc/src/contours_new.cpp` and `contours_common.hpp` (`findContours`, Suzuki
+  border following), `modules/geometry/src/convhull.cpp`, `rotcalipers.cpp`
+  (`convexHull`, `minAreaRect`), `modules/core/src/types.cpp` (`RotatedRect::points`),
+  `modules/imgproc/src/drawing.cpp` (`fillPoly`, `Line`, `clipLine`)
+- **License:** Apache License 2.0
+- **Changed:** ported to Rust for the cases the DB post-process calls (8-bit mask, `RETR_LIST`,
+  `CHAIN_APPROX_SIMPLE`; integer points; line type 8, no shift), arithmetic type for type
+
+### Clipper (text box unclip of `native/frame_engine`)
+- **File:** `native/frame_engine/src/branches/ocr/offset.rs`
+- **Source:** Clipper 6.4.2 by Angus Johnson, `clipper.cpp` as pyclipper 1.4.0 ships it
+  (https://github.com/fonttools/pyclipper)
+- **License:** Boost Software License 1.0
+- **Changed:** `ClipperOffset` (`AddPath`, `FixOrientations`, `DoOffset`, `OffsetPoint`,
+  `DoRound`) ported to Rust for one closed polygon with round joins; the union that ends
+  `Execute` is reproduced for the simple outlines this input gives, not ported
+
 ---
 
 ## ICC colour profiles (test fixtures)
