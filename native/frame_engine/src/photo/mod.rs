@@ -11,9 +11,9 @@
 //!    bounded by `OP_FRAME_ENGINE_BUDGET_WAIT_SECONDS`, then an overload.
 //! 3. Round 1: the slices of the inputs that need only the frame (`letterbox`, `embed_frame`,
 //!    the face detector's passes), except those of the branches the plan makes late (`late`),
-//!    then one job on a decode lane: nvJPEG, the orientation and the colour step's gather (or the
-//!    host decode and its upload), the size check, the fills and resamples into those slices, one
-//!    wait for the lane's stream. Every round-1 call goes out.
+//!    then one job on a decode lane: nvJPEG and the orientation (or the host decode and its
+//!    upload), the size check, the colour step's gather, the fills and resamples into those
+//!    slices, one wait for the lane's stream. Every round-1 call goes out.
 //! 4. Settle: the detector's boxes as frame rectangles, or the request's stored boxes in their
 //!    place (`cut`); the faces (anchor decode and NMS on the finish pool) unless they are late.
 //! 5. The late round: each late branch's condition against the detector's classes; those that
@@ -51,7 +51,7 @@ use self::calls::PhotoCalls;
 use self::clock::{BUDGET, DECODE, QUEUE, StageClock};
 use self::device::{DecodeJob, Decoded, Device, Write};
 use self::rounds::Work;
-use self::source::{Origin, Source};
+use self::source::Source;
 use crate::admission::FrameBudget;
 use crate::branches::BUILT;
 use crate::colour::{Colour, ColourError, ColourStep, Table, Upload};
@@ -406,21 +406,19 @@ where
         let late = late::late(plan, &BUILT);
         let mut round1 = work.stage_round1(plan, &runs, &late).await?;
         let table = match &colour {
-            Some(Colour::Convert(t)) => Some(Arc::clone(t)),
-            Some(Colour::Srgb | Colour::Ignored) | None => None,
+            Colour::Convert(t) => Some(Arc::clone(t)),
+            Colour::Srgb | Colour::Ignored => None,
         };
         let writes = std::mem::take(&mut round1.writes);
         let (frame, inputs) = self
             .decode(&mut work, &source, permit, writes, table)
             .await?;
-        if let Some(colour) = &colour {
-            self.metrics
-                .colour
-                .get_or_create(&ByOutcome {
-                    outcome: colour.label().into(),
-                })
-                .inc();
-        }
+        self.metrics
+            .colour
+            .get_or_create(&ByOutcome {
+                outcome: colour.label().into(),
+            })
+            .inc();
         let calls = std::mem::take(&mut round1.calls);
         let sent = work.send_round1(calls, inputs);
         let after = work
@@ -444,12 +442,7 @@ impl<D: Device, B: FrameBudget> PhotoFlow<D, B> {
     /// What the colour step does with the photo: its table built once per profile on the finish
     /// pool (the job's handle is kept by a task of its own, since a dropped handle tells the pool
     /// the job is unwanted), waited for here without holding any pool thread.
-    ///
-    /// `None` on the host route, whose frame no colour step touches.
-    async fn colour_of(&self, source: &Source) -> Result<Option<Colour>, Stop> {
-        if source.origin == Origin::Host {
-            return Ok(None);
-        }
+    async fn colour_of(&self, source: &Source) -> Result<Colour, Stop> {
         let device = Arc::clone(&self.device);
         let upload: Upload = Arc::new(move |host: &[u8]| device.colour_table(host));
         let device = Arc::clone(&self.device);
@@ -463,7 +456,6 @@ impl<D: Device, B: FrameBudget> PhotoFlow<D, B> {
         self.colour
             .lookup(source.icc.as_deref(), source.components, &spawn, &upload)
             .await
-            .map(Some)
             .map_err(|e| match e {
                 ColourError::Overload(o) => Stop::Fail(PipelineError::Overload(o)),
                 ColourError::Fault(f) => f.into(),

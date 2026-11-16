@@ -37,9 +37,11 @@ pub struct Source {
     pub reserve: u64,
     /// `gpu` or `cpu_<reason>` (`src/domain/decode_route.py`).
     pub decode_route: String,
-    /// The embedded profile the colour step reads (`JpegHeader::icc`).
+    /// The embedded profile the colour step reads (`JpegHeader::icc`; on the host route an `RGB`
+    /// or `RGBA` image's, from `host::admit`).
     pub icc: Option<Vec<u8>>,
-    /// Colour components of the frame the profile describes (`JpegHeader::components`).
+    /// Colour components of the frame the profile describes (`JpegHeader::components`; 3 on the
+    /// host route, whose profile is a colour image's only).
     pub components: u32,
 }
 
@@ -81,8 +83,8 @@ pub fn decide(
                 need: admitted.need,
                 reserve: budget::host_reserve_bytes(admitted.size, widths),
                 decode_route: format!("cpu_{reason}"),
-                icc: None,
-                components: 0,
+                icc: admitted.icc,
+                components: 3,
             })
         }
     }

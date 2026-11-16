@@ -13,8 +13,10 @@
 //! JPEG goes through libjpeg-turbo (`jpeg`), everything else through the `image` crate
 //! (`formats`); both apply Pillow's mode conversions (`modes`) and its orientation rule
 //! (`orientation`), the pixels moved by [`orient_host`], the host twin of `orient.cu`. The
-//! profile of an `RGB` or `RGBA` image travels with the frame to the colour step, the one colour
-//! path of both routes (plan 17 section 3, "Colour").
+//! profile of an `RGB` or `RGBA` image is read with the size, from the header as Pillow's
+//! `Image.open` reads `info["icc_profile"]`, so the colour step's table is ready before the decode
+//! job; the lane gathers the upright frame through it after the upload, the one colour path of
+//! both routes (plan 17 section 3, "Colour").
 
 mod formats;
 mod jpeg;
@@ -31,13 +33,11 @@ pub const MAX_IMAGE_PIXELS: u64 = 89_478_485;
 const EXIF_TAG: &[u8] = b"Exif\0\0";
 const XMP_TAG: &[u8] = b"http://ns.adobe.com/xap/1.0/\0";
 
-/// A decoded frame before orientation: interleaved RGB and the profile Pillow would hand to the
-/// colour step (an `RGB` or `RGBA` image's only).
+/// A decoded frame before orientation: interleaved RGB.
 struct Pixels {
     rgb: Vec<u8>,
     width: u32,
     height: u32,
-    icc: Option<Vec<u8>>,
 }
 
 /// An upright frame decoded on the host.
@@ -49,17 +49,17 @@ pub struct HostFrame {
     pub width: u32,
     /// Rows of the upright frame.
     pub height: u32,
-    /// The embedded profile of an `RGB` or `RGBA` image, for the colour step.
-    pub icc: Option<Vec<u8>>,
 }
 
 /// A photo the host route admitted: its pixel count by the header and the bytes it reserves.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Admitted {
     /// `(width, height)` of the upright frame.
     pub size: (u32, u32),
     /// Bytes of the frame against the budget (`prep_budget.host_need_bytes`).
     pub need: u64,
+    /// The embedded profile of an `RGB` or `RGBA` image, for the colour step.
+    pub icc: Option<Vec<u8>>,
 }
 
 /// `prep_budget.host_need_bytes` without renditions: the one upright frame.
@@ -115,16 +115,32 @@ fn probe(data: &[u8]) -> Result<(u32, u32, u32), String> {
     }
 }
 
-/// Step 1: the upright size and need of an admitted photo.
+/// The embedded profile of an `RGB` or `RGBA` image (`image_decode._decode` reads it from
+/// `Image.open`'s header, for those modes only; a JPEG's for three components). The native flow
+/// builds the colour table before the decode job, so it is read here, from the header too.
+fn profile(data: &[u8]) -> Result<Option<Vec<u8>>, String> {
+    if is_jpeg(data) {
+        let h = jpeg_header(data);
+        Ok(if h.components == 3 { h.icc } else { None })
+    } else if png::is_png(data) {
+        png::profile(data)
+    } else {
+        formats::profile(data)
+    }
+}
+
+/// Step 1: the upright size, need and profile of an admitted photo (the profile after the size
+/// gates, so a photo past them is `huge` whatever its profile).
 ///
 /// # Errors
 ///
 /// The photo's status: `decoder` when no decoder here opens it, `huge` past the gates.
 pub fn admit(data: &[u8], max_megapixels: f64) -> Result<Admitted, &'static str> {
-    let (w, h, tag) = probe(data).map_err(|e| {
+    let failed = |e: String| {
         tracing::debug!("host probe failed: {e}");
         "decoder"
-    })?;
+    };
+    let (w, h, tag) = probe(data).map_err(failed)?;
     let pixels = u64::from(w) * u64::from(h);
     if pixels > 2 * MAX_IMAGE_PIXELS {
         return Err("huge");
@@ -139,6 +155,7 @@ pub fn admit(data: &[u8], max_megapixels: f64) -> Result<Admitted, &'static str>
     Ok(Admitted {
         size: oriented_dims(w, h, tag),
         need: host_need_bytes(w, h),
+        icc: profile(data).map_err(failed)?,
     })
 }
 
@@ -156,25 +173,18 @@ pub fn decode(data: &[u8]) -> Result<HostFrame, String> {
             rgb: d.pixels,
             width: d.width,
             height: d.height,
-            icc: if h.components == 3 { h.icc } else { None },
         }
     } else if png::is_png(data) {
         png::decode(data)?
     } else {
         formats::decode(data)?
     };
-    let icc = p.icc;
     let (rgb, width, height) = if reorients(tag) {
         orient_host(&p.rgb, p.width, p.height, tag)
     } else {
         (p.rgb, p.width, p.height)
     };
-    Ok(HostFrame {
-        rgb,
-        width,
-        height,
-        icc,
-    })
+    Ok(HostFrame { rgb, width, height })
 }
 
 /// Step 2: the frame decoded on the lane.

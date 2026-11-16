@@ -70,29 +70,33 @@ fn truecolour(original: ExtendedColorType) -> bool {
     )
 }
 
-/// The frame and its profile.
-pub fn decode(data: &[u8]) -> Result<Pixels, String> {
+/// The profile of an `RGB` or `RGBA` image, from the header.
+pub fn profile(data: &[u8]) -> Result<Option<Vec<u8>>, String> {
     let (reader, _) = reader(data)?;
     let mut decoder = reader.into_decoder().map_err(err)?;
-    let original = decoder.original_color_type();
+    if truecolour(decoder.original_color_type()) {
+        decoder.icc_profile().map_err(err)
+    } else {
+        Ok(None)
+    }
+}
+
+/// The frame.
+pub fn decode(data: &[u8]) -> Result<Pixels, String> {
+    let (reader, _) = reader(data)?;
+    let decoder = reader.into_decoder().map_err(err)?;
     if matches!(
-        original,
+        decoder.original_color_type(),
         ExtendedColorType::Cmyk8 | ExtendedColorType::Cmyk16
     ) {
         return tiff_cmyk(data);
     }
-    let icc = if truecolour(original) {
-        decoder.icc_profile().map_err(err)?
-    } else {
-        None
-    };
     let image = DynamicImage::from_decoder(decoder).map_err(err)?;
     let (width, height) = (image.width(), image.height());
     Ok(Pixels {
         rgb: to_rgb(image)?,
         width,
         height,
-        icc,
     })
 }
 
@@ -114,7 +118,6 @@ fn tiff_cmyk(data: &[u8]) -> Result<Pixels, String> {
         rgb: modes::cmyk_to_rgb(&cmyk),
         width,
         height,
-        icc: None,
     })
 }
 

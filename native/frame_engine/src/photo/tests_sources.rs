@@ -110,10 +110,11 @@ async fn a_stored_box_that_is_not_a_number_fails_the_photo_as_pythons_round_does
 }
 
 const P3: &[u8] = include_bytes!("../../../../tests/fixtures/icc/DisplayP3-v4.icc");
+const SRGB: &[u8] = include_bytes!("../../../../tests/fixtures/icc/colord-sRGB.icc");
+const PROGRESSIVE: &[u8] = include_bytes!("../../tests/golden/host/jpeg_progressive.jpg");
 
-/// `jpeg` with an ICC profile in one APP2 chunk after the start marker.
-fn tagged(w: u16, h: u16, icc: &[u8]) -> Bytes {
-    let plain = jpeg(w, h, 1);
+/// `plain` with an ICC profile in one APP2 chunk after the start marker.
+fn with_icc(plain: &[u8], icc: &[u8]) -> Bytes {
     let mut payload = b"ICC_PROFILE\0\x01\x01".to_vec();
     payload.extend_from_slice(icc);
     let mut b = plain[..2].to_vec();
@@ -126,6 +127,19 @@ fn tagged(w: u16, h: u16, icc: &[u8]) -> Bytes {
     b.extend_from_slice(&payload);
     b.extend_from_slice(&plain[2..]);
     Bytes::from(b)
+}
+
+/// `jpeg` with an ICC profile.
+fn tagged(w: u16, h: u16, icc: &[u8]) -> Bytes {
+    with_icc(&jpeg(w, h, 1), icc)
+}
+
+fn gathers(b: &Bed) -> usize {
+    b.fake
+        .events()
+        .iter()
+        .filter(|e| matches!(e, Event::Gather))
+        .count()
 }
 
 fn colour_count(b: &Bed, outcome: &str) -> u64 {
@@ -176,5 +190,36 @@ async fn a_photo_with_a_converting_profile_is_gathered_through_one_table_per_pro
             .count(),
         2
     );
+    assert_released(&b).await;
+}
+
+#[tokio::test]
+async fn a_host_route_photo_with_a_converting_profile_is_gathered_after_its_upload() {
+    let b = bed();
+    let answer = b
+        .flow
+        .process(photo_of(with_icc(PROGRESSIVE, P3), FRAME))
+        .await
+        .expect("answer");
+    assert_eq!(
+        (answer.status.as_str(), answer.decode_route.as_str()),
+        ("ok", "cpu_progressive")
+    );
+    assert_eq!(
+        gathers(&b),
+        1,
+        "the upright host frame goes through the table"
+    );
+    assert_eq!(colour_count(&b, "converted"), 1);
+    for image in [with_icc(PROGRESSIVE, SRGB), Bytes::from_static(PROGRESSIVE)] {
+        let answer = b
+            .flow
+            .process(photo_of(image, FRAME))
+            .await
+            .expect("answer");
+        assert_eq!(answer.decode_route, "cpu_progressive");
+    }
+    assert_eq!(gathers(&b), 1, "an sRGB profile or none: left as decoded");
+    assert_eq!(colour_count(&b, "srgb"), 2);
     assert_released(&b).await;
 }

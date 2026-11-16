@@ -350,15 +350,13 @@ fn weight_sets<I>(
 /// A decoded frame on the card, or the photo's status.
 type LaneFrame = Result<(DeviceBuf, u32, u32), &'static str>;
 
-/// nvJPEG, then the EXIF tag applied by `orient.cu`; a frame of another size is `decoder`. Then
-/// the colour step's gather through `colour`, in place (`colour.cu`).
+/// nvJPEG, then the EXIF tag applied by `orient.cu`; a frame of another size is `decoder`.
 fn nvjpeg_frame(
     shared: &Shared,
     lane: &mut Lane,
     image: bytes::Bytes,
     orientation: u32,
     size: (u32, u32),
-    colour: Option<&crate::colour::Table>,
 ) -> Result<LaneFrame, GpuFault> {
     let stream = Arc::clone(lane.stream());
     let d = match lane.decode(image) {
@@ -378,10 +376,6 @@ fn nvjpeg_frame(
     };
     if (frame.1, frame.2) != size {
         return Ok(Err("decoder"));
-    }
-    if let Some(table) = colour {
-        let pixels = frame.1 as usize * frame.2 as usize;
-        shared.kernels.colour(&stream, &frame.0, pixels, &**table)?;
     }
     Ok(Ok(frame))
 }
@@ -429,11 +423,17 @@ fn decode_on_lane(
             .unwrap_or_else(PoisonError::into_inner);
         weight_sets(shared, &mut cache, &stream, &writes)?
     };
-    let decoded = clock.time(DECODE, || match origin {
-        Origin::Gpu { orientation } => {
-            nvjpeg_frame(shared, lane, image, orientation, size, colour.as_ref())
+    let decoded = clock.time(DECODE, || -> Result<LaneFrame, GpuFault> {
+        let decoded = match origin {
+            Origin::Gpu { orientation } => nvjpeg_frame(shared, lane, image, orientation, size)?,
+            Origin::Host => host_frame(shared, &stream, &image, size)?,
+        };
+        // the upright frame of either route, as `image_decode` converts after the orientation
+        if let (Ok((buf, w, h)), Some(table)) = (&decoded, &colour) {
+            let pixels = *w as usize * *h as usize;
+            shared.kernels.colour(&stream, buf, pixels, &**table)?;
         }
-        Origin::Host => host_frame(shared, &stream, &image, size),
+        Ok(decoded)
     })?;
     let (buf, width, height) = match decoded {
         Ok(frame) => frame,
