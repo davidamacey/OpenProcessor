@@ -25,11 +25,12 @@ use tokio::sync::Notify;
 
 use crate::branches::InputSpec;
 use crate::branches::crops::{self, CropJpeg};
+use crate::branches::faces::warp::FaceWarpKernel;
 use crate::fault::GpuFault;
 use crate::kernels::{FrameRef, PrepKernels, Staging, WEIGHT_CACHE_BYTES, WeightCache, WeightSet};
 use crate::photo::clock::{DECODE, JobClock, SYNCED};
 use crate::photo::device::{
-    DecodeJob, Decoded, Device, JobResult, LaunchJob, Launched, ModelCall, Write,
+    DecodeJob, Decoded, Device, JobResult, LaunchJob, Launched, ModelCall, Warp, WarpKind, Write,
 };
 
 /// A decoded, oriented frame: interleaved RGB on the card, and the budget it holds.
@@ -77,6 +78,7 @@ impl Drop for WaitOnDrop {
 struct Shared {
     frames: FramePool,
     kernels: PrepKernels,
+    face_warp: FaceWarpKernel,
     /// One cache per lane, locked only by that lane's thread (lanes own their state in gpu_frame).
     lane_weights: Vec<Mutex<WeightCache<DeviceBuf>>>,
     stage_sync: bool,
@@ -139,10 +141,13 @@ impl Gpu {
         let host = Arc::new(gpu_frame::HostCount::default());
         let lanes = Lanes::new(&frames, &host, cfg.lanes, None)
             .map_err(|e| pool_failed("decode lanes", e))?;
-        let kernels = PrepKernels::load(&gpu_frame::Kernels::new(ctx)?)?;
+        let loader = gpu_frame::Kernels::new(ctx)?;
+        let kernels = PrepKernels::load(&loader)?;
+        let face_warp = FaceWarpKernel::load(&loader)?;
         let shared = Arc::new(Shared {
             frames: frames.clone(),
             kernels,
+            face_warp,
             lane_weights: (0..lanes.count())
                 .map(|_| Mutex::new(WeightCache::new(WEIGHT_CACHE_BYTES)))
                 .collect(),
@@ -360,6 +365,33 @@ fn decode_on_lane(
     })
 }
 
+/// The warps of a launch, each timed as its stage (waited for at its end under
+/// `OP_FRAME_ENGINE_STAGE_SYNC`).
+fn warp_inputs(
+    shared: &Shared,
+    stream: &Arc<Stream>,
+    frame: &dyn FrameRef,
+    warps: &[Warp<gpu_frame::Slice>],
+    clock: &mut JobClock,
+) -> Result<(), GpuFault> {
+    for w in warps {
+        clock.time(w.stage, || -> Result<(), GpuFault> {
+            match &w.kind {
+                WarpKind::Faces(f) => {
+                    shared
+                        .face_warp
+                        .launch(&shared.frames, stream, frame, &w.input, f)?;
+                }
+            }
+            if shared.stage_sync && SYNCED.contains(&w.stage) {
+                stream.synchronize()?;
+            }
+            Ok(())
+        })?;
+    }
+    Ok(())
+}
+
 fn launch_on_thread(
     shared: &Shared,
     t: &mut LaunchThread,
@@ -368,19 +400,22 @@ fn launch_on_thread(
     let LaunchJob {
         frame,
         writes,
+        warps,
         blur,
+        blur_stage,
         request,
     } = job;
     let _wait = WaitOnDrop(Arc::clone(&t.stream));
     let mut clock = JobClock::new(request);
     let sets = weight_sets(shared, &mut t.weights, &t.stream, &writes)?;
     write_inputs(shared, &t.stream, &*frame, &writes, &sets, &mut clock)?;
+    warp_inputs(shared, &t.stream, &*frame, &warps, &mut clock)?;
     let sums = if blur.is_empty() {
         t.stream.synchronize()?;
         Vec::new()
     } else {
         // the sums are read back after a wait for the stream, which covers the squares too
-        clock.time(crate::photo::clock::BLUR, || {
+        clock.time(blur_stage, || {
             shared
                 .kernels
                 .lap_sums(&shared.frames, &t.stream, &mut t.staging, &*frame, &blur)
@@ -388,6 +423,7 @@ fn launch_on_thread(
     };
     Ok(Launched {
         inputs: writes.into_iter().map(|w| w.input).collect(),
+        warped: warps.into_iter().map(|w| w.input).collect(),
         blur: sums,
         stages: clock.stages,
     })
@@ -477,6 +513,15 @@ impl Device for Gpu {
         self.finish.submit(cancel, move |t: &mut FinishThread| {
             crop_on_thread(t, frame, rect)
         })
+    }
+
+    fn host<T: Send + 'static>(
+        &self,
+        f: impl FnOnce() -> T + Send + 'static,
+        cancel: &CancelToken,
+    ) -> JobResult<T> {
+        self.finish
+            .submit(cancel, move |_: &mut FinishThread| Ok(f()))
     }
 
     async fn infer(

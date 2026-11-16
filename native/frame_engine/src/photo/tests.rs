@@ -178,6 +178,7 @@ async fn the_hand_offs_come_in_the_python_order_and_each_stage_is_observed() {
             Event::Decode { .. } => "decode".into(),
             Event::Launch { .. } => "launch".into(),
             Event::Crop(_) => "crop".into(),
+            Event::Warps(_) => "warps".into(),
             Event::Call { model, .. } => format!("call {model}"),
         })
         .collect();
@@ -205,7 +206,8 @@ async fn the_hand_offs_come_in_the_python_order_and_each_stage_is_observed() {
     // round 2: one launch for the crop squares and the blur sums of the frame and each box
     assert_eq!(events[3], Event::Launch { writes: 1, blur: 4 });
     let text = b.flow.metrics.render();
-    for stage in clock::ALL {
+    // the ingest plan runs no face branch
+    for stage in clock::ALL.iter().filter(|s| !s.starts_with("face_")) {
         assert!(
             text.contains(&format!(
                 "op_frame_engine_stage_observations_total{{stage=\"{stage}\"}} 1"
@@ -712,14 +714,14 @@ async fn stored_boxes_and_unbuilt_branches_are_refused_as_n0_says() {
     };
     let failed = b.flow.process(p).await.expect_err("not built");
     assert!(matches!(&failed, PipelineError::Engine(m) if m.contains("N1a")));
-    let faces = r#"{"version": 1, "branches": ["detect", "faces"], "crops": "none", "detector": {"model": "det", "input_size": 640, "letterbox_fill": 114}, "faces": {"detector": "scrfd", "input_size": 640, "recogniser": "arcface", "batch": 32, "score_min": 0.5, "nms": 0.4, "max_faces": 50}}"#;
-    let answer = b.flow.process(photo(faces)).await.expect("answer");
+    let ocr = r#"{"version": 1, "branches": ["detect", "ocr"], "crops": "none", "detector": {"model": "det", "input_size": 640, "letterbox_fill": 114}, "ocr": {"detector": "ocr_det", "recogniser": "ocr_rec", "batch": 16, "max_lines": 50, "det_side": 960}}"#;
+    let answer = b.flow.process(photo(ocr)).await.expect("answer");
     assert_eq!(
-        answer.branches["faces"],
+        answer.branches["ocr"],
         BranchState::Error(UNSUPPORTED_BRANCH)
     );
     assert_eq!(answer.branches["detect"], BranchState::Ok);
-    assert!(answer.outputs.iter().all(|(n, _)| !n.starts_with("face")));
+    assert!(answer.outputs.iter().all(|(n, _)| !n.starts_with("ocr")));
 }
 
 #[tokio::test]
@@ -744,3 +746,6 @@ async fn the_crop_jpegs_are_packed_as_bytes_elements() {
         "in detection order"
     );
 }
+
+#[path = "faces_tests.rs"]
+mod faces;

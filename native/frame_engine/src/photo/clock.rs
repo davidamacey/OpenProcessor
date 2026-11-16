@@ -39,9 +39,19 @@ pub const CROP_COPY: &str = "crop_copy";
 pub const CROP_JPEG: &str = "crop_jpeg";
 /// Laplacian sums for the blur measure.
 pub const BLUR: &str = "blur";
+/// Resample of the face detector's passes.
+pub const FACE_LETTERBOX: &str = "face_letterbox";
+/// The face detector's calls and their decode and NMS.
+pub const FACE_DETECT: &str = "face_detect";
+/// Warp of the aligned faces into the recogniser batches.
+pub const FACE_ALIGN: &str = "face_align";
+/// The face recogniser's calls.
+pub const FACE_EMBED: &str = "face_embed";
+/// Laplacian sums of the face boxes.
+pub const FACE_BLUR: &str = "face_blur";
 
 /// Every stage this engine records, in the contract's order.
-pub const ALL: [&str; 11] = [
+pub const ALL: [&str; 16] = [
     QUEUE,
     BUDGET,
     DECODE,
@@ -53,11 +63,24 @@ pub const ALL: [&str; 11] = [
     CROP_COPY,
     CROP_JPEG,
     BLUR,
+    FACE_LETTERBOX,
+    FACE_DETECT,
+    FACE_ALIGN,
+    FACE_EMBED,
+    FACE_BLUR,
 ];
 
 /// The kernel stages whose end waits for the stream under `OP_FRAME_ENGINE_STAGE_SYNC`
-/// (`stage_metrics.ASYNC_STAGES`, the ones of N0's branches).
-pub const SYNCED: [&str; 4] = [LETTERBOX, EMBED_FRAME, EMBED_CROPS, BLUR];
+/// (`stage_metrics.ASYNC_STAGES`, the ones of the branches built here).
+pub const SYNCED: [&str; 7] = [
+    LETTERBOX,
+    EMBED_FRAME,
+    EMBED_CROPS,
+    BLUR,
+    FACE_LETTERBOX,
+    FACE_ALIGN,
+    FACE_BLUR,
+];
 
 /// One photo's seconds per stage, published to the metrics when dropped.
 pub struct StageClock {

@@ -108,11 +108,11 @@ pub fn args(
 }
 
 /// The loaded warp kernel; one instance serves every launch thread.
-pub struct WarpKernel {
+pub struct FaceWarpKernel {
     warp: Kernel,
 }
 
-impl WarpKernel {
+impl FaceWarpKernel {
     /// Compile the kernel for the current device.
     ///
     /// # Errors

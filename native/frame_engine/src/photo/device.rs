@@ -19,6 +19,7 @@ use tokio::time::Instant;
 
 use crate::branches::InputSpec;
 use crate::branches::crops::CropJpeg;
+use crate::branches::faces::warp::FaceWarps;
 use crate::fault::GpuFault;
 use crate::kernels::Resample;
 use crate::pipeline::RequestState;
@@ -77,14 +78,19 @@ pub enum Decoded<F, I> {
     },
 }
 
-/// Round-2 kernels on the launch pool: the writes, then the blur sums of `blur`, one wait.
+/// Round-2 kernels on the launch pool: the writes, the warps, then the blur sums of `blur`, one
+/// wait.
 pub struct LaunchJob<F, I> {
     /// The frame the kernels read.
     pub frame: Arc<F>,
     /// The round-2 writes, one per input slice.
     pub writes: Vec<Write<I>>,
+    /// The round-2 warps, one per input slice.
+    pub warps: Vec<Warp<I>>,
     /// Rectangles `x1, y1, x2, y2` in frame pixels whose Laplacian sums are taken; may be empty.
     pub blur: Vec<[i64; 4]>,
+    /// Stage the blur sums' seconds are counted under (`blur`, `face_blur`).
+    pub blur_stage: &'static str,
     /// The request the job belongs to, for its stage and cancel state.
     pub request: Arc<RequestState>,
 }
@@ -93,10 +99,32 @@ pub struct LaunchJob<F, I> {
 pub struct Launched<I> {
     /// The slices that were written, in the order of the writes.
     pub inputs: Vec<I>,
+    /// The slices the warps wrote, in the order of the warps.
+    pub warped: Vec<I>,
     /// `(sum, sum of squares)` of the Laplacian for each blur rectangle, in the order sent.
     pub blur: Vec<[i64; 2]>,
     /// Seconds per stage measured inside the job.
     pub stages: Stages,
+}
+
+/// Which warp kernel writes a slice, with its parameters: one variant per kernel, matched by
+/// name at the launch (no catch-all arm), so a kernel the launch stage does not know fails to
+/// compile.
+#[derive(Debug, Clone, PartialEq)]
+pub enum WarpKind {
+    /// `faces_warp.cu`: aligned face crops for the recogniser.
+    Faces(FaceWarps),
+}
+
+/// What a warp kernel writes into one region slice (the whole slice), timed as `stage`.
+#[derive(Debug)]
+pub struct Warp<I> {
+    /// The region slice the warp fills.
+    pub input: I,
+    /// The kernel and its parameters.
+    pub kind: WarpKind,
+    /// Stage the warp's seconds are counted under.
+    pub stage: &'static str,
 }
 
 /// One model call reading one slice; the slice comes back with the answer.
@@ -166,6 +194,21 @@ pub trait Device: Send + Sync + 'static {
         rect: [i64; 4],
         cancel: &CancelToken,
     ) -> JobResult<CropJpeg>;
+
+    /// Runs `f` on the finish pool: CPU post-processing of one photo (anchor decode and NMS, CTC,
+    /// box geometry), never a blocking wait and never work that feeds the card. The job waits in
+    /// the finish pool's queue, which admission bounds; a photo cancelled before the job starts
+    /// drops it unrun.
+    ///
+    /// # Errors
+    ///
+    /// The pool is shut down, or the job is cancelled before it starts or panics (a panic fails
+    /// the job, never the pool thread).
+    fn host<T: Send + 'static>(
+        &self,
+        f: impl FnOnce() -> T + Send + 'static,
+        cancel: &CancelToken,
+    ) -> JobResult<T>;
 
     /// Send one call; dropping the future cancels it and gives the slice back.
     fn infer(
