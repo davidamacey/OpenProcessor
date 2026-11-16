@@ -2,3 +2,10 @@
 #![forbid(unsafe_code)]
 
 pub mod codec;
+pub mod plan;
+
+pub use plan::{
+    Branch, CROP_FILL, CropEmbedSpec, CropRecipe, CropVectors, CropsMode,
+    DEFAULT_RENDITION_QUALITY, DetLimit, DetectorSpec, EmbedSpec, EncoderModels, EnginePlan,
+    FaceSpec, FrameRecipe, IngestPlan, OcrSpec, ProtocolVersion, RenditionFormat, RenditionSpec,
+};

@@ -363,6 +363,15 @@ repos:
         pass_filenames: false
         files: ^(native/op_engine_client/tests/goldens/bytes_codec\.json|scripts/codegen/(frame_engine_bytes_goldens|frame_engine_goldens)\.py)$
 
+      # The plan texts the Python client writes, for op_engine_client's plan builder: runs the
+      # real ingest and reprocess plan builders, so it needs the venv's dependencies.
+      - id: frame-engine-plan-build-cases-drift
+        name: op_engine_client plan-build cases are in sync
+        entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/codegen/frame_engine_plan_build_cases.py --check'
+        language: system
+        pass_filenames: false
+        files: ^(contracts/json/frame_engine_plan_build_cases\.json|src/domain/frame_engine_wire\.py|src/services/curation/(ingest_gpu_decode|reprocess_gpu_embed)\.py|scripts/codegen/frame_engine_plan_(cases|build_cases)\.py)$
+
   # Commit message linting (conventional commits). Scope stays optional.
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v4.4.0

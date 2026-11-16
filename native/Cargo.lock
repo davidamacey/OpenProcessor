@@ -1165,6 +1165,7 @@ name = "op_engine_client"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "op_config",
  "serde",
  "serde_json",
  "sha2",
