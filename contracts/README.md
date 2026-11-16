@@ -15,6 +15,7 @@ not edit by hand: change the Python source and regenerate.
 | `json/frame_engine_plan_cases.json` | Every plan text of `scripts/codegen/frame_engine_plan_cases.py` with what `parse_plan` answers (the parsed plan, or the fault and its message, which is the status details; a `bad_json` case carries no message); the native parser must give the same on each case | `parse_plan` in `src/domain/frame_engine_wire.py` |
 | `json/capture_cases.json` | Tag sets of one ExifTool read (hand-written and recorded from the committed test images, `native/op_media/tests/fixtures/exiftool/recorded.json`) with what `parse_capture` answers, and what `apply_location_policy` answers under each policy; the Rust capture mapping (`native/op_media`) must give the same on each case | `parse_capture` in `src/domain/capture_metadata.py`, `apply_location_policy` in `src/domain/location_policy.py` |
 | `openapi/curation.json` | `app.openapi()` filtered to paths under the curation API prefix (default `/curation`) plus only the components those paths reference. Keys are sorted, and the app version is left out, so diffs show real contract changes only | the FastAPI app (`src/main.py`) |
+| `openapi/core.json` | The rest of `app.openapi()`: every operation outside the curation API prefix (`/detect`, `/faces`, `/embed`, `/search`, `/models`, `/health`, ... and their `/v1` twins) plus only the components those paths reference. Same sorting and version rule as `curation.json`; the native core routes are held to it | the FastAPI app (`src/main.py`) |
 
 The generator always runs with default configuration. `OP_*` variables in
 your shell and any `.env` file are ignored, so everyone produces the same
@@ -32,7 +33,7 @@ Individual generators (each supports `--check`):
 
 ```bash
 python3 scripts/codegen/export_region_status_to_ts.py [--check]
-python3 scripts/codegen/export_api_contracts.py [--check] [--only item-wire|class-sources|keymap-actions|openapi|frame-engine]
+python3 scripts/codegen/export_api_contracts.py [--check] [--only item-wire|class-sources|keymap-actions|openapi|core-openapi|frame-engine]
 .venv/bin/python scripts/codegen/capture_cases.py [--check] [--record]   # --record needs exiftool
 ```
 
