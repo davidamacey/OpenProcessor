@@ -495,12 +495,13 @@ def main(
     argv: list[str] | None = None,
     make: Callable[[], dict[str, str]] = render,
     script: str = 'scripts/codegen/frame_engine_goldens.py',
+    out: Path = OUT,
 ) -> int:
-    """Write the files ``make`` renders, or with ``--check`` compare them with the committed ones
-    (the text goldens' script runs its own renderer through this)."""
+    """Write the files ``make`` renders into ``out``, or with ``--check`` compare them with the
+    committed ones (the other goldens' scripts run their own renderer through this)."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--check', action='store_true', help='compare with the committed files')
-    parser.add_argument('--out', type=Path, default=OUT)
+    parser.add_argument('--out', type=Path, default=out)
     args = parser.parse_args(argv)
     files = make()
     if args.check:

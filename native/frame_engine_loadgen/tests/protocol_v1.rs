@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use bytes::Bytes;
-use frame_engine_loadgen::client::{self, EngineClient, MODEL, pack_bytes, unpack_bytes};
+use frame_engine_loadgen::client::{self, EngineClient, MODEL};
 use frame_engine_loadgen::exchange::{Exchange, Outcome};
 use frame_engine_loadgen::list::PhotoList;
 use frame_engine_loadgen::measure::{Setup, measure};
@@ -26,6 +26,7 @@ use frame_engine_loadgen::proto::{
     ModelStatisticsRequest, ModelStatisticsResponse, ServerLiveRequest, ServerLiveResponse,
     ServerReadyRequest, ServerReadyResponse, StatisticDuration,
 };
+use op_engine_client::codec::{pack_bytes, unpack_bytes};
 use tokio::net::TcpListener;
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::{Request, Response, Status};

@@ -124,7 +124,7 @@ _ENGINE_STAND_INS = (
 CRATE_DEPENDENCIES: dict[str, frozenset[str]] = {
     'gpu_frame': frozenset(),
     'frame_engine': frozenset({'gpu_frame'}),
-    'frame_engine_loadgen': frozenset({'gpu_frame'}),
+    'frame_engine_loadgen': frozenset({'gpu_frame', 'op_engine_client'}),
     'op_config': frozenset(),
     'op_storage': frozenset({'op_config'}),
     'op_media': frozenset({'op_config'}),

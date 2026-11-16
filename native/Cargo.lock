@@ -488,6 +488,7 @@ dependencies = [
  "futures-util",
  "gpu_frame",
  "nvml-wrapper",
+ "op_engine_client",
  "prost",
  "protox",
  "serde",
@@ -1162,6 +1163,12 @@ version = "0.1.0"
 [[package]]
 name = "op_engine_client"
 version = "0.1.0"
+dependencies = [
+ "bytes",
+ "serde",
+ "serde_json",
+ "sha2",
+]
 
 [[package]]
 name = "op_ingest"
