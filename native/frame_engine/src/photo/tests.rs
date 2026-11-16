@@ -671,7 +671,7 @@ async fn a_panic_in_a_lane_job_fails_that_photo_and_the_lane_serves_the_next() {
 }
 
 #[tokio::test]
-async fn photos_the_gpu_route_does_not_take_answer_without_a_decode() {
+async fn photos_no_decoder_takes_answer_without_a_decode() {
     let b = bed();
     for (image, status) in [
         (Bytes::from_static(b"\x89PNG\r\n\x1a\n...."), "decoder"),
@@ -688,17 +688,6 @@ async fn photos_the_gpu_route_does_not_take_answer_without_a_decode() {
             (status, "none")
         );
     }
-    let mut truncated = jpeg(1000, 750, 1).to_vec();
-    truncated.truncate(truncated.len() - 2);
-    let answer = b
-        .flow
-        .process(photo_of(Bytes::from(truncated), INGEST))
-        .await
-        .expect("answer");
-    assert_eq!(
-        answer.status, "decoder",
-        "cpu_truncated is the host route's (N1a)"
-    );
     assert_eq!(b.fake.events(), []);
 }
 
@@ -749,3 +738,5 @@ async fn the_crop_jpegs_are_packed_as_bytes_elements() {
 
 #[path = "faces_tests.rs"]
 mod faces;
+#[path = "host_tests.rs"]
+mod host;

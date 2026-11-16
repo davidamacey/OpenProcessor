@@ -15,18 +15,27 @@ path = "src/main.rs"
 [dependencies]
 bytes = { workspace = true }
 clap = { version = "=4.6.7", default-features = false, features = ["derive", "error-context", "help", "std", "usage"] }
+# PNG chunk checksums as Pillow checks them (host route, `host/png.rs`).
+crc32fast = { workspace = true }
 gpu_frame = { path = "../gpu_frame" }
 http-body-util = "=0.1.5"
 hyper = { version = "=1.12.0", features = ["http1", "server"] }
 hyper-util = { version = "=0.1.21", features = ["tokio"] }
+# The host route's formats other than JPEG (plan 17 section 3, "Other host formats"): only the
+# decoders whose output equals Pillow 13.0.0's on the corpus (tests/golden_host.rs).
+image = { workspace = true, features = ["bmp", "gif", "ico", "png", "pnm", "qoi", "tga", "tiff", "webp"] }
 memchr = "=2.8.3"
 # the SVD, determinant, rank and inverse of the face alignment (plan 17 section 3)
 nalgebra = { version = "=0.35.0", default-features = false, features = ["std"] }
+# PNG pixels with the checksum policy Pillow has (`host/png.rs`); the `image` crate fixes it.
+png = { workspace = true }
 prometheus-client = "=0.26.0"
 procfs = { version = "=0.18.0", default-features = false }
 prost = { workspace = true }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.154", features = ["arbitrary_precision", "preserve_order"] }
+# CMYK TIFF ink samples, converted as Pillow converts them (`host/formats.rs`).
+tiff = { workspace = true }
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 tokio-stream = { version = "=0.1.19", features = ["net"] }
 tonic = { workspace = true, features = ["channel", "codegen", "router", "server"] }
@@ -37,6 +46,9 @@ tracing-subscriber = { version = "=0.3.23", default-features = false, features =
 # libjpeg-turbo built from the crate's source unless TURBOJPEG_SOURCE=explicit points at the
 # image's 3.1.2 build (plan 17 section 3); SIMD required, as the plan asks.
 turbojpeg = { workspace = true, features = ["cmake", "require-simd"] }
+# The strict host JPEG decode needs `tj3Set(TJPARAM_STOPONWARNING)`, which the safe crate does not
+# expose (plan 17 section 3, "Host JPEG"); same library build as `turbojpeg` above.
+turbojpeg-sys = { workspace = true }
 
 [dev-dependencies]
 base64 = "=0.22.1"

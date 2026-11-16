@@ -13,6 +13,7 @@ pub mod fault;
 pub mod front;
 pub mod geometry;
 pub mod health;
+pub mod host;
 pub mod jpeg_header;
 pub mod kernels;
 pub mod metrics;

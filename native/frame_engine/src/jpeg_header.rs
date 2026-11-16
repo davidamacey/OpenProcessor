@@ -92,7 +92,7 @@ fn be16(data: &[u8], at: usize) -> Option<u16> {
 /// `header_segments`: `(marker, payload)` of each length-carrying segment after the start marker,
 /// up to the first scan or the first byte that is not a marker. A length that reaches past the
 /// end gives the bytes that are there.
-fn header_segments(data: &[u8]) -> Vec<(u8, &[u8])> {
+pub(crate) fn header_segments(data: &[u8]) -> Vec<(u8, &[u8])> {
     let mut out = Vec::new();
     let mut i = 2usize;
     while i + 4 <= data.len() {

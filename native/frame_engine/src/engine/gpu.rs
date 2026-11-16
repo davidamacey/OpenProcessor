@@ -32,6 +32,7 @@ use crate::photo::clock::{DECODE, JobClock, SYNCED};
 use crate::photo::device::{
     DecodeJob, Decoded, Device, JobResult, LaunchJob, Launched, ModelCall, Warp, WarpKind, Write,
 };
+use crate::photo::source::Origin;
 
 /// A decoded, oriented frame: interleaved RGB on the card, and the budget it holds.
 pub struct Frame {
@@ -74,6 +75,23 @@ impl Drop for WaitOnDrop {
     }
 }
 
+/// One model input: its slice of the region and, with the body transport, the slice's bytes
+/// copied to the host by the job that wrote it, after that job's stream wait (`with_body`).
+pub struct Input {
+    slice: gpu_frame::Slice,
+    body: Option<bytes::Bytes>,
+}
+
+impl DeviceRange for Input {
+    fn device_addr(&self) -> u64 {
+        self.slice.device_addr()
+    }
+
+    fn byte_len(&self) -> usize {
+        self.slice.byte_len()
+    }
+}
+
 /// What every pool thread reads.
 struct Shared {
     frames: FramePool,
@@ -82,6 +100,27 @@ struct Shared {
     /// One cache per lane, locked only by that lane's thread (lanes own their state in gpu_frame).
     lane_weights: Vec<Mutex<WeightCache<DeviceBuf>>>,
     stage_sync: bool,
+    /// `OP_FRAME_ENGINE_TRANSPORT=body`: written inputs are copied to the host.
+    body: bool,
+}
+
+/// The written inputs handed back by a job whose stream was waited for; with the body transport
+/// each is copied to the host on that same stream (the thread that owns it, plan 17 section
+/// 2.1), so the network runtime never touches the card.
+fn with_body(
+    shared: &Shared,
+    stream: &Stream,
+    inputs: impl IntoIterator<Item = Input>,
+) -> Result<Vec<Input>, GpuFault> {
+    inputs
+        .into_iter()
+        .map(|mut input| {
+            if shared.body {
+                input.body = Some(bytes::Bytes::from(stream.read_to_host(&input.slice)?));
+            }
+            Ok(input)
+        })
+        .collect()
 }
 
 struct LaunchThread {
@@ -109,6 +148,8 @@ pub struct GpuConfig {
     pub jpeg_quality: u32,
     /// Whether each GPU stage synchronises its stream before returning, so stage timings are exact.
     pub stage_sync: bool,
+    /// Whether the inputs travel in the request body (`OP_FRAME_ENGINE_TRANSPORT=body`).
+    pub body: bool,
 }
 
 /// The card's decode lanes, kernels, launch and finish pools and the model-server connection; the device side of the photo flow.
@@ -152,6 +193,7 @@ impl Gpu {
                 .map(|_| Mutex::new(WeightCache::new(WEIGHT_CACHE_BYTES)))
                 .collect(),
             stage_sync: cfg.stage_sync,
+            body: cfg.body,
         });
         let launch = {
             let ctx = Arc::clone(ctx);
@@ -287,14 +329,66 @@ fn weight_sets<I>(
         .collect()
 }
 
+/// A decoded frame on the card, or the photo's status.
+type LaneFrame = Result<(DeviceBuf, u32, u32), &'static str>;
+
+/// nvJPEG, then the EXIF tag applied by `orient.cu`; a frame of another size is `decoder`.
+fn nvjpeg_frame(
+    shared: &Shared,
+    lane: &mut Lane,
+    image: bytes::Bytes,
+    orientation: u32,
+    size: (u32, u32),
+) -> Result<LaneFrame, GpuFault> {
+    let stream = Arc::clone(lane.stream());
+    let d = match lane.decode(image) {
+        Ok(d) => d,
+        Err(e) => return decode_refusal(e).map(Err),
+    };
+    let (w, h) = (d.frame.width(), d.frame.height());
+    let frame = match shared.kernels.orient(
+        &shared.frames,
+        &stream,
+        d.frame.buffer(),
+        (w, h),
+        orientation,
+    )? {
+        Some(oriented) => oriented,
+        None => (d.frame.into_buffer(), w, h),
+    };
+    if (frame.1, frame.2) != size {
+        return Ok(Err("decoder"));
+    }
+    Ok(Ok(frame))
+}
+
+/// The host route (`FrameEngine._decode_host`): the upright frame decoded on this lane's CPU,
+/// then copied into a frame-pool buffer on the lane's stream. The copy is from pageable memory,
+/// which the driver stages before the call returns, so the host frame may drop at once; the
+/// buffer is read only after the lane's stream wait.
+fn host_frame(
+    shared: &Shared,
+    stream: &Arc<Stream>,
+    image: &[u8],
+    size: (u32, u32),
+) -> Result<LaneFrame, GpuFault> {
+    let host = match crate::host::decode_checked(image, size) {
+        Ok(f) => f,
+        Err(status) => return Ok(Err(status)),
+    };
+    let buf = shared.frames.alloc(host.rgb.len(), stream)?;
+    stream.copy_from_host(&buf, 0, &host.rgb)?;
+    Ok(Ok((buf, host.width, host.height)))
+}
+
 fn decode_on_lane(
     shared: &Shared,
     lane: &mut Lane,
-    job: DecodeJob<gpu_frame::Slice>,
-) -> Result<Decoded<Frame, gpu_frame::Slice>, GpuFault> {
+    job: DecodeJob<Input>,
+) -> Result<Decoded<Frame, Input>, GpuFault> {
     let DecodeJob {
         image,
-        orientation,
+        origin,
         size,
         writes,
         hold,
@@ -310,30 +404,10 @@ fn decode_on_lane(
             .unwrap_or_else(PoisonError::into_inner);
         weight_sets(shared, &mut cache, &stream, &writes)?
     };
-    let decoded = clock.time(
-        DECODE,
-        || -> Result<Result<(DeviceBuf, u32, u32), &'static str>, GpuFault> {
-            let d = match lane.decode(image) {
-                Ok(d) => d,
-                Err(e) => return decode_refusal(e).map(Err),
-            };
-            let (w, h) = (d.frame.width(), d.frame.height());
-            let frame = match shared.kernels.orient(
-                &shared.frames,
-                &stream,
-                d.frame.buffer(),
-                (w, h),
-                orientation,
-            )? {
-                Some(oriented) => oriented,
-                None => (d.frame.into_buffer(), w, h),
-            };
-            if (frame.1, frame.2) != size {
-                return Ok(Err("decoder"));
-            }
-            Ok(Ok(frame))
-        },
-    )?;
+    let decoded = clock.time(DECODE, || match origin {
+        Origin::Gpu { orientation } => nvjpeg_frame(shared, lane, image, orientation, size),
+        Origin::Host => host_frame(shared, &stream, &image, size),
+    })?;
     let (buf, width, height) = match decoded {
         Ok(frame) => frame,
         Err(status) => {
@@ -360,7 +434,7 @@ fn decode_on_lane(
     })?;
     Ok(Decoded::Frame {
         frame: Arc::new(frame),
-        inputs: writes.into_iter().map(|w| w.input).collect(),
+        inputs: with_body(shared, &stream, writes.into_iter().map(|w| w.input))?,
         stages: clock.stages,
     })
 }
@@ -371,7 +445,7 @@ fn warp_inputs(
     shared: &Shared,
     stream: &Arc<Stream>,
     frame: &dyn FrameRef,
-    warps: &[Warp<gpu_frame::Slice>],
+    warps: &[Warp<Input>],
     clock: &mut JobClock,
 ) -> Result<(), GpuFault> {
     for w in warps {
@@ -380,7 +454,7 @@ fn warp_inputs(
                 WarpKind::Faces(f) => {
                     shared
                         .face_warp
-                        .launch(&shared.frames, stream, frame, &w.input, f)?;
+                        .launch(&shared.frames, stream, frame, &w.input.slice, f)?;
                 }
             }
             if shared.stage_sync && SYNCED.contains(&w.stage) {
@@ -395,8 +469,8 @@ fn warp_inputs(
 fn launch_on_thread(
     shared: &Shared,
     t: &mut LaunchThread,
-    job: LaunchJob<Frame, gpu_frame::Slice>,
-) -> Result<Launched<gpu_frame::Slice>, GpuFault> {
+    job: LaunchJob<Frame, Input>,
+) -> Result<Launched<Input>, GpuFault> {
     let LaunchJob {
         frame,
         writes,
@@ -422,8 +496,8 @@ fn launch_on_thread(
         })?
     };
     Ok(Launched {
-        inputs: writes.into_iter().map(|w| w.input).collect(),
-        warped: warps.into_iter().map(|w| w.input).collect(),
+        inputs: with_body(shared, &t.stream, writes.into_iter().map(|w| w.input))?,
+        warped: with_body(shared, &t.stream, warps.into_iter().map(|w| w.input))?,
         blur: sums,
         stages: clock.stages,
     })
@@ -473,21 +547,22 @@ fn crop_on_thread(
 
 impl Device for Gpu {
     type Frame = Frame;
-    type Input = gpu_frame::Slice;
+    type Input = Input;
 
     fn lost(&self) -> bool {
         self.ctx.is_lost()
     }
 
-    async fn slice(&self, bytes: usize, wait: Duration) -> Result<gpu_frame::Slice, SliceError> {
-        self.server.region().slice(bytes, wait).await
+    async fn slice(&self, bytes: usize, wait: Duration) -> Result<Input, SliceError> {
+        let slice = self.server.region().slice(bytes, wait).await?;
+        Ok(Input { slice, body: None })
     }
 
     fn decode(
         &self,
-        job: DecodeJob<gpu_frame::Slice>,
+        job: DecodeJob<Input>,
         cancel: &CancelToken,
-    ) -> JobResult<Decoded<Frame, gpu_frame::Slice>> {
+    ) -> JobResult<Decoded<Frame, Input>> {
         let shared = Arc::clone(&self.shared);
         self.lanes
             .run(cancel, move |lane| decode_on_lane(&shared, lane, job))
@@ -495,9 +570,9 @@ impl Device for Gpu {
 
     fn launch(
         &self,
-        job: LaunchJob<Frame, gpu_frame::Slice>,
+        job: LaunchJob<Frame, Input>,
         cancel: &CancelToken,
-    ) -> JobResult<Launched<gpu_frame::Slice>> {
+    ) -> JobResult<Launched<Input>> {
         let shared = Arc::clone(&self.shared);
         self.launch.submit(cancel, move |t: &mut LaunchThread| {
             launch_on_thread(&shared, t, job)
@@ -526,8 +601,8 @@ impl Device for Gpu {
 
     async fn infer(
         self: Arc<Self>,
-        call: ModelCall<gpu_frame::Slice>,
-    ) -> (Result<Vec<OutputTensor>, CallError>, gpu_frame::Slice) {
+        call: ModelCall<Input>,
+    ) -> (Result<Vec<OutputTensor>, CallError>, Input) {
         let ModelCall {
             model,
             input,
@@ -540,7 +615,8 @@ impl Device for Gpu {
                 name: input.name,
                 datatype: InputSpec::DATATYPE,
                 shape: &input.shape,
-                slice: &slice,
+                slice: &slice.slice,
+                body: slice.body.as_ref(),
             }];
             self.server
                 .infer(InferCall {

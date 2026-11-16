@@ -40,6 +40,29 @@ struct RegionMemory {
     registered: Arc<AtomicBool>,
 }
 
+impl RegionMemory {
+    /// One `cuMemAlloc` of `bytes` and its slab, not yet exported.
+    fn alloc(ctx: &Arc<Context>, bytes: usize) -> Result<RegionMemory, CudaError> {
+        let slab = Slab::new(bytes).ok_or_else(|| {
+            CudaError::invalid(format!(
+                "region of {bytes} bytes: not a positive multiple of {ALIGN}"
+            ))
+        })?;
+        ctx.bind()?;
+        // SAFETY: a plain synchronous allocation; the pointer is owned by the returned value from
+        // the next statement on, which frees it.
+        let ptr = ctx.check("cuMemAlloc", unsafe { result::malloc_sync(bytes) })?;
+        Ok(RegionMemory {
+            ctx: ctx.clone(),
+            ptr,
+            len: bytes,
+            handle: [0; IPC_HANDLE_BYTES],
+            slab,
+            registered: Arc::new(AtomicBool::new(false)),
+        })
+    }
+}
+
 impl Drop for RegionMemory {
     fn drop(&mut self) {
         if self.registered.load(Ordering::Acquire) {
@@ -77,27 +100,11 @@ impl Region {
     /// [`CudaError::Invalid`] when `bytes` is not a positive multiple of the alignment;
     /// [`CudaError::Driver`] when the allocation or its export fails.
     pub fn new(ctx: &Arc<Context>, bytes: usize) -> Result<Region, CudaError> {
-        let slab = Slab::new(bytes).ok_or_else(|| {
-            CudaError::invalid(format!(
-                "region of {bytes} bytes: not a positive multiple of {ALIGN}"
-            ))
-        })?;
-        ctx.bind()?;
-        // SAFETY: a plain synchronous allocation; the pointer is owned by `RegionMemory` from the
-        // next statement on, which frees it.
-        let ptr = ctx.check("cuMemAlloc", unsafe { result::malloc_sync(bytes) })?;
-        let mut mem = RegionMemory {
-            ctx: ctx.clone(),
-            ptr,
-            len: bytes,
-            handle: [0; IPC_HANDLE_BYTES],
-            slab,
-            registered: Arc::new(AtomicBool::new(false)),
-        };
+        let mut mem = RegionMemory::alloc(ctx, bytes)?;
         let mut handle = MaybeUninit::<sys::CUipcMemHandle>::zeroed();
         // SAFETY: `ptr` is the base of a live cuMemAlloc allocation of this context (the only
         // kind cuIpcGetMemHandle exports); the out-parameter is valid for one handle.
-        let rc = unsafe { sys::cuIpcGetMemHandle(handle.as_mut_ptr(), ptr) };
+        let rc = unsafe { sys::cuIpcGetMemHandle(handle.as_mut_ptr(), mem.ptr) };
         ctx.check("cuIpcGetMemHandle", rc.result())?;
         // SAFETY: the call succeeded, so the handle was written; it was zeroed before in any case.
         let handle = unsafe { handle.assume_init() };
@@ -105,6 +112,19 @@ impl Region {
             *dst = *src as u8;
         }
         Ok(Region { mem: Arc::new(mem) })
+    }
+
+    /// The same allocation and slab, not exported: for the body transport, where the inputs are
+    /// copied into the request and the model server never imports the region (its handle is
+    /// zeros and it is never registered).
+    ///
+    /// # Errors
+    ///
+    /// As [`Region::new`], without the export.
+    pub fn local(ctx: &Arc<Context>, bytes: usize) -> Result<Region, CudaError> {
+        Ok(Region {
+            mem: Arc::new(RegionMemory::alloc(ctx, bytes)?),
+        })
     }
 
     /// The serialized IPC handle the model server's register call takes as `raw_handle`.

@@ -14,6 +14,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build_client(true)
         // Output tensors arrive as reference-counted slices of the response buffer, not copies.
         .bytes(".inference.ModelInferResponse.raw_output_contents")
+        // The body transport's inputs move into the request without a copy.
+        .bytes(".inference.ModelInferRequest.raw_input_contents")
         .compile_fds(files)?;
     Ok(())
 }

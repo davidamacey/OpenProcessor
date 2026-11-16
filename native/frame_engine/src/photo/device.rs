@@ -22,6 +22,7 @@ use crate::branches::crops::CropJpeg;
 use crate::branches::faces::warp::FaceWarps;
 use crate::fault::GpuFault;
 use crate::kernels::Resample;
+use crate::photo::source::Origin;
 use crate::pipeline::RequestState;
 
 /// Seconds per stage measured inside a job, added to the photo's clock.
@@ -44,10 +45,10 @@ pub struct Write<I> {
 /// A decode on a lane: nvJPEG, the orientation, the size check, then the round-1 writes and one
 /// wait for the lane's stream.
 pub struct DecodeJob<I> {
-    /// The image proper (up to its end-of-image marker), a slice of the request message.
+    /// What the decoder reads, a slice of the request message (`Source::image`).
     pub image: Bytes,
-    /// EXIF orientation 1 to 8 to apply to the decoded frame.
-    pub orientation: u32,
+    /// nvJPEG with its EXIF orientation, or the host decode.
+    pub origin: Origin,
     /// The oriented size the header promised; a decode of another size is refused.
     pub size: (u32, u32),
     /// The round-1 writes done after the decode, one per input slice.

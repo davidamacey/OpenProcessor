@@ -17,16 +17,21 @@ publish = false
 [workspace.dependencies]
 bytes = "=1.12.1"
 crossbeam-channel = "=0.5.17"
+crc32fast = "=1.5.5"
 cudarc = { version = "=0.19.10", default-features = false, features = ["std", "driver", "nvrtc", "cuda-13020", "dynamic-loading"] }
+image = { version = "=0.25.10", default-features = false }
 libloading = "=0.9.1"
 nvml-wrapper = "=0.13.0"
+png = "=0.18.1"
 prost = "=0.14.6"
 protox = "=0.10.0"
+tiff = "=0.11.3"
 tokio = { version = "=1.54.1", default-features = false }
 tonic = { version = "=0.14.9", default-features = false }
 tonic-prost = "=0.14.9"
 tonic-prost-build = "=0.14.9"
 turbojpeg = { version = "=1.5.1", default-features = false }
+turbojpeg-sys = { version = "=1.2.0", default-features = false }
 
 # Lint levels for every member (`[lints] workspace = true`); the clippy names are in
 # https://rust-lang.github.io/rust-clippy/stable/index.html. `unwrap` stays allowed inside

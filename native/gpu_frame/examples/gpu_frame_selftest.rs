@@ -535,6 +535,7 @@ async fn server_checks(r: &mut Report, args: &Args, ctx: &Arc<Context>, region: 
         region_prefix: prefix,
         region_name: name,
         device_id: 0,
+        inputs: gpu_frame::InputMode::SharedMemory,
     };
     predecessor_check(r, args, ctx, &cfg).await;
     let name = format!("{}live-{pid}", args.prefix);
@@ -619,6 +620,7 @@ async fn infer_once(
         datatype: &args.datatype,
         shape: &args.shape,
         slice: &slice,
+        body: None,
     }];
     let outputs = [args.output.as_str()];
     let call = InferCall {

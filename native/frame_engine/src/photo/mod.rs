@@ -3,13 +3,15 @@
 //! runtime that hands each piece of work to the thread that owns it:
 //!
 //! 1. Route by header (`decode`): the markers, then the end-of-image walk, before any bytes are
-//!    reserved. A photo the GPU route does not take answers its status (`corrupt`, `huge`) or,
-//!    for the host route N0 does not build, `decoder`. A need above the whole budget is
+//!    reserved (`source`). The GPU route takes a JPEG nvJPEG decodes; every other readable image
+//!    takes the host route (`crate::host`, probed here, decoded on the lane); what neither takes
+//!    answers its status (`corrupt`, `huge`, `decoder`). A need above the whole budget is
 //!    `over_budget`.
 //! 2. Reserve the frame (`budget`): a worker slot and the frame's bytes, first come first served,
 //!    bounded by `OP_FRAME_ENGINE_BUDGET_WAIT_SECONDS`, then an overload.
 //! 3. Round 1: the slices of the inputs that need only the frame (`letterbox`, `embed_frame`),
-//!    then one job on a decode lane: nvJPEG, the orientation, the size check, the fills and
+//!    then one job on a decode lane: nvJPEG and the orientation (or the host decode and its
+//!    upload), the size check, the fills and
 //!    resamples into those slices, one wait for the lane's stream. Every round-1 call goes out.
 //! 4. Settle: the detector's boxes, as frame rectangles.
 //! 5. Round 2: the crop squares in chunks of the plan's batch, staged within the photo's window
@@ -31,6 +33,7 @@ pub mod clock;
 pub mod device;
 mod faces;
 mod rounds;
+pub mod source;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -40,10 +43,11 @@ use self::calls::PhotoCalls;
 use self::clock::{BUDGET, DECODE, QUEUE, StageClock};
 use self::device::{DecodeJob, Decoded, Device, Write};
 use self::rounds::{Round2, Work};
+use self::source::Source;
 use crate::admission::FrameBudget;
 use crate::branches::BUILT;
 use crate::fault::{GpuFault, job_failed};
-use crate::jpeg_header::{Decoder, JpegHeader, oriented_size, route};
+use crate::jpeg_header::route;
 use crate::metrics::{ByImage, ByOutcome, Metrics};
 use crate::pipeline::{Photo, PhotoAnswer, PipelineError, Tensor};
 use crate::wire::EnginePlan;
@@ -255,28 +259,30 @@ where
         Ok(answer)
     }
 
-    /// The route and the reservation of one photo: its header and the permit that holds its frame
+    /// The route and the reservation of one photo: its source and the permit that holds its frame
     /// budget, or the status that refuses it.
     async fn admit(
         &self,
         clock: &mut StageClock,
         photo: &Photo,
         runs: &Runs,
-    ) -> Result<(JpegHeader, B::Permit), Stop> {
+    ) -> Result<(Source, B::Permit), Stop> {
         let s = &self.settings;
-        let decided = clock.time(DECODE, || {
-            route(&photo.image, s.min_megapixels, s.max_megapixels)
-        });
-        let header = match decided.decoder {
-            Decoder::Gpu => decided.header,
-            Decoder::Refused(status) => return Err(Stop::Status(status)),
-            // the host route is N1a's: the API decodes such a photo itself
-            Decoder::Cpu(_) => return Err(Stop::Status("decoder")),
-        };
-        if budget::need_bytes(&header) > s.budget_bytes {
+        let source = clock
+            .time(DECODE, || {
+                let decided = route(&photo.image, s.min_megapixels, s.max_megapixels);
+                source::decide(
+                    &photo.image,
+                    decided,
+                    s.max_megapixels,
+                    &runs.widths(&photo.plan),
+                )
+            })
+            .map_err(Stop::Status)?;
+        if source.need > s.budget_bytes {
             return Err(Stop::Status("over_budget"));
         }
-        let reserve = budget::reserve_bytes(&header, &runs.widths(&photo.plan)).min(s.budget_bytes);
+        let reserve = source.reserve.min(s.budget_bytes);
         let permit = clock
             .wait(
                 BUDGET,
@@ -295,21 +301,20 @@ where
             })
             .inc();
         let permit = permit.map_err(|o| Stop::Fail(PipelineError::Overload(o)))?;
-        Ok((header, permit))
+        Ok((source, permit))
     }
 
     /// The decode job on a lane: the frame and the slices of the round-1 writes.
     async fn decode(
         &self,
         work: &mut Work<'_, D>,
-        photo: &Photo,
-        header: &JpegHeader,
+        source: &Source,
         permit: B::Permit,
         writes: Vec<Write<D::Input>>,
     ) -> Result<(Arc<D::Frame>, Vec<D::Input>), Stop> {
         let job = DecodeJob {
-            image: photo.image.slice(..header.end.min(photo.image.len())),
-            orientation: header.orientation,
+            image: source.image.clone(),
+            origin: source.origin,
             size: work.size,
             writes,
             hold: Box::new(permit),
@@ -356,8 +361,8 @@ where
         }
         let plan = &photo.plan;
         let runs = Runs::of(plan);
-        let (header, permit) = self.admit(clock, &photo, &runs).await?;
-        let size = oriented_size(&header);
+        let (source, permit) = self.admit(clock, &photo, &runs).await?;
+        let size = source.size;
         let request = Arc::clone(&photo.request);
         let calls = PhotoCalls::new(
             Arc::clone(&self.device),
@@ -382,7 +387,7 @@ where
 
         let round1 = work.stage_round1(plan, &runs).await?;
         let (frame, inputs) = self
-            .decode(&mut work, &photo, &header, permit, round1.writes)
+            .decode(&mut work, &source, permit, round1.writes)
             .await?;
         let sent = work.send_round1(round1.calls, inputs);
         let call_of = |owner: &str| sent.iter().find(|(o, _)| *o == owner).map(|(_, id)| *id);
@@ -423,7 +428,7 @@ where
             .await?;
         Ok(PhotoAnswer {
             status: "ok".into(),
-            decode_route: "gpu".into(),
+            decode_route: source.decode_route,
             branches: work.answers.states,
             outputs: ordered(plan, size, work.answers.out),
         })

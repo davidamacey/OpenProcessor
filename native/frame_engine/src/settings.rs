@@ -8,8 +8,8 @@
 //!   (section 2.1; [`crate::cores`]), not 16.
 //! * `OP_FRAME_ENGINE_SWITCH_INTERVAL_MS` means nothing here: a start with it set is refused
 //!   (section 1.1).
-//! * `OP_FRAME_ENGINE_TRANSPORT=body` and `OP_FRAME_ENGINE_CROP_MAX_SIDE` above 0 are N1 work
-//!   (section 5 N0, "Scope out"): they are refused at start, never silently ignored.
+//! * `OP_FRAME_ENGINE_CROP_MAX_SIDE` above 0 is N1 work (section 5 N0, "Scope out"): it is refused
+//!   at start, never silently ignored.
 
 use std::fmt;
 
@@ -32,11 +32,26 @@ fn refuse<T>(text: String) -> Result<T, SettingsError> {
     Err(SettingsError(text))
 }
 
-/// How photos reach the model server: the input travels by CUDA shared memory (`OP_FRAME_ENGINE_TRANSPORT`).
+/// `OP_FRAME_ENGINE_TRANSPORT`: `cuda` (the default) or `body`.
+fn read_transport(env: &Env<'_>) -> Result<Transport, SettingsError> {
+    match env.raw("OP_FRAME_ENGINE_TRANSPORT").as_deref() {
+        None | Some("cuda") => Ok(Transport::Cuda),
+        Some("body") => Ok(Transport::Body),
+        Some(other) => refuse(format!(
+            "OP_FRAME_ENGINE_TRANSPORT={}: one of cuda, body",
+            repr_str(other)
+        )),
+    }
+}
+
+/// How the model inputs reach the model server (`OP_FRAME_ENGINE_TRANSPORT`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Transport {
-    /// Inputs are written into a registered CUDA shared-memory region on the card; the only transport built.
+    /// `cuda`: slices of a registered CUDA shared-memory region on the card.
     Cuda,
+    /// `body`: copied to the host and sent in the request body (plan 17 section 1.1, the Python
+    /// `BodyTransport`), for a model server that cannot import the region.
+    Body,
 }
 
 /// Every setting of one engine process, read from `OP_FRAME_ENGINE_*`.
@@ -168,7 +183,7 @@ impl Settings {
             triton_url: env
                 .raw("OP_FRAME_ENGINE_TRITON_URL")
                 .unwrap_or(d.triton_url),
-            transport: Transport::Cuda,
+            transport: read_transport(&env)?,
             region_mib: env.int("OP_FRAME_ENGINE_REGION_MIB", d.region_mib, 16, 16_384)?,
             instance,
             triton_device_id: env.int(
@@ -266,22 +281,6 @@ impl Settings {
                  and means nothing to the native engine; unset it"
                     .into(),
             );
-        }
-        let transport = env.raw("OP_FRAME_ENGINE_TRANSPORT");
-        match transport.as_deref() {
-            None | Some("cuda") => {}
-            Some("body") => {
-                return refuse(
-                    "OP_FRAME_ENGINE_TRANSPORT='body' is not built in this engine yet (plan 17 N1a)"
-                        .into(),
-                );
-            }
-            Some(other) => {
-                return refuse(format!(
-                    "OP_FRAME_ENGINE_TRANSPORT={}: one of cuda, body",
-                    repr_str(other)
-                ));
-            }
         }
         let instance = env
             .raw("OP_FRAME_ENGINE_INSTANCE")
@@ -674,11 +673,23 @@ mod tests {
             text.contains("SWITCH_INTERVAL"),
             "even 0 is a setting that means nothing: {text}"
         );
-        assert!(refusal(&[("OP_FRAME_ENGINE_TRANSPORT", "body")]).contains("N1a"));
         assert!(refusal(&[("OP_FRAME_ENGINE_CROP_MAX_SIDE", "512")]).contains("CROP_MAX_SIDE"));
         assert_eq!(
             read(&[("OP_FRAME_ENGINE_CROP_MAX_SIDE", "0")]).map(|s| s.jpeg_quality),
             Ok(90)
+        );
+    }
+
+    #[test]
+    fn the_transport_is_cuda_by_default_and_body_when_asked() {
+        assert_eq!(read(&[]).map(|s| s.transport), Ok(Transport::Cuda));
+        assert_eq!(
+            read(&[("OP_FRAME_ENGINE_TRANSPORT", "body")]).map(|s| s.transport),
+            Ok(Transport::Body)
+        );
+        assert_eq!(
+            refusal(&[("OP_FRAME_ENGINE_TRANSPORT", "shm")]),
+            "OP_FRAME_ENGINE_TRANSPORT='shm': one of cuda, body"
         );
     }
 

@@ -52,6 +52,7 @@ impl Models {
             datatype: "UINT8",
             shape: &spec.shape,
             slice: &slice,
+            body: None,
         }];
         let outputs = [spec.output];
         let answer = self
@@ -130,6 +131,7 @@ pub async fn run(a: ZArgs, argv: Vec<String>) -> Result<ExitCode, Failure> {
             region_prefix: REGION_PREFIX.to_string(),
             region_name: name.clone(),
             device_id: a.server_device_id,
+            inputs: gpu_frame::InputMode::SharedMemory,
         },
         region,
     )
