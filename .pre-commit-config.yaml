@@ -363,6 +363,16 @@ repos:
         pass_filenames: false
         files: ^(native/op_media/tests/goldens/imohash\.json|scripts/codegen/imohash_goldens\.py|requirements\.txt|native/frame_engine/tests/golden/host/.*|tests/fixtures/.*|frontend/e2e/fixtures/ingest/.*)$
 
+      # The Rust capture mapping (native/op_media) is held to the Python parse_capture and
+      # apply_location_policy by cases; the generator imports the domain package (pydantic), so it
+      # runs under the project venv when one exists.
+      - id: capture-cases-drift
+        name: capture cases for the Rust mapping are in sync with the Python functions
+        entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/codegen/capture_cases.py --check'
+        language: system
+        pass_filenames: false
+        files: ^(contracts/json/capture_cases\.json|native/op_media/tests/fixtures/exiftool/recorded\.json|scripts/codegen/capture_cases\.py|src/domain/(capture_metadata|location_policy|geo_box)\.py)$
+
   # Commit message linting (conventional commits). Scope stays optional.
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v4.4.0

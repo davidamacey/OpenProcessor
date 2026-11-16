@@ -2,4 +2,6 @@
 //! path, and the capture field mapping. The fast path (plan 18, M16) is not here.
 #![forbid(unsafe_code)]
 
+pub mod capture;
 pub mod imohash;
+mod pytext;
