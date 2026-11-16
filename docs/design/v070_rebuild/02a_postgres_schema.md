@@ -216,10 +216,13 @@ CREATE FUNCTION op_project_delete_allows(pid uuid) RETURNS boolean
   project, else an error" calls `op_bound_project_strict()` (15b section 8), which also refuses the
   deployment and core scopes.
 - **The one exception to `FORCE`**: the search copies in schema `txt` (15b section 8) have row
-  security enabled but not forced. Their owner `op_text_owner` (1.5) never logs in and reads them
-  only inside the project-bound definer functions there; every other role, `op_app` included, goes
-  through the policy. A test asserts that the `txt` tables are the only ones with `relrowsecurity`
-  and not `relforcerowsecurity`.
+  security enabled but not forced. Their owner `op_text_owner` (1.5) never logs in and reads and
+  writes them only inside the project-bound definer functions there; `op_app` holds no privilege on
+  the tables and would be bound by the policy if one were added. The functions return item keys only
+  and every use joins them to a forced table (15b section 8, "How isolation holds"). A test asserts
+  that the `txt` tables are the only ones with `relrowsecurity` and not `relforcerowsecurity`, by name
+  and by schema. Another test asserts that, under the deployment scope, a count of every policy
+  table equals the owner's count with `FORCE` off, so a dump taken under that scope omits no row.
 - The application role `op_app` is not the table owner and has `NOBYPASSRLS`. Review fix R-13:
   "Superusers and roles with the BYPASSRLS attribute always bypass the row security system"
   ([row security](https://www.postgresql.org/docs/current/ddl-rowsecurity.html)), so `FORCE` only
@@ -235,16 +238,16 @@ CREATE FUNCTION op_project_delete_allows(pid uuid) RETURNS boolean
 | Role | Used by | Rights |
 |---|---|---|
 | `op_super` (the image's `POSTGRES_USER`: the Docker image creates it "with superuser power", [postgres image](https://hub.docker.com/_/postgres)); on a managed service the service's master user takes its place (below) | bootstrap only: `db-migrate` creates the roles below with it, then never again | everything (managed: the master user's rights, no superuser) |
-| `op_owner` | `db-migrate` (DDL), `openprocessor db backup/restore` | owns the schema; not a superuser; `BYPASSRLS` so `pg_dump` sees every row (review fix R-13), self-hosted only (below); member of `op_text_owner` `WITH SET` (migrations create the `txt` objects under `SET ROLE`) |
-| `op_app` | API, Celery workers, beat, stream workers | `SELECT, INSERT, UPDATE, DELETE` on the tables, `USAGE` on sequences, `EXECUTE` on `op_scope_project`, `op_scope_is_deployment`, `op_scope_is_core`, `op_scope_allows`, `op_project_delete_allows` (review RN-2), `op_bound_project_strict` and the `txt` search functions (15b section 8); no DDL, not a superuser, `NOBYPASSRLS`, member of no other role |
+| `op_owner` | `db-migrate` (DDL), `openprocessor db backup/restore` | owns the schema; not a superuser; `BYPASSRLS` so `pg_dump` sees every row (review fix R-13) on a self-hosted database only: on a managed service it has none and dumps under the deployment scope (below); member of `op_text_owner` `WITH SET` (migrations create the `txt` objects under `SET ROLE`) |
+| `op_app` | API, Celery workers, beat, stream workers | `SELECT, INSERT, UPDATE, DELETE` on the tables, `USAGE` on sequences, `EXECUTE` on `op_scope_project`, `op_scope_is_deployment`, `op_scope_is_core`, `op_scope_allows`, `op_project_delete_allows` (review RN-2), `op_bound_project_strict`, and, on the `txt` search schema, exactly `USAGE` on the schema and `EXECUTE` on its seven functions (15b section 8): **no privilege on the two copies**; no DDL, not a superuser, `NOBYPASSRLS`, member of no other role |
 | `op_vector` | the embedding-space job's DDL pool (15a 6.1) | `USAGE, CREATE` on schema `vec`; `NOBYPASSRLS` |
-| `op_text_owner` | nobody logs in as it (`NOLOGIN`); the `txt` definer functions run as it | owns schema `txt`, its two search copies and their functions (15b section 8); `REFERENCES (item_key)` on `items`, `EXECUTE` on `op_bound_project_strict`; no attribute (`NOBYPASSRLS`, not a superuser); its tables are not `FORCE`d, so it reads them without a policy |
+| `op_text_owner` | nobody logs in as it (`NOLOGIN`); the `txt` definer functions run as it | owns schema `txt`, its two search copies and their functions (15b section 8); `SELECT (item_key, project_id)` and `REFERENCES (item_key)` on `items`, `REFERENCES (id)` on `projects`, `EXECUTE` on `op_bound_project_strict`, nothing else; no attribute (`NOBYPASSRLS`, not a superuser); its tables are not `FORCE`d, so it reads them without a policy |
 
 **Who creates what** (15b section 8, review of 15b revision 2, M1). The bootstrap of `db-migrate`
 (`src/db/roles.py`: `ensure_roles`, `prepare_database`, idempotent) creates `op_owner`, `op_app`,
 `op_vector` and `op_text_owner`, grants `op_text_owner` to `op_owner` `WITH SET TRUE`, creates the
-schemas `vec` (owner `op_owner`) and `txt` (owner `op_text_owner`) and installs `pg_trgm` and
-`vector`. Every migration then runs as `op_owner`; the `txt` objects are created under `SET ROLE
+schemas `vec` (owner `op_owner`) and `txt` (owner `op_text_owner`) and installs `pg_trgm`, `btree_gin` and
+`vector` (and `btree_gin`, for the copies' project-led index). Every migration then runs as `op_owner`; the `txt` objects are created under `SET ROLE
 op_text_owner`, so no `ALTER ... OWNER` is needed. **Self-hosted**, the bootstrap runs as
 `op_super`. **Managed** (for example Amazon RDS or Aurora for PostgreSQL), there is no superuser:
 the master user is `NOSUPERUSER` with `CREATEDB` and `CREATEROLE` and may add supported extensions
@@ -257,14 +260,17 @@ attributes page), so on a managed service `op_owner` is created `NOBYPASSRLS`. C
 handled without it: (1) `FORCE` then binds `op_owner` too, so a data step of a migration sets the
 deployment scope first; (2) `openprocessor db backup` runs `pg_dump --enable-row-security` with the
 deployment scope set for its session (`PGOPTIONS='-c op.scope=deployment'`), under which every
-policy admits every row (1.4), and restore likewise; the provider's snapshots are the other
-backup; (3) no OpenProcessor feature needs a role that bypasses row security (15b section 8 chose a
+policy admits every row (1.4); the restore needs neither the option nor the scope, because
+`pg_restore` loads each table before its row security is enabled (02c section 6, which also
+weighs the alternatives); the provider's snapshots are the other backup; (3) no OpenProcessor feature needs a role that bypasses row security (15b section 8 chose a
 mechanism that does not). Cloud check C-1 (15b section 15) runs this on a real managed instance.
 
 Tests (`tests/db/test_roles.py`, new): `rolbypassrls` is true for exactly `op_owner` on a
 self-hosted database and for none of our roles on a managed one; `op_text_owner` cannot log in;
 `op_app` is a member of no role; `op_owner`'s membership in `op_text_owner` has `SET` and not
-`INHERIT`; every object in schema `txt` is owned by `op_text_owner`.
+`INHERIT`; every object in schema `txt` is owned by `op_text_owner` and it owns nothing outside
+`txt`; `op_app` has `USAGE` on `txt`, `EXECUTE` on exactly its seven functions and no privilege on
+its tables; `proacl` of every `txt` function has no `PUBLIC` entry.
 
 #### 1.5.1 Session settings per role (D-72)
 
@@ -294,8 +300,8 @@ shows its `application_name`.
 
 `db-migrate` connects as `op_super` (managed: the master user) only for the bootstrap above
 (passwords from their secret files), then runs `alembic upgrade head` as `op_owner`, re-applies the
-grants and runs the idempotent `txt` step (02c section 6: a restored database, whose dump leaves
-`txt` out, gets its search copies back).
+grants and runs the `txt` step (the one SQL file of 15b section 8; a restored database, whose dump
+leaves `txt` out, gets its search copies back through the numbered restore of 02c section 6).
 The superuser password file is mounted only into `postgres` and `db-migrate`.
 
 ## 2. Projects and deployment tables
