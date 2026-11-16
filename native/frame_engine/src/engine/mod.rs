@@ -25,6 +25,7 @@ use gpu_frame::{Context, DeviceCap, FramePool, ModelServer, ModelServerConfig, R
 use tokio::sync::Notify;
 
 pub use self::gpu::{Frame, Gpu, GpuConfig};
+use crate::branches::ocr::ctc::{CtcDecoder, DICTIONARY_PATH};
 use crate::metrics::{ByCause, ByCode, Metrics};
 use crate::photo::budget::GpuBudget;
 use crate::photo::{PhotoFlow, PhotoSettings};
@@ -115,6 +116,9 @@ impl GpuPipeline {
     /// Any start step fails (device identity, CUDA context, pools, region, model-server channels, kernels, registration); the text names the step.
     pub fn start(s: &Settings, metrics: Arc<Metrics>) -> Result<Self, String> {
         let (_, bus) = identify(s.expect_bus_id.as_deref())?;
+        let dictionary = step("OCR dictionary", || {
+            CtcDecoder::from_file(std::path::Path::new(DICTIONARY_PATH))
+        })?;
         let ctx = step("context", || Context::new(0))?;
         let cap =
             DeviceCap::new(usize::try_from(u64::from(s.pool_mib) * MIB).unwrap_or(usize::MAX));
@@ -176,6 +180,7 @@ impl GpuPipeline {
                 window: region_bytes / (s.workers as usize).max(1),
             },
             metrics,
+            dictionary: Arc::new(dictionary),
         };
         Ok(Self {
             flow,

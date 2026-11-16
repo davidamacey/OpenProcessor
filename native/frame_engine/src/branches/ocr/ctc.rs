@@ -142,11 +142,30 @@ mod tests {
         assert_eq!(d.decode(&[7, 3], &[0.5, 0.5]).expect("decoded").text, "c");
         assert_eq!(d.decode(&[-1], &[0.5]).expect("decoded").text, " ");
         assert!(d.decode(&[-6], &[0.5]).is_err());
-        assert!(CtcDecoder::from_file(Path::new("/nonexistent/dict.txt")).is_err());
+        let refused =
+            CtcDecoder::from_file(Path::new("/nonexistent/dict.txt")).expect_err("missing");
+        assert!(refused.contains("/nonexistent/dict.txt"), "{refused}");
         assert_eq!(
             CtcDecoder::from_text("x\ny").len(),
             4,
             "a last line without its newline"
         );
+    }
+
+    #[test]
+    fn the_native_image_carries_the_dictionary_where_the_engine_reads_it() {
+        let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let dockerfile =
+            std::fs::read_to_string(repo.join("docker/frame-engine-native/Dockerfile"))
+                .expect("the native Dockerfile");
+        let source = "models/paddleocr_rec_trt/ppocrv6_dict.txt";
+        assert!(
+            dockerfile
+                .lines()
+                .any(|l| l.trim() == format!("COPY {source} {DICTIONARY_PATH}")),
+            "the runtime stage copies {source} to {DICTIONARY_PATH}"
+        );
+        let d = CtcDecoder::from_file(&repo.join(source)).expect("the dictionary");
+        assert!(d.len() > 1000);
     }
 }

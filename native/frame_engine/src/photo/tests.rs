@@ -60,6 +60,9 @@ const ROWS: [[f32; 6]; 3] = [
     [600.0, 500.0, 700.0, 600.0, 0.25, 16.0],
 ];
 
+/// The fake recogniser's classes: blank, `a` to `e`, then the space.
+const DICTIONARY: &str = "a\nb\nc\nd\ne\n";
+
 struct Bed {
     fake: Arc<Fake>,
     flow: PhotoFlow<Fake, GpuBudget>,
@@ -80,6 +83,7 @@ fn bed_with(region: usize, window: usize, budget: u64, workers: u32) -> Bed {
             window,
         },
         metrics: Metrics::new(),
+        dictionary: Arc::new(CtcDecoder::from_text(DICTIONARY)),
     };
     Bed { fake, flow }
 }

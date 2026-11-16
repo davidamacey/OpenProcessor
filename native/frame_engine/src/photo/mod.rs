@@ -41,6 +41,7 @@ use self::clock::{BUDGET, DECODE, QUEUE, StageClock};
 use self::device::{DecodeJob, Decoded, Device, Write};
 use self::rounds::{Round2, Work};
 use crate::admission::FrameBudget;
+use crate::branches::ocr::ctc::CtcDecoder;
 use crate::branches::{BUILT, derivatives};
 use crate::fault::{GpuFault, job_failed};
 use crate::jpeg_header::{Decoder, JpegHeader, oriented_size, route};
@@ -102,6 +103,8 @@ pub struct PhotoFlow<D, B> {
     pub settings: PhotoSettings,
     /// Where the flow's stage and outcome series are written.
     pub metrics: Arc<Metrics>,
+    /// The recogniser's dictionary, read at start.
+    pub dictionary: Arc<CtcDecoder>,
 }
 
 /// The answer of a photo that decoded nothing: every reported branch `image_failed`, unbuilt ones
