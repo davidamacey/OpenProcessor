@@ -170,8 +170,9 @@ def test_faces_and_vectors_agree_with_the_reference(clients: tuple[Any, Any]) ->
     assert np.percentile(cosines, 1) >= COSINE_P01_MIN, sorted(cosines)[:5]
 
 
-#: Every pass kind: the whole frame, a coarse square and, above 1920 pixels, tiles.
-TILED = {'coarse': 320, 'tile_side': 1920, 'overlap': 64}
+#: Every pass kind: the whole frame, a coarse square and, above 640 pixels, tiles (so WIDER FACE's
+#: 1024-pixel photos are tiled too).
+TILED = {'coarse': 320, 'tile_side': 640, 'overlap': 64}
 
 
 def test_the_engine_answers_as_the_python_engine_with_tiles() -> None:
