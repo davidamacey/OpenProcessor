@@ -256,7 +256,7 @@ class TritonConnectionPool:
 
 ```bash
 # Monitor active connections
-watch -n 1 'docker compose exec api netstat -an | grep 8001 | grep ESTABLISHED'
+watch -n 1 'docker compose exec api-py netstat -an | grep 8001 | grep ESTABLISHED'
 
 # Monitor latency percentiles
 # If P99 >1000ms with <5000 RPS = possible connection bottleneck
@@ -4022,7 +4022,7 @@ Current: **32 workers** (fixed in `docker-compose.yml`; the installer does not c
 
 1. Check CPU cores:
 ```bash
-docker exec api nproc
+docker exec api-py nproc
 ```
 
 2. Calculate optimal workers:
@@ -4037,7 +4037,7 @@ Workers = (2 × CPU cores) + 1
 
 4. Restart:
 ```bash
-docker compose restart api
+docker compose restart api-py
 ```
 
 **Signs you need fewer workers**:
@@ -4055,7 +4055,7 @@ docker compose restart api
 Current: **50MB** per uploaded file (`max_file_size_mb`; the `MAX_FILE_SIZE_MB` key in `.env`, see
 `env.template`). A larger file answers 413.
 
-**To adjust**: set `MAX_FILE_SIZE_MB=100` in `.env`, then `docker compose restart api`.
+**To adjust**: set `MAX_FILE_SIZE_MB=100` in `.env`, then `docker compose restart api-py`.
 
 ### Slow Request Threshold
 
@@ -4088,7 +4088,7 @@ slow_request_threshold_ms=50  # More aggressive logging
 2. **Not using optimized libraries**
    ```bash
    # Verify orjson is installed
-   docker exec api python -c "import orjson; print('orjson OK')"
+   docker exec api-py python -c "import orjson; print('orjson OK')"
    ```
 
 ### Issue: Increased Memory Usage

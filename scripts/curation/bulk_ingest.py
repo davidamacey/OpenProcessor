@@ -25,8 +25,8 @@ finished with failures resumes that run and skips what it already stored.
 Ctrl-C asks the server to cancel (images already stored stay stored) and waits
 for it to stop.
 
-Usage (the default ``--api-base`` is ``localhost:8000`` inside the ``api`` container, where
-the API listens, and ``localhost:4603`` on the host, where compose publishes it):
+Usage (the default ``--api-base`` is ``api:8000`` inside the ``api-py`` container, where the API
+port is the Rust front's service name, and ``localhost:4603`` on the host, where compose publishes it):
     docker compose exec api-py python scripts/curation/bulk_ingest.py \\
         --folder /data/source/my_dataset --project cars
 
@@ -95,7 +95,7 @@ def build_parser() -> argparse.ArgumentParser:
     what.add_argument('--cancel', metavar='RUN_ID', help='Ask a live run to stop and exit')
     parser.add_argument(
         '--api-base',
-        default=f'http://localhost:{8000 if _in_container() else 4603}{get_curation_config().api_prefix}',
+        default=f'http://{"api:8000" if _in_container() else "localhost:4603"}{get_curation_config().api_prefix}',
         help='Curation API mount (no trailing slash); requests go to '
         '<api-base>/projects/<--project>/...',
     )

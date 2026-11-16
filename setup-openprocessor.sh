@@ -1977,9 +1977,9 @@ run_health() {
         # Without its models (--skip-models) /health is 503 by design; its body still shows OpenSearch is up.
         wait_http "http://${h}:${p}/health" 240 '"opensearch":{"ok":true' -sS \
             && log_warn "API is up but not ready (expected without Triton models: --skip-models)" \
-            || fails+=("API /health not ready: ./openprocessor logs api")
+            || fails+=("API /health not ready: ./openprocessor logs api-py")
     elif ! wait_http "http://${h}:${p}/health" 240 '"status":"ready"'; then
-        fails+=("API /health not ready: ./openprocessor logs api")
+        fails+=("API /health not ready: ./openprocessor logs api-py")
     else
         local cur=0 vlm_on=0 faces_on=1
         _has_tier curation && cur=1; model_setup_faces_enabled || faces_on=0

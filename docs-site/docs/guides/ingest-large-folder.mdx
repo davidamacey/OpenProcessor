@@ -94,7 +94,7 @@ and index size. In Cropwright press **Preview** next to **Start bulk ingest**.
 ```bash
 docker compose -p <project> exec api-py python scripts/curation/bulk_ingest.py \
   --project nas-photos --folder /data/source/2024-03-sat \
-  --api-base http://localhost:8000/curation --preview
+  --api-base http://api:8000/curation --preview
 ```
 
 Route: `POST /curation/projects/{project}/ingest/bulk/preview` (one of `folder`,
@@ -135,7 +135,7 @@ docker compose -p <project> exec api-py python scripts/curation/bulk_ingest.py \
   --project nas-photos --folder /data/source
 ```
 
-Inside `api` the default `--api-base` is `http://localhost:8000/curation`; on the host it
+Inside `api-py` the default `--api-base` is `http://api:8000/curation` (the Rust front); on the host it
 is `http://localhost:4603/curation`.
 
 | Flag | Meaning |
@@ -237,5 +237,5 @@ run.
 | 422 `bulk_ingest_invalid_source` | Path is not under a source root or does not exist. Use the container path; check `ingest/bulk/config`. |
 | Thumbnails 404, VLM predicts 0 | A worker lacks the source or alias mount. |
 | 409 `bulk_ingest_busy` | Another run is live; watch with `--status` or cancel it. |
-| Script cannot connect | Pass `--api-base` (`localhost:8000` inside `api`, `4603` on the host). |
+| Script cannot connect | Pass `--api-base` (`api:8000` inside `api-py`, `localhost:4603` on the host). |
 | Run `failed` right after start | Read `error` in `GET .../ingest/bulk/<run_id>`, fix, start the same source again. |

@@ -198,7 +198,10 @@ Two production Dockerfiles at the repo root: `Dockerfile` (the FastAPI `api`
 image, with `export` and `evaluator` targets; base `python:3.13-slim-trixie`) and
 `Dockerfile.triton` (Triton; base `nvcr.io/nvidia/tritonserver:26.10-py3`). The `api` image
 stays on Python 3.13 because `faiss-gpu-cu12` requires Python below 3.14; the trainer image is on 3.14.
-`scripts/docker-build-push.sh` builds, scans and pushes them:
+`scripts/docker-build-push.sh` builds, scans and pushes these two. It does not know the other
+release images (the Rust front `openprocessor-server`, `export`, `evaluator`, the segmenter, the
+frame engine, the trainer, Cropwright): a release is cut with `scripts/release/build_and_publish.sh`,
+which builds all of them.
 
 ```bash
 ./scripts/docker-build-push.sh all      # build and push to Docker Hub (also: api, triton)

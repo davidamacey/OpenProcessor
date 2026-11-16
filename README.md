@@ -150,7 +150,7 @@ how-to: [Security and network exposure](docs-site/docs/deployment/security.mdx).
 ```bash
 cd openprocessor
 ./openprocessor status            # services and health
-./openprocessor logs api -f       # live logs
+./openprocessor logs api-py -f    # live logs (the Python API; `api` is the Rust front)
 ./openprocessor sample coco       # fetch a public COCO sample (200 images)
 ./openprocessor vlm list          # the local VLM catalog
 ./openprocessor upgrade           # to the latest release (backs up first)

@@ -112,3 +112,12 @@ def test_the_python_api_keeps_its_gpu_and_replica_settings() -> None:
     assert spec['deploy']['replicas'] == '${OP_API_REPLICAS:-1}'
     device = spec['deploy']['resources']['reservations']['devices'][0]
     assert device['device_ids'] == ['${API_GPU_ID:-0}']
+
+
+def test_the_s3_tryout_overlay_configures_the_container_that_reads_s3() -> None:
+    """boto3 runs in the Python API; the front reads none of OP_S3_*."""
+    overlay = _load_yaml(REPO_ROOT / 'docker/test/compose.s3.yml')['services']
+    readers = [name for name, spec in overlay.items() if 'environment' in spec]
+    assert readers == ['api-py']
+    assert any('OP_S3_ENDPOINT_URL' in entry for entry in overlay['api-py']['environment'])
+    assert set(overlay) - {'minio'} <= set(_services())
