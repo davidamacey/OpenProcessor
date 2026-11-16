@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import check_layering as guard
@@ -212,3 +214,68 @@ def test_only_the_harness_engine_stand_in_may_import_the_engine(scratch_repo: Sc
     assert run(scratch_repo) == 0
     scratch_repo.write('docker/test/fake_other.py', 'from frame_engine.front import F\n')
     assert run(scratch_repo) == 1
+
+
+# The Rust crate rule: plan 18a section 2.2, read from `cargo metadata --no-deps` output.
+_METADATA = Path(__file__).parent / 'fixtures' / 'native_metadata.json'
+
+
+def _metadata() -> dict:
+    return json.loads(_METADATA.read_text(encoding='utf-8'))
+
+
+def _add_dependency(metadata: dict, crate: str, dependency: str, kind: str | None = None) -> None:
+    package = next(p for p in metadata['packages'] if p['name'] == crate)
+    package['dependencies'].append(
+        {'name': dependency, 'kind': kind, 'path': f'/w/native/{dependency}'}
+    )
+
+
+def test_the_fixture_workspace_follows_the_crate_table() -> None:
+    assert guard.crate_violations(_metadata()) == []
+
+
+@pytest.mark.parametrize(
+    ('crate', 'dependency', 'kind'),
+    [
+        ('op_config', 'op_db', None),
+        ('op_db', 'op_jobs', None),
+        ('op_config', 'op_db', 'dev'),
+        ('op_jobs', 'op_storage', 'build'),
+        ('frame_engine', 'op_config', None),
+        ('op_jobs', 'frame_engine', None),
+    ],
+)
+def test_a_crate_dependency_outside_the_table_fails(
+    crate: str, dependency: str, kind: str | None
+) -> None:
+    metadata = _metadata()
+    _add_dependency(metadata, crate, dependency, kind)
+    problems = guard.crate_violations(metadata)
+    assert len(problems) == 1
+    assert crate in problems[0]
+    assert dependency in problems[0]
+
+
+def test_a_workspace_crate_without_a_table_row_fails() -> None:
+    metadata = _metadata()
+    metadata['packages'].append({'name': 'op_unlisted', 'dependencies': []})
+    assert guard.crate_violations(metadata) == [
+        'op_unlisted: a workspace crate with no row in CRATE_DEPENDENCIES'
+    ]
+
+
+def test_an_external_package_of_the_same_name_is_not_a_workspace_dependency() -> None:
+    metadata = _metadata()
+    package = next(p for p in metadata['packages'] if p['name'] == 'op_config')
+    package['dependencies'].append({'name': 'op_db', 'kind': None, 'path': None})
+    assert guard.crate_violations(metadata) == []
+
+
+def test_the_crate_rule_reads_a_metadata_file(tmp_path: Path) -> None:
+    assert guard.main(['--crates', '--metadata', str(_METADATA)]) == 0
+    metadata = _metadata()
+    _add_dependency(metadata, 'op_config', 'op_db')
+    bad = tmp_path / 'metadata.json'
+    bad.write_text(json.dumps(metadata), encoding='utf-8')
+    assert guard.main(['--crates', '--metadata', str(bad)]) == 1
