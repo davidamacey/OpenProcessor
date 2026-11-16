@@ -143,29 +143,33 @@ pub fn blur_rect(bbox: [f64; 4], w: i64, h: i64) -> Option<[i64; 4]> {
     (x2 > x1 && y2 > y1).then_some([x1, y1, x2, y2])
 }
 
-/// numpy's `DOUBLE_pairwise_sum` as `ndarray.sum(axis=-1)` uses it on a contiguous row: eight
-/// running sums for 8 to 128 values, halves (a multiple of 8 apart) above that.
-pub fn pairwise_sum(a: &[f64]) -> f64 {
+/// numpy's `@TYPE@_pairwise_sum` as `ndarray.sum(axis=-1)` uses it on a contiguous row, in the
+/// row's own type (`DOUBLE`, `FLOAT`): eight running sums for 8 to 128 values, halves (a multiple
+/// of 8 apart) above that.
+pub fn pairwise_sum<T>(a: &[T]) -> T
+where
+    T: Copy + Default + std::ops::Add<Output = T> + std::ops::AddAssign,
+{
     let n = a.len();
     if n < 8 {
-        let mut r = 0.0;
+        let mut r = T::default();
         for x in a {
-            r += x;
+            r += *x;
         }
         r
     } else if n <= 128 {
-        let mut r = [0.0f64; 8];
+        let mut r = [T::default(); 8];
         r.copy_from_slice(&a[..8]);
         let mut i = 8;
         while i < n - (n % 8) {
             for (acc, x) in r.iter_mut().zip(&a[i..i + 8]) {
-                *acc += x;
+                *acc += *x;
             }
             i += 8;
         }
         let mut res = ((r[0] + r[1]) + (r[2] + r[3])) + ((r[4] + r[5]) + (r[6] + r[7]));
         for x in &a[i..] {
-            res += x;
+            res += *x;
         }
         res
     } else {
@@ -409,6 +413,6 @@ mod tests {
         assert_eq!(pairwise_sum(&ones), 300.0);
         assert_eq!(pairwise_sum(&ones[..7]), 7.0);
         assert_eq!(pairwise_sum(&ones[..100]), 100.0);
-        assert_eq!(pairwise_sum(&[]), 0.0);
+        assert_eq!(pairwise_sum::<f64>(&[]), 0.0);
     }
 }

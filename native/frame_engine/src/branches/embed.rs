@@ -116,22 +116,43 @@ pub fn crop_plan(
     Ok(CropPlan { picked, chunks })
 }
 
-/// The vectors of one encoder answer: `[rows, dim]` float32.
-pub fn vectors(outputs: &[OutputTensor]) -> Result<(usize, usize, Vec<f32>), String> {
-    let (shape, values) = fp32_output(outputs, OUTPUT)?;
+/// The vectors of one encoder answer: output `name`, `[rows, dim]` float32.
+pub fn vectors(outputs: &[OutputTensor], name: &str) -> Result<(usize, usize, Vec<f32>), String> {
+    let (shape, values) = fp32_output(outputs, name)?;
     match shape {
         [rows, dim] => Ok((
             usize::try_from(*rows).unwrap_or(0),
             usize::try_from(*dim).unwrap_or(0),
             values,
         )),
-        other => Err(format!("{OUTPUT} has shape {other:?}, not [rows, dim]")),
+        other => Err(format!("{name} has shape {other:?}, not [rows, dim]")),
     }
+}
+
+/// The vectors of several calls of one encoder stacked (`np.concatenate(axis=0)`): rows, width
+/// (0 when there is no row: no row tells the encoder's width) and the values.
+pub fn stacked(
+    answers: &[Vec<OutputTensor>],
+    name: &str,
+) -> Result<(usize, usize, Vec<f32>), String> {
+    let mut data = Vec::new();
+    let (mut rows, mut width) = (0usize, None);
+    for answer in answers {
+        let (n, dim, values) = vectors(answer, name)?;
+        if width.is_some_and(|w| w != dim) {
+            return Err(format!("{name} widths differ between calls"));
+        }
+        width = Some(dim);
+        rows += n;
+        data.extend(values);
+    }
+    let dim = if rows == 0 { 0 } else { width.unwrap_or(0) };
+    Ok((rows, dim, data))
 }
 
 /// `whole_embedding`: the first (only) row of the frame encoder's answer.
 pub fn whole_embedding(outputs: &[OutputTensor]) -> Result<Tensor, String> {
-    let (rows, dim, mut data) = vectors(outputs)?;
+    let (rows, dim, mut data) = vectors(outputs, OUTPUT)?;
     if rows == 0 {
         return Err(format!("{OUTPUT} has no row"));
     }
@@ -142,40 +163,42 @@ pub fn whole_embedding(outputs: &[OutputTensor]) -> Result<Tensor, String> {
     })
 }
 
-/// `crop_embeddings` (`[picked, dim]`, `(0, 0)` when nothing was picked: no row tells the crop
-/// encoder's width) and `crop_embedded`, one flag per detection.
-pub fn crop_outputs(
-    picked: &[bool],
-    answers: &[Vec<OutputTensor>],
-) -> Result<[(&'static str, Tensor); 2], String> {
-    let mut data = Vec::new();
-    let (mut rows, mut width) = (0usize, None);
-    for answer in answers {
-        let (n, dim, values) = vectors(answer)?;
-        if width.is_some_and(|w| w != dim) {
-            return Err(format!("{OUTPUT} widths differ between calls"));
-        }
-        width = Some(dim);
-        rows += n;
-        data.extend(values);
-    }
-    let dim = if rows == 0 { 0 } else { width.unwrap_or(0) };
-    Ok([
+/// A vectors tensor (`[rows, dim]` float32) and its flags (one per candidate: whether it has a
+/// row), under `names`.
+pub fn flagged(
+    names: [&'static str; 2],
+    flags: &[bool],
+    (rows, dim, data): (usize, usize, Vec<f32>),
+) -> [(&'static str, Tensor); 2] {
+    [
         (
-            "crop_embeddings",
+            names[0],
             Tensor::Fp32 {
                 shape: vec![rows as i64, dim as i64],
                 data,
             },
         ),
         (
-            "crop_embedded",
+            names[1],
             Tensor::Bool {
-                shape: vec![picked.len() as i64],
-                data: picked.to_vec(),
+                shape: vec![flags.len() as i64],
+                data: flags.to_vec(),
             },
         ),
-    ])
+    ]
+}
+
+/// `crop_embeddings` (`[picked, dim]`, `(0, 0)` when nothing was picked: no row tells the crop
+/// encoder's width) and `crop_embedded`, one flag per detection.
+pub fn crop_outputs(
+    picked: &[bool],
+    answers: &[Vec<OutputTensor>],
+) -> Result<[(&'static str, Tensor); 2], String> {
+    Ok(flagged(
+        ["crop_embeddings", "crop_embedded"],
+        picked,
+        stacked(answers, OUTPUT)?,
+    ))
 }
 
 #[cfg(test)]
