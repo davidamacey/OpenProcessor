@@ -164,6 +164,16 @@ floor measured as Python against Python in the same hold (both numbers reported)
 | `face_*` (N1b) | `BOX_ATOL_PX` 1.0 and cosine p01 at least 0.995 against the reference path; LFW, CALFW, CPLFW and WIDER FACE AP not below the Python branch's own numbers on the same pairs by more than its two-run difference | same | `tests/gpu/test_gpu_faces.py` |
 | `ocr_*` (N1c) | ground truth only: COCO-Text 400 photos strict F1 and spotted words not below the Python branch's on the same photos by more than its two-run difference; the existing checks (substrings, counts, quads in the frame) | same | `tests/gpu/test_gpu_ocr.py` |
 
+**The rule above one photo in flight** (coordinator, 2026-11-15, from shakedown 3: the Python engine
+at 1 against itself at 32 in flight gave crop-vector cosine 0.9997489, Rust against Python at 32
+0.9996706; at 1 in flight the engines were bit-identical on 46 of 46 crops). Bit identity is required
+at 1 photo in flight only. Above that, the bound for `whole_embedding` and `crop_embeddings` is the
+Python engine against itself across batch compositions: captures at 1 and at N in flight are the
+floor pair of `gpu_prep_parity.py compare`; the bit-identical share is reported, not gated. Exact at
+every level: counts, statuses, routes, boxes at 1 in flight, crop pixel sizes and blur values. Where
+the table's "at 32 in flight" column or H1 says "Python against Python" for vectors, it means this
+floor pair.
+
 Bits against ground truth (review D1): the bit rows are the first gate, cheap and sharp. A bit row
 that fails for a reason the lane names (for example a resampling weight one ulp apart) is judged by
 the ground-truth rows of plan 13 for that branch, within the Python-against-Python spread; an
@@ -365,6 +375,11 @@ recorded at selection (plan 14 section 3) and checked by `cargo deny` (section 3
 | Text-box offset (N1c) | the same algorithm as today, pyclipper 1.4.0's Clipper 6.4.2 (`JT_ROUND`, `ET_CLOSEDPOLYGON`, its integer conversion, default arc tolerance): either a binding of the Clipper 6.4.2 C++ source (a C++ toolchain in the build stage) or a Rust port, decided by the OCR parity gate; contours and minimum-area rectangles as OpenCV's `findContours` (`RETR_LIST`, `CHAIN_APPROX_SIMPLE`) and `minAreaRect`, ported and checked on the gate's photos | the `clipper2` crate binds Clipper2, not the 6.4.2 behaviour | https://github.com/fonttools/pyclipper ; https://sourceforge.net/projects/polyclipping/ | Boost (Clipper 6.4.2) |
 | Face alignment (N1b) | `nalgebra` 0.35.0 for the SVD, determinant, rank and inverse of `faces/alignment.py` | no hand-written SVD | https://docs.rs/nalgebra | Apache-2.0 |
 | Metrics | `prometheus-client` 0.26.0 with the names and labels of `stage_metrics.py`; the `process_*` series of Python's `ProcessCollector` (CPU seconds, resident and virtual memory, open and maximum descriptors, start time) read from `/proc/self`; served on `OP_FRAME_ENGINE_METRICS_PORT` by a hyper server (already in the tree through tonic) | the release acceptance greps `op_frame_engine_stage_seconds_total` and `_observations_total` | https://docs.rs/prometheus-client | Apache-2.0 OR MIT |
+
+**JSON.** The engine's plan reader is its own (`native/frame_engine/src/wire/json.rs`), so the
+workspace's serde_json carries `float_roundtrip` only, never `arbitrary_precision` or
+`preserve_order` (the reason, Cargo's feature unification across the server crates, is in
+[18a](18a_backend_rust_port_slices.md) section 2.1).
 
 **The owner's Rust server, and why it is not a dependency.** Measured as it is (2026-11-15), it
 confirms the design by mechanism: decode lanes on plain OS threads scale with cores in one process,
@@ -640,9 +655,20 @@ sweep on the merged tree; speed rows recorded under the evidence clause.
 - Profiles (E4): sizes per profile from measured memory; the lane count per GPU profile is
   derived from the measured nvJPEG bytes per megapixel (`op_frame_engine_nvjpeg_peak_bytes`) and
   the card's memory, since lane buffers sit outside the frame cap (a 16 GB card cannot hold 24
-  lanes at 20 MP); the 12 GB card starting inside its memory
+  lanes at 20 MP). The gauges `op_frame_engine_nvjpeg_in_use_bytes` and
+  `op_frame_engine_nvjpeg_peak_bytes` exist in `native/frame_engine/src/metrics.rs`; the measurement of bytes per megapixel on COCO,
+  the 20 MP set and set P is owed to N2's first GPU hold and comes before the profile files; the 12 GB card starting inside its memory
   and running plan A on the mix with failed 0, the accounting asserted against NVML there; the
   profile files, the installer mirror, its test and the sizing page changed together.
+- Reading a photo by key (plan 18 section 12): an optional input beside `image` (as `boxes` is
+  optional in protocol version 1), or a protocol revision, decided here. It names a landing-zone or
+  source key and the content claim (size, imohash); the engine resolves it under configured
+  read-only roots, answers new statuses for a missing or changed file and plan faults for an
+  unknown root or a bad key, in the generator of `contracts/json/frame_engine_v1.json` and the plan
+  cases; compose mounts the landing zone and source roots read-only into `frame-engine`. The engine
+  still never talks to S3. Its priority comes from plan 18's path-mode spike (M3). Also from plan
+  18 section 12: hardware JPEG decode tested on the L4 (the cloud example host), and the KServe
+  protos moved to a neutral directory first if `gpu_frame` leaves the workspace.
 - Faults: 50 kills at 32 in flight; a model-server restart (engine ready within 15 s of the server's
   gRPC port); the server recreated on a new address (first good call within about 1 s); SIGTERM
   drain; a sticky error injected (a test build with an out-of-range kernel write) ends in exit 1 and
