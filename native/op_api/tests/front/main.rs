@@ -13,6 +13,10 @@ mod edges;
 #[cfg(test)]
 mod forwarding;
 #[cfg(test)]
+mod framing;
+#[cfg(test)]
+mod lifecycle;
+#[cfg(test)]
 mod serving;
 #[cfg(test)]
 mod streaming;

@@ -14,7 +14,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
 use crate::support::{
-    Answer, Front, get_path, request, send, settings, start_front, start_front_with, start_stub,
+    Answer, Front, bounded, get_path, permit, request, send, settings, start_front,
+    start_front_with, start_stub,
 };
 
 const ORIGIN: &str = "http://localhost:5184";
@@ -50,56 +51,75 @@ fn assert_closed_to(answer: &Answer) {
 
 #[tokio::test]
 async fn the_503_for_an_upstream_that_is_down_is_readable_by_an_allowed_origin() {
-    let closed = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let nobody_home = closed.local_addr().unwrap();
-    drop(closed);
-    let front = start_front(nobody_home, &[]).await;
-    let answer = with_origin(&front, "POST", "/echo", ORIGIN).await;
-    assert_eq!(answer.status, StatusCode::SERVICE_UNAVAILABLE);
-    assert_eq!(answer.headers["retry-after"], "5");
-    assert_readable_by(&answer, ORIGIN);
-    assert_closed_to(&with_origin(&front, "POST", "/echo", "https://evil.example").await);
-    front.stop().await;
+    bounded(
+        "the_503_for_an_upstream_that_is_down_is_readable_by_an_allowed_origin",
+        async {
+            let closed = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let nobody_home = closed.local_addr().unwrap();
+            drop(closed);
+            let front = start_front(nobody_home, &[]).await;
+            let answer = with_origin(&front, "POST", "/echo", ORIGIN).await;
+            assert_eq!(answer.status, StatusCode::SERVICE_UNAVAILABLE);
+            assert_eq!(answer.headers["retry-after"], "5");
+            assert_readable_by(&answer, ORIGIN);
+            assert_closed_to(&with_origin(&front, "POST", "/echo", "https://evil.example").await);
+            front.stop().await;
+        },
+    )
+    .await;
 }
 
 #[tokio::test]
 async fn the_503_of_a_shed_request_is_readable_by_an_allowed_origin() {
-    let (stub, control) = start_stub().await;
-    let front = start_front(stub, &[("OP_API_CONCURRENCY_LIMIT", "1")]).await;
-    let first = tokio::spawn(send(
-        request(&front, "GET", "/hold").body(Body::empty()).unwrap(),
-    ));
-    control.held.acquire().await.unwrap().forget();
-    let shed = with_origin(&front, "GET", "/echo", ORIGIN).await;
-    assert_eq!(shed.status, StatusCode::SERVICE_UNAVAILABLE);
-    assert_eq!(shed.headers["retry-after"], "1");
-    assert_readable_by(&shed, ORIGIN);
-    control.hold.add_permits(1);
-    first.await.unwrap();
-    front.stop().await;
+    bounded(
+        "the_503_of_a_shed_request_is_readable_by_an_allowed_origin",
+        async {
+            let (stub, control) = start_stub().await;
+            let front = start_front(stub, &[("OP_API_CONCURRENCY_LIMIT", "1")]).await;
+            let first = tokio::spawn(send(
+                request(&front, "GET", "/hold").body(Body::empty()).unwrap(),
+            ));
+            permit(&control.held, "the stub to receive the /hold request").await;
+            let shed = with_origin(&front, "GET", "/echo", ORIGIN).await;
+            assert_eq!(shed.status, StatusCode::SERVICE_UNAVAILABLE);
+            assert_eq!(shed.headers["retry-after"], "1");
+            assert_readable_by(&shed, ORIGIN);
+            control.hold.add_permits(1);
+            first.await.unwrap();
+            front.stop().await;
+        },
+    )
+    .await;
 }
 
 #[tokio::test]
 async fn the_502_for_an_upstream_that_answers_nonsense_is_readable_by_an_allowed_origin() {
-    let broken = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = broken.local_addr().unwrap();
-    tokio::spawn(async move {
-        loop {
-            let Ok((stream, _)) = broken.accept().await else {
-                return;
-            };
-            drop(stream);
-        }
-    });
-    let front = start_front(addr, &[]).await;
-    let answer = with_origin(&front, "GET", "/echo", ORIGIN).await;
-    assert_eq!(answer.status, StatusCode::BAD_GATEWAY);
-    assert_readable_by(&answer, ORIGIN);
-    front.stop().await;
+    bounded(
+        "the_502_for_an_upstream_that_answers_nonsense_is_readable_by_an_allowed_origin",
+        async {
+            let broken = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = broken.local_addr().unwrap();
+            tokio::spawn(async move {
+                loop {
+                    let Ok((stream, _)) = broken.accept().await else {
+                        return;
+                    };
+                    drop(stream);
+                }
+            });
+            let front = start_front(addr, &[]).await;
+            let answer = with_origin(&front, "GET", "/echo", ORIGIN).await;
+            assert_eq!(answer.status, StatusCode::BAD_GATEWAY);
+            assert_readable_by(&answer, ORIGIN);
+            front.stop().await;
+        },
+    )
+    .await;
 }
 
 #[tokio::test]
 async fn the_400_for_a_request_target_the_front_cannot_forward_is_readable_by_an_allowed_origin() {
+    bounded("the_400_for_a_request_target_the_front_cannot_forward_is_readable_by_an_allowed_origin", async {
     let (stub, _control) = start_stub().await;
     let front = start_front(stub, &[]).await;
     let mut stream = TcpStream::connect(front.addr).await.unwrap();
@@ -119,6 +139,8 @@ async fn the_400_for_a_request_target_the_front_cannot_forward_is_readable_by_an
         "{text}"
     );
     front.stop().await;
+    })
+    .await;
 }
 
 async fn boom() -> &'static str {
@@ -127,51 +149,69 @@ async fn boom() -> &'static str {
 
 #[tokio::test]
 async fn the_500_of_a_panicking_handler_is_readable_by_an_allowed_origin() {
-    let (stub, _control) = start_stub().await;
-    let settings = settings(stub, &[]);
-    let state = AppState::new(&settings);
-    let router = middleware::common(
-        Router::new()
-            .route("/boom", get(boom))
-            .with_state(state.clone()),
-        &op_api::cors::origin_pattern().unwrap(),
-    );
-    let front = start_front_with(settings, Some(router)).await;
-    let answer = with_origin(&front, "GET", "/boom", ORIGIN).await;
-    assert_eq!(answer.status, StatusCode::INTERNAL_SERVER_ERROR);
-    assert_readable_by(&answer, ORIGIN);
-    front.stop().await;
+    bounded(
+        "the_500_of_a_panicking_handler_is_readable_by_an_allowed_origin",
+        async {
+            let (stub, _control) = start_stub().await;
+            let settings = settings(stub, &[]);
+            let state = AppState::new(&settings);
+            let router = middleware::common(
+                Router::new()
+                    .route("/boom", get(boom))
+                    .with_state(state.clone()),
+                &op_api::cors::origin_pattern().unwrap(),
+            );
+            let front = start_front_with(settings, Some(router)).await;
+            let answer = with_origin(&front, "GET", "/boom", ORIGIN).await;
+            assert_eq!(answer.status, StatusCode::INTERNAL_SERVER_ERROR);
+            assert_readable_by(&answer, ORIGIN);
+            front.stop().await;
+        },
+    )
+    .await;
 }
 
 #[tokio::test]
 async fn an_answer_the_python_api_gave_keeps_its_own_cors_headers_once() {
-    let (stub, _control) = start_stub().await;
-    let front = start_front(stub, &[]).await;
-    let answer = with_origin(&front, "GET", "/cors-upstream", ORIGIN).await;
-    assert_eq!(answer.status, StatusCode::OK);
-    let allowed: Vec<_> = answer
-        .headers
-        .get_all("access-control-allow-origin")
-        .iter()
-        .collect();
-    assert_eq!(allowed, ["http://upstream.test"]);
-    let credentials: Vec<_> = answer
-        .headers
-        .get_all("access-control-allow-credentials")
-        .iter()
-        .collect();
-    assert_eq!(credentials, ["true"]);
-    front.stop().await;
+    bounded(
+        "an_answer_the_python_api_gave_keeps_its_own_cors_headers_once",
+        async {
+            let (stub, _control) = start_stub().await;
+            let front = start_front(stub, &[]).await;
+            let answer = with_origin(&front, "GET", "/cors-upstream", ORIGIN).await;
+            assert_eq!(answer.status, StatusCode::OK);
+            let allowed: Vec<_> = answer
+                .headers
+                .get_all("access-control-allow-origin")
+                .iter()
+                .collect();
+            assert_eq!(allowed, ["http://upstream.test"]);
+            let credentials: Vec<_> = answer
+                .headers
+                .get_all("access-control-allow-credentials")
+                .iter()
+                .collect();
+            assert_eq!(credentials, ["true"]);
+            front.stop().await;
+        },
+    )
+    .await;
 }
 
 #[tokio::test]
 async fn a_request_without_an_origin_gets_no_cors_headers_on_a_front_built_answer() {
-    let closed = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let nobody_home = closed.local_addr().unwrap();
-    drop(closed);
-    let front = start_front(nobody_home, &[]).await;
-    let answer = get_path(&front, "/echo").await;
-    assert_eq!(answer.status, StatusCode::SERVICE_UNAVAILABLE);
-    assert_closed_to(&answer);
-    front.stop().await;
+    bounded(
+        "a_request_without_an_origin_gets_no_cors_headers_on_a_front_built_answer",
+        async {
+            let closed = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let nobody_home = closed.local_addr().unwrap();
+            drop(closed);
+            let front = start_front(nobody_home, &[]).await;
+            let answer = get_path(&front, "/echo").await;
+            assert_eq!(answer.status, StatusCode::SERVICE_UNAVAILABLE);
+            assert_closed_to(&answer);
+            front.stop().await;
+        },
+    )
+    .await;
 }

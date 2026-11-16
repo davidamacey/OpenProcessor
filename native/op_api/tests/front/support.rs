@@ -6,8 +6,10 @@
 use std::collections::BTreeMap;
 use std::convert::Infallible;
 use std::net::SocketAddr;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll};
 use std::time::Duration;
 
 use axum::Router;
@@ -15,6 +17,7 @@ use axum::body::{Body, Bytes};
 use axum::extract::{Request, State};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get};
+use futures_util::{Stream, StreamExt};
 use http::{HeaderMap, StatusCode};
 use http_body_util::BodyExt;
 use hyper_util::client::legacy::Client;
@@ -29,6 +32,7 @@ use tokio::sync::{Semaphore, mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 
 type EventReceiver = mpsc::Receiver<Result<Bytes, Infallible>>;
+type BreakableReceiver = mpsc::Receiver<Result<Bytes, std::io::Error>>;
 
 /// What the tests can do to the stub from outside.
 pub struct StubControl {
@@ -40,6 +44,15 @@ pub struct StubControl {
     pub held: Arc<Semaphore>,
     /// How many requests of any path the stub has received.
     pub requests: Arc<AtomicUsize>,
+    /// A permit is added each time a `/watch` or `/watch-events` request ends on the stub's side
+    /// (its handler or its body is dropped because the connection closed).
+    pub cancelled: Arc<Semaphore>,
+    /// A permit is added each time a `/watch` or `/watch-events` request has begun.
+    pub watching: Arc<Semaphore>,
+    /// The body of `/truncate` (an answer that promises 100 bytes): send a piece, then an error.
+    pub truncate: mpsc::Sender<Result<Bytes, std::io::Error>>,
+    /// The body of `/truncate-chunked` (no length promised): send a piece, then an error.
+    pub truncate_chunked: mpsc::Sender<Result<Bytes, std::io::Error>>,
 }
 
 #[derive(Clone)]
@@ -48,6 +61,10 @@ struct StubState {
     hold: Arc<Semaphore>,
     held: Arc<Semaphore>,
     requests: Arc<AtomicUsize>,
+    cancelled: Arc<Semaphore>,
+    watching: Arc<Semaphore>,
+    truncate: Arc<Mutex<Option<BreakableReceiver>>>,
+    truncate_chunked: Arc<Mutex<Option<BreakableReceiver>>>,
 }
 
 /// What `/echo` saw of a request.
@@ -92,11 +109,99 @@ fn stub_router(state: StubState) -> Router {
         .route("/headers-out", get(headers_out))
         .route("/cors-upstream", get(cors_upstream))
         .route("/status/{code}", any(status))
+        .route("/watch", any(watch))
+        .route("/watch-upload", any(watch_upload))
+        .route("/watch-events", get(watch_events))
+        .route("/truncate", get(truncate))
+        .route("/truncate-chunked", get(truncate_chunked))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             count_request,
         ))
         .with_state(state)
+}
+
+/// Adds a permit to `cancelled` when dropped.
+struct CancelSignal(Arc<Semaphore>);
+
+impl Drop for CancelSignal {
+    fn drop(&mut self) {
+        self.0.add_permits(1);
+    }
+}
+
+/// Waits for ever: it only ends because the connection closed, which drops the handler.
+async fn watch(State(state): State<StubState>) -> Response {
+    let _signal = CancelSignal(Arc::clone(&state.cancelled));
+    state.watching.add_permits(1);
+    std::future::pending::<()>().await;
+    StatusCode::OK.into_response()
+}
+
+/// Reads the request body to its end or its first error, which is how an upload that is cut off
+/// ends on the stub's side.
+async fn watch_upload(State(state): State<StubState>, request: Request) -> Response {
+    let _signal = CancelSignal(Arc::clone(&state.cancelled));
+    state.watching.add_permits(1);
+    let mut body = request.into_body().into_data_stream();
+    while let Some(Ok(_)) = body.next().await {}
+    StatusCode::OK.into_response()
+}
+
+/// One event, then silence for ever; the body is dropped when the connection closes.
+struct Silent {
+    sent: bool,
+    _signal: CancelSignal,
+}
+
+impl Stream for Silent {
+    type Item = Result<Bytes, Infallible>;
+
+    fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        if self.sent {
+            return Poll::Pending;
+        }
+        self.sent = true;
+        Poll::Ready(Some(Ok(Bytes::from_static(b": open\n\n"))))
+    }
+}
+
+async fn watch_events(State(state): State<StubState>) -> Response {
+    state.watching.add_permits(1);
+    (
+        [("content-type", "text/event-stream")],
+        Body::from_stream(Silent {
+            sent: false,
+            _signal: CancelSignal(Arc::clone(&state.cancelled)),
+        }),
+    )
+        .into_response()
+}
+
+/// The answer of `/truncate` and `/truncate-chunked` is what the test sends on the channel: the
+/// test sends a piece, reads it on the client side (so the head is out), then sends the error.
+async fn truncate(State(state): State<StubState>) -> Response {
+    let receiver = state.truncate.lock().ok().and_then(|mut slot| slot.take());
+    let Some(receiver) = receiver else {
+        return StatusCode::GONE.into_response();
+    };
+    let mut response = Body::from_stream(ReceiverStream::new(receiver)).into_response();
+    response
+        .headers_mut()
+        .insert("content-length", "100".parse().unwrap());
+    response
+}
+
+async fn truncate_chunked(State(state): State<StubState>) -> Response {
+    let receiver = state
+        .truncate_chunked
+        .lock()
+        .ok()
+        .and_then(|mut slot| slot.take());
+    let Some(receiver) = receiver else {
+        return StatusCode::GONE.into_response();
+    };
+    Body::from_stream(ReceiverStream::new(receiver)).into_response()
 }
 
 async fn count_request(
@@ -169,11 +274,19 @@ pub async fn start_stub() -> (SocketAddr, StubControl) {
     let hold = Arc::new(Semaphore::new(0));
     let held = Arc::new(Semaphore::new(0));
     let requests = Arc::new(AtomicUsize::new(0));
+    let cancelled = Arc::new(Semaphore::new(0));
+    let watching = Arc::new(Semaphore::new(0));
+    let (truncate_tx, truncate_rx) = mpsc::channel(4);
+    let (truncate_chunked_tx, truncate_chunked_rx) = mpsc::channel(4);
     let state = StubState {
         events: Arc::new(Mutex::new(Some(events_rx))),
         hold: Arc::clone(&hold),
         held: Arc::clone(&held),
         requests: Arc::clone(&requests),
+        cancelled: Arc::clone(&cancelled),
+        watching: Arc::clone(&watching),
+        truncate: Arc::new(Mutex::new(Some(truncate_rx))),
+        truncate_chunked: Arc::new(Mutex::new(Some(truncate_chunked_rx))),
     };
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -185,6 +298,10 @@ pub async fn start_stub() -> (SocketAddr, StubControl) {
             hold,
             held,
             requests,
+            cancelled,
+            watching,
+            truncate: truncate_tx,
+            truncate_chunked: truncate_chunked_tx,
         },
     )
 }
@@ -203,7 +320,7 @@ impl Front {
         if let Some(stop) = self.stop.take() {
             stop.send(()).ok();
         }
-        self.done.take().unwrap().await.unwrap()
+        self.finished_within().await
     }
 
     /// Send the stop signal and do not wait.
@@ -215,7 +332,15 @@ impl Front {
 
     /// Wait for the server to return after a signal.
     pub async fn finished(mut self) -> Stopped {
-        self.done.take().unwrap().await.unwrap()
+        self.finished_within().await
+    }
+
+    async fn finished_within(&mut self) -> Stopped {
+        let done = self.done.take().unwrap();
+        tokio::time::timeout(Duration::from_secs(45), done)
+            .await
+            .expect("the front did not return within 45 s of the stop signal")
+            .unwrap()
     }
 }
 
@@ -258,6 +383,28 @@ pub async fn start_front_with(settings: ApiSettings, router: Option<Router>) -> 
         stop: Some(stop),
         done: Some(done),
     }
+}
+
+/// How long one test may take in all. The exchanges inside a test have shorter bounds of their
+/// own; this one turns anything that never happens into a failure in seconds, naming the test.
+const TEST_DEADLINE: Duration = Duration::from_secs(60);
+
+/// Run one test body, failing it if it takes more than [`TEST_DEADLINE`].
+pub async fn bounded(name: &str, body: impl std::future::Future<Output = ()>) {
+    tokio::time::timeout(TEST_DEADLINE, body)
+        .await
+        .unwrap_or_else(|_| {
+            panic!("{name}: not finished in {TEST_DEADLINE:?}; something it awaits never happened")
+        });
+}
+
+/// Wait for the stub to add a permit to `semaphore` (`what` names the event), and take it.
+pub async fn permit(semaphore: &Semaphore, what: &str) {
+    tokio::time::timeout(Duration::from_secs(20), semaphore.acquire())
+        .await
+        .unwrap_or_else(|_| panic!("waited 20 s for {what}"))
+        .unwrap()
+        .forget();
 }
 
 /// A client with its own pool.
