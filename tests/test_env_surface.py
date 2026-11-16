@@ -159,6 +159,8 @@ _TEMPLATE_SIDE_ALLOWLIST = {
     'OP_PGBOUNCER_MAX_CLIENT_CONN',
     'OP_PGBOUNCER_MAX_PREPARED',
     'OP_DOCKER_GID',
+    # Read by the Rust server's storage layer (native/op_storage), not Python code.
+    'OP_LANDING_ROOT',
 }
 
 
