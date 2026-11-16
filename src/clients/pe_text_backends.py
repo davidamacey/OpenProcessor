@@ -13,6 +13,7 @@ import numpy as np
 
 from src.clients.triton_deadline import infer_with_deadline
 from src.config.settings import TritonModelConfig
+from src.utils.retry import retry_sync
 
 
 if TYPE_CHECKING:
@@ -26,6 +27,10 @@ PE_TEXT_TRITON_MODEL = TritonModelConfig.PE_TEXT_MODEL
 PE_TEXT_INPUT = 'text_tokens'
 PE_TEXT_OUTPUT = 'text_embeddings'
 PE_TEXT_CONTEXT_LENGTH = 32
+#: Extra tries of a text call that met UNAVAILABLE. A channel the server closed with GOAWAY (an
+#: idle one a ping policy or a proxy timed out) fails the call in flight and reconnects for the
+#: next; both calls here (inference, readiness) only read the model, so one more try is safe.
+UNAVAILABLE_RETRIES = 1
 
 
 def trim_text_tokens(tokens: np.ndarray) -> np.ndarray:
@@ -64,7 +69,12 @@ class TritonTextBackend:
 
         inp = InferInput(PE_TEXT_INPUT, list(tokens.shape), 'INT64')
         inp.set_data_from_numpy(tokens)
-        result = infer_with_deadline(
-            self._client_source(), self.model_name, [inp], [InferRequestedOutput(PE_TEXT_OUTPUT)]
+        result = retry_sync(
+            infer_with_deadline,
+            self._client_source(),
+            self.model_name,
+            [inp],
+            [InferRequestedOutput(PE_TEXT_OUTPUT)],
+            max_retries=UNAVAILABLE_RETRIES,
         )
         return np.asarray(result.as_numpy(PE_TEXT_OUTPUT), dtype=np.float32)

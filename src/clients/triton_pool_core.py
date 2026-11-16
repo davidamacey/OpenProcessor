@@ -91,7 +91,9 @@ def images_input(tensor: np.ndarray, datatype: str) -> grpcclient.InferInput:
 # Reference: https://grpc.io/docs/guides/performance/
 RECONNECT_MAX_BACKOFF_MS = 3000
 GRPC_CHANNEL_OPTIONS = [
-    # Keep connections alive (prevents reconnection overhead)
+    # Keep connections alive (prevents reconnection overhead). The model server must permit
+    # these idle pings (compose Triton flags, the harness's fake server);
+    # tests/test_triton_keepalive.py pins them to these values.
     ('grpc.keepalive_time_ms', 30000),  # Send keepalive ping every 30s
     ('grpc.keepalive_timeout_ms', 10000),  # Wait 10s for keepalive response
     ('grpc.keepalive_permit_without_calls', 1),  # Allow keepalive when idle
