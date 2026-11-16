@@ -72,8 +72,8 @@ impl PgWorld {
             .owner
             .query_one(
                 "INSERT INTO projects (slug, display_name, status, index_prefix, storage_prefix, \
-                 model_prefix, mlflow_experiment) VALUES ($1, $1, 'active', 'op_' || $1, $1, \
-                 'm_' || $1, 'e_' || $1) RETURNING id",
+                 model_prefix, mlflow_experiment, created_by) VALUES ($1, $1, 'active', \
+                 'op_' || $1, $1, 'm_' || $1, 'e_' || $1, 'test') RETURNING id",
                 &[&alias],
             )
             .await
