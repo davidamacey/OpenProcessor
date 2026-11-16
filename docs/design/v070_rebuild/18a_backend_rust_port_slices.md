@@ -640,7 +640,12 @@ on the recorded tag sets and the location-policy cases of `contracts/json/captur
 host). Settings: `OP_EXIFTOOL_BIN`, `OP_EXIFTOOL_POOL_SIZE`, `OP_EXIFTOOL_MAX_WAITING`,
 `OP_EXIFTOOL_QUEUE_WAIT_S`, `OP_EXIFTOOL_READ_TIMEOUT_S`. The pool starts each child through
 `setpriv --pdeathsig TERM --` (util-linux, `native/op_media/src/exiftool/child.rs`), so the
-`op-server` image needs `util-linux` as well as ExifTool and Perl (R1a's Dockerfile). Owed to the
+`op-server` image needs `util-linux` as well as ExifTool and Perl (R1a's Dockerfile). Deviations from the Python reader, accepted (decision 17): a path that could
+inject ExifTool arguments (empty, a line break or NUL byte, or a first character `-` or `#`) is
+refused (`ExifToolError::InvalidPath`); the Python client's `-echo4` is not used; an empty answer is
+its own error (`EmptyOutput`) and does not kill a healthy child; a capture time whose UTC falls
+outside years 1 to 9999 keeps the local time with UTC unset (the Python reader crashes the ingest
+there). Owed to the
 sweep: the pool against the real ExifTool in that image over `coco2k` and `setp200`, values equal to
 the Python reader on every file (the go bar above).
 

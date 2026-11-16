@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | plan, revision 1 (2026-11-15). Revision 0 (`5763a2d04`) reworked after an independent review (4 blocker, 9 major, 9 minor findings) and the coordinator's 13 decisions; section 13 traces every finding and decision to the text that now answers it. Covers roadmap gaps G5 (core routes on the engine and the record) and G14 (deploy, the parts this port changes) of [14](14_roadmap.md) |
+| Status | plan, revision 1 (2026-11-15), brought in step on 2026-11-16 with the coordinator's decisions 14 to 20 (contract-first, one owner per landing file, the env-surface test reading Rust, the metadata reader's deviations, one TLS stack, the derived-file cache, the closed API capacity rows), the labelling plan's changes (16a sections 4 and 5) and what stage 0 built. Revision 0 (`5763a2d04`) reworked after an independent review (4 blocker, 9 major, 9 minor findings) and the coordinator's 13 decisions; section 13 traces every finding and decision to the text that now answers it. Covers roadmap gaps G5 (core routes on the engine and the record) and G14 (deploy, the parts this port changes) of [14](14_roadmap.md) |
 | Companions | [18a_backend_rust_port_slices.md](18a_backend_rust_port_slices.md): how a slice runs, the Cargo workspace and crates, the test and parity rules, and the slices that start now, each complete. [18b_backend_rust_port_later_slices.md](18b_backend_rust_port_later_slices.md): the slices after the record exists, the mapping from the storage slices of plan 15c to this plan, and the traceability tables |
 | Code base read | `int/b4-stateless` at `7614a8648` (this worktree); `int/storage` at `0d9412024` (plans 15b, 15c, the Python step 1); `int/native` at `1a3311290` (the `native/` workspace of plan 17). API facts come from the port inventory of 2026-11-15 (gitignored, `artifacts_local/speed_1113/api_port/inventory.md`); its "inferred" rows are used only where re-read in code or marked as hypotheses |
 | Numbers | every number names its source; estimates say "estimate". "Capacity rows" = the partial grid of 2026-11-15 (gitignored `artifacts_local/speed_1113/api_capacity/results.md`, `summary_w8_partial.txt`). "Ingest timeline" = gitignored `artifacts_local/speed_1113/ingest_timeline/timeline_clean.md`. Measurement ids M1 to M18 are this plan's (section 8); the storage measurements of plan 15b section 13 are written "15b M1" and so on |
@@ -64,8 +64,9 @@ lasted 2 to 3 seconds each, so their spread is wide.
 
 At 32 small-photo clients the API used 10.7 cores, OpenSearch 4.5, PostgreSQL 0.65; no store queue
 was seen. The API processes are the bound. Real photos give about 7 objects, not 2, so real API cost
-is higher. Not measured yet: where the API's CPU goes (M1), the 30-process and 1-process grids (M2),
-set P rows.
+is higher. Not measured, and not going to be: where the API's CPU goes (M1) and the 30-process and 1-process
+grids (M2), because the grid closed at 27 of 33 rows and the missing rows measure the Python API the
+Rust server replaces (section 8). Set P rows are not in this table.
 
 ### 1.2 What the API's CPU is made of (what a Rust server can and cannot remove)
 
@@ -121,7 +122,7 @@ one card plan C at 70/s fits in 24 cores; two cards plan C at 140/s needs 27 to 
 | Database driver | tokio-postgres 0.7.18, deadpool-postgres 0.14.2, pgvector 0.4.2 (features `postgres`, `halfvec`) | section 2.2 |
 | Object storage | one interface: the `object_store` crate 0.14.2 (local directory and S3-compatible), no second mechanism beside it | decision 4; section 4 |
 | Search | SQL on the record (gate A) and the vector index gate B picks; if gate A or B keeps OpenSearch as a derived store, the `opensearch` crate 2.4.0 | no OpenSearch code is ported before gates A and B decide (R2b, 18b) |
-| Contract | decided by the contract spike M15 between code-first (utoipa) and contract-first (section 2.4) | decision 10 |
+| Contract | contract-first: the committed `contracts/openapi/*.json` are the source of truth and hand-written serde types are checked against them (decided by the spike M15; section 2.4) | decision 14 |
 | Metrics, logs | prometheus-client 0.26.0 (as the engine), same metric names and labels as today; tracing 0.1.44 with tracing-subscriber 0.3.23 JSON output, same field names (`request_id`) | |
 | Workspace | one Cargo workspace, `native/`, engine and server crates side by side; the crate list, owners and rules are in 18a section 2 | 18a section 2.1 gives the reasons |
 
@@ -148,8 +149,9 @@ the licence proof at each lane's first commit.
 | Capture fast path (candidate, M16) | kamadak-exif 0.6.2 (BSD-2-Clause, 2026-11-05): reads Exif "directly from some image formats including TIFF, JPEG, HEIF, PNG, and WebP" through `Reader::read_from_container`; time, GPS, orientation and camera tags on JPEG. Accepted only if M16 shows equal values to ExifTool on the corpus; ExifTool stays for the formats and tags the fast path does not cover | nom-exif 3.8.0: licence "non-standard" on crates.io | https://docs.rs/kamadak-exif/0.6.2/exif/ |
 | Text tokens for text search | tokenizers 0.23.2, checked token for token against today's tokenizer | | https://crates.io/api/v1/crates/tokenizers |
 | HTTP clients (segmenter, VLM, model-server HTTP) | reqwest 0.13.5 | | https://crates.io/api/v1/crates/reqwest |
+| TLS (S3, PostgreSQL, a cloud VLM endpoint) | one stack: rustls 0.23.46 with the ring provider (`object_store` with its `aws-base`, `reqwest` and `ring` features and reqwest's `rustls-no-provider`; `tokio-postgres-rustls` 0.14.0 for the database), the provider installed once by `op_config::install_tls_provider`; roots from the platform verifier, or the file `OP_DB_SSLROOTCERT` names for the database. `native/deny.toml` checks only the two targets we ship (`x86_64-unknown-linux-gnu` and `aarch64-unknown-linux-gnu`); no licence is added for it | no system OpenSSL (a libssl in every image and a second stack beside the engine's), no aws-lc (its `aws-lc-sys` build and the OpenSSL-licence text it carries) | https://docs.rs/rustls/0.23.46/rustls/crypto/struct.CryptoProvider.html#method.install_default (decision 18) |
 | Graph and assignment (near-duplicate groups, lineage) | petgraph 0.8.3 (MIT or Apache-2.0: connected components, union-find); pathfinding 4.16.0 (Apache-2.0 or MIT: `kuhn_munkres_min`, the Hungarian method; weights must be `Ord`, so float costs are scaled to integers, checked against SciPy's `linear_sum_assignment` on recorded inputs) | | https://crates.io/api/v1/crates/petgraph ; https://docs.rs/pathfinding/4.16.0/pathfinding/kuhn_munkres/fn.kuhn_munkres.html |
-| k-means and kNN at scale | decided by M12 and M13: matrix-multiply kernels in our own GPU crate first; cuvs 26.10.0 (Apache-2.0) only if its Rust API is proven on the card; linfa-clustering 0.8.1 on CPU as the small-set path | section 2.3 | review evidence, section 2.3 |
+| k-means and kNN at scale | k-means: `op_numeric` (plan 16a L16-1): our own spherical Lloyd's loop on faer products on the CPU, behind a whole-fit interface; a GPU backend (cuBLAS through cudarc in `gpu_frame`) only if plan 16's B2 needs it. linfa-clustering 0.8.1 is not today's algorithm (L2 distance, no re-normalisation). The exact all-pairs top-k kinds: decided by M13 | section 2.3 | plan 16a section 2 for the pages read; review evidence, section 2.3 |
 | Tests | proptest 1.12.0; testcontainers-modules 0.15.0 (PostgreSQL) for the database tier | cargo-fuzz needs nightly, against the pinned stable toolchain | https://crates.io/api/v1/crates/proptest |
 
 ### 2.3 What stays Python (decision 3), and the rule for everything else
@@ -158,7 +160,8 @@ the licence proof at each lane's first commit.
 |---|---|
 | `probe`, `train`, `model_export`, `bakeoff`, `promote` | stay Python: Ultralytics, PyTorch, TensorRT and ModelOpt, ONNX Runtime, `onnx` have no Rust equivalent |
 | `embedding_viz` (UMAP) | stays Python until a product decision replaces the method: annembed 0.1.6 is "à la UMAP" and no maintained exact port exists; M14 measures map quality so the owner can decide |
-| `cluster_run` (both methods), `item_scores` (uniqueness), `near_dup_score` and `near_dup_core_group` (exact all-pairs kNN), `persons_cluster` (face kNN) | Rust if M12 or M13 passes on 100,000 and 1,000,000 real crop vectors; else Python reading and writing its own result tables. The decision falls before R6 and R8 start, so neither language's version is written and then replaced |
+| `cluster_run` (both methods) | Rust, on CPU or GPU as M12 decides; **no Python fallback** (plan 16a section 5: the owner's list of what stays Python is `probe`, `train`, `model_export`, `bakeoff`, `promote`, `embedding_viz`) |
+| `item_scores` (uniqueness), `near_dup_score` and `near_dup_core_group` (exact all-pairs kNN), `persons_cluster` (face kNN) | Rust if M13 passes on 100,000 and 1,000,000 real crop vectors; else Python reading and writing its own result tables. Plan 16a flags that the no-fallback rule above applies to these four too; that is outside this plan's text and awaits the coordinator's word. The decision falls before the first slice of each kind starts, so neither language's version is written and then replaced |
 | `score_rows`, `region_fp_centroids`, `selection` (k-center greedy), `near_dup_group`, `near_dup_rescore`, `group_lineage`, `raw_label_clusters` (`autolabel`), the `assist_loop` splitter, `embedding_reindex`, `reprocess`, the VLM client jobs and the VLM worker loop | Rust in their slice ("straightforward" in the review's table: a GEMM, a farthest-point loop, union-find, the Hungarian method, average or complete linkage over at most 2,000 members, HTTP and gRPC calls), each checked for equal output on recorded inputs |
 | Segmenter and vLLM servers | stay, in their own images |
 
@@ -176,28 +179,41 @@ FastAPI's `app.openapi()` filtered to `/curation` (OpenAPI 3.1.0, 759 components
 The 66 core route decorators have no contract; R0c (18a) writes `contracts/openapi/core.json` as
 their baseline before R2a.
 
-Two ways to keep the contract, decided by the spike M15 before R1a's contract part:
+Decision 14 (2026-11-16, D6): **B, contract-first.** The spike M15 ran
+(`artifacts_local/speed_1113/plan18_contract_spike/results.md`) and code-first fails this section's own
+pass rule: `const` needs a custom schema impl and a post-print JSON pass that is not a utoipa feature;
+tuples need a custom impl; `Option<$ref>` prints `oneOf` where the file has `anyOf` in 146 places; a
+discriminator works only on untagged enums. So the committed `contracts/openapi/*.json` are the source
+of truth, frozen per family at its switch (the FastAPI generator stops writing a family when Rust owns
+it). Rust wire types are hand-written natural serde types, checked three ways: (a) in each family's
+Rust tests, serialised samples and negative cases are validated against the committed schema with the
+`jsonschema` crate (a dev-dependency; its transitive licence, MIT-0, is added to `native/deny.toml` by
+the coordinator when the first lane needs it: MIT-0 is MIT without the attribution duty); (b) in the
+sweep, Schemathesis's response-schema conformance on every operation of the family against the Rust
+server (R0d's runner generates cases for every operation and checks answers with `--check-schema`);
+(c) requests generated from the contract must be accepted and negative ones refused. `typify` is not
+used: its types lose `const`, tuple and discriminator typing. No `op_contracts` crate is created.
+**Open, to settle before R12:** how a new route enters the contract once FastAPI is gone: a hand edit
+of the OpenAPI file with `oasdiff` and the frontend type generation, or utoipa revisited.
 
-| | A. Code-first | B. Contract-first |
+The two options that were weighed, kept for the record:
+
+| | A. Code-first (not chosen) | B. Contract-first (chosen) |
 |---|---|---|
-| Source of truth | Rust wire structs with utoipa 6.0.0 derives (utoipa-axum 0.3.0); `op_contracts` prints the document | the committed `contracts/openapi/*.json`; Rust wire types generated from it or checked against it by a test |
-| During the port | `scripts/codegen/export_api_contracts.py` merges the Rust part and the FastAPI part into the one file | the file is frozen per family at its switch; the FastAPI generator stops writing a family when Rust owns it |
-| Known limits | utoipa's serde support is partial; `discriminator` works only on untagged enums; `Option` becomes nullable (ToSchema docs). Whether it writes `prefixItems` (8 uses), `const` (42) and a discriminator with a mapping on a tagged enum (2) is unknown | `contracts/README.md` says the files are generated, never hand-edited; a change becomes an edit of the file plus regenerated types, which needs a rule and a tool |
-| What it changes | a hook needs a built Rust binary: the `op_contracts` hook runs `cargo run --locked -p op_contracts` scoped to `native/**` and the contract files (cost measured in M15) | the drift hooks compare Rust types to the file; the generator of item wire and enum files moves to a Rust test |
+| Source of truth | Rust wire structs with utoipa 6.0.0 derives (utoipa-axum 0.3.0), a crate printing the document | the committed `contracts/openapi/*.json`; Rust wire types written by hand and checked against it by tests |
+| During the port | `scripts/codegen/export_api_contracts.py` would merge the Rust part and the FastAPI part into the one file | the file is frozen per family at its switch; the FastAPI generator stops writing a family when Rust owns it |
+| Why | utoipa's serde support is partial (see the failures above) | `contracts/README.md` says the files are generated, never hand-edited: after a family's switch the file is hand-edited, which needs the rule and tool of the open question above |
 
-M15 builds, in a scratch crate outside the merge, the two discriminator schemas, two tuple
-(`prefixItems`) schemas and three `const` fields of `curation.json` both ways and compares them
-with the normalised diff below. A passes when every one matches with no custom `ToSchema` impl or
-with at most one documented impl per construct; else B.
-
-Equality is by meaning, not bytes (decision 5, Q3 accepted with the review's conditions): (1) `oasdiff
-breaking` (OpenAPI 3.1 support documented from v1.15.0) between the integration head and the new
-file reports nothing outside the slice's intended-change list; (2) a normalised diff of each ported
-operation and its schemas (titles dropped, the two spellings of an optional field made one, keys
-sorted) is empty outside that list, and compares `prefixItems`, `const`, discriminators and nullable
-forms directly, since oasdiff covers `prefixItems` only when added or removed
-(https://github.com/oasdiff/oasdiff/blob/main/docs/OPENAPI-31.md); (3) the frontend's contract
-tests, `npm run check` and `npm run build` pass unchanged. Error bodies keep FastAPI's shapes, which
+Equality is by meaning, not bytes (decision 5, Q3 accepted with the review's conditions). With the
+file frozen, three things hold it: (1) the checks (a) to (c) of decision 14, whose `jsonschema` tests
+compare `prefixItems`, `const`, discriminators and nullable forms directly, since oasdiff covers
+`prefixItems` only when added or removed
+(https://github.com/oasdiff/oasdiff/blob/main/docs/OPENAPI-31.md); (2) when a file is edited by hand
+for an intended change, `oasdiff breaking` (OpenAPI 3.1 support documented from v1.15.0) between the
+integration head and the new file reports nothing outside the slice's intended-change list; (3) the
+frontend's contract tests, `npm run check` and `npm run build` pass unchanged. The normalised diff of
+two generated documents that revision 1 planned is not built: no second generated document exists
+once the file is frozen. Error bodies keep FastAPI's shapes, which
 `frontend/src/lib/api_errors.ts` reads (`{detail}`, `{detail: {error, message}}`, 422 `{detail:
 [{loc, msg, type}]}`); the `msg` text of validation errors may differ, except "String should match
 pattern '...'", which Rust emits word for word. The generated files `item_wire.json`, `itemWire.ts`,
@@ -246,7 +262,7 @@ truth) also fails.
 
 | Stage | Owner's step | Slices (18a, 18b) | What the person gets |
 |---|---|---|---|
-| 0, now | (1) runs in plan 17; (2) starts | R0 measurements and tools (R0w, R0c, R0d, R0e, R0g, R0x, M15); R1s storage layer; R1a server skeleton and front; R1j job runner core; R1e engine client; R1x ExifTool pool and hashing; R1u upload receiver up to the landing zone | nothing changes for the person; the pieces of the Rust ingest are built and tested |
+| 0, built except the server front (R1a) | (1) runs in plan 17; (2) starts | R0 measurements and tools (R0w, R0c, R0d, R0e, R0g, R0x, M15); R1s storage layer; R1a server skeleton and front; R1j job runner core; R1e engine client; R1x ExifTool pool and hashing; R1u upload receiver up to the landing zone | nothing changes for the person; the pieces of the Rust ingest are built and tested |
 | A | (2) | R3a ticks in Rust, Python claim loop, Celery leaves; R3b live events from Rust, Valkey leaves; R1b the record and the fold in Rust; R11a projects on the record; R1c Rust ingest switches (uploads and folders; S3 storage); R2a inference routes on the engine | ingest on Rust at the card's rate; uploads stream to storage; `/detect`, `/faces`, `/embed`, `/ocr`, `/analyze` on the engine |
 | B | (2), (3) | R4 gallery reads; R5 labelling acts, review, counts; R5e erasure; R11 configuration, settings, models | the gallery, labelling and settings work again on Rust; the gallery frontend update (photo-library plans) builds on R4 |
 | C | (4) | R6 vectors, search, near-duplicates, holdout; R7 regions; R8 clustering; R9 import, combine, export, training inputs; R10 machine helpers and re-runs; R2b core data on the record, OpenSearch leaves | every family on the record; one database when gates A and B say so |
@@ -302,17 +318,17 @@ at a pinned commit.
 So the go bar of R1c, API host CPU per photo at most 0.5x Python's (18b R1c), is plausible at 20 MP
 and doubtful on small photos unless M16's fast path or decision D2 takes ExifTool off the hot path.
 At 140 photos/s on two cards at 20 MP the estimate frees about 3.5 to 9.7 cores (arithmetic on 25 to
-69 ms saved per photo). M1 and M5 run first; M16 is the candidate that changes the small-photo floor.
+69 ms saved per photo). M5 runs first (M1 is not run: the capacity rows above are the baseline); M16 is the candidate that changes the small-photo floor.
 
 ### 3.5 Decisions the measurements settle
 
 | # | Decision | Branches | Settled by |
 |---|---|---|---|
 | D2 | Does ExifTool stay on the hot path? | keep (M5 under 3 ms CPU per photo at 20 MP, an estimate threshold); else the hot path reads time, orientation, GPS and camera in Rust (M16's reader) and the full ExifTool read becomes a queued job, agreed with the gallery metadata plan ([05](../photo_library/05_p2a0_metadata.md), which owns the reader) | M5, M16 |
-| D3 | API process count until R1c lands | if photos/s at 20 MP rises above the plan C ceiling with CPU per photo unchanged at 30 processes, set the compose default from the grid (configuration only) | M2 |
+| D3 | API process count until R1c lands | stays at the compose default: M2 is not run (decision 20); the 27 rows that exist do not justify a change | none |
 | D4 | Does OpenSearch survive as a derived store? | no (R2b deletes the client and the service); yes (R2b and R6 use the `opensearch` crate behind the vector-index or search-copy interface) | gate A, gate B |
-| D5 | Numeric kinds in Rust or Python | per section 2.3 | M12, M13 (and M14 for the owner's product decision on the 2-D map) |
-| D6 | Contract mechanism | A or B of section 2.4 | M15 |
+| D5 | Numeric kinds on CPU or GPU, in Rust (`cluster_run`); the four exact kNN kinds in Rust or Python per section 2.3 | M12 decides CPU or GPU for `cluster_run`; M13 for the four | M12, M13 (and M14 for the owner's product decision on the 2-D map) |
+| D6 | Contract mechanism | **B, contract-first** (decided 2026-11-16, decision 14, section 2.4) | M15 (done) |
 
 Revision 0's D1 (a Python half of "the engine reads by key") is dropped (decision 6): no Python
 change that R1c replaces is written. Reading by key is an engine protocol addition for plan 17
@@ -401,6 +417,12 @@ leaves its root.
   root), `photo_files`, every derived prefix of the photo, exports and training copies listed by 15a
   section 8, the holdout snapshot rewritten without it. `op_storage` provides the primitives (R1s):
   delete by key, delete by prefix, both idempotent.
+- The derived-file cache (decision 19): with an S3 store, derived files are cached on local disk in
+  their own directory `OP_STORAGE_CACHE_ROOT` (required with an S3 store and a cap above 0), shared by
+  the server processes of one host, with a layout that mirrors the key; entries live at most
+  `OP_STORAGE_CACHE_MAX_AGE_S`. The erase guarantee: no process serves an erased file; this host's
+  cached copy goes at once (`delete_prefix` removes the subtree on disk); another host's copy goes
+  within the maximum age.
 - Shared files: originals are keyed per project, so erasure in one project never touches another
   project's bytes. Inside a project, one stored object can be referenced by more than one row (a photo
   and a `photo_files` row with equal bytes, a holdout snapshot, an export). Before an object is
@@ -548,8 +570,9 @@ jscpd duplication check over `native/**/*.rs`, the file-size ratchet, Dependabot
 |---|---|
 | No unsafe | `#![forbid(unsafe_code)]` in every server crate |
 | Layering | `scripts/codegen/check_layering.py` gains a rule over `cargo metadata` that holds 18a section 2.2's dependency table |
-| Contract drift | the drift hooks regenerate or check the contract by D6's mechanism; stale fails |
-| Breaking changes | `oasdiff breaking` and the normalised diff of 2.4 against the integration head; anything outside the slice's intended-change file fails |
+| Contract drift | for families still generated by FastAPI, the drift hooks regenerate and compare; for a family Rust owns, its tests check the Rust types against the frozen file (section 2.4); stale fails |
+| Breaking changes | `oasdiff breaking` of a hand-edited contract file against the integration head; anything outside the slice's intended-change file fails |
+| Settings surface | `tests/test_env_surface.py` reads `native/**/*.rs` as well: an `OP_*` variable read through `op_config::Env` counts as read by code, and every one must be documented in `env.template` (decision 16); a lane adds no allowlist line for a Rust-read variable |
 | Case contracts | the fold cases, plan-build cases, capture goldens and every other generated case file replayed by Rust tests; drift fails |
 | Statements | a database-tier test prepares every statement of the registry against the head schema (wave sweep) |
 | Property tests | the fold (any order of machine writes around a claim gives the same row), the filter grammar, the cursor codec, local key resolution (no key leaves its root) |
@@ -564,8 +587,8 @@ registry name; set P as numbers only.
 
 | Id | What | Bar or use | Before |
 |---|---|---|---|
-| M1 | Where the API's CPU goes: the capacity harness with its stdlib sampler (`APICAP_PROF=1`), 8 processes, stub engine, `coco2k`, `mp20` and `setp200`; per-PID `/proc/<pid>/stat` deltas split uvicorn from ExifTool; crop JPEG bytes per photo logged | fact-finding: the parts of 3.4 | R1c |
-| M2 | 30-process and 1-process grids, same lists | D3 | R1c |
+| M1 | **Not run** (decision 20; the missing rows measure the Python API the Rust server replaces; the per-photo CPU of section 1.1 is the baseline). Where the API's CPU goes: the capacity harness with its stdlib sampler (`APICAP_PROF=1`), 8 processes, stub engine, `coco2k`, `mp20` and `setp200`; per-PID `/proc/<pid>/stat` deltas split uvicorn from ExifTool; crop JPEG bytes per photo logged | fact-finding: the parts of 3.4 | R1c |
+| M2 | **Not run** (decision 20). 30-process and 1-process grids, same lists | D3, which stays at the compose default | none |
 | M3 | Path-mode spike in a scratch copy (no product file touched): the API sends a path, the stub engine reads the file, capture by `read_capture_file`, imohash from the file | the share of API CPU that reading by key removes: the priority of plan 17's by-key item (section 12) | that item |
 | M4 | Real objects per photo: the grid with plan 17's real pipeline, plan C | slope of API CPU per object | R1c |
 | M5 | ExifTool's own cost: `-stay_open` over `coco2k`, `setp200`, `commons` and a format corpus (TIFF, PNG, HEIC, WebP), by path and by pipe; CPU per file and bytes read (`/proc/<pid>/io`) | D2 (3 ms at 20 MP, estimate threshold) | R1c |
@@ -575,24 +598,24 @@ registry name; set P as numbers only.
 | M9 | Region-stage worker profile (`scripts/curation/worker.py --continuous`) | R7's priority | R7 |
 | M10 | The Python upload route today with `op-upload-loadgen`: 128 photos, 512 MiB cap, concurrency 1, 2, 4, 8 on `coco2k` and `setp200`; photos/s, API CPU per photo, request latency | the baseline R1c must beat; the frontend default | R1c |
 | M11 | NAS sequential read and write MB/s from this host | section 5.4 staging | the first scale run |
-| M12 | k-means on 100,000 and 1,000,000 x 1,024 real crop vectors, k about 1,000 to 4,000: wall time and objective against faiss CPU and GPU, assignment agreement; our GPU matrix-multiply kernel, cuvs only if its Rust API covers k-means on the card, linfa on CPU for small sets | D5 for `cluster_run`: Rust when the objective is within the two-run spread of faiss and the time is not above faiss GPU by more than the spread | R8 |
+| M12 | Today's parameters for the cluster fit (K = min(512, n // 6), a 50,000-object sample) at 100,000 and 1,000,000 real crop vectors on `op_numeric`'s CPU backend: wall time and objective against faiss, assignment agreement; the bar is in plan 16 section 4 | D5 for `cluster_run`: CPU or GPU inside Rust (never Python) | R8-1 |
 | M13 | Exact all-pairs top-k on the same vectors and on face vectors: time and recall against faiss `IndexFlatIP`; uniqueness score rank correlation against faiss IVF | D5 for `near_dup_score`, `near_dup_core_group`, `persons_cluster`, `item_scores` | R6 |
 | M14 | 2-D map quality at 128,000 points: trustworthiness and kNN preservation of annembed and of PCA against umap-learn, and time | the owner's product decision for `embedding_viz` | none (informs) |
-| M15 | Contract spike (section 2.4): both mechanisms on the discriminator, tuple and `const` schemas; the hook's cost per commit | D6 | R1a's contract part |
+| M15 | **Done 2026-11-16.** Contract spike (section 2.4): both mechanisms on the discriminator, tuple and `const` schemas; the hook's cost per commit | D6 = B | R1a's contract part |
 | M16 | Capture fast path: kamadak-exif against ExifTool on JPEG time, GPS, orientation and camera tags over `coco2k`, `setp2k`, `commons` and the format corpus: equal values per file, CPU per file | accept the fast path for the formats and tags where every value is equal | R1c (optional: R1c ships without it) |
 | M17 | `NOTIFY` at ingest commit rate: commit groups with one `NOTIFY` each at 3x the target commit rate, with listeners in 4 processes; commit p99 with and without, event latency | Valkey leaves when commit p99 rises by at most the two-run spread and event p99 is under 100 ms (estimate threshold) | R3b |
 | M18 | Storage write cost per photo on this host: SHA-256 while streaming, landing write and rename, a local object store, and an S3-compatible server on loopback, at both sizes | B1's budget and the floor of 3.4 | R1c |
 
 M12, M13 and M14 share one build of the vectors with the vector-index round and plan 16: 100,000 and
 1,000,000 real crop vectors from the engine's crop encoder over the dataset registry's lists (set P as
-numbers only). The early lanes of 18a section 5 need none of M1 to M18 to start, except R1a's
-contract part (M15).
+numbers only). The early lanes of 18a section 5 need none of M1 to M18 to start (M15, the one
+that R1a's contract part needed, is done).
 
 ## 9. Risks and their early signals
 
 | Risk | Early signal | Answer |
 |---|---|---|
-| The contract cannot be kept equal | the normalised diff reports a change on the first ported route | the intended-change file and a frontend edit in the same slice; D6's other branch |
+| The contract cannot be kept equal | a family's `jsonschema` tests or Schemathesis conformance run report a difference on the first ported route | the intended-change file and a frontend edit in the same slice |
 | The Rust fold disagrees with the oracle | a case of R0x's export fails | the oracle wins unless the case is a recorded Python defect, listed with the owner |
 | Two job runtimes in one table drift | a conformance case (claim race, lease expiry, cancel, exclusive group, pause) differs between the Rust runner and the Python claim loop | one conformance suite run against both (18a section 3.5) |
 | A family's window lasts long (W2) | the pending list does not shrink between sweeps | the coordinator orders stage B by the person's acceptance walk |
@@ -605,7 +628,7 @@ contract part (M15).
 | Forwarded routes add latency | p99 of forwarded routes rises through the front | R1a's go bar; the forwarder is deleted in R12 |
 | Metric names change | the metric-name diff fails | name and label checks per slice |
 | The cloud host is CPU-bound | B2 shows 8 cores busy below the card ceiling | the hardware JPEG backend; API CPU per photo |
-| OpenAPI 3.1 tooling gaps | oasdiff or Schemathesis misreads a construct | the normalised diff stays the gate |
+| OpenAPI 3.1 tooling gaps | oasdiff or Schemathesis misreads a construct | the `jsonschema` tests of the family are the gate |
 | A key leaves its root | the property test | section 4.4 |
 
 ## 10. Not in this plan
