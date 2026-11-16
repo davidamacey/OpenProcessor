@@ -4,8 +4,10 @@
 #![forbid(unsafe_code)]
 
 pub mod durable;
+pub mod erase;
 pub mod error;
 pub mod hash;
 pub mod keys;
 pub mod landing;
 pub mod local;
+pub mod reconcile;

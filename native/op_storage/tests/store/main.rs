@@ -3,5 +3,6 @@
 #![cfg(test)]
 
 mod durable_tests;
+mod erase_tests;
 mod s3_tests;
 mod support;

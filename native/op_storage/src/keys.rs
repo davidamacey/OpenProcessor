@@ -193,6 +193,31 @@ impl StorageKey {
         ))
     }
 
+    /// The prefix of every original of a project: `projects/<project>/originals`.
+    #[must_use]
+    pub fn originals_prefix(project: ProjectId) -> Self {
+        Self::from_safe_parts(
+            Root::Projects,
+            [project.to_string(), "originals".to_owned()],
+        )
+    }
+
+    /// The prefix of every derived file of one kind of one photo:
+    /// `projects/<project>/derived/<kind>/<photo_key>`. Delete by prefix covers whole path
+    /// segments, so photo 4 never covers photo 42.
+    #[must_use]
+    pub fn derived_prefix(project: ProjectId, kind: DerivedKind, photo_key: i64) -> Self {
+        Self::from_safe_parts(
+            Root::Projects,
+            [
+                project.to_string(),
+                "derived".to_owned(),
+                kind.as_str().to_owned(),
+                photo_key.to_string(),
+            ],
+        )
+    }
+
     /// A file under a source root, read in place: `source/<rel>`.
     ///
     /// # Errors
@@ -288,6 +313,14 @@ mod tests {
         assert_eq!(s.as_str(), "source/trip/IMG_1.jpg");
         assert_eq!(s.root(), Root::Source);
         assert_eq!(s.segments().collect::<Vec<_>>(), ["trip", "IMG_1.jpg"]);
+    }
+
+    #[test]
+    fn the_derived_prefix_is_the_folder_of_one_photo_and_kind() {
+        let p = StorageKey::derived_prefix(ProjectId(3), DerivedKind::Thumbs, 42);
+        assert_eq!(p.as_str(), "projects/3/derived/thumbs/42");
+        let d = StorageKey::derived(ProjectId(3), DerivedKind::Thumbs, 42, "256.jpg").unwrap();
+        assert!(d.as_str().starts_with(&format!("{p}/")));
     }
 
     #[test]
