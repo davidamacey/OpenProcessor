@@ -279,7 +279,8 @@ def test_each_arm_is_captured_into_its_own_directory(
 def test_generate_writes_the_six_models_and_the_graphs_only_when_asked(tmp_path: Path) -> None:
     si.generate(tmp_path / 'plain', onnx=False, detector_instances=2, encoder_instances=1)
     names = sorted(p.name for p in (tmp_path / 'plain').iterdir())
-    assert names == sorted([*si.null_names(), *si.capture_names()])
+    product = [p.null_name for p in si.PRODUCT_NULLS]
+    assert names == sorted([*si.null_names(), *si.capture_names(), *product])
     for name in si.capture_names():
         assert (
             tmp_path / 'plain' / name / '1' / 'model.py'
@@ -287,7 +288,7 @@ def test_generate_writes_the_six_models_and_the_graphs_only_when_asked(tmp_path:
     assert (tmp_path / 'plain' / 'null_detector_640' / '1').is_dir(), 'the plan goes here'
     si.generate(tmp_path / 'withonnx', onnx=True, detector_instances=4, encoder_instances=2)
     assert sorted(p.name for p in (tmp_path / 'withonnx' / '_onnx').iterdir()) == sorted(
-        f'{n}.onnx' for n in si.null_names()
+        f'{n}.onnx' for n in [*si.null_names(), *product]
     )
     config = parse((tmp_path / 'withonnx' / 'null_detector_640' / 'config.pbtxt').read_text())
     assert config.instance_group[0].count == 4
@@ -298,7 +299,7 @@ def test_plan_commands_print_by_default_and_run_only_when_asked(
 ) -> None:
     assert si.main(['plan-commands', '--runner', 'definitely-not-installed-trtexec']) == 0
     printed = capsys.readouterr().out.splitlines()
-    assert len(printed) == 3
+    assert len(printed) == len(si.SPECS) + len(si.PRODUCT_NULLS) == 7
     assert all(line.startswith('definitely-not-installed-trtexec --onnx=') for line in printed)
     assert si.main(['plan-commands', '--runner', 'definitely-not-installed-trtexec', '--run']) == 1
 
@@ -337,3 +338,105 @@ def test_names_are_printed_for_the_hold_script(capsys: pytest.CaptureFixture[str
 def test_the_detection_count_is_the_fixed_boxes(capsys: pytest.CaptureFixture[str]) -> None:
     assert si.main(['detections']) == 0
     assert capsys.readouterr().out.strip() == str(len(si.detector_rows())) == '5'
+
+
+PRODUCT = {p.null_name: p for p in si.PRODUCT_NULLS}
+
+
+@pytest.mark.parametrize('name', sorted(PRODUCT))
+def test_a_product_null_repeats_its_real_models_contract_under_its_own_name(name: str) -> None:
+    p = PRODUCT[name]
+    ours, theirs = parse(si.product_null_config(p)), real(p.real)
+    assert ours.name == name
+    assert contract(ours) == contract(theirs)
+    assert (ours.platform, list(ours.instance_group)) == (
+        theirs.platform,
+        list(theirs.instance_group),
+    )
+
+
+def test_the_product_nulls_fill_the_plans_face_and_text_fields(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert si.main(['names', '--kind', 'product']) == 0
+    assert json.loads(capsys.readouterr().out) == {
+        'face_detector': 'null_scrfd_640',
+        'face_recogniser': 'null_arcface_112',
+        'text_detector': 'null_ocr_det',
+        'text_recogniser': 'null_ocr_rec',
+    }
+
+
+def run_product(name: str, feed: dict[str, np.ndarray]) -> list[np.ndarray]:
+    return [
+        np.asarray(o)
+        for o in ReferenceEvaluator(si.product_null_onnx(PRODUCT[name])).run(None, feed)
+    ]
+
+
+def test_the_null_face_detector_decodes_to_one_fixed_face_through_the_engines_decoder() -> None:
+    from frame_engine.faces import scrfd
+
+    batch = np.random.default_rng(3).integers(0, 256, (2, 3, 640, 640), dtype=np.uint8)
+    outs = run_product('null_scrfd_640', {'images': batch})
+    names = si.scrfd_output_names()
+    assert names == [o.name for o in real('scrfd_10g_bnkps_uint8').output]
+    for row in range(2):
+        scores, boxes, kps = scrfd.decode(
+            {n: o[row] for n, o in zip(names, outs, strict=True)}, 640, 640, 0.5
+        )
+        assert scores.tolist() == pytest.approx([0.9])
+        assert boxes.tolist() == [[256.0, 256.0, 384.0, 384.0]]
+        landmarks = [[304.0, 307.2], [336.0, 307.2], [320.0, 320.0], [307.2, 336.0], [332.8, 336.0]]
+        assert np.array_equal(kps[0], np.array(landmarks, np.float32))
+
+
+def test_the_null_face_recogniser_answers_one_unit_vector() -> None:
+    (out,) = run_product('null_arcface_112', {'images': np.zeros((5, 3, 112, 112), np.uint8)})
+    assert out.shape == (5, 512)
+    assert np.allclose(np.linalg.norm(out, axis=1), 1.0)
+    assert (out == out[0]).all()
+
+
+@pytest.mark.parametrize(('h', 'w'), [(736, 736), (736, 1312), (1920, 1088)])
+def test_the_null_text_map_has_the_four_line_bands_at_any_input_size(h: int, w: int) -> None:
+    x = np.random.default_rng(4).integers(0, 256, (1, 3, h, w), dtype=np.uint8)
+    (out,) = run_product('null_ocr_det', {'x': x})
+    assert out.shape == (1, 1, h, w)
+    expected = np.zeros((h, w), np.float32)
+    for lo, hi in si.TEXT_ROW_BANDS:
+        expected[lo:hi, si.TEXT_COL_BAND[0] : si.TEXT_COL_BAND[1]] = 1.0
+    assert np.array_equal(out[0, 0], expected)
+
+
+@pytest.mark.parametrize('w', [48, 320, 321, 2048])
+def test_the_null_recogniser_reads_one_class_per_step(w: int) -> None:
+    indices, scores = run_product('null_ocr_rec', {'x': np.zeros((3, 3, 48, w), np.uint8)})
+    steps = -(-w // si.TEXT_REC_STEP)
+    assert indices.dtype == np.int32
+    assert indices.shape == scores.shape == (3, steps)
+    assert (indices == si.TEXT_REC_CLASS).all()
+    assert np.allclose(scores, si.TEXT_REC_SCORE)
+
+
+@pytest.mark.parametrize('name', sorted(PRODUCT))
+def test_no_product_null_operator_receives_the_uint8_input_but_the_cast(name: str) -> None:
+    graph = si.product_null_onnx(PRODUCT[name]).graph
+    assert [i.type.tensor_type.elem_type for i in graph.input] == [2], 'the model input stays UINT8'
+    uint8 = {i.name for i in graph.input}
+    users = [n for n in graph.node if uint8 & set(n.input)]
+    assert [n.op_type for n in users] == ['Cast']
+    assert users[0].attribute[0].i == 1, 'cast to FP32'
+
+
+def test_the_product_trtexec_commands_build_the_real_models_input_range() -> None:
+    args = si.product_trtexec_args(PRODUCT['null_ocr_det'])
+    assert '--minShapes=x:1x3x32x32' in args
+    assert '--optShapes=x:1x3x736x736' in args
+    assert '--maxShapes=x:1x3x1920x1920' in args
+    assert '--saveEngine=/stand_in/null_ocr_det/1/model.plan' in args
+    assert '--maxShapes=x:16x3x48x2048' in si.product_trtexec_args(PRODUCT['null_ocr_rec'])
+    assert '--maxShapes=images:64x3x640x640' in si.product_trtexec_args(PRODUCT['null_scrfd_640'])
+    assert '--maxShapes=images:128x3x112x112' in si.product_trtexec_args(
+        PRODUCT['null_arcface_112']
+    )
