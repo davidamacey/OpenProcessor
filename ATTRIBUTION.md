@@ -447,6 +447,7 @@ and the project stays AGPL-3.0-or-later and depends on the AGPL-3.0 `ultralytics
 | cachetools (bounded per-process TTL and LRU caches) | MIT | ✓ Yes |
 | pyclipper (Clipper polygon offset, OCR box unclip) | MIT (Clipper: Boost Software License 1.0) | ✓ Yes (this file) |
 | PostgreSQL 18 (control-plane database, `postgres` image) | PostgreSQL License | ✓ Yes |
+| pgvector 0.8.7 (vector type of the record's per-space tables, in the `pgvector/pgvector` image) | PostgreSQL License | ✓ Yes |
 | Valkey 9 (task broker, `valkey` image) | BSD 3-Clause | ✓ Yes |
 | SQLAlchemy 2.1.8 | MIT (installed wheel metadata) | ✓ Yes |
 | Alembic 1.20.1 | MIT (installed wheel metadata) | ✓ Yes |

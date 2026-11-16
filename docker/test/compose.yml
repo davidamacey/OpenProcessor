@@ -124,7 +124,7 @@ services:
       - verify_net
 
   postgres:
-    image: postgres:18.6-trixie@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583
+    image: pgvector/pgvector:0.8.7-pg18-trixie@sha256:ab49524d18df7200b74ac9a475e1db6297fc1eb57da4c214c63d10ecc4b754fa
     command: ["postgres", "-c", "max_connections=100", "-c", "password_encryption=scram-sha-256"]
     environment:
       - POSTGRES_USER=op_super
@@ -181,6 +181,7 @@ services:
       - OP_DB_APP_PASSWORD_FILE=/run/secrets/op_pg/app_password
       - OP_DB_OWNER_PASSWORD_FILE=/run/secrets/op_pg/owner_password
       - OP_DB_SUPER_PASSWORD_FILE=/run/secrets/op_pg/super_password
+      - OP_DB_VECTOR_PASSWORD_FILE=/run/secrets/op_pg/vector_password
       - OPENSEARCH_URL=http://opensearch:9200
       # Every project index carries the verify_ prefix, as for api.
       - OP_PROJECT_INDEX_PREFIX=verify_prj_

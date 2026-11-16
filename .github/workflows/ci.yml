@@ -147,7 +147,7 @@ jobs:
       COVERAGE_FILE: .coverage.shard-db
     services:
       postgres:
-        image: postgres:18.6-trixie@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583
+        image: pgvector/pgvector:0.8.7-pg18-trixie@sha256:ab49524d18df7200b74ac9a475e1db6297fc1eb57da4c214c63d10ecc4b754fa
         env:
           POSTGRES_USER: op_super
           POSTGRES_PASSWORD: op-test-super-password

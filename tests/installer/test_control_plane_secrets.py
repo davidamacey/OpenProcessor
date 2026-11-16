@@ -24,6 +24,7 @@ FILES = (
     'postgres/super_password',
     'postgres/owner_password',
     'postgres/app_password',
+    'postgres/vector_password',
     'valkey/password',
     'valkey/valkey.conf',
     'flower/auth',

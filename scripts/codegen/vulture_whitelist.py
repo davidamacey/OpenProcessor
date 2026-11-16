@@ -96,6 +96,20 @@ _.to_request  # ProcessingPlan.to_request; the route that parses the plan, docs/
 _.crop_key  # src/domain/storage_keys.py; docs/design/v070_rebuild/03a_stage1_foundation.md 1E-4 (crop sizing work); only tests/clients/storage/test_crop_key_variant.py calls it today
 _.replace_groups  # src/db/repos/region_text.py; the consensus job of docs/design/v070_rebuild/06e_w5e_plate_text.md lane w5e/region-text-jobs; only tests/db/test_region_text_repo.py calls it today
 _.groups_for_boxes  # src/db/repos/region_text.py; the region-text wire and review lanes of 06e_w5e_plate_text.md; only tests/db/test_region_text_repo.py calls it today
+_.get_or_create_analyser  # src/db/repos/analysers.py; wired by storage steps 2 to 4; entry removed by that lane
+_.record_ledger  # src/db/repos/analysers.py; wired by storage steps 2 to 4; entry removed by that lane
+_.photos_needing  # src/db/repos/analysers.py; wired by storage steps 2 to 4; entry removed by that lane
+_.live_claims_of_operation  # src/db/repos/claims.py; wired by storage steps 2 to 4; entry removed by that lane
+_.insert_items  # src/db/repos/items.py; wired by storage steps 2 to 4; entry removed by that lane
+_.item_keys_by_crop_id  # src/db/repos/items.py; wired by storage steps 2 to 4; entry removed by that lane
+_.create_statements  # src/db/vector_ddl.py; wired by storage steps 2 to 4; entry removed by that lane
+_.drop_statement  # src/db/vector_ddl.py; wired by storage steps 2 to 4; entry removed by that lane
+_.row_security_flags  # src/db/vector_ddl.py; wired by storage steps 2 to 4; entry removed by that lane
+_.cascade_tables  # src/services/erasure/catalogue.py; wired by storage steps 2 to 4; entry removed by that lane
+_.vector_delete_statement  # src/services/erasure/catalogue.py; wired by storage steps 2 to 4; entry removed by that lane
+_.NOT_ERASED  # src/services/erasure/catalogue.py; wired by storage steps 2 to 4; entry removed by that lane
+_.DOCUMENT_REFERENCES  # src/services/erasure/catalogue.py; wired by storage steps 2 to 4; entry removed by that lane
+_.RANK_NEUTRAL_TABLES  # src/db/repos/results.py; read by tests/storage/test_apply_offline.py: with RANK_CHANGING_TABLES it must cover every result table, so a new table cannot go unclassified
 
 # Registered or read by a framework through a name, a decorator or a protocol
 _._on_worker_init  # src/tasks/app.py; connected to Celery's worker_init signal by decorator
@@ -119,3 +133,28 @@ _.__qualname__  # src/tasks/runtime/register.py; assigned so Celery names the ta
 _.registry_sha  # src/services/training/jobs.py; stored in training_runs.spec, read by name in docker/trainer/job_manifest.py
 _.tb  # src/utils/stage_timing.py; the __exit__ signature of the context manager protocol
 _.nvtx_verbosity  # scripts/research/gpu_pipeline/trt_runner.py; a TensorRT IExecutionContext property the runtime reads, assigned to drop per-layer NVTX ranges
+
+# Storage redesign, step 1 (plan 15 section 10): pure domain code whose only callers are its tests
+# until the lanes that wire it land
+_.fold_item  # the fold and its readers: wired by storage steps 2 to 4; entry removed by that lane
+_.moved_placement  # the fold and its readers: wired by storage steps 2 to 4; entry removed by that lane
+_.rank_items  # the fold and its readers: wired by storage steps 2 to 4; entry removed by that lane
+_.freeze_machine_class  # the fold and its readers: wired by storage steps 2 to 4; entry removed by that lane
+_.present_opinions  # the fold and its readers: the class_cleared payload the clear route writes; wired by storage steps 2 to 4; entry removed by that lane
+_.match_items  # claim matching: wired by storage steps 2 to 4; entry removed by that lane
+_.parse_payload  # claim payload and replay helpers: wired by storage steps 2 to 4; entry removed by that lane
+_.payload_json  # claim payload and replay helpers: wired by storage steps 2 to 4; entry removed by that lane
+_.without_replays  # claim payload and replay helpers: wired by storage steps 2 to 4; entry removed by that lane
+_.accept_machine  # human write path builders: wired by storage steps 2 to 4; entry removed by that lane
+_.accept_machine_eligible  # human write path builders: wired by storage steps 2 to 4; entry removed by that lane
+_.duplicate_verdict  # human write path builders: wired by storage steps 2 to 4; entry removed by that lane
+_.flag_new_class  # human write path builders: wired by storage steps 2 to 4; entry removed by that lane
+_.move_to_cluster  # human write path builders: wired by storage steps 2 to 4; entry removed by that lane
+_.probe_dismiss  # human write path builders: wired by storage steps 2 to 4; entry removed by that lane
+_.resolve_new_class  # human write path builders: wired by storage steps 2 to 4; entry removed by that lane
+_.unlabel  # human write path builders: wired by storage steps 2 to 4; entry removed by that lane
+_.vlm_dismiss  # human write path builders: wired by storage steps 2 to 4; entry removed by that lane
+_.combine_label  # import and combine claim builders: wired by storage steps 2 to 4; entry removed by that lane
+_.import_box  # import and combine claim builders: wired by storage steps 2 to 4; entry removed by that lane
+_.import_item  # import and combine claim builders: wired by storage steps 2 to 4; entry removed by that lane
+_.DEFAULT_PRECEDENCE  # the machine class precedence order: wired by storage steps 2 to 4; entry removed by that lane

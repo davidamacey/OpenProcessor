@@ -4,6 +4,7 @@ Importing this package registers all tables on ``Base.metadata`` and imports not
 SQLAlchemy and ``src.domain``.
 """
 
+from src.db.models.analysis import Analyser, AnalysisLedger
 from src.db.models.assist_loop import (
     AssistLoopBudget,
     AssistLoopBudgetLedger,
@@ -15,6 +16,8 @@ from src.db.models.assist_loop import (
     AssistLoopSelection,
     VlmUsageHourly,
 )
+from src.db.models.boxes import BoxText, RegionBox, TextLine
+from src.db.models.claims import Claim, ClaimKindRow, ErasureJob
 from src.db.models.classes import ClassRegistry, ProjectClass, SearchProjectionTask
 from src.db.models.clustering import (
     ClusterActivation,
@@ -56,6 +59,29 @@ from src.db.models.embeddings import (
     EmbeddingReindexRun,
     EmbeddingSpace,
 )
+from src.db.models.gallery import (
+    Entity,
+    EntityEdge,
+    EntityState,
+    FaceState,
+    MembershipState,
+    PhotoDerivative,
+    PhotoFile,
+    PhotoPlace,
+    PhotoSignal,
+    PhotoState,
+)
+from src.db.models.item_state import BoxStateRow, ItemStateRow
+from src.db.models.items import (
+    ClassOpinion,
+    Detection,
+    Face,
+    Item,
+    ItemNote,
+    ItemRegionResult,
+    RawLabelCluster,
+    VectorGap,
+)
 from src.db.models.jobs import (
     Event,
     GpuDevice,
@@ -77,6 +103,7 @@ from src.db.models.near_dup import (
     NearDupRun,
 )
 from src.db.models.ops import PrivacyPurge, UpgradeRun
+from src.db.models.photos import Photo, PhotoCapture, PhotoProvenance
 from src.db.models.projects import (
     DeploymentCounter,
     DeploymentSetting,
@@ -89,6 +116,7 @@ from src.db.models.region_text import (
     RegionTextConsensusMember,
     RegionTextRun,
 )
+from src.db.models.scores import AssistAnswer, ItemProjection, ItemScore, ProbePrediction
 from src.db.models.serving import ServingReport
 from src.db.models.training import (
     BakeoffRun,
@@ -102,6 +130,9 @@ from src.db.models.training import (
 
 
 __all__ = [
+    'Analyser',
+    'AnalysisLedger',
+    'AssistAnswer',
     'AssistLoopBudget',
     'AssistLoopBudgetLedger',
     'AssistLoopIteration',
@@ -111,6 +142,11 @@ __all__ = [
     'AssistLoopRun',
     'AssistLoopSelection',
     'BakeoffRun',
+    'BoxStateRow',
+    'BoxText',
+    'Claim',
+    'ClaimKindRow',
+    'ClassOpinion',
     'ClassRegistry',
     'ClusterActivation',
     'ClusterActivationEvent',
@@ -132,11 +168,18 @@ __all__ = [
     'DatasetUpload',
     'DeploymentCounter',
     'DeploymentSetting',
+    'Detection',
     'EmbeddingEvaluationRun',
     'EmbeddingModelVersion',
     'EmbeddingReindexRun',
     'EmbeddingSpace',
+    'Entity',
+    'EntityEdge',
+    'EntityState',
+    'ErasureJob',
     'Event',
+    'Face',
+    'FaceState',
     'GpuDevice',
     'GpuReservation',
     'HoldoutFreeze',
@@ -144,11 +187,18 @@ __all__ = [
     'ImageContent',
     'IngestSource',
     'IngestSourceFile',
+    'Item',
+    'ItemNote',
+    'ItemProjection',
+    'ItemRegionResult',
+    'ItemScore',
+    'ItemStateRow',
     'Job',
     'JobAttempt',
     'JobItem',
     'LabelOperation',
     'LabelOperationMember',
+    'MembershipState',
     'Model',
     'ModelEngine',
     'ModelShare',
@@ -159,7 +209,16 @@ __all__ = [
     'NearDupPending',
     'NearDupRun',
     'PartitionCluster',
+    'Photo',
+    'PhotoCapture',
+    'PhotoDerivative',
+    'PhotoFile',
+    'PhotoPlace',
+    'PhotoProvenance',
+    'PhotoSignal',
+    'PhotoState',
     'PrivacyPurge',
+    'ProbePrediction',
     'Project',
     'ProjectClass',
     'ProjectIndex',
@@ -169,14 +228,18 @@ __all__ = [
     'ProjectState',
     'ProjectionState',
     'Promotion',
+    'RawLabelCluster',
+    'RegionBox',
     'RegionTextConsensusGroup',
     'RegionTextConsensusMember',
     'RegionTextRun',
     'SearchProjectionTask',
     'ServingReport',
     'StreamWorkerClaim',
+    'TextLine',
     'TrainingRun',
     'UpgradeRun',
+    'VectorGap',
     'VlmEndpointProbe',
     'VlmUsageHourly',
     'WorkerCapability',

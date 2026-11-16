@@ -187,10 +187,11 @@ OpenSearch, and `/ready` answers 503 naming the one that is down.
 | `flower` | Celery monitor on port 4613 (profile `monitoring`, bound to `OP_BIND_ADDRESS`) |
 
 **Secrets.** The installer creates `secrets/postgres/` (`super_password`, `owner_password`,
-`app_password`), `secrets/valkey/` and `secrets/flower/` as the installing user, mode 600 in 700
+`app_password`, `vector_password`), `secrets/valkey/ and `secrets/flower/` as the installing user, mode 600 in 700
 directories, and never rotates an existing file. Each service mounts only the files it needs:
 the application password goes to the API and the workers, the owner password to `db-migrate` and
-the backup task, the superuser password to PostgreSQL. A password is a file, never an
+the backup task, the superuser password to PostgreSQL, the vector password (the role that makes the per-space vector
+tables) to `db-migrate`. A password is a file, never an
 environment value. Back up `secrets/` together with the PostgreSQL volume: a restore needs both.
 
 **Connections.** PostgreSQL runs with `max_connections` from `OP_PG_MAX_CONNECTIONS` (default

@@ -28,4 +28,5 @@ def test_password_files_live_under_the_pytest_base_temp(
         'app_password',
         'owner_password',
         'super_password',
+        'vector_password',
     }

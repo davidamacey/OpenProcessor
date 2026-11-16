@@ -13,6 +13,7 @@ UUIDV7 = text('uuidv7()')
 NOW = text('now()')
 EMPTY_OBJECT = text("'{}'::jsonb")
 EMPTY_ARRAY = text("'{}'")
+EMPTY_JSON_ARRAY = text("'[]'::jsonb")
 
 
 class Xid8(UserDefinedType[int]):
