@@ -2,13 +2,14 @@
 
 | Field | Value |
 |---|---|
-| Status | plan, revision 3 (2026-11-16; rows "Revision 2" and "Revision 3" below). Revision 1 (2026-11-15): the read map of plan 15 section 12, written after the gate A measurement at 1 and 10 million objects (8 clients held); revision 1 folds in the independent review of 15b and 15c and the coordinator's decisions on it (appendix "Review trace"): the summaries are a delta log (section 6). Companion of [15_storage_plan.md](15_storage_plan.md) and [15a_storage_schema.md](15a_storage_schema.md); the cut-over slices that build it are [15c_storage_slices.md](15c_storage_slices.md) |
+| Status | plan, revision 3.1 (2026-11-16; rows "Revision 2", "Revision 3" and "Revision 3.1" below). Revision 1 (2026-11-15): the read map of plan 15 section 12, written after the gate A measurement at 1 and 10 million objects (8 clients held); revision 1 folds in the independent review of 15b and 15c and the coordinator's decisions on it (appendix "Review trace"): the summaries are a delta log (section 6). Companion of [15_storage_plan.md](15_storage_plan.md) and [15a_storage_schema.md](15a_storage_schema.md); the cut-over slices that build it are [15c_storage_slices.md](15c_storage_slices.md) |
 | Code base read | `int/storage` at `7cadf2968` (the integration code of `int/b4-stateless` plus storage step 1: `src/domain/claim*.py`, `fold*.py`, `results.py`, migration `0010_storage_record`, `src/db/repos/`, `src/services/record/apply.py`) |
 | Checklist | the storage inventory of 2026-11-13 (`artifacts_local/speed_1113/storage_inventory.md`, gitignored), section 3: shapes 1 to 80 with file:line. Its paths are relative to `src/services/curation/` unless they start with another directory; its line numbers were re-checked on this tree (same code) |
 | Measurement | gate A (`artifacts_local/speed_1113/v2_read_shapes/`, gitignored): `notes.md`, `queries_pg.sql`, `summary_pg.sql`, `raw/time_pg_1m.json`, `raw/time_os_1m.json`, `raw/time_pg_10m.json`, `raw/time_os_10m.partial.json` |
 | Decided by the coordinator | page fetches are SQL on the record; exact totals only from summary keys, else a capped count; dashboards read summary tables kept by the writer; cluster placement is the side table; text substring search is a trigram index; the search engine leaves the curation stack (section 1.2 of the inventory stays until phase 3); the fallback for a pending measurement that fails is additive (a search copy without vectors for the failing shapes only) |
 | Revision 2 (2026-11-16) | measurement round 3 folded in (`artifacts_local/speed_1113/m3_storage/results_round3.md`, `notes.md`, cells under `raw/`, gitignored). The 12 statements that had to change to run are corrected where they live (list in section 14.1). Every miss has its cause, options and one chosen change in section 14; round 4 (section 15) measures only what is still open; section 16 says what each Rust record slice of plan 18b takes from this file. The backend that builds this is Rust (plan 18 section 3.2): the statements here are its specification, the Python module names are where today's behaviour lives |
 | Revision 3 (2026-11-16) | fix pass after the independent review of revision 2 (`artifacts_local/speed_1113/m3_storage/plan15b_r2_review.md`, gitignored; 7 major, 13 minor; trace in the appendix). Binding constraint added: the same backend later runs on **managed PostgreSQL** (for example Amazon RDS or Aurora), where nobody is a superuser, so no role can be given `BYPASSRLS` and no function can be marked `LEAKPROOF` (section 8). Changed: fragment and word search read **owner-read search copies** in schema `txt` through definer functions owned by a role without any special attribute (section 8, replacing revision 2's `BYPASSRLS` role); the function runs as its own statement with a cap and a per-call plan; fuzzy over a defined alphabet with a switch; the strict project function and the tightened scope function are written out; the card table gains the drift check's statement, the touched-set statement and a full join for clusters with only pending deltas (6.5, 6.6, P7); the sort band now adds the guard's cost to the walk (section 7); round 4 rewritten (section 15); every slice item marked final or waiting (section 16) |
+| Revision 3.1 (2026-11-16) | fix pass after the second review (`artifacts_local/speed_1113/m3_storage/plan15b_r3_review.md`, gitignored; 1 blocker, 7 major, 8 minor; trace in the appendix). The search-copy mechanism stays, with defence in depth made part of the design: the read functions return item keys only and every use joins them to a forced base table in the caller's own statement; the probe raises on a foreign key; the copies carry a project foreign key and a project-led index (`btree_gin`); `op_app` holds `USAGE` and `EXECUTE` and nothing on the tables (writes and per-item tests are functions); the function text lives in one SQL file; a two-project matrix test, a mutation run and a catalogue test are the go bar; totals count after every filter in one snapshot; backup and restore written step by step for self-hosted and managed (02c section 6, no `BYPASSRLS` needed); round 4 grows by about 6 minutes |
 
 **Revision 2 in one paragraph** (text mechanism replaced by revision 3, section 8). The delta log, the compactor, the rebuild, the capped counts and
 the several-class pages met their bars at 10 million items. Changed by the measurement: cluster
@@ -1099,7 +1100,8 @@ Planner statistics for the correlated class columns (`st_item_state_class`, stat
 Revision 3 replaces revision 2's mechanism (a role with `BYPASSRLS` owning the fragment function),
 which cannot be set up on managed PostgreSQL and whose inner plan was never looked at (review M1,
 M2). What stays: X33 for every equality form, the variant list for fuzzy (now over a defined
-alphabet), the 3-character minimum for fragments.
+alphabet), the 3-character minimum for fragments. Revision 3.1 (second review) keeps the copies and
+adds the layers of "How isolation holds" below.
 
 **Box text** (today the `text_fold` keyword and its `text_fold.sub` wildcard field,
 `region_text_search.py:1-11`; the review tab's case-insensitive wildcard). `box_state.text_fold` is
@@ -1147,21 +1149,35 @@ are 65 % of 5.1 M boxes; 5 to 8 characters A to Z and 0 to 9; gate A `notes.md` 
 | | (a) definer function owned by a `BYPASSRLS` role (revision 2) | (b) mark the operator functions `LEAKPROOF` | (c) posting table `(project_id, trigram, item_key)` probed by equality, `LIKE` as a recheck | (d) owner-read search copy (**chosen**) |
 |---|---|---|---|---|
 | How the index becomes usable | the role bypasses every policy, `FORCE` included ([row security](https://www.postgresql.org/docs/18/ddl-rowsecurity.html)) | `textlike` and pg_trgm's operator functions treated as leakproof, so `LIKE` may run before the policy | only equality on `uuid`, `integer`, `bigint` in index conditions (leakproof, R4-3 checks `uuid_eq`, `int4eq`, `int8eq`) | the copy's owner "normally bypass[es] row security" when the table is not `FORCE`d (row security page), and a definer function runs "with the privileges of the user that owns it" (CREATE FUNCTION), so no policy applies inside it |
-| Isolation, fail closed | `project_id = op_bound_project_strict()` inside; raises unbound | the policy still applies to every caller | the policy applies to every caller (the table is an ordinary forced table); unbound raises in the policy | inside the function `project_id = op_bound_project_strict()` (raises unbound or outside project scope); every direct read and write of `op_app` goes through the policy (it is not the owner) |
+| Isolation, fail closed | `project_id = op_bound_project_strict()` inside; raises unbound | the policy still applies to every caller | the policy applies to every caller (the table is an ordinary forced table); unbound raises in the policy | inside each function `project_id = op_bound_project_strict()` (raises unbound or outside project scope), and the functions return item keys only, joined by the caller to a forced base table before use (four layers, below); `op_app` has no privilege on the copies, and the policy would bind it (it is not the owner) if one were added |
 | Bootstrap and migration, self-hosted | bootstrap (`op_super`) creates the role; changing a function's owner needs `SET ROLE` to the new owner and its `CREATE` on the schema ([ALTER FUNCTION](https://www.postgresql.org/docs/18/sql-alterfunction.html)), which revision 2 did not grant | superuser `ALTER FUNCTION ... LEAKPROOF` on system and extension functions, outside any migration | none beyond today's | bootstrap creates a role with no attributes and its schema; the migration (`op_owner`) creates the objects under `SET ROLE` (below) |
 | Managed | impossible (no `BYPASSRLS`) | impossible (no superuser) | works | works: the same statements, the bootstrap run by the master user |
 | Plan and bound | a GIN read inside a fence; bound as (d) once written so | as a plain query | per fragment of `k` characters, `k - 2` posting lists read and intersected; bounded only by the longest list (plate digit groups repeat) | one statement per call, planned with the actual fragment and project, at most `max_items` rows read from the heap (below) |
-| Write cost | none beyond X7 | none | about 4.5 interior trigrams per text: about 12 M rows at 10 M, about 0.7 GB heap and 0.55 GB B-tree (60 and 46 B a row), against X7's 108 MB; about 6,800 row inserts per second at round 3's box rate | one upsert of one row per item whose box texts change, plus its GIN entries (about X7's); about 2.65 M rows at most, about 0.16 GB heap and 0.06 GB key |
-| Verdict | not chosen: cannot be set up on managed PostgreSQL | not chosen: superuser only, and wrong by definition: `LIKE` raises on some patterns, and "a function which throws an error message for some argument values but not others ... is not leakproof" (CREATE FUNCTION) | fallback if (d) misses R4-3: no privilege change at all, but a hand-made trigram search 12 times X7's size | chosen: the documented GIN index, no special attribute, the same on both platforms |
+| Write cost | none beyond X7 | none | about 4.5 interior trigrams per text: about 12 M rows at 10 M, about 0.7 GB heap and 0.55 GB B-tree (60 and 46 B a row), against X7's 108 MB; about 6,800 row inserts per second at round 3's box rate | one upsert of one row per item whose box texts change, plus its GIN entries (about X7's, plus one project entry per row); about 2.65 M rows at most, about 0.16 GB heap and 0.06 GB key |
+| Verdict | not chosen: cannot be set up on managed PostgreSQL | not chosen: superuser only, and wrong by definition: `LIKE` raises on some patterns, and "a function which throws an error message for some argument values but not others ... is not leakproof" (CREATE FUNCTION) | costed fallback, built only if (d) misses R4-3 or its go bar cannot pass: no privilege change at all and no function body to trust, but a hand-made trigram search 12 times X7's size | chosen: the documented GIN index, no special attribute, the same on both platforms |
 
 Also considered: a `security_barrier` view (the same leakproof rule applies to it, rules page);
-`btree_gin` to put `project_id` into the GIN index (does not lift the rule); partitioning by project
+`btree_gin` to put `project_id` into the GIN index under row security (does not lift the rule; it is used on the copies, where no policy applies inside the function, so the index is scoped by project: [btree_gin](https://www.postgresql.org/docs/18/btree-gin.html), trusted, `uuid` supported, and "for queries that test both a GIN-indexable column and a B-tree-indexable column, it might be more efficient to create a multicolumn GIN index ... than to create two separate indexes"; on Amazon RDS `btree_gin` 1.3 and `pg_trgm` 1.6 are listed for PostgreSQL 17 and 18, [supported extension versions](https://docs.aws.amazon.com/AmazonRDS/latest/PostgreSQLReleaseNotes/postgresql-extensions.html)); partitioning by project
 (DDL per project, rejected in 15a section 1).
 
-**Roles and objects of (d)** (02a 1.5 has the role table; 02c section 6 the restore). The role
-`op_text_owner` is `NOLOGIN` with no attribute; it owns schema `txt`, the two copies and their
-functions, and holds nothing else but `REFERENCES (item_key)` on `items` and `EXECUTE` on
-`op_bound_project_strict()`. `op_app` is not a member of it.
+**Roles and objects of (d)** (02a 1.5 has the role table; 02c section 6 the backup and restore). The
+role `op_text_owner` is `NOLOGIN` with no attribute; it owns schema `txt`, the two copies and their
+functions, and holds nothing else but `SELECT (item_key, project_id)` and `REFERENCES (item_key)` on
+`items`, `REFERENCES (id)` on `projects` and `EXECUTE` on `op_bound_project_strict()`. `op_app` is
+not a member of it and gets exactly `USAGE` on schema `txt` and `EXECUTE` on the seven functions:
+**nothing on the two tables** (second review, decision 3), so the writes and the broad-path test go
+through functions too. Privileges are the PostgreSQL defaults plus these grants ([privileges](https://www.postgresql.org/docs/18/ddl-priv.html):
+no privilege on tables or schemas for `PUBLIC` by default, `USAGE` on a schema "allows the grantee to
+look up objects within the schema", `EXECUTE` on functions is granted to `PUBLIC` by default).
+
+**One source for the SQL** (second review, M7). The DDL below is the specification. Its only code
+copy is one file, `src/db/sql/txt_search.sql`, in three marked parts (`tables`, `indexes`,
+`functions`): migration `0011` runs all three in its transaction, the restore (02c section 6) runs
+`tables`, then `functions`, then the refill, then `indexes`. No migration and no restore step holds
+function text of its own: a changed function is an edit of the file plus a migration that runs the
+file again. `db verify` and a `db` test compare the `prosrc` of every function in `txt` with the
+file's text (the migration runs the file's current text on a fresh database; the file's statements
+are idempotent and need only objects `0011` already has).
 
 ```sql
 -- bootstrap (src/db/roles.py: ensure_roles, prepare_database), idempotent; self-hosted as op_super,
@@ -1171,111 +1187,257 @@ CREATE ROLE op_text_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRL
 GRANT op_text_owner TO CURRENT_USER WITH SET TRUE;                       -- needed on managed only
 CREATE SCHEMA IF NOT EXISTS txt AUTHORIZATION op_text_owner;
 GRANT op_text_owner TO op_owner WITH ADMIN FALSE, INHERIT FALSE, SET TRUE;   -- migrations SET ROLE to it
+CREATE EXTENSION IF NOT EXISTS pg_trgm;    -- both "trusted" (pg_trgm, btree_gin pages): CREATE on the database suffices
+CREATE EXTENSION IF NOT EXISTS btree_gin;  -- operator class uuid_ops for the project column of the copies' index
 
 -- 0011, as op_owner (owner of public's tables and of the scope functions)
 CREATE OR REPLACE FUNCTION op_scope_project() ...   -- 02a 1.4, tightened: 'project' with an empty id raises
 CREATE FUNCTION op_bound_project_strict() RETURNS uuid
   LANGUAGE plpgsql STABLE SET search_path = pg_catalog, pg_temp AS $f$
-DECLARE pid text := current_setting('op.project_id', true);
+DECLARE v_pid text := current_setting('op.project_id', true);
 BEGIN
   IF coalesce(current_setting('op.scope', true), '') <> 'project' THEN
     RAISE EXCEPTION 'project_scope_required' USING ERRCODE = 'insufficient_privilege';
   END IF;
-  IF coalesce(pid, '') = '' THEN
+  IF coalesce(v_pid, '') = '' THEN
     RAISE EXCEPTION 'project_not_bound' USING ERRCODE = 'insufficient_privilege';
   END IF;
-  RETURN pid::uuid;
+  RETURN v_pid::uuid;
 END $f$;
 REVOKE ALL ON FUNCTION op_bound_project_strict() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION op_bound_project_strict() TO op_app, op_text_owner;
-GRANT REFERENCES (item_key) ON items TO op_text_owner;
-SET ROLE op_text_owner;                                  -- everything below is owned by op_text_owner
-CREATE TABLE txt.item_box_text (                         -- one row per item with box text (S4, R7)
+GRANT SELECT (item_key, project_id), REFERENCES (item_key) ON items TO op_text_owner;   -- the copies' foreign key; the writers' join
+GRANT REFERENCES (id) ON projects TO op_text_owner;                                      -- the copies' project foreign key
+
+-- txt_search.sql, part "tables" (each part begins with SET ROLE op_text_owner and ends with RESET ROLE,
+-- so everything it creates is owned by that role)
+SET ROLE op_text_owner;
+CREATE TABLE IF NOT EXISTS txt.item_box_text (           -- one row per item with box text (S4, R7)
   item_key bigint PRIMARY KEY REFERENCES public.items(item_key) ON DELETE CASCADE,
-  project_id uuid NOT NULL,                              -- deleted with its items (02a 1.2's batched delete)
+  project_id uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
   folds text NOT NULL                                    -- the item's box text_fold values, ' '-separated, by box_id
 );
-CREATE TABLE txt.item_line_text (                        -- one row per item with OCR lines (today item_text_tokens)
+CREATE TABLE IF NOT EXISTS txt.item_line_text (          -- one row per item with OCR lines (today item_text_tokens)
   item_key bigint PRIMARY KEY REFERENCES public.items(item_key) ON DELETE CASCADE,
-  project_id uuid NOT NULL,
+  project_id uuid NOT NULL REFERENCES public.projects(id) ON DELETE CASCADE,
   words text NOT NULL                                    -- item_text_tokens of the item's lines, ' '-separated
 );
--- both: ENABLE ROW LEVEL SECURITY without FORCE (the one exception to 02a 1.4, see the tests);
--- policy p_<table>_project exactly as 02a 1.4; GRANT SELECT, INSERT, UPDATE, DELETE TO op_app
-CREATE INDEX ix_item_box_text_trgm ON txt.item_box_text USING gin (folds public.gin_trgm_ops)    -- X7
-  WITH (fastupdate = on, gin_pending_list_limit = 512);
-CREATE INDEX ix_item_line_text_trgm ON txt.item_line_text USING gin (words public.gin_trgm_ops)  -- X25
-  WITH (fastupdate = on, gin_pending_list_limit = 512);
+-- both: ENABLE ROW LEVEL SECURITY without FORCE (the one exception to 02a 1.4, see the tests); policy
+-- p_<table>_project exactly as 02a 1.4, dropped and created again by every run. op_app holds no
+-- privilege on the tables, so the policy is a second lock on a door that is already shut: if a
+-- grant to op_app is ever added by mistake, op_app (not the owner) is still bound by it.
+REVOKE ALL ON txt.item_box_text, txt.item_line_text FROM PUBLIC;
 
--- the functions and their grants: in the migration's one transaction, as the definer page asks
--- ("create it and set the privileges within a single transaction")
-CREATE FUNCTION txt.fragment_items(frag text, max_items integer) RETURNS SETOF bigint
-  LANGUAGE plpgsql STABLE SECURITY DEFINER PARALLEL UNSAFE
-  SET search_path = pg_catalog, pg_temp SET plan_cache_mode = force_custom_plan AS $f$
-DECLARE p uuid := public.op_bound_project_strict();     -- raises before anything is read
-BEGIN
-  IF frag IS NULL OR length(frag) < 3 OR max_items IS NULL OR max_items NOT BETWEEN 1 AND 10001
-     OR strpos(frag, '%') > 0 OR strpos(frag, '_') > 0 OR strpos(frag, '\') > 0 OR strpos(frag, ' ') > 0 THEN
-    RAISE EXCEPTION 'text_fragment_invalid' USING ERRCODE = 'invalid_parameter_value';
-  END IF;
-  RETURN QUERY SELECT t.item_key FROM txt.item_box_text t
-               WHERE t.project_id = p AND t.folds LIKE '%' || frag || '%'
-               LIMIT max_items;
-END $f$;
-CREATE FUNCTION txt.word_items(words text[], max_items integer) RETURNS SETOF bigint
-  LANGUAGE plpgsql STABLE SECURITY DEFINER PARALLEL UNSAFE
-  SET search_path = pg_catalog, pg_temp SET plan_cache_mode = force_custom_plan AS $f$
-DECLARE p uuid := public.op_bound_project_strict(); longest text;
-BEGIN
-  SELECT w INTO longest FROM unnest(words) w ORDER BY length(w) DESC, w LIMIT 1;
-  IF longest IS NULL OR length(longest) < 3 OR max_items IS NULL OR max_items NOT BETWEEN 1 AND 10001
-     OR EXISTS (SELECT 1 FROM unnest(words) w WHERE w IS NULL OR w = '' OR strpos(w, '%') > 0
-                OR strpos(w, '_') > 0 OR strpos(w, '\') > 0 OR strpos(w, ' ') > 0) THEN
-    RAISE EXCEPTION 'text_words_invalid' USING ERRCODE = 'invalid_parameter_value';
-  END IF;
-  RETURN QUERY SELECT t.item_key FROM txt.item_line_text t
-               WHERE t.project_id = p
-                 AND t.words LIKE '%' || longest || '%'                       -- the GIN condition
-                 AND NOT EXISTS (SELECT 1 FROM unnest(words) w                -- every word starts a token
-                                 WHERE strpos(' ' || t.words, ' ' || w) = 0)
-               LIMIT max_items;
-END $f$;
-CREATE FUNCTION txt.fuzzy_items(key text, threshold real, max_items integer)
-  RETURNS TABLE (item_key bigint, folds text)
+-- part "indexes": X7 and X25, project first (btree_gin, GIN multicolumn; R4-3 measures it against folds alone)
+CREATE INDEX IF NOT EXISTS ix_item_box_text_trgm ON txt.item_box_text
+  USING gin (project_id, folds public.gin_trgm_ops) WITH (fastupdate = on, gin_pending_list_limit = 512);
+CREATE INDEX IF NOT EXISTS ix_item_line_text_trgm ON txt.item_line_text
+  USING gin (project_id, words public.gin_trgm_ops) WITH (fastupdate = on, gin_pending_list_limit = 512);
+
+-- part "functions": one transaction, as the definer page asks ("create it and set the privileges
+-- within a single transaction"); the default below makes a new function start without PUBLIC too
+ALTER DEFAULT PRIVILEGES REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;   -- for objects op_text_owner creates
+
+-- reads that return item keys only
+CREATE OR REPLACE FUNCTION txt.fragment_items(q_frag text, q_max_items integer) RETURNS SETOF bigint
   LANGUAGE plpgsql STABLE SECURITY DEFINER PARALLEL UNSAFE
   SET search_path = pg_catalog, pg_temp SET plan_cache_mode = force_custom_plan
-  SET pg_trgm.word_similarity_threshold = 0.6 AS $f$
-DECLARE p uuid := public.op_bound_project_strict();
+  SET gin_fuzzy_search_limit = 0 AS $f$
+#variable_conflict error
+DECLARE v_project uuid := public.op_bound_project_strict();     -- raises before anything is read
 BEGIN
-  IF key IS NULL OR key = '' OR threshold IS NULL OR threshold NOT BETWEEN 0.1 AND 1
-     OR max_items IS NULL OR max_items NOT BETWEEN 1 AND 10001
-     OR strpos(key, '%') > 0 OR strpos(key, '_') > 0 OR strpos(key, '\') > 0 OR strpos(key, ' ') > 0 THEN
+  IF q_frag IS NULL OR length(q_frag) NOT BETWEEN 3 AND 64
+     OR q_max_items IS NULL OR q_max_items NOT BETWEEN 1 AND 10001
+     OR strpos(q_frag, '%') > 0 OR strpos(q_frag, '_') > 0 OR strpos(q_frag, '\') > 0 OR strpos(q_frag, ' ') > 0 THEN
+    RAISE EXCEPTION 'text_fragment_invalid' USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  RETURN QUERY SELECT t.item_key FROM txt.item_box_text AS t
+               WHERE t.project_id = v_project AND t.folds LIKE '%' || q_frag || '%'
+               LIMIT q_max_items;
+END $f$;
+CREATE OR REPLACE FUNCTION txt.word_items(q_words text[], q_max_items integer) RETURNS SETOF bigint
+  LANGUAGE plpgsql STABLE SECURITY DEFINER PARALLEL UNSAFE
+  SET search_path = pg_catalog, pg_temp SET plan_cache_mode = force_custom_plan
+  SET gin_fuzzy_search_limit = 0 AS $f$
+#variable_conflict error
+DECLARE v_project uuid := public.op_bound_project_strict(); v_longest text;
+BEGIN
+  IF q_words IS NULL OR cardinality(q_words) NOT BETWEEN 1 AND 16
+     OR q_max_items IS NULL OR q_max_items NOT BETWEEN 1 AND 10001
+     OR EXISTS (SELECT 1 FROM unnest(q_words) AS u(w)
+                WHERE u.w IS NULL OR length(u.w) NOT BETWEEN 1 AND 64 OR strpos(u.w, '%') > 0
+                   OR strpos(u.w, '_') > 0 OR strpos(u.w, '\') > 0 OR strpos(u.w, ' ') > 0) THEN
+    RAISE EXCEPTION 'text_words_invalid' USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  SELECT u.w INTO v_longest FROM unnest(q_words) AS u(w) ORDER BY length(u.w) DESC, u.w LIMIT 1;
+  IF length(v_longest) < 3 THEN                          -- a short-word query takes the predicate, not the index
+    RAISE EXCEPTION 'text_words_invalid' USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  RETURN QUERY SELECT t.item_key FROM txt.item_line_text AS t
+               WHERE t.project_id = v_project
+                 AND t.words LIKE '%' || v_longest || '%'                       -- the GIN condition
+                 AND NOT EXISTS (SELECT 1 FROM unnest(q_words) AS u(w)          -- every word starts a token
+                                 WHERE strpos(' ' || t.words, ' ' || u.w) = 0)
+               LIMIT q_max_items;
+END $f$;
+CREATE OR REPLACE FUNCTION txt.fuzzy_items(q_key text, q_threshold real, q_max_items integer) RETURNS SETOF bigint
+  LANGUAGE plpgsql STABLE SECURITY DEFINER PARALLEL UNSAFE
+  SET search_path = pg_catalog, pg_temp SET plan_cache_mode = force_custom_plan
+  SET gin_fuzzy_search_limit = 0 SET pg_trgm.word_similarity_threshold = 0.6 AS $f$
+#variable_conflict error
+DECLARE v_project uuid := public.op_bound_project_strict();
+BEGIN
+  IF q_key IS NULL OR length(q_key) NOT BETWEEN 1 AND 64
+     OR q_threshold IS NULL OR q_threshold NOT BETWEEN 0.1 AND 1
+     OR q_max_items IS NULL OR q_max_items NOT BETWEEN 1 AND 10001
+     OR strpos(q_key, '%') > 0 OR strpos(q_key, '_') > 0 OR strpos(q_key, '\') > 0 OR strpos(q_key, ' ') > 0 THEN
     RAISE EXCEPTION 'text_fuzzy_invalid' USING ERRCODE = 'invalid_parameter_value';
   END IF;
   -- local to the function: the SET clause above restores the value at exit (CREATE FUNCTION, SET)
-  PERFORM set_config('pg_trgm.word_similarity_threshold', threshold::text, true);
-  RETURN QUERY SELECT t.item_key, t.folds FROM txt.item_box_text t
-               WHERE t.project_id = p AND key OPERATOR(public.<%) t.folds
-               LIMIT max_items;
+  PERFORM set_config('pg_trgm.word_similarity_threshold', q_threshold::text, true);
+  RETURN QUERY SELECT t.item_key FROM txt.item_box_text AS t
+               WHERE t.project_id = v_project AND q_key OPERATOR(public.<%) t.folds
+               LIMIT q_max_items;
 END $f$;
+
+-- per-item tests for the broad walk (section 8, step 3): a boolean about a key the caller already holds
+CREATE OR REPLACE FUNCTION txt.box_text_has(q_item_key bigint, q_frag text) RETURNS boolean
+  LANGUAGE plpgsql STABLE SECURITY DEFINER PARALLEL UNSAFE SET search_path = pg_catalog, pg_temp AS $f$
+#variable_conflict error
+DECLARE v_project uuid := public.op_bound_project_strict();
+BEGIN
+  IF q_item_key IS NULL OR q_frag IS NULL OR length(q_frag) NOT BETWEEN 3 AND 64
+     OR strpos(q_frag, '%') > 0 OR strpos(q_frag, '_') > 0 OR strpos(q_frag, '\') > 0 OR strpos(q_frag, ' ') > 0 THEN
+    RAISE EXCEPTION 'text_fragment_invalid' USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  RETURN EXISTS (SELECT 1 FROM txt.item_box_text AS t
+                 WHERE t.item_key = q_item_key AND t.project_id = v_project AND t.folds LIKE '%' || q_frag || '%');
+END $f$;
+CREATE OR REPLACE FUNCTION txt.line_text_has(q_item_key bigint, q_words text[]) RETURNS boolean
+  LANGUAGE plpgsql STABLE SECURITY DEFINER PARALLEL UNSAFE SET search_path = pg_catalog, pg_temp AS $f$
+#variable_conflict error
+DECLARE v_project uuid := public.op_bound_project_strict();
+BEGIN
+  IF q_item_key IS NULL OR q_words IS NULL OR cardinality(q_words) NOT BETWEEN 1 AND 16
+     OR EXISTS (SELECT 1 FROM unnest(q_words) AS u(w)
+                WHERE u.w IS NULL OR length(u.w) NOT BETWEEN 1 AND 64 OR strpos(u.w, '%') > 0
+                   OR strpos(u.w, '_') > 0 OR strpos(u.w, '\') > 0 OR strpos(u.w, ' ') > 0) THEN
+    RAISE EXCEPTION 'text_words_invalid' USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  RETURN EXISTS (SELECT 1 FROM txt.item_line_text AS t
+                 WHERE t.item_key = q_item_key AND t.project_id = v_project
+                   AND NOT EXISTS (SELECT 1 FROM unnest(q_words) AS u(w)
+                                   WHERE strpos(' ' || t.words, ' ' || u.w) = 0));
+END $f$;
+
+-- writes: the only way op_app changes a copy. Each row is taken only for an item of the bound project,
+-- by two separate clauses (the explicit one and the policy of items, which applies to op_text_owner
+-- because it does not own items); a NULL text removes the item's row
+CREATE OR REPLACE FUNCTION txt.put_box_text(q_item_keys bigint[], q_folds text[]) RETURNS integer
+  LANGUAGE plpgsql VOLATILE SECURITY DEFINER PARALLEL UNSAFE SET search_path = pg_catalog, pg_temp AS $f$
+#variable_conflict error
+DECLARE v_project uuid := public.op_bound_project_strict(); v_n integer;
+BEGIN
+  IF q_item_keys IS NULL OR q_folds IS NULL OR cardinality(q_item_keys) <> cardinality(q_folds)
+     OR cardinality(q_item_keys) > 10000 THEN
+    RAISE EXCEPTION 'text_put_invalid' USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  DELETE FROM txt.item_box_text AS t USING
+    (SELECT u.k FROM unnest(q_item_keys, q_folds) AS u(k, f)
+       JOIN public.items AS i ON i.item_key = u.k AND i.project_id = v_project WHERE u.f IS NULL) AS d
+  WHERE t.item_key = d.k AND t.project_id = v_project;
+  INSERT INTO txt.item_box_text AS t (item_key, project_id, folds)
+    SELECT u.k, v_project, u.f FROM unnest(q_item_keys, q_folds) AS u(k, f)
+      JOIN public.items AS i ON i.item_key = u.k AND i.project_id = v_project
+     WHERE u.f IS NOT NULL ORDER BY u.k
+  ON CONFLICT (item_key) DO UPDATE SET folds = EXCLUDED.folds
+    WHERE t.project_id = v_project AND t.folds IS DISTINCT FROM EXCLUDED.folds;
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  RETURN v_n;
+END $f$;
+-- txt.put_line_text(q_item_keys bigint[], q_words text[]) RETURNS integer: the same body over txt.item_line_text
+
 REVOKE ALL ON FUNCTION txt.fragment_items(text, integer), txt.word_items(text[], integer),
-                       txt.fuzzy_items(text, real, integer) FROM PUBLIC;
+  txt.fuzzy_items(text, real, integer), txt.box_text_has(bigint, text), txt.line_text_has(bigint, text[]),
+  txt.put_box_text(bigint[], text[]), txt.put_line_text(bigint[], text[]) FROM PUBLIC;
+GRANT USAGE ON SCHEMA txt TO op_app;
 GRANT EXECUTE ON FUNCTION txt.fragment_items(text, integer), txt.word_items(text[], integer),
-                          txt.fuzzy_items(text, real, integer) TO op_app;
+  txt.fuzzy_items(text, real, integer), txt.box_text_has(bigint, text), txt.line_text_has(bigint, text[]),
+  txt.put_box_text(bigint[], text[]), txt.put_line_text(bigint[], text[]) TO op_app;
 RESET ROLE;                                              -- back to op_owner for the rest of 0011
 ```
 
 `0011` writes the body of `op_scope_project` once (02a 1.4 with the `'project'` branch raising
 `project_not_bound` on an empty id instead of returning `NULL`, review M7): with `NULL` a policy
-compares `project_id = NULL` and returns nothing, silently. The search path of both definer
-functions is `pg_catalog, pg_temp` and every other name is schema-qualified, as the definer page
-asks ("`pg_temp` as the last entry"); `LIKE`, `strpos` and `unnest` are in `pg_catalog`, the
-operator class and `<%` are named with their schema (`public` keeps `USAGE` for every role by
-default, so `op_text_owner` needs no grant there). `SET ROLE` makes the objects owned by
-`op_text_owner` without the `ALTER ... OWNER` step revision 2 could not perform; it needs only the
-membership `WITH SET` from the bootstrap, and no session setting of the role ("does not process
-session variables", [SET ROLE](https://www.postgresql.org/docs/18/sql-set-role.html)) matters here:
-the copies are empty and their indexes are built in the migration (15a 2.6).
+compares `project_id = NULL` and returns nothing, silently. Every function body is written to the
+rules of the definer page ([CREATE FUNCTION](https://www.postgresql.org/docs/18/sql-createfunction.html),
+"Writing `SECURITY DEFINER` Functions Safely"): the search path is `pg_catalog, pg_temp` ("`pg_temp`
+as the last entry") and every other name is schema-qualified; `LIKE`, `strpos`, `unnest` and `||`
+are in `pg_catalog`, the operator class and `<%` are named with their schema (`public` keeps
+`USAGE` for every role by default, so `op_text_owner` needs no grant there); the first statement of
+each body is `#variable_conflict error` and **every reference is qualified** (second review, M6):
+the parameters carry the prefix `q_`, the locals `v_`, every column carries its table alias and
+every `unnest` its alias `u(...)`, so no name can be both a variable and a column ([PL/pgSQL
+variable substitution](https://www.postgresql.org/docs/18/plpgsql-implementation.html#PLPGSQL-VAR-SUBST):
+with `error` an ambiguous name raises instead of choosing). Revision 3's `word_items` named its
+parameter `words`, the same as `t.words`; that was the defect. **Every body is compiled and run once
+in round 4's set-up** (R4-0: the harness extracts this block unedited and calls each function with a
+valid and an invalid argument) before any slice copies it into the file; a body that fails stops
+the round. `SET gin_fuzzy_search_limit = 0` pins the one caller-settable parameter that could thin a
+GIN scan silently ([client connection defaults](https://www.postgresql.org/docs/18/runtime-config-client.html)).
+The `ALTER DEFAULT PRIVILEGES` line follows its page: it "revokes the public EXECUTE permission that
+is normally granted on functions, for all functions subsequently created by" the role, and a
+per-schema form would not do it; the explicit `REVOKE` and `GRANT` in the same transaction stay,
+so a function is never visible to `PUBLIC` even for an instant ([ALTER DEFAULT
+PRIVILEGES](https://www.postgresql.org/docs/18/sql-alterdefaultprivileges.html); the page does not
+say whether `pg_restore` honours them, so the restore also creates the functions through the file,
+02c section 6). `SET ROLE` makes the objects owned by `op_text_owner` without the `ALTER ... OWNER`
+step revision 2 could not perform; it needs only the membership `WITH SET` from the bootstrap
+([SET ROLE](https://www.postgresql.org/docs/18/sql-set-role.html)).
+
+**How isolation holds, and what one mistake could expose** (second review, M7). A forced policy cannot
+guard the copies: a definer function runs "with the privileges of the user that owns it" and the
+owner "normally bypass[es] row security" ([row security](https://www.postgresql.org/docs/18/ddl-rowsecurity.html)),
+and an owner that is forced cannot use the trigram index (the leakproof rule above). So inside a
+function the barrier is one clause per statement, `t.project_id = v_project`; where a forced table
+guards every statement, here a body that lost the clause would return every project's rows. Four
+layers surround that clause so that its loss cannot expose text:
+
+1. **The read functions return item keys only; nothing they return reaches the backend unless it
+   was joined, in the caller's own statement running as `op_app`, to `items` or to the table the
+   shape reads (`item_state`, `box_state`)**, whose forced policy filters the keys by the caller's scope.
+   A body without the clause would return other projects' keys and the join would drop them. Text
+   is never returned: the fuzzy candidates' text is read from `box_state` under its own policy
+   (below). The two per-item tests return a boolean about a key the caller took from its own rows, and
+   the writers return a count.
+2. **The route probe detects it.** Its one statement (below) compares the keys the function produced
+   with the keys that survived the join and, if they differ, the reader raises `text_isolation_fault`
+   (an error, no result, a metric): in correct operation they are equal, because a copy row exists
+   only for an item that exists in the same snapshot (foreign key, `REPEATABLE READ`).
+3. **Each copy carries `project_id` with a foreign key to `projects` and the trigram index leads with
+   it**, so a correct function walks only its own project's entries and a small project's search
+   does not pay for a large neighbour's matches (cost, not isolation); deleting a project deletes its
+   copy rows, as for every other table (15a section 1).
+4. **The go bar below**: a two-project matrix over every function, a run with the clause removed
+   from each statement in turn that must fail, and a catalogue test that no function lacks a matrix.
+
+*Residual exposure, plainly.* If a function body lost its clause and the matrix test, the mutation
+run and the probe all failed to catch it, a caller could still learn, from the time a call takes and
+from the single yes-or-no the probe raises as an error, that another project has a matching text;
+it would receive no text, no key and no count of another project. Accepted: it needs an error in a
+reviewed, tested body, it exposes one bit and a timing, and the alternative that has none (the
+posting table probed by equality, below) is 12 times the size and is kept as the costed fallback.
+
+*Scopes.* The functions refuse the deployment scope and the core scope (`project_scope_required`,
+`insufficient_privilege`), which is stricter than the policies (they admit the deployment scope):
+no code running at the deployment scope can search text across projects, no admin or retention
+feature may plan on it (a feature that needs it adds its own function and its own matrix), and core
+images (project `NULL`) have no copy rows (`project_id NOT NULL`).
+
+**The fallback stays costed.** The posting table `(project_id, trigram, item_key)` probed by
+equality (mechanism (c)) keeps `FORCE` on every table and has no function body to trust. Round 4
+builds it only if the copies miss R4-3's bars or the go bar below cannot be made to pass; its size
+and write cost are in the table above.
 
 **The plan inside, and its bound** (review M2). A PL/pgSQL statement is prepared once and may get
 a generic plan "not dependent on specific parameter values"; a fresh plan "can use the current
@@ -1284,46 +1446,68 @@ parameter values" ([PL/pgSQL plan caching](https://www.postgresql.org/docs/18/pl
 actual fragment and project ([PREPARE](https://www.postgresql.org/docs/18/sql-prepare.html),
 [plan_cache_mode](https://www.postgresql.org/docs/18/runtime-config-query.html#GUC-PLAN-CACHE-MODE)).
 One row per item means no `DISTINCT`, so `LIMIT max_items` stops the heap phase at `max_items` rows:
-the expected plan is a bitmap scan of X7 (cost: the posting lists of the fragment's `k - 2`
-trigrams, compressed in GIN) and at most `max_items` heap rows with their `LIKE` recheck. The
+the expected plan is a bitmap scan of X7 with both conditions in the index (`project_id = <constant>` and the `LIKE`; cost: the posting lists of the fragment's `k - 2`
+trigrams intersected with the project's, GIN's fast scan skips along the shorter lists, [GIN](https://www.postgresql.org/docs/18/gin.html)) and at most `max_items` heap rows with their `LIKE` recheck. The
 planner may instead pick a sequential scan with `LIMIT` when it expects many matches; R4-3 records
 the inner plan of every call through `auto_explain` with `log_nested_statements` ("statements
 executed inside a function", [auto_explain](https://www.postgresql.org/docs/18/auto-explain.html)),
 and if any inner plan reads more than ten times `max_items` rows sequentially the functions get
 `SET enable_seqscan = off` ([planner method configuration](https://www.postgresql.org/docs/18/runtime-config-query.html#RUNTIME-CONFIG-QUERY-ENABLE)).
-`PARALLEL UNSAFE` is the default and is declared on purpose: the function runs as its own statement
-(below), so it forces no caller's plan to be serial (the `PARALLEL` paragraph of CREATE FUNCTION);
-its `ROWS` estimate has no consumer for the same reason.
+`PARALLEL UNSAFE` is the default and is declared on purpose: a statement that contains the function
+is planned serial (the `PARALLEL` paragraph of CREATE FUNCTION), which costs nothing here, since
+every text statement is an index walk or a bounded sort (below); the function's `ROWS` default (1,000)
+is only an estimate, and the `MATERIALIZED` CTE keeps it from being rescanned.
 
-**How a page, a count and a sort use it** (review M3). The function is never a subquery of P1, P4,
-P8 or P9; the reader calls it first, as its own statement, with `max_items` = 10,001 (the list cap
-plus one), in the page's transaction:
+**How a page, a count and a sort use it** (reviews M3 and, second review, M4 and m3). The page's
+transaction is `REPEATABLE READ READ ONLY` for every text read, so the probe and the statements after
+it see one snapshot ([transaction isolation](https://www.postgresql.org/docs/18/transaction-iso.html#XACT-REPEATABLE-READ)).
+The function is never a bare subquery: the reader writes it as a `MATERIALIZED` CTE, so it runs once
+per statement and a nested loop cannot rescan it per outer row ([WITH queries](https://www.postgresql.org/docs/18/queries-with.html#QUERIES-WITH-CTE-MATERIALIZATION)).
+Its keys are used only through a join to a base table, never returned.
 
-1. `SELECT k FROM txt.fragment_items(:frag, 10001) k` (or `word_items`) returns `:text_keys`.
-2. **Narrow** (at most 10,000 keys): the text predicate is `s.item_key = ANY(:text_keys)` (P1, P8),
-   `b.item_key = ANY(:text_keys)` (P9's first statement); the total is the number of keys, exact,
-   with no count statement (P4 is not run); the page takes the sort path over these keys
-   (section 7), whose bar met at 10,000 rows (`m7`).
-3. **Broad** (10,001 keys): the total is "10,000+" (`total_capped`, no count statement); the page
-   takes the walk path of its sort with the text test as a per-item filter, `EXISTS (SELECT 1 FROM
-   txt.item_box_text t WHERE t.item_key = s.item_key AND t.folds LIKE :like)` (`:like` =
-   `'%' || frag || '%'`); here the policy applies (the reader is `op_app`), the index condition is
-   the primary key's `bigint` equality and `LIKE` is a filter on one row. A broad match fills a page
-   after few entries (section 7, walk path).
+1. **Route probe**, one statement, `max_items` = 10,001 (the list cap plus one):
+   `WITH tk AS MATERIALIZED (SELECT k.item_key FROM txt.fragment_items(:frag, 10001) AS k(item_key))
+   SELECT count(i.item_key) AS visible, count(*) > count(i.item_key) AS foreign_keys FROM tk LEFT JOIN
+   items i ON i.item_key = tk.item_key` (or `word_items`). `items` is forced, so a key of another
+   project does not join. `foreign_keys` true raises `text_isolation_fault` and the read ends.
+2. **Narrow** (`visible` at most 10,000): the text predicate is the semi-join `s.item_key IN (SELECT
+   item_key FROM tk)` inside the shape's own statement (P1, P8; P9's first statement with
+   `b.item_key`), with `tk` as above, **together with the shape's other filters, its sort, its limit
+   and its total**: the page carries `count(*) OVER ()` over the rows that pass every filter (at most
+   10,000 rows, the sort path of section 7, whose bar met at 10,000 rows, `m7`), and a count shape
+   (P4) counts the same statement's rows with the section 5 cap. The total is thus exact and counts
+   what passes **all** the filters, not the number of text keys.
+3. **Broad** (`visible` is 10,001): the page takes the walk path of its sort with the per-item test
+   `txt.box_text_has(s.item_key, :frag)` (`txt.line_text_has(s.item_key, :words)` for words) as a
+   filter on rows the walk already holds; the total is the capped count of section 5 over the whole
+   predicate (text and every other filter, same snapshot), "10,000+" only when that count reaches
+   the cap. The per-item test is a definer function, since `op_app` has no privilege on the copy;
+   the plan row it replaces was an `EXISTS` on the copy. R4-3 times the per-call cost (a plpgsql
+   call per walked row) in the deep cells. A broad match fills a page after few entries (section 7,
+   walk path). A fragment or word query whose longest word has fewer than three characters skips
+   the probe and takes this step directly.
+4. **Fuzzy** (the trigram form below): one statement reads the candidates' text from the base table,
+   `WITH tk AS MATERIALIZED (SELECT k.item_key FROM txt.fuzzy_items(:key, :threshold, 10001) AS k(item_key))
+   SELECT b.item_key, b.box_id, b.text_fold FROM box_state b WHERE b.item_key IN (SELECT item_key FROM
+   tk) AND b.text_fold IS NOT NULL` (policy of `box_state`, `uq_box_state_item_box`); the domain
+   function keeps the items with a word at distance at most 1 and their kept keys enter step 2's
+   statement as `= ANY(:kept)`. The keys that enter it come from `box_state` rows, not from the function.
 
 P9's second statement, the matching boxes of the page's items, applies the text test to `box_state`
 rows already bounded by the keys (at most 61 items, at most 74 boxes each; section 9):
 `... WHERE b.project_id = :p AND b.item_key = ANY(:keys) AND b.text_fold LIKE :like ORDER BY
-b.item_key DESC, b.ordinal` (a filter after the policy on those rows). R4-3 times steps 1 to 3
-inside P1, P4, P8 and P9 at three selectivities.
+b.item_key DESC, b.ordinal` (a filter after the policy on those rows). For the trigram-fuzzy form it
+has no `:like`: it returns the bounded rows' `text_fold` and the domain function marks the boxes
+within distance 1 (second review, m4a). R4-3 times steps 1 to 4 inside P1, P4, P8 and P9 at three
+selectivities.
 
 | Match (`TextMatch`) | SQL | Index |
 |---|---|---|
 | `exact` | `b.text_fold = :key` | X33 |
-| `fuzzy` (`FUZZY_FUZZINESS = 1`, transpositions, `region_text_search.py:29-30`) | closed alphabet: `b.text_fold = ANY(:variants)`; otherwise the trigram form below | X33; X7 through `txt.fuzzy_items` |
-| `fragment` (3 characters or more, after `fold`) | `txt.fragment_items`, then steps 2 and 3 above | X7 |
+| `fuzzy` (`FUZZY_FUZZINESS = 1`, transpositions, `region_text_search.py:29-30`) | closed alphabet: `b.text_fold = ANY(:variants)`; otherwise the trigram form below (step 4 above) | X33; X7 through `txt.fuzzy_items` |
+| `fragment` (3 to 64 characters, after `fold`) | `txt.fragment_items` through the probe, then steps 2 and 3 above | X7 |
 | `same_text_as` (`same_text_key`, `region_text_search.py:37`) | the box's own `text_fold` by `(item_key, box_id)` (`uq_box_state_item_box`), then `exact` | X33 |
-| item text words (`?item_text=`, `item_text.py:110-121`) | `txt.word_items` with the query's words (`normalize_tokens`), then steps 2 and 3 | X25 |
+| item text words (`?item_text=`, `item_text.py:110-121`) | `txt.word_items` with the query's words (`normalize_tokens`) through the probe, then steps 2 and 3 | X25 |
 
 **Fuzzy: the variant list, its alphabet and its switch** (review M4). A key of `n` characters over
 an alphabet `A` has at most `n(|A| - 1)` substitutions, `(n + 1)|A|` insertions, `n` deletions and
@@ -1335,10 +1519,10 @@ decimal digits `normalize` keeps. The list is used when `text_charset` is set, `
 and the key at most 12 characters: at most 12 x 39 + 13 x 40 + 23 = 1,011 probes (the spike: `A` =
 A to Z and 0 to 9, 36 characters, 546 strings for 7 characters). Otherwise (`text_charset` empty,
 which keeps every non-space character; a larger alphabet; a longer key) the search switches to
-`txt.fuzzy_items(key, threshold, 10001)` (above): pg_trgm's word similarity `key <% t.folds`
+`txt.fuzzy_items(key, threshold, 10001)` (above, step 4): pg_trgm's word similarity `key <% t.folds`
 (served by X7, pg_trgm page) with the threshold the domain function derives from the key's length,
-returning candidates with their `folds`; the domain function then keeps exactly the items with a
-word at Damerau-Levenshtein distance at most 1. The threshold formula is R4-3's (recall against a
+returning candidate keys only; step 4 reads their `text_fold` from `box_state` under its policy and
+the domain function keeps exactly the items with a word at Damerau-Levenshtein distance at most 1. The threshold formula is R4-3's (recall against a
 brute-force distance on the spike's texts must be 100 % for keys of 1 to 12 characters). When
 10,001 candidates come back, the page shows the matches among them and marks the total unknown
 (`total_unknown`, section 5); R4-3 reports how often that happens on the spike. A box text read by a human or another reader that
@@ -1362,17 +1546,31 @@ path directly (step 3, with every word as the `strpos` test on `txt.item_line_te
 so today's one- and two-character prefixes keep working; a fragment under three characters is
 refused with 400 `text_too_short` (revision 1, 15c contract addendum).
 
-**Who writes the copies.** `store_states` (6.2), the only writer of `box_state`, rewrites
-`txt.item_box_text` for each item whose box `text_fold` values changed, in the same transaction
-after step 2, ordered by `item_key`: an `INSERT ... SELECT b.item_key, :p, string_agg(b.text_fold,
-' ' ORDER BY b.box_id) FROM box_state b WHERE b.item_key = ANY(:changed) AND b.text_fold IS NOT NULL
-GROUP BY 1 ORDER BY 1 ON CONFLICT (item_key) DO UPDATE SET folds = EXCLUDED.folds WHERE t.folds IS
-DISTINCT FROM EXCLUDED.folds`, and a `DELETE` of the changed items that have no text left. The
-repository that writes `text_lines` rows with an `item_key` (`src/db/repos/text_search.py`, new)
-rewrites `txt.item_line_text` the same way from `item_text_tokens`. Deletes cascade from `items`.
-The ratchet of 6.2 (`tests/storage/test_counted_writers.py`) also names the writer of each copy.
+**Who writes the copies, and how a photo's rows leave them.** `store_states` (6.2), the only writer of
+`box_state`, calls `txt.put_box_text(:keys, :folds)` for the items whose box `text_fold` values
+changed, in the same transaction after step 2, with the arrays ordered by `item_key`:
+`SELECT array_agg(c.k ORDER BY c.k), array_agg(x.folds ORDER BY c.k) FROM unnest(:changed) AS c(k)
+LEFT JOIN LATERAL (SELECT string_agg(b.text_fold, ' ' ORDER BY b.box_id) AS folds FROM box_state b
+WHERE b.item_key = c.k AND b.text_fold IS NOT NULL) x ON true`; an item with no text left gets a
+`NULL`, which removes its copy row. The repository that writes `text_lines` rows with an `item_key`
+(`src/db/repos/text_search.py`, new) calls `txt.put_line_text` the same way with the tokens of
+`item_text_tokens` (the tokens are made by the domain code, so the function takes them as
+arguments; it takes a row only for an item of the bound project). The ratchet of 6.2
+(`tests/storage/test_counted_writers.py`) names the writer of each copy. Both run as `op_app` under
+`project_tx`; `op_app` has no privilege on the tables, so no other path writes them. The copy is
+safe from lost updates only because `store_states` holds the `items` lock first (lock rank 6, 15a
+section 7: "a fold reads its inputs after it holds the `items` lock"): two writers that change
+different boxes of one item serialise there, and a two-writer test (go bar, item 6) proves it.
 Write cost: one row and its GIN entries per changed item; `box_state` keeps X33, so a text change
 there is not HOT (as before).
+
+**Erasure** (second review, M3). The copies are in the erasure catalogue (15a section 8) as "cascade
+through `items`": both foreign keys to `items` are `ON DELETE CASCADE`, so the rows of a photo leave
+the copies in the same transaction as the `items` rows (a referential action runs inside the
+deleting statement and bypasses row security, [row security](https://www.postgresql.org/docs/18/ddl-rowsecurity.html)),
+and the foreign key to `projects` removes a deleted project's rows. `store_states(delete_photos=...)`
+does nothing extra for them. Erased text stays in dead heap tuples and the GIN pending list until
+vacuum, as in every table; the erasure record says so.
 
 **GIN pending list** (round 3, M9): `fastupdate` on with `gin_pending_list_limit` 512 kB gave the
 lowest insert p99 under 30 box writers (service 8.2 / 17.3 ms p50 / p99, against 14.3 / 40.6 ms with
@@ -1385,15 +1583,51 @@ an ordinary insert ([GIN fast update](https://www.postgresql.org/docs/18/gin.htm
 R4-3 times fragment reads in 30 s windows alternating with and without 30 box writers (the windowed
 method of 14.4); if the reads with writers miss the page bar, the fallback is `fastupdate = off`.
 
-**Tests** (`db` feature of the slice that builds it, R1b and R7). Bound to project A the functions
-never return an item of B while B has matching rows; with no project bound, an empty project id or
-a scope other than `project` they raise; `op_app` cannot read B's copy rows directly, cannot alter or
-drop the functions or the copies, and is not a member of `op_text_owner`; `pg_roles` shows
-`op_text_owner` without login and without `rolbypassrls`; the copies are the only tables with
-`relrowsecurity` and not `relforcerowsecurity`, and every other table with a `project_id` is forced
-(02a 1.4); both functions are `prosecdef` with `search_path` and `plan_cache_mode` in `proconfig`;
-each function's result equals the `LIKE` (or prefix) test over the source rows run by the owner; the
-6.8 property test asserts after every step that each copy equals its source.
+**Go bar of the slice that creates the copies and functions** (R1b's text part, after R4-3, with R7's
+`put_line_text`; `db` tests of R1b and R7; nothing merges until every item passes, and C-1 repeats
+items 1, 2 and 4 on the managed instance). Second review, M7, decision 1c.
+
+1. **Two-project matrix, generated from the catalogue** (the test lists the functions of schema `txt`
+   from `pg_proc`; a function without a matrix entry fails the test). Projects A and B hold the same
+   texts, different texts, and a text only B holds (three fixtures, items of both projects). Bound to
+   A, each read function is called with every argument shape: exact (a whole stored text), fragments
+   of 3, 4 and 5 characters, a fuzzy key one character off at thresholds 0.1, 0.6 and 1, one word,
+   several words, a word prefix, a one-character word, the empty string, `NULL`, wildcard-only (`%`,
+   `_`, `%%%`, `\`), a space inside, 64 and 65 and 10,000 characters, `max_items` 0, 1, 10,001 and
+   10,002. Assert: the result holds no key of an item of B (read from `items` by the test as owner),
+   holds every key of A that the owner-run `LIKE` finds, and an invalid shape raises
+   `invalid_parameter_value` and returns nothing. The mirror run is bound to B. The per-item tests,
+   called with a key of B under A, return false; `put_*` called with B's keys under A change no row of
+   B's copy (compared as owner before and after, `NULL` text included).
+2. **No project, no scope, other scopes.** With no project bound, an empty project id, scope `core` and
+   scope `deployment`, every function raises (`project_not_bound` / `project_scope_required`) before
+   any row is read. A deployment-scope caller has no text search (stated above); that is the pass
+   condition, not a gap.
+3. **Mutation run.** The test builds, in a scratch schema, one variant of each function per
+   statement with `v_project` removed from that statement, and asserts that item 1 fails for it
+   (so item 1 would have caught the mistake: the test has been seen to fail) and that the route
+   probe on that variant raises `text_isolation_fault`.
+4. **Catalogue.** `proacl` of every function lists no `PUBLIC` entry and only `op_app` and the owner;
+   `prosecdef` is true, `proowner` is `op_text_owner`, `proconfig` holds `search_path`, `plan_cache_mode`
+   (reads) and `gin_fuzzy_search_limit` (set reads); the `prosrc` of every function equals the file's
+   (one source); `op_app` has `USAGE` on `txt` and no privilege of any kind on either copy (`SELECT`
+   from it raises `permission denied`) and cannot alter or drop an object of `txt` or create one in
+   it; `op_app` is a member of no role; `pg_roles` shows `op_text_owner` without login and without
+   `rolbypassrls`; every object of schema `txt` is owned by `op_text_owner` and `op_text_owner` owns
+   nothing outside `txt` (a forgotten `RESET ROLE`); no view, rule, trigger or policy outside the
+   copies references `txt`; the copies are the only tables with `relrowsecurity` and not
+   `relforcerowsecurity` (asserted by name and by schema) and every other table with a `project_id`
+   is forced (02a 1.4); `op_text_owner`'s own privileges are exactly those listed above.
+5. **Results equal the source.** Each function's result equals the `LIKE` (or prefix) test over the
+   source rows run by the owner; the 6.8 property test asserts after every step that each copy
+   equals its source, `project_id` included (a row under another project's id fails it; the copy's
+   foreign key is to `items (item_key)` only, a composite key would need a `UNIQUE (item_key,
+   project_id)` on a 10 M-row table and the join of layer 1 already makes a mismatch harmless to
+   isolation).
+6. **Writers and erasure.** Two writers changing different boxes of one item leave the copy equal to
+   its source; erasing a seeded photo leaves no row in either copy, no hit from `fragment_items` or
+   `word_items`, after a vacuum (also in the erasure tests of 15a section 8).
+7. **Round 4's set-up compiled and ran** every body of this block (R4-0) before the file was written.
 
 ## 9. Box rows: the index and the page
 
@@ -1407,8 +1641,7 @@ state, detector, item_key DESC)`, X26 `(project_id, state, item_key DESC)`, X27 
 detector, item_key DESC)` (M6; box rows change far less often than item rows). `<box predicate>` is
 state, detector and the text match of section 8. For `exact`, `fuzzy` and `same_text_as` it is the
 same text in both statements. For a fragment (revision 3, review M3) the first statement takes
-`b.item_key = ANY(:text_keys)` (narrow) or the walk with the per-item `EXISTS` on
-`txt.item_box_text` (broad), and the second statement takes `b.text_fold LIKE :like` on the rows
+the narrow semi-join on the probe's keys or the walk with `txt.box_text_has` (broad), and the second statement takes `b.text_fold LIKE :like` on the rows
 already bounded by `b.item_key = ANY(:keys)`, so only the boxes that match are returned (section 8).
 
 ```sql
@@ -1646,8 +1879,8 @@ definition); (c) a posting table probed by equality (works everywhere, about 1.3
 X7's 108 MB, hand-made trigram search); (d) an owner-read search copy read through project-bound
 definer functions owned by a role without any special attribute. **Chosen: (d)** with X33 for
 equality and the variant list for fuzzy over a defined alphabet (section 8: `txt.item_box_text`,
-`txt.item_line_text`, `txt.fragment_items`, `txt.word_items`, `txt.fuzzy_items`); (c) is the
-fallback if (d) misses R4-3. Round 4 R4-3: the leakproof flags and a control plan; the functions'
+`txt.item_line_text` and seven functions: `fragment_items`, `word_items`, `fuzzy_items`, two per-item tests, two writers); (c) is the
+fallback if (d) misses R4-3 or its go bar. Round 4 R4-3: the leakproof flags and a control plan; the functions'
 inner plans; every form inside P1, P4, P8 and P9 at three selectivities against 50 / 200 ms; reads
 while 30 box writers fill the pending list.
 
@@ -1820,20 +2053,28 @@ for a cell with at least 100 finished queries; a cell with fewer reports p50 and
 its count `n` (round 3 reported p99s of 6 to 60 samples, which are maxima). Delete the 3 stale M7
 records first (`results_round3.md` section 3).
 
-**Text set-up** (R4-0, for R4-3): role `m3_text_owner` and schema `txt` in `v2_10m` as section 8
-(`txt.item_box_text` filled from `m3.box_state` by one `INSERT ... SELECT ... string_agg ... GROUP
-BY item_key`, then X7 on it; the three functions; `m3.op_bound_project_strict`; the tightened
-`m3.op_scope_project`). The spike's texts are uniform over A to Z and 0 to 9, so a 3-character
-fragment matches about 2.65 M x 4.5 / 46,656 = about 260 boxes and no fragment is broad: R4-3
-plants two groups absent from the data, one in the copy rows and `text_fold` of 3,000 random items
-(mid) and one in 50,000 (broad), and removes them at its end (shared hold, under a minute). The spike
-has no item text lines, so `word_items` is timed by the first wave sweep after its slice on set P
-(section 1.3); R4-3 times the same mechanism on box text.
+**Text set-up** (R4-0, for R4-3): role `m3_text_owner`, schema `txt`, `btree_gin`, `m3.op_bound_project_strict`
+and the tightened `m3.op_scope_project` in `v2_10m`, and **the seven functions created from section
+8's DDL block as written** (the harness extracts the block unedited; each function is then called
+once with a valid and once with an invalid argument, and a body that does not compile or run stops
+the round before R4-3: second review, M6 and decision 6; the slices copy only a tested text).
+`txt.item_box_text` is filled from `m3.box_state` by one `INSERT ... SELECT ... string_agg ... GROUP
+BY item_key`, then X7 (project first) is built on it; a clone `txt.item_box_text_plain` with the
+index on `folds` alone is built for the comparison and dropped at the end. **Two projects of very
+different size**: the spike's project L (10 M items) and a planted project S of 20,000 items (base
+rows in `items` and `box_state`, texts drawn from the same distribution so that the same fragments
+match in both), with its copy rows; both are removed at the end. The spike's texts are uniform
+over A to Z and 0 to 9, so a 3-character fragment matches about 2.65 M x 4.5 / 46,656 = about 260
+boxes and no fragment is broad: R4-3 plants two groups absent from the data, one in the copy rows
+and `text_fold` of 3,000 random items (mid) and one in 50,000 (broad) of L, and the same two
+fragments in 200 and 2,000 items of S (shared hold, under a minute). The spike has no item text
+lines, so `word_items` is timed by the first wave sweep after its slice on set P (section 1.3);
+R4-3 times the same mechanism on box text and calls every other function of the block at least once.
 
 | Item | Question | Bar | Data and set-up | Cells | Time |
 |---|---|---|---|---|---|
-| R4-0 set-up (shared hold) | | | `sum_cluster_card` filled by the roll-up of 6.5; `ix_sum_cluster_det`, `ix_sum_deltas_cluster`; X33 on `box_state`; the text set-up above (its fill time is also the restore refill time of 02c section 6); `m3_app_explain`; `ANALYZE` | none | 6 min (round 3: kinds 7 to 10 rebuild 67 s idle; X33 and the copy with X7 about 1 min each, estimated) |
-| R4-3 text | is row security the cause; do X33, the variant list and the owner-read functions meet the page bar inside every shape that uses them, also while boxes are written; what plan runs inside the functions | 50 / 200 ms per shape; recall 100 %; box write service p99 not above round 3's 512 kB cell (17.3 ms) by more than the windowed rule of 14.4 | `proleakproof` of `texteq`, `textlike`, `int4eq`, `int8eq`, `uuid_eq`, `textregexeq`, `similarity`, `similarity_op`, `word_similarity_op` and the operator families of `gin_trgm_ops` and the B-tree `text_ops` (the SQL behind `\dAo+`, rules and privileges page); control: the fragment count of round 3 as the superuser (no row security) and as `m3_app`; inner plans of `fragment_items` and `fuzzy_items` for every form below (nested statements); `fragment_items` alone at 3, 4 and 5 characters (narrow), mid and broad; the text predicate inside P1 (class page by `updated_at`), P4 (count), P8 (review by score) and P9 (both statements), each narrow, mid and broad (section 8 steps 1 to 3), P1 and P9 also deep at broad (the walk); exact first and deep; variant list at 1, 2, 4, 7, 10, 12 characters; `fuzzy_items` at 3, 7, 10, 12 characters with recall against a brute-force distance over every distinct text, and how often 10,001 candidates come back; fragment and exact readers in 6 x 30 s windows alternating with and without 30 paced box writers (512 kB list), the writers also upserting the copy as `store_states` does | 31 reader cells x 20 s at 8 readers, the windowed cell 180 s, plans and flags without timing | 19 min |
+| R4-0 set-up (shared hold) | | | `sum_cluster_card` filled by the roll-up of 6.5; `ix_sum_cluster_det`, `ix_sum_deltas_cluster`; X33 on `box_state`; the text set-up above (the bulk fill time is a floor for the restore refill of 02c section 6, which goes through `put_box_text`; R4-3 times that path too); `m3_app_explain`; `ANALYZE` | none | 9 min (round 3: kinds 7 to 10 rebuild 67 s idle; X33, the copy with X7 and the comparison index about 1 to 1.5 min each, estimated; project S and the body check about 1 min) |
+| R4-3 text | is row security the cause; do X33, the variant list and the owner-read functions meet the page bar inside every shape that uses them, also while boxes are written; what plan runs inside the functions | 50 / 200 ms per shape; recall 100 %; box write service p99 not above round 3's 512 kB cell (17.3 ms) by more than the windowed rule of 14.4; **every recorded nested plan shows constants** (a `$1` in a filter or index condition is a generic plan: the round fails the cell); **the project-led index is used** (its `Index Cond` holds `project_id = <constant>` beside the `LIKE` or `<%` condition) and a call bound to S reads fewer index buffers than L's for the same fragment; the matrix test (go bar items 1 to 3) passes on the set-up | `proleakproof` of `texteq`, `textlike`, `int4eq`, `int8eq`, `uuid_eq`, `textregexeq`, `similarity`, `similarity_op`, `word_similarity_op` and the operator families of `gin_trgm_ops` and the B-tree `text_ops` (the SQL behind `\dAo+`, rules and privileges page); control: the fragment count of round 3 as the superuser (no row security) and as `m3_app`; inner plans of `fragment_items`, `fuzzy_items`, `box_text_has` and the probe for every form below (nested statements, constants visible, `Rows Removed by Filter` on `project_id`); **two-project cells**: the same fragment at narrow, mid and broad bound to S and bound to L, on the project-led index and on `item_box_text_plain` (the cost of a small project beside a large one, and whether the index earns its size); the matrix of the go bar run once on the set-up (seconds); `fragment_items` alone at 3, 4 and 5 characters (narrow), mid and broad; the text predicate inside P1 (class page by `updated_at`), P4 (count), P8 (review by score) and P9 (both statements), each narrow, mid and broad (section 8 steps 1 to 4, with another filter beside the text predicate in half of the cells, so the total after every filter is timed), P1 and P9 also deep at broad (the walk with `box_text_has`); exact first and deep; variant list at 1, 2, 4, 7, 10, 12 characters; `fuzzy_items` at 3, 7, 10, 12 characters with recall against a brute-force distance over every distinct text, and how often 10,001 candidates come back; fragment and exact readers in 6 x 30 s windows alternating with and without 30 paced box writers (512 kB list), the writers also calling `put_box_text` as `store_states` does | 31 reader cells x 20 s at 8 readers, 6 two-project cells x 20 s, the windowed cell 180 s, plans and flags without timing | 22 min |
 | R4-7 fillfactor | does fillfactor 90 keep region-only updates at least 90 % HOT beside labels, and in a dense region re-run? | 90 % HOT | `item_state_ff90`: (1) 15 label + 15 region writers paced, labels on fresh rows, 300 s; (2) dense: 10 writers re-running the region columns of one detector's items in `item_key` order, batches of 1,000, 300 s; checkpoint counters | 2 cells | 10 min, then restore and consistency check 4 min (round 3: rebuild 163 s, `m3_m5_restore_10m.json`; check 79 s) |
 | R4-4 detector count | does the plan's form (EXISTS through X32) meet the page bar? | 50 / 200 ms | P4 cap 10,001 with `detector_class_name` as `EXISTS` on `detections`, alone and with a class; 1 and 8 readers; plans | 4 x 20 s | 2 min |
 | R4-5 sorts | where is `T_sort`; how slow is the composed path just above it; does the planner's estimate decide well enough to skip the guard (section 7 step 3); the 6 missing cells | 50 / 200 ms per cell; outputs `T_sort`, the band per sort, estimate against actual | the 6 cells of `photos_unlabeled_count` (round 3 section 3); sort path on `item_state` copies for `created_at`, `crop_area_norm`, `crop_rank_in_image`, `detector_confidence`, `detector_class_name` at 10,000 / 20,000 / 40,000 / 70,000 / 100,000 matches; walk path (planner settings unforced) at 40,000 / 70,000 / 100,000 for those plus `updated_at`, `blur_lap_ratio`, `cluster_score`; sort path for `validated`, `class_name`, `region_score` at 20,000 / 40,000 / 70,000; the to-label and regions queues at the sizes the data holds; first and deep, 8 readers. Then, with `T_sort` computed by the script (the largest size where every copy sort meets), **guard then walk** (the page's capped count, the guard to `T_sort + 1`, the walk) for `updated_at` and the seven joined sorts at `T_sort` + 1 %, + 10 % and 2 x, first page; for every filter the `EXPLAIN` row estimate beside the actual count | about 111 cells x 3 s plus 24 composed cells x 5 s plus 6 | 2 holds, 13 min |
@@ -1845,8 +2086,9 @@ has no item text lines, so `word_items` is timed by the first wave sweep after i
 | R4-10 defined bars | the windowed compactor bar and ingest throughput | 14.4 | 30 paced writers, 6 x 30 s windows alternating the compactor (response p99, `ix_sum_deltas_cluster` present); ingest at 1, 8, 30 writers, 20 s warm-up, 60 s cells | 1 + 3 cells | 7.5 min |
 | final check (shared hold) | | 0 mismatches | consistency check of every `_now` view and every card | none | 1.5 min |
 
-**Total and window.** About 92 minutes of steps (the "Time" column, from round 3's cell durations
-and the estimates named there), about 105 minutes with the chain's start and stop around each item;
+**Total and window.** About 98 minutes of steps (the "Time" column, from round 3's cell durations
+and the estimates named there; revision 3.1 added 3 minutes to R4-0 and 3 to R4-3), about 111
+minutes with the chain's start and stop around each item;
 the round fits one quiet window of **two hours**, provided no other heavy work runs on the host:
 the chain's load gate waits up to 4 minutes per cell at load 16 or more, and round 3 lost six holds
 of M7 to loads of 21 to 31 (`results_round3.md` section 3). The dry-runs on `v2_1m` happen before
@@ -1855,24 +2097,44 @@ R4-7 with its restore, then R4-4, R4-5, R4-6, R4-9, R4-2, R4-1, R4-8, R4-10, the
 cell writes `raw/m4_<item>_10m.json`; the write-up follows `results_round3.md`'s form.
 
 **Must run before the first record slice (R1b) builds its waiting parts:** R4-0, R4-3, R4-7 (about
-39 minutes of steps). **Can run later, each before the slice that waits for it (section 16):** R4-4,
+45 minutes of steps). **Can run later, each before the slice that waits for it (section 16):** R4-4,
 R4-5, R4-1 (R4, gallery reads); R4-6, R4-8 (R5); R4-2, R4-9 (R8); R4-10 (changes only constants of
 R1b's compactor). If the window is cut short, the chain stops after a finished item and resumes.
 
 **Cloud check C-1** (outside the window; it needs a managed instance, so the coordinator schedules
-it): on an Amazon RDS for PostgreSQL 18 instance, as the master user, run the bootstrap of section 8
-and 02a 1.5 and `0011`'s text part as `op_owner`. Expected: `CREATE ROLE ... BYPASSRLS` fails (the
-evidence that (a) is impossible there); `op_text_owner`, schema `txt`, the copies, the functions and
-the isolation tests of section 8 pass; `pg_trgm` installs. Needed before R1b's bootstrap part merges;
-the self-hosted path does not wait for it.
+it): on an Amazon RDS for PostgreSQL 18 instance (16 or later is needed for `GRANT ... WITH SET`,
+[GRANT](https://www.postgresql.org/docs/18/sql-grant.html)), as the master user:
 
-**Every choice left to measurement and its cell:** the text mechanism's confirmation, the inner
-plans and the `enable_seqscan` setting of the functions, the fuzzy threshold, the `fastupdate`
+1. **Facts.** `SELECT version()`; `rolname, rolbypassrls` of `postgres` and `rds_superuser`;
+   `CREATE ROLE x BYPASSRLS` fails (the evidence that (a) is impossible there); `CREATE EXTENSION`
+   of `pg_trgm` and `btree_gin` works for the master user; `auto_explain` through the parameter
+   group; `PGOPTIONS='-c op.scope=deployment'` accepted on the instance endpoint the backup uses.
+2. **Bootstrap, `0011`, the tests.** The bootstrap of section 8 and 02a 1.5, `0011`'s text part as
+   `op_owner`, and the go bar of section 8 (items 1 to 4: the matrix, the scopes, the mutation run,
+   the catalogue) pass.
+3. **Backup and restore, required** (02c section 6, the managed procedure): fill the instance with
+   the 1 M-item spike data plus its copies; `db backup` ends without error and its per-table row
+   counts equal the counts the owner reads with `FORCE` off; `db restore` into the same instance
+   follows the numbered steps; record that `pg_restore` ends with no error (the dump's extension
+   entries included), the order of `ROW SECURITY` entries against `TABLE DATA` in `pg_restore
+   --list`, the time of each phase (data, indexes, constraints, refill, copy index build) and the
+   extrapolation to 10 M items, that `db verify` passes (forced flags, `proacl`, ownership,
+   `prosrc`), and that go bar items 1, 2 and 4 pass again after the restore. If the data load
+   fails with "COPY FROM not supported with row-level security", the fallback of 02c section 6
+   (data-only restore under `NO FORCE`, or `--rows-per-insert`) is run and timed instead.
+
+Needed before R1b's bootstrap part and the restore command merge; the self-hosted path does not
+wait for it, but its restore test (02c section 7) is the same sequence.
+
+**Every choice left to measurement and its cell:** the text mechanism's confirmation, the project-led
+index against `folds` alone, the inner plans and the `enable_seqscan` setting of the functions, the
+per-call cost of `box_text_has` in the walk, the fuzzy threshold, the `fastupdate`
 fallback (R4-3); `item_state` fillfactor 90 or 80 (R4-7); the detector-class count form (R4-4);
 `T_sort`, the planner-estimate step, the band (R4-5); the routed review queue (R4-6); the filtered
 card size limit (R4-9); the card form, the compactor rate with the refresh, the card check (R4-2);
 the bars under writers and the write cost of `ix_sum_deltas_cluster` (R4-1, R4-2, R4-10); `K`
-(R4-8); the windowed compactor bar and ingest (R4-10); managed set-up (C-1).
+(R4-8); the windowed compactor bar and ingest (R4-10); managed set-up, restore time and the
+dump-extension question (C-1).
 
 ## 16. What the Rust record slices take from this revision
 
@@ -1884,10 +2146,10 @@ are marked the same way.
 
 | Slice (18b) | Final (build now) | Waits for round 4 or the owner |
 |---|---|---|
-| R1b, the record and the fold | `0011`: X1 to X6, X8 to X21, X24, X26 to X33 (15a 2.6; X33 on `box_state`); the summary tables, `sum_deltas`, the `_now` views (6.1); `op_bound_project_strict` and the tightened `op_scope_project` (8); the bootstrap's `op_text_owner`, schema `txt` and `op_owner`'s membership `WITH SET` (8; 02a 1.5) for self-hosted; `sum_deltas` vacuum threshold 10,000 (6.1, 6.5); `store_states` with aliased `RETURNING` pairs (6.2); the tally (6.2); the compactor for all ten kinds, key-only conflict targets for kinds 6 to 10, ordered upserts, batch 10,000, beat 0.2 s, built table-driven so R8 adds the card refresh as a second statement and the touched-set output without changing the first (6.5); the drift check over ten kinds with float sums in double precision (6.6); the label transaction's statements (6.9) | both text copies, X7, X25, `fragment_items`, `word_items`, `fuzzy_items` and `store_states`' copy upsert (8): R4-3 (and the posting-table fallback if it misses); `item_state` fillfactor 90 or 80: R4-7; the bootstrap on a managed service: C-1; batch and beat constants: R4-10 (constants only) |
-| R4, gallery reads | P1 with up to 16 class branches, P2, P4 with a 50 ms budget, P5, P6, P15 (2, 5); the cursor with typed binding and the chosen path (4); sorts reading `item_state`'s copies; the path decision's steps 1, 2 and 4 (7); capped totals (5) | `T_sort` and step 3 (planner estimate): R4-5; the band: owner question 2, asked with R4-5's numbers; the detector-class count form: R4-4; the text predicate inside P1, P4, P8 (8 steps 1 to 3): R4-3; reads under writers: R4-1 (a miss goes back as code work) |
+| R1b, the record and the fold | `0011`: X1 to X6, X8 to X21, X24, X26 to X33 (15a 2.6; X33 on `box_state`); the summary tables, `sum_deltas`, the `_now` views (6.1); `op_bound_project_strict` and the tightened `op_scope_project` (8); the bootstrap's `op_text_owner`, schema `txt`, `pg_trgm`, `btree_gin`, `op_owner`'s membership `WITH SET` and the default-privileges line (8; 02a 1.5) for self-hosted; `sum_deltas` vacuum threshold 10,000 (6.1, 6.5); `store_states` with aliased `RETURNING` pairs (6.2); the tally (6.2); the compactor for all ten kinds, key-only conflict targets for kinds 6 to 10, ordered upserts, batch 10,000, beat 0.2 s, built table-driven so R8 adds the card refresh as a second statement and the touched-set output without changing the first (6.5); the drift check over ten kinds with float sums in double precision (6.6); the label transaction's statements (6.9) | both text copies, X7 and X25 (project first), the seven `txt` functions, the SQL file `src/db/sql/txt_search.sql`, `store_states`' `put_box_text` call and the go bar (8): R4-3 (and the posting-table fallback if it misses R4-3 or the go bar); backup and restore on a managed service (02c section 6): C-1; `item_state` fillfactor 90 or 80: R4-7; the bootstrap on a managed service: C-1; batch and beat constants: R4-10 (constants only) |
+| R4, gallery reads | P1 with up to 16 class branches, P2, P4 with a 50 ms budget, P5, P6, P15 (2, 5); the cursor with typed binding and the chosen path (4); sorts reading `item_state`'s copies; the path decision's steps 1, 2 and 4 (7); capped totals (5) | `T_sort` and step 3 (planner estimate): R4-5; the band: owner question 2, asked with R4-5's numbers; the detector-class count form: R4-4; the text predicate inside P1, P4, P8 (8 steps 1 to 4, totals after every filter): R4-3; reads under writers: R4-1 (a miss goes back as code work) |
 | R5, labelling, review, class counts | counted review tabs (6.2); P3 totals; class counts from `sum_items` (row 16); chunks of 1,000 under the job kind `label_op` (14.2) | the routed review queue: R4-6; `K` above 1 (today's exclusive group): R4-8; the "to review" definition: owner question 1 |
-| R7, regions and boxes | P9 with X6, X26, X27 (9, met); `exact` and `same_text_as` on X33; the variant list and its alphabet function, the switch rule (8); the 3-character minimum for fragments; the dropped `max_expansions` pins (8) | P9 with fragments and `fuzzy_items`' threshold: R4-3; the pending-list setting under writers: R4-3; the `text_lines` copy writer (`src/db/repos/text_search.py`) and word search: R4-3 for the mechanism, then the wave sweep on set P (no item text in the spike) |
+| R7, regions and boxes | P9 with X6, X26, X27 (9, met); `exact` and `same_text_as` on X33; the variant list and its alphabet function, the switch rule (8); the 3-character minimum for fragments; the dropped `max_expansions` pins (8) | P9 with fragments and `fuzzy_items`' threshold: R4-3; the pending-list setting under writers: R4-3; the `text_lines` copy writer (`src/db/repos/text_search.py`, calling `put_line_text`), `line_text_has` and word search: R4-3 for the mechanism, then the wave sweep on set P (no item text in the spike) |
 | R8, clustering and the cluster screens | `0016`: the four cluster summary tables, `ix_sum_cluster_det`, `ix_sum_deltas_cluster` (moved here from R1b, revision 3), `sum_cluster_card` (6.1); the compactor's kinds 7 to 10, the touched-set output and the card refresh (6.5); the card check (6.6); the partition fill with the card roll-up (6.7); P8 inside a cluster, facets and placement reads (met) | P7 (full join) against its bar and the compactor's rate with the refresh: R4-2; filtered cards (P13 set-based): R4-9 and owner question 3; the "to review" count: owner question 1 |
 | R10, machine helpers | nothing yet | only if the owner answers question 1 with (a) or (d): the probe job and the embedding re-index report membership changes (through `store_states` for (a), per probe batch for (d)) |
 | R6a, R6b, R9, R2b | nothing new beyond revision 1 (6.7's run-keyed fill for R6b); R6b sets no GIN setting (18b correction below) | none |
@@ -1896,7 +2158,7 @@ are marked the same way.
 row R6b, column "Revision": "`0015_near_dup_cutover` (writes 15b M9's `fastupdate` choice)" becomes
 "`0015_near_dup_cutover`"; (2) section R1b, **Builds**: "indexes X1 to X21 and X24 to X32" becomes
 "indexes X1 to X6, X8 to X21, X24 and X26 to X33, the schema `txt` search copies with X7 and X25
-(`fastupdate = on, gin_pending_list_limit = 512`) and their functions, `op_bound_project_strict`
+(project first, `fastupdate = on, gin_pending_list_limit = 512`) and their seven functions, `op_bound_project_strict`
 and the tightened `op_scope_project` (15b section 8)", and "fillfactors from 15b M5" stays; (3) row
 R8: `0016` also creates `ix_sum_deltas_cluster` (15b 6.1).
 
@@ -1958,3 +2220,27 @@ One row per finding of the review of 15b and 15c (2026-11-15) and the place that
 | m11 owner questions' options | 14.3 (options (d), (e) added; question 2 put with R4-5's numbers) |
 | m12 stale text | header status; section 1.2 note; 6.9; 15a fillfactor row |
 | m13 `ix_sum_deltas_cluster` write cost on one cell | 6.1 note; R4-1, R4-2, R4-10 run with it |
+
+
+**Review of revision 3** (2026-11-16, 1 blocker, 7 major, 8 minor), answered by revision 3.1. The
+review's verdict on isolation (a missing project clause in one body exposes every project, with no
+second barrier) is answered by the layers of section 8 "How isolation holds":
+
+| Finding | Answered in |
+|---|---|
+| B1 managed backup and restore cannot work | 02c section 6: the dump of a managed service runs with `--enable-row-security` under the deployment scope; the restore does **not** use that option: `pg_restore` creates the tables itself, `FORCE` is part of the table's creation and `ENABLE ROW LEVEL SECURITY` is a post-data entry, so the data loads while row security is not yet on ([pg_restore](https://www.postgresql.org/docs/18/app-pgrestore.html): the option "is relevant only when restoring the contents of a table which has row security"); fallbacks if C-1 shows otherwise; C-1 step 3 runs it. The review read the option's note, which concerns a data-only restore into existing tables |
+| M1 `USAGE` on `txt` never granted | section 8 DDL (`GRANT USAGE ON SCHEMA txt TO op_app`, `EXECUTE` on seven functions, nothing on tables); 02a 1.5; go bar item 4 (privileges asserted exactly) |
+| M2 restore order: `--clean`, `--no-privileges`, refill role, recreated functions | 02c section 6 numbered procedure: `DROP SCHEMA txt CASCADE` before `pg_restore`; the grants named and re-applied; the refill is `op_app` calling `put_box_text` per project; functions created through the one file in one transaction, default privileges revoke `PUBLIC` |
+| M3 erasure catalogue and test miss the copies | section 8 "Erasure"; 15a section 8 (catalogue rows, test scans `public` and `txt`, leaves-nothing test extended); go bar item 6 |
+| M4 totals wrong when a text filter combines with another | section 8 "How a page ... use it": narrow total by `count(*) OVER ()` after every filter in the shape's statement, broad total by the capped count over the whole predicate; R4-3 times cells with another filter |
+| M5 round 4 does not prove the plan | section 15: two projects of very different size, constants in nested plans, project-led index used, plain index comparison, per-call cost of the per-item test, matrix smoke run |
+| M6 ambiguous `words` in `word_items` | section 8: `q_` and `v_` prefixes, every reference qualified, `#variable_conflict error`; every body compiled and run in R4-0 before any slice copies it |
+| M7 isolation hangs on one clause per statement | section 8 "How isolation holds": keys only joined to a forced table in the caller's statement, the probe's `text_isolation_fault`, project foreign key and project-led index, the go bar (matrix, mutation run, catalogue); one SQL file; residual exposure stated; posting table kept as the costed fallback |
+| m1 `gin_fuzzy_search_limit` not pinned | section 8 DDL (`SET gin_fuzzy_search_limit = 0` on the set reads; `proconfig` test) |
+| m2 foreign key to `items (item_key)` only | stands: a composite key needs `UNIQUE (item_key, project_id)` on a 10 M-row table, and the join of layer 1 makes a mismatched row harmless to isolation; the 6.8 property test compares `project_id` (go bar item 5) |
+| m3 three steps not one snapshot | section 8: `REPEATABLE READ READ ONLY` for text reads |
+| m4 (a) P9's second statement for trigram-fuzzy; (b) refill time; (c) policy drop and create | (a) section 8 after step 4; (b) 02c section 6: indexes built after the refill; R4-0 times the `put_box_text` path; (c) stands: between drop and create the table denies `op_app` (fail closed), and the step runs before the API starts |
+| m5 missing tests | go bar items 4 and 6 (`proacl`, converse ownership, no view or trigger, `db verify` checks, concurrency test) |
+| m6 managed assumptions in C-1 | section 15 C-1 steps 1 to 3 |
+| m7 stale text (02a 238, `relrowsecurity` by schema) | 02a 1.5 role table; go bar item 4 asserts by name and by schema |
+| m8 scope refusal not stated | section 8 "Scopes" |
