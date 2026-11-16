@@ -129,8 +129,9 @@ impl RetiredEnv {
     }
 }
 
-/// Refuse to start when `env` holds a variable the embedded list retires. Every role of the
-/// server calls this first.
+/// Refuse to start when `env` holds a variable the embedded list retires. Every role that serves
+/// or works calls this first; `op-server health` does not, because it is a probe of a front that
+/// is already running and reads only the address it listens on.
 ///
 /// # Errors
 ///

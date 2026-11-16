@@ -78,6 +78,14 @@ and `OP_SERVER_IMAGE` (the Rust front on the API port),
 `OP_TRAINER_IMAGE`. The installer sets them to digest-pinned references; a
 checkout rarely needs them.
 
+The server image (`openprocessor-server`) has no published tag before the first release that
+carries it. Its default tag is the same `OP_IMAGE_TAG` default as every other image (the `VERSION`
+file; `tests/test_version_consistency.py` keeps them equal), so on a checkout the dev overlay
+builds it locally and a deployment that keeps `OP_IMAGE_TAG` at the already released `0.6.0` has
+nothing to pull for it. The release step bumps `VERSION` and every `OP_IMAGE_TAG` default together
+and `scripts/release/build_and_publish.sh` then pushes `openprocessor-server:<VERSION>` with the
+other images.
+
 ## Filesystem roots and caches
 
 | Variable | Default | Meaning |

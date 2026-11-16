@@ -101,6 +101,22 @@ fn health_succeeds_on_a_success() -> Result<(), Failed> {
     }
 }
 
+/// `health` is a probe, not a serving role: a retired variable in its environment is not its
+/// concern (the front it asks refused to start with it, or it would not be running).
+fn health_does_not_refuse_a_retired_variable(name: &str) -> Result<(), Failed> {
+    let addr = answers_once("200 OK");
+    let listen = format!("0.0.0.0:{}", addr.port());
+    let output = run(
+        &["health", "--timeout-s", "5"],
+        &[("OP_API_LISTEN", &listen), (name, "x")],
+    );
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(stderr(&output).into())
+    }
+}
+
 fn health_fails_on_a_503_and_says_so() -> Result<(), Failed> {
     let output = health(answers_once("503 Service Unavailable"), "/health");
     let text = stderr(&output);
@@ -194,6 +210,14 @@ fn main() {
     trials.push(Trial::test(
         "health_succeeds_on_a_2xx",
         health_succeeds_on_a_success,
+    ));
+    let any_retired = contract["retired"][0]["name"]
+        .as_str()
+        .expect("a name")
+        .to_owned();
+    trials.push(Trial::test(
+        "health_is_a_probe_and_does_not_refuse_a_retired_variable",
+        move || health_does_not_refuse_a_retired_variable(&any_retired),
     ));
     trials.push(Trial::test(
         "health_fails_on_a_503",

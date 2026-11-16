@@ -114,18 +114,6 @@ impl ApiError {
         self.retry_after = Some(seconds);
         self
     }
-
-    /// The status of the answer.
-    #[must_use]
-    pub fn status(&self) -> StatusCode {
-        self.status
-    }
-
-    /// The JSON body of the answer.
-    #[must_use]
-    pub fn body(&self) -> Value {
-        Value::Object(self.body.clone())
-    }
 }
 
 impl IntoResponse for ApiError {
