@@ -322,3 +322,51 @@ def test_committed_item_wire_ts_declares_nested_models() -> None:
     ]
     for name in schema.get('$defs', {}):
         assert f'export interface {name} {{' in ts
+
+
+def _app_operations() -> set[tuple[str, str]]:
+    from src.main import app
+
+    methods = {'get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'}
+    return {
+        (method, path)
+        for path, item in app.openapi()['paths'].items()
+        for method in item
+        if method in methods
+    }
+
+
+def _is_curation(path: str) -> bool:
+    return path == '/curation' or path.startswith('/curation/')
+
+
+def test_core_openapi_holds_every_non_curation_operation(rendered: dict[Path, str]) -> None:
+    spec = json.loads(rendered[Path('openapi/core.json')])
+    methods = {'get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'}
+    got = {(m, p) for p, item in spec['paths'].items() for m in item if m in methods}
+    want = {(m, p) for m, p in _app_operations() if not _is_curation(p)}
+    assert got == want
+    assert got
+    assert not any(_is_curation(p) for p in spec['paths'])
+    assert any(p.startswith('/v1/') for p in spec['paths'])
+
+
+def test_core_openapi_refs_resolve_inside_the_file(rendered: dict[Path, str]) -> None:
+    spec = json.loads(rendered[Path('openapi/core.json')])
+    refs: set[str] = set()
+    _refs(spec, refs)
+    defined = {f'#/components/{s}/{n}' for s, names in spec['components'].items() for n in names}
+    assert refs == defined, 'every $ref resolves and every component is referenced'
+
+
+def test_core_openapi_is_byte_identical_across_runs(
+    mod: ModuleType, rendered: dict[Path, str]
+) -> None:
+    again = mod.render(['core-openapi'])
+    assert again[Path('openapi/core.json')] == rendered[Path('openapi/core.json')]
+
+
+def test_committed_core_openapi_is_in_sync(mod: ModuleType, rendered: dict[Path, str]) -> None:
+    assert (
+        mod.check({Path('openapi/core.json'): rendered[Path('openapi/core.json')]}, CONTRACTS) == []
+    )
