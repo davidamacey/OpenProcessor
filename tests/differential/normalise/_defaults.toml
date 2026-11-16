@@ -1,0 +1,18 @@
+# What may differ between the reference stack and the candidate for EVERY family (18a section 3.2).
+# A family's own list is normalise/<family>.toml, written by the slice that ports it; it adds to this
+# file and cannot remove from it. Everything else is compared. Rule kinds are in compare.py.
+#
+# Not rules, because they are the comparison itself:
+#   status code and the media type of Content-Type: always compared (charset and other parameters are not);
+#   JSON bodies: compared as parsed values, so key order and number spelling (1.0, 1, 1e0) never differ;
+#   header names: lowercased. Only the headers listed here are compared, so the `server`, `date`,
+#   `content-length` and request-id headers, which differ by construction, are never looked at.
+
+compare_headers = ["allow", "cache-control", "content-disposition", "retry-after"]
+
+[[rule]]
+kind = "message_text"
+pointer = "/detail/*/msg"
+status = [422]
+except_pattern = "^String should match pattern"
+reason = "18 section 2.4: the msg text of a validation error may differ, its loc and type may not; a pattern message is compared word for word"
