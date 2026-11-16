@@ -1,0 +1,273 @@
+# Operation to family: which route family owns each operation of the contracts (docs/design/v070_rebuild/18a_backend_rust_port_slices.md, 3.2).
+#
+# Every operation of every contracts/openapi/*.json file present must land in exactly one family
+# (tests/differential/test_families.py); the loader and the pattern rules are in families.py.
+#   contract  the contract file the family's operations live in (curation or core)
+#   slice     the slice that ports the family and removes its Python handlers
+#   fixtures  providers (tests/differential/providers/) that supply parameter values present in both
+#             stacks, for the family's path and query parameters
+#   paths     "[METHOD[,METHOD] ]<path>"; "<path>/*" is a prefix, anything else exact; the most specific wins
+# `{project}` etc. are the contract's own path templates, matched as written.
+#
+# The curation part is built from the 388 operations of curation.json and the slice map of plan 18b
+# section 7.1. The core part is built from the route prefixes in CLAUDE.md, NOT from core.json (the
+# lane that writes it had not merged): it is unverified until that file lands, and the first run of
+# test_families.py against it names every operation it misses. A slice may move an operation to its own
+# family in the slice's commit; the test keeps the mapping total.
+
+
+[[family]]
+name = "projects"
+contract = "curation"
+slice = "R11a"
+fixtures = ["projects"]
+# create, list, read, update, delete, archive: the project record. `fixtures` shows the worked example
+paths = [
+  "/curation/projects",
+  "/curation/projects/{project}",
+  "/curation/projects/{project}/archive",
+  "/curation/projects/{project}/unarchive",
+]
+
+[[family]]
+name = "project_combine"
+contract = "curation"
+slice = "R9"
+# combine several projects into a new one
+paths = [
+  "/curation/projects/combine/*",
+]
+
+[[family]]
+name = "ingest"
+contract = "curation"
+slice = "R1c"
+# upload, batch, objects, bulk, sources, path lookup, status; image_counts/backfill is deleted in the slice
+paths = [
+  "/curation/projects/{project}/ingest/*",
+  "/curation/projects/{project}/image_counts/*",
+  "/curation/projects/{project}/source_backfill/*",
+]
+
+[[family]]
+name = "gallery"
+contract = "curation"
+slice = "R4"
+# reads of photos, objects, crops, thumbnails, map, table, projection
+paths = [
+  "GET /curation/projects/{project}/crops/*",
+  "/curation/projects/{project}/images/*",
+  "/curation/projects/{project}/map/*",
+  "/curation/projects/{project}/table/*",
+  "/curation/projects/{project}/viz/*",
+]
+
+[[family]]
+name = "labelling"
+contract = "curation"
+slice = "R5"
+# labelling acts, undo, review, classes, counts. Writes on crops are acts; reads on crops are gallery
+paths = [
+  "POST,PUT,PATCH,DELETE /curation/projects/{project}/crops/*",
+  "/curation/projects/{project}/classes/*",
+  "/curation/projects/{project}/class_sources",
+  "/curation/projects/{project}/review/*",
+  "/curation/projects/{project}/label_ops/*",
+  "/curation/projects/{project}/select/*",
+  "/curation/projects/{project}/selection/*",
+  "/curation/projects/{project}/scores/*",
+  "/curation/projects/{project}/stats/*",
+  "/curation/projects/{project}/detections/*",
+  "/curation/projects/{project}/exclude_reasons",
+  "/curation/projects/{project}/next_steps",
+  "/curation/projects/{project}/quality/*",
+]
+
+[[family]]
+name = "erasure"
+contract = "curation"
+slice = "R5e"
+# privacy audit
+paths = [
+  "/curation/projects/{project}/audit/*",
+]
+
+[[family]]
+name = "search_embedding"
+contract = "curation"
+slice = "R6a"
+paths = [
+  "/curation/projects/{project}/search/*",
+  "/curation/projects/{project}/embedding/*",
+]
+
+[[family]]
+name = "near_duplicates"
+contract = "curation"
+slice = "R6b"
+paths = [
+  "/curation/projects/{project}/near_duplicates/*",
+]
+
+[[family]]
+name = "regions"
+contract = "curation"
+slice = "R7"
+# the region stage; ingest/region_drain is more specific than the ingest prefix
+paths = [
+  "/curation/projects/{project}/regions/*",
+  "/curation/projects/{project}/region_stage/*",
+  "/curation/projects/{project}/ingest/region_drain",
+]
+
+[[family]]
+name = "clusters"
+contract = "curation"
+slice = "R8"
+paths = [
+  "/curation/projects/{project}/clusters/*",
+  "/curation/projects/{project}/cluster/*",
+]
+
+[[family]]
+name = "training_export"
+contract = "curation"
+slice = "R9"
+# dataset import, export, training, promotion and the models they produce
+paths = [
+  "/curation/projects/{project}/datasets/*",
+  "/curation/projects/{project}/export/*",
+  "/curation/projects/{project}/train/*",
+  "/curation/projects/{project}/models/*",
+  "/curation/projects/{project}/training_cohorts/*",
+  "/curation/projects/{project}/test_holdout/*",
+]
+
+[[family]]
+name = "assist"
+contract = "curation"
+slice = "R10"
+# the assist loop, open vocabulary, auto-label pipeline, reprocess, probe and the VLM batch calls
+paths = [
+  "/curation/projects/{project}/assist/*",
+  "/curation/projects/{project}/assist_loop_presets/*",
+  "/curation/projects/{project}/open_vocab/*",
+  "/curation/projects/{project}/pipeline/*",
+  "/curation/projects/{project}/reprocess/*",
+  "/curation/projects/{project}/probe/*",
+  "/curation/projects/{project}/vlm/label_batch",
+  "/curation/projects/{project}/vlm/region_visible_batch",
+  "/curation/projects/{project}/vlm/verify_region_batch",
+  "/curation/projects/{project}/crops/{crop_id}/reprocess",
+  "/curation/projects/{project}/images/{image_id}/reprocess",
+]
+
+[[family]]
+name = "configuration"
+contract = "curation"
+slice = "R11"
+# configuration documents, the VLM registry, keymap, settings, pause, bake-off, health, embedding models, ingest config and policy
+paths = [
+  "/curation/projects/{project}/prompt_packs/*",
+  "/curation/projects/{project}/region_profiles/*",
+  "/curation/projects/{project}/ingest_profiles/*",
+  "/curation/projects/{project}/cluster_profiles/*",
+  "/curation/projects/{project}/near_dup_profiles/*",
+  "/curation/serving_profiles/*",
+  "/curation/vlm/*",
+  "/curation/projects/{project}/vlm/endpoints/*",
+  "/curation/projects/{project}/vlm/policy",
+  "/curation/projects/{project}/keymap/*",
+  "/curation/projects/{project}/location_policy",
+  "/curation/projects/{project}/settings",
+  "/curation/projects/{project}/pause",
+  "/curation/projects/{project}/resume",
+  "/curation/projects/{project}/clone_settings",
+  "/curation/projects/{project}/methods",
+  "/curation/projects/{project}/config/*",
+  "/curation/projects/{project}/bakeoff/*",
+  "/curation/projects/{project}/health",
+  "/curation/health",
+  "/curation/embedding/models",
+  "/curation/projects/{project}/ingest/config",
+  "/curation/projects/{project}/ingest/policy/*",
+]
+
+[[family]]
+name = "events"
+contract = "curation"
+slice = "R3b"
+# the three event streams, publish and stats; pipeline/events is more specific than the assist pipeline prefix
+paths = [
+  "/curation/events",
+  "/curation/projects/{project}/events/*",
+  "/curation/projects/{project}/pipeline/events",
+]
+
+[[family]]
+name = "jobs"
+contract = "curation"
+slice = "R3a"
+paths = [
+  "/curation/jobs/*",
+  "/curation/projects/{project}/jobs/*",
+]
+
+[[family]]
+name = "core_inference"
+contract = "core"
+slice = "R2a"
+# engine-backed routes; the faces search and identify routes belong to core_store in 18b, split here when core.json shows them
+paths = [
+  "/detect/*",
+  "/v1/detect/*",
+  "/analyze/*",
+  "/v1/analyze/*",
+  "/ocr/*",
+  "/v1/ocr/*",
+  "/embed/*",
+  "/v1/embed/*",
+  "/faces/*",
+  "/v1/faces/*",
+]
+
+[[family]]
+name = "core_store"
+contract = "core"
+slice = "R2b"
+paths = [
+  "/ingest/*",
+  "/v1/ingest/*",
+  "/search/*",
+  "/v1/search/*",
+  "/persons/*",
+  "/v1/persons/*",
+  "/clusters/*",
+  "/v1/clusters/*",
+  "/query/*",
+  "/v1/query/*",
+  "/jobs/*",
+]
+
+[[family]]
+name = "core_models"
+contract = "core"
+slice = "R2a"
+# listing is R2a, lifecycle and export R11: split when core.json shows them
+paths = [
+  "/models/*",
+  "/v1/models/*",
+]
+
+[[family]]
+name = "core_health"
+contract = "core"
+slice = "R11"
+paths = [
+  "/health/*",
+  "/",
+  "/live",
+  "/ready",
+  "/metrics",
+  "/connection_pool_info",
+]

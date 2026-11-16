@@ -49,3 +49,23 @@ pytest_plugins = [
     'harness.stub',
     'harness.page_log',
 ]
+
+
+def pytest_collection_modifyitems(items):
+    """Tests listed in tests/pending_rust.txt are expected failures until their slice lands.
+
+    The mechanism is the backend suite's (tests/pending_rust.py), loaded by path: putting tests/ on
+    sys.path would shadow this suite's own ``fixtures`` package.
+    """
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    pending_rust = sys.modules.get('pending_rust')
+    if pending_rust is None:
+        module_path = Path(__file__).resolve().parents[2] / 'tests' / 'pending_rust.py'
+        spec = importlib.util.spec_from_file_location('pending_rust', module_path)
+        pending_rust = importlib.util.module_from_spec(spec)
+        sys.modules['pending_rust'] = pending_rust
+        spec.loader.exec_module(pending_rust)
+    pending_rust.mark_pending(items, pending_rust.read_pending())
