@@ -10,7 +10,7 @@
 //!
 //! The pool keeps up to the cap of freed memory cached (its release threshold), so the device
 //! memory it holds stays within the cap while the count of live bytes is the cap itself
-//! (stream-ordered allocator: https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__MALLOC__ASYNC.html).
+//! (stream-ordered allocator: <https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__MALLOC__ASYNC.html>).
 
 use std::fmt;
 use std::sync::Arc;
@@ -70,6 +70,10 @@ impl fmt::Debug for FramePool {
 
 impl FramePool {
     /// A pool on the context's device whose live bytes are capped by `cap`.
+    ///
+    /// # Errors
+    ///
+    /// [`CudaError`] when the device memory pool cannot be created on the context.
     pub fn new(ctx: &Arc<Context>, cap: Arc<DeviceCap>) -> Result<FramePool, CudaError> {
         let pool = MemPool::new(ctx, cap.limit() as u64)?;
         Ok(FramePool {
@@ -90,6 +94,11 @@ impl FramePool {
 
     /// `bytes` of uninitialised device memory (at least one byte is allocated), usable in order
     /// on `stream`, charged to the cap until dropped.
+    ///
+    /// # Errors
+    ///
+    /// [`AllocError::Cap`] when the charge would pass the engine's cap; [`AllocError::Cuda`] when
+    /// the driver refuses the allocation.
     pub fn alloc(&self, bytes: usize, stream: &Arc<Stream>) -> Result<DeviceBuf, AllocError> {
         let size = bytes.max(1);
         let charge = self.cap.charge(size).map_err(AllocError::Cap)?;
@@ -105,7 +114,12 @@ impl FramePool {
     /// on `stream` and the stream is waited for before the buffer is handed out. Kernels on other
     /// streams would otherwise read it before the copy lands (the throwaway pipeline's
     /// illegal-address crash with weight sets shared across lanes; "API synchronization
-    /// behavior", https://docs.nvidia.com/cuda/cuda-driver-api/api-sync-behavior.html).
+    /// behavior", <https://docs.nvidia.com/cuda/cuda-driver-api/api-sync-behavior.html>).
+    ///
+    /// # Errors
+    ///
+    /// [`AllocError::Cap`] or [`AllocError::Cuda`] when the allocation fails; [`AllocError::Cuda`]
+    /// when the copy or the stream wait fails.
     pub fn upload(&self, data: &[u8], stream: &Arc<Stream>) -> Result<DeviceBuf, AllocError> {
         let buf = self.alloc(data.len(), stream)?;
         stream.copy_from_host(&buf, 0, data)?;
@@ -137,10 +151,12 @@ impl DeviceBuf {
         self.alloc.stream()
     }
 
+    /// The length in bytes that was asked for (the allocation is at least one byte).
     pub fn len(&self) -> usize {
         self.len
     }
 
+    /// Whether zero bytes were asked for.
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }

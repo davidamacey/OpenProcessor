@@ -9,8 +9,9 @@
 
 use super::passes::DetPass;
 
-/// The detector's strides and anchors per centre.
+/// The detector's strides.
 pub const FPN_STRIDES: [usize; 3] = [8, 16, 32];
+/// Anchors per grid centre.
 pub const NUM_ANCHORS: usize = 2;
 /// Output names of the batch-patched SCRFD (`export/scrfd_onnx.py`), scores, boxes and landmarks
 /// per stride, in this order.
@@ -23,16 +24,21 @@ pub const EDGE_MARGIN: f32 = 2.0;
 /// Detections as rows: scores, boxes `x1, y1, x2, y2`, five landmarks `x, y` each.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Dets {
+    /// One score per detection.
     pub scores: Vec<f32>,
+    /// One box per detection: `x1, y1, x2, y2`.
     pub boxes: Vec<[f32; 4]>,
+    /// Five landmarks per detection: `x, y` each.
     pub landmarks: Vec<[f32; 10]>,
 }
 
 impl Dets {
+    /// The number of detections.
     pub fn len(&self) -> usize {
         self.scores.len()
     }
 
+    /// Whether there is no detection.
     pub fn is_empty(&self) -> bool {
         self.scores.is_empty()
     }
@@ -62,21 +68,30 @@ impl Dets {
 /// `anchors x 10` landmark offsets.
 #[derive(Debug, Clone, Copy)]
 pub struct StrideOut<'a> {
+    /// One score per anchor.
     pub scores: &'a [f32],
+    /// Four distances per anchor: left, top, right, bottom, in strides.
     pub boxes: &'a [f32],
+    /// Ten landmark offsets per anchor, in strides.
     pub kps: &'a [f32],
 }
 
 /// The faces of a photo, best score first, and how many past the cap were dropped.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Faces {
+    /// The faces kept, best score first.
     pub dets: Dets,
+    /// Faces past the cap, dropped.
     pub overflow: usize,
 }
 
 /// `decode`: one input's detections at or above `threshold`, in input pixels, stride by stride
 /// and anchor by anchor. `outputs` is per stride of [`FPN_STRIDES`]; an output whose length does
 /// not match the input's anchor grid is an error.
+///
+/// # Errors
+///
+/// A stride's outputs do not have one row per anchor of the input's grid.
 pub fn decode(
     outputs: &[StrideOut<'_>; 3],
     net_w: usize,

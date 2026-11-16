@@ -41,6 +41,7 @@ pub struct GpuBudget {
 }
 
 impl GpuBudget {
+    /// A budget of `budget_bytes` of decoded frame for `workers` photos, waiting at most `wait_seconds`; `in_use` is the gauge it keeps current.
     pub fn new(workers: u32, budget_bytes: u64, wait_seconds: f64, in_use: Gauge) -> Self {
         Self {
             admission: Arc::new(Admission::new(workers, budget_bytes)),
@@ -49,14 +50,17 @@ impl GpuBudget {
         }
     }
 
+    /// The whole frame budget, bytes.
     pub fn total_bytes(&self) -> u64 {
         self.admission.budget_bytes()
     }
 
+    /// Bytes of decoded frame reserved now.
     pub fn bytes_in_use(&self) -> u64 {
         self.admission.bytes_in_use()
     }
 
+    /// Worker slots held now.
     pub fn workers_in_use(&self) -> u64 {
         self.admission.count_in_use()
     }

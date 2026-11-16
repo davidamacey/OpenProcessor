@@ -2,7 +2,7 @@
 //! landmarks to the ArcFace template (Umeyama's least squares, scale estimated, as scikit-image's
 //! `_umeyama` and so InsightFace's `estimate_norm`), its inverse, and the warp kernel's taps.
 //!
-//! The SVD is `nalgebra`'s (https://docs.rs/nalgebra/0.35.0/nalgebra/linalg/struct.SVD.html,
+//! The SVD is `nalgebra`'s (<https://docs.rs/nalgebra/0.35.0/nalgebra/linalg/struct.SVD.html>,
 //! `try_new`, singular values in descending order as LAPACK's `gesdd` gives them). The result
 //! does not depend on the singular vectors' signs: every product here pairs a left vector with
 //! its right one. Sums run in the order numpy's reductions run them on five rows; the reference's
@@ -34,8 +34,11 @@ pub type Affine = [[f64; 3]; 2];
 /// embedded).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FaceWarp {
+    /// The output-to-source map, `a, b, tx, c, d, ty`.
     pub inv: [f32; 6],
+    /// Bilinear taps per axis per output pixel.
     pub taps: i32,
+    /// Whether the landmarks gave a usable transform.
     pub ok: bool,
 }
 
@@ -101,6 +104,10 @@ fn rotation(
 /// `umeyama(src, ARCFACE_DST)[:2]` as `estimate`: the forward map of one face's landmarks (source
 /// pixels to the 112 output). NaN at a degenerate set (rank 0); an error where numpy's SVD
 /// fails (a non-finite landmark).
+///
+/// # Errors
+///
+/// A landmark is not finite: numpy's SVD does not converge on it.
 pub fn estimate(src: &[[f64; 2]; 5]) -> Result<Affine, String> {
     let (src_d, src_mean) = demean(src);
     let (dst_d, dst_mean) = demean(&ARCFACE_DST);
@@ -153,6 +160,10 @@ pub fn samples(inv: &Affine) -> i32 {
 }
 
 /// `warp_params` for one face's landmarks (`x, y` five times, float32 as the detector gave them).
+///
+/// # Errors
+///
+/// As [`estimate`].
 pub fn warp_params(landmarks: &[f32; 10]) -> Result<FaceWarp, String> {
     let mut src = [[0.0; 2]; 5];
     for (k, p) in src.iter_mut().enumerate() {

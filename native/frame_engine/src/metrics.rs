@@ -27,36 +27,51 @@ use tokio::net::TcpListener;
 /// The content type of [`Metrics::render`] (OpenMetrics 1.0).
 pub const CONTENT_TYPE: &str = "application/openmetrics-text; version=1.0.0; charset=utf-8";
 
+/// Label set of a series split by pipeline stage.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct ByStage {
+    /// Stage name, one of the contract's `stages`.
     pub stage: String,
 }
 
+/// Label set of a series split by outcome.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct ByOutcome {
+    /// Outcome of the wait or conversion, for example `admitted` or `timeout`.
     pub outcome: String,
 }
 
+/// Label set of a series split by cause.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct ByCause {
+    /// What caused the event, for example the overload cause or the registration cause.
     pub cause: String,
 }
 
+/// Label set of a series split by CUDA error code.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct ByCode {
+    /// The `cudaError` code of the sticky error.
     pub code: String,
 }
 
+/// Label set of a failed model-server call.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct ByModelCall {
+    /// Name of the model that was called.
     pub model: String,
+    /// gRPC status code of the failure.
     pub code: String,
+    /// `deadline` when no answer arrived in time, `rejected` when the server answered an error.
     pub reason: String,
 }
 
+/// Label set of an answered image.
 #[derive(Clone, Debug, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub struct ByImage {
+    /// `ok` or the reason the image failed.
     pub status: String,
+    /// How the image was decoded, from the contract's `decode_routes`.
     pub decode_route: String,
 }
 
@@ -66,21 +81,37 @@ type Seconds = Counter<f64, AtomicU64>;
 /// (`in_flight`, `overloads`, `deadlines`), the pipeline the rest.
 pub struct Metrics {
     registry: Registry,
+    /// Wall seconds spent per stage, summed over images (`op_frame_engine_stage_seconds`).
     pub stage_seconds: Family<ByStage, Seconds>,
+    /// Images that ran each stage (`op_frame_engine_stage_observations`).
     pub stage_observations: Family<ByStage, Counter>,
+    /// Requests admitted and not yet answered.
     pub in_flight: Gauge,
+    /// Bytes of the shared-memory region handed out.
     pub slab_in_use: Gauge,
+    /// Most bytes of the region handed out so far.
     pub slab_peak: Gauge,
+    /// Requests that waited for room in the region.
     pub slab_waits: Gauge,
+    /// Bytes of the decoded-frame budget held by requests.
     pub budget_in_use: Gauge,
+    /// Requests that waited for the frame budget, by outcome (`admitted` or `timeout`).
     pub budget_waits: Family<ByOutcome, Counter>,
+    /// Shared-memory region registrations with the model server, by cause.
     pub registrations: Family<ByCause, Counter>,
+    /// Failed model-server calls, by model, gRPC status and reason.
     pub triton_errors: Family<ByModelCall, Counter>,
+    /// Requests answered `DEADLINE_EXCEEDED`, by the stage they were last in.
     pub deadlines: Family<ByStage, Counter>,
+    /// Images answered, by status and decode route.
     pub outcomes: Family<ByImage, Counter>,
+    /// CUDA contexts lost to a sticky error, by error code.
     pub context_lost: Family<ByCode, Counter>,
+    /// Requests answered with the overload status, by cause.
     pub overloads: Family<ByCause, Counter>,
+    /// Decoded frames by what their colour profile asked: `srgb`, `converted` or `ignored`.
     pub colour: Family<ByOutcome, Counter>,
+    /// Device bytes held by the cached profile-to-sRGB tables.
     pub colour_table_bytes: Gauge,
 }
 
@@ -95,7 +126,120 @@ fn register(
     registry.register(name, help.trim_end_matches('.'), metric);
 }
 
+/// The series of the work inside the engine: stages, in flight, the region and the frame budget.
+fn register_work_series(registry: &mut Registry, m: &Metrics) {
+    register(
+        registry,
+        "op_frame_engine_stage_seconds",
+        "Wall seconds the worker thread spent in a frame engine stage; a model call in \
+             flight counts only while the worker waits for its answer (crop_jpeg: host-thread \
+             encode seconds summed over the crops).",
+        m.stage_seconds.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_stage_observations",
+        "Images that ran a frame engine stage.",
+        m.stage_observations.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_in_flight",
+        "Requests admitted and not yet answered.",
+        m.in_flight.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_slab_in_use_bytes",
+        "Bytes of the region handed out.",
+        m.slab_in_use.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_slab_peak_bytes",
+        "Most bytes of the region handed out.",
+        m.slab_peak.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_slab_waits",
+        "Requests that waited for room in the region.",
+        m.slab_waits.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_budget_in_use_bytes",
+        "Bytes of the decoded-frame budget held by requests.",
+        m.budget_in_use.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_budget_waits",
+        "Requests that waited for device memory, by outcome (admitted or timeout).",
+        m.budget_waits.clone(),
+    );
+}
+
+/// The series of the requests and their failures: the model server, deadlines, outcomes, overloads, colour.
+fn register_request_series(registry: &mut Registry, m: &Metrics) {
+    register(
+        registry,
+        "op_frame_engine_region_registrations",
+        "Shared-memory region registrations with the model server, by cause.",
+        m.registrations.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_triton_call_errors",
+        "Failed model-server calls, by model, gRPC status and reason (deadline: no answer \
+             in time; unavailable: the channel or server went away; client: the client library \
+             failed the call; rejected: the server answered an error).",
+        m.triton_errors.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_request_deadlines",
+        "Requests answered DEADLINE_EXCEEDED at the request deadline, by the stage they \
+             were last in.",
+        m.deadlines.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_images",
+        "Images answered, by status (ok or the reason) and decode route.",
+        m.outcomes.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_context_lost",
+        "CUDA contexts lost to a sticky CUDA error, by cudaError code; the process then \
+             exits for a restart (a dying process may not be scraped: changes() over \
+             process_start_time_seconds counts the restarts).",
+        m.context_lost.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_overloads",
+        "Requests answered with the overload status, by cause.",
+        m.overloads.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_colour",
+        "Decoded frames by what the embedded colour profile asked: srgb (untagged or sRGB, \
+             untouched), converted (to sRGB on the GPU) or ignored (not an RGB profile).",
+        m.colour.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_colour_table_bytes",
+        "Device bytes held by the cached profile-to-sRGB tables.",
+        m.colour_table_bytes.clone(),
+    );
+}
+
 impl Metrics {
+    /// A registry with every series registered at zero, plus the process series.
     pub fn new() -> Arc<Self> {
         let mut registry = Registry::default();
         let m = Self {
@@ -117,115 +261,17 @@ impl Metrics {
             colour_table_bytes: Gauge::default(),
             registry: Registry::default(),
         };
-        register(
-            &mut registry,
-            "op_frame_engine_stage_seconds",
-            "Wall seconds the worker thread spent in a frame engine stage; a model call in \
-             flight counts only while the worker waits for its answer (crop_jpeg: host-thread \
-             encode seconds summed over the crops).",
-            m.stage_seconds.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_stage_observations",
-            "Images that ran a frame engine stage.",
-            m.stage_observations.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_in_flight",
-            "Requests admitted and not yet answered.",
-            m.in_flight.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_slab_in_use_bytes",
-            "Bytes of the region handed out.",
-            m.slab_in_use.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_slab_peak_bytes",
-            "Most bytes of the region handed out.",
-            m.slab_peak.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_slab_waits",
-            "Requests that waited for room in the region.",
-            m.slab_waits.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_budget_in_use_bytes",
-            "Bytes of the decoded-frame budget held by requests.",
-            m.budget_in_use.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_budget_waits",
-            "Requests that waited for device memory, by outcome (admitted or timeout).",
-            m.budget_waits.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_region_registrations",
-            "Shared-memory region registrations with the model server, by cause.",
-            m.registrations.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_triton_call_errors",
-            "Failed model-server calls, by model, gRPC status and reason (deadline: no answer \
-             in time; unavailable: the channel or server went away; client: the client library \
-             failed the call; rejected: the server answered an error).",
-            m.triton_errors.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_request_deadlines",
-            "Requests answered DEADLINE_EXCEEDED at the request deadline, by the stage they \
-             were last in.",
-            m.deadlines.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_images",
-            "Images answered, by status (ok or the reason) and decode route.",
-            m.outcomes.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_context_lost",
-            "CUDA contexts lost to a sticky CUDA error, by cudaError code; the process then \
-             exits for a restart (a dying process may not be scraped: changes() over \
-             process_start_time_seconds counts the restarts).",
-            m.context_lost.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_overloads",
-            "Requests answered with the overload status, by cause.",
-            m.overloads.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_colour",
-            "Decoded frames by what the embedded colour profile asked: srgb (untagged or sRGB, \
-             untouched), converted (to sRGB on the GPU) or ignored (not an RGB profile).",
-            m.colour.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_colour_table_bytes",
-            "Device bytes held by the cached profile-to-sRGB tables.",
-            m.colour_table_bytes.clone(),
-        );
+        register_work_series(&mut registry, &m);
+        register_request_series(&mut registry, &m);
         registry.register_collector(Box::new(ProcessSeries));
         Arc::new(Self { registry, ..m })
     }
 
     /// The exposition text of every series.
+    ///
+    /// # Panics
+    ///
+    /// Never in practice: the encoder only writes to a `String`, which cannot fail.
     pub fn render(&self) -> String {
         let mut text = String::new();
         encode(&mut text, &self.registry).expect("writing to a String does not fail");
@@ -339,6 +385,10 @@ impl Collector for ProcessSeries {
 
 /// Serves the exposition on `listener` to every GET, whatever the path (as the Python engine's
 /// `start_http_server` does), until `stop` completes.
+///
+/// # Panics
+///
+/// Never in practice: building the response with one valid header cannot fail.
 pub async fn serve(listener: TcpListener, metrics: Arc<Metrics>, stop: impl Future<Output = ()>) {
     tokio::pin!(stop);
     loop {

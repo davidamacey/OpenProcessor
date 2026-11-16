@@ -47,6 +47,10 @@ pub async fn run<P: Pipeline>(
 
 /// Whether the engine listening on `127.0.0.1:port` answers `ModelReady` true, within `timeout`
 /// for the connection and again for the call.
+///
+/// # Errors
+///
+/// The engine cannot be reached on the port within `timeout`, or the `ModelReady` call fails.
 pub async fn probe(port: u16, timeout: Duration) -> Result<bool, String> {
     let channel = tonic::transport::Endpoint::from_shared(format!("http://127.0.0.1:{port}"))
         .map_err(|e| e.to_string())?

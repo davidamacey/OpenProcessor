@@ -29,24 +29,32 @@ pub fn rate(completions: usize, seconds: f64) -> f64 {
 }
 
 /// One model's cumulative counters in the model server's statistics answer
-/// (https://github.com/triton-inference-server/server/blob/r26.10/docs/protocol/extension_statistics.md):
+/// (<https://github.com/triton-inference-server/server/blob/r26.10/docs/protocol/extension_statistics.md>):
 /// `inference_count` counts batch items, `execution_count` counts executions (a dynamic batch is
 /// one), `queue` is the requests' cumulative wait in the scheduler, `compute_infer` the cumulative
 /// execution time. All grow from the server's start, so a window is the difference of two reads.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 pub struct Counters {
+    /// Requests the model server counted as inferences (batch items) since it started.
     pub inference_count: u64,
+    /// Executions the model server ran since it started; a dynamic batch is one execution.
     pub execution_count: u64,
+    /// Requests whose scheduler wait is counted in `queue_ns`.
     pub queue_count: u64,
+    /// Cumulative time requests waited in the scheduler, in nanoseconds.
     pub queue_ns: u64,
+    /// Executions whose time is counted in `compute_infer_ns`.
     pub compute_infer_count: u64,
+    /// Cumulative model execution time, in nanoseconds.
     pub compute_infer_ns: u64,
 }
 
 /// What a model did inside a window.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct ModelWindow {
+    /// Batch items the model inferred inside the window.
     pub inferences: u64,
+    /// Executions the model ran inside the window.
     pub executions: u64,
     /// Batch items per execution.
     pub mean_batch: f64,

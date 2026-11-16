@@ -32,8 +32,9 @@ use crate::kernels::{Filter, Resample};
 use crate::pipeline::Tensor;
 use crate::wire::plan::FaceSpec;
 
-/// Both models' input name, and the recogniser's output.
+/// Both models' input name.
 pub const INPUT: &str = "images";
+/// The recogniser's output name.
 pub const OUTPUT: &str = "output";
 /// Detector inputs per call: a 20 MP photo with tiles is a few tens of passes, never one call.
 pub const PASSES_PER_CALL: usize = 8;
@@ -41,13 +42,20 @@ pub const PASSES_PER_CALL: usize = 8;
 /// One detector call: its input, the passes it holds (in batch order) and their resamples.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DetCall {
+    /// The detector's input: `[passes, 3, net, net]` uint8.
     pub input: InputSpec,
+    /// The passes, in batch order.
     pub passes: Vec<DetPass>,
+    /// Each pass's resample into its batch element.
     pub resamples: Vec<Resample>,
 }
 
 /// `Faces.round1`'s cut for a frame of `w x h`: the passes in calls of [`PASSES_PER_CALL`], each
 /// pass's window at the top-left of its zero-filled `net x net` input.
+///
+/// # Errors
+///
+/// The frame size or the overlap gives no pass (the plan parser refuses such an overlap first).
 pub fn detector_calls(spec: &FaceSpec, w: u32, h: u32) -> Result<Vec<DetCall>, String> {
     let net = i64::from(spec.input_size);
     let all = passes::plan_passes(
@@ -112,6 +120,11 @@ fn call_outputs(outputs: &[OutputTensor]) -> Result<Vec<Fp32Output>, String> {
 /// `Faces.settle`: every pass of every call decoded at `score_min`, mapped to source pixels,
 /// merged by one NMS at `nms` and capped at `max_faces`. `answers` holds one answer per call of
 /// `calls`, in order. Runs on the finish pool.
+///
+/// # Errors
+///
+/// The answers do not match the calls: a missing answer or output, a non-FP32 output, or a
+/// batch element whose anchors do not match the input's grid.
 pub fn settle(
     spec: &FaceSpec,
     w: u32,
@@ -210,6 +223,10 @@ pub fn blur_rects(f: &Faces, w: u32, h: u32) -> Vec<Option<[i64; 4]>> {
 
 /// `face_blur_sums`, `int64 [faces, 3]`: (pixels, sum, sum of squares) of each clamped face box,
 /// `(0, 0, 0)` for an empty one. `sums` holds one pair per non-empty rectangle, in order.
+///
+/// # Errors
+///
+/// `sums` does not hold exactly one pair per non-empty rectangle.
 pub fn blur_sums(clamped: &[Option<[i64; 4]>], sums: &[[i64; 2]]) -> Result<Tensor, String> {
     let mut next = sums.iter();
     let mut data = Vec::with_capacity(3 * clamped.len());

@@ -16,19 +16,27 @@ use crate::pipeline::Tensor;
 /// One recogniser call: its input and the warp that writes it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Chunk {
+    /// The recogniser's input: `[faces, 3, 112, 112]` uint8.
     pub input: InputSpec,
+    /// The faces' maps and taps.
     pub warps: FaceWarps,
 }
 
 /// What `face_embed` sends: which faces are embedded, and the calls of their crops.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EmbedPlan {
+    /// One flag per face: whether it gets a vector.
     pub embedded: Vec<bool>,
+    /// The recogniser calls, in face order.
     pub chunks: Vec<Chunk>,
 }
 
 /// `FaceEmbed.round2`'s cut: each face's warp (`alignment.warp_params`), the usable ones in calls
 /// of `batch`. An error where the reference's SVD fails (a non-finite landmark).
+///
+/// # Errors
+///
+/// A face's landmarks are not finite (see `align::estimate`).
 pub fn plan(faces: &Faces, batch: u32) -> Result<EmbedPlan, String> {
     let warps: Vec<FaceWarp> = faces
         .dets
@@ -71,6 +79,10 @@ pub fn normalise(row: &mut [f32]) {
 
 /// `face_embeddings` (`[embedded, dim]`, `(0, 0)` when no call was made) and `face_embedded`,
 /// one flag per face.
+///
+/// # Errors
+///
+/// An answer has no `[rows, dim]` float32 `output`, or two answers differ in width.
 pub fn outputs(
     embedded: &[bool],
     answers: &[Vec<OutputTensor>],

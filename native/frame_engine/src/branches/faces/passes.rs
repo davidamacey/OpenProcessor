@@ -10,8 +10,11 @@
 /// inside the scaled frame, where a tile cuts faces.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DetPass {
+    /// The frame's size after the pass's resample.
     pub scaled: [i64; 2],
+    /// The part of the resampled frame the input holds: left, top, width, height.
     pub window: [i64; 4],
+    /// Whether the window's left, top, right and bottom edges lie inside the resampled frame.
     pub inner: [bool; 4],
 }
 

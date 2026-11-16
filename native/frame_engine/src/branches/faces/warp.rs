@@ -14,6 +14,7 @@ use gpu_frame::{DeviceRange, FramePool, Kernel, KernelArg, Kernels, LaunchConfig
 use crate::fault::GpuFault;
 use crate::kernels::FrameRef;
 
+/// The kernel's CUDA source, the file the Python engine compiles.
 pub const WARP_SOURCE: &str = include_str!("../../../kernels/faces_warp.cu");
 /// Threads per block (`warp_into`).
 const THREADS: u32 = 128;
@@ -21,8 +22,11 @@ const THREADS: u32 = 128;
 /// One recogniser batch's warp: per face its output-to-source map and taps, the output side.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FaceWarps {
+    /// Per face, the output-to-source map.
     pub inv: Vec<[f32; 6]>,
+    /// Per face, the taps per axis.
     pub taps: Vec<i32>,
+    /// The output side.
     pub size: u32,
 }
 
@@ -35,6 +39,10 @@ impl FaceWarps {
 }
 
 /// `((size * size + 127) / 128, faces)` blocks of 128 threads.
+///
+/// # Errors
+///
+/// No face, or a grid past the launch limits.
 pub fn launch(faces: usize, size: u32) -> Result<LaunchConfig, GpuFault> {
     let pixels = u64::from(size) * u64::from(size);
     let gx = u32::try_from(pixels.div_ceil(u64::from(THREADS)))
@@ -72,6 +80,10 @@ fn int(v: u64, what: &str) -> Result<i32, GpuFault> {
 
 /// `warp_faces`'s arguments: `src, H, W, inv, taps, n_faces, S, dst, slot` (`slot` the bytes of
 /// one face's crop).
+///
+/// # Errors
+///
+/// A dimension past the kernel's `int` arguments.
 pub fn args(
     frame: (u64, u32, u32),
     inv: u64,
@@ -101,6 +113,11 @@ pub struct WarpKernel {
 }
 
 impl WarpKernel {
+    /// Compile the kernel for the current device.
+    ///
+    /// # Errors
+    ///
+    /// NVRTC or the module load fails.
     pub fn load(kernels: &Kernels) -> Result<Self, GpuFault> {
         Ok(Self {
             warp: kernels
@@ -111,6 +128,11 @@ impl WarpKernel {
 
     /// Queue the batch's warp on `stream` into `dst` (a region slice of exactly its bytes); the
     /// maps go up on the same stream and are freed in order behind the launch.
+    ///
+    /// # Errors
+    ///
+    /// The maps do not match the faces, `dst` is too small, an allocation or copy fails, or
+    /// the launch fails.
     pub fn launch(
         &self,
         pool: &FramePool,

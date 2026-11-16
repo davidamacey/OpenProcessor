@@ -15,7 +15,12 @@ use std::fmt;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GeometryError {
     /// A side that is not positive.
-    DegenerateSize { w: i64, h: i64 },
+    DegenerateSize {
+        /// Width in pixels.
+        w: i64,
+        /// Height in pixels.
+        h: i64,
+    },
     /// No output index in the window asked of a filter.
     EmptyWindow,
 }
@@ -34,17 +39,28 @@ impl std::error::Error for GeometryError {}
 /// The aspect-preserving fit of a frame into a square, pasted at an integer offset.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Letterbox {
+    /// Width of the scaled frame, pixels.
     pub new_w: i64,
+    /// Height of the scaled frame, pixels.
     pub new_h: i64,
+    /// Pixels of padding left of the scaled frame in the square.
     pub left: i64,
+    /// Pixels of padding above the scaled frame in the square.
     pub top: i64,
+    /// Ratio of network pixels to frame pixels, the same on both axes.
     pub scale: f64,
+    /// `left` as a float, the horizontal offset removed when mapping a box back.
     pub pad_w: f64,
+    /// `top` as a float, the vertical offset removed when mapping a box back.
     pub pad_h: f64,
 }
 
 /// `letterbox_geometry`: the frame of `w` x `h` fitted into a `target` square. A margin of an odd
 /// number of pixels puts the extra one on the right or bottom.
+///
+/// # Errors
+///
+/// `w` or `h` is not positive.
 pub fn letterbox_geometry(w: i64, h: i64, target: i64) -> Result<Letterbox, GeometryError> {
     if w <= 0 || h <= 0 {
         return Err(GeometryError::DegenerateSize { w, h });
@@ -69,13 +85,21 @@ pub fn letterbox_geometry(w: i64, h: i64, target: i64) -> Result<Letterbox, Geom
 /// The whole-frame embedding input: shorter edge to the target, centre crop.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Square {
+    /// Width of the frame scaled so its shorter side is the target, pixels.
     pub new_w: i64,
+    /// Height of the frame scaled so its shorter side is the target, pixels.
     pub new_h: i64,
+    /// Pixels cropped from the left of the scaled frame.
     pub left: i64,
+    /// Pixels cropped from the top of the scaled frame.
     pub top: i64,
 }
 
 /// `whole_square_geometry`.
+///
+/// # Errors
+///
+/// `w` or `h` is not positive.
 pub fn whole_square_geometry(w: i64, h: i64, target: i64) -> Result<Square, GeometryError> {
     if w <= 0 || h <= 0 {
         return Err(GeometryError::DegenerateSize { w, h });
@@ -183,15 +207,23 @@ where
 /// count, and the normalised weights `[out_size, kmax]` (float32, row after row).
 #[derive(Debug, Clone, PartialEq)]
 pub struct FilterWeights {
+    /// Index of the first source tap of each output index.
     pub first: Vec<i32>,
+    /// Number of source taps of each output index.
     pub count: Vec<i32>,
+    /// The largest tap count, the row width of `weights`.
     pub kmax: usize,
+    /// Normalised tap weights, `kmax` per output index, zero past that index's count.
     pub weights: Vec<f32>,
 }
 
 /// `filter_weights(in_size, out_size, antialias=...)`: a triangle centred on `(i + 0.5) * in / out`
 /// whose support widens with the downscale factor when `antialias` (Pillow `BILINEAR`), plain
 /// bilinear otherwise (OpenCV `INTER_LINEAR`).
+///
+/// # Errors
+///
+/// `out_size` is not positive.
 pub fn filter_weights(
     in_size: i64,
     out_size: i64,
@@ -245,8 +277,11 @@ pub fn filter_weights(
 /// outputs from `left`, with what the caller sizes its scratch from.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Weights {
+    /// The packed little-endian bytes the kernels read.
     pub blob: Vec<u8>,
+    /// Number of output indexes in the slice.
     pub n: usize,
+    /// Weights per output index.
     pub kmax: usize,
     /// The first source index any output of the slice reads.
     pub lo: i64,
@@ -255,6 +290,10 @@ pub struct Weights {
 }
 
 /// `_weights(n_in, n_out, left, take, antialias, lanczos=False)`.
+///
+/// # Errors
+///
+/// `out_size` is not positive or the slice `left .. left + take` holds no output index.
 pub fn weights(
     n_in: i64,
     n_out: i64,

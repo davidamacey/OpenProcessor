@@ -26,27 +26,41 @@ use crate::statistics;
 
 /// The card's sampler and what names the card.
 pub struct Gpu {
+    /// Samples the card from before the first photo until the row is built; stopped when dropped.
     pub sampler: Sampler,
+    /// Names the card, recorded in the row.
     pub identity: Identity,
 }
 
 /// Everything a row is made of besides the loop's result.
 pub struct Setup {
+    /// The row's mode: `engine` or `z`.
     pub mode: &'static str,
+    /// The arm's name, recorded in the row.
     pub label: String,
+    /// The command line as given, recorded in the row.
     pub command: Vec<String>,
+    /// The photos to send, round robin.
     pub list: PhotoList,
+    /// The plan every photo carries.
     pub plan: PlanFile,
+    /// The plan file's path, recorded in the row.
     pub plan_path: String,
+    /// Photos in flight at all times.
     pub in_flight: usize,
+    /// Length of the unmeasured warm-up.
     pub warmup: Duration,
+    /// Length of the measured window.
     pub window: Duration,
     /// The cgroup of the measured process: the engine, or in `z` mode the model server.
     pub cgroup: Option<Cgroup>,
     /// The model server's address and a channel to it, for the statistics deltas.
     pub stats: Option<(String, Client)>,
+    /// The sampled card, when GPU evidence is wanted.
     pub gpu: Option<Gpu>,
+    /// Engine evidence for an `engine` row; `None` in `z` mode.
     pub engine: Option<EngineEvidence>,
+    /// Models-alone evidence for a `z` row; `None` in `engine` mode.
     pub z: Option<ZEvidence>,
 }
 
@@ -136,6 +150,68 @@ pub async fn measure<E: Exchange>(setup: Setup, exchange: Arc<E>) -> Row {
     )
 }
 
+fn gpu_evidence(g: &Gpu, open: &Reads, close: &Reads) -> GpuEvidence {
+    let window = open
+        .at
+        .zip(close.at)
+        .and_then(|(from, to)| g.sampler.window(from, to));
+    let process_labels = window
+        .iter()
+        .flat_map(|w| w.processes.iter().map(|p| gpu::label(p.pid)))
+        .collect();
+    GpuEvidence {
+        identity: g.identity.clone(),
+        window,
+        process_labels,
+        read_errors: g.sampler.read_errors(),
+    }
+}
+
+fn host_evidence(load: (Option<f64>, Option<f64>)) -> HostEvidence {
+    HostEvidence {
+        hostname: host::hostname(),
+        cpu: host::cpuinfo(),
+        load1_start: load.0,
+        load1_end: load.1,
+    }
+}
+
+fn list_evidence(setup: &Setup) -> ListEvidence {
+    ListEvidence {
+        path: setup.list.path.display().to_string(),
+        sha256: setup.list.sha256.clone(),
+        photos: setup.list.photos.len(),
+        bytes: setup.list.total_bytes,
+    }
+}
+
+fn plan_evidence(setup: &Setup) -> PlanEvidence {
+    PlanEvidence {
+        path: setup.plan_path.clone(),
+        sha256: setup.plan.sha256.clone(),
+        text: setup.plan.text.clone(),
+    }
+}
+
+fn engine_evidence(e: &EngineEvidence) -> EngineEvidence {
+    EngineEvidence {
+        address: e.address.clone(),
+        channels: e.channels,
+        timeout_s: e.timeout_s,
+    }
+}
+
+fn z_evidence(z: &ZEvidence) -> ZEvidence {
+    ZEvidence {
+        crop_counts_path: z.crop_counts_path.clone(),
+        crop_counts_list_sha256: z.crop_counts_list_sha256.clone(),
+        region_mib: z.region_mib,
+        region_name: z.region_name.clone(),
+        mean_calls_per_photo: z.mean_calls_per_photo,
+        mean_crops_per_photo: z.mean_crops_per_photo,
+    }
+}
+
 fn build_row(
     setup: &Setup,
     result: &LoopResult,
@@ -159,22 +235,7 @@ fn build_row(
         .cgroup
         .as_ref()
         .map(|cg| cpu_evidence(cg, open, close, seconds, ok));
-    let gpu = setup.gpu.as_ref().map(|g| {
-        let window = open
-            .at
-            .zip(close.at)
-            .and_then(|(from, to)| g.sampler.window(from, to));
-        let process_labels = window
-            .iter()
-            .flat_map(|w| w.processes.iter().map(|p| gpu::label(p.pid)))
-            .collect();
-        GpuEvidence {
-            identity: g.identity.clone(),
-            window,
-            process_labels,
-            read_errors: g.sampler.read_errors(),
-        }
-    });
+    let gpu = setup.gpu.as_ref().map(|g| gpu_evidence(g, open, close));
     let model_server = setup
         .stats
         .as_ref()
@@ -192,36 +253,11 @@ fn build_row(
         ended_at: host::iso_utc(run_ms.1),
         window_start_unix_ms: open.unix_ms,
         window_end_unix_ms: close.unix_ms,
-        host: HostEvidence {
-            hostname: host::hostname(),
-            cpu: host::cpuinfo(),
-            load1_start: load.0,
-            load1_end: load.1,
-        },
-        list: ListEvidence {
-            path: setup.list.path.display().to_string(),
-            sha256: setup.list.sha256.clone(),
-            photos: setup.list.photos.len(),
-            bytes: setup.list.total_bytes,
-        },
-        plan: PlanEvidence {
-            path: setup.plan_path.clone(),
-            sha256: setup.plan.sha256.clone(),
-            text: setup.plan.text.clone(),
-        },
-        engine: setup.engine.as_ref().map(|e| EngineEvidence {
-            address: e.address.clone(),
-            channels: e.channels,
-            timeout_s: e.timeout_s,
-        }),
-        z: setup.z.as_ref().map(|z| ZEvidence {
-            crop_counts_path: z.crop_counts_path.clone(),
-            crop_counts_list_sha256: z.crop_counts_list_sha256.clone(),
-            region_mib: z.region_mib,
-            region_name: z.region_name.clone(),
-            mean_calls_per_photo: z.mean_calls_per_photo,
-            mean_crops_per_photo: z.mean_crops_per_photo,
-        }),
+        host: host_evidence(load),
+        list: list_evidence(setup),
+        plan: plan_evidence(setup),
+        engine: setup.engine.as_ref().map(engine_evidence),
+        z: setup.z.as_ref().map(z_evidence),
         in_flight: setup.in_flight,
         warmup_s: setup.warmup.as_secs_f64(),
         window_s: setup.window.as_secs_f64(),

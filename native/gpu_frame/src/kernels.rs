@@ -3,7 +3,7 @@
 //! (plan 17 section 3, "Kernel build"; review row M1).
 //!
 //! CuPy's rule, read from `cupy/cuda/compiler.py` at v14.2.0
-//! (https://github.com/cupy/cupy/blob/v14.2.0/cupy/cuda/compiler.py):
+//! (<https://github.com/cupy/cupy/blob/v14.2.0/cupy/cuda/compiler.py>):
 //! * `_compile_with_cache_cuda` adds `-ftz=true`;
 //! * `_compile` then adds the arch option from `_get_arch_for_options_for_nvrtc` and
 //!   `--device-as-default-execution-space` (jitify and `--pch` are off by default);
@@ -16,7 +16,7 @@
 //!
 //! The same NVRTC build and the same options give the same binary as the Python engine's. The
 //! kernel files themselves belong to the engine crate; this module compiles what it is given.
-//! NVRTC: https://docs.nvidia.com/cuda/nvrtc/index.html (`nvrtcGetCUBIN`, supported options).
+//! NVRTC: <https://docs.nvidia.com/cuda/nvrtc/index.html> (`nvrtcGetCUBIN`, supported options).
 
 use std::collections::HashMap;
 use std::ffi::c_void;
@@ -58,7 +58,12 @@ pub fn cupy_options(cc: (i32, i32), version: (i32, i32)) -> Vec<String> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KernelError {
     /// NVRTC refused the source; the log says why.
-    Compile { name: String, log: String },
+    Compile {
+        /// The program name given to [`Kernels::load`].
+        name: String,
+        /// NVRTC's compile log.
+        log: String,
+    },
     /// A driver or library call failed (no NVRTC, module load, missing kernel name).
     Cuda(CudaError),
 }
@@ -107,6 +112,11 @@ impl fmt::Debug for Kernels {
 
 impl Kernels {
     /// A loader for the context's device; reads the compute capability and NVRTC's version.
+    ///
+    /// # Errors
+    ///
+    /// [`KernelError::Cuda`] when the compute capability or NVRTC's version cannot be read (no
+    /// driver, no NVRTC).
     pub fn new(ctx: &Arc<Context>) -> Result<Kernels, KernelError> {
         let cc = ctx.compute_capability()?;
         let version = nvrtc_version()?;
@@ -125,6 +135,11 @@ impl Kernels {
 
     /// The module compiled from `source` under the program name `name` (compiled once per
     /// name and source; later calls return the cached module).
+    ///
+    /// # Errors
+    ///
+    /// [`KernelError::Compile`] when NVRTC refuses `source`; [`KernelError::Cuda`] when the module
+    /// cannot be loaded.
     pub fn load(&self, name: &str, source: &str) -> Result<Module, KernelError> {
         let key = (name.to_string(), source.to_string());
         // Loads happen at start; the lock is never taken on a photo's path.
@@ -162,6 +177,10 @@ impl fmt::Debug for Module {
 
 impl Module {
     /// The kernel `name`; resolve once and keep it.
+    ///
+    /// # Errors
+    ///
+    /// [`KernelError::Cuda`] when the module has no kernel `name`.
     pub fn function(&self, name: &str) -> Result<Kernel, KernelError> {
         Ok(Kernel {
             inner: self.inner.function(name)?,
@@ -175,6 +194,10 @@ impl Module {
     /// and type, and every address in it must name memory the kernel may touch. A kernel that
     /// writes outside its arguments corrupts device memory, which the driver reports as a sticky
     /// error that marks the context lost.
+    ///
+    /// # Errors
+    ///
+    /// [`KernelError::Cuda`] when `name` is not in the module or the driver refuses the launch.
     pub fn launch(
         &self,
         name: &str,
@@ -199,6 +222,10 @@ impl fmt::Debug for Kernel {
 
 impl Kernel {
     /// Launch on `stream` (see [`Module::launch`] for what `args` must satisfy).
+    ///
+    /// # Errors
+    ///
+    /// [`KernelError::Cuda`] when the driver refuses the launch.
     pub fn launch(
         &self,
         cfg: &LaunchConfig,
@@ -212,20 +239,29 @@ impl Kernel {
 /// Grid and block dimensions and dynamic shared memory of one launch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LaunchConfig {
+    /// Blocks per grid in x, y and z.
     pub grid: (u32, u32, u32),
+    /// Threads per block in x, y and z.
     pub block: (u32, u32, u32),
+    /// Dynamic shared memory per block, in bytes.
     pub shared_bytes: u32,
 }
 
 /// One kernel parameter, passed by value. Device pointers are passed as `U64` addresses
-/// ([`DeviceRange::checked_addr`]).
+/// ([`crate::cuda::DeviceRange::checked_addr`]).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum KernelArg {
+    /// A signed 32-bit value.
     I32(i32),
+    /// An unsigned 32-bit value.
     U32(u32),
+    /// A signed 64-bit value.
     I64(i64),
+    /// An unsigned 64-bit value; a device pointer is passed this way.
     U64(u64),
+    /// A 32-bit float.
     F32(f32),
+    /// A 64-bit float.
     F64(f64),
 }
 
