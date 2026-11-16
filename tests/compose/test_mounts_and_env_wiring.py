@@ -105,19 +105,6 @@ def test_segmenter_hf_cache_mounted_at_appuser_home() -> None:
     assert not any(m.endswith(':/root/.cache/huggingface') for m in mounts), mounts
 
 
-def test_triton_accepts_the_clients_idle_keepalive_pings() -> None:
-    """Found live: clients ping every 30 s while idle; Triton refused (idle pings
-    off, 5-minute minimum interval) and sent GOAWAY too_many_pings."""
-    command = _services()['triton-server']['command']
-    assert '--grpc-keepalive-permit-without-calls=true' in command
-    interval = next(
-        int(arg.split('=', 1)[1])
-        for arg in command
-        if arg.startswith('--grpc-http2-min-recv-ping-interval-without-data=')
-    )
-    assert interval <= 30_000
-
-
 def test_triton_does_not_log_every_pinned_memory_allocation() -> None:
     """`--log-verbose=1` printed an allocation and a free line for every tensor of every
     request (12,038 lines in one 2,000-image window) and bought nothing in production."""

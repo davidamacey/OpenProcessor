@@ -1,6 +1,6 @@
 # Desktop app: the end-goal direction
 
-Status: direction only, recorded 2026-11-13 at the owner's request. Nothing here is built now. It is reviewed
+Status: Note: written before the decision of 2026-11-15 to move the backend to Rust; where this plan names Celery, Alembic Python migrations, FastAPI handlers or OpenSearch as the place of new work, read plan 18 (the Rust backend) instead; a re-base of this plan is listed in the roadmap (stage 3). Direction only, recorded 2026-11-13 at the owner's request. Nothing here is built now. It is reviewed
 after P2c and becomes its own plan then. Goal G6 in [00](00_photo_library_plan.md).
 
 ## 1. The goal

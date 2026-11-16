@@ -24,6 +24,9 @@ hyper-util = { version = "=0.1.21", features = ["tokio"] }
 # The host route's formats other than JPEG (plan 17 section 3, "Other host formats"): only the
 # decoders whose output equals Pillow 13.0.0's on the corpus (tests/golden_host.rs).
 image = { workspace = true, features = ["bmp", "gif", "ico", "png", "pnm", "qoi", "tga", "tiff", "webp"] }
+# Little CMS 2.19 (the version Pillow 13.0.0 bundles) built from the crate's vendored source for
+# the colour step (plan 17 section 3, "Colour").
+lcms2 = { version = "=6.2.0", features = ["static"] }
 memchr = "=2.8.3"
 # the SVD, determinant, rank and inverse of the face alignment (plan 17 section 3)
 nalgebra = { version = "=0.35.0", default-features = false, features = ["std"] }
@@ -34,6 +37,7 @@ procfs = { version = "=0.18.0", default-features = false }
 prost = { workspace = true }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { workspace = true }
+sha2 = "=0.11.1"
 # CMYK TIFF ink samples, converted as Pillow converts them (`host/formats.rs`).
 tiff = { workspace = true }
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
@@ -54,7 +58,6 @@ turbojpeg-sys = { workspace = true }
 base64 = "=0.22.1"
 http = "=1.5.0"
 hyper = { version = "=1.12.0", features = ["client", "http2"] }
-sha2 = "=0.11.1"
 
 [build-dependencies]
 prost-types = "=0.14.6"

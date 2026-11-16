@@ -181,7 +181,8 @@ fn twelve_bit_jpeg() -> Bytes {
 #[test]
 fn every_decode_route_of_the_contract_is_one_the_source_decides() {
     let decide = |image: &Bytes, lo: f64| {
-        source::decide(image, route(image, lo, 100.0), 100.0, &[640]).map(|s| s.decode_route)
+        source::decide(image, route(image, lo, 100.0), 100.0, &[], |_| vec![640])
+            .map(|s| s.decode_route)
     };
     for name in &contract().decode_routes {
         let got = match name.as_str() {

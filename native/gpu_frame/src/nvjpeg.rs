@@ -15,6 +15,7 @@
 //! with other lanes, nothing may still write it) and the wait's answer tells a lost context from
 //! the photo's own failure, as the Python engine's `_check_context` does.
 
+pub mod encoder;
 mod ffi;
 pub mod status;
 
@@ -24,10 +25,11 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 
-use crate::budget::HostCount;
+use crate::budget::ByteCount;
 use crate::cuda::{CudaError, DeviceRange, Fault, Stream};
 use crate::frame_pool::{AllocError, DeviceBuf, FramePool};
 use crate::pool::{CancelToken, JobError, JobHandle, PoolError, WorkerPool};
+pub use encoder::{EncodeError, Encoder, Encoders};
 use ffi::{LaneObjects, Shared, StreamInfo};
 pub use status::{Backend, NvjpegFailure, NvjpegStatus};
 
@@ -261,6 +263,7 @@ impl Drop for Lane {
 pub struct Lanes {
     pool: WorkerPool<Lane>,
     version: (i32, i32, i32),
+    encoders: Encoders,
 }
 
 impl fmt::Debug for Lanes {
@@ -274,8 +277,8 @@ impl fmt::Debug for Lanes {
 
 impl Lanes {
     /// Load nvJPEG (from `library_dir` first when given) and start `count` lanes whose frames
-    /// and nvJPEG device buffers come from `frames` (charged to its cap); nvJPEG's pinned bytes
-    /// are counted in `host`.
+    /// and nvJPEG device buffers come from `frames`' pool: frames charged to its cap, nvJPEG's
+    /// device bytes counted in `device` and its pinned bytes in `host`.
     ///
     /// # Errors
     ///
@@ -284,17 +287,19 @@ impl Lanes {
     /// cannot start.
     pub fn new(
         frames: &FramePool,
-        host: &Arc<HostCount>,
+        host: &Arc<ByteCount>,
+        device: &Arc<ByteCount>,
         count: usize,
         library_dir: Option<&Path>,
     ) -> Result<Lanes, DecodeError> {
         let ctx = frames.context().clone();
         ctx.bind().map_err(DecodeError::Cuda)?;
         let shared = Arc::new(
-            Shared::new(library_dir, &ctx, &frames.pool, frames.cap(), host)
+            Shared::new(library_dir, &ctx, &frames.pool, device, host)
                 .map_err(DecodeError::Library)?,
         );
         let version = shared.version();
+        let encoders = Encoders::new(Arc::clone(&shared));
         let frames = frames.clone();
         let pool = WorkerPool::new("gpu-frame-lane", count, move |index| {
             ctx.bind().map_err(DecodeError::Cuda)?;
@@ -317,7 +322,11 @@ impl Lanes {
                 DecodeError::Library(format!("a lane thread could not start: {e}"))
             }
         })?;
-        Ok(Lanes { pool, version })
+        Ok(Lanes {
+            pool,
+            version,
+            encoders,
+        })
     }
 
     /// Decode `data` on the next free lane and wait for its stream.
@@ -356,6 +365,11 @@ impl Lanes {
     /// The number of lanes.
     pub fn count(&self) -> usize {
         self.pool.threads()
+    }
+
+    /// What makes an encoder on another thread, from the lanes' library and handle.
+    pub fn encoders(&self) -> Encoders {
+        self.encoders.clone()
     }
 
     /// nvJPEG's version (major, minor, patch).

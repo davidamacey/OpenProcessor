@@ -117,8 +117,8 @@ pub fn chunks(data: &[u8]) -> Result<Meta<'_>, String> {
     })
 }
 
-/// The frame as Pillow converts it to RGB, and the profile of an `RGB` or `RGBA` image.
-pub fn decode(data: &[u8]) -> Result<Pixels, String> {
+/// The crate's reader past the chunks before the image data, with Pillow's checksum policy.
+fn reader(data: &[u8]) -> Result<png::Reader<Cursor<&[u8]>>, String> {
     let mut options = png::DecodeOptions::default();
     options.set_ignore_crc(true);
     // zlib checks the stream's Adler-32 for Pillow; the crate skips it by default
@@ -127,12 +127,25 @@ pub fn decode(data: &[u8]) -> Result<Pixels, String> {
     // the engine's megapixel gate bounds the frame, not the crate's 64 MiB default
     decoder.set_limits(png::Limits { bytes: usize::MAX });
     decoder.set_transformations(png::Transformations::EXPAND);
-    let mut reader = decoder.read_info().map_err(|e| e.to_string())?;
+    decoder.read_info().map_err(|e| e.to_string())
+}
+
+/// The profile of an `RGB` or `RGBA` image (`iCCP`, read before the image data as Pillow's open
+/// reads it).
+pub fn profile(data: &[u8]) -> Result<Option<Vec<u8>>, String> {
+    let reader = reader(data)?;
     let info = reader.info();
-    let source = info.color_type;
-    let icc = matches!(source, png::ColorType::Rgb | png::ColorType::Rgba)
-        .then(|| info.icc_profile.as_ref().map(|p| p.to_vec()))
-        .flatten();
+    Ok(
+        matches!(info.color_type, png::ColorType::Rgb | png::ColorType::Rgba)
+            .then(|| info.icc_profile.as_ref().map(|p| p.to_vec()))
+            .flatten(),
+    )
+}
+
+/// The frame as Pillow converts it to RGB.
+pub fn decode(data: &[u8]) -> Result<Pixels, String> {
+    let mut reader = reader(data)?;
+    let source = reader.info().color_type;
     let size = reader.output_buffer_size().ok_or("frame too large")?;
     let mut buf = vec![0u8; size];
     let frame = reader.next_frame(&mut buf).map_err(|e| e.to_string())?;
@@ -142,7 +155,6 @@ pub fn decode(data: &[u8]) -> Result<Pixels, String> {
         rgb,
         width: frame.width,
         height: frame.height,
-        icc,
     })
 }
 
@@ -182,4 +194,42 @@ fn to_rgb(
         (C::Rgba, _) => modes::high_bytes_to_rgb(&wide, 4, false),
         (C::Indexed, _) => return Err("palette not expanded".into()),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const P3: &[u8] = include_bytes!("../../../../tests/fixtures/icc/DisplayP3-v4.icc");
+
+    fn tagged(colour: png::ColorType) -> Vec<u8> {
+        let mut info = png::Info::with_size(2, 1);
+        info.color_type = colour;
+        info.icc_profile = Some(P3.into());
+        let mut out = Vec::new();
+        let mut writer = png::Encoder::with_info(&mut out, info)
+            .expect("encoder")
+            .write_header()
+            .expect("header");
+        let channels = if colour == png::ColorType::Rgb { 3 } else { 1 };
+        writer
+            .write_image_data(&vec![0; 2 * channels])
+            .expect("data");
+        writer.finish().expect("finish");
+        out
+    }
+
+    #[test]
+    fn the_profile_is_read_before_the_data_for_colour_images_only() {
+        assert_eq!(
+            profile(&tagged(png::ColorType::Rgb)).expect("png"),
+            Some(P3.to_vec())
+        );
+        assert_eq!(
+            profile(&tagged(png::ColorType::Grayscale)).expect("png"),
+            None
+        );
+        let admitted = crate::host::admit(&tagged(png::ColorType::Rgb), 100.0).expect("admitted");
+        assert_eq!(admitted.icc.as_deref(), Some(P3));
+    }
 }

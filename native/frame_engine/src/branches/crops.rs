@@ -9,8 +9,8 @@
 //! API of the same library gives those settings by default with `TJPARAM_SUBSAMP` set to 4:2:0
 //! (<https://libjpeg-turbo.org/Documentation/Documentation>, TurboJPEG 3 API: `TJPARAM_QUALITY`,
 //! `TJPARAM_SUBSAMP`, `TJPARAM_FASTDCT` default 0, `TJPARAM_OPTIMIZE` default 0); RGB input is
-//! converted to YCbCr by the same arithmetic as OpenCV's BGR input. `OP_FRAME_ENGINE_CROP_MAX_SIDE`
-//! above 0 (OpenCV's area filter before the encode) is refused at start in N0.
+//! converted to YCbCr by the same arithmetic as OpenCV's BGR input. A crop whose long side passes
+//! `OP_FRAME_ENGINE_CROP_MAX_SIDE` is first shrunk with OpenCV's area filter ([`super::area`]).
 
 use turbojpeg::{Compressor, Image, PixelFormat, Subsamp};
 
@@ -58,6 +58,27 @@ pub fn encode(
     };
     c.compress_to_vec(image)
         .map_err(|e| format!("crop JPEG encode failed: {e}"))
+}
+
+/// The JPEG of a crop's `width x height` RGB pixels, its long side first capped at `max_side`
+/// (0: no cap) with the area filter, never enlarged (`CropJpegs._encode`).
+///
+/// # Errors
+///
+/// The resize's refusal ([`super::area::resize_area`]) or the encoder's failure.
+pub fn encode_capped(
+    c: &mut Compressor,
+    pixels: &[u8],
+    (width, height): (usize, usize),
+    max_side: u32,
+) -> Result<Vec<u8>, String> {
+    match super::area::capped_size(width, height, max_side) {
+        Some((w, h)) => {
+            let shrunk = super::area::resize_area(pixels, (width, height), (w, h))?;
+            encode(c, &shrunk, w, h)
+        }
+        None => encode(c, pixels, width, height),
+    }
 }
 
 #[cfg(test)]
@@ -115,10 +136,12 @@ mod tests {
     }
 
     #[test]
-    fn a_crop_decodes_to_its_size() {
+    fn a_crop_decodes_to_its_size_or_to_the_cap() {
         let mut c = encoder(90).expect("encoder");
-        let jpeg = encode(&mut c, &pattern(5, 9), 5, 9).expect("encode");
-        let image = turbojpeg::decompress(&jpeg, PixelFormat::RGB).expect("decode");
-        assert_eq!((image.width, image.height), (5, 9));
+        for (max_side, size) in [(0, (5, 9)), (9, (5, 9)), (6, (3, 6))] {
+            let jpeg = encode_capped(&mut c, &pattern(5, 9), (5, 9), max_side).expect("encode");
+            let image = turbojpeg::decompress(&jpeg, PixelFormat::RGB).expect("decode");
+            assert_eq!((image.width, image.height), size, "cap {max_side}");
+        }
     }
 }

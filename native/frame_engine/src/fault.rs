@@ -7,6 +7,7 @@
 //! `AllocError::is_out_of_memory`); this module only carries it to the photo's answer.
 
 use std::fmt;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use gpu_frame::{AllocError, CudaError, Fault, JobError, KernelError};
 
@@ -41,9 +42,26 @@ impl From<CudaError> for GpuFault {
     fn from(e: CudaError) -> Self {
         match e.fault() {
             Fault::ContextLost => Self::ContextLost(e.to_string()),
-            Fault::OutOfMemory => Self::OutOfMemory(e.to_string()),
+            Fault::OutOfMemory => Self::OutOfMemory(format!("the card's memory: {e}")),
             Fault::Other => Self::Failed(e.to_string()),
         }
+    }
+}
+
+/// Memory refusals seen since start (`FrameEngine.memory_events`).
+static MEMORY_EVENTS: AtomicU64 = AtomicU64::new(0);
+
+/// Log a photo answered `gpu_memory`: where, the photo's oriented size and the refusal (bytes
+/// asked, bytes in use and the limit, or the card's own refusal). The first and then every
+/// hundredth are logged, as the Python engine's `_note_memory_failure` does, so a flood of
+/// refusals (a card shared beyond its memory) cannot flood the log; the count is in each line.
+pub fn note_memory_failure(stage: &str, (w, h): (u32, u32), detail: &str) {
+    let event = MEMORY_EVENTS.fetch_add(1, Ordering::Relaxed) + 1;
+    if event % 100 == 1 {
+        tracing::warn!(
+            "gpu_memory in {stage}: photo {w} x {h}, frame {} bytes: {detail}; memory refusal {event}",
+            u64::from(w) * u64::from(h) * 3
+        );
     }
 }
 

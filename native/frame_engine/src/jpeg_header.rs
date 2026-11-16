@@ -12,7 +12,7 @@
 //! stops.
 //!
 //! The ICC profile is returned as its joined bytes; what kind of profile it is (sRGB, convert or
-//! other) is decided with the colour step (plan 17 N1a), which needs a colour management library.
+//! other) is decided by the colour step ([`crate::colour`]).
 
 const SOF_MARKERS: [u8; 13] = [
     0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF,

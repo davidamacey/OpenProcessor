@@ -37,10 +37,18 @@ pub struct Source {
     pub reserve: u64,
     /// `gpu` or `cpu_<reason>` (`src/domain/decode_route.py`).
     pub decode_route: String,
+    /// The embedded profile the colour step reads (`JpegHeader::icc`; on the host route an `RGB`
+    /// or `RGBA` image's, from `host::admit`).
+    pub icc: Option<Vec<u8>>,
+    /// Colour components of the frame the profile describes (`JpegHeader::components`; 3 on the
+    /// host route, whose profile is a colour image's only).
+    pub components: u32,
 }
 
 /// The source of `image` routed as `decided`, or the status that refuses it before any decode
-/// (`corrupt` and `huge` from the route; `huge` and `decoder` from the host probe).
+/// (`corrupt` and `huge` from the route; `huge` and `decoder` from the host probe). `sides` are
+/// the plan's rendition sides; `widths` gives the output widths the model inputs of an upright
+/// frame of that size write, for the resample scratch (the renditions' are added here).
 ///
 /// # Errors
 ///
@@ -49,32 +57,44 @@ pub fn decide(
     image: &Bytes,
     decided: Route,
     max_megapixels: f64,
-    widths: &[u32],
+    sides: &[u32],
+    widths: impl Fn((u32, u32)) -> Vec<u32>,
 ) -> Result<Source, &'static str> {
+    let written = |(w, h): (u32, u32)| {
+        let mut out = widths((w, h));
+        out.extend(budget::rendition_widths(w, h, sides));
+        out
+    };
     match decided.decoder {
         Decoder::Refused(status) => Err(status),
         Decoder::Gpu => {
             let h = decided.header;
+            let size = oriented_size(&h);
             Ok(Source {
                 image: image.slice(..h.end.min(image.len())),
                 origin: Origin::Gpu {
                     orientation: h.orientation,
                 },
-                size: oriented_size(&h),
-                need: budget::need_bytes(&h),
-                reserve: budget::reserve_bytes(&h, widths),
+                size,
+                need: budget::need_bytes(&h, sides),
+                reserve: budget::reserve_bytes(&h, sides, &written(size)),
                 decode_route: "gpu".into(),
+                icc: h.icc,
+                components: h.components,
             })
         }
         Decoder::Cpu(reason) => {
             let admitted = host::admit(image, max_megapixels)?;
+            let need = budget::host_need_bytes(admitted.stored, sides);
             Ok(Source {
                 image: image.clone(),
                 origin: Origin::Host,
                 size: admitted.size,
-                need: admitted.need,
-                reserve: budget::host_reserve_bytes(admitted.size, widths),
+                need,
+                reserve: budget::host_reserve_bytes(need, admitted.size, &written(admitted.size)),
                 decode_route: format!("cpu_{reason}"),
+                icc: admitted.icc,
+                components: 3,
             })
         }
     }

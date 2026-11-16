@@ -60,9 +60,7 @@ def test_the_binary_wants_a_pipeline(binary: Path) -> None:
         ('OP_FRAME_ENGINE_SWITCH_INTERVAL_MS', '0.1', 'means nothing to the native engine'),
         ('OP_FRAME_ENGINE_WORKERS', '0', "OP_FRAME_ENGINE_WORKERS='0': outside [1, 256]"),
         ('OP_FRAME_ENGINE_WORKERS', 'many', 'not a number'),
-        ('OP_FRAME_ENGINE_TRANSPORT', 'body', 'not built in this engine yet'),
         ('OP_FRAME_ENGINE_TRANSPORT', 'system', 'one of cuda, body'),
-        ('OP_FRAME_ENGINE_CROP_MAX_SIDE', '512', 'not built in this engine yet'),
         ('OP_FRAME_ENGINE_BUDGET_MIB', '8192', 'exceeds OP_FRAME_ENGINE_POOL_MIB'),
     ],
 )

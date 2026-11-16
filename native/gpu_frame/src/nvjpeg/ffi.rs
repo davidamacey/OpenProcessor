@@ -26,8 +26,8 @@
 //! handle, the status names, the decoupled decode sequence and the drop order of states before
 //! their buffers. Changed: the CUDA runtime, NVRTC and driver tables are not taken (streams and
 //! memory come from cudarc, `cuda.rs`); handles are created with the V2 allocators so every byte
-//! nvJPEG allocates is counted (device bytes from the engine's pool against its cap, pinned host
-//! bytes in a [`HostCount`]); each lane keeps a pinned and a device buffer per backend state, as
+//! nvJPEG allocates is counted (device bytes from the engine's pool in one [`ByteCount`], pinned
+//! host bytes in another); each lane keeps a pinned and a device buffer per backend state, as
 //! the Python engine's `nvjpeg_lanes.py` does.
 //!
 //! Signatures are those of `nvjpeg.h` in the `nvidia-nvjpeg` 13.2.3.58 wheel the engine image
@@ -43,25 +43,27 @@ use std::sync::Arc;
 
 use cudarc::driver::{result, sys};
 
-use crate::budget::{DeviceCap, HostCount};
+use crate::budget::ByteCount;
 use crate::cuda::{Context, MemPool};
 use crate::nvjpeg::status::{Backend, NvjpegFailure, NvjpegStatus, check};
 
-type Status = c_int;
-type Handle = *mut c_void;
+pub(super) type Status = c_int;
+pub(super) type Handle = *mut c_void;
 type Decoder = *mut c_void;
 type State = *mut c_void;
 type JpegStream = *mut c_void;
 type DecodeParams = *mut c_void;
 type BufferPinned = *mut c_void;
 type BufferDevice = *mut c_void;
-type CudaStream = *mut c_void;
+pub(super) type CudaStream = *mut c_void;
+pub(super) type EncoderState = *mut c_void;
+pub(super) type EncoderParams = *mut c_void;
 
 /// `nvjpegImage_t`.
 #[repr(C)]
-struct NvjpegImage {
-    channel: [*mut u8; 4],
-    pitch: [usize; 4],
+pub(super) struct NvjpegImage {
+    pub(super) channel: [*mut u8; 4],
+    pub(super) pitch: [usize; 4],
 }
 
 type DevMalloc = unsafe extern "C" fn(*mut c_void, *mut *mut c_void, usize, CudaStream) -> c_int;
@@ -93,10 +95,10 @@ pub const NVJPEG_SONAME: &str = "libnvjpeg.so.13";
 /// Declares a table of C entry points and a loader that resolves every one of them or names the
 /// first that is missing.
 macro_rules! fn_table {
-    ($table:ident { $($name:ident : fn($($arg:ty),*) -> $ret:ty;)* }) => {
+    ($vis:vis $table:ident { $($name:ident : fn($($arg:ty),*) -> $ret:ty;)* }) => {
         #[expect(non_snake_case, reason = "the fields are the C entry points, named as nvJPEG names them")]
-        struct $table {
-            $($name: unsafe extern "C" fn($($arg),*) -> $ret,)*
+        $vis struct $table {
+            $($vis $name: unsafe extern "C" fn($($arg),*) -> $ret,)*
         }
 
         impl $table {
@@ -141,6 +143,22 @@ fn_table!(Fns {
     nvjpegDecodeJpegDevice: fn(Handle, Decoder, State, *mut NvjpegImage, CudaStream) -> Status;
 });
 
+// The encoder's entry points (nvJPEG documentation 2.3.5, "JPEG Encoding"), a table of their own
+// so a test can record the calls without filling the decoder's entries; loaded from the same
+// library handle as `Fns`.
+fn_table!(pub(super) EncFns {
+    nvjpegEncoderStateCreate: fn(Handle, *mut EncoderState, CudaStream) -> Status;
+    nvjpegEncoderStateDestroy: fn(EncoderState) -> Status;
+    nvjpegEncoderParamsCreate: fn(Handle, *mut EncoderParams, CudaStream) -> Status;
+    nvjpegEncoderParamsDestroy: fn(EncoderParams) -> Status;
+    nvjpegEncoderParamsSetQuality: fn(EncoderParams, c_int, CudaStream) -> Status;
+    nvjpegEncoderParamsSetEncoding: fn(EncoderParams, c_int, CudaStream) -> Status;
+    nvjpegEncoderParamsSetOptimizedHuffman: fn(EncoderParams, c_int, CudaStream) -> Status;
+    nvjpegEncoderParamsSetSamplingFactors: fn(EncoderParams, c_int, CudaStream) -> Status;
+    nvjpegEncodeImage: fn(Handle, EncoderState, EncoderParams, *const NvjpegImage, c_int, c_int, c_int, CudaStream) -> Status;
+    nvjpegEncodeRetrieveBitstream: fn(Handle, EncoderState, *mut u8, *mut usize, CudaStream) -> Status;
+});
+
 /// Load `soname` from `dir` when given and present there, else from the loader path. The handle
 /// is leaked: every function pointer taken from it must stay valid for the life of the process,
 /// and unloading a library that ran CUDA initialisers is worse than a leaked handle.
@@ -176,11 +194,30 @@ fn version_of(lib: &libloading::Library) -> Result<(i32, i32, i32), String> {
 struct Counters {
     ctx: Arc<Context>,
     pool: Arc<MemPool>,
-    cap: Arc<DeviceCap>,
-    host: Arc<HostCount>,
+    device: DeviceAccount,
+    host: Arc<ByteCount>,
 }
 
-/// Device bytes for nvJPEG: charged to the cap, taken from the engine's pool on nvJPEG's stream,
+/// Where nvJPEG's device bytes are accounted: counted exactly, never charged to the frame cap
+/// (the module documentation of `budget.rs` says why).
+struct DeviceAccount {
+    count: Arc<ByteCount>,
+}
+
+impl DeviceAccount {
+    /// Account `size` bytes nvJPEG asks for; the allocation itself may still fail on the card.
+    fn take(&self, size: usize) -> bool {
+        self.count.add(size);
+        true
+    }
+
+    /// Give back what [`DeviceAccount::take`] accounted.
+    fn give(&self, size: usize) {
+        self.count.sub(size);
+    }
+}
+
+/// Device bytes for nvJPEG: counted in the device count, taken from the engine's pool on nvJPEG's stream,
 /// usable on any stream once this returns (the allocating stream is waited for). Answers
 /// non-zero on failure, which nvJPEG reports as `NVJPEG_STATUS_ALLOCATOR_FAILURE`.
 unsafe extern "C" fn dev_malloc(
@@ -192,7 +229,7 @@ unsafe extern "C" fn dev_malloc(
     // SAFETY: `ctx` points at the `Counters` held by the `Shared` that created the handle, which
     // outlives every object of the handle (they hold the `Shared`); access is shared, read only.
     let c = unsafe { &*ctx.cast::<Counters>() };
-    if c.ctx.bind().is_err() || c.cap.reserve(size).is_err() {
+    if c.ctx.bind().is_err() || !c.device.take(size) {
         return 1;
     }
     let raw_stream = stream.cast::<sys::CUstream_st>();
@@ -201,7 +238,7 @@ unsafe extern "C" fn dev_malloc(
     let ptr = match unsafe { c.pool.alloc_raw(size.max(1), raw_stream) } {
         Ok(p) => p,
         Err(_) => {
-            c.cap.release(size);
+            c.device.give(size);
             return 1;
         }
     };
@@ -212,7 +249,7 @@ unsafe extern "C" fn dev_malloc(
         // Freed in order on the same stream; nvJPEG never saw the pointer.
         // SAFETY: `ptr` came from this pool just above and is freed once.
         let _ = unsafe { c.pool.free_raw(ptr, raw_stream) };
-        c.cap.release(size);
+        c.device.give(size);
         return 1;
     }
     // SAFETY: `out` is nvJPEG's valid out-parameter.
@@ -239,11 +276,11 @@ unsafe extern "C" fn dev_free(
         c.pool
             .free_raw(ptr as u64, stream.cast::<sys::CUstream_st>())
     };
-    c.cap.release(size);
+    c.device.give(size);
     if freed.is_ok() { 0 } else { 1 }
 }
 
-/// Pinned host bytes for nvJPEG, counted in the [`HostCount`].
+/// Pinned host bytes for nvJPEG, counted in the [`ByteCount`].
 unsafe extern "C" fn pinned_malloc(
     ctx: *mut c_void,
     out: *mut *mut c_void,
@@ -295,6 +332,7 @@ unsafe extern "C" fn pinned_free(
 /// documented guarantee; plan 17 section 2.1).
 pub(crate) struct Shared {
     fns: Fns,
+    enc: EncFns,
     handle: Handle,
     decoders: [(Backend, Decoder); 2],
     version: (i32, i32, i32),
@@ -317,22 +355,27 @@ impl Shared {
         dir: Option<&Path>,
         ctx: &Arc<Context>,
         pool: &Arc<MemPool>,
-        cap: &Arc<DeviceCap>,
-        host: &Arc<HostCount>,
+        device: &Arc<ByteCount>,
+        host: &Arc<ByteCount>,
     ) -> Result<Shared, String> {
         let lib = open(NVJPEG_SONAME, dir)?;
         let version = version_of(lib)?;
-        // SAFETY: the library is leaked; the signatures are those of the shipped header.
-        let fns = unsafe { Fns::load(lib) }.map_err(|missing| {
+        let lacks = |missing: &str| {
             format!(
-                "{NVJPEG_SONAME} version {}.{}.{} lacks {missing} (the engine needs the V2 allocator API)",
+                "{NVJPEG_SONAME} version {}.{}.{} lacks {missing} (the engine needs the V2 allocator and encoder API)",
                 version.0, version.1, version.2
             )
-        })?;
+        };
+        // SAFETY: the library is leaked; the signatures are those of the shipped header.
+        let fns = unsafe { Fns::load(lib) }.map_err(lacks)?;
+        // SAFETY: as above.
+        let enc = unsafe { EncFns::load(lib) }.map_err(lacks)?;
         let counters = Arc::new(Counters {
             ctx: ctx.clone(),
             pool: pool.clone(),
-            cap: cap.clone(),
+            device: DeviceAccount {
+                count: device.clone(),
+            },
             host: host.clone(),
         });
         // The callbacks only read through this pointer (atomics and shared handles).
@@ -363,6 +406,7 @@ impl Shared {
         .map_err(|e| e.to_string())?;
         let mut shared = Shared {
             fns,
+            enc,
             handle,
             decoders: [
                 (Backend::GpuHybrid, ptr::null_mut()),
@@ -389,6 +433,11 @@ impl Shared {
 
     pub(crate) fn version(&self) -> (i32, i32, i32) {
         self.version
+    }
+
+    /// The encoder's entry points and the handle they take.
+    pub(super) fn encoder(&self) -> (&EncFns, Handle) {
+        (&self.enc, self.handle)
     }
 
     fn decoder(&self, backend: Backend) -> Decoder {
@@ -653,5 +702,40 @@ mod tests {
     fn a_missing_library_is_an_error_value() {
         let dir = std::env::temp_dir().join("gpu_frame-no-such-dir");
         assert!(open("libgpu_frame_no_such_library.so.0", Some(&dir)).is_err());
+    }
+
+    const MIB: usize = 1 << 20;
+
+    #[test]
+    fn grown_lane_buffers_never_refuse_a_later_frame_that_fits_the_cap() {
+        // the hold's sequence: 24 lanes each grew to a 24 MP photo's buffers (about 350 MB),
+        // then a 24 MP photo with no detections needs its 72 MB frame from a 4096 MiB cap
+        let cap = crate::budget::DeviceCap::new(4096 * MIB);
+        let count = Arc::new(ByteCount::default());
+        let device = DeviceAccount {
+            count: count.clone(),
+        };
+        for lane in 0..24 {
+            assert!(
+                device.take(350 * MIB),
+                "lane {lane} could not grow its buffers"
+            );
+        }
+        let frame = 6000 * 4000 * 3;
+        let held = cap.charge(frame).expect("the frame fits the cap");
+        drop(held);
+        // a frame larger than the whole cap is still refused, as gpu_memory
+        assert!(cap.charge(4097 * MIB).is_err());
+        assert_eq!(cap.in_use(), 0, "nvJPEG's buffers are not in the frame cap");
+        assert_eq!(
+            (count.in_use(), count.peak()),
+            (24 * 350 * MIB, 24 * 350 * MIB)
+        );
+        device.give(350 * MIB);
+        assert_eq!(
+            count.in_use(),
+            23 * 350 * MIB,
+            "a freed buffer is counted out"
+        );
     }
 }

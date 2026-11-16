@@ -17,16 +17,18 @@ use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use gpu_frame::{
-    CallError, CancelToken, Context, DecodeError, DeviceBuf, DeviceRange, FramePool, InferCall,
-    InputTensor, Lane, Lanes, ModelCalls, ModelServer, OutputTensor, SliceError, Stream,
-    WorkerPool,
+    AllocError, ByteCount, CallError, CancelToken, Context, DecodeError, DeviceBuf, DeviceRange,
+    Encoder, Encoders, FramePool, InferCall, InputTensor, Lane, Lanes, ModelCalls, ModelServer,
+    OutputTensor, SliceError, Stream, WorkerPool,
 };
 use tokio::sync::Notify;
 
 use crate::branches::InputSpec;
 use crate::branches::crops::{self, CropJpeg};
+use crate::branches::derivatives::{self, InterleaveKernel, RenderTools, Rendered, RenditionJob};
 use crate::branches::faces::warp::FaceWarpKernel;
-use crate::fault::GpuFault;
+use crate::branches::ocr::warp::TextWarpKernel;
+use crate::fault::{GpuFault, note_memory_failure};
 use crate::kernels::{FrameRef, PrepKernels, Staging, WEIGHT_CACHE_BYTES, WeightCache, WeightSet};
 use crate::photo::clock::{DECODE, JobClock, SYNCED};
 use crate::photo::device::{
@@ -97,6 +99,8 @@ struct Shared {
     frames: FramePool,
     kernels: PrepKernels,
     face_warp: FaceWarpKernel,
+    text_warp: TextWarpKernel,
+    interleave: InterleaveKernel,
     /// One cache per lane, locked only by that lane's thread (lanes own their state in gpu_frame).
     lane_weights: Vec<Mutex<WeightCache<DeviceBuf>>>,
     stage_sync: bool,
@@ -127,12 +131,35 @@ struct LaunchThread {
     stream: Arc<Stream>,
     weights: WeightCache<DeviceBuf>,
     staging: Staging,
+    encoder: Encoder,
+}
+
+/// The launch threads, each with its stream, weight cache, staging and nvJPEG encoder (made on
+/// the thread, as nvJPEG requires of encoder states).
+fn launch_pool(
+    ctx: &Arc<Context>,
+    threads: usize,
+    encoders: Encoders,
+) -> Result<WorkerPool<LaunchThread>, GpuFault> {
+    let ctx = Arc::clone(ctx);
+    WorkerPool::new("fe-launch", threads, move |_| {
+        ctx.bind().map_err(|e| e.to_string())?;
+        let stream = Stream::new(&ctx).map_err(|e| e.to_string())?;
+        Ok::<_, String>(LaunchThread {
+            encoder: encoders.create(&stream).map_err(|e| e.to_string())?,
+            stream,
+            weights: WeightCache::new(WEIGHT_CACHE_BYTES),
+            staging: Staging::new(&ctx),
+        })
+    })
+    .map_err(|e| pool_failed("launch pool", e))
 }
 
 struct FinishThread {
     stream: Arc<Stream>,
     staging: Staging,
     encoder: turbojpeg::Compressor,
+    max_side: u32,
 }
 
 /// How the pools are sized and what they do.
@@ -146,6 +173,8 @@ pub struct GpuConfig {
     pub finish_threads: usize,
     /// JPEG quality (1 to 100) of the encoded crops, `OP_FRAME_ENGINE_JPEG_QUALITY`.
     pub jpeg_quality: u32,
+    /// `OP_FRAME_ENGINE_CROP_MAX_SIDE`: a crop's long side above it is shrunk before the encode.
+    pub crop_max_side: u32,
     /// Whether each GPU stage synchronises its stream before returning, so stage timings are exact.
     pub stage_sync: bool,
     /// Whether the inputs travel in the request body (`OP_FRAME_ENGINE_TRANSPORT=body`).
@@ -161,6 +190,7 @@ pub struct Gpu {
     finish: WorkerPool<FinishThread>,
     pub(super) server: Arc<ModelServer>,
     pub(super) wake: Notify,
+    nvjpeg_device: Arc<ByteCount>,
 }
 
 fn pool_failed<E: std::fmt::Display>(what: &str, e: E) -> GpuFault {
@@ -179,43 +209,39 @@ impl Gpu {
         server: ModelServer,
         cfg: &GpuConfig,
     ) -> Result<Self, GpuFault> {
-        let host = Arc::new(gpu_frame::HostCount::default());
-        let lanes = Lanes::new(&frames, &host, cfg.lanes, None)
+        let host = Arc::new(ByteCount::default());
+        let nvjpeg_device = Arc::new(ByteCount::default());
+        let lanes = Lanes::new(&frames, &host, &nvjpeg_device, cfg.lanes, None)
             .map_err(|e| pool_failed("decode lanes", e))?;
         let loader = gpu_frame::Kernels::new(ctx)?;
         let kernels = PrepKernels::load(&loader)?;
         let face_warp = FaceWarpKernel::load(&loader)?;
+        let text_warp = TextWarpKernel::load(&loader)?;
+        let interleave = InterleaveKernel::load(&loader)?;
         let shared = Arc::new(Shared {
             frames: frames.clone(),
             kernels,
             face_warp,
+            text_warp,
+            interleave,
             lane_weights: (0..lanes.count())
                 .map(|_| Mutex::new(WeightCache::new(WEIGHT_CACHE_BYTES)))
                 .collect(),
             stage_sync: cfg.stage_sync,
             body: cfg.body,
         });
-        let launch = {
-            let ctx = Arc::clone(ctx);
-            WorkerPool::new("fe-launch", cfg.launch_threads, move |_| {
-                ctx.bind()?;
-                Ok::<_, gpu_frame::CudaError>(LaunchThread {
-                    stream: Stream::new(&ctx)?,
-                    weights: WeightCache::new(WEIGHT_CACHE_BYTES),
-                    staging: Staging::new(&ctx),
-                })
-            })
-            .map_err(|e| pool_failed("launch pool", e))?
-        };
+        let launch = launch_pool(ctx, cfg.launch_threads, lanes.encoders())?;
         let finish = {
             let ctx = Arc::clone(ctx);
             let quality = cfg.jpeg_quality;
+            let max_side = cfg.crop_max_side;
             WorkerPool::new("fe-finish", cfg.finish_threads, move |_| {
                 ctx.bind().map_err(|e| e.to_string())?;
                 Ok::<_, String>(FinishThread {
                     stream: Stream::new(&ctx).map_err(|e| e.to_string())?,
                     staging: Staging::new(&ctx),
                     encoder: crops::encoder(quality)?,
+                    max_side,
                 })
             })
             .map_err(|e| pool_failed("finish pool", e))?
@@ -228,7 +254,13 @@ impl Gpu {
             finish,
             server: Arc::new(server),
             wake: Notify::new(),
+            nvjpeg_device,
         })
+    }
+
+    /// nvJPEG's device bytes in use and their peak (the lanes' buffers, outside the frame cap).
+    pub fn nvjpeg_device(&self) -> (usize, usize) {
+        (self.nvjpeg_device.in_use(), self.nvjpeg_device.peak())
     }
 
     /// The CUDA context of the card all work runs on.
@@ -268,11 +300,16 @@ impl Gpu {
 /// `prep_budget.is_memory_error`, then the context: a decode failure is the photo's (`decoder`)
 /// only while the context still works (`engine._check_context`; the lane waits for its stream
 /// after an nvJPEG failure and reports a lost context instead).
-fn decode_refusal(e: DecodeError) -> Result<&'static str, GpuFault> {
+fn decode_refusal(e: DecodeError, size: (u32, u32)) -> Result<&'static str, GpuFault> {
     if e.is_context_lost() {
         return Err(GpuFault::ContextLost(e.to_string()));
     }
     if e.is_out_of_memory() {
+        let detail = match &e {
+            DecodeError::Alloc(AllocError::Cap(cap)) => cap.to_string(),
+            other => format!("the card's memory: {other}"),
+        };
+        note_memory_failure("decode", size, &detail);
         return Ok("gpu_memory");
     }
     match e {
@@ -343,7 +380,7 @@ fn nvjpeg_frame(
     let stream = Arc::clone(lane.stream());
     let d = match lane.decode(image) {
         Ok(d) => d,
-        Err(e) => return decode_refusal(e).map(Err),
+        Err(e) => return decode_refusal(e, size).map(Err),
     };
     let (w, h) = (d.frame.width(), d.frame.height());
     let frame = match shared.kernels.orient(
@@ -391,6 +428,7 @@ fn decode_on_lane(
         origin,
         size,
         writes,
+        colour,
         hold,
         request,
     } = job;
@@ -404,17 +442,26 @@ fn decode_on_lane(
             .unwrap_or_else(PoisonError::into_inner);
         weight_sets(shared, &mut cache, &stream, &writes)?
     };
-    let decoded = clock.time(DECODE, || match origin {
-        Origin::Gpu { orientation } => nvjpeg_frame(shared, lane, image, orientation, size),
-        Origin::Host => host_frame(shared, &stream, &image, size),
+    let decoded = clock.time(DECODE, || -> Result<LaneFrame, GpuFault> {
+        let decoded = match origin {
+            Origin::Gpu { orientation } => nvjpeg_frame(shared, lane, image, orientation, size)?,
+            Origin::Host => host_frame(shared, &stream, &image, size)?,
+        };
+        // the upright frame of either route, as `image_decode` converts after the orientation
+        if let (Ok((buf, w, h)), Some(table)) = (&decoded, &colour) {
+            let pixels = *w as usize * *h as usize;
+            shared.kernels.colour(&stream, buf, pixels, &**table)?;
+        }
+        Ok(decoded)
     })?;
     let (buf, width, height) = match decoded {
         Ok(frame) => frame,
         Err(status) => {
-            lane.synchronize().map_err(|e| match decode_refusal(e) {
-                Err(fault) => fault,
-                Ok(_) => GpuFault::Failed("the lane's stream wait failed".into()),
-            })?;
+            lane.synchronize()
+                .map_err(|e| match decode_refusal(e, size) {
+                    Err(fault) => fault,
+                    Ok(_) => GpuFault::Failed("the lane's stream wait failed".into()),
+                })?;
             return Ok(Decoded::Refused {
                 status,
                 stages: clock.stages,
@@ -455,6 +502,11 @@ fn warp_inputs(
                     shared
                         .face_warp
                         .launch(&shared.frames, stream, frame, &w.input.slice, f)?;
+                }
+                WarpKind::Text(t) => {
+                    shared
+                        .text_warp
+                        .launch(&shared.frames, stream, frame, &w.input.slice, t)?;
                 }
             }
             if shared.stage_sync && SYNCED.contains(&w.stage) {
@@ -503,6 +555,32 @@ fn launch_on_thread(
     })
 }
 
+fn render_on_thread(
+    shared: &Shared,
+    t: &mut LaunchThread,
+    job: RenditionJob<Frame>,
+) -> Result<Rendered, GpuFault> {
+    let RenditionJob {
+        frame,
+        renditions,
+        request,
+    } = job;
+    let _wait = WaitOnDrop(Arc::clone(&t.stream));
+    let mut clock = JobClock::new(request);
+    let tools = RenderTools {
+        kernels: &shared.kernels,
+        interleave: &shared.interleave,
+        frames: &shared.frames,
+        weights: &mut t.weights,
+        encoder: &mut t.encoder,
+    };
+    let jpegs = derivatives::render(tools, &*frame, &renditions, &mut clock)?;
+    Ok(Rendered {
+        jpegs,
+        stages: clock.stages,
+    })
+}
+
 fn crop_on_thread(
     t: &mut FinishThread,
     frame: Arc<Frame>,
@@ -520,6 +598,7 @@ fn crop_on_thread(
         stream,
         staging,
         encoder,
+        max_side,
     } = t;
     let started = Instant::now();
     let pinned = staging.at_least(width * height * 3)?;
@@ -537,7 +616,8 @@ fn crop_on_thread(
     // the copy was waited for: the frame may go
     drop(frame);
     let started = Instant::now();
-    let jpeg = crops::encode(encoder, pixels, width, height).map_err(GpuFault::Failed)?;
+    let jpeg = crops::encode_capped(encoder, pixels, (width, height), *max_side)
+        .map_err(GpuFault::Failed)?;
     Ok(CropJpeg {
         data: bytes::Bytes::from(jpeg),
         copy_seconds: copied,
@@ -597,6 +677,20 @@ impl Device for Gpu {
     ) -> JobResult<T> {
         self.finish
             .submit(cancel, move |_: &mut FinishThread| Ok(f()))
+    }
+
+    fn colour_table(&self, host: &[u8]) -> Result<crate::colour::Table, GpuFault> {
+        self.ctx.bind()?;
+        let stream = Stream::new(&self.ctx)?;
+        let table = self.shared.frames.upload(host, &stream)?;
+        Ok(Arc::new(table))
+    }
+
+    fn renditions(&self, job: RenditionJob<Frame>, cancel: &CancelToken) -> JobResult<Rendered> {
+        let shared = Arc::clone(&self.shared);
+        self.launch.submit(cancel, move |t: &mut LaunchThread| {
+            render_on_thread(&shared, t, job)
+        })
     }
 
     async fn infer(

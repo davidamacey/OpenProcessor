@@ -1,0 +1,110 @@
+{
+ "generated_by": "scripts/codegen/frame_engine_area_goldens.py",
+ "opencv": "5.0.0",
+ "cases": [
+  {
+   "w": 512,
+   "h": 256,
+   "max_side": 256,
+   "out_w": 256,
+   "out_h": 128,
+   "sha256": "3ba3ccc3cb2896d2cf4e611e6ecca1c9fc703b3ddfc33bd87564cd6f4ba33665"
+  },
+  {
+   "w": 1000,
+   "h": 750,
+   "max_side": 500,
+   "out_w": 500,
+   "out_h": 375,
+   "sha256": "ebb8b716c4b3fe54e6e91c66352950a2008d0fa9f0b4789fb9d6b2e31e53405f"
+  },
+  {
+   "w": 66,
+   "h": 34,
+   "max_side": 33,
+   "out_w": 33,
+   "out_h": 17,
+   "sha256": "bca5252588aaab85ce579c401e73db5047e80a1c380dda43ea2e569e9ffb310a"
+  },
+  {
+   "w": 900,
+   "h": 600,
+   "max_side": 300,
+   "out_w": 300,
+   "out_h": 200,
+   "sha256": "2dd1cc0c8ea9c6ca296c5d8871c0b7639799436478696fcdbe6c8f211da4eb36"
+  },
+  {
+   "w": 1024,
+   "h": 1024,
+   "max_side": 256,
+   "out_w": 256,
+   "out_h": 256,
+   "sha256": "91b70fafeeb8a5e7bc1b55241bf5e29733d1012e6f573458dc326380e3868950"
+  },
+  {
+   "w": 1001,
+   "h": 2048,
+   "max_side": 1024,
+   "out_w": 500,
+   "out_h": 1024,
+   "sha256": "b645ba6694680e864848d16a313b3cf90d8516d4d68b558d40b5dc691d658039"
+  },
+  {
+   "w": 1537,
+   "h": 1025,
+   "max_side": 512,
+   "out_w": 512,
+   "out_h": 341,
+   "sha256": "6598cdba0ec2e70ce22be89c6a982951c24e640a955ff91361287e6dd5730c85"
+  },
+  {
+   "w": 640,
+   "h": 427,
+   "max_side": 333,
+   "out_w": 333,
+   "out_h": 222,
+   "sha256": "7625ffdf87e4437a22de0755ed43d65f9515312dc0d046f6fe3255a996e60147"
+  },
+  {
+   "w": 3000,
+   "h": 7,
+   "max_side": 1000,
+   "out_w": 1000,
+   "out_h": 2,
+   "sha256": "ebfeb111e9729f010c492b58e5249245f623348e52f7c5342ecd9b3b5da6be70"
+  },
+  {
+   "w": 5000,
+   "h": 1,
+   "max_side": 640,
+   "out_w": 640,
+   "out_h": 1,
+   "sha256": "ada13197665c8d1e65ee81b697929cddaf55ec1373dd0dfe310a025df824549e"
+  },
+  {
+   "w": 257,
+   "h": 513,
+   "max_side": 256,
+   "out_w": 128,
+   "out_h": 256,
+   "sha256": "f4b34abbe70ccb0ee8f8884f28b8d4d18e0b18341b3b202a2f731833cba09046"
+  },
+  {
+   "w": 8,
+   "h": 300,
+   "max_side": 299,
+   "out_w": 8,
+   "out_h": 299,
+   "sha256": "9a018eab2409318926384efdec06ba484eb5204388d1d4e6bc209547aebf8e3d"
+  },
+  {
+   "w": 4000,
+   "h": 3000,
+   "max_side": 1024,
+   "out_w": 1024,
+   "out_h": 768,
+   "sha256": "1ac28b31b375377106d565bc14227264c0bed80a3ede672e7833ce1d4595e14f"
+  }
+ ]
+}

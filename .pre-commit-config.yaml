@@ -346,13 +346,59 @@ repos:
       # with a scrubbed env; it only fires when Python source or its own
       # outputs change. Regenerate with `make contracts`.
       - id: api-contracts-drift
-        name: Item wire / class-source / curation OpenAPI contracts are in sync
+        name: Item wire / class-source / curation and core OpenAPI contracts are in sync
         # Imports the app (src.main), so it needs the project's dependencies: prefer the
         # venv the repo tells you to use, and fall back to python3 where CI has them installed.
         entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/codegen/export_api_contracts.py --check'
         language: system
         pass_filenames: false
-        files: ^(src/.*\.py|contracts/json/(item_wire|frame_engine_v1|frame_engine_plan_cases)\.json|contracts/openapi/curation\.json|contracts/ts/(itemWire|classSources|classNames)\.ts|scripts/codegen/(export_api_contracts|_contract_runtime|frame_engine_contract|frame_engine_plan_cases)\.py)$
+        files: ^(src/.*\.py|contracts/json/(item_wire|frame_engine_v1|frame_engine_plan_cases|job_kinds)\.json|contracts/openapi/(curation|core)\.json|contracts/ts/(itemWire|classSources|classNames)\.ts|scripts/codegen/(export_api_contracts|_contract_runtime|frame_engine_contract|frame_engine_plan_cases|job_kinds_contract)\.py)$
+
+      # The Rust duplicate hash (native/op_media) is held to the Python `imohash` package by
+      # goldens; the generator imports the package, so it runs under the project venv when one exists.
+      - id: imohash-goldens-drift
+        name: imohash goldens for the Rust port are in sync with the Python package
+        entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/codegen/imohash_goldens.py --check'
+        language: system
+        pass_filenames: false
+        files: ^(native/op_media/tests/goldens/imohash\.json|scripts/codegen/imohash_goldens\.py|requirements\.txt|native/frame_engine/tests/golden/host/.*|tests/fixtures/.*|frontend/e2e/fixtures/ingest/.*)$
+
+      # The Rust capture mapping (native/op_media) is held to the Python parse_capture and
+      # apply_location_policy by cases; the generator imports the domain package (pydantic), so it
+      # runs under the project venv when one exists.
+      - id: capture-cases-drift
+        name: capture cases for the Rust mapping are in sync with the Python functions
+        entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/codegen/capture_cases.py --check'
+        language: system
+        pass_filenames: false
+        files: ^(contracts/json/capture_cases\.json|native/op_media/tests/fixtures/exiftool/recorded\.json|scripts/codegen/capture_cases\.py|src/domain/(capture_metadata|location_policy|geo_box)\.py)$
+
+      # The BYTES codec's goldens, packed by Triton's own serialize_byte_tensor (the venv has
+      # tritonclient; the hook only fires when the script or its output changes).
+      - id: frame-engine-bytes-goldens-drift
+        name: op_engine_client BYTES codec goldens are in sync
+        entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/codegen/frame_engine_bytes_goldens.py --check'
+        language: system
+        pass_filenames: false
+        files: ^(native/op_engine_client/tests/goldens/bytes_codec\.json|scripts/codegen/(frame_engine_bytes_goldens|frame_engine_goldens)\.py)$
+
+      # The plan texts the Python client writes, for op_engine_client's plan builder: runs the
+      # real ingest and reprocess plan builders, so it needs the venv's dependencies.
+      - id: frame-engine-plan-build-cases-drift
+        name: op_engine_client plan-build cases are in sync
+        entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/codegen/frame_engine_plan_build_cases.py --check'
+        language: system
+        pass_filenames: false
+        files: ^(contracts/json/frame_engine_plan_build_cases\.json|src/domain/frame_engine_wire\.py|src/services/curation/(ingest_gpu_decode|reprocess_gpu_embed)\.py|scripts/codegen/frame_engine_plan_(cases|build_cases)\.py)$
+
+      # Engine answers as the Python front writes them and the Python client reads them: the
+      # fixtures op_engine_client's parser is held to.
+      - id: frame-engine-answer-goldens-drift
+        name: op_engine_client answer goldens are in sync
+        entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/codegen/frame_engine_answer_goldens.py --check'
+        language: system
+        pass_filenames: false
+        files: ^(native/op_engine_client/tests/goldens/answers\.json|frame_engine/front\.py|src/clients/frame_engine\.py|src/domain/frame_engine_wire\.py|scripts/codegen/(frame_engine_answer_goldens|frame_engine_goldens)\.py)$
 
       # The list of environment variables every role of the Rust server refuses to start with
       # (native/op_config, module retired). It re-runs itself under the project interpreter like

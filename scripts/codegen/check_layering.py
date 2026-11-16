@@ -108,13 +108,16 @@ _ENGINE_MAY_IMPORT = ('src.domain', 'src.utils')
 # engine's own gRPC front, so the wire handling it answers with is the engine's, not a copy that
 # drifts. The goldens generator runs the Python geometry and routing functions the native engine
 # ports, so the goldens are what they answer; the host corpus generator records what the Python
-# engine answers for each corpus file; both go with the Python engine (plan 17 N3). All are
-# development fixtures, never part of the API.
+# engine answers for each corpus file; the answer goldens run the Python front's own response
+# builder to give the Rust client the bytes the Python engine sends; all go with the Python engine
+# (plan 17 N3). All are development fixtures, never part of the API.
 _ENGINE_STAND_INS = (
     'docker/test/fake_frame_engine.py',
+    'scripts/codegen/frame_engine_answer_goldens.py',
     'scripts/codegen/frame_engine_goldens.py',
     'scripts/codegen/frame_engine_face_goldens.py',
     'scripts/codegen/frame_engine_host_corpus.py',
+    'scripts/codegen/frame_engine_text_goldens.py',
 )
 
 
@@ -123,11 +126,11 @@ _ENGINE_STAND_INS = (
 CRATE_DEPENDENCIES: dict[str, frozenset[str]] = {
     'gpu_frame': frozenset(),
     'frame_engine': frozenset({'gpu_frame'}),
-    'frame_engine_loadgen': frozenset({'gpu_frame'}),
+    'frame_engine_loadgen': frozenset({'gpu_frame', 'op_engine_client'}),
     'op_config': frozenset(),
     'op_storage': frozenset({'op_config'}),
     'op_media': frozenset({'op_config'}),
-    'op_engine_client': frozenset({'op_config'}),
+    'op_engine_client': frozenset({'op_config', 'frame_engine'}),
     'op_db': frozenset({'op_config'}),
     'op_jobs': frozenset({'op_db', 'op_config'}),
     'op_ingest': frozenset({'op_storage', 'op_media', 'op_engine_client', 'op_jobs', 'op_store'}),

@@ -19,7 +19,9 @@ use tokio::time::Instant;
 
 use crate::branches::InputSpec;
 use crate::branches::crops::CropJpeg;
+use crate::branches::derivatives::{Rendered, RenditionJob};
 use crate::branches::faces::warp::FaceWarps;
+use crate::branches::ocr::LineWarp;
 use crate::fault::GpuFault;
 use crate::kernels::Resample;
 use crate::photo::source::Origin;
@@ -53,6 +55,9 @@ pub struct DecodeJob<I> {
     pub size: (u32, u32),
     /// The round-1 writes done after the decode, one per input slice.
     pub writes: Vec<Write<I>>,
+    /// The colour table gathered over the oriented frame before the writes, for a photo whose
+    /// profile converts (`colour.py`); held to the job's stream wait.
+    pub colour: Option<crate::colour::Table>,
     /// Held as long as the frame (the frame budget's permit).
     pub hold: Box<dyn Send + Sync>,
     /// The request the job belongs to, for its stage and cancel state.
@@ -115,6 +120,8 @@ pub struct Launched<I> {
 pub enum WarpKind {
     /// `faces_warp.cu`: aligned face crops for the recogniser.
     Faces(FaceWarps),
+    /// `ocr_warp.cu`: text lines for the recogniser.
+    Text(LineWarp),
 }
 
 /// What a warp kernel writes into one region slice (the whole slice), timed as `stage`.
@@ -196,6 +203,17 @@ pub trait Device: Send + Sync + 'static {
         cancel: &CancelToken,
     ) -> JobResult<CropJpeg>;
 
+    /// The renditions of the frame, rendered and JPEG-encoded on the launch pool.
+    ///
+    /// # Errors
+    ///
+    /// The pool is shut down, or the job is cancelled, panics or, inside the handle, a resample or encode fails.
+    fn renditions(
+        &self,
+        job: RenditionJob<Self::Frame>,
+        cancel: &CancelToken,
+    ) -> JobResult<Rendered>;
+
     /// Runs `f` on the finish pool: CPU post-processing of one photo (anchor decode and NMS, CTC,
     /// box geometry), never a blocking wait and never work that feeds the card. The job waits in
     /// the finish pool's queue, which admission bounds; a photo cancelled before the job starts
@@ -210,6 +228,14 @@ pub trait Device: Send + Sync + 'static {
         f: impl FnOnce() -> T + Send + 'static,
         cancel: &CancelToken,
     ) -> JobResult<T>;
+
+    /// A colour table's bytes uploaded to the card, charged to the frame cap. Called on a pool
+    /// thread (it binds the context and waits for its own copy).
+    ///
+    /// # Errors
+    ///
+    /// The allocation is refused (`gpu_memory`) or the copy fails.
+    fn colour_table(&self, host: &[u8]) -> Result<crate::colour::Table, GpuFault>;
 
     /// Send one call; dropping the future cancels it and gives the slice back.
     fn infer(

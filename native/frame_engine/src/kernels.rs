@@ -34,6 +34,32 @@ use crate::geometry::{self, GeometryError};
 pub const PREP_SOURCE: &str = include_str!("../kernels/prep.cu");
 /// CUDA source of the EXIF re-orientation kernel, compiled at start.
 pub const ORIENT_SOURCE: &str = include_str!("../kernels/orient.cu");
+/// CUDA source of the colour gather (`colour.py`'s `icc_gather`), compiled at start.
+pub const COLOUR_SOURCE: &str = include_str!("../kernels/colour.cu");
+/// `icc_gather`: threads per block and the most blocks (`ColourStep.apply`).
+const COLOUR_THREADS: u32 = 256;
+const COLOUR_BLOCKS: u64 = 4096;
+
+/// `icc_gather`'s launch over `pixels` pixels: `min(4096, ceil(n / 256))` blocks of 256 threads,
+/// each thread striding the grid (`ColourStep.apply`).
+///
+/// # Errors
+///
+/// No pixels.
+pub fn colour_launch(pixels: usize) -> Result<LaunchConfig, GpuFault> {
+    let blocks = (pixels as u64)
+        .div_ceil(u64::from(COLOUR_THREADS))
+        .min(COLOUR_BLOCKS);
+    Ok(LaunchConfig {
+        grid: (
+            grid(i64::try_from(blocks).unwrap_or(0), "colour grid")?,
+            1,
+            1,
+        ),
+        block: (COLOUR_THREADS, 1, 1),
+        shared_bytes: 0,
+    })
+}
 
 /// Threads per block of both resample passes (`prep_kernels.py`).
 const RESAMPLE_THREADS: u32 = 128;
@@ -45,24 +71,19 @@ const ORIENT_THREADS: u32 = 256;
 /// Device bytes of weight sets one pool thread keeps (the Python engine's `ARENA_BYTES`).
 pub const WEIGHT_CACHE_BYTES: usize = 2 << 20;
 
-/// The filter of a resample (`resample_into`'s `antialias`): every variant is matched by name,
-/// never by a catch-all arm, so a filter one site does not know fails to compile.
+/// The filter of a resample (`resample_into`'s `antialias` and `lanczos`). Every variant is matched
+/// by name, never by a catch-all arm, so a filter one site does not know fails to compile. The
+/// variants: the triangle widened
+/// with the downscale (Pillow `BILINEAR`), the plain triangle (OpenCV `INTER_LINEAR`, the OCR
+/// detector's input without `det_antialias`), Pillow's `LANCZOS` (the renditions).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Filter {
-    /// Pillow `BILINEAR`: the support widens with the downscale factor.
+    /// The triangle widened with the downscale (Pillow `BILINEAR`).
     Antialias,
-    /// Plain bilinear, OpenCV `INTER_LINEAR` (the face detector's letterbox).
+    /// The plain triangle (OpenCV `INTER_LINEAR`).
     Bilinear,
-}
-
-impl Filter {
-    /// `filter_weights`' `antialias` flag.
-    pub fn antialias(self) -> bool {
-        match self {
-            Filter::Antialias => true,
-            Filter::Bilinear => false,
-        }
-    }
+    /// Pillow's `LANCZOS`, `a = 3`, antialiased.
+    Lanczos,
 }
 
 /// One resample (`PrepKernels.resample_into`): `roi` of the frame scaled to `size`, of which
@@ -77,11 +98,12 @@ pub struct Resample {
     pub window: [i64; 4],
     /// Where the window's first pixel of the first plane goes, in bytes from the input's start.
     pub dst_offset: usize,
-    /// Bytes from one plane to the next, and from one row to the next.
+    /// Bytes from one plane to the next (negative writes the planes in reverse order, as the
+    /// OCR detector's BGR input), and from one row to the next.
     pub plane: i64,
     /// Bytes from one row to the next.
     pub row_stride: i64,
-    /// The resampling filter of both axes.
+    /// Which filter the weights are.
     pub filter: Filter,
 }
 
@@ -108,24 +130,38 @@ impl Resample {
         }
     }
 
-    /// One past the last destination byte the vertical pass writes, from the input's start.
+    /// One past the last destination byte the vertical pass writes, from the input's start;
+    /// `None` for an empty window or one that would start before the input.
     pub fn extent(&self) -> Option<usize> {
         let (ww, wh) = (self.window[2], self.window[3]);
         if ww <= 0 || wh <= 0 {
             return None;
         }
-        let last = self
-            .plane
-            .checked_mul(2)?
+        let planes = self.plane.checked_mul(2)?;
+        let first = i64::try_from(self.dst_offset)
+            .ok()?
+            .checked_add(planes.min(0))?;
+        if first < 0 {
+            return None;
+        }
+        let last = planes
+            .max(0)
             .checked_add((wh - 1).checked_mul(self.row_stride)?)?
             .checked_add(ww)?;
         usize::try_from(last).ok()?.checked_add(self.dst_offset)
     }
+
+    /// The first destination byte the vertical pass writes, from the input's start.
+    pub fn first_byte(&self) -> usize {
+        let planes = self.plane.saturating_mul(2).min(0);
+        self.dst_offset
+            .saturating_sub(usize::try_from(-planes).unwrap_or(usize::MAX))
+    }
 }
 
 /// The filter of one axis: `n_in` source pixels to `n_out`, the `take` outputs from `left`
-/// (`prep_kernels._weights`; antialiased turns into plain bilinear in `filter_weights` when the
-/// output is larger than the input).
+/// (`prep_kernels._weights`; the antialiased triangle turns into plain bilinear when the output
+/// is larger than the input).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WeightKey {
     /// Source pixels along the axis (the rectangle's width or height).
@@ -136,7 +172,7 @@ pub struct WeightKey {
     pub left: i64,
     /// Number of output indexes written from `left`.
     pub take: i64,
-    /// The filter the weights are made for.
+    /// Which filter the weights are.
     pub filter: Filter,
 }
 
@@ -147,13 +183,12 @@ impl WeightKey {
     ///
     /// The window `left .. left + take` holds no output index, or `n_out` is not positive.
     pub fn weights(&self) -> Result<geometry::Weights, GeometryError> {
-        geometry::weights(
-            self.n_in,
-            self.n_out,
-            self.left,
-            self.take,
-            self.filter.antialias(),
-        )
+        let (n_in, n_out, left, take) = (self.n_in, self.n_out, self.left, self.take);
+        match self.filter {
+            Filter::Antialias => geometry::weights(n_in, n_out, left, take, true),
+            Filter::Bilinear => geometry::weights(n_in, n_out, left, take, false),
+            Filter::Lanczos => geometry::lanczos_weights(n_in, n_out, left, take),
+        }
     }
 }
 
@@ -562,6 +597,7 @@ pub struct PrepKernels {
     resample_v: Kernel,
     lap_sums: Kernel,
     orient: Kernel,
+    icc_gather: Kernel,
 }
 
 impl PrepKernels {
@@ -573,11 +609,13 @@ impl PrepKernels {
     pub fn load(kernels: &Kernels) -> Result<Self, GpuFault> {
         let prep = kernels.load("prep.cu", PREP_SOURCE)?;
         let orient = kernels.load("orient.cu", ORIENT_SOURCE)?;
+        let colour = kernels.load("colour.cu", COLOUR_SOURCE)?;
         Ok(Self {
             resample_h: prep.function("resample_h")?,
             resample_v: prep.function("resample_v")?,
             lap_sums: prep.function("lap_sums")?,
             orient: orient.function("orient")?,
+            icc_gather: colour.function("icc_gather")?,
         })
     }
 
@@ -615,7 +653,8 @@ impl PrepKernels {
         let extent = r
             .extent()
             .ok_or_else(|| GpuFault::Failed(format!("an empty resample window {r:?}")))?;
-        let dst_addr = dst.checked_addr(r.dst_offset, extent - r.dst_offset)?;
+        let lo = r.first_byte();
+        let dst_addr = dst.checked_addr(lo, extent - lo)? + (r.dst_offset - lo) as u64;
         let (wx, wy) = (SetAt::from(&*sets[0]), SetAt::from(&*sets[1]));
         let shape = resample_shape(r, sets[1].lo, sets[1].hi)?;
         let scratch = pool.alloc(shape.scratch_bytes, stream)?;
@@ -693,6 +732,29 @@ impl PrepKernels {
         ];
         self.orient.launch(&orient_launch(ow, oh)?, stream, &args)?;
         Ok(Some((out, ow, oh)))
+    }
+
+    /// Queue the colour gather on `stream`: each of the `pixels` RGB pixels of `frame` replaced
+    /// in place by its entry of `table` (`r * 65536 + g * 256 + b`, three bytes each).
+    ///
+    /// # Errors
+    ///
+    /// The frame or table is smaller than the gather reads, or the launch fails.
+    pub fn colour(
+        &self,
+        stream: &Arc<Stream>,
+        frame: &dyn DeviceRange,
+        pixels: usize,
+        table: &dyn DeviceRange,
+    ) -> Result<(), GpuFault> {
+        let args = [
+            KernelArg::U64(frame.checked_addr(0, pixels * 3)?),
+            KernelArg::I64(i64::try_from(pixels).map_err(|e| GpuFault::Failed(e.to_string()))?),
+            KernelArg::U64(table.checked_addr(0, crate::colour::TABLE_BYTES)?),
+        ];
+        self.icc_gather
+            .launch(&colour_launch(pixels)?, stream, &args)?;
+        Ok(())
     }
 }
 

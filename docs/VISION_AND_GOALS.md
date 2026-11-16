@@ -135,7 +135,7 @@ the next release (0.7.0) is on the integration branch `int/b4-stateless`, not ye
 Done on the integration branch:
 
 - **Foundation.** PostgreSQL for control data, every long job on Celery and
-  Valkey, one Ultralytics version, a stateless API that runs as N replicas.
+  Valkey (the 0.7.0 rebuild moves jobs to a Rust runner on PostgreSQL), one Ultralytics version, a stateless API that runs as N replicas.
 - **The labelling workflow in Cropwright.** One Workspace over one shared filter; served
   next steps; label operations with undo; the image editor; near-duplicates;
   training cohorts.
@@ -145,7 +145,7 @@ Done on the integration branch:
 Decided by the owner on 2026-11-15:
 
 - **No 0.7.0 tag until the whole programme is done:** the backend rewrite (native Rust engine,
-  PostgreSQL as the record, the API where measured), the frontend updated for it with the
+  PostgreSQL as the record, the API in Rust), the frontend updated for it with the
   gallery mode, and the roadmap's features. Pushes after green sweeps continue; a tag does not.
 - **No in-place upgrade from 0.6.0.** 0.7.0 is a new build for speed; a 0.6.0 installation
   moves its work by exporting and importing labelled datasets.

@@ -13,9 +13,10 @@ use std::time::Instant;
 
 use super::calls::{Answer, CallId};
 use super::clock::{FACE_ALIGN, FACE_BLUR, FACE_DETECT, FACE_EMBED, FACE_LETTERBOX};
-use super::device::{Device, LaunchJob, Warp, WarpKind, Write};
-use super::rounds::{Round1, Work};
-use super::{Runs, Stop, engine, job_failed, settle_job_time};
+use super::device::{Device, LaunchJob, Warp, WarpKind};
+use super::late::LateCall;
+use super::rounds::Work;
+use super::{Runs, Stop, engine, job_failed};
 use crate::branches::faces::embed::{self as face_vectors, Chunk};
 use crate::branches::faces::scrfd::{Faces, OUTPUT_NAMES};
 use crate::branches::faces::{self, DetCall};
@@ -33,34 +34,31 @@ pub(super) struct FaceRound2 {
 }
 
 impl<D: Device> Work<'_, D> {
-    /// Round 1 (`faces`): one slice per detector call, zero-filled, its passes resampled into it
-    /// by the decode job.
-    pub async fn stage_faces<'p>(
-        &mut self,
+    /// Round 1 (`faces`): one zero-filled input per detector call, its passes resampled into it
+    /// (by the decode job, or by the late round when the plan makes `faces` late), and the
+    /// detector calls the settle decodes.
+    pub fn face_entries<'p>(
+        &self,
         spec: &'p FaceSpec,
-        round: &mut Round1<'p, D::Input>,
-    ) -> Result<(), Stop> {
+    ) -> Result<(Vec<LateCall<'p>>, Vec<DetCall>), Stop> {
         let (w, h) = self.size;
         let calls = faces::detector_calls(spec, w, h).map_err(engine)?;
-        for c in &calls {
-            let bytes = c.input.bytes();
-            let slice = self.calls.stage(self.clock, bytes, FACE_LETTERBOX).await?;
-            round.writes.push(Write {
-                input: slice,
+        let entries = calls
+            .iter()
+            .map(|c| LateCall {
+                call: (
+                    "faces",
+                    FACE_DETECT,
+                    spec.detector.as_str(),
+                    c.input.clone(),
+                    &OUTPUT_NAMES,
+                ),
                 fill: Some(0),
                 resamples: c.resamples.clone(),
                 stage: FACE_LETTERBOX,
-            });
-            round.calls.push((
-                "faces",
-                FACE_DETECT,
-                spec.detector.as_str(),
-                c.input.clone(),
-                &OUTPUT_NAMES,
-            ));
-        }
-        round.faces = calls;
-        Ok(())
+            })
+            .collect();
+        Ok((entries, calls))
     }
 
     /// Settle (`faces`): every detector answer, then the decode and NMS on the finish pool; the
@@ -181,16 +179,7 @@ impl<D: Device> Work<'_, D> {
             blur_stage: FACE_BLUR,
             request: Arc::clone(&self.request),
         };
-        self.clock.enter(stage);
-        let started = Instant::now();
-        let launched = self
-            .device
-            .launch(job, &self.cancel)
-            .map_err(|e| Stop::Fail(job_failed(stage, &e)))?
-            .wait()
-            .await
-            .map_err(|e| Stop::Fail(job_failed(stage, &e)))??;
-        settle_job_time(self.clock, started.elapsed().as_secs_f64(), launched.stages);
+        let launched = self.launch_waited(stage, job).await?;
         Ok((launched.warped, launched.blur))
     }
 

@@ -52,6 +52,16 @@ _ENV_CONSTANT_RE = re.compile(
 # of env.template unnoticed.
 _SCANNED_ROOTS = ('src', 'frame_engine', 'scripts', 'docker', 'export')
 
+# The Rust server reads settings through ``op_config::Env``: a literal passed to ``get`` or
+# ``require`` (``env.require::<u16>("OP_X")``), or a ``const NAME: &str = "OP_X"`` the crate keeps
+# its key names in. Only code outside tests counts: a file under ``tests/`` is skipped, and a
+# source file is cut at its trailing ``#[cfg(test)]`` module, whose literals are fixtures.
+_RUST_ENV_READ_RE = re.compile(r'\.(?:get|require)(?:::<[^>(]*>)?\(\s*"(OP_[A-Z0-9_]+)"')
+_RUST_ENV_CONSTANT_RE = re.compile(
+    r"\bconst\s+[A-Z0-9_]+\s*:\s*&(?:'static\s+)?str\s*=\s*\"(OP_[A-Z0-9_]+)\""
+)
+_RUST_SKIP_DIRS = {'target', 'tests'}
+
 # Prefixes documented via a "2-3 examples + see the dataclass" convention
 # rather than one env.template line per field (RegionFields has ~30
 # fields, DetectionProfile ~30) -- direction 1 (code -> env.template) is
@@ -163,8 +173,19 @@ _TEMPLATE_SIDE_ALLOWLIST = {
 }
 
 
-def _direct_env_vars_read_by_code() -> set[str]:
+def _rust_env_vars_read_by_code() -> set[str]:
     found: set[str] = set()
+    for path in (REPO_ROOT / 'native').rglob('*.rs'):
+        if _RUST_SKIP_DIRS & set(path.relative_to(REPO_ROOT / 'native').parts):
+            continue
+        text = path.read_text(encoding='utf-8', errors='ignore').split('#[cfg(test)]')[0]
+        found.update(_RUST_ENV_READ_RE.findall(text))
+        found.update(_RUST_ENV_CONSTANT_RE.findall(text))
+    return found
+
+
+def _direct_env_vars_read_by_code() -> set[str]:
+    found: set[str] = _rust_env_vars_read_by_code()
     for root in _SCANNED_ROOTS:
         for path in (REPO_ROOT / root).rglob('*.py'):
             text = path.read_text(encoding='utf-8', errors='ignore')
@@ -199,6 +220,13 @@ def _op_tokens(text: str) -> set[str]:
 
 def _env_template_tokens() -> set[str]:
     return _op_tokens((REPO_ROOT / 'env.template').read_text())
+
+
+def test_the_rust_scan_finds_the_storage_settings_and_ignores_test_fixtures() -> None:
+    found = _rust_env_vars_read_by_code()
+    assert {'OP_LANDING_ROOT', 'OP_SOURCE_ROOT'} <= found
+    # op_config's own tests read made-up names such as OP_PORT and OP_ABSENT.
+    assert not {'OP_PORT', 'OP_ABSENT', 'OP_BAD'} & found
 
 
 def test_a_name_inside_a_longer_name_is_not_a_token() -> None:

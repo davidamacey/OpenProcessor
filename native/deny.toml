@@ -4,6 +4,9 @@
 
 [graph]
 all-features = true
+# Only the targets this project ships are checked (docs: https://embarkstudios.github.io/cargo-deny/checks/cfg.html#the-targets-field),
+# so crates that only wasm or Android builds need (rustls-platform-verifier's webpki-root-certs) are not.
+targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
 
 [licenses]
 # Each licence is compatible with this repository's AGPL-3.0-or-later (LICENSE; pyproject.toml

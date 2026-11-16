@@ -13,7 +13,9 @@ use super::calls::{Answer, CallId, PhotoCalls};
 use super::clock::{
     BLUR, CROP_COPY, CROP_JPEG, DETECT, EMBED_CROPS, EMBED_FRAME, EMBED_PE, LETTERBOX, StageClock,
 };
-use super::device::{Device, LaunchJob, Write};
+use super::cut::Cut;
+use super::device::{Device, LaunchJob, Launched, Write};
+use super::late::LateCall;
 use super::{Answers, Runs, Stop, engine, job_failed, settle_job_time};
 use crate::branches::crops::CropJpeg;
 use crate::branches::{InputSpec, detect, embed, faces};
@@ -38,6 +40,8 @@ pub(super) struct Round1<'p, I> {
     pub calls: Vec<Round1Call<'p>>,
     pub canvas: Option<detect::Canvas>,
     pub faces: Vec<faces::DetCall>,
+    /// The round-1 calls of late branches, sent after the conditions are checked.
+    pub late: Vec<LateCall<'p>>,
 }
 
 /// What round 2 produced: the crop calls in flight, the detections picked for them, the blur
@@ -67,6 +71,7 @@ impl<D: Device> Work<'_, D> {
         &mut self,
         plan: &'p EnginePlan,
         runs: &Runs,
+        late: &[&'static str],
     ) -> Result<Round1<'p, D::Input>, Stop> {
         let (w, h) = self.size;
         let mut round = Round1 {
@@ -74,52 +79,91 @@ impl<D: Device> Work<'_, D> {
             calls: Vec::new(),
             canvas: None,
             faces: Vec::new(),
+            late: Vec::new(),
         };
+        let mut entries = Vec::new();
         if let (true, Some(spec)) = (runs.detect, &plan.detector) {
             let c = detect::canvas(spec, w, h).map_err(engine)?;
-            let slice = self
-                .calls
-                .stage(self.clock, c.input.bytes(), LETTERBOX)
-                .await?;
-            round.writes.push(Write {
-                input: slice,
+            entries.push(LateCall {
+                call: (
+                    "detect",
+                    DETECT,
+                    spec.model.as_str(),
+                    c.input.clone(),
+                    &[detect::OUTPUT],
+                ),
                 fill: Some(c.fill),
                 resamples: vec![c.resample],
                 stage: LETTERBOX,
             });
-            round.calls.push((
-                "detect",
-                DETECT,
-                spec.model.as_str(),
-                c.input.clone(),
-                &[detect::OUTPUT],
-            ));
             round.canvas = Some(c);
         }
         if let (true, Some(spec)) = (runs.embed_frame, &plan.embed) {
             let (input, r) = embed::frame_square(spec, w, h).map_err(engine)?;
-            let slice = self
-                .calls
-                .stage(self.clock, input.bytes(), EMBED_FRAME)
-                .await?;
-            round.writes.push(Write {
-                input: slice,
+            entries.push(LateCall {
+                call: (
+                    "embed_frame",
+                    EMBED_PE,
+                    spec.model.as_str(),
+                    input,
+                    &[embed::OUTPUT],
+                ),
                 fill: None,
                 resamples: vec![r],
                 stage: EMBED_FRAME,
             });
-            round.calls.push((
-                "embed_frame",
-                EMBED_PE,
-                spec.model.as_str(),
-                input,
-                &[embed::OUTPUT],
-            ));
         }
         if let (true, Some(spec)) = (runs.faces, &plan.faces) {
-            self.stage_faces(spec, &mut round).await?;
+            let (calls, detector) = self.face_entries(spec)?;
+            entries.extend(calls);
+            round.faces = detector;
+        }
+        if let (true, Some(spec)) = (runs.ocr, &plan.ocr) {
+            entries.push(self.ocr_entry(spec)?);
+        }
+        for entry in entries {
+            // a late branch's inputs wait for its condition (`late.rs`)
+            if late.contains(&entry.call.0) {
+                round.late.push(entry);
+                continue;
+            }
+            let bytes = entry.call.3.bytes();
+            let slice = self.calls.stage(self.clock, bytes, entry.stage).await?;
+            round.writes.push(Write {
+                input: slice,
+                fill: entry.fill,
+                resamples: entry.resamples,
+                stage: entry.stage,
+            });
+            round.calls.push(entry.call);
         }
         Ok(round)
+    }
+
+    /// One launch job, waited for, its time counted from `stage` on: what it wrote.
+    ///
+    /// # Errors
+    ///
+    /// The job's failure, which fails the photo.
+    pub async fn launch_waited(
+        &mut self,
+        stage: &'static str,
+        job: LaunchJob<D::Frame, D::Input>,
+    ) -> Result<Launched<D::Input>, Stop> {
+        self.clock.enter(stage);
+        let started = Instant::now();
+        let launched = self
+            .device
+            .launch(job, &self.cancel)
+            .map_err(|e| Stop::Fail(job_failed(stage, &e)))?
+            .wait()
+            .await
+            .map_err(|e| Stop::Fail(job_failed(stage, &e)))??;
+        settle_job_time(self.clock, started.elapsed().as_secs_f64(), launched.stages);
+        Ok(Launched {
+            stages: Vec::new(),
+            ..launched
+        })
     }
 
     /// Send every round-1 call with the slice its decode wrote.
@@ -168,16 +212,16 @@ impl<D: Device> Work<'_, D> {
         }
     }
 
-    /// Round 2: crop squares and blur sums on the launch pool, crop JPEGs on the finish pool.
+    /// Round 2: crop squares and blur sums on the launch pool, crop JPEGs on the finish pool,
+    /// all cut from `cut` (the detector's rectangles or the stored boxes).
     pub async fn round2(
         &mut self,
         plan: &EnginePlan,
         runs: &Runs,
-        d: &detect::Detections,
+        cut: &Cut,
         frame: &Arc<D::Frame>,
     ) -> Result<Round2, Stop> {
         let (w, h) = self.size;
-        let (summed, clamped) = detect::blur_rects(d, w, h);
         let mut out = Round2 {
             crop_calls: Vec::new(),
             picked: Vec::new(),
@@ -186,21 +230,23 @@ impl<D: Device> Work<'_, D> {
         };
         let mut chunks = Vec::new();
         if let (true, Some(spec)) = (self.answers.running("embed_crops"), &plan.crop_embed) {
-            let cut = embed::crop_plan(
+            let planned = embed::crop_plan(
                 spec,
                 plan.embed_classes.as_ref(),
-                &d.rects,
-                Some(&d.classes),
+                &cut.rects,
+                cut.classes.as_deref(),
             )
             .map_err(engine)?;
-            out.picked = cut.picked;
-            chunks = cut.chunks;
+            out.picked = planned.picked;
+            chunks = planned.chunks;
         }
         let model = plan.crop_embed.as_ref().map_or("", |c| c.model.as_str());
         let mut chunks = chunks.into_iter().peekable();
-        let mut pending_blur = Some(summed);
+        let mut pending_blur = cut.blur.as_ref().map(|(summed, _)| summed.clone());
+        let mut jpegs_started = false;
         while chunks.peek().is_some() || pending_blur.is_some() {
             let (batch, staged) = self.stage_batch(&mut chunks).await?;
+            let first = pending_blur.is_some();
             let job = LaunchJob {
                 frame: Arc::clone(frame),
                 writes: staged,
@@ -209,7 +255,6 @@ impl<D: Device> Work<'_, D> {
                 blur_stage: BLUR,
                 request: Arc::clone(&self.request),
             };
-            let first = out.blur.is_none();
             self.clock
                 .enter(if batch.is_empty() { BLUR } else { EMBED_CROPS });
             let started = Instant::now();
@@ -221,8 +266,8 @@ impl<D: Device> Work<'_, D> {
                 .await
                 .map_err(|e| Stop::Fail(job_failed(EMBED_CROPS, &e)))??;
             settle_job_time(self.clock, started.elapsed().as_secs_f64(), launched.stages);
-            if first {
-                out.blur = Some(detect::blur_sums(w, h, &clamped, &launched.blur).map_err(engine)?);
+            if let (true, Some((_, clamped))) = (first, &cut.blur) {
+                out.blur = Some(detect::blur_sums(w, h, clamped, &launched.blur).map_err(engine)?);
             }
             for (chunk, slice) in batch.into_iter().zip(launched.inputs) {
                 out.crop_calls.push(self.calls.send(
@@ -234,17 +279,36 @@ impl<D: Device> Work<'_, D> {
                     vec![embed::OUTPUT],
                 ));
             }
-            if first && runs.crops {
-                for rect in &d.rects {
-                    out.jpegs.push(
-                        self.device
-                            .crop_jpeg(Arc::clone(frame), *rect, &self.cancel)
-                            .map_err(|e| Stop::Fail(job_failed(CROP_COPY, &e)))?,
-                    );
-                }
+            if !jpegs_started {
+                out.jpegs = self.start_jpegs(runs, &cut.rects, frame)?;
+                jpegs_started = true;
             }
         }
+        // stored boxes with no crop squares launch nothing: their JPEGs start here
+        if !jpegs_started {
+            out.jpegs = self.start_jpegs(runs, &cut.rects, frame)?;
+        }
         Ok(out)
+    }
+
+    /// One crop JPEG per rectangle on the finish pool, when the plan asks for them.
+    fn start_jpegs(
+        &self,
+        runs: &Runs,
+        rects: &[[i64; 4]],
+        frame: &Arc<D::Frame>,
+    ) -> Result<Vec<JobHandle<Result<CropJpeg, GpuFault>>>, Stop> {
+        if !runs.crops {
+            return Ok(Vec::new());
+        }
+        rects
+            .iter()
+            .map(|rect| {
+                self.device
+                    .crop_jpeg(Arc::clone(frame), *rect, &self.cancel)
+                    .map_err(|e| Stop::Fail(job_failed(CROP_COPY, &e)))
+            })
+            .collect()
     }
 
     /// The chunks that fit the photo's window now (at least one when any is left), and the writes

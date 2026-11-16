@@ -1,0 +1,589 @@
+{
+ "exiftool_version": "12.76",
+ "args": [
+  "-j",
+  "-fast",
+  "-G",
+  "-n",
+  "-EXIF:DateTimeOriginal",
+  "-EXIF:OffsetTimeOriginal",
+  "-EXIF:SubSecTimeOriginal",
+  "-EXIF:CreateDate",
+  "-EXIF:OffsetTimeDigitized",
+  "-EXIF:SubSecTimeDigitized",
+  "-EXIF:Make",
+  "-EXIF:Model",
+  "-EXIF:LensModel",
+  "-EXIF:FocalLength",
+  "-EXIF:FocalLengthIn35mmFormat",
+  "-EXIF:Orientation",
+  "-EXIF:GPSDateStamp",
+  "-EXIF:GPSTimeStamp",
+  "-EXIF:GPSStatus",
+  "-EXIF:GPSHPositioningError",
+  "-EXIF:GPSImgDirection",
+  "-Composite:GPSLatitude",
+  "-Composite:GPSLongitude",
+  "-Composite:GPSAltitude",
+  "-ExifTool:Error"
+ ],
+ "rows": [
+  {
+   "name": "native/frame_engine/tests/golden/host/damaged_bad_huffman_data_gpu.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/damaged_bad_huffman_data_gpu.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/damaged_bad_huffman_data_small.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/damaged_bad_huffman_data_small.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/damaged_bad_huffman_table_gpu.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/damaged_bad_huffman_table_gpu.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/damaged_bad_huffman_table_small.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/damaged_bad_huffman_table_small.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/damaged_cmyk_bad_huffman_data.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/damaged_cmyk_bad_huffman_data.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/damaged_cmyk_truncated.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/damaged_cmyk_truncated.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/damaged_png_bad_crc.png",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/damaged_png_bad_crc.png"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/damaged_png_bad_idat_crc.png",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/damaged_png_bad_idat_crc.png"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/damaged_png_truncated.png",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/damaged_png_truncated.png"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/damaged_progressive_no_eoi.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/damaged_progressive_no_eoi.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/damaged_progressive_truncated.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/damaged_progressive_truncated.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/damaged_soi_garbage.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/damaged_soi_garbage.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/damaged_soi_only.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/damaged_soi_only.jpg",
+    "ExifTool:Error": "File format error"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/damaged_trailing_bytes_gpu.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/damaged_trailing_bytes_gpu.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/damaged_trailing_bytes_small.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/damaged_trailing_bytes_small.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/damaged_trailing_jpeg_gpu.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/damaged_trailing_jpeg_gpu.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/damaged_trailing_jpeg_small.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/damaged_trailing_jpeg_small.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/damaged_truncated_after_sos_gpu.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/damaged_truncated_after_sos_gpu.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/damaged_truncated_after_sos_small.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/damaged_truncated_after_sos_small.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/damaged_truncated_half_gpu.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/damaged_truncated_half_gpu.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/damaged_truncated_half_small.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/damaged_truncated_half_small.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/damaged_truncated_no_eoi_gpu.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/damaged_truncated_no_eoi_gpu.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/damaged_truncated_no_eoi_small.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/damaged_truncated_no_eoi_small.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/huge_png_bomb.png",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/huge_png_bomb.png"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/huge_png_header.png",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/huge_png_header.png"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/jpeg_baseline_420_small.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/jpeg_baseline_420_small.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/jpeg_baseline_422_small.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/jpeg_baseline_422_small.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/jpeg_baseline_444_small.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/jpeg_baseline_444_small.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/jpeg_baseline_gpu.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/jpeg_baseline_gpu.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/jpeg_baseline_grey_small.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/jpeg_baseline_grey_small.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/jpeg_cmyk.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/jpeg_cmyk.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/jpeg_cmyk_grid.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/jpeg_cmyk_grid.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/jpeg_cmyk_progressive.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/jpeg_cmyk_progressive.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/jpeg_exif_orientation_1.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/jpeg_exif_orientation_1.jpg",
+    "EXIF:Orientation": 1
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/jpeg_exif_orientation_2.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/jpeg_exif_orientation_2.jpg",
+    "EXIF:Orientation": 2
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/jpeg_exif_orientation_3.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/jpeg_exif_orientation_3.jpg",
+    "EXIF:Orientation": 3
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/jpeg_exif_orientation_4.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/jpeg_exif_orientation_4.jpg",
+    "EXIF:Orientation": 4
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/jpeg_exif_orientation_5.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/jpeg_exif_orientation_5.jpg",
+    "EXIF:Orientation": 5
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/jpeg_exif_orientation_6.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/jpeg_exif_orientation_6.jpg",
+    "EXIF:Orientation": 6
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/jpeg_exif_orientation_7.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/jpeg_exif_orientation_7.jpg",
+    "EXIF:Orientation": 7
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/jpeg_exif_orientation_8.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/jpeg_exif_orientation_8.jpg",
+    "EXIF:Orientation": 8
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/jpeg_exif_orientation_9.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/jpeg_exif_orientation_9.jpg",
+    "EXIF:Orientation": 9
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/jpeg_progressive.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/jpeg_progressive.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/jpeg_progressive_grey.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/jpeg_progressive_grey.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/jpeg_srgb_profile_small.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/jpeg_srgb_profile_small.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/jpeg_xmp_orientation_3.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/jpeg_xmp_orientation_3.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/jpeg_xmp_orientation_6.jpg",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/jpeg_xmp_orientation_6.jpg"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/png_1bit.png",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/png_1bit.png"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/png_exif_orientation_3.png",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/png_exif_orientation_3.png",
+    "EXIF:Orientation": 3
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/png_exif_orientation_6.png",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/png_exif_orientation_6.png",
+    "EXIF:Orientation": 6
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/png_grey16.png",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/png_grey16.png"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/png_grey16_trns.png",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/png_grey16_trns.png"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/png_interlaced.png",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/png_interlaced.png"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/png_l.png",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/png_l.png"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/png_la.png",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/png_la.png"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/png_p.png",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/png_p.png"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/png_p_transparency.png",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/png_p_transparency.png"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/png_rgb.png",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/png_rgb.png"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/png_rgb16.png",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/png_rgb16.png"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/png_rgba.png",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/png_rgba.png"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/png_rgba16.png",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/png_rgba16.png"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/tiff_cmyk.tif",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/tiff_cmyk.tif"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/tiff_cmyk_grid.tif",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/tiff_cmyk_grid.tif"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/tiff_deflate.tif",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/tiff_deflate.tif"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/tiff_exif_orientation_6.tif",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/tiff_exif_orientation_6.tif",
+    "EXIF:Orientation": 6
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/tiff_jpeg.tif",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/tiff_jpeg.tif"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/tiff_l.tif",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/tiff_l.tif"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/tiff_lzw.tif",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/tiff_lzw.tif"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/tiff_p.tif",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/tiff_p.tif"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/tiff_packbits.tif",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/tiff_packbits.tif"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/tiff_rgb.tif",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/tiff_rgb.tif"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/tiff_rgba.tif",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/tiff_rgba.tif"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/webp_exif_orientation_6.webp",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/webp_exif_orientation_6.webp",
+    "EXIF:Orientation": 6
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/webp_lossless.webp",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/webp_lossless.webp"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/webp_lossless_rgba.webp",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/webp_lossless_rgba.webp"
+   }
+  },
+  {
+   "name": "native/frame_engine/tests/golden/host/webp_lossy.webp",
+   "row": {
+    "SourceFile": "native/frame_engine/tests/golden/host/webp_lossy.webp"
+   }
+  },
+  {
+   "name": "tests/fixtures/sample_image.jpg",
+   "row": {
+    "SourceFile": "tests/fixtures/sample_image.jpg"
+   }
+  },
+  {
+   "name": "scenario/tagged_full",
+   "row": {
+    "SourceFile": "scenario/tagged_full.jpg",
+    "EXIF:DateTimeOriginal": "2024:03:05 14:22:11",
+    "EXIF:OffsetTimeOriginal": "+01:00",
+    "EXIF:SubSecTimeOriginal": 50,
+    "EXIF:CreateDate": "2024:03:05 14:22:12",
+    "EXIF:OffsetTimeDigitized": "+01:00",
+    "EXIF:SubSecTimeDigitized": 51,
+    "EXIF:Make": "TestCam",
+    "EXIF:Model": "T-1000",
+    "EXIF:LensModel": "Test Lens 35mm",
+    "EXIF:FocalLength": 35,
+    "EXIF:FocalLengthIn35mmFormat": 52,
+    "EXIF:Orientation": 6
+   }
+  },
+  {
+   "name": "scenario/tagged_gps_south_west",
+   "row": {
+    "SourceFile": "scenario/tagged_gps_south_west.jpg",
+    "EXIF:DateTimeOriginal": "2024:03:05 14:22:11",
+    "EXIF:GPSDateStamp": "2024:03:05",
+    "EXIF:GPSTimeStamp": "13:22:11",
+    "EXIF:GPSStatus": "A",
+    "EXIF:GPSHPositioningError": 4.25,
+    "EXIF:GPSImgDirection": 90.5,
+    "Composite:GPSLatitude": -47.5,
+    "Composite:GPSLongitude": -8.25,
+    "Composite:GPSAltitude": -410
+   }
+  },
+  {
+   "name": "scenario/tagged_gps_north_east_void",
+   "row": {
+    "SourceFile": "scenario/tagged_gps_north_east_void.jpg",
+    "EXIF:GPSStatus": "V",
+    "Composite:GPSLatitude": 12.5,
+    "Composite:GPSLongitude": 100.25
+   }
+  },
+  {
+   "name": "scenario/tagged_gps_zero_zero",
+   "row": {
+    "SourceFile": "scenario/tagged_gps_zero_zero.jpg",
+    "Composite:GPSLatitude": 0,
+    "Composite:GPSLongitude": 0
+   }
+  },
+  {
+   "name": "scenario/tagged_create_date_only",
+   "row": {
+    "SourceFile": "scenario/tagged_create_date_only.jpg",
+    "EXIF:CreateDate": "2023:12:31 23:59:59"
+   }
+  },
+  {
+   "name": "scenario/tagged_clock_with_gps_stamps_no_offset",
+   "row": {
+    "SourceFile": "scenario/tagged_clock_with_gps_stamps_no_offset.jpg",
+    "EXIF:DateTimeOriginal": "2024:03:05 14:22:11",
+    "EXIF:GPSDateStamp": "2024:03:05",
+    "EXIF:GPSTimeStamp": "13:22:11"
+   }
+  },
+  {
+   "name": "scenario/tagged_camera_only",
+   "row": {
+    "SourceFile": "scenario/tagged_camera_only.jpg",
+    "EXIF:Make": "Another Maker",
+    "EXIF:Model": "Z 9"
+   }
+  },
+  {
+   "name": "scenario/tagged_orientation_3",
+   "row": {
+    "SourceFile": "scenario/tagged_orientation_3.jpg",
+    "EXIF:Orientation": 3
+   }
+  }
+ ]
+}

@@ -165,8 +165,8 @@ the licence proof at each lane's first commit.
 One rule, which replaces revision 0's two (review minor 9): every job not in the stay list above is
 Rust; the jobs that stay never fold opinions, so no internal write route for Python is built. A
 Python job reads and writes only the job tables and its own result tables (runs, scores,
-projections), through `src/db`; `rg "apply\("` at each family's entry confirms it. Roadmap 14 section
-4's "the VLM stays Python" becomes "the VLM server stays Python".
+projections), through `src/db`; `rg "apply\("` at each family's entry confirms it. The VLM server
+stays Python; the VLM client jobs move to Rust (decision 3; roadmap 14 section 7).
 
 ### 2.4 The contract and the frontend (decision 10)
 
@@ -278,8 +278,8 @@ Rust database tests get the schema from a committed dump (18a section 3.3).
 
 ### 3.3 Windows: what does not work when, and what the full sweep runs against
 
-The Rust slices merge into one integration branch for the programme (question Q1 proposes
-`int/rust`: `int/b4-stateless` with `int/native` merged). The reference stack is `int/b4-stateless`
+The Rust slices merge into one integration branch for the programme (question Q1: `int/native`, which
+holds the engine and the server in the workspace `native/`). The reference stack is `int/b4-stateless`
 at a pinned commit.
 
 | Window | On the integration branch, works | On the integration branch, does not work | The full sweep (once per large merge) runs |
@@ -343,8 +343,10 @@ free space is low.
    `RequestBodyTimeoutLayer` (deadline reset per frame). `DISK_GUARD`'s thresholds apply to the
    landing volume before a part is accepted.
 2. **Part complete.** The file is flushed; `imohash` is read from it (three 16 KiB reads); the file is
-   renamed inside the landing zone to its content name `landing/<project_id>/<sha256>` (same
-   filesystem, so a rename). The finished part goes to a spawned task through a bounded channel (its
+   moved inside the landing zone, without replacing anything, to its own name
+   `landing/<project_id>/<sha256>.<upload_id>.<index>` (same filesystem; the name carries the part,
+   so a landing file has one owner and equal bytes meet only in the object store and the content
+   claim). The finished part goes to a spawned task through a bounded channel (its
    capacity is the photos-in-work bound); the receiver reads the next part meanwhile.
 3. **Work, in parallel.** The content claim (duplicate check, record); the engine call (bytes read once
    from the landing file today; the landing key once plan 17 adds reading by key, section 12);
@@ -617,7 +619,7 @@ frontend beyond the edits named per slice; video; the desktop application; orche
 
 | # | Question | Recommended answer |
 |---|---|---|
-| Q1 | The integration branch for the Rust slices | `int/rust`, made from `int/b4-stateless` with `int/native` merged (`--no-ff`); `int/native` keeps the engine lanes until N3 and is merged into `int/rust` at each engine wave; the reference stack is `int/b4-stateless` at a pinned commit |
+| Q1 | The integration branch for the Rust slices | Answered 2026-11-15: `int/native`; there is no `int/rust` branch. Engine and server share the workspace `native/`; the reference stack is `int/b4-stateless` at a pinned commit |
 | Q2 | Decision 4 asks for "shared-file reference counts"; 15a (binding) has no counter table, and per-project keys leave sharing only inside a project | a reference check by query over the erasure catalogue's file-key columns under the imohash advisory lock (section 4.5); a stored counter would be a 15a schema change |
 | Q3 | `frame_engine` enables serde_json's `arbitrary_precision` and `preserve_order` features (`native/frame_engine/Cargo.toml`); Cargo unifies features across the packages of one build, so `cargo test --workspace` builds the server with them too | R0w adds a test that round-trips an internally tagged enum and a `flatten` struct with numbers. Result: it failed, so the engine's plan reader is its own and the features are gone; one workspace stands (18a section 2.1) |
 | Q4 | SHA-256 of every upload on a host with no SHA instructions | keep it (decision 4) and record M18; if it exceeds the B1 budget at 20 MP, the owner chooses between a faster content hash (a 15a column change) and the cost |

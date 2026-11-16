@@ -8,8 +8,6 @@
 //!   (section 2.1; [`crate::cores`]), not 16.
 //! * `OP_FRAME_ENGINE_SWITCH_INTERVAL_MS` means nothing here: a start with it set is refused
 //!   (section 1.1).
-//! * `OP_FRAME_ENGINE_CROP_MAX_SIDE` above 0 is N1 work (section 5 N0, "Scope out"): it is refused
-//!   at start, never silently ignored.
 
 use std::fmt;
 
@@ -97,6 +95,8 @@ pub struct Settings {
     pub max_megapixels: f64,
     /// JPEG quality, 1 to 100, of the encoded crops, `OP_FRAME_ENGINE_JPEG_QUALITY`.
     pub jpeg_quality: u32,
+    /// Long-side cap of the crop JPEGs in pixels (0: the crop's own size).
+    pub crop_max_side: u32,
     /// Whether kernel stages wait for their stream so stage seconds are exact, `OP_FRAME_ENGINE_STAGE_SYNC`.
     pub stage_sync: bool,
     /// TCP port of the gRPC service, `OP_FRAME_ENGINE_PORT`.
@@ -144,6 +144,7 @@ impl Settings {
             min_megapixels: 0.0,
             max_megapixels: 100.0,
             jpeg_quality: 90,
+            crop_max_side: 0,
             stage_sync: false,
             port: 8001,
             metrics_port: 8002,
@@ -242,6 +243,7 @@ impl Settings {
                 10_000.0,
             )?,
             jpeg_quality: env.int("OP_FRAME_ENGINE_JPEG_QUALITY", d.jpeg_quality, 1, 100)?,
+            crop_max_side: env.int("OP_FRAME_ENGINE_CROP_MAX_SIDE", d.crop_max_side, 0, 65_535)?,
             stage_sync: env.boolean("OP_FRAME_ENGINE_STAGE_SYNC", d.stage_sync)?,
             port: env.int("OP_FRAME_ENGINE_PORT", d.port, 1, 65_535)?,
             metrics_port: env.int("OP_FRAME_ENGINE_METRICS_PORT", d.metrics_port, 1, 65_535)?,
@@ -300,13 +302,6 @@ impl Settings {
                 "OP_FRAME_ENGINE_EXPECT_BUS_ID={}: a PCI bus id such as 0000:65:00.0",
                 repr_str(text)
             ));
-        }
-        let crop_max_side: u32 = env.int("OP_FRAME_ENGINE_CROP_MAX_SIDE", 0, 0, 65_535)?;
-        if crop_max_side != 0 {
-            return refuse(
-                "OP_FRAME_ENGINE_CROP_MAX_SIDE above 0 is not built in this engine yet (plan 17 N1)"
-                    .into(),
-            );
         }
         Ok((instance, expect_bus_id))
     }
@@ -567,7 +562,7 @@ mod tests {
     #[test]
     fn every_range_of_the_python_settings_is_the_range_here() {
         // name, low, high: `frame_engine/settings.py` `from_env`
-        let ranges: [(&str, i64, i64); 20] = [
+        let ranges: [(&str, i64, i64); 21] = [
             ("REGION_MIB", 16, 16_384),
             ("TRITON_DEVICE_ID", 0, 63),
             ("TRITON_CHANNELS", 1, 64),
@@ -583,6 +578,7 @@ mod tests {
             ("SLAB_WAIT_SECONDS", 0, 600),
             ("COLOUR_TABLES", 1, 64),
             ("JPEG_QUALITY", 1, 100),
+            ("CROP_MAX_SIDE", 0, 65_535),
             ("PORT", 1, 65_535),
             ("METRICS_PORT", 1, 65_535),
             ("MAX_MESSAGE_MIB", 1, 2047),
@@ -673,10 +669,9 @@ mod tests {
             text.contains("SWITCH_INTERVAL"),
             "even 0 is a setting that means nothing: {text}"
         );
-        assert!(refusal(&[("OP_FRAME_ENGINE_CROP_MAX_SIDE", "512")]).contains("CROP_MAX_SIDE"));
         assert_eq!(
-            read(&[("OP_FRAME_ENGINE_CROP_MAX_SIDE", "0")]).map(|s| s.jpeg_quality),
-            Ok(90)
+            read(&[("OP_FRAME_ENGINE_CROP_MAX_SIDE", "512")]).map(|s| s.crop_max_side),
+            Ok(512)
         );
     }
 

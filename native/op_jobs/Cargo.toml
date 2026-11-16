@@ -8,5 +8,22 @@ license.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+[features]
+# The database tier: tests that start PostgreSQL in a container (Docker needed).
+db = ["op_db/db"]
+
+[dependencies]
+op_config = { path = "../op_config" }
+op_db = { path = "../op_db" }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+tracing = { workspace = true }
+uuid = { workspace = true, features = ["std"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "test-util", "time"] }
+
 [lints]
 workspace = true

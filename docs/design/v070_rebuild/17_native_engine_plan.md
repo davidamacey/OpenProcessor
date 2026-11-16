@@ -4,10 +4,10 @@
 |---|---|
 | Status | plan, revision 1 (2026-11-15), reviewed. Inputs of this revision, kept untracked in the coordinator's speed-work notes: an independent review of revision 0 (2 blockers, 14 major and 15 minor findings, 10 silent decisions), the coordinator's binding decisions on it, and the two measurements of 2026-11-15 (a throwaway Rust pipeline on public photo sets, whose numbers are cited here; a run of the owner's Rust server as it is, described by mechanism only). Section 10 traces every finding and decision to its place here |
 | Code base read | `int/b4-stateless` at `7fb83e660` (the crop encoder of plan 13b lane C1 merged): `frame_engine/`, `src/clients/frame_engine.py`, `src/domain/frame_engine_wire.py`, `tests/frame_engine_tests/`, `tests/gpu/`, `docker/frame-engine/`, the compose files, `scripts/bench/gpu_prep_parity.py`, `scripts/datasets/` |
-| Reads with | [14](14_roadmap.md) section 4 (how a port is judged), [13](13_backend_speed_plan.md) D1 and the protocol, [13b](13b_crop_vectors_plan.md) sections 6 and 7 (the crop encoder), [the serving trade study](../../research/v060_serving_backend_trade_study.md) sections 5 and 10, [the desktop direction](../photo_library/50_desktop_direction.md) |
+| Reads with | [14](14_roadmap.md) section 3 (stage 2, how a port is judged), [13](13_backend_speed_plan.md) D1 and the protocol, [13b](13b_crop_vectors_plan.md) sections 6 and 7 (the crop encoder), [the serving trade study](../../research/v060_serving_backend_trade_study.md) sections 5 and 10, [the desktop direction](../photo_library/50_desktop_direction.md) |
 | Replaces | track T1 of plan 13 (raised to a build); plan 14 row 7's order ("after phase 3") is overridden by the owner: the native engine starts now |
 | Owner decisions in force | 2026-11-15: no further speed work goes into the Python engine; it is frozen as the reference for correct outputs and deleted at the switch (N3); two engines are never kept. Rust (C or C++ where a library needs it). No bias toward any one design: measure, then decide. The engine code is public. Nothing is tuned to this host: its CPU (two Xeon E5-2680 v3, 24 physical cores) is the baseline, thread counts derive from cores and card, and every result names the CPU |
-| Not in scope | the API is not in this plan (the owner expects the whole backend to end in Rust; the API port is decided after a running capacity measurement); jobs, storage and training are not either; the model server stays for N0 to N3 (section 4, decision 4.1) |
+| Not in scope | the API is not in this plan (the owner expects the whole backend to end in Rust; the API port is decided: plan 18); jobs, storage and training are not either; the model server stays for N0 to N3 (section 4, decision 4.1) |
 | Numbers | every number names its set and run. Rows marked "pipeline" are the throwaway Rust pipeline of 2026-11-15 (public sets: COCO 1,000 photos, 120 Commons photos at 18 to 24.5 MP), measured in the same exclusive holds as the Python engine path; other rows cite their plan. Set P (a private set of real-world 20 MP vehicle photos) is a normal part of every speed test; its numbers may be published (owner, 2026-11-15), its source, file names and images stay private |
 
 ## 0. The user's job and the measured truth
@@ -164,6 +164,16 @@ floor measured as Python against Python in the same hold (both numbers reported)
 | `face_*` (N1b) | `BOX_ATOL_PX` 1.0 and cosine p01 at least 0.995 against the reference path; LFW, CALFW, CPLFW and WIDER FACE AP not below the Python branch's own numbers on the same pairs by more than its two-run difference | same | `tests/gpu/test_gpu_faces.py` |
 | `ocr_*` (N1c) | ground truth only: COCO-Text 400 photos strict F1 and spotted words not below the Python branch's on the same photos by more than its two-run difference; the existing checks (substrings, counts, quads in the frame) | same | `tests/gpu/test_gpu_ocr.py` |
 
+**The rule above one photo in flight** (coordinator, 2026-11-15, from shakedown 3: the Python engine
+at 1 against itself at 32 in flight gave crop-vector cosine 0.9997489, Rust against Python at 32
+0.9996706; at 1 in flight the engines were bit-identical on 46 of 46 crops). Bit identity is required
+at 1 photo in flight only. Above that, the bound for `whole_embedding` and `crop_embeddings` is the
+Python engine against itself across batch compositions: captures at 1 and at N in flight are the
+floor pair of `gpu_prep_parity.py compare`; the bit-identical share is reported, not gated. Exact at
+every level: counts, statuses, routes, boxes at 1 in flight, crop pixel sizes and blur values. Where
+the table's "at 32 in flight" column or H1 says "Python against Python" for vectors, it means this
+floor pair.
+
 Bits against ground truth (review D1): the bit rows are the first gate, cheap and sharp. A bit row
 that fails for a reason the lane names (for example a resampling weight one ulp apart) is judged by
 the ground-truth rows of plan 13 for that branch, within the Python-against-Python spread; an
@@ -294,15 +304,15 @@ budget and slices instead of starting work (the Python front cancels a queued ph
    JPEG bytes become `Bytes` in the response without a copy.
 
 The engine's own byte count is the cap (review D6: a hard cap, not a release threshold).
-`OP_FRAME_ENGINE_POOL_MIB` caps every device allocation the engine makes except the region; an
-allocation past it fails as an out-of-memory error; `CUDA_ERROR_OUT_OF_MEMORY` (2) and nvJPEG status
+`OP_FRAME_ENGINE_POOL_MIB` caps every device allocation the engine makes except the region and
+nvJPEG's lane buffers; an allocation past it fails as an out-of-memory error; `CUDA_ERROR_OUT_OF_MEMORY` (2) and nvJPEG status
 5 (allocator failure) answer `gpu_memory`, as `prep_budget.is_memory_error` does. The pool's release
 threshold only keeps freed memory cached.
 
 | Class | Size | Charged to |
 |---|---|---|
 | Region | `OP_FRAME_ENGINE_REGION_MIB`, fixed at start | outside the cap, reported at start |
-| Lane buffers | grow with the largest photo a lane decoded (pipeline: about 360 MB per lane at 20 MP including its frame and scratch) | the cap: nvJPEG's device allocations go through a counting allocator passed as `nvjpegDevAllocator_t` to `nvjpegCreateEx` (nvJPEG docs, `nvjpegDevAllocator_t`) |
+| Lane buffers | grow-only: each lane keeps the largest buffers it needed, so the total is bounded by lanes times the largest accepted photo's need (pipeline: about 360 MB per lane at 20 MP including its frame and scratch) | counted exactly but outside the cap: nvJPEG's device allocations go through a counting allocator passed as `nvjpegDevAllocatorV2_t` to `nvjpegCreateExV2` (nvJPEG docs, `nvjpegDevAllocatorV2_t`), reported as `op_frame_engine_nvjpeg_in_use_bytes` and `_peak_bytes`. Charged to the cap they filled it for good once enough lanes had seen a large photo and refused later photos that fit (`gpu_memory`, N0 shakedown, 2026-11-15); the Python engine's lanes allocate outside its pool limit too. The lane count bounds them (N2, profiles) |
 | Frame and its oriented copy | w x h x 3, twice while an EXIF orientation is applied | the frame budget (and so the cap) |
 | Resample scratch | rows x width x 12 bytes per model input being written (about 28 MB for a 20 MP detector letterbox) | the frame budget (a term the Python budget leaves out) |
 | Weight sets | small; a byte-capped least-recently-used cache (the pipeline's grew without a bound) | the cap |
@@ -311,7 +321,8 @@ threshold only keeps freed memory cached.
 | Crop pixel staging | pinned host memory per finish thread, reused | host, not the card |
 
 The GPU tier asserts on the 12 GB profile that NVML's per-process device memory stays within the
-context baseline (measured idle) plus the region plus `OP_FRAME_ENGINE_POOL_MIB`.
+context baseline (measured idle) plus the region plus `OP_FRAME_ENGINE_POOL_MIB` plus the nvJPEG
+peak.
 
 ### 2.4 Channel settings, both directions
 
@@ -345,7 +356,7 @@ context baseline (measured idle) plus the region plus `OP_FRAME_ENGINE_POOL_MIB`
 ## 3. Building blocks
 
 Versions are the latest on 2026-11-15 and pinned exactly in `native/Cargo.lock`; licences are
-recorded at selection (plan 14 section 3) and checked by `cargo deny` (section 3.1).
+recorded at selection (plan 14 section 2) and checked by `cargo deny` (section 3.1).
 
 | Need | Choice | Why, and the alternative | Doc | Licence |
 |---|---|---|---|---|
@@ -364,6 +375,11 @@ recorded at selection (plan 14 section 3) and checked by `cargo deny` (section 3
 | Text-box offset (N1c) | the same algorithm as today, pyclipper 1.4.0's Clipper 6.4.2 (`JT_ROUND`, `ET_CLOSEDPOLYGON`, its integer conversion, default arc tolerance): either a binding of the Clipper 6.4.2 C++ source (a C++ toolchain in the build stage) or a Rust port, decided by the OCR parity gate; contours and minimum-area rectangles as OpenCV's `findContours` (`RETR_LIST`, `CHAIN_APPROX_SIMPLE`) and `minAreaRect`, ported and checked on the gate's photos | the `clipper2` crate binds Clipper2, not the 6.4.2 behaviour | https://github.com/fonttools/pyclipper ; https://sourceforge.net/projects/polyclipping/ | Boost (Clipper 6.4.2) |
 | Face alignment (N1b) | `nalgebra` 0.35.0 for the SVD, determinant, rank and inverse of `faces/alignment.py` | no hand-written SVD | https://docs.rs/nalgebra | Apache-2.0 |
 | Metrics | `prometheus-client` 0.26.0 with the names and labels of `stage_metrics.py`; the `process_*` series of Python's `ProcessCollector` (CPU seconds, resident and virtual memory, open and maximum descriptors, start time) read from `/proc/self`; served on `OP_FRAME_ENGINE_METRICS_PORT` by a hyper server (already in the tree through tonic) | the release acceptance greps `op_frame_engine_stage_seconds_total` and `_observations_total` | https://docs.rs/prometheus-client | Apache-2.0 OR MIT |
+
+**JSON.** The engine's plan reader is its own (`native/frame_engine/src/wire/json.rs`), so the
+workspace's serde_json carries `float_roundtrip` only, never `arbitrary_precision` or
+`preserve_order` (the reason, Cargo's feature unification across the server crates, is in
+[18a](18a_backend_rust_port_slices.md) section 2.1).
 
 **The owner's Rust server, and why it is not a dependency.** Measured as it is (2026-11-15), it
 confirms the design by mechanism: decode lanes on plain OS threads scale with cores in one process,
@@ -610,7 +626,7 @@ docker compose -p op-n0 -f docker/frame-engine-native/compose.n0.yml down
 inside the native engine and no fix inside N0, when model inputs differ for a reason not found in the
 loader, the options or the geometry port, when the region cannot be registered or read, or when a
 kill leaves the model server restarted, not ready or above its baseline. A miss is reported with its
-number and its bound; a bar moves only in writing (plan 14 section 6).
+number and its bound; a bar moves only in writing (plan 14 section 11).
 
 **Thrown away after N0.** `compose.n0.yml`, the `decoder` answer for host-route photos, and the
 refusal of a non-zero crop side cap (both replaced in N1a). Everything else is product code.
@@ -636,9 +652,23 @@ sweep on the merged tree; speed rows recorded under the evidence clause.
   non-root; G6 and G7.
 - Settings: every `OP_FRAME_ENGINE_*` with the Python ranges (1.1); `env.template` and the sizing
   page say the new `OP_FRAME_ENGINE_LANES` default.
-- Profiles (E4): sizes per profile from measured memory, the 12 GB card starting inside its memory
+- Profiles (E4): sizes per profile from measured memory; the lane count per GPU profile is
+  derived from the measured nvJPEG bytes per megapixel (`op_frame_engine_nvjpeg_peak_bytes`) and
+  the card's memory, since lane buffers sit outside the frame cap (a 16 GB card cannot hold 24
+  lanes at 20 MP). The gauges `op_frame_engine_nvjpeg_in_use_bytes` and
+  `op_frame_engine_nvjpeg_peak_bytes` exist in `native/frame_engine/src/metrics.rs`; the measurement of bytes per megapixel on COCO,
+  the 20 MP set and set P is owed to N2's first GPU hold and comes before the profile files; the 12 GB card starting inside its memory
   and running plan A on the mix with failed 0, the accounting asserted against NVML there; the
   profile files, the installer mirror, its test and the sizing page changed together.
+- Reading a photo by key (plan 18 section 12): an optional input beside `image` (as `boxes` is
+  optional in protocol version 1), or a protocol revision, decided here. It names a landing-zone or
+  source key and the content claim (size, imohash); the engine resolves it under configured
+  read-only roots, answers new statuses for a missing or changed file and plan faults for an
+  unknown root or a bad key, in the generator of `contracts/json/frame_engine_v1.json` and the plan
+  cases; compose mounts the landing zone and source roots read-only into `frame-engine`. The engine
+  still never talks to S3. Its priority comes from plan 18's path-mode spike (M3). Also from plan
+  18 section 12: hardware JPEG decode tested on the L4 (the cloud example host), and the KServe
+  protos moved to a neutral directory first if `gpu_frame` leaves the workspace.
 - Faults: 50 kills at 32 in flight; a model-server restart (engine ready within 15 s of the server's
   gRPC port); the server recreated on a new address (first good call within about 1 s); SIGTERM
   drain; a sticky error injected (a test build with an out-of-range kernel write) ends in exit 1 and
@@ -653,7 +683,7 @@ sweep on the merged tree; speed rows recorded under the evidence clause.
   detailed developer page), `env.template`, `CHANGELOG.md`.
 - The sweep: full offline suite, `pytest -m native`, the GPU tier on the native engine, the four-way
   ingest rows, the 600 s soak of configuration D with failed 0, every number with host CPU per photo
-  per process (plan 14 section 4).
+  per process (plan 14 section 3).
 
 ### N3: the switch and the deletion
 
