@@ -39,7 +39,8 @@ Still to choose when the work starts, by reading the official docs and measuring
 | Apple text model | Apple's Foundation Models framework (Swift) through a small bridge, macOS only |
 
 The server's backend may also move to Rust over time, starting with the hot paths, if the engine speed work (P1)
-shows the gain with measurements. Python stays until then.
+shows the gain with measurements. Python stays until then (scoped to the server; the order is the
+roadmap's [section 4](../v070_rebuild/14_roadmap.md); the desktop store is decided in its own plan).
 
 ## 3. What today's work keeps possible (no extra code now)
 
