@@ -20,6 +20,8 @@ http-body-util = "=0.1.5"
 hyper = { version = "=1.12.0", features = ["http1", "server"] }
 hyper-util = { version = "=0.1.21", features = ["tokio"] }
 memchr = "=2.8.3"
+# the SVD, determinant, rank and inverse of the face alignment (plan 17 section 3)
+nalgebra = { version = "=0.35.0", default-features = false, features = ["std"] }
 prometheus-client = "=0.26.0"
 procfs = { version = "=0.18.0", default-features = false }
 prost = { workspace = true }

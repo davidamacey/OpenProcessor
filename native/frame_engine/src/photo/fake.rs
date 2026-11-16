@@ -16,8 +16,11 @@ use gpu_frame::{
 };
 use tokio::time::Instant;
 
-use super::device::{DecodeJob, Decoded, Device, JobResult, LaunchJob, Launched, ModelCall};
+use super::device::{
+    DecodeJob, Decoded, Device, JobResult, LaunchJob, Launched, ModelCall, WarpKind,
+};
 use crate::branches::crops::CropJpeg;
+use crate::branches::faces::scrfd::{FPN_STRIDES, OUTPUT_NAMES};
 use crate::fault::GpuFault;
 
 /// What the fake does, set by each test.
@@ -36,6 +39,9 @@ pub struct Script {
     pub call_hold: Option<Duration>,
     /// The decode job blocks until this is set.
     pub decode_gate: Option<Arc<AtomicBool>>,
+    /// Face detector anchors that fire in the first input of every detector call: stride-8
+    /// anchor, score, distances (in strides) and landmark offsets (in strides).
+    pub face_fires: Vec<(usize, f32, [f32; 4], [f32; 10])>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -49,6 +55,8 @@ pub enum Event {
         blur: usize,
     },
     Crop([i64; 4]),
+    /// A launch's warps: the faces of each.
+    Warps(Vec<usize>),
     Call {
         model: String,
         shape: [i64; 4],
@@ -151,6 +159,34 @@ fn tensor(name: &str, shape: Vec<i64>, values: &[f32]) -> OutputTensor {
     }
 }
 
+/// The nine SCRFD outputs for `batch` inputs of `net`: zeros, except `fires` at stride 8 of the
+/// first input.
+fn scrfd_answer(
+    batch: usize,
+    net: usize,
+    fires: &[(usize, f32, [f32; 4], [f32; 10])],
+) -> Vec<OutputTensor> {
+    OUTPUT_NAMES
+        .iter()
+        .enumerate()
+        .map(|(k, name)| {
+            let stride = FPN_STRIDES[k % 3];
+            let anchors = (net / stride) * (net / stride) * 2;
+            let d = [1, 4, 10][k / 3];
+            let mut v = vec![0f32; batch * anchors * d];
+            for (anchor, score, ltrb, kps) in fires.iter().filter(|_| stride == 8) {
+                let at = anchor * d;
+                match k / 3 {
+                    0 => v[at] = *score,
+                    1 => v[at..at + 4].copy_from_slice(ltrb),
+                    _ => v[at..at + 10].copy_from_slice(kps),
+                }
+            }
+            tensor(name, vec![batch as i64, anchors as i64, d as i64], &v)
+        })
+        .collect()
+}
+
 impl Device for Fake {
     type Frame = Frame;
     type Input = Slice;
@@ -223,6 +259,12 @@ impl Device for Fake {
             writes: job.writes.len(),
             blur: job.blur.len(),
         });
+        if !job.warps.is_empty() {
+            let faces = job.warps.iter().map(|w| match &w.kind {
+                WarpKind::Faces(f) => f.inv.len(),
+            });
+            self.note(Event::Warps(faces.collect()));
+        }
         self.submit(cancel, move || {
             let _frame = job.frame;
             if let Some(f) = fault {
@@ -230,12 +272,14 @@ impl Device for Fake {
             }
             let mut stages: Vec<(&'static str, f64)> =
                 job.writes.iter().map(|w| (w.stage, 0.001)).collect();
+            stages.extend(job.warps.iter().map(|w| (w.stage, 0.001)));
             if !job.blur.is_empty() {
-                stages.push(("blur", 0.001));
+                stages.push((job.blur_stage, 0.001));
             }
             Ok(Launched {
                 blur: job.blur.iter().map(|[x1, _, x2, _]| [*x1, *x2]).collect(),
                 inputs: job.writes.into_iter().map(|w| w.input).collect(),
+                warped: job.warps.into_iter().map(|w| w.input).collect(),
                 stages,
             })
         })
@@ -258,6 +302,14 @@ impl Device for Fake {
         })
     }
 
+    fn host<T: Send + 'static>(
+        &self,
+        f: impl FnOnce() -> T + Send + 'static,
+        cancel: &CancelToken,
+    ) -> JobResult<T> {
+        self.submit(cancel, move || Ok(f()))
+    }
+
     fn infer(
         self: Arc<Self>,
         call: ModelCall<Slice>,
@@ -269,12 +321,13 @@ impl Device for Fake {
             region_in_use: self.slab.usage().in_use,
         });
         async move {
-            let (fail, hold, rows) = {
+            let (fail, hold, rows, fires) = {
                 let script = self.script.lock().expect("script");
                 (
                     script.fail.get(&call.model).cloned(),
                     script.call_hold,
                     script.detections.clone(),
+                    script.face_fires.clone(),
                 )
             };
             if let Some(hold) = hold {
@@ -283,12 +336,21 @@ impl Device for Fake {
             if let Some(e) = fail {
                 return (Err(e), call.slice);
             }
+            let n = usize::try_from(call.input.shape[0]).unwrap_or(0);
+            if call.outputs.first() == Some(&"score_8") {
+                let net = usize::try_from(call.input.shape[2]).unwrap_or(0);
+                return (Ok(scrfd_answer(n, net, &fires)), call.slice);
+            }
+            if call.outputs == ["output"] {
+                let values: Vec<f32> = (0..n * self.dim).map(|v| (v + 1) as f32).collect();
+                let out = tensor("output", vec![n as i64, self.dim as i64], &values);
+                return (Ok(vec![out]), call.slice);
+            }
             let out = if call.outputs == ["output0"] {
                 let mut values: Vec<f32> = rows.iter().flatten().copied().collect();
                 values.resize(300 * 6, 0.0);
                 tensor("output0", vec![1, 300, 6], &values)
             } else {
-                let n = usize::try_from(call.input.shape[0]).unwrap_or(0);
                 let values: Vec<f32> = (0..n * self.dim).map(|v| v as f32).collect();
                 tensor("image_embeddings", vec![n as i64, self.dim as i64], &values)
             };

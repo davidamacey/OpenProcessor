@@ -29,6 +29,7 @@ pub mod budget;
 pub mod calls;
 pub mod clock;
 pub mod device;
+mod faces;
 mod rounds;
 
 use std::collections::BTreeMap;
@@ -135,6 +136,8 @@ struct Runs {
     embed_frame: bool,
     embed_crops: bool,
     crops: bool,
+    faces: bool,
+    face_embed: bool,
 }
 
 impl Runs {
@@ -144,6 +147,8 @@ impl Runs {
             embed_frame: plan.runs("embed_frame") && plan.embed.is_some(),
             embed_crops: plan.runs("embed_crops") && plan.crop_embed.is_some(),
             crops: plan.crops == Crops::Inline,
+            faces: plan.runs("faces") && plan.faces.is_some(),
+            face_embed: plan.runs("face_embed") && plan.faces.is_some(),
         }
     }
 
@@ -158,6 +163,9 @@ impl Runs {
         }
         if let (true, Some(c)) = (self.embed_crops, &plan.crop_embed) {
             out.push(c.size);
+        }
+        if let (true, Some(f)) = (self.faces, &plan.faces) {
+            out.push(f.input_size);
         }
         out
     }
@@ -178,10 +186,10 @@ impl Answers {
         name: &'static str,
         state: BranchState,
     ) {
-        let dependents: &[&'static str] = if name == "detect" {
-            &["embed_crops"]
-        } else {
-            &[]
+        let dependents: &[&'static str] = match name {
+            "detect" => &["embed_crops"],
+            "faces" => &["face_embed"],
+            _ => &[],
         };
         for (branch, st) in std::iter::once((name, state)).chain(
             dependents
@@ -207,7 +215,10 @@ impl Answers {
             let built = match name {
                 "detect" => runs.detect,
                 "embed_frame" => runs.embed_frame,
-                _ => runs.embed_crops,
+                "embed_crops" => runs.embed_crops,
+                "faces" => runs.faces,
+                "face_embed" => runs.face_embed,
+                _ => false,
             };
             if built && self.running(name) {
                 self.states.insert(name.to_owned(), BranchState::Ok);
@@ -375,6 +386,10 @@ where
             .await?;
         let sent = work.send_round1(round1.calls, inputs);
         let call_of = |owner: &str| sent.iter().find(|(o, _)| *o == owner).map(|(_, id)| *id);
+        let face_calls = sent
+            .iter()
+            .filter(|(o, _)| *o == "faces")
+            .map(|(_, id)| *id);
 
         let found = work
             .settle_detect(call_of("detect"), round1.canvas.as_ref())
@@ -382,6 +397,9 @@ where
         if found.is_none() && runs.embed_crops {
             work.stop_crops_without_boxes();
         }
+        let faces = work
+            .settle_faces(plan, round1.faces, face_calls.collect())
+            .await?;
         let round2 = match &found {
             Some(d) => work.round2(plan, &runs, d, &frame).await?,
             None => Round2 {
@@ -391,9 +409,16 @@ where
                 jpegs: Vec::new(),
             },
         };
+        let face_round = match &faces {
+            Some(f) => Some(work.round2_faces(plan, &runs, f, &frame).await?),
+            None => None,
+        };
         // the photo's own hold on the frame ends here; jobs still running keep it to their wait
         drop(frame);
 
+        if let Some(r) = face_round {
+            work.finish_faces(&runs, r).await?;
+        }
         work.finish(&runs, found.is_some(), round2, call_of("embed_frame"))
             .await?;
         Ok(PhotoAnswer {

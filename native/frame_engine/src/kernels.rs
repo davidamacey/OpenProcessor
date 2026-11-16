@@ -45,6 +45,26 @@ const ORIENT_THREADS: u32 = 256;
 /// Device bytes of weight sets one pool thread keeps (the Python engine's `ARENA_BYTES`).
 pub const WEIGHT_CACHE_BYTES: usize = 2 << 20;
 
+/// The filter of a resample (`resample_into`'s `antialias`): every variant is matched by name,
+/// never by a catch-all arm, so a filter one site does not know fails to compile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Filter {
+    /// Pillow `BILINEAR`: the support widens with the downscale factor.
+    Antialias,
+    /// Plain bilinear, OpenCV `INTER_LINEAR` (the face detector's letterbox).
+    Bilinear,
+}
+
+impl Filter {
+    /// `filter_weights`' `antialias` flag.
+    pub fn antialias(self) -> bool {
+        match self {
+            Filter::Antialias => true,
+            Filter::Bilinear => false,
+        }
+    }
+}
+
 /// One resample (`PrepKernels.resample_into`): `roi` of the frame scaled to `size`, of which
 /// `window` is written into the destination, a CHW uint8 tensor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,6 +81,8 @@ pub struct Resample {
     pub plane: i64,
     /// Bytes from one row to the next.
     pub row_stride: i64,
+    /// The resampling filter of both axes.
+    pub filter: Filter,
 }
 
 impl Resample {
@@ -71,6 +93,7 @@ impl Resample {
             n_out: self.size[0],
             left: self.window[0],
             take: self.window[2],
+            filter: self.filter,
         }
     }
 
@@ -81,6 +104,7 @@ impl Resample {
             n_out: self.size[1],
             left: self.window[1],
             take: self.window[3],
+            filter: self.filter,
         }
     }
 
@@ -100,8 +124,8 @@ impl Resample {
 }
 
 /// The filter of one axis: `n_in` source pixels to `n_out`, the `take` outputs from `left`
-/// (`prep_kernels._weights`; always antialiased, which `filter_weights` turns into plain
-/// bilinear when the output is larger than the input).
+/// (`prep_kernels._weights`; antialiased turns into plain bilinear in `filter_weights` when the
+/// output is larger than the input).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WeightKey {
     /// Source pixels along the axis (the rectangle's width or height).
@@ -112,6 +136,8 @@ pub struct WeightKey {
     pub left: i64,
     /// Number of output indexes written from `left`.
     pub take: i64,
+    /// The filter the weights are made for.
+    pub filter: Filter,
 }
 
 impl WeightKey {
@@ -121,7 +147,13 @@ impl WeightKey {
     ///
     /// The window `left .. left + take` holds no output index, or `n_out` is not positive.
     pub fn weights(&self) -> Result<geometry::Weights, GeometryError> {
-        geometry::weights(self.n_in, self.n_out, self.left, self.take, true)
+        geometry::weights(
+            self.n_in,
+            self.n_out,
+            self.left,
+            self.take,
+            self.filter.antialias(),
+        )
     }
 }
 
