@@ -52,9 +52,16 @@ MAX_DET = 300
 MODEL_REPO = Path(os.environ.get('FAKE_TRITON_MODEL_REPO', '/triton-models'))
 _loaded_from_repo: set[str] = set()
 #: Triton accepts messages up to INT32_MAX; grpc's default 4 MiB refuses one SCRFD frame (4.9 MB).
+#: The ping policy is the compose file's Triton flags (``--grpc-keepalive-permit-without-calls``,
+#: ``--grpc-http2-min-recv-ping-interval-without-data``): the API's channels ping every 30 s while
+#: idle, and a server on gRPC's defaults (no pings without calls, 5 minutes apart) answers that with
+#: GOAWAY ``too_many_pings`` (https://github.com/grpc/grpc/blob/master/doc/keepalive.md).
+#: ``tests/test_triton_keepalive.py`` pins it to the client's options.
 GRPC_OPTIONS = [
     ('grpc.max_receive_message_length', 2**31 - 1),
     ('grpc.max_send_message_length', 2**31 - 1),
+    ('grpc.keepalive_permit_without_calls', 1),
+    ('grpc.http2.min_ping_interval_without_data_ms', 10000),
 ]
 
 
