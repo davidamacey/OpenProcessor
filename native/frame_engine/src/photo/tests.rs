@@ -700,18 +700,116 @@ async fn photos_the_gpu_route_does_not_take_answer_without_a_decode() {
     assert_eq!(b.fake.events(), []);
 }
 
-#[tokio::test]
-async fn stored_boxes_and_unbuilt_branches_are_refused_as_n0_says() {
-    let b = bed();
-    let plan = r#"{"version": 1, "branches": ["embed_crops"], "crops": "none", "crop_embed": {"model": "pe_crop", "size": 224, "batch": 32}}"#;
-    let p = Photo {
+const STORED: &str = r#"{"version": 1, "branches": ["embed_crops"], "crops": "inline", "crop_embed": {"model": "pe_crop", "size": 224, "batch": 32}}"#;
+
+fn stored(plan: &str, boxes: Vec<[f64; 4]>) -> Photo {
+    Photo {
         image: jpeg(100, 100, 1),
         plan: parse_plan(plan.as_bytes(), true).expect("plan"),
-        boxes: Some(vec![[0.1, 0.1, 0.5, 0.5]]),
+        boxes: Some(boxes),
         request: Arc::new(RequestState::new(RequestClock::start(Instant::now(), 30.0))),
+    }
+}
+
+fn jpeg_names(a: &PhotoAnswer) -> Vec<String> {
+    let Some(Tensor::Bytes(items)) = output(a, "crop_jpegs") else {
+        panic!("crop_jpegs is BYTES");
     };
-    let failed = b.flow.process(p).await.expect_err("not built");
-    assert!(matches!(&failed, PipelineError::Engine(m) if m.contains("N1a")));
+    items
+        .iter()
+        .map(|i| String::from_utf8_lossy(i).into_owned())
+        .collect()
+}
+
+#[tokio::test]
+async fn stored_boxes_stand_in_for_the_detector_in_the_requests_order() {
+    let b = bed();
+    // one inside, one past the right edge and above the top: cut to a one-pixel column
+    let boxes = vec![[0.1, 0.1, 0.5, 0.5], [1.2, -0.3, 1.5, 0.2]];
+    let answer = b.flow.process(stored(STORED, boxes)).await.expect("answer");
+    assert_eq!(
+        (answer.status.as_str(), answer.decode_route.as_str()),
+        ("ok", "gpu")
+    );
+    assert_eq!(answer.branches["embed_crops"], BranchState::Ok);
+    let names: Vec<&str> = answer.outputs.iter().map(|(n, _)| n.as_str()).collect();
+    assert_eq!(
+        names,
+        ["size", "crop_embeddings", "crop_embedded", "crop_jpegs"]
+    );
+    assert_eq!(
+        shape(output(&answer, "crop_embeddings").expect("vectors")),
+        [2, 8]
+    );
+    assert_eq!(
+        jpeg_names(&answer),
+        ["jpeg [10, 10, 50, 50]", "jpeg [99, 0, 100, 20]"]
+    );
+    assert_eq!(b.fake.calls(), [("pe_crop".to_owned(), [2, 3, 224, 224])]);
+    assert!(
+        b.fake
+            .events()
+            .iter()
+            .all(|e| !matches!(e, Event::Launch { blur, .. } if *blur > 0)),
+        "no blur sums without the detector"
+    );
+    assert_released(&b).await;
+}
+
+#[tokio::test]
+async fn zero_stored_boxes_answer_empty_crop_outputs_without_a_call() {
+    let b = bed();
+    let answer = b
+        .flow
+        .process(stored(STORED, vec![]))
+        .await
+        .expect("answer");
+    assert_eq!(answer.status, "ok");
+    assert_eq!(
+        shape(output(&answer, "crop_embeddings").expect("vectors")),
+        [0, 0]
+    );
+    assert_eq!(shape(output(&answer, "crop_embedded").expect("mask")), [0]);
+    assert_eq!(jpeg_names(&answer), Vec::<String>::new());
+    assert_eq!(b.fake.calls(), []);
+    assert_released(&b).await;
+}
+
+#[tokio::test]
+async fn stored_boxes_with_crops_alone_still_encode_every_crop() {
+    let b = bed();
+    let plan = r#"{"version": 1, "branches": ["embed_frame"], "crops": "inline", "embed": {"model": "pe", "size": 336}}"#;
+    let answer = b
+        .flow
+        .process(stored(
+            plan,
+            vec![[0.0, 0.0, 1.0, 1.0], [0.25, 0.5, 0.75, 1.0]],
+        ))
+        .await
+        .expect("answer");
+    assert_eq!(
+        jpeg_names(&answer),
+        ["jpeg [0, 0, 100, 100]", "jpeg [25, 50, 75, 100]"]
+    );
+    assert_eq!(b.fake.calls(), [("pe".to_owned(), [1, 3, 336, 336])]);
+    assert_released(&b).await;
+}
+
+#[tokio::test]
+async fn a_stored_box_that_is_not_a_number_fails_the_photo_as_pythons_round_does() {
+    let b = bed();
+    let failed = b
+        .flow
+        .process(stored(STORED, vec![[0.1, f64::NAN, 0.5, 0.5]]))
+        .await
+        .expect_err("not a number");
+    assert!(matches!(&failed, PipelineError::Engine(m) if m.contains("finite")));
+    assert_released(&b).await;
+}
+
+#[tokio::test]
+async fn unbuilt_branches_answer_unsupported_branch() {
+    let b = bed();
     let faces = r#"{"version": 1, "branches": ["detect", "faces"], "crops": "none", "detector": {"model": "det", "input_size": 640, "letterbox_fill": 114}, "faces": {"detector": "scrfd", "input_size": 640, "recogniser": "arcface", "batch": 32, "score_min": 0.5, "nms": 0.4, "max_faces": 50}}"#;
     let answer = b.flow.process(photo(faces)).await.expect("answer");
     assert_eq!(

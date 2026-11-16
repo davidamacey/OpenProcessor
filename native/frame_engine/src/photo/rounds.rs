@@ -13,6 +13,7 @@ use super::calls::{Answer, CallId, PhotoCalls};
 use super::clock::{
     BLUR, CROP_COPY, CROP_JPEG, DETECT, EMBED_CROPS, EMBED_FRAME, EMBED_PE, LETTERBOX, StageClock,
 };
+use super::cut::Cut;
 use super::device::{Device, LaunchJob, Write};
 use super::{Answers, Runs, Stop, engine, job_failed, settle_job_time};
 use crate::branches::crops::CropJpeg;
@@ -156,16 +157,16 @@ impl<D: Device> Work<'_, D> {
         }
     }
 
-    /// Round 2: crop squares and blur sums on the launch pool, crop JPEGs on the finish pool.
+    /// Round 2: crop squares and blur sums on the launch pool, crop JPEGs on the finish pool,
+    /// all cut from `cut` (the detector's rectangles or the stored boxes).
     pub async fn round2(
         &mut self,
         plan: &EnginePlan,
         runs: &Runs,
-        d: &detect::Detections,
+        cut: &Cut,
         frame: &Arc<D::Frame>,
     ) -> Result<Round2, Stop> {
         let (w, h) = self.size;
-        let (summed, clamped) = detect::blur_rects(d, w, h);
         let mut out = Round2 {
             crop_calls: Vec::new(),
             picked: Vec::new(),
@@ -174,28 +175,29 @@ impl<D: Device> Work<'_, D> {
         };
         let mut chunks = Vec::new();
         if let (true, Some(spec)) = (self.answers.running("embed_crops"), &plan.crop_embed) {
-            let cut = embed::crop_plan(
+            let planned = embed::crop_plan(
                 spec,
                 plan.embed_classes.as_ref(),
-                &d.rects,
-                Some(&d.classes),
+                &cut.rects,
+                cut.classes.as_deref(),
             )
             .map_err(engine)?;
-            out.picked = cut.picked;
-            chunks = cut.chunks;
+            out.picked = planned.picked;
+            chunks = planned.chunks;
         }
         let model = plan.crop_embed.as_ref().map_or("", |c| c.model.as_str());
         let mut chunks = chunks.into_iter().peekable();
-        let mut pending_blur = Some(summed);
+        let mut pending_blur = cut.blur.as_ref().map(|(summed, _)| summed.clone());
+        let mut jpegs_started = false;
         while chunks.peek().is_some() || pending_blur.is_some() {
             let (batch, staged) = self.stage_batch(&mut chunks).await?;
+            let first = pending_blur.is_some();
             let job = LaunchJob {
                 frame: Arc::clone(frame),
                 writes: staged,
                 blur: pending_blur.take().unwrap_or_default(),
                 request: Arc::clone(&self.request),
             };
-            let first = out.blur.is_none();
             self.clock
                 .enter(if batch.is_empty() { BLUR } else { EMBED_CROPS });
             let started = Instant::now();
@@ -207,8 +209,8 @@ impl<D: Device> Work<'_, D> {
                 .await
                 .map_err(|e| Stop::Fail(job_failed(EMBED_CROPS, &e)))??;
             settle_job_time(self.clock, started.elapsed().as_secs_f64(), launched.stages);
-            if first {
-                out.blur = Some(detect::blur_sums(w, h, &clamped, &launched.blur).map_err(engine)?);
+            if let (true, Some((_, clamped))) = (first, &cut.blur) {
+                out.blur = Some(detect::blur_sums(w, h, clamped, &launched.blur).map_err(engine)?);
             }
             for (chunk, slice) in batch.into_iter().zip(launched.inputs) {
                 out.crop_calls.push(self.calls.send(
@@ -220,17 +222,36 @@ impl<D: Device> Work<'_, D> {
                     vec![embed::OUTPUT],
                 ));
             }
-            if first && runs.crops {
-                for rect in &d.rects {
-                    out.jpegs.push(
-                        self.device
-                            .crop_jpeg(Arc::clone(frame), *rect, &self.cancel)
-                            .map_err(|e| Stop::Fail(job_failed(CROP_COPY, &e)))?,
-                    );
-                }
+            if !jpegs_started {
+                out.jpegs = self.start_jpegs(runs, &cut.rects, frame)?;
+                jpegs_started = true;
             }
         }
+        // stored boxes with no crop squares launch nothing: their JPEGs start here
+        if !jpegs_started {
+            out.jpegs = self.start_jpegs(runs, &cut.rects, frame)?;
+        }
         Ok(out)
+    }
+
+    /// One crop JPEG per rectangle on the finish pool, when the plan asks for them.
+    fn start_jpegs(
+        &self,
+        runs: &Runs,
+        rects: &[[i64; 4]],
+        frame: &Arc<D::Frame>,
+    ) -> Result<Vec<JobHandle<Result<CropJpeg, GpuFault>>>, Stop> {
+        if !runs.crops {
+            return Ok(Vec::new());
+        }
+        rects
+            .iter()
+            .map(|rect| {
+                self.device
+                    .crop_jpeg(Arc::clone(frame), *rect, &self.cancel)
+                    .map_err(|e| Stop::Fail(job_failed(CROP_COPY, &e)))
+            })
+            .collect()
     }
 
     /// The chunks that fit the photo's window now (at least one when any is left), and the writes

@@ -28,6 +28,7 @@
 pub mod budget;
 pub mod calls;
 pub mod clock;
+pub mod cut;
 pub mod device;
 mod rounds;
 
@@ -37,6 +38,7 @@ use std::time::{Duration, Instant};
 
 use self::calls::PhotoCalls;
 use self::clock::{BUDGET, DECODE, QUEUE, StageClock};
+use self::cut::Cut;
 use self::device::{DecodeJob, Decoded, Device, Write};
 use self::rounds::{Round2, Work};
 use crate::admission::FrameBudget;
@@ -351,11 +353,6 @@ where
                 "the CUDA context of this engine is lost; it is restarting".into(),
             )));
         }
-        if photo.boxes.is_some() {
-            return Err(engine(
-                "stored boxes are not built in this engine yet (plan 17 N1a)",
-            ));
-        }
         let plan = &photo.plan;
         let runs = Runs::of(plan);
         let (header, permit) = self.admit(clock, &photo, &runs).await?;
@@ -390,14 +387,19 @@ where
         let sent = work.send_round1(round1.calls, inputs);
         let call_of = |owner: &str| sent.iter().find(|(o, _)| *o == owner).map(|(_, id)| *id);
 
-        let found = work
-            .settle_detect(call_of("detect"), round1.canvas.as_ref())
-            .await?;
-        if found.is_none() && runs.embed_crops {
+        // settle: the detector's rectangles, or the stored boxes in their place
+        let cut = match &photo.boxes {
+            Some(boxes) => Some(Cut::stored(boxes, size)?),
+            None => work
+                .settle_detect(call_of("detect"), round1.canvas.as_ref())
+                .await?
+                .map(|d| Cut::detected(&d, size)),
+        };
+        if cut.is_none() && runs.embed_crops {
             work.stop_crops_without_boxes();
         }
-        let round2 = match &found {
-            Some(d) => work.round2(plan, &runs, d, &frame).await?,
+        let round2 = match &cut {
+            Some(cut) => work.round2(plan, &runs, cut, &frame).await?,
             None => Round2 {
                 crop_calls: Vec::new(),
                 picked: Vec::new(),
@@ -408,7 +410,7 @@ where
         // the photo's own hold on the frame ends here; jobs still running keep it to their wait
         drop(frame);
 
-        work.finish(&runs, found.is_some(), round2, call_of("embed_frame"))
+        work.finish(&runs, cut.is_some(), round2, call_of("embed_frame"))
             .await?;
         Ok(PhotoAnswer {
             status: "ok".into(),
