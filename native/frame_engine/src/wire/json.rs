@@ -287,4 +287,400 @@ mod tests {
         assert_eq!(ok(r#""x""#).text(), "x");
         assert_eq!(ok("3").text(), "3");
     }
+
+    /// Every row was produced by the reader as it stood before the `serde_json` features
+    /// `arbitrary_precision` and `preserve_order` were dropped: the input bytes and the `Debug`
+    /// text of what `parse` returned, error words included. The refusals that Python's
+    /// `json.loads` does not make are named in the module comment.
+    const EDGE_CASES: &[(&[u8], &str)] = &[
+        (
+            b"[18446744073709551616]",
+            r##"Ok(List([Int("18446744073709551616")]))"##,
+        ),
+        (
+            b"[-9223372036854775809]",
+            r##"Ok(List([Int("-9223372036854775809")]))"##,
+        ),
+        (
+            b"18446744073709551615",
+            r##"Ok(Int("18446744073709551615"))"##,
+        ),
+        (
+            b"-9223372036854775808",
+            r##"Ok(Int("-9223372036854775808"))"##,
+        ),
+        (
+            b"[123456789012345678901234567890123456789012345678901234567890]",
+            r##"Ok(List([Int("123456789012345678901234567890123456789012345678901234567890")]))"##,
+        ),
+        (b"1e400", r##"Ok(Float(inf))"##),
+        (b"-1e400", r##"Ok(Float(-inf))"##),
+        (b"1e-400", r##"Ok(Float(0.0))"##),
+        (b"-0", r##"Ok(Int("0"))"##),
+        (b"-0.0", r##"Ok(Float(-0.0))"##),
+        (b"-0e0", r##"Ok(Float(-0.0))"##),
+        (b"1.0", r##"Ok(Float(1.0))"##),
+        (b"1", r##"Ok(Int("1"))"##),
+        (b"1E5", r##"Ok(Float(100000.0))"##),
+        (b"1e+5", r##"Ok(Float(100000.0))"##),
+        (b"1.5e-3", r##"Ok(Float(0.0015))"##),
+        (b"0.1", r##"Ok(Float(0.1))"##),
+        (
+            b"01",
+            r##"Err(JsonError("invalid number at line 1 column 2"))"##,
+        ),
+        (
+            b"-01",
+            r##"Err(JsonError("invalid number at line 1 column 3"))"##,
+        ),
+        (
+            b"[00.5]",
+            r##"Err(JsonError("invalid number at line 1 column 3"))"##,
+        ),
+        (
+            b"+1",
+            r##"Err(JsonError("expected value at line 1 column 1"))"##,
+        ),
+        (
+            b".5",
+            r##"Err(JsonError("expected value at line 1 column 1"))"##,
+        ),
+        (
+            b"1.",
+            r##"Err(JsonError("EOF while parsing a value at line 1 column 2"))"##,
+        ),
+        (
+            b"-",
+            r##"Err(JsonError("EOF while parsing a value at line 1 column 1"))"##,
+        ),
+        (
+            b"1e",
+            r##"Err(JsonError("EOF while parsing a value at line 1 column 2"))"##,
+        ),
+        (
+            b"0x10",
+            r##"Err(JsonError("trailing characters at line 1 column 2"))"##,
+        ),
+        (
+            b"{\"a\": {\"b\": [1, {\"c\": 1,\n  \"d\": 2, \"c\": 3}]}}",
+            r##"Err(JsonError("duplicate key 'c' at line 2 column 13"))"##,
+        ),
+        (
+            b"{\"a\": 1, \"a\": 2}",
+            r##"Err(JsonError("duplicate key 'a' at line 1 column 12"))"##,
+        ),
+        (
+            b"{\"\xc3\xa9\": 1, \"\xc3\xa9\": 2}",
+            r##"Err(JsonError("duplicate key 'é' at line 1 column 14"))"##,
+        ),
+        (
+            b"{\"a\": 1, \"a\": 2}",
+            r##"Err(JsonError("duplicate key 'a' at line 1 column 12"))"##,
+        ),
+        (
+            b"{\"x\": {\"k\": 1, \"k\": 2}, \"y\": {\"z\": 1, \"z\": 2}}",
+            r##"Err(JsonError("duplicate key 'k' at line 1 column 18"))"##,
+        ),
+        (
+            b"{\"z\": 1, \"a\": 2, \"m\": 3}",
+            r##"Ok(Object([("z", Int("1")), ("a", Int("2")), ("m", Int("3"))]))"##,
+        ),
+        (
+            b"\"\\u00e9\\u20ac\\n\\t\\\"\\\\\\/\"",
+            r##"Ok(Str("é€\n\t\"\\/"))"##,
+        ),
+        (b"\"\\ud83d\\ude00\"", r##"Ok(Str("😀"))"##),
+        (
+            b"\"\\ud83d\"",
+            r##"Err(JsonError("unexpected end of hex escape at line 1 column 8"))"##,
+        ),
+        (
+            b"\"\\ude00\"",
+            r##"Err(JsonError("lone leading surrogate in hex escape at line 1 column 7"))"##,
+        ),
+        (
+            b"\"\\ud83dx\"",
+            r##"Err(JsonError("unexpected end of hex escape at line 1 column 8"))"##,
+        ),
+        (
+            b"\"\\u12g4\"",
+            r##"Err(JsonError("invalid escape at line 1 column 7"))"##,
+        ),
+        (
+            b"\"\\x\"",
+            r##"Err(JsonError("invalid escape at line 1 column 3"))"##,
+        ),
+        (
+            b"\"\xc3\xa9\xe2\x82\xac\xf0\x9f\x98\x80\"",
+            r##"Ok(Str("é€😀"))"##,
+        ),
+        (b"{\"A\\n\": 1}", r##"Ok(Object([("A\n", Int("1"))]))"##),
+        (
+            b"[1,]",
+            r##"Err(JsonError("trailing comma at line 1 column 4"))"##,
+        ),
+        (
+            b"{\"a\": 1,}",
+            r##"Err(JsonError("trailing comma at line 1 column 9"))"##,
+        ),
+        (
+            b"[,1]",
+            r##"Err(JsonError("expected value at line 1 column 2"))"##,
+        ),
+        (
+            b"NaN",
+            r##"Err(JsonError("expected value at line 1 column 1"))"##,
+        ),
+        (
+            b"Infinity",
+            r##"Err(JsonError("expected value at line 1 column 1"))"##,
+        ),
+        (
+            b"-Infinity",
+            r##"Err(JsonError("invalid number at line 1 column 2"))"##,
+        ),
+        (
+            b"[NaN]",
+            r##"Err(JsonError("expected value at line 1 column 2"))"##,
+        ),
+        (
+            b"",
+            r##"Err(JsonError("EOF while parsing a value at line 1 column 0"))"##,
+        ),
+        (
+            b"  \n ",
+            r##"Err(JsonError("EOF while parsing a value at line 2 column 1"))"##,
+        ),
+        (
+            b"[1] x",
+            r##"Err(JsonError("trailing characters at line 1 column 5"))"##,
+        ),
+        (
+            b"{} {}",
+            r##"Err(JsonError("trailing characters at line 1 column 4"))"##,
+        ),
+        (b" [1] \n\t\r", r##"Ok(List([Int("1")]))"##),
+        (b"\xef\xbb\xbf[1]", r##"Ok(List([Int("1")]))"##),
+        (
+            b"\xef\xbb\xbf",
+            r##"Err(JsonError("EOF while parsing a value at line 1 column 0"))"##,
+        ),
+        (
+            b"\xef\xbb\xbf\xef\xbb\xbf[1]",
+            r##"Err(JsonError("expected value at line 1 column 1"))"##,
+        ),
+        (
+            b"[\"\xff\"]",
+            r##"Err(JsonError("invalid utf-8 sequence of 1 bytes from index 2"))"##,
+        ),
+        (
+            b"\"a\x01b\"",
+            r##"Err(JsonError("control character (\\u0000-\\u001F) found while parsing a string at line 1 column 3"))"##,
+        ),
+        (
+            b"\"a\nb\"",
+            r##"Err(JsonError("control character (\\u0000-\\u001F) found while parsing a string at line 2 column 0"))"##,
+        ),
+        (
+            b"\"abc",
+            r##"Err(JsonError("EOF while parsing a string at line 1 column 4"))"##,
+        ),
+        (
+            b"[1, 2",
+            r##"Err(JsonError("EOF while parsing a list at line 1 column 5"))"##,
+        ),
+        (
+            b"{\"a\": 1",
+            r##"Err(JsonError("EOF while parsing an object at line 1 column 7"))"##,
+        ),
+        (
+            b"{1: 2}",
+            r##"Err(JsonError("key must be a string at line 1 column 2"))"##,
+        ),
+        (
+            b"{'a': 1}",
+            r##"Err(JsonError("key must be a string at line 1 column 2"))"##,
+        ),
+        (
+            b"{\"a\" 1}",
+            r##"Err(JsonError("expected `:` at line 1 column 6"))"##,
+        ),
+        (b"true", r##"Ok(Bool(true))"##),
+        (
+            b"tru",
+            r##"Err(JsonError("EOF while parsing a value at line 1 column 3"))"##,
+        ),
+        (
+            b"True",
+            r##"Err(JsonError("expected value at line 1 column 1"))"##,
+        ),
+        (b" null ", r##"Ok(Null)"##),
+        (b"[]", r##"Ok(List([]))"##),
+        (b"{}", r##"Ok(Object([]))"##),
+        (b"{\"\": 1}", r##"Ok(Object([("", Int("1"))]))"##),
+        (
+            b"[1,\n 2,\n  x]",
+            r##"Err(JsonError("expected value at line 3 column 3"))"##,
+        ),
+        (
+            b"\x0c[1]",
+            r##"Err(JsonError("expected value at line 1 column 1"))"##,
+        ),
+        (
+            b"\xc2\xa0[1]",
+            r##"Err(JsonError("expected value at line 1 column 1"))"##,
+        ),
+        (
+            b"[1x]",
+            r##"Err(JsonError("expected `,` or `]` at line 1 column 3"))"##,
+        ),
+        (
+            b"0.1000000000000000055511151231257827",
+            r##"Ok(Float(0.1))"##,
+        ),
+        (b"1e99999999999999999999", r##"Ok(Float(inf))"##),
+        (b"1e-99999999999999999999", r##"Ok(Float(0.0))"##),
+        (
+            b"{\"true\": true}",
+            r##"Ok(Object([("true", Bool(true))]))"##,
+        ),
+        (
+            b"[{\"a\": 1, \"a\": 2}, x]",
+            r##"Err(JsonError("duplicate key 'a' at line 1 column 13"))"##,
+        ),
+        (
+            b"{\"a\": 1, \"a\": 2} x",
+            r##"Err(JsonError("duplicate key 'a' at line 1 column 12"))"##,
+        ),
+        (
+            b"{\"a\": 1, \"a\": 2,}",
+            r##"Err(JsonError("duplicate key 'a' at line 1 column 12"))"##,
+        ),
+        (
+            b"[x, {\"a\": 1, \"a\": 2}]",
+            r##"Err(JsonError("expected value at line 1 column 2"))"##,
+        ),
+        (
+            b"{\"a\": 1, \"\\u0061\": 2}",
+            r##"Err(JsonError("duplicate key 'a' at line 1 column 17"))"##,
+        ),
+        (
+            b"{\n  \"k\": 1,\n\n    \"k\": [2]}",
+            r##"Err(JsonError("duplicate key 'k' at line 4 column 7"))"##,
+        ),
+        (
+            b"{\"\xf0\x9f\x98\x80\": 1,\n \"\xf0\x9f\x98\x80\": 2}",
+            r##"Err(JsonError("duplicate key '😀' at line 2 column 7"))"##,
+        ),
+        (
+            b"[{\"a\": 1}, {\"a\": 2}]",
+            r##"Ok(List([Object([("a", Int("1"))]), Object([("a", Int("2"))])]))"##,
+        ),
+        (
+            b"{\"a\": 1, \"a\": \"x\"}",
+            r##"Err(JsonError("duplicate key 'a' at line 1 column 12"))"##,
+        ),
+        (
+            b"{\"1\": 1, \"1.0\": 2}",
+            r##"Ok(Object([("1", Int("1")), ("1.0", Int("2"))]))"##,
+        ),
+        (
+            b"\"a\tb\"",
+            r##"Err(JsonError("control character (\\u0000-\\u001F) found while parsing a string at line 1 column 3"))"##,
+        ),
+        (b"\"\\u0000\"", r##"Ok(Str("\0"))"##),
+        (
+            b"\"\\ud83d\\u0041\"",
+            r##"Err(JsonError("lone leading surrogate in hex escape at line 1 column 13"))"##,
+        ),
+        (
+            b"[1 2]",
+            r##"Err(JsonError("expected `,` or `]` at line 1 column 4"))"##,
+        ),
+        (
+            b"{\"a\": 1 \"b\": 2}",
+            r##"Err(JsonError("expected `,` or `}` at line 1 column 9"))"##,
+        ),
+        (
+            b"{\"a\": }",
+            r##"Err(JsonError("expected value at line 1 column 7"))"##,
+        ),
+        (
+            b"[1,,2]",
+            r##"Err(JsonError("expected value at line 1 column 4"))"##,
+        ),
+        (
+            b"{,}",
+            r##"Err(JsonError("key must be a string at line 1 column 2"))"##,
+        ),
+        (
+            b"[truex]",
+            r##"Err(JsonError("expected `,` or `]` at line 1 column 6"))"##,
+        ),
+        (
+            b"nul",
+            r##"Err(JsonError("EOF while parsing a value at line 1 column 3"))"##,
+        ),
+        (
+            b"[-Infinity]",
+            r##"Err(JsonError("invalid number at line 1 column 3"))"##,
+        ),
+        (b"1E400", r##"Ok(Float(inf))"##),
+        (
+            b"[1e+0, 1E-0, 2e00]",
+            r##"Ok(List([Float(1.0), Float(1.0), Float(2.0)]))"##,
+        ),
+        (
+            b"[-0.5, 0.0, -1]",
+            r##"Ok(List([Float(-0.5), Float(0.0), Int("-1")]))"##,
+        ),
+        (b"\xef\xbb\xbf  {}", r##"Ok(Object([]))"##),
+        (
+            b" {\t\"a\"\r:\n[ 1 , 2 ] } ",
+            r##"Ok(Object([("a", List([Int("1"), Int("2")]))]))"##,
+        ),
+        (
+            b"{\"a\": 1, \"A\": 2}",
+            r##"Ok(Object([("a", Int("1")), ("A", Int("2"))]))"##,
+        ),
+    ];
+
+    #[test]
+    fn the_edge_cases_read_as_they_always_did() {
+        for (input, expected) in EDGE_CASES {
+            let got = format!("{:?}", parse(input));
+            assert_eq!(&got, expected, "input {:?}", String::from_utf8_lossy(input));
+        }
+    }
+
+    #[test]
+    fn nesting_is_read_to_a_depth_of_127_and_refused_beyond() {
+        let nested = |depth: usize| [vec![b'['; depth], vec![b']'; depth]].concat();
+        let mut value = ok("[]");
+        for _ in 1..127 {
+            value = Json::List(vec![value]);
+        }
+        assert_eq!(parse(&nested(127)), Ok(value));
+        for (input, error) in [
+            (nested(128), "recursion limit exceeded at line 1 column 128"),
+            (nested(129), "recursion limit exceeded at line 1 column 128"),
+            (
+                vec![b'['; 200],
+                "recursion limit exceeded at line 1 column 128",
+            ),
+        ] {
+            assert_eq!(parse(&input), Err(JsonError(error.into())));
+        }
+        let objects = [br#"{"a":"#.repeat(130), b"1".to_vec(), b"}".repeat(130)].concat();
+        assert_eq!(
+            parse(&objects),
+            Err(JsonError(
+                "recursion limit exceeded at line 1 column 636".into()
+            ))
+        );
+        let mut deep = vec![b'['; 126];
+        deep.extend_from_slice(b"1e400");
+        deep.extend_from_slice(&[b']'; 126]);
+        assert!(parse(&deep).is_ok(), "an overflowing float at depth 126");
+    }
 }
