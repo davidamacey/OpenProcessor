@@ -60,21 +60,19 @@ pub fn strip_hop_by_hop(headers: &mut HeaderMap) {
     }
 }
 
-/// Tell the Python API who asked, as the proxy that started the connection: the peer's address is
-/// appended to `X-Forwarded-For`, and `X-Forwarded-Proto` is `http` unless a proxy in front of
-/// this one has already said what the client used. `Host` and `X-Forwarded-Host` are left as the
-/// client sent them, which is what `src/core/request_origin.py` reads.
+/// Tell the Python API who connected. `X-Forwarded-For` is the peer's address and nothing else:
+/// the front is the edge, so a chain a client wrote is dropped. uvicorn trusts the front
+/// (`--forwarded-allow-ips`) and takes the first entry as the client address it logs, so a kept
+/// client entry would let a client choose it; before the front uvicorn ignored the header from any
+/// peer that was not loopback. `X-Forwarded-Proto` is `http` unless a proxy in front of this one
+/// has already said what the client used (`src/core/request_origin.py` reads that header as it
+/// always did). `Host` and `X-Forwarded-Host` are left as the client sent them, which is also
+/// what `request_origin.py` reads.
 ///
 /// Call it after [`strip_hop_by_hop`]: a client that names `X-Forwarded-For` in `Connection`
 /// must not be able to make the proxy drop its own entry.
 pub fn add_forwarded(headers: &mut HeaderMap, peer: IpAddr) {
-    let mut chain: Vec<u8> = Vec::new();
-    for value in headers.get_all(X_FORWARDED_FOR) {
-        chain.extend_from_slice(value.as_bytes());
-        chain.extend_from_slice(b", ");
-    }
-    chain.extend_from_slice(peer.to_canonical().to_string().as_bytes());
-    if let Ok(value) = HeaderValue::from_bytes(&chain) {
+    if let Ok(value) = HeaderValue::from_str(&peer.to_canonical().to_string()) {
         headers.insert(X_FORWARDED_FOR, value);
     }
     if !headers.contains_key(X_FORWARDED_PROTO) {
@@ -148,16 +146,14 @@ mod tests {
     }
 
     #[test]
-    fn the_peer_is_appended_to_the_forwarded_for_chain_and_the_proto_defaults_to_http() {
+    fn the_peer_replaces_any_client_forwarded_for_and_the_proto_defaults_to_http() {
         let mut map = headers(&[
             ("x-forwarded-for", "203.0.113.9"),
             ("x-forwarded-for", "198.51.100.2"),
         ]);
         add_forwarded(&mut map, "192.0.2.7".parse().unwrap());
-        assert_eq!(
-            map["x-forwarded-for"],
-            "203.0.113.9, 198.51.100.2, 192.0.2.7"
-        );
+        let seen: Vec<_> = map.get_all("x-forwarded-for").iter().collect();
+        assert_eq!(seen, ["192.0.2.7"]);
         assert_eq!(map["x-forwarded-proto"], "http");
     }
 

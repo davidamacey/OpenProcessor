@@ -5,9 +5,10 @@
 //! see [`headers`]), the request body and the response body, both streamed frame by frame with the
 //! back pressure of the two sockets (nothing is read ahead of the side that is writing, and
 //! nothing is held to count or hash it), and server-sent events, which are just a response body
-//! that does not end. It adds `x-forwarded-for` and `x-forwarded-proto`; `host`,
-//! `x-forwarded-host` and `x-request-id` pass as they are, so `src/core/request_origin.py` and the
-//! logs see what they saw before.
+//! that does not end. It sets `x-forwarded-for` to the peer's address (a client's own value is
+//! dropped) and adds `x-forwarded-proto` when absent; `host`, `x-forwarded-host` and
+//! `x-request-id` pass as they are, so `src/core/request_origin.py` and the logs see what they
+//! saw before.
 //!
 //! The client is hyper-util's legacy client
 //! (<https://docs.rs/hyper-util/0.1.21/hyper_util/client/legacy/struct.Client.html>): a pool of

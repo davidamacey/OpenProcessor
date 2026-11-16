@@ -105,19 +105,25 @@ async fn the_response_loses_its_hop_by_hop_fields_and_keeps_every_cookie() {
 }
 
 #[tokio::test]
-async fn the_upstream_sees_the_host_and_forwarded_fields_the_origin_rule_reads() {
+async fn the_upstream_sees_the_host_and_forwarded_fields_the_origin_rule_reads_and_the_peer_as_the_client()
+ {
     let (stub, _control) = start_stub().await;
     let front = start_front(stub, &[]).await;
     let sent = request(&front, "GET", "/echo")
         .header("host", "photos.test:5184")
         .header("x-forwarded-host", "gallery.test")
         .header("x-forwarded-for", "203.0.113.9")
+        .header("x-forwarded-for", "198.51.100.2")
         .body(Body::empty())
         .unwrap();
     let headers = send(sent).await.json()["headers"].clone();
     assert_eq!(headers["host"][0], "photos.test:5184");
     assert_eq!(headers["x-forwarded-host"][0], "gallery.test");
-    assert_eq!(headers["x-forwarded-for"][0], "203.0.113.9, 127.0.0.1");
+    assert_eq!(
+        headers["x-forwarded-for"],
+        serde_json::json!(["127.0.0.1"]),
+        "a client-supplied chain is dropped: the front is the edge and says who connected"
+    );
     assert_eq!(headers["x-forwarded-proto"][0], "http");
     front.stop().await;
 }
