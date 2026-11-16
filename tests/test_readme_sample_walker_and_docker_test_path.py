@@ -14,7 +14,7 @@ Two concrete breakages fixed here:
    ``/data/source/...``.
 2. **The "Docker-only" pytest path doesn't exist.** The production
    ``api`` image installs only ``requirements.txt`` -- no pytest, no
-   ``requirements-test.txt`` -- so ``docker compose exec api pytest
+   ``requirements-test.txt`` -- so ``docker compose exec api-py pytest
    ...`` fails with "executable file not found". README must install
    ``requirements-test.txt`` into the running container first.
 
@@ -39,7 +39,7 @@ CONTRIBUTING = (REPO_ROOT / 'CONTRIBUTING.md').read_text()
 def _compose_source_root_mount() -> str:
     with (REPO_ROOT / 'docker-compose.yml').open() as fh:
         compose = yaml.safe_load(fh)
-    volumes = compose['services']['api']['volumes']
+    volumes = compose['services']['api-py']['volumes']
     match = next(v for v in volumes if 'OP_SOURCE_ROOT_HOST' in str(v))
     return str(match)
 
