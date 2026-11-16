@@ -11,7 +11,7 @@ def test_evaluator_sees_exports_at_the_api_path() -> None:
     """Bake-off eval datasets are exports: the evaluator must read them at the
     path the API resolved (``./data/projects/<project>/exports`` -> ``/app/data``)."""
     services = _services()
-    api_mounts = services['api'].get('volumes') or []
+    api_mounts = services['api-py'].get('volumes') or []
     evaluator_mounts = services['curation-evaluator'].get('volumes') or []
     assert any(str(v).startswith('./data:/app/data') for v in api_mounts)
     assert './data:/app/data:ro' in evaluator_mounts
@@ -36,7 +36,7 @@ def test_evaluator_gets_the_same_mlflow_tracking_url_as_the_trainer() -> None:
     evaluator_url = _value(evaluator_env, 'MLFLOW_TRACKING_URI')
     assert trainer_url is not None
     assert evaluator_url == trainer_url
-    api_env = services['api'].get('environment') or []
+    api_env = services['api-py'].get('environment') or []
     assert _value(api_env, 'MLFLOW_TRACKING_URI') == trainer_url, (
         'project delete cleans the MLflow experiment over REST from the API'
     )
@@ -49,7 +49,7 @@ def test_api_evaluator_segmenter_gpu_ids_are_env_driven_not_hardcoded() -> None:
     compose edit to run them at all."""
     services = _services()
     expectations = {
-        'api': 'API_GPU_ID',
+        'api-py': 'API_GPU_ID',
         'curation-evaluator': 'EVALUATOR_GPU_ID',
         'segmenter': 'SEGMENTER_GPU_ID',
     }
@@ -80,7 +80,7 @@ def test_api_and_detection_worker_share_crop_cache() -> None:
     what the API's ingest path wrote."""
     services = _services()
     target = '/var/cache/openprocessor/crops'
-    for name in ('api', 'curation-detection-worker'):
+    for name in ('api-py', 'curation-detection-worker'):
         mounts = [str(v) for v in (services[name].get('volumes') or [])]
         matching = [m for m in mounts if m.endswith(f':{target}')]
         assert matching, f'{name} has no crop-cache mount at {target}: {mounts}'
@@ -130,7 +130,7 @@ def test_api_keeps_freed_pixel_buffers_instead_of_trimming_them() -> None:
     """Ingest frees tens of megabytes per image; glibc's default trims each thread arena after
     every call and the next allocation faults the pages back (0.109 against 0.096 CPU-s per
     image on 640 x 480 frames)."""
-    env = dict(a.split('=', 1) for a in _services()['api']['environment'] if '=' in a)
+    env = dict(a.split('=', 1) for a in _services()['api-py']['environment'] if '=' in a)
     assert int(env['MALLOC_TRIM_THRESHOLD_']) >= 64 * 1024 * 1024
     assert int(env['MALLOC_TOP_PAD_']) > 0
     assert int(env['MALLOC_MMAP_THRESHOLD_']) >= 16 * 1024 * 1024
@@ -144,7 +144,7 @@ def test_source_root_mounted_at_the_same_path_on_api_and_detection_worker() -> N
     services = _services()
     target = '/data/source'
     for name in (
-        'api',
+        'api-py',
         'curation-detection-worker',
         'curation-auto-label-worker',
         'curation-assist-loop-worker',
@@ -180,7 +180,7 @@ def test_examples_reachable_on_api_and_detection_worker() -> None:
     dev_services = dev_compose['services']
     target = '/app/examples'
     for name in (
-        'api',
+        'api-py',
         'curation-detection-worker',
         'curation-auto-label-worker',
         'curation-assist-loop-worker',
@@ -202,7 +202,7 @@ def test_examples_reachable_on_api_and_detection_worker() -> None:
 # needs the class registry itself, so ./data is its own, narrower
 # requirement -- see test_class_registry_data_mounted_where_needed below.
 _IN_PROCESS_PIPELINE_SERVICES = (
-    'api',
+    'api-py',
     'curation-detection-worker',
     'curation-auto-label-worker',
     'curation-assist-loop-worker',
@@ -221,7 +221,7 @@ def test_class_registry_data_mounted_where_needed() -> None:
     (it only ever writes unlabeled `*_proposal` detections)."""
     services = _services()
     target = '/app/data'
-    for name in ('api', 'curation-auto-label-worker', 'curation-assist-loop-worker'):
+    for name in ('api-py', 'curation-auto-label-worker', 'curation-assist-loop-worker'):
         mounts = [str(v) for v in (services[name].get('volumes') or [])]
         assert any(m.endswith((f':{target}', f':{target}:ro')) for m in mounts), (
             f'{name} has no ./data mount at {target}: {mounts}'
@@ -264,7 +264,7 @@ def test_triton_serves_partial_model_sets() -> None:
 def test_api_service_aggregates_metrics_across_workers() -> None:
     """uvicorn --workers N keeps one registry per process; without a shared
     multiprocess dir a /metrics scrape reflects a single worker."""
-    spec = _services()['api']
+    spec = _services()['api-py']
     env = spec['environment']
     entries = dict(e.split('=', 1) for e in env) if isinstance(env, list) else env
     mp_dir = entries['PROMETHEUS_MULTIPROC_DIR']

@@ -20,6 +20,7 @@ _IMAGE_KEYS_SH_LOADED=1
 
 IMAGE_KEYS_TABLE=(
     "api|OP_API_IMAGE|build|Dockerfile|openprocessor|api"
+    "server|OP_SERVER_IMAGE|build|docker/op-server/Dockerfile|openprocessor-server|"
     "export|OP_EXPORT_IMAGE|build|Dockerfile|openprocessor-export|export"
     "evaluator|OP_EVALUATOR_IMAGE|build|Dockerfile|openprocessor-evaluator|evaluator"
     "triton|OP_TRITON_IMAGE|build|Dockerfile.triton|openprocessor-triton|"

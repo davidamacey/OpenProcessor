@@ -56,7 +56,7 @@ services:
       - --allow-client-shm=true
       - --log-verbose=0
       - --log-info=true
-  api: &profile_env
+  api-py: &profile_env
     environment:
       - OP_LOAD_PROFILE=ingest
   curation-detection-worker: *profile_env

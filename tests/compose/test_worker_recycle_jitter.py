@@ -25,7 +25,7 @@ def _flag(args: list[str], name: str) -> str | None:
 
 
 def test_api_recycle_sets_jitter() -> None:
-    args = _args(_services()['api'])
+    args = _args(_services()['api-py'])
     assert _flag(args, '--limit-max-requests') is not None, 'api no longer recycles workers'
     jitter = _flag(args, '--limit-max-requests-jitter')
     assert jitter is not None, 'workers recycle in lockstep: --limit-max-requests-jitter missing'

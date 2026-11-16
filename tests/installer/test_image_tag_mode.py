@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 BUILD_ENVS = (
     'OP_API_IMAGE',
+    'OP_SERVER_IMAGE',
     'OP_EXPORT_IMAGE',
     'OP_EVALUATOR_IMAGE',
     'OP_TRITON_IMAGE',
@@ -28,6 +29,7 @@ def _local_images(shimmed: Shimmed, repo: str, tag: str) -> None:
     images.mkdir(exist_ok=True)
     for name in (
         'openprocessor',
+        'openprocessor-server',
         'openprocessor-export',
         'openprocessor-triton',
         'openprocessor-frame-engine',

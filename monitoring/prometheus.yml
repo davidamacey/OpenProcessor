@@ -33,7 +33,22 @@ scrape_configs:
       - source_labels: [__meta_dns_name]
         target_label: service
 
+  # The Python API (the service api-py, port 4613, not published): http_request_duration_seconds of
+  # every request it answers, which is every request the Rust front forwards.
   - job_name: 'api'
+    metrics_path: /metrics
+    dns_sd_configs:
+      - names: ['api-py']
+        type: A
+        port: 4613
+    relabel_configs:
+      - source_labels: [__meta_dns_name]
+        target_label: service
+
+  # The Rust front (the service api, port 8000): the routes it answers itself and what it counts
+  # about forwarding (op_api_forward_failures_total, op_api_requests_shed_total). A request is
+  # observed by the process that answers it, so the two jobs never count one request twice.
+  - job_name: 'api-front'
     metrics_path: /metrics
     dns_sd_configs:
       - names: ['api']

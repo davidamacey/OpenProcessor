@@ -18,7 +18,7 @@ from compose._helpers import COMPOSE_PATH, REPO_ROOT, _load_yaml, _services
 # than a dev checkout's live `git rev-parse HEAD` fallback.
 # =============================================================================
 
-_BUILD_SHA_SERVICES = ('api', 'model-export', 'curation-trainer', 'curation-evaluator')
+_BUILD_SHA_SERVICES = ('api', 'api-py', 'model-export', 'curation-trainer', 'curation-evaluator')
 
 # (Dockerfile, stage the published image is built to; None = the last stage)
 _BUILD_SHA_DOCKERFILES = (
@@ -86,7 +86,8 @@ _FORBIDDEN_BASE_MOUNT_PREFIXES = (
 # override var docker-compose.yml pins it through.
 _CUSTOM_IMAGE_OVERRIDE_VARS = {
     'triton-server': 'OP_TRITON_IMAGE',
-    'api': 'OP_API_IMAGE',
+    'api': 'OP_SERVER_IMAGE',
+    'api-py': 'OP_API_IMAGE',
     'curation-detection-worker': 'OP_API_IMAGE',
     'curation-vlm-worker': 'OP_API_IMAGE',
     'curation-auto-label-worker': 'OP_API_IMAGE',
@@ -135,7 +136,7 @@ def test_dev_overlay_carries_every_build_block_and_source_mount() -> None:
     for name in _CUSTOM_IMAGE_OVERRIDE_VARS:
         assert name in dev_services, f'{name} missing from docker-compose.dev.yml'
         assert 'build' in dev_services[name], f'{name} missing build: in docker-compose.dev.yml'
-    api_mounts = [str(v) for v in dev_services['api'].get('volumes') or []]
+    api_mounts = [str(v) for v in dev_services['api-py'].get('volumes') or []]
     # ./export is mounted into the export image's service only: the API image has no export/.
     for prefix in (p for p in _FORBIDDEN_BASE_MOUNT_PREFIXES if p != './export'):
         assert any(m.startswith(prefix + ':') for m in api_mounts), (
@@ -192,7 +193,7 @@ def test_gpu_arbiter_overlay_exists_and_mounts_docker_socket() -> None:
     assert any('/var/run/docker.sock' in m for m in mounts), mounts
     # And the base compose must NOT already mount it (defeats the point of
     # an opt-in overlay).
-    base_mounts = [str(v) for v in (_services()['api'].get('volumes') or [])]
+    base_mounts = [str(v) for v in (_services()['api-py'].get('volumes') or [])]
     assert not any('docker.sock' in m for m in base_mounts), base_mounts
 
 

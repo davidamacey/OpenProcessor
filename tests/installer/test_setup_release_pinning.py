@@ -140,6 +140,7 @@ def _local_images(shimmed: Shimmed, repo: str, tag: str) -> None:
     images.mkdir(exist_ok=True)
     for name in (
         'openprocessor',
+        'openprocessor-server',
         'openprocessor-export',
         'openprocessor-triton',
         'openprocessor-frame-engine',

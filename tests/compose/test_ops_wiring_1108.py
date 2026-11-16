@@ -54,6 +54,7 @@ def test_only_the_periodic_worker_gets_the_owner_secret() -> None:
     ]
     assert 'periodic-worker' in holders
     assert 'api' not in holders
+    assert 'api-py' not in holders
     assert 'jobs-worker' not in holders
 
 

@@ -97,7 +97,7 @@ Usage: build_and_publish.sh (--dry-run|--push) [--only svc1,svc2] [--version vX.
 
   --dry-run           build + scan every selected image, never push
   --push              build + scan + push, resolve third-party digests, write images.lock
-  --only LIST         comma-separated subset of: api,export,evaluator,triton,segmenter,frame_engine,trainer,cropwright
+  --only LIST         comma-separated subset of: api,server,export,evaluator,triton,segmenter,frame_engine,trainer,cropwright
   --version vX.Y.Z    override the VERSION file (must equal it unless --allow-dirty)
   --namespace NAME    override OP_IMAGE_NAMESPACE (default: davidamacey)
   --allow-dirty       skip the clean-worktree / VERSION-tag gate (local testing only)
@@ -251,6 +251,9 @@ build_image() {
     # The frontend build reads the generated contracts/ts outside its context: named build context.
     local -a ctx_args=()
     [[ "$svc" == cropwright ]] && ctx_args=(--build-context "contracts=$EXPORT_DIR/contracts")
+    # The server image embeds the retired-variable list, which the root .dockerignore keeps out of
+    # the main context: named build context.
+    [[ "$svc" == server ]] && ctx_args=(--build-context "contracts_json=$EXPORT_DIR/contracts/json")
 
     log "building $svc -> $version_tag (cache on, $dockerfile${target:+ target $target})"
     "$DOCKER_BIN" build \

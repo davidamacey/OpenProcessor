@@ -68,7 +68,7 @@ def connection_budget(env: dict[str, str] | None = None) -> dict[str, int]:
     """Connections each part of the deployment may hold, and the limits, under ``env``."""
     env = dict(env or {})
     services = _services()
-    api = services['api']
+    api = services['api-py']
     workers = int(
         _interpolate(
             next(e for e in api['environment'] if e.startswith('WEB_CONCURRENCY=')).split('=')[1],
@@ -113,7 +113,7 @@ def test_every_database_service_is_in_the_table() -> None:
     # The trainer and evaluator images start their Celery worker from ENTRYPOINT: PLANNED_CELERY_CHILDREN
     # counts them.
     known = {
-        'api',
+        'api-py',
         'db-migrate',
         'jobs-beat',
         'curation-trainer',

@@ -9,7 +9,7 @@
 
 # Workers and apps that must be stopped while the database is replaced.
 _DB_APP_SERVICES=(
-    api jobs-worker interactive-worker periodic-worker open-vocab-worker jobs-beat flower cluster-worker
+    api api-py jobs-worker interactive-worker periodic-worker open-vocab-worker jobs-beat flower cluster-worker
     curation-detection-worker curation-vlm-worker curation-auto-label-worker
     curation-assist-loop-worker
 )
@@ -101,7 +101,7 @@ _db_restore() {
 # db verify: the database against OpenSearch and storage (class reconciliation, project indexes,
 # storage keys). Report only; it changes nothing.
 _db_verify() {
-    dc run --rm --no-deps -T -w /app api python -m scripts.db.verify
+    dc run --rm --no-deps -T -w /app api-py python -m scripts.db.verify
 }
 
 cmd_db() {

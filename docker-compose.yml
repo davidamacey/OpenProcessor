@@ -207,7 +207,59 @@ services:
     networks:
       - triton_net
 
+  # The front of the API (native/op_server, `op-server api`, docker/op-server/Dockerfile): it
+  # listens on the API port, answers the routes Rust owns (/live, /metrics) and forwards every other
+  # request, body and event stream included, to the Python API below (api-py). Nothing else
+  # changes for a client or for the services that call http://api:8000. The Python API is not
+  # published: only the front is.
   api:
+    image: ${OP_SERVER_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor-server:${OP_IMAGE_TAG:-0.6.0}}
+    logging: *default-logging
+    restart: always
+    # uvicorn gave in-flight requests 30 s after SIGTERM; the front gives them the same, and
+    # compose's default 10 s would cut them short.
+    stop_grace_period: 35s
+    mem_reservation: 128m
+    # The image's entrypoint is `op-server`; the role is the argument.
+    command: ["api"]
+    # Retired settings in .env are refused at start (the same list the Python API enforces),
+    # so the front sees the whole file.
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      - OP_PY_API_URL=http://api-py:4613
+      - OP_API_LISTEN=0.0.0.0:8000
+    ports:
+      - "${OP_BIND_ADDRESS:-127.0.0.1}:${API_PORT:-4603}:8000"  # the front
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    healthcheck:
+      # Asks through the front: healthy means the front is up and the Python API answers /health.
+      test: ["CMD", "op-server", "health", "--path", "/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 5
+    depends_on:
+      api-py:
+        condition: service_healthy
+    networks:
+      # G-28: Cropwright's default API_UPSTREAM is http://op-api:8000. The
+      # public compose's service is named api; this alias lets
+      # Cropwright's out-of-the-box default resolve without every deployer
+      # having to override API_UPSTREAM. See docs/CURATION.md "Wiring up
+      # Cropwright".
+      triton_net:
+        aliases:
+          - op-api
+
+  # The Python API, behind the front: the FastAPI app and its uvicorn workers. Reached by the front
+  # on port 4613 of the compose network; it publishes no port.
+  api-py:
     image: ${OP_API_IMAGE:-${OP_IMAGE_REPO:-davidamacey}/openprocessor:${OP_IMAGE_TAG:-0.6.0}}
     logging: *default-logging
     restart: always
@@ -316,7 +368,10 @@ services:
       - uvicorn
       - src.main:app
       - --host=0.0.0.0
-      - --port=8000
+      - --port=4613
+      # Only the front reaches this port (it is not published): trust the client address and scheme
+      # it forwards, so the access log shows the person's address, not the front's.
+      - --forwarded-allow-ips=*
       # Worker count: WEB_CONCURRENCY above (API_WORKERS), not a flag.
       - --limit-max-requests=10000       # Recycle workers every 10k requests (prevents memory leaks)
       - --limit-max-requests-jitter=1000 # Stagger recycles so the workers do not all restart together
@@ -337,16 +392,14 @@ services:
       # ===================================================================
       - --access-log
       - --log-level=info
-    ports:
-      - "${OP_BIND_ADDRESS:-127.0.0.1}:${API_PORT:-4603}:8000"  # FastAPI
     ulimits:
       memlock: -1
       stack: 67108864
     healthcheck:
       # S-7: curation workers gate startup on `condition: service_healthy`
-      # against this service; without a healthcheck here that condition
-      # can never resolve.
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" || exit 1"]
+      # against the front (api), which waits for this service's health; without a healthcheck here
+      # that condition can never resolve.
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:4613/health')\" || exit 1"]
       interval: 30s
       timeout: 10s
       start_period: 60s
@@ -376,14 +429,7 @@ services:
       triton-server:
         condition: service_healthy
     networks:
-      # G-28: Cropwright's default API_UPSTREAM is http://op-api:8000. The
-      # public compose's service is named api; this alias lets
-      # Cropwright's out-of-the-box default resolve without every deployer
-      # having to override API_UPSTREAM. See docs/CURATION.md "Wiring up
-      # Cropwright".
-      triton_net:
-        aliases:
-          - op-api
+      - triton_net
 
   # ===================================================================
   # Control plane (B2): Postgres (all relational state), Valkey (the Celery broker) and the

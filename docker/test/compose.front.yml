@@ -1,0 +1,31 @@
+# Opt-in overlay: the Rust front (`op-server api`) in front of the harness API, so the live tier's
+# requests cross the forwarder. The live tests reach it when VERIFY_API_URL points at its port:
+#
+#   docker compose -p op-live-verify -f docker/test/compose.yml -f docker/test/compose.front.yml up -d --wait
+#   VERIFY_API_URL=http://localhost:14707 .venv/bin/python -m pytest tests/live -m live -q --no-cov
+#
+# The base file stays the Python API alone, the default of every other run.
+services:
+  front:
+    build:
+      context: ../..
+      dockerfile: docker/op-server/Dockerfile
+      additional_contexts:
+        contracts_json: ../../contracts/json
+    image: ${VERIFY_CONTAINER_PREFIX:-op-verify}-front:latest
+    environment:
+      OP_PY_API_URL: http://api:8000
+      OP_API_LISTEN: 0.0.0.0:8000
+    ports:
+      - ${VERIFY_FRONT_PORT:-14707}:8000
+    healthcheck:
+      test: ["CMD", "op-server", "health", "--path", "/health"]
+      interval: 5s
+      timeout: 10s
+      retries: 60
+      start_period: 10s
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - verify_net

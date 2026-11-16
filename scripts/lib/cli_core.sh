@@ -124,7 +124,7 @@ cmd_models_install() {
         return 1
     fi
     if [[ -z "$only" || "$only" == pe ]] && [[ "$tiers" == *curation* ]]; then
-        dc restart api
+        dc restart api-py
     fi
 }
 
@@ -154,22 +154,22 @@ cmd_faces() {
         case "$configured" in
             0|false|no|off) ;;
             *)
-                log_error "refusing to purge while faces are on: set OP_FACES_ENABLED=false in ${PROJECT_DIR}/.env and restart the api first"
+                log_error "refusing to purge while faces are on: set OP_FACES_ENABLED=false in ${PROJECT_DIR}/.env and restart api-py first"
                 return 2
                 ;;
         esac
-        if [[ -n "$(dc ps --status running -q api 2>/dev/null)" ]]; then
-            running="$(dc exec -T api printenv OP_FACES_ENABLED 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr -d '\r')"
+        if [[ -n "$(dc ps --status running -q api-py 2>/dev/null)" ]]; then
+            running="$(dc exec -T api-py printenv OP_FACES_ENABLED 2>/dev/null | tr '[:upper:]' '[:lower:]' | tr -d '\r')"
             case "$running" in
                 0|false|no|off) ;;
                 *)
-                    log_error "the running api still has faces on: ./openprocessor restart api, then purge again"
+                    log_error "the running api-py still has faces on: ./openprocessor restart api-py, then purge again"
                     return 2
                     ;;
             esac
         fi
     fi
-    dc run --rm --no-deps -T -w /app api python -m scripts.purge_face_data "${flags[@]}"
+    dc run --rm --no-deps -T -w /app api-py python -m scripts.purge_face_data "${flags[@]}"
 }
 
 # ocr purge [--dry-run] [--yes]: forwards exactly the flags given to the purge script, which
@@ -192,7 +192,7 @@ cmd_ocr() {
                 ;;
         esac
     done
-    dc run --rm --no-deps -T -w /app api python -m scripts.purge_ocr_data "${flags[@]}"
+    dc run --rm --no-deps -T -w /app api-py python -m scripts.purge_ocr_data "${flags[@]}"
 }
 
 cmd_export() {

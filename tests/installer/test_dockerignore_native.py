@@ -21,10 +21,15 @@ NEEDED = [
     'native/frame_engine/kernels/prep.cu',
     'native/gpu_frame/proto/grpc_service.proto',
     'native/frame_engine_loadgen/Cargo.toml',
+    'native/op_server/Cargo.toml',
+    'native/op_server/src/main.rs',
+    'native/op_api/src/lib.rs',
+    'native/op_config/src/retired.rs',
     'docker/frame-engine/requirements.txt',
 ]
 STILL_EXCLUDED = [
     'contracts/json/frame_engine_v1.json',  # the image reads it as a named build context instead
+    'contracts/json/retired_env.json',  # so does the server image
     'requirements.lock',
     'docker/frame-engine-native/stand_in/null_detector_640/1/model.plan',
     'native/target/release/op-frame-engine',

@@ -40,7 +40,11 @@ def _logged_services() -> set[str]:
 
 def test_api_and_triton_are_scraped_by_dns_so_every_replica_is_a_target() -> None:
     jobs = _prometheus_jobs()
-    for name, service, port in (('api', 'api', 8000), ('triton', 'triton-server', 8002)):
+    for name, service, port in (
+        ('api', 'api-py', 4613),
+        ('api-front', 'api', 8000),
+        ('triton', 'triton-server', 8002),
+    ):
         dns = jobs[name]['dns_sd_configs']
         assert dns == [{'names': [service], 'type': 'A', 'port': port}]
         assert 'static_configs' not in jobs[name]
@@ -49,7 +53,7 @@ def test_api_and_triton_are_scraped_by_dns_so_every_replica_is_a_target() -> Non
 
 def test_every_queue_consumer_and_api_has_a_log_rule() -> None:
     wanted = {name for names in consumers(_services()).values() for name in names}
-    wanted |= {'api', 'triton-server', 'postgres', 'valkey', *ARBITER}
+    wanted |= {'api', 'api-py', 'triton-server', 'postgres', 'valkey', *ARBITER}
     assert wanted <= _logged_services(), sorted(wanted - _logged_services())
 
 
