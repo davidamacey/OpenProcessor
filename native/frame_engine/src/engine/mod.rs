@@ -25,6 +25,7 @@ use gpu_frame::{Context, DeviceCap, FramePool, ModelServer, ModelServerConfig, R
 use tokio::sync::Notify;
 
 pub use self::gpu::{Frame, Gpu, GpuConfig};
+use crate::colour::ColourStep;
 use crate::metrics::{ByCause, ByCode, Metrics};
 use crate::photo::budget::GpuBudget;
 use crate::photo::{PhotoFlow, PhotoSettings};
@@ -184,6 +185,7 @@ impl GpuPipeline {
                 slab_wait: Duration::from_secs_f64(s.slab_wait_seconds),
                 window: region_bytes / (s.workers as usize).max(1),
             },
+            colour: ColourStep::new(s.colour_tables as usize, metrics.colour_table_bytes.clone()),
             metrics,
         };
         Ok(Self {

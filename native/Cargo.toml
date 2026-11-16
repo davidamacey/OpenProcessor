@@ -66,3 +66,7 @@ opt-level = 2
 
 [profile.dev.package.sha2]
 opt-level = 3
+
+# The colour tests build 2^24-entry conversion tables through Little CMS.
+[profile.dev.package.lcms2-sys]
+opt-level = 3

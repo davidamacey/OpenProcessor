@@ -49,6 +49,9 @@ pub enum Event {
         blur: usize,
     },
     Crop([i64; 4]),
+    /// A colour table uploaded (its bytes), and a decode that gathers through one.
+    ColourTable(usize),
+    Gather,
     Call {
         model: String,
         shape: [i64; 4],
@@ -66,6 +69,19 @@ pub struct Slice {
 impl Drop for Slice {
     fn drop(&mut self) {
         self.slab.give(self.off, self.len);
+    }
+}
+
+/// A colour table that only knows its size.
+struct HostTable(usize);
+
+impl gpu_frame::DeviceRange for HostTable {
+    fn device_addr(&self) -> u64 {
+        0
+    }
+
+    fn byte_len(&self) -> usize {
+        self.0
     }
 }
 
@@ -181,6 +197,9 @@ impl Device for Fake {
             script.decode_gate.clone(),
         );
         drop(script);
+        if job.colour.is_some() {
+            self.note(Event::Gather);
+        }
         self.note(Event::Decode {
             bytes: job.writes.iter().map(|w| w.input.len).collect(),
             fills: job.writes.iter().map(|w| w.fill).collect(),
@@ -256,6 +275,19 @@ impl Device for Fake {
                 encode_seconds: 0.002,
             })
         })
+    }
+
+    fn host<T: Send + 'static>(
+        &self,
+        f: impl FnOnce() -> T + Send + 'static,
+        cancel: &CancelToken,
+    ) -> JobResult<T> {
+        self.submit(cancel, move || Ok(f()))
+    }
+
+    fn colour_table(&self, host: &[u8]) -> Result<crate::colour::Table, GpuFault> {
+        self.note(Event::ColourTable(host.len()));
+        Ok(Arc::new(HostTable(host.len())))
     }
 
     fn infer(

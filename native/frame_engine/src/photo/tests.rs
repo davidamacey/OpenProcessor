@@ -13,6 +13,7 @@ use super::budget::GpuBudget;
 use super::fake::{Event, Fake};
 use super::*;
 use crate::admission::RequestClock;
+use crate::colour::ColourStep;
 use crate::pipeline::RequestState;
 use crate::wire::branch_status::MODEL_ERROR;
 use crate::wire::bytes_tensor::{pack, unpack};
@@ -80,6 +81,7 @@ fn bed_with(region: usize, window: usize, budget: u64, workers: u32) -> Bed {
             window,
         },
         metrics: Metrics::new(),
+        colour: ColourStep::new(2, Gauge::default()),
     };
     Bed { fake, flow }
 }
@@ -178,6 +180,8 @@ async fn the_hand_offs_come_in_the_python_order_and_each_stage_is_observed() {
             Event::Decode { .. } => "decode".into(),
             Event::Launch { .. } => "launch".into(),
             Event::Crop(_) => "crop".into(),
+            Event::ColourTable(_) => "colour table".into(),
+            Event::Gather => "gather".into(),
             Event::Call { model, .. } => format!("call {model}"),
         })
         .collect();
@@ -841,4 +845,74 @@ async fn the_crop_jpegs_are_packed_as_bytes_elements() {
         b"jpeg [158, 84, 470, 502]",
         "in detection order"
     );
+}
+
+const P3: &[u8] = include_bytes!("../../../../tests/fixtures/icc/DisplayP3-v4.icc");
+
+/// `jpeg` with an ICC profile in one APP2 chunk after the start marker.
+fn tagged(w: u16, h: u16, icc: &[u8]) -> Bytes {
+    let plain = jpeg(w, h, 1);
+    let mut payload = b"ICC_PROFILE\0\x01\x01".to_vec();
+    payload.extend_from_slice(icc);
+    let mut b = plain[..2].to_vec();
+    b.extend_from_slice(&[0xFF, 0xE2]);
+    b.extend_from_slice(
+        &u16::try_from(payload.len() + 2)
+            .expect("short")
+            .to_be_bytes(),
+    );
+    b.extend_from_slice(&payload);
+    b.extend_from_slice(&plain[2..]);
+    Bytes::from(b)
+}
+
+fn colour_count(b: &Bed, outcome: &str) -> u64 {
+    b.flow
+        .metrics
+        .colour
+        .get_or_create(&ByOutcome {
+            outcome: outcome.into(),
+        })
+        .get()
+}
+
+#[tokio::test]
+async fn a_photo_with_a_converting_profile_is_gathered_through_one_table_per_profile() {
+    let b = bed();
+    for _ in 0..2 {
+        let answer = b
+            .flow
+            .process(photo_of(tagged(1000, 750, P3), FRAME))
+            .await
+            .expect("answer");
+        assert_eq!(
+            (answer.status.as_str(), answer.decode_route.as_str()),
+            ("ok", "gpu")
+        );
+    }
+    let events = b.fake.events();
+    let tables = events
+        .iter()
+        .filter(|e| matches!(e, Event::ColourTable(_)))
+        .count();
+    let gathers = events.iter().filter(|e| matches!(e, Event::Gather)).count();
+    assert_eq!(
+        (tables, gathers),
+        (1, 2),
+        "one table for the profile, a gather per photo"
+    );
+    assert!(events.contains(&Event::ColourTable(crate::colour::TABLE_BYTES)));
+    assert_eq!(colour_count(&b, "converted"), 2);
+    // untagged: no gather
+    b.flow.process(photo(FRAME)).await.expect("answer");
+    assert_eq!(colour_count(&b, "srgb"), 1);
+    assert_eq!(
+        b.fake
+            .events()
+            .iter()
+            .filter(|e| matches!(e, Event::Gather))
+            .count(),
+        2
+    );
+    assert_released(&b).await;
 }

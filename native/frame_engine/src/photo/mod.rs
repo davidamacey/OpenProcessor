@@ -36,6 +36,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use gpu_frame::CancelToken;
+
 use self::calls::PhotoCalls;
 use self::clock::{BUDGET, DECODE, QUEUE, StageClock};
 use self::cut::Cut;
@@ -43,6 +45,7 @@ use self::device::{DecodeJob, Decoded, Device, Write};
 use self::rounds::{Round2, Work};
 use crate::admission::FrameBudget;
 use crate::branches::BUILT;
+use crate::colour::{Colour, ColourError, ColourStep, Table, Upload};
 use crate::fault::{GpuFault, job_failed, note_memory_failure};
 use crate::jpeg_header::{Decoder, JpegHeader, oriented_size, route};
 use crate::metrics::{ByImage, ByOutcome, Metrics};
@@ -106,6 +109,8 @@ pub struct PhotoFlow<D, B> {
     pub settings: PhotoSettings,
     /// Where the flow's stage and outcome series are written.
     pub metrics: Arc<Metrics>,
+    /// The colour step's profile kinds and tables, shared by every photo.
+    pub colour: ColourStep,
 }
 
 /// The answer of a photo that decoded nothing: every reported branch `image_failed`, unbuilt ones
@@ -305,12 +310,14 @@ where
         header: &JpegHeader,
         permit: B::Permit,
         writes: Vec<Write<D::Input>>,
+        colour: Option<Table>,
     ) -> Result<(Arc<D::Frame>, Vec<D::Input>), Stop> {
         let job = DecodeJob {
             image: photo.image.slice(..header.end.min(photo.image.len())),
             orientation: header.orientation,
             size: work.size,
             writes,
+            colour,
             hold: Box::new(permit),
             request: Arc::clone(&work.request),
         };
@@ -380,10 +387,21 @@ where
             size,
         };
 
+        let colour = self.colour_of(&header).await?;
         let round1 = work.stage_round1(plan, &runs).await?;
+        let table = match &colour {
+            Colour::Convert(t) => Some(Arc::clone(t)),
+            Colour::Srgb | Colour::Ignored => None,
+        };
         let (frame, inputs) = self
-            .decode(&mut work, &photo, &header, permit, round1.writes)
+            .decode(&mut work, &photo, &header, permit, round1.writes, table)
             .await?;
+        self.metrics
+            .colour
+            .get_or_create(&ByOutcome {
+                outcome: colour.label().into(),
+            })
+            .inc();
         let sent = work.send_round1(round1.calls, inputs);
         let call_of = |owner: &str| sent.iter().find(|(o, _)| *o == owner).map(|(_, id)| *id);
 
@@ -418,6 +436,31 @@ where
             branches: work.answers.states,
             outputs: ordered(plan, size, work.answers.out),
         })
+    }
+}
+
+impl<D: Device, B: FrameBudget> PhotoFlow<D, B> {
+    /// What the colour step does with the photo: its table built once per profile on the finish
+    /// pool (the job's handle is kept by a task of its own, since a dropped handle tells the pool
+    /// the job is unwanted), waited for here without holding any pool thread.
+    async fn colour_of(&self, header: &JpegHeader) -> Result<Colour, Stop> {
+        let device = Arc::clone(&self.device);
+        let upload: Upload = Arc::new(move |host: &[u8]| device.colour_table(host));
+        let device = Arc::clone(&self.device);
+        let spawn = move |job: Box<dyn FnOnce() + Send>| {
+            let handle = device
+                .host(job, &CancelToken::new())
+                .map_err(|e| GpuFault::Failed(format!("colour table build: {e}")))?;
+            tokio::spawn(async move { drop(handle.wait().await) });
+            Ok(())
+        };
+        self.colour
+            .lookup(header.icc.as_deref(), header.components, &spawn, &upload)
+            .await
+            .map_err(|e| match e {
+                ColourError::Overload(o) => Stop::Fail(PipelineError::Overload(o)),
+                ColourError::Fault(f) => f.into(),
+            })
     }
 }
 

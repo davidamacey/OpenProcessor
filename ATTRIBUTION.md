@@ -233,6 +233,14 @@ used only for code, ids, hashes and paths.
 - **License:** IJG License, Modified (3-clause) BSD License and zlib License, as the library's
   `LICENSE.md` sets out; the binary carries the library unmodified
 
+### Little CMS (colour step of `native/frame_engine`)
+- **Source:** https://www.littlecms.com, version 2.19 (the version Pillow 13.0.0 bundles), through
+  the `lcms2` 6.2.0 and `lcms2-sys` 4.0.7 crates (MIT), built from the source `lcms2-sys` vendors
+  and linked statically
+- **License:** MIT
+- **Usage:** classifies embedded ICC profiles and builds the profile-to-sRGB tables
+  (`native/frame_engine/src/colour/`), equal to the byte to the Python engine's through Pillow
+
 ### OpenCV area resize (crop side cap of `native/frame_engine`)
 - **File:** `native/frame_engine/src/branches/area.rs`
 - **Source:** the 8-bit `INTER_AREA` paths of `modules/imgproc/src/resize.cpp` in OpenCV 5.0.0

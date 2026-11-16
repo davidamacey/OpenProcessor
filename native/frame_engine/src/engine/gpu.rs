@@ -310,6 +310,7 @@ fn decode_on_lane(
         orientation,
         size,
         writes,
+        colour,
         hold,
         request,
     } = job;
@@ -343,6 +344,10 @@ fn decode_on_lane(
             };
             if (frame.1, frame.2) != size {
                 return Ok(Err("decoder"));
+            }
+            if let Some(table) = &colour {
+                let pixels = frame.1 as usize * frame.2 as usize;
+                shared.kernels.colour(&stream, &frame.0, pixels, &**table)?;
             }
             Ok(Ok(frame))
         },
@@ -498,6 +503,22 @@ impl Device for Gpu {
         self.finish.submit(cancel, move |t: &mut FinishThread| {
             crop_on_thread(t, frame, rect)
         })
+    }
+
+    fn host<T: Send + 'static>(
+        &self,
+        f: impl FnOnce() -> T + Send + 'static,
+        cancel: &CancelToken,
+    ) -> JobResult<T> {
+        self.finish
+            .submit(cancel, move |_: &mut FinishThread| Ok(f()))
+    }
+
+    fn colour_table(&self, host: &[u8]) -> Result<crate::colour::Table, GpuFault> {
+        self.ctx.bind()?;
+        let stream = Stream::new(&self.ctx)?;
+        let table = self.shared.frames.upload(host, &stream)?;
+        Ok(Arc::new(table))
     }
 
     async fn infer(

@@ -34,6 +34,32 @@ use crate::geometry::{self, GeometryError};
 pub const PREP_SOURCE: &str = include_str!("../kernels/prep.cu");
 /// CUDA source of the EXIF re-orientation kernel, compiled at start.
 pub const ORIENT_SOURCE: &str = include_str!("../kernels/orient.cu");
+/// CUDA source of the colour gather (`colour.py`'s `icc_gather`), compiled at start.
+pub const COLOUR_SOURCE: &str = include_str!("../kernels/colour.cu");
+/// `icc_gather`: threads per block and the most blocks (`ColourStep.apply`).
+const COLOUR_THREADS: u32 = 256;
+const COLOUR_BLOCKS: u64 = 4096;
+
+/// `icc_gather`'s launch over `pixels` pixels: `min(4096, ceil(n / 256))` blocks of 256 threads,
+/// each thread striding the grid (`ColourStep.apply`).
+///
+/// # Errors
+///
+/// No pixels.
+pub fn colour_launch(pixels: usize) -> Result<LaunchConfig, GpuFault> {
+    let blocks = (pixels as u64)
+        .div_ceil(u64::from(COLOUR_THREADS))
+        .min(COLOUR_BLOCKS);
+    Ok(LaunchConfig {
+        grid: (
+            grid(i64::try_from(blocks).unwrap_or(0), "colour grid")?,
+            1,
+            1,
+        ),
+        block: (COLOUR_THREADS, 1, 1),
+        shared_bytes: 0,
+    })
+}
 
 /// Threads per block of both resample passes (`prep_kernels.py`).
 const RESAMPLE_THREADS: u32 = 128;
@@ -530,6 +556,7 @@ pub struct PrepKernels {
     resample_v: Kernel,
     lap_sums: Kernel,
     orient: Kernel,
+    icc_gather: Kernel,
 }
 
 impl PrepKernels {
@@ -541,11 +568,13 @@ impl PrepKernels {
     pub fn load(kernels: &Kernels) -> Result<Self, GpuFault> {
         let prep = kernels.load("prep.cu", PREP_SOURCE)?;
         let orient = kernels.load("orient.cu", ORIENT_SOURCE)?;
+        let colour = kernels.load("colour.cu", COLOUR_SOURCE)?;
         Ok(Self {
             resample_h: prep.function("resample_h")?,
             resample_v: prep.function("resample_v")?,
             lap_sums: prep.function("lap_sums")?,
             orient: orient.function("orient")?,
+            icc_gather: colour.function("icc_gather")?,
         })
     }
 
@@ -661,6 +690,29 @@ impl PrepKernels {
         ];
         self.orient.launch(&orient_launch(ow, oh)?, stream, &args)?;
         Ok(Some((out, ow, oh)))
+    }
+
+    /// Queue the colour gather on `stream`: each of the `pixels` RGB pixels of `frame` replaced
+    /// in place by its entry of `table` (`r * 65536 + g * 256 + b`, three bytes each).
+    ///
+    /// # Errors
+    ///
+    /// The frame or table is smaller than the gather reads, or the launch fails.
+    pub fn colour(
+        &self,
+        stream: &Arc<Stream>,
+        frame: &dyn DeviceRange,
+        pixels: usize,
+        table: &dyn DeviceRange,
+    ) -> Result<(), GpuFault> {
+        let args = [
+            KernelArg::U64(frame.checked_addr(0, pixels * 3)?),
+            KernelArg::I64(i64::try_from(pixels).map_err(|e| GpuFault::Failed(e.to_string()))?),
+            KernelArg::U64(table.checked_addr(0, crate::colour::TABLE_BYTES)?),
+        ];
+        self.icc_gather
+            .launch(&colour_launch(pixels)?, stream, &args)?;
+        Ok(())
     }
 }
 

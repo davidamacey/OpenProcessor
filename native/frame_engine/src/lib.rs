@@ -7,6 +7,7 @@
 
 pub mod admission;
 pub mod branches;
+pub mod colour;
 pub mod cores;
 pub mod engine;
 pub mod fault;

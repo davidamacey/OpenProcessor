@@ -19,11 +19,15 @@ gpu_frame = { path = "../gpu_frame" }
 http-body-util = "=0.1.5"
 hyper = { version = "=1.12.0", features = ["http1", "server"] }
 hyper-util = { version = "=0.1.21", features = ["tokio"] }
+# Little CMS 2.19 (the version Pillow 13.0.0 bundles) built from the crate's vendored source for
+# the colour step (plan 17 section 3, "Colour").
+lcms2 = { version = "=6.2.0", features = ["static"] }
 memchr = "=2.8.3"
 prometheus-client = "=0.26.0"
 procfs = { version = "=0.18.0", default-features = false }
 prost = { workspace = true }
 serde = { version = "=1.0.229", features = ["derive"] }
+sha2 = "=0.11.1"
 serde_json = { version = "=1.0.154", features = ["arbitrary_precision", "preserve_order"] }
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 tokio-stream = { version = "=0.1.19", features = ["net"] }
@@ -40,7 +44,6 @@ turbojpeg = { workspace = true, features = ["cmake", "require-simd"] }
 base64 = "=0.22.1"
 http = "=1.5.0"
 hyper = { version = "=1.12.0", features = ["client", "http2"] }
-sha2 = "=0.11.1"
 
 [build-dependencies]
 prost-types = "=0.14.6"
