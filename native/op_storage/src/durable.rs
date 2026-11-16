@@ -6,8 +6,9 @@
 //!
 //! S3 is built from the crate's `aws-base`, `reqwest` and `ring` features, not its `aws` feature:
 //! `aws` pulls `aws-lc-rs` and with it `aws-lc-sys`, whose OpenSSL licence is not on
-//! `native/deny.toml`'s allow list. TLS is the system's through reqwest's `native-tls` feature;
-//! reqwest's rustls features pull `webpki-root-certs` (CDLA-Permissive-2.0), also not allowed.
+//! `native/deny.toml`'s allow list. TLS is rustls with the ring provider (reqwest's
+//! `rustls-no-provider` feature, which verifies against the platform's root certificates), so no
+//! system OpenSSL is linked. The provider is installed once, in [`install_tls_provider`].
 
 use std::path::Path as FsPath;
 use std::sync::Arc;
@@ -40,6 +41,14 @@ const MULTIPART_CHUNK: usize = 8 * 1024 * 1024;
 const MULTIPART_PARTS_IN_FLIGHT: usize = 4;
 /// Bytes read from the landing file per read while streaming a multipart upload.
 const READ_BLOCK: usize = 1024 * 1024;
+
+/// Install the ring crypto provider as rustls's process default, once. `install_default` answers
+/// `Err` when a provider is already installed (by an earlier call, another crate or a test); that
+/// is the wanted end state, so the result is ignored.
+/// <https://docs.rs/rustls/0.23.46/rustls/crypto/struct.CryptoProvider.html#method.install_default>
+pub fn install_tls_provider() {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+}
 
 /// Where the landing zone is relative to the store, which decides how a photo is moved in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -134,6 +143,7 @@ impl Durable {
         if !endpoint.is_empty() {
             builder = builder.with_endpoint(endpoint);
         }
+        install_tls_provider();
         let store = builder.build().map_err(|e| config(&e.to_string()))?;
         Ok(Self::from_store(Arc::new(store), Backend::Streamed, true))
     }

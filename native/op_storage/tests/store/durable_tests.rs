@@ -231,6 +231,17 @@ fn an_s3_store_builds_without_touching_the_network() {
     assert!(err.contains("OP_STORAGE_S3_ALLOW_HTTP"), "{err}");
 }
 
+#[test]
+fn building_an_s3_store_installs_the_ring_tls_provider_once() {
+    let w = world();
+    let env = Env::from_pairs([(STORAGE_URL_KEY, "s3://photos")]);
+    Durable::from_settings(&env, &w.roots).unwrap();
+    Durable::from_settings(&env, &w.roots).unwrap();
+    let ring = rustls::crypto::ring::default_provider();
+    let installed = rustls::crypto::CryptoProvider::get_default().expect("a provider is installed");
+    assert_eq!(installed.cipher_suites, ring.cipher_suites);
+}
+
 #[tokio::test]
 async fn the_landing_file_is_synced_before_it_is_linked() {
     let w = world();
