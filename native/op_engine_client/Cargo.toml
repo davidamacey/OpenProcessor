@@ -10,16 +10,24 @@ publish.workspace = true
 
 [dependencies]
 bytes = { workspace = true }
+fastrand = { workspace = true }
 op_config = { path = "../op_config" }
 prost = { workspace = true }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time"] }
 tonic = { workspace = true, features = ["channel", "codegen"] }
 tonic-prost = { workspace = true }
+tracing = "=0.1.44"
 
 [dev-dependencies]
 base64 = "=0.22.1"
+# the engine's own front and stub pipeline, in this process: the round-trip tests (no GPU)
+frame_engine = { path = "../frame_engine" }
 sha2 = "=0.11.1"
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "time"] }
+tokio-stream = { version = "=0.1.19", features = ["net"] }
+tonic = { workspace = true, features = ["router", "server"] }
 
 [build-dependencies]
 protox = { workspace = true }

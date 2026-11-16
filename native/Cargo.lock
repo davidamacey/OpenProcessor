@@ -1166,15 +1166,20 @@ version = "0.1.0"
 dependencies = [
  "base64",
  "bytes",
+ "fastrand",
+ "frame_engine",
  "op_config",
  "prost",
  "protox",
  "serde",
  "serde_json",
  "sha2",
+ "tokio",
+ "tokio-stream",
  "tonic",
  "tonic-prost",
  "tonic-prost-build",
+ "tracing",
 ]
 
 [[package]]

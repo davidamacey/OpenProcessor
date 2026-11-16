@@ -130,7 +130,7 @@ CRATE_DEPENDENCIES: dict[str, frozenset[str]] = {
     'op_config': frozenset(),
     'op_storage': frozenset({'op_config'}),
     'op_media': frozenset({'op_config'}),
-    'op_engine_client': frozenset({'op_config'}),
+    'op_engine_client': frozenset({'op_config', 'frame_engine'}),
     'op_db': frozenset({'op_config'}),
     'op_jobs': frozenset({'op_db', 'op_config'}),
     'op_ingest': frozenset({'op_storage', 'op_media', 'op_engine_client', 'op_jobs', 'op_store'}),

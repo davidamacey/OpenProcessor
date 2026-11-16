@@ -7,5 +7,9 @@
 
 mod answers;
 mod contract_answer;
+mod contract_client;
+mod model_server;
 mod plans;
+mod retries;
+mod stub_engine;
 mod support;
