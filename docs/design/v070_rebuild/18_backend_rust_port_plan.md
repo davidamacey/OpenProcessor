@@ -1,483 +1,670 @@
-# 18: the backend in Rust, ordered by measured gain
+# 18: the backend in Rust, in the owner's order
 
 | Field | Value |
 |---|---|
-| Status | plan, revision 0 (2026-11-15), not reviewed. Covers roadmap gaps G5 (core routes on the engine and the record) and G14 (deploy, the parts this port changes) of [14](14_roadmap.md) |
-| Companion | [18a_backend_rust_port_slices.md](18a_backend_rust_port_slices.md): the slice template, the test and parity rules, every slice, and the traceability table. This file holds the decisions, the order, the measurements, the cloud benchmark, deploy, gates, risks and questions |
-| Code base read | `int/b4-stateless` at `7614a8648` (this worktree); `int/storage` at `0d9412024` (15b, 15c); `int/native` (the `native/` workspace of plan 17). Facts about the API come from the port inventory of 2026-11-15 (gitignored, `artifacts_local/speed_1113/api_port/inventory.md`); its "inferred" rows are used here only where re-read in code or marked as hypotheses |
-| Numbers | every number names its source. "API capacity rows" = the partial grid of 2026-11-15 (gitignored `artifacts_local/speed_1113/api_capacity/results.md`): 8 API processes, the Rust engine as a stub returning 2 objects per photo, server-side path ingest. Estimates are marked "estimate" |
-| Not in scope | the engine's internals (plan 17), the storage schema and its slices (plans 15, 15a, 15b, 15c), the cluster, label and train logic (plan 16), the gallery's design (photo-library plans), authentication |
+| Status | plan, revision 1 (2026-11-15). Revision 0 (`5763a2d04`) reworked after an independent review (4 blocker, 9 major, 9 minor findings) and the coordinator's 13 decisions; section 13 traces every finding and decision to the text that now answers it. Covers roadmap gaps G5 (core routes on the engine and the record) and G14 (deploy, the parts this port changes) of [14](14_roadmap.md) |
+| Companions | [18a_backend_rust_port_slices.md](18a_backend_rust_port_slices.md): how a slice runs, the Cargo workspace and crates, the test and parity rules, and the slices that start now, each complete. [18b_backend_rust_port_later_slices.md](18b_backend_rust_port_later_slices.md): the slices after the record exists, the mapping from the storage slices of plan 15c to this plan, and the traceability tables |
+| Code base read | `int/b4-stateless` at `7614a8648` (this worktree); `int/storage` at `0d9412024` (plans 15b, 15c, the Python step 1); `int/native` at `1a3311290` (the `native/` workspace of plan 17). API facts come from the port inventory of 2026-11-15 (gitignored, `artifacts_local/speed_1113/api_port/inventory.md`); its "inferred" rows are used only where re-read in code or marked as hypotheses |
+| Numbers | every number names its source; estimates say "estimate". "Capacity rows" = the partial grid of 2026-11-15 (gitignored `artifacts_local/speed_1113/api_capacity/results.md`, `summary_w8_partial.txt`). "Ingest timeline" = gitignored `artifacts_local/speed_1113/ingest_timeline/timeline_clean.md`. Measurement ids M1 to M18 are this plan's (section 8); the storage measurements of plan 15b section 13 are written "15b M1" and so on |
+| Not in scope | the engine's internals (plan 17), the storage schema and its design (plans 15, 15a, 15b, 15c: kept as design, section 3.2), the cluster, label and train logic (plan 16), the gallery's views (photo-library plans), authentication |
 
-## 0. The user's job, and what the port is for
+## 0. The person's job, the owner's objective and his order
 
-A person points OpenProcessor at a folder of photos, or uploads them from the browser: thousands to
-millions, small web photos up to 20 MP camera photos. The detector finds the objects; every photo
-and object gets vectors, text and faces; the person finds photos, labels their own classes by
-cluster and trains a detector; a gallery (timeline, map, people, events) sits on the same record.
+A person points OpenProcessor at a folder of photos, or uploads them from the browser or an API
+client: thousands to millions, small web photos up to 20 MP camera photos. The detector finds the
+objects; every photo and object gets vectors, text and faces; the person finds photos, labels their
+own classes by cluster and trains a detector; a gallery (timeline, map, people, events) sits on the
+same record.
 
 The owner's objective: "the whole point is to process this image data set as fast as possible and
-efficiently and make it work for other tasks as well for images". The whole backend ends in Rust,
-so no interpreter lock and no per-process workarounds remain, deployable on this machine, other
-machines and a cloud account. No release tag until the programme is done, so there is no
-compatibility duty to a released version: wipe and re-ingest beats migration, no shims, no dead
-code, and no step writes code a later step rewrites.
+efficiently and make it work for other tasks as well for images". The measure is photos per second
+per core and per GPU from "photo in" to "stored, findable and on the map", and the latency of that
+path for one photo.
 
-The measure is photos per second per core and per GPU from "photo in" to "stored, findable and on
-the map", and the latency of that path for one photo.
+The owner's order (2026-11-15), which this plan follows:
 
-## 1. What the measurements say today, and what follows
+1. The Rust image engine (plan 17).
+2. The API and the Python code replaced by Rust, with a robust upload endpoint for one or many files
+   from the frontend or API clients; uploads stored in S3 in the cloud, organised and stored
+   correctly. The upload path is the one the Cropwright frontend uses today: no second upload API.
+3. The frontend gallery update.
+4. The database and the clustering.
+5. A cloud-like deployment: "a cloud version of our app for people to store and organize their
+   photos for a fee, or for small businesses to run".
 
-### 1.1 The API capacity rows (8 API processes, stub engine, 2 objects per photo)
+His standing rules: Rust writes to the database, is the API, does the image processing, the
+housekeeping and admin work, the job queue, and the clustering where a Rust crate or our own code can
+do it. Python is used only for training models (the exact list is section 2.3). No code that another
+lane writes too, and none that a later step rewrites. Selective checks per slice; the full sweep once
+per large merge. No authentication built now; a public deployment needs it first. No release tag
+until the whole programme is done, so wipe and re-ingest beats migration, no shims, no dead code.
+Benchmarks at product scale: 2,000, 100,000 and 1,000,000 photos, set P and the public sets.
+
+## 1. What the measurements say today
+
+### 1.1 The capacity rows (8 API processes, stub engine, 2 objects per photo)
+
+Setup, from the capacity rows: host load 13.9 to 18.5 at the start of the rows (other projects'
+work), 2 or 3 repetitions per row, server-side path ingest (`POST .../ingest/batch`), the Rust
+engine as a stub returning 2 objects per photo. Small photos are the `coco2k` list (about 165 KB);
+the 20 MP rows used the `mp20` list (about 6.5 MB), not set P. The 20 MP rows at 16 and 32 clients
+lasted 2 to 3 seconds each, so their spread is wide.
 
 | Clients | 1 | 4 | 8 | 16 | 32 |
 |---|---|---|---|---|---|
-| Small photos (about 165 KB), photos/s | 56 | 212 | 329 | 461 | 495 |
-| 20 MP photos (about 6.5 MB), photos/s | 18 | 56 | 80 | 91 | 95 |
+| Small, photos/s, median (min to max) | 56.5 (56.0 to 56.7) | 211.9 (172.8 to 218.4) | 328.9 (286.5 to 371.3) | 460.6 (456.1 to 465.2) | 495.2 (483.0 to 507.5) |
+| 20 MP, photos/s, median (min to max) | 18.1 (17.7 to 18.5) | 55.9 (54.2 to 57.5) | 79.6 (74.4 to 84.8) | 91.3 (72.3 to 110.2) | 94.7 (86.3 to 103.0) |
 
-| Cost per photo (host CPU) | Small | 20 MP |
+| Host CPU per photo | Small | 20 MP |
 |---|---|---|
-| API container (8 uvicorn processes plus their ExifTool children) | 19 to 21 ms | 85 to 109 ms |
+| API container (8 uvicorn processes and their ExifTool children) | 18.6 to 21.3 ms | 84.9 to 109.1 ms |
 | PostgreSQL | 1.0 to 1.5 ms | 3.7 to 6.5 ms |
-| OpenSearch | 6.5 to 14 ms | 7.4 to 18 ms |
-| Stub engine (its own copy of the photo) | 0.5 ms | 9 to 12 ms |
+| OpenSearch | 6.5 to 14.3 ms | 7.4 to 17.6 ms (44 at 1 client, noisy) |
+| Stub engine (its own copy of the photo) | 0.5 to 0.6 ms | 9.1 to 11.7 ms |
 
 At 32 small-photo clients the API used 10.7 cores, OpenSearch 4.5, PostgreSQL 0.65; no store queue
-was seen. The API processes are the bound. Real photos give about 7 objects, not 2, so real API
-cost is higher. Not measured yet: where the API's CPU goes, the 30-process and 1-process grids,
+was seen. The API processes are the bound. Real photos give about 7 objects, not 2, so real API cost
+is higher. Not measured yet: where the API's CPU goes (M1), the 30-process and 1-process grids (M2),
 set P rows.
 
-### 1.2 What a native engine needs from the host (plan 17 sections 0.1 and 0a)
+### 1.2 What the API's CPU is made of (what a Rust server can and cannot remove)
+
+| Part | Number | Source |
+|---|---|---|
+| ExifTool execution per photo (capture time, place, orientation, camera) | 10.5 ms per COCO photo, 33.8 ms per 20 MP photo (wall time inside ExifTool per read, `-fast -G -n`) | ingest timeline section 5. Measured with the earlier feed by temporary file, whose write added 2.8 and 19.6 ms; the pipe feed replaced it |
+| CPU outside the Python interpreters at small/32 | at least 2.7 cores of the 10.7 (8 interpreters use at most 8): at least 5.5 ms per photo at 495 photos/s | arithmetic on the capacity rows; it holds the ExifTool children, gRPC and orjson native threads |
+| Per-photo byte touches in the API | the whole file read into one `bytes`; 3 to 4 full copies on the engine call (inferred); the ExifTool pipe feed; on uploads, multipart parse to a spooled file, a read into memory and a write again | inventory section 6.3, read in code |
+| Not size dependent | `imohash` (about 48 KiB sampled), documents, vectors, rows | inventory section 6.3 |
+
+Read plainly: dropping the interpreter lock removes the interpreter work and the copies. It does not
+remove ExifTool's own cost, which is the largest single part at 20 MP. Section 3.4 states the gain
+as an estimate with these parts.
+
+### 1.3 What a native engine needs from the host (plan 17 sections 0.1 and 0a)
 
 | Fact | Number |
 |---|---|
 | Engine host CPU per photo, end to end | COCO 7.3 to 7.7 ms; 20 MP 92 to 103 ms (nvJPEG's host phase) |
 | Card ceiling, plan F (detector + frame encoder) | COCO about 196 photos/s; 20 MP about 125 (138 measured at 128 in flight) |
 | Card ceiling, plan C (ingest plan with crop vectors) | COCO 52 to 65 (arithmetic); set P 63 to 71 |
-| Host | two Xeon E5-2680 v3, 24 physical cores |
+| Host | two Xeon E5-2680 v3 (Haswell), 24 physical cores |
 
-### 1.3 The core budget (estimate, arithmetic on 1.1 and 1.2)
-
-| Case | Engine cores | Python API cores (85 to 109 ms) | Stores | Sum against 24 |
-|---|---|---|---|---|
-| One card, 20 MP, plan C at 70/s | 6.4 to 7.2 | 6.0 to 7.6 | about 1 | 13 to 16: fits |
-| One card, 20 MP, plan F at 125/s | 11.5 to 12.9 | 10.6 to 13.6 | about 1.5 | 24 to 28: host-bound |
-| Two cards, 20 MP, plan C at 140/s | 12.9 to 14.4 | 11.9 to 15.3 | about 2 | 27 to 32: host-bound |
-| Two cards, COCO, plan F at 390/s | 2.8 to 3.0 | 7.4 to 8.2 | about 4 | 14 to 15: fits |
-
-Read plainly: on small photos and one card the Python API keeps up. On 20 MP photos, on two cards,
-and on any cloud host with few cores (section 6), the API's CPU per photo decides whether the GPU
-can be fed at all. Each millisecond of API CPU per photo costs 0.14 cores at 140 photos/s. So the
-first steps of the port must cut API CPU per photo on the ingest path, uploads included, and the
-size-dependent part first.
-
-### 1.4 Where the size-dependent API cost comes from (read in code)
-
-On the engine route the API never decodes (`ImageContext.pil` is None, `ingest_index.py:96`). It
-touches the photo's bytes in these places, per photo:
-
-1. `read_files` (`src/utils/file_read.py:56`) reads the whole file into one `bytes`.
-2. `frame_engine.process` (`src/clients/frame_engine.py:308-350`) wraps it in a numpy object array;
-   tritonclient's `serialize_byte_tensor` packs and joins it (a full copy), the request builder
-   extends `raw_input_contents` (another), gRPC serialises the message on send (inferred: 3 to 4
-   full copies; the first two on the event loop thread).
-3. `read_capture` (`src/services/curation/capture_read.py:144`) feeds the bytes to ExifTool through
-   a pipe in 1 MiB chunks; `read_capture_file(path)` (same file, line 155) already reads by path and
-   is used by backfills.
-4. The upload route also parses multipart into a spooled file, reads it into memory
-   (`ingest_upload.py:136`) and writes it again (`persist_uploaded_bytes`).
-
-Not size dependent: `imohash` (about 48 KiB sampled), documents, vectors, rows. The crop JPEGs the
-engine returns grow with box size (no side cap by default): inferred, measured by M1.
+Each millisecond of API CPU per photo costs 0.14 cores at 140 photos/s (two cards, 20 MP, plan C).
+On 20 MP photos, on two cards and on any cloud host with few cores (section 5), the API's CPU per
+photo decides whether the GPU can be fed (revision 0's budget table, arithmetic on 1.1 and 1.3, kept:
+one card plan C at 70/s fits in 24 cores; two cards plan C at 140/s needs 27 to 32 and is host-bound).
 
 ## 2. Decisions
 
 ### 2.1 The target architecture
 
 ```text
- browser / scripts ──HTTP──► op-server "api" (Rust, axum) ──tonic──► op-frame-engine (Rust, one per card) ──► Triton
-                               │  ingest pipeline in-process          ▲ reads the photo by storage key
-                               │  ExifTool -stay_open children         │
-                               ├──► PostgreSQL (record, jobs, events) ◄┤
-                               ├──► storage layer (local dir or object store)
-                               └──► Valkey (wake-ups; Celery broker for Python workers)
- op-server "worker" (Rust job runner)   op-server "periodic" (Rust ticks)
- Python workers (Celery): trainer, export, evaluator, probe, promote, numeric jobs (FAISS, scikit-learn, UMAP)
- jobs-dispatch (Python, small): LISTEN on PostgreSQL, sends the Celery message for a Python-kind job row
+ browser / API clients ──HTTP──► op-server "api" (Rust, axum) ──tonic──► op-frame-engine (Rust, one per card) ──► Triton
+                                  │  upload receiver ─► landing zone (local fast disk) ◄─ reads by key (plan 17 item)
+                                  │  ingest pipeline, ExifTool -stay_open pool by path
+                                  ├──► PostgreSQL: record, jobs, events (NOTIFY is the wake-up)
+                                  └──► object store (object_store crate: local directory or S3-compatible)
+ op-server "worker" (Rust job runner)        op-server "periodic" (Rust ticks, reaper)
+ Python workers (one claim loop each, one subprocess per job): train, model_export, bakeoff, probe, promote, embedding_viz
 ```
 
 | Question | Decision | Why |
 |---|---|---|
-| One binary or several | one server binary `op-server` with roles as subcommands (`api`, `worker`, `periodic`, and `all` for a one-host install); the engine stays its own binary and process per card (plan 17 section 2.1); each role runs in its own container | one image and one code base for the CPU side; roles scale apart; the engine stays a pure function (photo in, results out) with no database, which keeps the fault rule of plan 17 section 1.3 and lets `gpu_frame` move to the owner's Rust serving project |
-| Processes per host for the API | one process; a tokio multi-thread runtime over all cores; no `WEB_CONCURRENCY` | no interpreter lock; one connection pool, one ExifTool pool, one metrics registry; per-process singletons and the multi-process Prometheus directory disappear |
-| Where ingest runs | in the `api` role, in-process (and in the `worker` role for bulk and source jobs, the same crate) | the measured cost is per photo in the API; a hop to a separate ingest service adds a copy and a process boundary for no gain |
-| Inside the engine process | no; the engine never writes the record | keeps the engine stateless and replaceable; project, row-level security and claims stay in one place |
-| What stays Python, and how Rust talks to it | trainer, model export, bake-off and probe (Ultralytics, PyTorch, TensorRT, ONNX Runtime); promote (the `onnx` head edit); the numeric jobs (FAISS, scikit-learn, SciPy, UMAP: `cluster_run`, `item_scores`, `embedding_viz`, `region_fp_centroids`, `persons_cluster`, the four `near_dup_*` scoring kinds); `autolabel` and `assist_loop` unless R10 finds Rust equivalents; the segmenter and vLLM servers. The VLM client jobs port (section 2.3). Rust writes a `jobs` row (the spec) and the Python worker writes its results to the record | section 2.3 |
-| HTTP framework | axum 0.8.9 | section 2.2 |
-| Database driver | tokio-postgres 0.7.18 with deadpool-postgres 0.14.2 and pgvector 0.4.2 (features `postgres`, `halfvec`) | section 2.2 |
-| Queue | the existing `jobs` table and its claim protocol, run by a Rust runner for Rust kinds; Celery and Valkey stay for the Python workers only; Rust never writes a Celery message | section 2.3 |
-| Search | SQL on the record (gate A) and the vector index gate B picks; if gate A or B keeps OpenSearch as a derived store, the official `opensearch` crate 2.4.0 | no OpenSearch code is ported before 15c S9 settles which shapes remain |
-| Contract | code-first: utoipa 6.0.0 derives on the Rust wire structs; during the port the generator merges the Rust part and the FastAPI part into the one committed `contracts/openapi/curation.json`; equality is semantic (section 2.4) | section 2.4 |
-| Metrics, logs | prometheus-client 0.26.0 (as the engine, plan 17 section 3), same metric names and labels as today; tracing 0.1.44 with tracing-subscriber 0.3.23 JSON output, same field names (`request_id`) | |
-| Workspace | one Cargo workspace, `native/` (section 7.1) | |
+| One binary or several | one server binary `op-server` with roles as subcommands (`api`, `worker`, `periodic`, `migrate` from R12, `all` for a one-host install); each role in its own container; the engine stays its own binary, one process per card | one image and one code base for the CPU side; roles scale apart; the engine stays a pure function with no database (plan 17 section 1.3) |
+| Processes per host for the API | one process with a tokio multi-thread runtime; no `WEB_CONCURRENCY`. Two or more `api` replicas behind a load balancer are supported: every per-process pool (ExifTool, admission permits, database pool) is sized per process and no state is shared in memory | no interpreter lock; one pool of each kind; the failure domain is answered in section 4.6 |
+| Where ingest runs | in the `api` role, in-process; in the `worker` role for bulk and source jobs (the same crate) | the cost is per photo in the API; a separate ingest service adds a copy and a boundary |
+| The engine and storage | the engine reads local files only and never talks to S3; uploads land on local fast disk, the engine reads them there; a mover makes them durable in the object store (section 4) | plan 17's engine has no database and no credentials; reading a photo once from local disk is its cheapest input |
+| Job queue | a Rust runner on the existing `jobs` and `job_attempts` tables (plan 02b semantics: claim, lease, fencing, exclusive groups, pause, yield, `auto_resume`, the reaper); the Python jobs that stay use a small claim loop over the same tables, one subprocess per job. No Celery, no broker, no `jobs-dispatch`, no `runner` field, no Flower | decision 2; section 2.5 |
+| Valkey | leaves the stack in R3b (18b) unless M17 shows a need PostgreSQL cannot meet; events reach the browser from the event rows with `NOTIFY` as the wake-up | decision 2; section 2.5 |
+| What stays Python | section 2.3 | decision 3 |
+| HTTP framework | axum 0.8.9 with tower-http 0.7.1 | section 2.2 |
+| Database driver | tokio-postgres 0.7.18, deadpool-postgres 0.14.2, pgvector 0.4.2 (features `postgres`, `halfvec`) | section 2.2 |
+| Object storage | one interface: the `object_store` crate 0.14.2 (local directory and S3-compatible), no second mechanism beside it | decision 4; section 4 |
+| Search | SQL on the record (gate A) and the vector index gate B picks; if gate A or B keeps OpenSearch as a derived store, the `opensearch` crate 2.4.0 | no OpenSearch code is ported before gates A and B decide (R2b, 18b) |
+| Contract | decided by the contract spike M15 between code-first (utoipa) and contract-first (section 2.4) | decision 10 |
+| Metrics, logs | prometheus-client 0.26.0 (as the engine), same metric names and labels as today; tracing 0.1.44 with tracing-subscriber 0.3.23 JSON output, same field names (`request_id`) | |
+| Workspace | one Cargo workspace, `native/`, engine and server crates side by side; the crate list, owners and rules are in 18a section 2 | 18a section 2.1 gives the reasons |
 
 ### 2.2 Library choices, each against its alternative
 
-Versions are the latest stable on 2026-11-15, read from the crates.io release records
-(`https://crates.io/api/v1/crates/<name>`), pinned exactly in `native/Cargo.lock` as plan 17 does.
+Versions are the latest stable on 2026-11-15, read from the crates.io records
+(`https://crates.io/api/v1/crates/<name>`) or the docs.rs page named, pinned exactly in
+`native/Cargo.lock` as plan 17 does. `cargo deny` with plan 17's allow list (`native/deny.toml`) is
+the licence proof at each lane's first commit.
 
 | Need | Choice | Alternatives and why not | Documentation read |
 |---|---|---|---|
-| HTTP server | axum 0.8.9, tower-http 0.7.1 (request id, CORS, trace, body limit, timeout), hyper-util 0.1.21 | actix-web 4.19.0 is mature and fast, but brings its own runtime model and middleware; axum "doesn't have its own middleware system" and uses `tower::Service`, so it shares middleware and the hyper and tokio stack with tonic, which the API already needs as the engine's client | https://docs.rs/axum/0.8.9/axum/ (tower, SSE under the default `tokio` feature, `Multipart` behind the `multipart` feature) |
-| Streaming uploads | `axum::extract::Multipart` with `Field::chunk()` (a `Stream` of `Bytes`); `DefaultBodyLimit::disable()` on the upload route only, replaced by tower-http's `RequestBodyLimitLayer` at the served byte cap | buffering extractors stop at 2 MB by default and hold the body in memory | https://docs.rs/axum/0.8.9/axum/extract/struct.DefaultBodyLimit.html ; https://docs.rs/axum/0.8.9/axum/extract/multipart/struct.Field.html |
-| CPU-bound work in the server | a dedicated rayon 1.12.0 pool, results back through a oneshot channel | `spawn_blocking`: tokio says "the upper limit on the number of blocking threads is very large" and recommends "a separate thread pool dedicated to CPU bound tasks", naming rayon | https://docs.rs/tokio/1.54.1/tokio/index.html ("CPU-bound tasks and blocking code") |
-| PostgreSQL | tokio-postgres 0.7.18 (pipelining "automatically when futures are polled concurrently"; a `binary_copy` module for vector bulk loads), deadpool-postgres 0.14.2, pgvector 0.4.2 | sqlx 0.9.0: its checked `query!` macros need "`DATABASE_URL` ... set at build-time" or a committed `.sqlx` directory made by `cargo sqlx prepare` against a running database; lanes run no database (global lane rule), so every new query would wait for a wave. The check sqlx gives at compile time is replaced by a database-tier test that prepares every registered statement against the head schema (section 7.2) | https://docs.rs/tokio-postgres/0.7.18/tokio_postgres/ ; https://docs.rs/sqlx/0.9.0/sqlx/macro.query.html ; https://github.com/pgvector/pgvector-rust |
-| Row-level security | a `ProjectTx` type: the only way to get a transaction for project data is `project_tx(pool, project)`, which opens the transaction and sets the project scope as `src/db/session.py` `project_tx` does; every repository function for project tables takes `&mut ProjectTx` | a runtime check per call can be forgotten; a type cannot | (pattern; PostgreSQL row security as 02a and 15 R10) |
-| Job queue | the existing `jobs` table protocol (`src/tasks/runtime/`, 02b) ported as a Rust runner: claim by `FOR UPDATE SKIP LOCKED`, lease and heartbeat, terminal states, exclusive groups, pausable slices; wake-up by `LISTEN`/`NOTIFY` with a 2 s backstop poll | apalis 1.2.0 (maintained) brings its own schema and semantics: a second jobs table beside the one the Python workers, the reaper and `/curation/jobs/{id}` read. Custom code is justified: no library implements this table's protocol | https://crates.io/api/v1/crates/apalis ; https://www.postgresql.org/docs/18/sql-notify.html |
-| Talking to Celery | none from Rust: a small Python `jobs-dispatch` process listens for `NOTIFY` and calls today's `dispatch()` (`src/services/jobs/dispatch.py`) | the Rust `celery` crate's last release is 0.5.5 of 2023-09-25 (unmaintained); Celery's protocol page leaves `embed` signatures unspecified and says the "Body is only for language specific data"; the Valkey transport envelope is kombu's code, not a document. PostgreSQL delivers `NOTIFY` "until and unless the transaction is committed", which is exactly the "send after commit" rule of `dispatch.py` | https://crates.io/api/v1/crates/celery ; https://docs.celeryq.dev/en/stable/internals/protocol.html (Celery 5.7) |
-| Valkey (wake-ups, Celery broker reads) | redis 1.8.2 | fred 10.1.0 last released 2025-02 | https://crates.io/api/v1/crates/redis |
-| OpenAPI | utoipa 6.0.0 with utoipa-axum 0.3.0: serde `rename`, `rename_all`, `tag`, `untagged`, `default`, `deny_unknown_fields`, `flatten` are read; doc comments become descriptions; `Option` is nullable | aide 0.15.1 (schemars based): fewer users, same merge problem; contract-first codegen from the frozen file: the file would become hand-edited, against `contracts/README.md` ("Do not edit by hand") | https://docs.rs/utoipa/6.0.0/utoipa/ ; https://docs.rs/utoipa/6.0.0/utoipa/derive.ToSchema.html |
-| Contract comparison | oasdiff (Apache-2.0; OpenAPI 3.1 support documented in its `docs/OPENAPI-31.md`) for breaking changes, plus a normalised schema diff (section 2.4) | byte equality with Pydantic output (titles, `anyOf` for optional fields) would need a hand-written schema for each of 759 components | https://github.com/oasdiff/oasdiff |
-| Request validation | serde with `serde_path_to_error` 0.1.20 (the failing path becomes `loc`) and garde 0.23.0 for field constraints (`ge`, `le`, lengths, patterns) | validator: not chosen without a reason beyond garde's recent release; the first lane reads both pages and records the choice | https://crates.io/api/v1/crates/garde |
-| Files and object storage | cap-std 4.0.3 `Dir` handles for local roots (paths opened relative to an open directory); object_store 0.14.2 for S3, GCS, Azure behind the storage layer's key contract (15 section 8, slice F) | `std::fs` with string checks for `..` and symlinks: the lane proves cap-std's escape refusal with a test, since its front page does not state it | https://docs.rs/cap-std/4.0.3/cap_std/ ; https://crates.io/api/v1/crates/object_store |
-| Content hash | `imohash` 0.1.2 if it matches goldens generated from the Python `imohash` on the standard lists; else a port of the small algorithm with those goldens | | https://crates.io/api/v1/crates/imohash |
-| ExifTool | a driver for `exiftool -stay_open True -@ -` by path, written here (about 200 lines, estimate), as `src/clients/exiftool_client.py` is today | `exiftool` 0.3.1 and other wrappers have few users (under 10,000 downloads); `exiftool-rs` 1.0.0 (a Rust port of ExifTool 13.60, released 2026-10-30) is a later candidate only after a parity run against ExifTool on the format corpus, owned by the gallery metadata plan ([05](../photo_library/05_p2a0_metadata.md)) | https://crates.io/api/v1/crates?q=exiftool |
-| Text tokens for text search | tokenizers 0.23.2 (the library under transformers' fast tokenizers), checked token for token against today's tokenizer | | https://crates.io/api/v1/crates/tokenizers |
+| HTTP server | axum 0.8.9, tower-http 0.7.1 (request id, CORS, trace, body limit, timeouts), hyper-util 0.1.21 (already in `native/Cargo.lock`) | actix-web 4.19.0 brings its own runtime model and middleware; axum uses `tower::Service`, the stack tonic already uses for the engine client | https://docs.rs/axum/0.8.9/axum/ |
+| Streaming uploads | `axum::extract::Multipart` (`next_field`, then `Field::chunk()` per part); `DefaultBodyLimit::disable()` on the upload route only, replaced by tower-http's `RequestBodyLimitLayer` at the served byte cap and its `RequestBodyTimeoutLayer` as the idle-body limit (its deadline resets per frame) | buffering extractors stop at 2 MB by default and hold the body in memory | https://docs.rs/axum/0.8.9/axum/extract/multipart/struct.Multipart.html ; https://docs.rs/tower-http/0.7.1/tower_http/timeout/index.html |
+| CPU-bound work in the server | a dedicated rayon 1.12.0 pool, results back through a oneshot channel | `spawn_blocking`: tokio recommends "a separate thread pool dedicated to CPU bound tasks", naming rayon | https://docs.rs/tokio/1.54.1/tokio/index.html |
+| PostgreSQL | tokio-postgres 0.7.18 (pipelining "when futures are polled concurrently"), deadpool-postgres 0.14.2, pgvector 0.4.2. Vector bulk loads: `COPY` into an `ON COMMIT DROP` temporary table, then one `INSERT ... SELECT`, because `COPY FROM` is refused on tables with row-level security (15a section 1) | sqlx 0.9.0's checked `query!` macros need a database or a committed `.sqlx` directory at build time; lanes run no database. A database-tier test prepares every registered statement instead (section 7) | https://docs.rs/tokio-postgres/0.7.18/tokio_postgres/ ; https://docs.rs/sqlx/0.9.0/sqlx/macro.query.html |
+| Wake-ups | `LISTEN`/`NOTIFY`: one dedicated, reconnecting connection per process, outside the pool, since tokio-postgres delivers notifications only through the connection task the caller drives (`AsyncMessage::Notification`); it does not work through a transaction-mode pooler. Payload under 8,000 bytes; delivered only after commit; a 2 s poll covers a lost wake-up | Valkey pub/sub: a second store for a job PostgreSQL does | https://www.postgresql.org/docs/18/sql-notify.html ; https://docs.rs/tokio-postgres/0.7.18/tokio_postgres/enum.AsyncMessage.html |
+| Row-level security | a `ProjectTx` type: repositories of project tables take `&mut ProjectTx`, made only by `project_tx(pool, project)`, which sets the scope as `src/db/session.py` does; the pool is private to `op_db` so a handler cannot open a bare transaction | a runtime check per call can be forgotten; a type cannot | (pattern; PostgreSQL row security as 02a and 15 R10) |
+| Job queue | our own runner on the existing tables (section 2.5) | section 2.5's library table | https://www.postgresql.org/docs/18/sql-select.html (`SKIP LOCKED`) |
+| Object storage | object_store 0.14.2 (MIT or Apache-2.0, 2026-09-15): `LocalFileSystem::new_with_prefix` and `AmazonS3Builder` (`with_endpoint` for S3-compatible servers, `with_allow_http` for a local test server, `with_url` for Cloudflare R2, `with_checksum_algorithm` for an integrity check on upload, `with_conditional_put`). "All operations are atomic, and readers cannot observe partial and/or failed writes"; `put_multipart_opts` writes "without buffering the entire object in memory"; `PutMode::Create` fails with `AlreadyExists` on an existing object; `Path::parse` refuses `.`, `..`, empty segments and control characters. `LocalFileSystem` follows symlinks that leave its root, so the key layout never creates one and local read paths are checked (section 4.4). The 0.13 upgrade guide renamed `copy`, `rename` and `delete` to `copy_opts`, `rename_opts` (default: copy, then delete) and `delete_stream`; the lane reads it | `aws-sdk-s3` 1.159.0 (Apache-2.0): S3 only, a second mechanism for the local store; cap-std 4.0.3: local only. Decision 4: one interface | https://docs.rs/object_store/0.14.2/object_store/ ; https://docs.rs/object_store/0.14.2/object_store/aws/struct.AmazonS3Builder.html ; https://docs.rs/object_store/0.14.2/object_store/local/struct.LocalFileSystem.html ; https://docs.rs/object_store/0.14.2/object_store/path/struct.Path.html ; https://docs.rs/object_store/0.14.2/object_store/enum.PutMode.html |
+| Content hash on write | SHA-256 while streaming, `sha2` 0.11.1 (already pinned in `native/Cargo.lock`); the host's Haswell CPUs have no SHA instructions, so M18 measures the cost at 20 MP | BLAKE3 is faster in software but 15a's `photos.content_sha256` is SHA-256 | https://docs.rs/sha2/0.11.1/sha2/ |
+| Duplicate probe | a port of py-imohash (about 30 lines: 16 KiB samples at start, middle and end, MurmurHash3 x64 128, size as a varint over the first bytes), checked against goldens from the Python `imohash` on the standard lists; `murmur3` 0.5.2 (MIT or Apache-2.0, last release 2022-10-10) for the hash, or a port of the reference function if the goldens disagree | the `imohash` crate 0.1.2 (last release 2024-08-28, about 10,000 downloads): the port is the default | https://crates.io/api/v1/crates/murmur3 ; https://crates.io/api/v1/crates/imohash |
+| ExifTool | a driver for `exiftool -stay_open True -@ -` by path, written here (about 200 lines, estimate), as `src/clients/exiftool_client.py` is today | `exiftool` 0.3.1 and other wrappers have few users. `exiftool-rs` 1.0.0 (2026-10-30, GPL-3.0-or-later: compatible with AGPL, but outside `native/deny.toml`'s allow list, so an explicit `cargo deny` exception would be needed) is not chosen | https://crates.io/api/v1/crates?q=exiftool |
+| Capture fast path (candidate, M16) | kamadak-exif 0.6.2 (BSD-2-Clause, 2026-11-05): reads Exif "directly from some image formats including TIFF, JPEG, HEIF, PNG, and WebP" through `Reader::read_from_container`; time, GPS, orientation and camera tags on JPEG. Accepted only if M16 shows equal values to ExifTool on the corpus; ExifTool stays for the formats and tags the fast path does not cover | nom-exif 3.8.0: licence "non-standard" on crates.io | https://docs.rs/kamadak-exif/0.6.2/exif/ |
+| Text tokens for text search | tokenizers 0.23.2, checked token for token against today's tokenizer | | https://crates.io/api/v1/crates/tokenizers |
 | HTTP clients (segmenter, VLM, model-server HTTP) | reqwest 0.13.5 | | https://crates.io/api/v1/crates/reqwest |
-| Tests | proptest 1.12.0; testcontainers-modules 0.15.0 (PostgreSQL) for the database tier | cargo-fuzz needs a nightly toolchain, against the pinned stable toolchain of plan 17 | https://crates.io/api/v1/crates/proptest |
+| Graph and assignment (near-duplicate groups, lineage) | petgraph 0.8.3 (MIT or Apache-2.0: connected components, union-find); pathfinding 4.16.0 (Apache-2.0 or MIT: `kuhn_munkres_min`, the Hungarian method; weights must be `Ord`, so float costs are scaled to integers, checked against SciPy's `linear_sum_assignment` on recorded inputs) | | https://crates.io/api/v1/crates/petgraph ; https://docs.rs/pathfinding/4.16.0/pathfinding/kuhn_munkres/fn.kuhn_munkres.html |
+| k-means and kNN at scale | decided by M12 and M13: matrix-multiply kernels in our own GPU crate first; cuvs 26.10.0 (Apache-2.0) only if its Rust API is proven on the card; linfa-clustering 0.8.1 on CPU as the small-set path | section 2.3 | review evidence, section 2.3 |
+| Tests | proptest 1.12.0; testcontainers-modules 0.15.0 (PostgreSQL) for the database tier | cargo-fuzz needs nightly, against the pinned stable toolchain | https://crates.io/api/v1/crates/proptest |
 
-Licences are recorded by `cargo deny` at selection with plan 17's allow list; none above is
-outside it by its crates.io record, and the first lane's `cargo deny` run is the proof.
+### 2.3 What stays Python (decision 3), and the rule for everything else
 
-### 2.3 What stays Python, with the reason (the roadmap statement checked)
+| Group | Verdict |
+|---|---|
+| `probe`, `train`, `model_export`, `bakeoff`, `promote` | stay Python: Ultralytics, PyTorch, TensorRT and ModelOpt, ONNX Runtime, `onnx` have no Rust equivalent |
+| `embedding_viz` (UMAP) | stays Python until a product decision replaces the method: annembed 0.1.6 is "à la UMAP" and no maintained exact port exists; M14 measures map quality so the owner can decide |
+| `cluster_run` (both methods), `item_scores` (uniqueness), `near_dup_score` and `near_dup_core_group` (exact all-pairs kNN), `persons_cluster` (face kNN) | Rust if M12 or M13 passes on 100,000 and 1,000,000 real crop vectors; else Python reading and writing its own result tables. The decision falls before R6 and R8 start, so neither language's version is written and then replaced |
+| `score_rows`, `region_fp_centroids`, `selection` (k-center greedy), `near_dup_group`, `near_dup_rescore`, `group_lineage`, `raw_label_clusters` (`autolabel`), the `assist_loop` splitter, `embedding_reindex`, `reprocess`, the VLM client jobs and the VLM worker loop | Rust in their slice ("straightforward" in the review's table: a GEMM, a farthest-point loop, union-find, the Hungarian method, average or complete linkage over at most 2,000 members, HTTP and gRPC calls), each checked for equal output on recorded inputs |
+| Segmenter and vLLM servers | stay, in their own images |
 
-Roadmap 14 section 4 says "Training, export and the VLM stay Python: they are the GPU frameworks'
-language". Checked against the inventory's import table:
+One rule, which replaces revision 0's two (review minor 9): every job not in the stay list above is
+Rust; the jobs that stay never fold opinions, so no internal write route for Python is built. A
+Python job reads and writes only the job tables and its own result tables (runs, scores,
+projections), through `src/db`; `rg "apply\("` at each family's entry confirms it. Roadmap 14 section
+4's "the VLM stays Python" becomes "the VLM server stays Python".
 
-| Group | Libraries | Verdict |
+### 2.4 The contract and the frontend (decision 10)
+
+The frontend imports `contracts/ts/itemWire.ts` and reads `contracts/openapi/curation.json` in 20
+contract tests key by key; `frontend/e2e/harness/stub.py` builds stubs from it. The contract today is
+FastAPI's `app.openapi()` filtered to `/curation` (OpenAPI 3.1.0, 759 components, 388 operations).
+The 66 core route decorators have no contract; R0c (18a) writes `contracts/openapi/core.json` as
+their baseline before R2a.
+
+Two ways to keep the contract, decided by the spike M15 before R1a's contract part:
+
+| | A. Code-first | B. Contract-first |
 |---|---|---|
-| `train`, `model_export`, `bakeoff`, `probe`, `promote` | Ultralytics, PyTorch, TensorRT and ModelOpt, ONNX Runtime, `onnx` | stay Python: no Rust equivalent of the training and export frameworks |
-| Numeric jobs (8 kinds above) | FAISS, scikit-learn, SciPy, UMAP, cuML optional | stay Python in this plan (plan 16 owns their logic). One job per process, and these libraries run in C or C++ outside the interpreter lock, so the lock is not their bound. Reopened per kind only when a measured run at 1 million vectors shows the Python process (not the library) binding a wait a person feels |
-| VLM client jobs and the VLM worker loop (`vlm_label_batch`, `vlm_verify_region_batch`, `scripts/curation/vlm_worker.py`) | httpx and tenacity | challenged and changed: the GPU framework is vLLM in its own server, not these clients. They are input-output bound, so speed is not the reason to move them; the fold is. They write class opinions through `apply()` (15c S8a), and a fold kept in Python for them would exist twice for good. They port in R10 |
-| `autolabel`, `assist_loop` | scikit-learn (`raw_label_clusters.py`, `assist_loop/splitter.py`) and VLM calls | they also write opinions. At R10's entry the lane reads what each scikit-learn call does: a call with a maintained Rust equivalent ports with the job; otherwise the job stays Python and writes its opinions through the server (one internal write route of the `api` role, R10), never through a Python fold |
-| Segmenter and vLLM servers | their own images | stay |
+| Source of truth | Rust wire structs with utoipa 6.0.0 derives (utoipa-axum 0.3.0); `op_contracts` prints the document | the committed `contracts/openapi/*.json`; Rust wire types generated from it or checked against it by a test |
+| During the port | `scripts/codegen/export_api_contracts.py` merges the Rust part and the FastAPI part into the one file | the file is frozen per family at its switch; the FastAPI generator stops writing a family when Rust owns it |
+| Known limits | utoipa's serde support is partial; `discriminator` works only on untagged enums; `Option` becomes nullable (ToSchema docs). Whether it writes `prefixItems` (8 uses), `const` (42) and a discriminator with a mapping on a tagged enum (2) is unknown | `contracts/README.md` says the files are generated, never hand-edited; a change becomes an edit of the file plus regenerated types, which needs a rule and a tool |
+| What it changes | a hook needs a built Rust binary: the `op_contracts` hook runs `cargo run --locked -p op_contracts` scoped to `native/**` and the contract files (cost measured in M15) | the drift hooks compare Rust types to the file; the generator of item wire and enum files moves to a Rust test |
 
-The rule behind the table: after R12 only Rust folds. A Python job that calls `apply()` after wave
-G is either ported or writes through the server. The numeric jobs write run and result tables that
-are joined, not folded (15 section 4.4); R10's entry confirms this per kind with `rg apply\(`.
+M15 builds, in a scratch crate outside the merge, the two discriminator schemas, two tuple
+(`prefixItems`) schemas and three `const` fields of `curation.json` both ways and compares them
+with the normalised diff below. A passes when every one matches with no custom `ToSchema` impl or
+with at most one documented impl per construct; else B.
 
-The remaining Python processes are single-purpose workers whose cost sits in GPU or C libraries.
-"No more GIL or workarounds" holds for every process on the request and ingest paths.
+Equality is by meaning, not bytes (decision 5, Q3 accepted with the review's conditions): (1) `oasdiff
+breaking` (OpenAPI 3.1 support documented from v1.15.0) between the integration head and the new
+file reports nothing outside the slice's intended-change list; (2) a normalised diff of each ported
+operation and its schemas (titles dropped, the two spellings of an optional field made one, keys
+sorted) is empty outside that list, and compares `prefixItems`, `const`, discriminators and nullable
+forms directly, since oasdiff covers `prefixItems` only when added or removed
+(https://github.com/oasdiff/oasdiff/blob/main/docs/OPENAPI-31.md); (3) the frontend's contract
+tests, `npm run check` and `npm run build` pass unchanged. Error bodies keep FastAPI's shapes, which
+`frontend/src/lib/api_errors.ts` reads (`{detail}`, `{detail: {error, message}}`, 422 `{detail:
+[{loc, msg, type}]}`); the `msg` text of validation errors may differ, except "String should match
+pattern '...'", which Rust emits word for word. The generated files `item_wire.json`, `itemWire.ts`,
+`regionStatus.ts`, `classSources.ts`, `classNames.ts`, `keymap_actions.json` and the frame-engine
+contracts stay generated from their Python sources until the slice that ports the source; then the
+source moves to Rust and the files stay byte-identical (a test compares).
 
-### 2.4 The contract and the frontend
+### 2.5 Jobs without Celery (decision 2)
 
-The frontend imports `contracts/ts/itemWire.ts` and reads `contracts/openapi/curation.json` in its
-contract tests key by key (for example `frontend/src/lib/itemFilter/filterKeys.contract.test.ts`).
-The contract today is FastAPI's `app.openapi()` (OpenAPI 3.1.0), 2.3 MB, 759 components.
+The existing tables already hold the protocol: `jobs` (33 columns: status with 11 transitions guarded
+by the trigger `jobs_status_transition_guard`, `fencing_token`, `owner`, `heartbeat_at`,
+`lease_expires_at`, `retry_count`, `max_attempts`, `attempt`, `cancel_requested_at`,
+`pause_requested_at`, `idempotency_key`, `parent_job_id`), `job_attempts`, `job_items`, and the partial
+unique index `uq_jobs_one_active` for exclusive groups (02b section 1). `run_job`
+(`src/tasks/runtime/job_task.py`) already claims a row by id in one statement, heartbeats and writes a
+fenced terminal state; Celery only delivers the id and backstops time limits.
 
-- The generator gains a Rust part: `op_contracts` (a binary in `native/`) prints the utoipa document
-  of the ported routes; `scripts/codegen/export_api_contracts.py` merges it with the FastAPI part,
-  sorts keys and writes the same file. The drift hooks run both.
-- Equality is semantic, not byte for byte: (1) `oasdiff breaking` between the contract on the
-  integration head and the merged one reports nothing outside the slice's intended-change list;
-  (2) a normalised diff of each ported route's operation and its schemas (titles dropped, the two
-  spellings of an optional field made one, keys sorted) is empty outside that list; (3) the
-  frontend's contract tests, `npm run check` and `npm run build` pass unchanged. The first slice of
-  each route family records the cosmetic regeneration (titles and optional spelling) as one
-  intended change.
-- Error bodies keep FastAPI's shapes, which `frontend/src/lib/api_errors.ts` reads: `{detail:
-  "..."}`, `{detail: {error, message}}`, and 422 `{detail: [{loc, msg, type}]}`. The `msg` text of
-  validation errors may differ (intended change), except "String should match pattern '...'", which
-  the frontend rewrites and Rust emits word for word.
-- `contracts/json/item_wire.json`, `itemWire.ts`, `regionStatus.ts`, `classSources.ts`,
-  `classNames.ts`, `keymap_actions.json` and the frame-engine contracts stay generated from their
-  Python sources until the slice that ports the source; then the source moves to Rust and the files
-  stay byte-identical (a test compares).
+| Runner | Design |
+|---|---|
+| Rust (`op_jobs`, R1j in 18a) | claim: `SELECT ... FROM jobs WHERE status = 'queued' AND kind = ANY($kinds_this_process_handles) ... FOR UPDATE SKIP LOCKED LIMIT n` ("can be used to avoid lock contention with multiple consumers accessing a queue-like table", PostgreSQL docs); wake-up: `NOTIFY op_jobs` in the transaction that queues a row, `LISTEN` on the dedicated connection, 2 s poll backstop; lease and heartbeat with the fencing token; terminal states, cancel, pause, yield, `auto_resume`, exclusive groups as 02b; the reaper and ticks in the `periodic` role with the existing PostgreSQL advisory lock for a single ticker |
+| Python (the stay list of 2.3, R3a in 18b) | one claim loop per worker image (`src/tasks/claim_loop.py`): the same claim query for the kinds that process registers, `LISTEN` for wake-ups, then `run_job(job_id)` in one subprocess per job (replacing Celery's `max-tasks-per-child` and `max-memory-per-child`); the loop kills the child at the kind's `hard_limit_s`; `SoftTimeLimitExceeded` leaves `job_task.py`. The trainer, export and evaluator images replace their Celery consumer entry with the same loop |
+| Which runner takes a kind | the process that registers a handler for it; no `runner` column. A kind moves to Rust in the same slice as every route and tick that queues it |
+| Removed (R3a) | Celery and kombu configuration, `src/tasks/app.py` and the task registrations, `jobs-dispatch` (never built), `dispatch()`'s broker send, `task_queue`, `redis_transport`, `event_wakeup`, the reaper's re-dispatch rule, `jobs-beat`, `periodic-worker`, `flower`. Columns `dispatch_count` and `last_dispatched_at` lose their writer and leave in R12's baseline schema |
 
-## 3. The order of the work, by measured gain
+Libraries checked (crates.io, 2026-11-15; the review's table): apalis 1.2.0 (apalis-postgres 1.1.0 shows
+licence "non-standard" on crates.io while its README says Apache-2.0 or MIT; own `apalis` schema),
+graphile_worker 0.14.2 (own schema), underway 0.2.0 (16 months since release, own tables), sqlxmq
+0.6.0 (own tables, tied to sqlx), pgmq 0.33.7 (a queue table per name, no state machine), fang 0.11.0
+(own tables), rusty-sidekiq 0.15.2 (Redis semantics), celery 0.5.5 (2023, unmaintained). None runs
+the lease, fencing token, `interrupted` versus `lost`, exclusive groups, pause, yield and
+`auto_resume` on the existing columns, which the API's job route and the Python claim loop read: our
+own runner (about 1,500 lines, estimate) is justified.
 
-### 3.1 The candidates (brief items a to d)
+Valkey after Celery: its remaining uses are the event wake-up (becomes `NOTIFY op_events`, R3b), the
+image-counts dirty set (never ported: plan 15's design deletes it), reachability probes and the
+reaper's queued marker (both become rows or disappear). PostgreSQL's documented limits for
+`NOTIFY`: a payload under 8,000 bytes, one queue of 8 GB, delivery only after commit. Commit-time
+serialisation of notifying transactions is reported for PostgreSQL's implementation but not stated
+on the docs page; M17 measures it at three times the target commit rate. Valkey stays only if M17
+fails and a coalesced wake-up (at most one `NOTIFY` per process per 50 ms; the event rows stay the
+truth) also fails.
 
-| Candidate | What it gains (estimate unless measured) | Cost | Waits for | Must be measured first |
-|---|---|---|---|---|
-| a. The engine reads the photo by storage key (server-side paths and uploads both, since an upload is written to storage first): the API sends a key and a content claim (size, imohash), not the bytes | removes items 1 to 3 of section 1.4 from the API; estimate: 20 MP API CPU from 85 to 109 ms toward 25 to 45 ms in Python (the small-photo cost plus crop handling); the engine reads the file once (it needs the bytes anyway), removing the stub's 9 to 12 ms message copy | engine: one new input `source` and key resolution under configured roots (Rust, permanent); API: about 150 lines (estimate) in `file_read.py`, `ingest_stage.py`, `frame_engine.py` client, capture by path | N3 (protocol version 1 is fixed until then and the Python engine takes no new feature, plan 17 sections 1.1 and 0); slice F (storage keys) | M1, M3 |
-| b. The ingest writer in Rust, the API only accepting the job | removes the commit path's Python work (documents, rows, vectors, events); leaves the per-photo request work in Python; no gain on the size-dependent cost by itself | needs the fold, attach and summary writer in Rust (section 3.3); a second process boundary for every photo | S1a-ii; fold stable | M1 (the share of commit work) |
-| c. Ingest routes first in a Rust server beside the Python one (the Rust server fronts port 4603 and forwards unported paths), then families one at a time | estimate: API CPU per photo 2 to 6 ms of server work at both sizes plus ExifTool's own CPU (unknown until M5), against 19 to 21 (small) and 85 to 109 (20 MP); uploads stream to storage without a whole-photo buffer | a server skeleton, the record and jobs core, the ingest pipeline; each later family is its own slice | N3; S1a-ii and the fold stable (section 3.2) | M1 to M5 |
-| d. A full port in one cut | none until the end; 435 route decorators, 44 job kinds and 175,623 lines of `src/` in one change, parity proven all at once, while 15c rewrites the same modules | very large; a long-lived branch rewritten twice | everything | rejected |
+## 3. The order of the work
 
-Decision: c, with a's engine half inside its first slice. b is not a step of its own: a writer
-service beside a Python API keeps the per-photo request cost in Python and adds a boundary, and the
-Rust ingest pipeline of c contains the writer anyway. d is rejected.
+### 3.1 Stages, in the owner's order
 
-a's Python half (sending keys from the Python API) would be rewritten by c's first slice. It is
-planned as a conditional slice RP (18a) only under branch A of decision D1 below.
-
-### 3.2 What each step waits for, so nothing is ported that is about to be deleted
-
-| Rust slice (18a) | Waits for in storage (15c) | Waits for in the engine (17) | Why |
+| Stage | Owner's step | Slices (18a, 18b) | What the person gets |
 |---|---|---|---|
-| RP (conditional) | slice F (keys) | N3 | protocol frozen before N3 |
-| R1 ingest | wave E merged (S6 places new photos as membership rows; S7 changes import's image stage); S9 not needed | N3 (and N1b, N1c for faces and text in the benchmark plan) | S1a-ii rewrites the commit path; S6 puts placement back into it; porting earlier means a Rust commit path that two Python lanes must then edit |
-| R2 core routes (G5) | wave G (S9): the curation search path gone; the reserved core project of 15 answer 1 | N3 (the engine branches `detect`, `faces`, `face_embed`, `ocr`, `embed_frame` native) | 15c answer 7 keeps core data on the global indexes until this track; doing it in Python first would be rewritten |
-| R3 jobs, ticks, live events | R1 merged | none | the runner core arrives in R1; the beat and the server-sent events port after |
-| R4 to R11 route families | wave G merged (every family on the record, the contract diff of 15c section 2 applied) | none | 15c section 2 changes wire fields of these families slice by slice until S9 |
-| R12 Python API removed | all of the above | none | |
+| 0, now | (1) runs in plan 17; (2) starts | R0 measurements and tools (R0w, R0c, R0d, R0e, R0g, R0x, M15); R1s storage layer; R1a server skeleton and front; R1j job runner core; R1e engine client; R1x ExifTool pool and hashing; R1u upload receiver up to the landing zone | nothing changes for the person; the pieces of the Rust ingest are built and tested |
+| A | (2) | R3a ticks in Rust, Python claim loop, Celery leaves; R3b live events from Rust, Valkey leaves; R1b the record and the fold in Rust; R11a projects on the record; R1c Rust ingest switches (uploads and folders; S3 storage); R2a inference routes on the engine | ingest on Rust at the card's rate; uploads stream to storage; `/detect`, `/faces`, `/embed`, `/ocr`, `/analyze` on the engine |
+| B | (2), (3) | R4 gallery reads; R5 labelling acts, review, counts; R5e erasure; R11 configuration, settings, models | the gallery, labelling and settings work again on Rust; the gallery frontend update (photo-library plans) builds on R4 |
+| C | (4) | R6 vectors, search, near-duplicates, holdout; R7 regions; R8 clustering; R9 import, combine, export, training inputs; R10 machine helpers and re-runs; R2b core data on the record, OpenSearch leaves | every family on the record; one database when gates A and B say so |
+| D | (2) closes | R12 the Python API removed; the schema leaves Alembic | one backend language on every request path |
+| E | (5) | the cloud benchmark (section 5) on the deploy shape (section 6) | a measured cloud deployment, behind authentication that a later plan builds |
 
-The fold in Rust: R1 needs `apply()`, `attach` and `store_states` (`src/domain/fold*.py`,
-`claim_match.py`, `src/services/record/apply.py`, `attach.py`, `src/db/repos/state.py`: about 3,100
-lines of Python domain and 1,300 of repositories on `int/storage`). From R1's merge until the last
-Python caller of the fold is ported (R10 at the latest, section 2.3), the fold exists twice. The bound on that:
-a generated case contract `contracts/json/fold_cases.json` (from the Python fold over the recorded
-differential cases and property-generated histories), a drift hook, and the rule plan 17 section 7
-already uses for the plan parser: the lane that changes the fold regenerates the cases and changes
-the Rust fold in the same commit. The Python fold is deleted with its last caller.
+R2b deletes OpenSearch only when gates A and B decide (decision D4 below), and it sits in stage C, so
+the cloud north star's one database arrives in stage C, not earlier (review major 9). The cloud
+benchmark's ingest half (B1, B2, B3) can run after stage A; B4 needs R4.
 
-### 3.3 The resulting order
+### 3.2 The storage plans (decision 1: every write path is built in Rust directly)
 
-```text
-now ── R0 measurements ──┬────────────────────── (wave E, N3) ── R1 Rust ingest ── R3 jobs, ticks, events ─┐
-                         └─ D1 branch A only: RP after N3 + F                                             │
-                                          (wave G, N3) ── R2 core routes, OpenSearch leaves ──────────────┤
-                                          (wave G) ── R4 .. R11 families, ordered by M7 ───────── R12 Python API removed
-```
+No new Python storage slice is written. Kept from plans 15, 15a, 15b and 15c, and binding: the schema
+(15a); migrations 0010 to 0018 as SQL; the transaction and lock-order design (15a section 7); the read
+shapes (15b); the claim kinds and the fold's truth table as data; the key layout (section 4.3 here,
+from 15 section 8); every measurement (15b M1 to M10, gate A, gate B). The Python step 1 on
+`int/storage` (fold, claims, repositories, `apply()`, the 45,000 differential sequences over 2,000
+seeds of `tests/domain/test_fold_differential.py`; 3,137 lines of domain and 1,457 of repositories
+and `apply.py`) is the oracle: R0x exports its cases as data, the Rust fold must pass them, and it is
+not extended. The Python backend on `int/b4-stateless` stays as it is (its current store, its tests)
+as the reference and the differential-parity partner until each family's Rust slice replaces it; it
+gets fixes only. 18b section 6 maps every 15c slice to the Rust slice that now builds its design, and
+says what of it is kept as design, kept as SQL, or no longer written.
 
-| Step | Gain (estimate unless marked) | First usable result |
-|---|---|---|
-| R0 | the numbers that fix D1 to D3 | none (measurement only) |
-| R1 Rust ingest (uploads and server-side paths) | API CPU per photo from 19 to 21 ms (small) and 85 to 109 ms (20 MP) to 2 to 6 ms plus ExifTool (estimate); at 140 photos/s on two cards about 11 to 15 cores freed; uploads with no whole-photo buffer and back pressure to the browser | ingest at the card ceiling on 20 MP and two cards where the host allows; the cloud benchmark's ingest half |
-| R2 core routes on the engine and the record | the core routes stop preprocessing in Python (cv2, numpy); the five global OpenSearch indexes and `image_contents` go; with 15c S9 and gate B in PostgreSQL, OpenSearch leaves the stack (its heap and its cores: 4.5 cores at 495 photos/s on the old curation path, measured) | one store; `/detect`, `/faces`, `/embed`, `/ocr`, `/analyze`, `/search` on the engine |
-| R3 | small throughput gain; removes Celery beat and the Python job runtime for Rust kinds; live events from one process | the Python API no longer runs jobs |
-| R4 to R11 | per family, measured by M7; the page bars of 15 section 6 already hold in SQL (15b gate A: deep list page 1.3 / 2 ms p50 / p99 in PostgreSQL), so these gains are API CPU per request and one language | each family is usable alone behind the same paths |
-| R12 | the Python API, FastAPI, uvicorn, the forwarder and the Python contract generator deleted | one backend language on every request path |
+Schema ownership until R12: Alembic stays the single migrator, so one tool writes the schema of one
+database. Each of 0010 to 0018 is a committed SQL file under `src/db/migrations/sql/`, run by a
+ten-line Alembic revision; R12 replaces the chain with one baseline SQL (wipe and re-ingest allowed).
+Rust database tests get the schema from a committed dump (18a section 3.3).
 
-### 3.4 Decisions the measurements settle
+### 3.3 Windows: what does not work when, and what the full sweep runs against
+
+The Rust slices merge into one integration branch for the programme (question Q1 proposes
+`int/rust`: `int/b4-stateless` with `int/native` merged). The reference stack is `int/b4-stateless`
+at a pinned commit.
+
+| Window | On the integration branch, works | On the integration branch, does not work | The full sweep (once per large merge) runs |
+|---|---|---|---|
+| W0: stage 0 (until R1c merges) | everything as today: Python serves every route, through the Rust front once R1a merges | nothing new is broken | the offline suite, the database tier, the live and browser tiers through the Rust front, `--all-files` hooks, the cargo gates and the Rust database tier (jobs on the schema dump); the Python suite of `int/b4-stateless` only when it takes a fix |
+| W1: after R3a | as W0; jobs run on the Rust runner and the Python claim loop | nothing new is broken (every tick and kind keeps a runner) | as W0, plus the job conformance suite (18a section 3.5) and `test_job_load.py`, `test_queue_delivery.py`, `test_job_recovery_real_handlers.py` live |
+| W2: after R1c (the record) | ingest (upload, batch, objects, bulk, sources) on Rust into the record; core routes; configuration documents, settings, models, VLM registry; jobs | every curation family that reads or writes the search store shows nothing for photos ingested after the switch: gallery, lists, labels, review, search, regions, clusters, near-duplicates, import, combine, export, training inputs, machine helpers. Accepted by decision 1, as plan 15c accepted "families not yet moved do not work between slices" | the switched families: their live tests through Rust, their differential cases against the reference stack (brought up once per sweep), their Rust database tier; the families not yet switched: their live tests listed in `tests/pending_rust.txt` (strict expected failure, 18a section 3.4), and their behaviour stays proven by the reference stack as the differential partner; unaffected tests must pass |
+| W3 onward: each family slice | each switched family works again, on the record | the families still listed in `tests/pending_rust.txt` | as W2; each family slice removes its ids from the pending list and must leave it shorter |
+| After R12 | everything, one language | nothing | the whole suite on Rust; the differential ledger closed |
+
+### 3.4 The gain of the Rust ingest, as an estimate with its parts (decision 7)
+
+| Part of API CPU per photo | Small (today 18.6 to 21.3 ms) | 20 MP (today 84.9 to 109.1 ms) | After R1c (estimate) |
+|---|---|---|---|
+| ExifTool execution | 10.5 ms (ingest timeline) | 33.8 ms | unchanged while ExifTool stays on the hot path; less if read by path costs less than the measured feed (M5); near 0 for JPEG if the fast path passes M16 |
+| Interpreter work and photo copies | the rest: about 8 to 11 ms | the rest: about 51 to 75 ms | Rust server work 2 to 6 ms (estimate, revision 0's figure, unmeasured) |
+| SHA-256 on write (uploads only) | about 165 KB per photo | 6.5 MB per photo | M18 measures; a software SHA-256 on this host is a material share at 20 MP (estimate) |
+| Floor, ExifTool kept | | | small about 12 to 17 ms; 20 MP about 40 to 60 ms (estimate, upper end with SHA-256 on uploads) |
+
+So the go bar of R1c, API host CPU per photo at most 0.5x Python's (18b R1c), is plausible at 20 MP
+and doubtful on small photos unless M16's fast path or decision D2 takes ExifTool off the hot path.
+At 140 photos/s on two cards at 20 MP the estimate frees about 3.5 to 9.7 cores (arithmetic on 25 to
+69 ms saved per photo). M1 and M5 run first; M16 is the candidate that changes the small-photo floor.
+
+### 3.5 Decisions the measurements settle
 
 | # | Decision | Branches | Settled by |
 |---|---|---|---|
-| D1 | Does the Python API get the engine-by-key change (RP) before R1? | A: yes, when M3 shows the change removes at least 60% of the size-dependent API CPU at 20 MP and R1's entry (wave E) is expected more than four weeks after N3; RP is then the one planned piece of Python that R1 rewrites, stated as such. B: no; the engine's `source` input ships inside R1 | M3, and the coordinator's dates for N3 and wave E (question Q1) |
-| D2 | Does ExifTool stay on the hot path? | keep (M5 under 3 ms CPU per photo at 20 MP, estimate threshold); else the hot path reads only capture time, orientation and GPS from EXIF in Rust and the full ExifTool read becomes a queued job, which needs the gallery metadata plan's agreement ([05](../photo_library/05_p2a0_metadata.md) owns the reader) | M5 |
-| D3 | API worker count until R1 lands | the 30-process grid: if photos/s at 20 MP rises above the plan C ceiling with CPU per photo unchanged, set the compose default from the grid (configuration only) | M2 |
-| D4 | Does OpenSearch survive as a derived store? | no (R2 deletes the client); yes (R2 and R6 use the `opensearch` crate behind the vector-index or search-copy interface) | gate A in S9, gate B round 2 |
+| D2 | Does ExifTool stay on the hot path? | keep (M5 under 3 ms CPU per photo at 20 MP, an estimate threshold); else the hot path reads time, orientation, GPS and camera in Rust (M16's reader) and the full ExifTool read becomes a queued job, agreed with the gallery metadata plan ([05](../photo_library/05_p2a0_metadata.md), which owns the reader) | M5, M16 |
+| D3 | API process count until R1c lands | if photos/s at 20 MP rises above the plan C ceiling with CPU per photo unchanged at 30 processes, set the compose default from the grid (configuration only) | M2 |
+| D4 | Does OpenSearch survive as a derived store? | no (R2b deletes the client and the service); yes (R2b and R6 use the `opensearch` crate behind the vector-index or search-copy interface) | gate A, gate B |
+| D5 | Numeric kinds in Rust or Python | per section 2.3 | M12, M13 (and M14 for the owner's product decision on the 2-D map) |
+| D6 | Contract mechanism | A or B of section 2.4 | M15 |
 
-## 4. The upload path is a hot path
+Revision 0's D1 (a Python half of "the engine reads by key") is dropped (decision 6): no Python
+change that R1c replaces is written. Reading by key is an engine protocol addition for plan 17
+(section 12).
 
-The cloud picture (section 5) is the browser uploading through the existing route. There is no
-second upload API.
+## 4. Storage and the upload path (decision 4)
 
-Today, read in code: the frontend (`frontend/src/lib/api_ingest.ts:40-52`) sends `POST
-{prefix}/ingest/upload` as multipart: one `images` part per file, then `image_paths` (a JSON list of
-identifiers) and `source`. The planner (`frontend/src/lib/ingest/uploadPlanner.ts`) packs files up
-to the served `upload_max_images_per_request` (128) and `upload_max_bytes_per_request` (512 MiB,
-`src/config/curation.py:129-130`); `DEFAULT_UPLOAD_CONCURRENCY` is 2 requests in parallel
-(`frontend/src/lib/ingest/ingestConfig.ts:35`). The route answers once every photo of the request
-is done, with one result per photo. The live tier covers it (`tests/live/test_live_ingest.py`).
+### 4.1 Today, read in code
 
-The Rust route keeps the path, the form fields, the limits and the response, and changes what
-happens inside:
+The frontend (`frontend/src/lib/api_ingest.ts:40-52`) sends `POST {prefix}/ingest/upload` as
+multipart: one `images` part per file, then `image_paths` (a JSON list of identifiers), `source`,
+and the optional `run_id`. The planner (`frontend/src/lib/ingest/uploadPlanner.ts`) packs files up to
+the served `upload_max_images_per_request` (128) and `upload_max_bytes_per_request` (512 MiB,
+`src/config/curation.py:129-130`); two requests run in parallel (`ingestConfig.ts:35`). Accepted
+extensions are `.jpg`, `.jpeg`, `.png` (`src/config/curation.py:131`). The route answers once every
+photo of the request is done, one result per photo. Uploads land at
+`<upload_root>/<imohash[:2]>/<imohash><ext>` (`persist_uploaded_bytes`, `image_serving.py:152`), under
+the project's upload root (`src/config/projects.py:137`), named by the sampled hash; the Python `BlobStore` protocol (`src/clients/storage/base.py`) writes whole bytes (`write_atomic`),
+with no streaming and no hash check; `DISK_GUARD` (`src/core/disk_space.py`) refuses uploads when
+free space is low.
 
-1. Each `images` part is streamed with `Field::chunk()` into the storage layer: a temporary key on
-   the landing root, written as chunks arrive; no process holds a whole photo except the engine,
-   which must for nvJPEG.
-2. When a part ends: `imohash` from the stored file (three 16 KiB reads), the content claim, then
-   the engine call with the storage key, and capture by path. The next part is read meanwhile, so
-   engine work overlaps the rest of the upload.
-3. Back pressure: the photos admitted to work and the bytes in flight are bounded (one semaphore
-   each, sized from cores and the engine's in-flight cap). When either is full the route stops
-   polling the body; hyper then stops reading the socket and TCP flow control slows the browser. A
-   request that cannot start inside its admission bound answers 503 with `Retry-After`, as the
-   engine-unavailable answer does today.
-4. A duplicate's temporary file is deleted; a new photo's file is renamed or copied to its content
-   key by the storage layer after the commit.
+### 4.2 The flow per photo in Rust (R1u, R1s, R1c)
 
-Contract: no wire change is needed for speed. One frontend edit is planned with R1: append
-`source` and `image_paths` before the `images` parts (`api_ingest.ts:47-50`), so each photo can
-commit as soon as it is processed; a client that sends them last still works and its commits wait
-for the end of the body. `scripts/curation/ingest_upload.py` gets the same order. The default
-concurrency of 2 is reset from measurement M10 (a frontend constant, not a contract).
+1. **Receive.** `next_field()` yields one part at a time. The receiver writes the part's chunks to a
+   new file in the landing zone (`landing/<upload_id>/<n>.part`, local fast disk), computing SHA-256
+   as the bytes pass. A permit of the bytes-in-flight bound is taken when the part's first bytes
+   arrive, not before, so a slow client holds no permit while idle; the idle-body limit is tower-http's
+   `RequestBodyTimeoutLayer` (deadline reset per frame). `DISK_GUARD`'s thresholds apply to the
+   landing volume before a part is accepted.
+2. **Part complete.** The file is flushed; `imohash` is read from it (three 16 KiB reads); the file is
+   renamed inside the landing zone to its content name `landing/<project_id>/<sha256>` (same
+   filesystem, so a rename). The finished part goes to a spawned task through a bounded channel (its
+   capacity is the photos-in-work bound); the receiver reads the next part meanwhile.
+3. **Work, in parallel.** The content claim (duplicate check, record); the engine call (bytes read once
+   from the landing file today; the landing key once plan 17 adds reading by key, section 12);
+   capture through the ExifTool pool by path (or the fast path, M16); the mover (step 4).
+4. **Make durable before the commit.** The mover writes the object to its content key in the object
+   store with `PutMode::Create`: a local store renames within the same store when the landing zone and
+   the store share a filesystem, else streams with `put_multipart_opts`; S3 checks integrity on upload
+   with `with_checksum_algorithm`. `AlreadyExists` means the content is present: its size and hash
+   are checked, never overwritten. The photo row is committed only after the object is durable, so
+   the record never says "stored" before the bytes are (MAJOR 3: no rename or move after the commit).
+5. **Commit.** One transaction per commit group (18b R1b, R1c). A duplicate's landing file is deleted
+   and no object is written.
+6. **After the commit.** The landing file is deleted. A crash between 4 and 5 leaves an object no row
+   references; the reconcile tick (R3a's `upload_sweep`, extended) deletes such objects older than one
+   hour and stale landing files, under the imohash lock rule of 4.5.
 
-## 5. The cloud benchmark
+Back pressure: when the photos-in-work or bytes-in-flight bound is full the route stops polling the
+body; hyper stops reading the socket and TCP flow control slows the client. A request that cannot
+start inside its admission bound answers 503 with `Retry-After`, as the engine-unavailable answer does
+today.
 
-The north star (owner, 2026-11-15): a photo service in the cloud that takes uploaded photos,
-processes them as fast as possible, stores them in PostgreSQL and shows them on a map and in time or
-event groups as quickly as possible. The product stays a local application; this is the benchmark
-to work toward, and it deploys as Docker. The Cropwright frontend runs in front of the Rust backend;
-authentication and network security are assumed set up for such a deployment and are not built
-here (section 6).
+Server-side paths (`ingest/batch`, bulk and source jobs) skip steps 1, 2 and 4: the source root is read
+in place and never written (plan 15 section 8); `photos.storage_key` is `source/<relative path>`.
 
-### 5.1 What is measured
+### 4.3 The key layout (by project and content)
 
-Photos arrive as uploads through `POST /curation/projects/{project}/ingest/upload` (bytes, not
-server-side paths), sent as the frontend sends them (section 4). Processing is the library plan:
-detector, frame vector, crop vectors, faces, text lines, and capture time and place from EXIF.
+| Kind | Key | Notes |
+|---|---|---|
+| Original of an upload | `projects/<project_id>/originals/<sha256[0:2]>/<sha256>` | the project id, not the slug (a slug can be renamed); content addressed, so a retry or a second upload of the same bytes writes nothing |
+| Other files of a photo (`photo_files`: motion, edited, raw, sidecar) | `projects/<project_id>/originals/<sha256[0:2]>/<sha256>` of that file | the same rule |
+| Derived files | `projects/<project_id>/derived/<kind>/<photo_key>/...` with kinds `crops`, `thumbs`, `exports`, `training`, `snapshots` | derived files are separate from originals and deleted by prefix; crop and thumbnail entries are a cache that can be regenerated from the original |
+| Source roots read in place | `source/<relative path>` | never written or erased (plan 15 section 8) |
+| Models, bake-off results, caches | `models/`, `bakeoff_results/`, `cache/` as today's roots (`src/domain/storage_keys.py`) | unchanged roots; the `upgrade` root goes with the 0.6.0 upgrade code |
+
+`photos.content_sha256` is filled for every upload (computed while streaming), which 15a allows (the
+column is nullable and unique per project); `imohash` stays the cheap duplicate probe.
+
+### 4.4 Local read paths
+
+The engine and ExifTool need a file path. `op_storage` resolves two kinds of local key: landing keys
+and `source/` keys. Each is parsed with `object_store::path::Path::parse` (which refuses `.`, `..`,
+empty segments and control characters), joined to its configured root, canonicalised, and refused
+unless the result is inside the canonical root (symlinks that leave a root are refused, since
+`LocalFileSystem` would follow them). A property test generates keys and asserts no resolved path
+leaves its root.
+
+### 4.5 Delete, erase and shared files
+
+- Delete of a photo (trash) is a claim (plan 15 answer 4); emptying the trash is erasure.
+- Erasure of a photo (R5e in 18b, on 15a section 8's design): the record rows go under the
+  `erasure_jobs` guard; then the files: the original if the project owns it (uploads; never a source
+  root), `photo_files`, every derived prefix of the photo, exports and training copies listed by 15a
+  section 8, the holdout snapshot rewritten without it. `op_storage` provides the primitives (R1s):
+  delete by key, delete by prefix, both idempotent.
+- Shared files: originals are keyed per project, so erasure in one project never touches another
+  project's bytes. Inside a project, one stored object can be referenced by more than one row (a photo
+  and a `photo_files` row with equal bytes, a holdout snapshot, an export). Before an object is
+  deleted, the erasure job checks by query that no row in the catalogue's file-key columns still names
+  it; the check and the delete run under the same `(project, imohash)` advisory lock that the ingest
+  commit takes, and the ingest commit checks the object exists (a `head`) after taking that lock and
+  writes it again from the landing file if not. So a concurrent upload of the same bytes and an
+  erasure never leave a committed photo without its object. This is decision 4's "shared-file reference
+  counts" as a reference check by query, not a stored counter (question Q2).
+
+### 4.6 Failure domain and replicas
+
+One `api` process per host means a crash or out-of-memory kill drops every in-flight request of every
+project (today 8 processes share that load). The client retry is safe: content addressing makes a
+repeated photo a `duplicate` and its object already present. Two or more `api` replicas may run behind
+a load balancer; each sizes its own pools and permits. Risk row in section 9.
+
+### 4.7 Wire, formats and the frontend edit
+
+No wire change is needed for speed. One frontend edit ships with R1c: `api_ingest.ts` appends `source`,
+`image_paths` and `run_id` before the `images` parts, so each photo can commit as soon as it is
+processed; a client that sends them last still works and its commits wait for the end of the body.
+`scripts/curation/ingest_upload.py` gets the same order. The accepted extensions do not widen in R1c:
+HEIC, TIFF and WebP are added by changing the configured list when the engine's format corpus accepts
+them (plan 17 N1a) and M5's format rows are known (configuration, no code). The default of two
+parallel requests is reset from M10 (a frontend constant, not a contract).
+
+## 5. The cloud benchmark (decision 8)
+
+### 5.1 What is measured, as requests with expected results
+
+Photos arrive as uploads through `POST /curation/projects/{project}/ingest/upload` as the frontend
+sends them (section 4.7). Processing is the library plan: detector, frame vector, crop vectors, faces,
+text lines, capture time and place.
 
 | Id | Metric | How |
 |---|---|---|
 | B1 | Photos per second per GPU, end to end | photos committed / wall seconds of the steady window / GPUs; failed photos counted and must be 0 |
 | B2 | Photos per second per CPU core | B1 x GPUs divided by (a) the cores busy, summed over every container's cgroup `cpu.stat` in the window, and (b) the cores provisioned |
-| B3 | Time from the last byte of a photo's upload to "findable", p50 and p99 | the client stamps the last byte of each part; "findable" is the first `crop.created` event for the photo on the project's event stream, confirmed by the photo page route answering it and a search by its own picture returning it. No polling loop: the event is the signal, one read confirms |
-| B4 | Time from the last byte to "on the map" and "in a time group", p50 and p99 | after the event, one read of `GET /curation/projects/{project}/map/cells` that counts the photo's cell, and one read of the time grouping (below) that counts its group |
-| B5 | Cost per million photos | price per hour / (B1 x GPUs x 3600) x 1,000,000, compute only; storage, transfer and a managed database added as separate stated lines |
+| B3 | Time to "stored and findable", p50 and p99 | server stamps per photo: `part_complete` (step 2 of 4.2) and `committed` (the commit group's commit), logged with the `image_id`; reported as committed minus part_complete. The client stamps the last byte it wrote for each part and the response time of each request; both are reported, the client view as a second line. Every photo then passes, once, after the request answered: `GET /curation/projects/{project}/images/{image_id}` answers 200 with its stored fields, and `GET /curation/projects/{project}/images/locate` places it in the default photo list; a photo with at least one object also returns one of its crops in the top 10 of `POST /curation/projects/{project}/search/image` with its own bytes. Photos with no object pass the first two. The record is transactional, so a photo that passes is findable from its commit; a vector index outside PostgreSQL (if gate B picks one) adds its lag, measured as a third stamp |
+| B4 | "On the map" and "in a time group" | on the map: for each photo with GPS allowed by the location policy, `GET /curation/projects/{project}/map/cells` over a box around its position counts it (photos without GPS are counted apart, not failed). In a time group: there is no route yet; until the timeline buckets of the organise plan ([10](../photo_library/10_p2a1_organise.md)) exist, a SQL probe on the record's capture time stands in and is reported as "not a system check" |
+| B5 | Cost per million photos | price per hour / (B1 x GPUs x 3600) x 1,000,000, compute only; separate stated lines for storage, requests, transfer and the database (5.3) |
 | B6 | The same on this machine | B1 to B4 on one A6000 and on two; B5 not computed (owned hardware) |
 
-Named cloud host: AWS `g6.4xlarge` (one NVIDIA L4 with 24 GB, 16 vCPU, 64 GiB), $1.3232 per hour
-on demand in us-east-1, Linux (price trackers of the AWS price list: https://ec2calc.cloud/instances/g6.4xlarge
-and https://cloudprice.net/aws/ec2/instances/g6.4xlarge, read 2026-11-15). B5 = 367.6 / (photos/s)
-dollars per million: 50 photos/s gives $7.35, 100 gives $3.68 (arithmetic; the L4's rate is not
-measured). Two facts change the engine on that host: the L4 has 4 hardware JPEG decoders (NVIDIA's
-L4 page, https://www.nvidia.com/en-us/data-center/l4/), which plan 17's GA102 lacks, and 16 vCPU
-are 8 cores. At plan 17's 92 to 103 ms of host CPU per 20 MP photo, 8 cores cap the engine near 80
-photos/s before the API takes any: the API's CPU per photo and the use of the hardware decoder
-(nvJPEG's hardware backend, baseline single-scan JPEG only) decide B5. The hardware backend is a
-plan 17 revision item (question Q5), not this plan's.
+The gallery plan's target "new photo visible after ingest: 30 s"
+([00](../photo_library/00_photo_library_plan.md) section 10) is the starting bar for B3 and B4; the
+owner sets the benchmark's bars after the first baseline.
 
-Time groups: today the route `GET /curation/projects/{project}/events` is the live job-event
-stream, not photo events. Photo events and trips are planned in the gallery's create plan
-([30](../photo_library/30_p2c_create.md), incremental re-segmentation of plus or minus 7 days after
-ingest); the timeline buckets in the organise plan ([10](../photo_library/10_p2a1_organise.md)).
-The benchmark measures B4 against the timeline buckets once they exist and against events once P2c
-builds them; until then a SQL probe on the capture-time column of the record stands in and is
-labelled so. This plan designs neither view. The gallery plan's existing target "New photo visible
-after ingest: 30 s" ([00](../photo_library/00_photo_library_plan.md) section 10) is the starting bar
-for B3 and B4; the owner sets the benchmark's own bars after the first baseline run.
+### 5.2 Who sends the uploads
 
-### 5.2 Runs at product scale
+A compiled closed-loop client, `op-upload-loadgen` (R0g in 18a), sends browser-shaped multipart: the
+field order of 4.7, up to 128 photos or 512 MiB per request, N requests in parallel, stamps per part
+and per request, one JSON line per row as plan 17's `op-fe-loadgen` does. A Python client cannot
+produce 80 photos/s of 6.5 MB (about 520 MB/s). It runs on its own host in the same zone in the cloud,
+and on cores pinned apart from the stack on this machine.
+
+### 5.3 The host is a parameter; `g6.4xlarge` is the named example
+
+| Fact for `g6.4xlarge` | Value and source |
+|---|---|
+| Price | $1.3232 per hour on demand in us-east-1, Linux (https://ec2calc.cloud/instances/g6.4xlarge and https://cloudprice.net/aws/ec2/instances/g6.4xlarge, read 2026-11-15; the review also read about $1.00 spot and about $0.861 for one year) |
+| Compute | 16 vCPU (AMD EPYC 7R13, so 8 cores), 64 GiB, one NVIDIA L4 with 24 GB |
+| Disk and network | 600 GiB local NVMe (instance store, lost on stop); EBS up to 1,000 MB/s; network up to 25 Gbps (burst figure) |
+| JPEG hardware | NVIDIA lists 4 JPEG decoders on the L4 (https://www.nvidia.com/en-us/data-center/l4/); nvJPEG's hardware backend "supports baseline JPEG images with single scan with 1 or 3 channels" and not 4:1:0 or 4:1:1 (https://docs.nvidia.com/cuda/nvjpeg/index.html). The docs name architectures, not the L4: a test on the card decides (plan 17 item, section 12) |
+| Engine host CPU cap | plan 17's 92 to 103 ms per 20 MP photo were measured on Haswell; on this CPU the number is unknown, so the engine's photos/s cap from 8 cores is a parameter of the run, not "about 80" |
+
+What each run records, beside the metrics: the landing disk (the local NVMe, which holds only the
+landing window: the 1,000,000 run's 3.4 TB of originals go to S3); the S3 bucket and region; where
+PostgreSQL runs (on the host on an EBS volume, or a managed service with pgvector `halfvec` and
+row-level security) and its volume; the load-generator host type and zone; and the cost lines: S3
+storage (GB-month), S3 requests (PUT and multipart requests per photo times the price per 1,000),
+transfer (inbound and any cross-zone), and the database, each with the price read from the AWS
+pricing pages at run time.
+
+B5's arithmetic for the example: 367.6 / (photos/s) dollars per million (50 photos/s gives $7.35, 100
+gives $3.68; the L4's rate is not measured).
+
+### 5.4 Runs at product scale
 
 | Run | Photos | Mix | Purpose | Expected wall time (estimate) |
 |---|---|---|---|---|
-| Regression | 2,000 per list: `op-bench-v1/coco2k` and `setp2k` (registry names) | one list per run | every slice that touches ingest; one targeted run | under 1 minute each at 40 to 120 photos/s |
+| Regression | 2,000 per list: `op-bench-v1/coco2k` and `setp2k` (registry names) | one list per run | every slice that touches ingest | under 1 minute each at 40 to 120 photos/s |
 | Headline | 100,000 | half set P (20 MP), half public small photos (COCO train2017, Open Images, Objects365 per the dataset registry) | B1 to B6 | 25 to 45 minutes at 40 to 70 photos/s |
-| Scale | 1,000,000 | same mix | what shows only at scale: database growth, vector index build and size, memory, the map and time views filling while ingest runs, B3 and B4 drift over the run | 4 to 7 hours at 40 to 70 photos/s; under 3 hours at 120 |
+| Scale | 1,000,000 | same mix | database growth, vector index build and size, memory, map and time views filling during ingest, B3 and B4 drift | 4 to 7 hours at 40 to 70 photos/s; under 3 hours at 120 |
 
-Staging (this machine): the photos are read from NVMe, never from the NAS during a run. NVMe has
-313 GB free on 2026-11-15. The 100,000 run needs about 340 GB of source photos at the
-half-and-half mix (50,000 x 6.5 MB plus 50,000 x 0.2 MB) and as much again for the stored originals;
-the 1,000,000 run about 3.4 TB of each. Neither fits whole. For both long runs the client reads a
-rolling window of photos staged ahead from the NAS to NVMe, and the storage layer keeps the stored
-originals on a NAS root while the landing root (where uploads are first written) stays on NVMe,
-which is the cloud design (landing disk, then object storage). Measurement M11 records the NAS read and write rates first; if the link binds the
-1,000,000 run, that run reports the scale effects and the link as its bound, and the headline rate
-comes from the 100,000 run. Set P appears in results as numbers only; the public 1,000,000 part is
-fetched and entered in the dataset registry before the run (a stewardship task, not a lane).
+The 100,000 run needs 50,000 distinct set P photos (a repeated photo answers `duplicate` without engine
+work), so it draws distinct photos beyond the 2,000 list; the 1,000,000 run needs 500,000. Staging on
+this machine: photos are read from NVMe, never from the NAS during a run; NVMe had 313 GB free on
+2026-11-15; the 100,000 run needs about 340 GB of sources (50,000 x 6.5 MB plus 50,000 x 0.2 MB) and
+as much again for stored originals; the 1,000,000 run about 3.4 TB of each. For both long runs the
+client reads a rolling window staged ahead from the NAS to NVMe, the object store keeps originals on
+a NAS root, and the landing zone stays on NVMe, which is the cloud design. M11 records the NAS rates
+first; if the link binds the 1,000,000 run, that run reports the scale effects and the link as its
+bound. Set P appears in results as numbers only; the public 1,000,000 part is fetched and entered in
+the dataset registry before the run (a stewardship task, not a lane).
 
-### 5.3 What each metric depends on
-
-| Metric | Depends on |
-|---|---|
-| B1, B2 | R1 (Rust upload ingest); N3, N1b (faces), N1c (text) of plan 17; S1a-ii; D2 (ExifTool) |
-| B3 | R1; S1a-ii (transactional commit); S3 and gate B (search in the record, visible at commit; an index outside PostgreSQL adds its lag) |
-| B4 | S1b-ii (photos and map reads); P2a-1 timeline buckets or P2c events; R4 if the map route must be fast under ingest load |
-| B5 | B1 on the named host; the L4 hardware decoder (Q5); section 6 images |
-| B6 | all of the above on this machine; plan 17 N2's two-card row |
-
-## 6. Deploy shape (gap G14, the parts this port changes)
+## 6. Deploy shape (G14, the parts this port changes)
 
 | Part | After the port | Notes |
 |---|---|---|
-| CPU images | one `op-server` image (Rust binary, ExifTool and Perl, non-root, `-slim` base); one Python worker image for the numeric and VLM client jobs and `jobs-dispatch`, without FastAPI and uvicorn | sizes measured against today's API image (M8); a Trivy scan before publishing (global rule) |
-| GPU images | the engine (plan 17), Triton, the trainer, the export image, the evaluator, segmenter and vLLM, unchanged by this plan | |
-| CPU-only host | runs the server roles, PostgreSQL, Valkey and the Python CPU workers: browse, label, search, cluster | ingest needs a GPU host with the engine and Triton |
-| Split hosts | the engine reads photos by storage key, so a GPU host needs read access to the storage layer (a shared volume or the object store), not a copy pushed by the API | the reason candidate a matters beyond speed |
-| Managed PostgreSQL | must provide pgvector with `halfvec`, row-level security, and a login role `op_vector` created by the operator (15 section 14 answer 2); if gate B picks VectorChord, most managed services do not offer it (risk) | the server connects through deadpool with a pool sized per process, not per worker; PgBouncer becomes optional |
-| Object storage | object_store behind the storage-layer key contract of slice F; uploads land on local disk first, then move | |
-| Authentication | **entry condition for any deployment reachable from the internet**: the API has none by the owner's decision (14 section 9, answer 4: added later). Until it exists the stack stays on loopback, a LAN or a private network of the owner's choosing | not work in this plan |
+| CPU images | one `op-server` image (Rust binary, ExifTool and Perl, non-root, `-slim` base, multi-stage); one Python worker image for the stay list of 2.3, without FastAPI and uvicorn | sizes against today's API image (M8); a Trivy scan before publishing |
+| GPU images | the engine (plan 17), Triton, the trainer, export, evaluator, segmenter and vLLM; unchanged here except the Celery entry replaced by the claim loop (R3a) | |
+| CPU-only host | runs the server roles, PostgreSQL and the Python CPU workers: browse, label, search, cluster | ingest needs a GPU host with the engine and Triton |
+| Split hosts | the engine reads the landing zone, so a GPU host runs the `api` role (or a receiver) next to the engine, with the landing zone on its local disk; the object store is shared | the reason the landing zone is local to the engine |
+| Managed PostgreSQL | pgvector with `halfvec`, row-level security, the operator-created login role `op_vector` (15 section 14 answer 2); VectorChord, if gate B picks it, is rarely offered (risk) | the pool is sized per process; PgBouncer optional, but the `LISTEN` connection must bypass a transaction-mode pooler |
+| Object storage | `object_store`: a local directory on this machine, S3 (or an S3-compatible server) in the cloud; uploads land on local disk first (section 4) | |
+| Authentication | **entry condition for any deployment reachable from the internet**: none is built (14 section 9 answer 4). Until it exists the stack stays on loopback, a LAN or a private network | |
 
 Left to a later deploy plan: authentication and authorisation (plan 10 F5), TLS termination,
-orchestration (Kubernetes or another), managed-database backups and point-in-time recovery, secret
-handling, autoscaling, and the GPU arbiter overlay.
+orchestration, managed-database backups and point-in-time recovery, secret handling, autoscaling, the
+GPU arbiter overlay.
+
+### 6.1 Multi-user seams (decision 9: non-goals, each with the place it would attach)
+
+Already in place: every project table has `project_id` with forced row-level security (15a), the scope
+is set inside the transaction (`src/db/session.py:51`), and `ProjectTx` carries it into Rust. Nothing
+below is built by this plan.
+
+| # | Seam | State | Where it would attach |
+|---|---|---|---|
+| 1 | Account or tenant above the project | `projects` has no owner; slugs are global | `projects.account_id`, a transaction setting `op.account` the policies also check, a `Principal` extractor in `op_api` that `project_tx` takes |
+| 2 | Project list and the global event stream | `GET /curation/projects` lists all; `/curation/events` carries every project's events | filter by principal in the list route and the stream |
+| 3 | Deployment-wide registries | the VLM endpoint registry is deployment wide and may hold keys | per-account registry, or admin-only reads |
+| 4 | Core library | the global indexes become one reserved core project in R2b | a core project per account |
+| 5 | Files | keys under `projects/<project_id>/` (section 4.3) | an account prefix above the project |
+| 6 | Vector tables | one table per project and space (`vec.v<lock_key>_<space_key>`) | thousands of tenants mean thousands of tables and index builds: measure the catalogue size before a public deployment; quotas on the creation job |
+| 7 | Queues | one `jobs` table for all projects; exclusive groups per project | per-project round robin in the claim query; a per-account concurrency cap |
+| 8 | Upload limits and back pressure | deployment-wide limits; admission bounds per process | admission keyed by project or account beside the global one, in the same tower layer |
+| 9 | Metrics and logs | project label, request id | an account label; per-account log filters |
+| 10 | Rate and quota | none in code | a tower layer in `op_api` before the extractors |
+| 11 | Authentication | not built (owner) | the same layer; section 6's entry condition |
 
 ## 7. Gates for Rust code
 
-### 7.1 One workspace
-
-One Cargo workspace, `native/`, holds the engine crates and the server crates
-(https://doc.rust-lang.org/cargo/reference/workspaces.html): one `Cargo.lock`, so tokio, tonic, hyper
-and prost are one version on both sides of the engine protocol; one set of gates; the KServe protos
-move from `frame_engine` into a shared `kserve_proto` crate used by the engine and the server.
-`gpu_frame` leaves the workspace when it moves to the owner's Rust serving project (plan 17 N3), with
-no effect on the server crates.
-
-| Crate | Holds | May depend on |
-|---|---|---|
-| `op_domain` | pure ports: fold, claim matching, tallies, geometry, filter grammar, cursor codec, wire rules | nothing with input or output |
-| `op_store` | the pool, `ProjectTx`, the statement registry, repositories | `op_domain` |
-| `op_engine_client` | the engine and Triton clients | `kserve_proto` |
-| `op_ingest` | the ingest pipeline, capture driver, storage keys | `op_store`, `op_engine_client` |
-| `op_jobs` | the runner, kinds, ticks | `op_store`, `op_ingest` |
-| `op_api` | axum routers, wire structs, errors, utoipa | `op_store`, `op_ingest`, `op_jobs` |
-| `op_server` | the binary and its roles | all |
-| `op_contracts` | the contract exporter and case generators' Rust side | `op_api` |
-
-`scripts/codegen/check_layering.py` gains a rule over `cargo metadata` that holds this table.
-
-### 7.2 The gates
-
-Plan 17 section 3.1 applies unchanged (format, clippy with `-D warnings` and the workspace lints,
-`cargo test` with no GPU and no network, `cargo deny` licences, bans, sources, advisories at
-pre-push and CI, the `native` CI job, Dependabot, the file-size ratchet over `native/**/*.rs`). The
-server adds:
+Plan 17 section 3.1 applies unchanged, as it stands on `int/native` today: `cargo fmt`, `cargo clippy
+-D warnings` with the workspace lints of `native/Cargo.toml` (`missing_docs`, `unsafe_op_in_unsafe_fn`,
+rustdoc broken and private intra-doc links, `allow_attributes` and `allow_attributes_without_reason`
+denied so every suppression is an `#[expect(.., reason = "..")]`, `cognitive_complexity` at 15,
+`too_many_lines` at 100, `too_many_arguments` at 7 from `native/clippy.toml`, `unwrap_used` denied
+outside tests, `missing_errors_doc`, `missing_panics_doc`), `cargo doc` with warnings denied, `cargo
+test` with no GPU and no network, `cargo deny` licences, bans, sources (advisories at pre-push), the
+jscpd duplication check over `native/**/*.rs`, the file-size ratchet, Dependabot. The server adds:
 
 | Gate | Rule |
 |---|---|
-| No unsafe | `#![forbid(unsafe_code)]` in every server crate (`op_domain` to `op_contracts`) |
-| Contract drift | the drift hooks regenerate the merged contract (Rust part from `op_contracts`); stale fails |
-| Breaking changes | `oasdiff breaking` against the integration head's contract; anything outside the slice's intended-change file fails |
-| Case contracts | `fold_cases.json` and every other generated case file replayed by Rust tests; drift fails |
+| No unsafe | `#![forbid(unsafe_code)]` in every server crate |
+| Layering | `scripts/codegen/check_layering.py` gains a rule over `cargo metadata` that holds 18a section 2.2's dependency table |
+| Contract drift | the drift hooks regenerate or check the contract by D6's mechanism; stale fails |
+| Breaking changes | `oasdiff breaking` and the normalised diff of 2.4 against the integration head; anything outside the slice's intended-change file fails |
+| Case contracts | the fold cases, plan-build cases, capture goldens and every other generated case file replayed by Rust tests; drift fails |
 | Statements | a database-tier test prepares every statement of the registry against the head schema (wave sweep) |
-| Property tests | proptest for the fold (any order of machine writes around a claim gives the same row, as the Python property test), the filter grammar, the cursor codec, storage-key resolution (no key escapes its root) |
-| Request edges | tests for body limits, upload streaming under a slow reader, the 503 with `Retry-After` at admission, the error shapes of section 2.4 |
-| Schema-driven requests | Schemathesis 4.33.4 (PyPI) against the live harness for families with wide query inputs (filters), checking no 5xx and conformance to the contract, at the wave sweep; the first lane confirms its OpenAPI 3.1 support on its documentation |
+| Property tests | the fold (any order of machine writes around a claim gives the same row), the filter grammar, the cursor codec, local key resolution (no key leaves its root) |
+| Request edges | body limits, idle body, a slow reader, the 503 with `Retry-After`, the error shapes of 2.4 |
+| Differential parity | the rule of 18a section 3.2 for every family; the ledger check fails a slice that deletes a Python test without a replacement row |
 
-## 8. Measurements before coding (R0)
+## 8. Measurements
 
-Each runs in the coordinator's hold, writes raw files under `artifacts_local/` and a summary row
-under 17 section 5's evidence clause. Lists by registry name; set P as numbers only.
+Each runs in the coordinator's hold (host load under 16 at the start, recorded), writes raw files
+under `artifacts_local/` and a summary row under plan 17 section 5's evidence clause. Lists by
+registry name; set P as numbers only.
 
-| Id | What | Script-level description | Bar or use | What each outcome changes |
-|---|---|---|---|---|
-| M1 | Where the API's CPU goes | the API capacity harness with its stdlib sampler on (`APICAP_PROF=1`), 8 processes, stub engine, `coco2k` and `setp200`; per-PID `/proc/<pid>/stat` deltas to split uvicorn from ExifTool; log crop JPEG bytes per photo | fact-finding | copies dominate: a and R1 carry the gain (both keep their place); ExifTool dominates: D2's other branch, and R1's estimate drops to ExifTool's cost; per-object Python work dominates: R1's gain grows with objects (M4) |
-| M2 | 30-process and 1-process grids | `chain_all.sh` rows at W=30 and W=1, same lists | D3 | photos/s rises with CPU per photo flat: the bound was process count, D3 sets W, R1's gain is cores, not rate; CPU per photo grows with W: contention, R1's gain larger |
-| M3 | Path-mode spike | a scratch copy (as the stub patch of 2026-11-15): the API sends the path, the stub engine reads the file, capture by `read_capture_file`, imohash from the file; same rows as M1; no product file touched | D1: 60% of the size-dependent cost | branch A or B of D1 |
-| M4 | Real objects per photo | the grid with plan 17 N0's real pipeline, plan C, `coco2k` and `setp200` | slope of API CPU per object | the per-object part of R1's estimate |
-| M5 | ExifTool's own cost | drive `exiftool -stay_open` over `coco2k`, `setp200`, `commons` and a format corpus (TIFF, PNG, HEIC, WebP), by path and by pipe; CPU per file and bytes read (`/proc/<pid>/io`) | D2: 3 ms at 20 MP (estimate threshold) | D2 |
-| M6 | Core routes | `/detect`, `/embed/image`, `/faces/recognize` at 1, 8, 32 clients on `coco2k`, API CPU per request | R2's gain row | R2's place against R4 to R11 |
-| M7 | Read routes per family (after wave G) | the 80 shapes of 15b through their HTTP routes at 8 clients: p50, p99, API CPU per request | the order of R4 to R11 | highest API CPU per request times request rate in the acceptance walk first |
-| M8 | Static facts | import `create_app()` and count routes including `/v1`; `pytest --collect-only -m live`; `python -X importtime -c "import src.main"` for torch and transformers; today's API image size | none | slice sizes; the image-size baseline |
-| M9 | Region-stage worker (after S4) | profile `scripts/curation/worker.py --continuous` on S4's code: CPU per item, one core saturated or not | R7's priority | |
-| M10 | Upload through the route | the Python route today: browser-shaped multipart requests (128 photos, 512 MiB cap, concurrency 1, 2, 4, 8) on `coco2k` and `setp200`; photos/s, API CPU per photo, request latency | the baseline R1 must beat; the frontend default concurrency | R1's upload bar |
-| M11 | NAS rates | sequential read and write MB/s to the NAS root from this host | the 1,000,000 run's staging | section 5.2 |
+| Id | What | Bar or use | Before |
+|---|---|---|---|
+| M1 | Where the API's CPU goes: the capacity harness with its stdlib sampler (`APICAP_PROF=1`), 8 processes, stub engine, `coco2k`, `mp20` and `setp200`; per-PID `/proc/<pid>/stat` deltas split uvicorn from ExifTool; crop JPEG bytes per photo logged | fact-finding: the parts of 3.4 | R1c |
+| M2 | 30-process and 1-process grids, same lists | D3 | R1c |
+| M3 | Path-mode spike in a scratch copy (no product file touched): the API sends a path, the stub engine reads the file, capture by `read_capture_file`, imohash from the file | the share of API CPU that reading by key removes: the priority of plan 17's by-key item (section 12) | that item |
+| M4 | Real objects per photo: the grid with plan 17's real pipeline, plan C | slope of API CPU per object | R1c |
+| M5 | ExifTool's own cost: `-stay_open` over `coco2k`, `setp200`, `commons` and a format corpus (TIFF, PNG, HEIC, WebP), by path and by pipe; CPU per file and bytes read (`/proc/<pid>/io`) | D2 (3 ms at 20 MP, estimate threshold) | R1c |
+| M6 | Core routes: `/detect`, `/embed/image`, `/faces/recognize` at 1, 8, 32 clients on `coco2k`, API CPU per request | R2a's go row | R2a |
+| M7 | Read routes per family: the 80 shapes of 15b through HTTP at 8 clients: p50, p99, API CPU per request (on the reference stack) | the order inside stage B and C | R4 |
+| M8 | Static facts: routes including `/v1` from `create_app()`; `pytest --collect-only -m live`; `python -X importtime -c "import src.main"`; today's API image size | slice sizes; the image baseline | R1a |
+| M9 | Region-stage worker profile (`scripts/curation/worker.py --continuous`) | R7's priority | R7 |
+| M10 | The Python upload route today with `op-upload-loadgen`: 128 photos, 512 MiB cap, concurrency 1, 2, 4, 8 on `coco2k` and `setp200`; photos/s, API CPU per photo, request latency | the baseline R1c must beat; the frontend default | R1c |
+| M11 | NAS sequential read and write MB/s from this host | section 5.4 staging | the first scale run |
+| M12 | k-means on 100,000 and 1,000,000 x 1,024 real crop vectors, k about 1,000 to 4,000: wall time and objective against faiss CPU and GPU, assignment agreement; our GPU matrix-multiply kernel, cuvs only if its Rust API covers k-means on the card, linfa on CPU for small sets | D5 for `cluster_run`: Rust when the objective is within the two-run spread of faiss and the time is not above faiss GPU by more than the spread | R8 |
+| M13 | Exact all-pairs top-k on the same vectors and on face vectors: time and recall against faiss `IndexFlatIP`; uniqueness score rank correlation against faiss IVF | D5 for `near_dup_score`, `near_dup_core_group`, `persons_cluster`, `item_scores` | R6 |
+| M14 | 2-D map quality at 128,000 points: trustworthiness and kNN preservation of annembed and of PCA against umap-learn, and time | the owner's product decision for `embedding_viz` | none (informs) |
+| M15 | Contract spike (section 2.4): both mechanisms on the discriminator, tuple and `const` schemas; the hook's cost per commit | D6 | R1a's contract part |
+| M16 | Capture fast path: kamadak-exif against ExifTool on JPEG time, GPS, orientation and camera tags over `coco2k`, `setp2k`, `commons` and the format corpus: equal values per file, CPU per file | accept the fast path for the formats and tags where every value is equal | R1c (optional: R1c ships without it) |
+| M17 | `NOTIFY` at ingest commit rate: commit groups with one `NOTIFY` each at 3x the target commit rate, with listeners in 4 processes; commit p99 with and without, event latency | Valkey leaves when commit p99 rises by at most the two-run spread and event p99 is under 100 ms (estimate threshold) | R3b |
+| M18 | Storage write cost per photo on this host: SHA-256 while streaming, landing write and rename, a local object store, and an S3-compatible server on loopback, at both sizes | B1's budget and the floor of 3.4 | R1c |
 
-M1 to M5, M8 and M10 come before R1's first lane; M6 before R2; M7 before R4; M9 before R7; M11
-before the first scale run.
+M12, M13 and M14 share one build of the vectors with the vector-index round and plan 16: 100,000 and
+1,000,000 real crop vectors from the engine's crop encoder over the dataset registry's lists (set P as
+numbers only). The early lanes of 18a section 5 need none of M1 to M18 to start, except R1a's
+contract part (M15).
 
 ## 9. Risks and their early signals
 
 | Risk | Early signal | Answer |
 |---|---|---|
-| The contract cannot be kept equal | oasdiff or the normalised diff reports a change on the first ported route | the intended-change file and a frontend edit in the same slice, or a custom `ToSchema` impl for that type |
-| The two folds drift | a fold case fails in Rust after a Python storage lane | the same-commit rule (3.2); the Python fold goes with its last caller |
-| The two job runtimes drift | a conformance case (claim race, lease expiry, cancel, exclusive group) differs | one database-tier conformance suite run against both runtimes |
-| The port is large (175,623 lines of `src/`, 852 Pydantic classes) | lanes stop at concern boundaries without finishing | families split by concern; one lane per area; at most three lanes per integration branch |
-| ExifTool, not the API, is the cost | M5 over the D2 threshold | D2's branch |
-| Storage waves slip | wave E later than N3 by months | D1 branch A (RP) |
-| Forwarded routes add latency | p99 of unported routes rises through the front | measured in R1's sweep; the forwarder is deleted in R12 |
-| Metric names change | the scripted metric-name diff fails | prometheus-client name and label checks per slice |
-| The cloud host is CPU-bound | B2 on `g6.4xlarge` shows 8 cores busy below the card ceiling | the hardware JPEG backend (Q5); API CPU per photo |
-| OpenAPI 3.1 tooling gaps | oasdiff or Schemathesis misreads a 3.1 construct | the normalised diff stays the gate; the tool row is advisory |
-| A storage key escapes its root | the property test or a crafted key test | cap-std handles; refuse `..`, absolute keys and unknown roots before any open |
+| The contract cannot be kept equal | the normalised diff reports a change on the first ported route | the intended-change file and a frontend edit in the same slice; D6's other branch |
+| The Rust fold disagrees with the oracle | a case of R0x's export fails | the oracle wins unless the case is a recorded Python defect, listed with the owner |
+| Two job runtimes in one table drift | a conformance case (claim race, lease expiry, cancel, exclusive group, pause) differs between the Rust runner and the Python claim loop | one conformance suite run against both (18a section 3.5) |
+| A family's window lasts long (W2) | the pending list does not shrink between sweeps | the coordinator orders stage B by the person's acceptance walk |
+| The port is large (175,623 lines of `src/`, 852 Pydantic classes) | lanes stop at concern boundaries without finishing | families split by concern; at most three lanes per wave |
+| ExifTool, not the API, is the cost | M5 over D2's threshold | D2's branch, M16 |
+| SHA-256 on write costs too much on this host | M18 at 20 MP | the cost is B1 budget; question Q4 |
+| One process per host fails | an out-of-memory kill drops every upload in flight | client retry (safe by content address); memory bounded by the bytes-in-flight permit; two replicas allowed |
+| `NOTIFY` serialises commits | M17 | coalesced wake-up; Valkey stays only if that fails too |
+| Feature unification in one workspace changes server behaviour | R0w's test (18a) | question Q3 |
+| Forwarded routes add latency | p99 of forwarded routes rises through the front | R1a's go bar; the forwarder is deleted in R12 |
+| Metric names change | the metric-name diff fails | name and label checks per slice |
+| The cloud host is CPU-bound | B2 shows 8 cores busy below the card ceiling | the hardware JPEG backend; API CPU per photo |
+| OpenAPI 3.1 tooling gaps | oasdiff or Schemathesis misreads a construct | the normalised diff stays the gate |
+| A key leaves its root | the property test | section 4.4 |
 
 ## 10. Not in this plan
 
-Authentication and any public deployment; the gallery's views (timeline, events, people) and their
-read shapes; the engine's internals, its hardware-decoder use and its branches; the storage schema,
-its migrations and its slices; cluster, label and train logic (plan 16); training, export,
-bake-off, VLM serving in Rust; the frontend beyond the edits named per slice; video; the desktop
-application; orchestration.
+Authentication and any public deployment; the gallery's views and their read shapes; the engine's
+internals, its hardware-decoder use and its branches; the storage schema's content (15a is binding);
+cluster, label and train logic (plan 16); training, export, bake-off and VLM serving in Rust; the
+frontend beyond the edits named per slice; video; the desktop application; orchestration.
 
 ## 11. Questions for the coordinator
 
 | # | Question | Recommended answer |
 |---|---|---|
-| Q1 | Allow RP (the Python API sends keys to the engine) as the one planned piece of Python that R1 rewrites? | yes, only under D1 branch A: M3 shows at least 60% of the size-dependent cost removed and wave E is more than four weeks after N3 |
-| Q2 | Keep Celery and Valkey for the Python workers, with `jobs-dispatch` as the bridge, so Rust never writes a Celery message? | yes (it keeps the owner's 2026-11-04 decision for Python long jobs); R12 reviews whether the Python workers should claim from the `jobs` table directly and leave Valkey for wake-ups only |
-| Q3 | Accept semantic contract equality (section 2.4) instead of byte equality, with one recorded cosmetic regeneration per family? | yes |
-| Q4 | The numeric jobs stay Python at the end of this plan, reopened only by measurement; the VLM client jobs port in R10 because they fold (section 2.3), which revises roadmap 14 section 4's "the VLM stays Python" to "the VLM server stays Python" | yes |
-| Q5 | Name `g6.4xlarge` (one L4) as the cloud benchmark host, and add the nvJPEG hardware backend to a plan 17 revision | yes to both |
+| Q1 | The integration branch for the Rust slices | `int/rust`, made from `int/b4-stateless` with `int/native` merged (`--no-ff`); `int/native` keeps the engine lanes until N3 and is merged into `int/rust` at each engine wave; the reference stack is `int/b4-stateless` at a pinned commit |
+| Q2 | Decision 4 asks for "shared-file reference counts"; 15a (binding) has no counter table, and per-project keys leave sharing only inside a project | a reference check by query over the erasure catalogue's file-key columns under the imohash advisory lock (section 4.5); a stored counter would be a 15a schema change |
+| Q3 | `frame_engine` enables serde_json's `arbitrary_precision` and `preserve_order` features (`native/frame_engine/Cargo.toml`); Cargo unifies features across the packages of one build, so `cargo test --workspace` builds the server with them too | R0w adds a test that round-trips an internally tagged enum and a `flatten` struct with numbers; if it fails, plan 17 scopes the feature (for example its own number type), else one workspace stands |
+| Q4 | SHA-256 of every upload on a host with no SHA instructions | keep it (decision 4) and record M18; if it exceeds the B1 budget at 20 MP, the owner chooses between a faster content hash (a 15a column change) and the cost |
+| Q5 | The engine-client lane shares one BYTES-tensor codec with `frame_engine_loadgen` (an edit of `native/frame_engine_loadgen/src/client.rs`, plan 17's crate) | yes, in one commit, with plan 17 lanes holding that file for that wave (18a section 2.3); the engine's own decoder stays separate on purpose |
+
+## 12. Items for plan 17 (decision 6: written here, plan 17 is not edited)
+
+| Item | Content |
+|---|---|
+| Read the photo by key (phase N2) | an optional input beside `IMAGE` (as `BOXES` is optional in protocol version 1), or a protocol revision: plan 17 decides. It names a landing or source key and the content claim (size, imohash); the engine resolves it under configured read-only roots, answers new statuses for a missing or changed file and plan faults for an unknown root or bad key, in the generator of `contracts/json/frame_engine_v1.json` and the plan cases. Compose mounts the landing zone and source roots read-only into `frame-engine` (no mounts today). Priority from M3 |
+| Hardware JPEG decode on the L4 | a test on the card (section 5.3) |
+| The proto copy | if `gpu_frame` leaves the workspace, the one copy of the KServe protos (`native/gpu_frame/proto`, read by three crates' `build.rs`) moves to a neutral directory first |
+| serde_json features | Q3 |
+
+## 13. Review trace
+
+| Finding | Resolved in |
+|---|---|
+| BLOCKER 1 order; write path written twice | 0 (owner's order); 3.1; 3.2 (no Python storage slice); 18b section 6 (15c mapping); R1u split from R1c (18a) |
+| BLOCKER 2 parity by recorded traffic | 18a section 3.2 (differential from the contract, ledger, live tier); R0c core baseline; R0d |
+| BLOCKER 3 `jobs-dispatch` and `runner` | 2.5; R3a (18b); 18a R1j |
+| BLOCKER 4 no storage slice | 4; 18a R1s; 2.2 object storage row |
+| MAJOR 1 gain estimate | 1.2; 3.4; M1, M5, M16, M18 |
+| MAJOR 2 cloud checks | 5.1 (requests, stamps); 5.2 (load generator); 5.3 (host parameter, cost lines); 5.4 (distinct photos) |
+| MAJOR 3 upload windows | 4.2 (durable before commit, permits, idle limit, spawned task); 4.6; 4.7 (`run_id`, formats) |
+| MAJOR 4 test gaps | 18a section 3 (ledger, schema dump, seeding over HTTP, surviving `src/`); 18b R12 |
+| MAJOR 5 unassigned items | 18b section 7.6 |
+| MAJOR 6 contract tooling | 2.4; M15; R0s in 18a |
+| MAJOR 7 plan 17 interaction | 3.5 (RP dropped); 12 |
+| MAJOR 8 two folds and runtimes | 3.2 (no Python fold extended: one fold, Rust, checked against the frozen oracle); 2.5 and 18a 3.5 (two runners, one conformance suite) |
+| MAJOR 9 R2b's store decision | 3.1 (stage C, D4) |
+
+| Decision | Applied in |
+|---|---|
+| 1 order (ii-b) | 3.1, 3.2, 3.3; 18b sections 1 to 6 |
+| 2 jobs without Celery | 2.1, 2.5; R1j (18a), R3a, R3b (18b); M17 |
+| 3 what stays Python | 2.3; M12 to M14; R6, R8, R10 (18b) |
+| 4 storage layer | 2.2, 4; R1s, R1u (18a); R1c, R5e (18b) |
+| 5 parity | 2.4; 18a section 3.2; R0c, R0d |
+| 6 RP dropped | 3.5; 12 |
+| 7 gain estimate | 1.2, 3.4; M16 |
+| 8 cloud benchmark | 5 |
+| 9 multi-user seams | 6.1 |
+| 10 contract tooling | 2.4; M15 |
+| 11 early lanes | 18a sections 2 and 5 |
+| 12 measurements | 8 |
+| 13 the rest | this table; 18a sections 3 and 4; 18b section 7 |
+
+Minor findings: all fixed (1: 1.1; 2: 2.2 PostgreSQL row; 3: 2.2 wake-ups row; 4: 2.2 duplicate probe;
+5: 3.2 sizes, M1; 6: 2.2 ExifTool row; 7: 2.5; 8: 5.3; 9: 2.3).
