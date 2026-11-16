@@ -33,6 +33,7 @@ bytes = "=1.12.1"
 crossbeam-channel = "=0.5.17"
 crc32fast = "=1.5.5"
 cudarc = { version = "=0.19.10", default-features = false, features = ["std", "driver", "nvrtc", "cuda-13020", "dynamic-loading"] }
+deadpool-postgres = { version = "=0.14.2", default-features = false, features = ["rt_tokio_1"] }
 image = { version = "=0.25.10", default-features = false }
 libloading = "=0.9.1"
 nvml-wrapper = "=0.13.0"
@@ -43,13 +44,18 @@ protox = "=0.10.0"
 # as Python's json.loads does), `arbitrary_precision` and `preserve_order` never (they change how
 # other crates' wire models read); `op_config/tests/workspace_features.rs` guards both.
 serde_json = { version = "=1.0.154", features = ["float_roundtrip"] }
+testcontainers-modules = { version = "=0.15.0", features = ["postgres"] }
+thiserror = "=2.0.21"
 tiff = "=0.11.3"
 tokio = { version = "=1.54.1", default-features = false }
+tokio-postgres = "=0.7.18"
 tonic = { version = "=0.14.9", default-features = false }
 tonic-prost = "=0.14.9"
 tonic-prost-build = "=0.14.9"
+tracing = "=0.1.44"
 turbojpeg = { version = "=1.5.1", default-features = false }
 turbojpeg-sys = { version = "=1.2.0", default-features = false }
+uuid = { version = "=1.29.2", default-features = false }
 
 # Lint levels for every member (`[lints] workspace = true`); the clippy names are in
 # https://rust-lang.github.io/rust-clippy/stable/index.html. `unwrap` stays allowed inside

@@ -8,5 +8,24 @@ license.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+[features]
+# The database tier: `op_db::testing` starts PostgreSQL in a container (Docker needed). Off by
+# default so the commit hooks and `cargo test --workspace` need no Docker.
+db = ["dep:testcontainers-modules"]
+
+[dependencies]
+deadpool-postgres = { workspace = true }
+op_config = { path = "../op_config" }
+serde_json = { workspace = true }
+testcontainers-modules = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt", "sync", "time"] }
+tokio-postgres = { workspace = true, features = ["with-serde_json-1", "with-uuid-1"] }
+tracing = { workspace = true }
+uuid = { workspace = true, features = ["std"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "test-util", "time"] }
+
 [lints]
 workspace = true
