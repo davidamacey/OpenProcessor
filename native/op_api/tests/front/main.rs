@@ -5,6 +5,8 @@
 // `cfg(test)` is always set for a test target; the attribute is what lets clippy's
 // `allow-unwrap-in-tests` cover the helpers as well as the `#[test]` functions.
 #[cfg(test)]
+mod abort;
+#[cfg(test)]
 mod cors;
 #[cfg(test)]
 mod edges;

@@ -46,6 +46,8 @@ pub enum ForwardFailure {
     Connect,
     /// The connection was made and then broke or sent something that is not HTTP.
     Upstream,
+    /// The client's own request body failed (it gave up on an upload): not the Python API's fault.
+    ClientAborted,
 }
 
 impl ForwardFailure {
@@ -53,6 +55,7 @@ impl ForwardFailure {
         match self {
             Self::Connect => "connect",
             Self::Upstream => "upstream",
+            Self::ClientAborted => "client_aborted",
         }
     }
 }
@@ -115,7 +118,7 @@ impl Metrics {
             .observe(elapsed.as_secs_f64());
     }
 
-    /// Record a forwarded request the Python API did not answer.
+    /// Record a forwarded request that got no answer, by why.
     pub fn forward_failed(&self, failure: ForwardFailure) {
         self.forward_failures
             .get_or_create(&ByReason {

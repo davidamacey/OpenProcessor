@@ -21,12 +21,14 @@ pub mod headers;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use axum::body::Body;
 use axum::extract::{ConnectInfo, Request, State};
 use axum::response::{IntoResponse, Response};
 use http::{StatusCode, Uri, Version};
+use http_body_util::BodyExt;
 use hyper_util::client::legacy::Client;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::{TokioExecutor, TokioTimer};
@@ -98,17 +100,34 @@ impl Forwarder {
         headers::add_forwarded(&mut parts.headers, peer.ip());
         parts.uri = target;
         parts.version = Version::HTTP_11;
+        // An error of the request body is the client's (it gave up on its upload); the flag lets
+        // `failed` tell it from the Python API breaking.
+        let client_failed = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&client_failed);
+        let body = Body::new(body.map_err(move |error| {
+            flag.store(true, Ordering::Relaxed);
+            error
+        }));
         match self.client.request(Request::from_parts(parts, body)).await {
             Ok(response) => {
                 let (mut parts, body) = response.into_parts();
                 headers::strip_hop_by_hop(&mut parts.headers);
                 Response::from_parts(parts, Body::new(body))
             }
-            Err(error) => self.failed(&error, id.as_deref()).into_response(),
+            Err(error) => {
+                let by_client = client_failed.load(Ordering::Relaxed);
+                self.failed(&error, by_client, id.as_deref())
+                    .into_response()
+            }
         }
     }
 
-    fn failed(&self, error: &hyper_util::client::legacy::Error, id: Option<&str>) -> ApiError {
+    fn failed(
+        &self,
+        error: &hyper_util::client::legacy::Error,
+        by_client: bool,
+        id: Option<&str>,
+    ) -> ApiError {
         let (failure, answer) = if error.is_connect() {
             (
                 ForwardFailure::Connect,
@@ -118,13 +137,22 @@ impl Forwarder {
                 )
                 .with_retry_after(UNAVAILABLE_RETRY_AFTER_S),
             )
+        } else if by_client {
+            (
+                ForwardFailure::ClientAborted,
+                ApiError::detail(StatusCode::BAD_REQUEST, "The request body was not received"),
+            )
         } else {
             (
                 ForwardFailure::Upstream,
                 ApiError::detail(StatusCode::BAD_GATEWAY, "The API did not answer correctly"),
             )
         };
-        tracing::warn!(error = %error, ?failure, "the Python API could not answer");
+        if by_client {
+            tracing::info!(error = %error, "the client gave up on its request body");
+        } else {
+            tracing::warn!(error = %error, ?failure, "the Python API could not answer");
+        }
         self.metrics.forward_failed(failure);
         with_id(answer, id)
     }

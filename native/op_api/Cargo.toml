@@ -12,6 +12,7 @@ publish.workspace = true
 axum = { workspace = true, features = ["http1", "json", "matched-path", "tokio"] }
 futures-util = { workspace = true, features = ["std"] }
 http = { workspace = true }
+http-body-util = { workspace = true }
 hyper = { workspace = true, features = ["http1", "server"] }
 hyper-util = { workspace = true, features = ["client-legacy", "http1", "server-graceful", "service", "tokio"] }
 op_config = { path = "../op_config" }
@@ -25,7 +26,6 @@ tracing = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 
 [dev-dependencies]
-http-body-util = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "macros", "rt-multi-thread"] }
 tokio-stream = { workspace = true }
 
