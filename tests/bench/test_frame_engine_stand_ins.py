@@ -308,7 +308,12 @@ def test_the_default_plan_command_mounts_the_stand_in_directory_writable(
 ) -> None:
     for command in si.plan_commands(tmp_path):
         mounts = [command[i + 1] for i, a in enumerate(command) if a == '-v']
-        assert mounts == [f'{tmp_path.resolve()}:/stand_in'], 'no :ro, so the plan can be written'
+        # Measured 2026-11-15: a `-v` on the serving target `/stand_in` stays read-only (the compose
+        # file's `:ro` mount of that target wins), so the build writes through a target of its own.
+        assert mounts == [f'{tmp_path.resolve()}:/stand_in_build']
+        saves = [a for a in command if a.startswith('--saveEngine=')]
+        assert saves
+        assert all(a.startswith('--saveEngine=/stand_in_build/') for a in saves)
         assert command.index('-v') < command.index('triton-server')
         assert command.index('triton-server') < command.index('trtexec')
 

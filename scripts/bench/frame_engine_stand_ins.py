@@ -246,18 +246,20 @@ def trtexec_args(s: Spec, repo: str = SERVER_STAND_IN_DIR) -> list[str]:
 
 #: How ``export/build_pe_trt.sh`` reaches trtexec: the model server's image carries it. The test
 #: bed's compose file mounts the stand-in repository at ``/stand_in`` read-only (serving only
-#: reads it), so the build run mounts it writable for itself: ``compose run -v`` replaces the
-#: file's mount of the same target. ``{stand_in}`` is the host directory.
+#: reads it). A ``compose run -v`` on that same target stays read-only (measured 2026-11-15: the
+#: file's mount wins), so the build run mounts the host directory a second time, writable, at
+#: ``BUILD_STAND_IN_DIR`` and reads and writes through that. ``{stand_in}`` is the host directory.
+BUILD_STAND_IN_DIR = '/stand_in_build'
 DEFAULT_RUNNER = (
     'docker compose -p op-n0 -f docker/frame-engine-native/compose.n0.yml '
-    'run --rm --no-deps -T -v {stand_in}:/stand_in triton-server trtexec'
+    'run --rm --no-deps -T -v {stand_in}:' + BUILD_STAND_IN_DIR + ' triton-server trtexec'
 )
 DEFAULT_OUT = Path('artifacts_local/native_engine/n0/stand_in')
 
 
 def plan_commands(out: Path = DEFAULT_OUT, runner: str = DEFAULT_RUNNER) -> list[list[str]]:
     prefix = shlex.split(runner.replace('{stand_in}', shlex.quote(str(out.resolve()))))
-    return [[*prefix, *trtexec_args(s)] for s in SPECS]
+    return [[*prefix, *trtexec_args(s, BUILD_STAND_IN_DIR)] for s in SPECS]
 
 
 def generate(
