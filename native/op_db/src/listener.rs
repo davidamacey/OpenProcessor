@@ -16,7 +16,7 @@ use std::time::Duration;
 
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
-use tokio_postgres::{AsyncMessage, NoTls};
+use tokio_postgres::AsyncMessage;
 
 use crate::error::DbError;
 use crate::settings::DbSettings;
@@ -138,11 +138,7 @@ impl Listener {
         channels: &'static [&'static str],
     ) -> Self {
         Self::spawn(
-            PgConnector {
-                settings: settings.clone(),
-                application_name: application_name.to_owned(),
-                channels,
-            },
+            PgConnector::new(settings, application_name, channels),
             Backoff::DEFAULT,
         )
     }
@@ -202,6 +198,22 @@ pub struct PgConnector {
     channels: &'static [&'static str],
 }
 
+impl PgConnector {
+    /// A connector for the channels of the database `settings` name, on a direct connection.
+    #[must_use]
+    pub fn new(
+        settings: &DbSettings,
+        application_name: &str,
+        channels: &'static [&'static str],
+    ) -> Self {
+        Self {
+            settings: settings.clone(),
+            application_name: application_name.to_owned(),
+            channels,
+        }
+    }
+}
+
 /// A live `LISTEN` connection of [`PgConnector`].
 #[derive(Debug)]
 pub struct PgSession {
@@ -254,7 +266,7 @@ impl ListenConnector for PgConnector {
             .settings
             .pg_config(&self.application_name, true, false)?;
         let (client, mut connection) = config
-            .connect(NoTls)
+            .connect(self.settings.tls_connector()?)
             .await
             .map_err(|e| DbError::call("listen.connect", e))?;
         let (tx, notifications) = mpsc::channel(DRIVER_QUEUE);

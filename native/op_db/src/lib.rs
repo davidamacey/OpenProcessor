@@ -16,6 +16,7 @@ mod settings;
 mod statement;
 #[cfg(feature = "db")]
 pub mod testing;
+mod tls;
 pub mod tx;
 
 pub use error::DbError;

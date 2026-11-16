@@ -7,6 +7,11 @@
 //! revision the dump records, and re-applies the application role's grants. The dump is produced
 //! by `scripts/codegen/dump_schema.py` in the sweep; this crate commits no hand-written copy.
 //!
+//! [`TestDatabase::start_with_tls`] starts the same server with `ssl=on` and a certificate the
+//! test supplies, so the pool, the listener and the session lock can be shown to connect under
+//! `verify-full` (and to be refused under a wrong CA). The harness's own raw connections negotiate
+//! TLS like any other client (`prefer`, certificate not checked: they only seed and read back).
+//!
 //! The application role is a different role from the table owner and has no `BYPASSRLS`, so a test
 //! through [`TestDatabase::pool`] meets row-level security exactly as the server does.
 
@@ -17,15 +22,15 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use op_config::Env;
 use testcontainers_modules::postgres::Postgres;
 use testcontainers_modules::testcontainers::runners::AsyncRunner;
-use testcontainers_modules::testcontainers::{ContainerAsync, ImageExt};
-use tokio_postgres::NoTls;
+use testcontainers_modules::testcontainers::{ContainerAsync, CopyTargetOptions, ImageExt};
 
 /// A raw connection, as the table owner or the superuser: for seeding and read-back in tests.
 pub use tokio_postgres::Client as RawClient;
 
 use crate::pool::{Pool, PoolSpec, Profile};
-use crate::settings::DbSettings;
+use crate::settings::{DbSettings, SslMode};
 use crate::statement::Statement;
+use crate::tls;
 
 /// The server version the stack runs (`docker-compose.yml`).
 const POSTGRES_TAG: &str = "18.6-trixie";
@@ -34,6 +39,62 @@ const ROLE_PASSWORD: &str = "op-test-password";
 
 /// What the dump's first line must say, so a loader knows which migrations are newer.
 const REVISION_PREFIX: &str = "-- alembic revision: ";
+
+/// The certificate and private key (PEM) a TLS-enabled test server presents.
+#[derive(Debug, Clone)]
+pub struct ServerTls {
+    /// The certificate, with any intermediates; its alternative names must include `127.0.0.1`.
+    pub cert_pem: String,
+    /// Its private key.
+    pub key_pem: String,
+}
+
+/// Where the certificate files are put in the container before the server starts.
+const TLS_SOURCE_DIR: &str = "/op-tls-source";
+/// The server's own copy, owned by `postgres` with a private key at mode 0600: the server
+/// refuses a key that is group- or world-readable or that it does not own
+/// (<https://www.postgresql.org/docs/18/ssl-tcp.html>).
+const TLS_DIR: &str = "/var/lib/postgresql/op-tls";
+
+/// The command of a server with TLS. The image's entrypoint runs a command that is not `postgres`
+/// as it is, so this script installs the key and certificate with the right owner and mode and
+/// then calls the image's entrypoint itself.
+fn tls_start_script() -> String {
+    format!(
+        "install -d -m 700 -o postgres -g postgres {TLS_DIR} \
+         && install -m 600 -o postgres -g postgres {TLS_SOURCE_DIR}/server.key {TLS_DIR}/server.key \
+         && install -m 644 -o postgres -g postgres {TLS_SOURCE_DIR}/server.crt {TLS_DIR}/server.crt \
+         && exec docker-entrypoint.sh postgres -c fsync=off -c ssl=on \
+            -c ssl_cert_file={TLS_DIR}/server.crt -c ssl_key_file={TLS_DIR}/server.key"
+    )
+}
+
+async fn start_container(tls: Option<&ServerTls>) -> (ContainerAsync<Postgres>, u16) {
+    let image = Postgres::default().with_host_auth().with_tag(POSTGRES_TAG);
+    let container = match tls {
+        None => image.start().await,
+        Some(tls) => {
+            image
+                .with_copy_to(
+                    CopyTargetOptions::new(format!("{TLS_SOURCE_DIR}/server.key")).with_mode(0o600),
+                    tls.key_pem.clone().into_bytes(),
+                )
+                .with_copy_to(
+                    format!("{TLS_SOURCE_DIR}/server.crt"),
+                    tls.cert_pem.clone().into_bytes(),
+                )
+                .with_cmd(["/bin/sh".to_owned(), "-c".to_owned(), tls_start_script()])
+                .start()
+                .await
+        }
+    }
+    .unwrap_or_else(|e| panic!("cannot start the PostgreSQL container (is Docker up?): {e}"));
+    let port = container
+        .get_host_port_ipv4(5432)
+        .await
+        .unwrap_or_else(|e| panic!("the container has no port 5432: {e}"));
+    (container, port)
+}
 
 /// A PostgreSQL container with the schema loaded.
 pub struct TestDatabase {
@@ -118,8 +179,10 @@ async fn connect(port: u16, user: &str, password: &str) -> RawClient {
         .user(user)
         .password(password)
         .dbname("postgres");
+    let tls = tls::connector(SslMode::Prefer, None)
+        .unwrap_or_else(|e| panic!("the test TLS connector cannot be built: {e}"));
     let (client, connection) = config
-        .connect(NoTls)
+        .connect(tls)
         .await
         .unwrap_or_else(|e| panic!("cannot connect to the test database as {user}: {e}"));
     tokio::spawn(connection);
@@ -135,6 +198,20 @@ impl TestDatabase {
     /// coordinator generates it with `scripts/codegen/dump_schema.py`), when Docker is not
     /// reachable, or when the dump or a newer migration does not load.
     pub async fn start() -> Self {
+        Self::start_with(None).await
+    }
+
+    /// Start the container with TLS on: the server presents `tls`'s certificate. The settings
+    /// still say `disable`; a test copies them and sets `ssl_mode` and `ssl_root_cert`.
+    ///
+    /// # Panics
+    ///
+    /// As [`Self::start`], and when the server does not come up with the certificate.
+    pub async fn start_with_tls(tls: &ServerTls) -> Self {
+        Self::start_with(Some(tls)).await
+    }
+
+    async fn start_with(tls: Option<&ServerTls>) -> Self {
         let head = manifest_dir().join("schema/head.sql");
         let dump = fs::read_to_string(&head).unwrap_or_else(|_| {
             panic!(
@@ -157,18 +234,7 @@ impl TestDatabase {
             .trim()
             .to_owned();
 
-        let container = Postgres::default()
-            .with_host_auth()
-            .with_tag(POSTGRES_TAG)
-            .start()
-            .await
-            .unwrap_or_else(|e| {
-                panic!("cannot start the PostgreSQL container (is Docker up?): {e}")
-            });
-        let port = container
-            .get_host_port_ipv4(5432)
-            .await
-            .unwrap_or_else(|e| panic!("the container has no port 5432: {e}"));
+        let (container, port) = start_container(tls).await;
 
         let superuser = connect(port, "postgres", SUPER_PASSWORD).await;
         superuser
