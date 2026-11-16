@@ -13,7 +13,6 @@
 use std::time::Duration;
 
 use deadpool_postgres::{Manager, ManagerConfig, RecyclingMethod, Runtime};
-use tokio_postgres::NoTls;
 
 use crate::error::DbError;
 use crate::settings::{CONNECT_TIMEOUT, DbSettings, Pooler};
@@ -87,7 +86,7 @@ impl Pool {
             settings.pg_config(&spec.application_name, false, spec.profile == Profile::Job)?;
         let manager = Manager::from_config(
             config,
-            NoTls,
+            settings.tls_connector()?,
             ManagerConfig {
                 recycling_method: RecyclingMethod::Verified,
             },

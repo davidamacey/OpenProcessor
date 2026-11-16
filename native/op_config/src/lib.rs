@@ -1,6 +1,12 @@
 //! Reading `OP_*` settings from the environment into typed structs through one helper, and the
-//! refusal of retired variables. Only the helper ([`Env`]) exists so far.
+//! refusal of retired variables. Only the helper ([`Env`]) exists so far; the crate also holds the
+//! one function that installs the process's TLS crypto provider ([`install_tls_provider`]),
+//! because it is the one dependency every crate that speaks TLS already has.
 #![forbid(unsafe_code)]
+
+mod tls;
+
+pub use tls::install_tls_provider;
 
 use std::collections::HashMap;
 use std::error::Error;
