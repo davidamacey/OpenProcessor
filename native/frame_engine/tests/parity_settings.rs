@@ -132,10 +132,88 @@ fn every_range_python_reads_is_read_by_the_native_engine() {
 #[test]
 fn the_native_only_settings_are_listed_with_a_reason() {
     let doc = load();
+    let refused = doc["native_only_refused_values"]
+        .as_object()
+        .expect("native_only_refused_values");
     for (name, reason) in doc["native_only"].as_object().expect("native_only") {
         assert!(!reason.as_str().expect("reason").is_empty(), "{name}");
-        let env = HashMap::from([(name.clone(), "card two".to_owned())]);
-        let text = read(&env).expect_err("a bad value is refused");
-        assert!(text.contains(name), "{text}");
+        match refused.get(name) {
+            Some(bad) => {
+                let bad = bad.as_str().expect("a refused value is text").to_owned();
+                let env = HashMap::from([(name.clone(), bad)]);
+                let text = read(&env).expect_err("a bad value is refused");
+                assert!(text.contains(name), "{text}");
+            }
+            None => {
+                let env = HashMap::from([(name.clone(), "/data/photos".to_owned())]);
+                assert!(read(&env).is_ok(), "{name} takes any text");
+            }
+        }
     }
+    for name in refused.keys() {
+        assert!(
+            doc["native_only"].get(name).is_some(),
+            "{name} is not native only"
+        );
+    }
+}
+
+/// The `OP_FRAME_ENGINE_*` names in `settings.rs` outside its test module.
+fn names_read_by_the_native_engine() -> Vec<String> {
+    let source = include_str!("../src/settings.rs");
+    let product = source.split("#[cfg(test)]").next().expect("a first part");
+    let mut names: Vec<String> = product
+        .split("\"OP_FRAME_ENGINE_")
+        .skip(1)
+        .filter_map(|rest| {
+            let end = rest.find('"')?;
+            let tail = &rest[..end];
+            tail.bytes()
+                .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
+                .then(|| format!("OP_FRAME_ENGINE_{tail}"))
+        })
+        .collect();
+    names.sort();
+    names.dedup();
+    names
+}
+
+#[test]
+fn every_setting_the_native_engine_reads_is_pythons_or_a_listed_native_one() {
+    let doc = load();
+    let mut known: Vec<&str> = doc["python_names"]
+        .as_array()
+        .expect("python_names")
+        .iter()
+        .map(|n| n.as_str().expect("name"))
+        .collect();
+    known.extend(
+        doc["differences"]
+            .as_object()
+            .expect("differences")
+            .keys()
+            .map(String::as_str),
+    );
+    known.extend(
+        doc["native_only"]
+            .as_object()
+            .expect("native_only")
+            .keys()
+            .map(String::as_str),
+    );
+    let read = names_read_by_the_native_engine();
+    assert!(
+        read.len() >= 24,
+        "only {} names found in settings.rs",
+        read.len()
+    );
+    let unlisted: Vec<&String> = read
+        .iter()
+        .filter(|n| !known.contains(&n.as_str()))
+        .collect();
+    assert!(
+        unlisted.is_empty(),
+        "read by the native engine, not by the Python engine, and not listed as native only \
+         with a reason in scripts/codegen/frame_engine_parity_goldens.py: {unlisted:?}"
+    );
 }

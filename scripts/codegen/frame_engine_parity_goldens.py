@@ -49,7 +49,16 @@ NATIVE_ONLY_SETTINGS = {
     'OP_FRAME_ENGINE_EXPECT_BUS_ID': (
         'refuse the start on any card but this PCI bus id (a host run names its card by it)'
     ),
+    'OP_FRAME_ENGINE_LANDING_ROOT': (
+        'the directory a landing/... key is read under; the Python engine has no read by key'
+    ),
+    'OP_FRAME_ENGINE_SOURCE_ROOT': (
+        'the directory a source/... key is read under; the Python engine has no read by key'
+    ),
 }
+#: A value the native engine must refuse, for the native-only settings whose value has a form.
+#: (A root is any path; the start checks it is a directory, the settings read does not.)
+NATIVE_ONLY_REFUSED_VALUES = {'OP_FRAME_ENGINE_EXPECT_BUS_ID': 'card two'}
 #: Fields of ``EngineSettings`` that are not settings of a deployment.
 NOT_REPLAYED_FIELDS = ('ocr_dictionary', 'switch_interval_ms')
 
@@ -89,6 +98,26 @@ def _from_env_calls() -> list[dict[str, Any]]:
             }
         )
     return found
+
+
+def _names_python_reads() -> list[str]:
+    """Every ``OP_FRAME_ENGINE_*`` name ``frame_engine/settings.py`` hands to one of its
+    ``env_*`` readers, read from the source (the ranged ones and the text and boolean ones)."""
+    tree = ast.parse((ROOT / 'frame_engine' / 'settings.py').read_text(encoding='utf-8'))
+    names = set()
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
+            continue
+        if not node.func.id.startswith('env_') or not node.args:
+            continue
+        first = node.args[0]
+        if (
+            isinstance(first, ast.Constant)
+            and isinstance(first.value, str)
+            and first.value.startswith(PREFIX)
+        ):
+            names.add(first.value)
+    return sorted(names)
 
 
 #: Settings that must be set beside a boundary value for it to be accepted (the relations).
@@ -169,6 +198,8 @@ def render_settings() -> str:
         'ranges': _from_env_calls(),
         'differences': SETTINGS_DIFFERENCES,
         'native_only': NATIVE_ONLY_SETTINGS,
+        'native_only_refused_values': NATIVE_ONLY_REFUSED_VALUES,
+        'python_names': _names_python_reads(),
         'cases': cases,
     }
     return json.dumps(body, sort_keys=True, separators=(',', ':')) + '\n'
