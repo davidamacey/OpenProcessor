@@ -47,6 +47,7 @@ png = "=0.18.1"
 proptest = { version = "=1.12.0", default-features = false, features = ["std"] }
 prost = "=0.14.6"
 protox = "=0.10.0"
+reqwest = { version = "=0.13.5", default-features = false }
 rustix = "=1.1.6"
 # The one place serde_json's features are set: `float_roundtrip` on (floats parse correctly rounded,
 # as Python's json.loads does), `arbitrary_precision` and `preserve_order` never (they change how

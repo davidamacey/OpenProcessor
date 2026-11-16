@@ -100,9 +100,14 @@ async fn an_unfinished_part_is_never_visible_under_a_content_name() {
     let data = pattern(500_000);
     let hash = one_shot(&data);
     let project = ProjectId(4);
-    let content_path = f.landing.root().join("4").join(hash.to_string());
+    let upload = Uuid::from_u128(9);
+    let content_path = f
+        .landing
+        .root()
+        .join("4")
+        .join(format!("{hash}.{upload}.0"));
 
-    let mut w = f.landing.begin_part(Uuid::from_u128(9), 0);
+    let mut w = f.landing.begin_part(upload, 0);
     for c in data.chunks(100_000) {
         w.write(&Bytes::copy_from_slice(c)).await.unwrap();
         assert!(
@@ -119,7 +124,7 @@ async fn an_unfinished_part_is_never_visible_under_a_content_name() {
         .await
         .unwrap();
     assert_eq!(photo.path, content_path);
-    assert_eq!(photo.key, StorageKey::landing(project, &hash));
+    assert_eq!(photo.key, StorageKey::landing(project, &hash, upload, 0));
     assert_eq!((photo.size, photo.sha256), (part.size, part.sha256));
     assert_eq!(std::fs::read(&photo.path).unwrap(), data);
     assert!(
@@ -178,6 +183,8 @@ async fn paths_outside_the_landing_root_are_refused() {
     let stray = other.path().join("x.part");
     std::fs::write(&stray, b"x").unwrap();
     let part = LandedPart {
+        upload_id: Uuid::from_u128(1),
+        index: 0,
         path: stray.clone(),
         size: 1,
         sha256: one_shot(b"x"),
@@ -192,6 +199,8 @@ async fn paths_outside_the_landing_root_are_refused() {
 
     let dotted = f.landing.root().join("..").join("escape");
     let part = LandedPart {
+        upload_id: Uuid::from_u128(1),
+        index: 0,
         path: dotted,
         size: 1,
         sha256: one_shot(b"x"),
@@ -207,4 +216,44 @@ async fn free_ratio_is_a_fraction_of_the_volume() {
     let f = fixture();
     let ratio = f.landing.free_ratio().await.unwrap();
     assert!((0.0..=1.0).contains(&ratio) && ratio > 0.0, "{ratio}");
+}
+
+#[tokio::test]
+async fn equal_bytes_in_one_project_get_two_files_and_removing_one_keeps_the_other() {
+    let f = fixture();
+    let data = pattern(50_000);
+    let first = land(&f, 20, 0, &data, 8192).await;
+    let second = land(&f, 21, 0, &data, 8192).await;
+    let project = ProjectId(1);
+    let a = f.landing.name_by_content(project, first).await.unwrap();
+    let b = f.landing.name_by_content(project, second).await.unwrap();
+
+    assert_ne!(a.path, b.path);
+    assert_ne!(a.key, b.key);
+    assert_eq!(a.sha256, b.sha256);
+    assert!(a.key.as_str().contains(&a.sha256.to_string()));
+
+    f.landing.remove(&a).await.unwrap();
+    assert!(!a.path.exists());
+    assert_eq!(std::fs::read(&b.path).unwrap(), data);
+}
+
+#[tokio::test]
+async fn the_same_part_named_twice_is_an_error_and_never_replaces_a_file() {
+    let f = fixture();
+    let part = land(&f, 22, 3, b"first bytes", 4).await;
+    let photo = f
+        .landing
+        .name_by_content(ProjectId(1), part.clone())
+        .await
+        .unwrap();
+
+    std::fs::write(&part.path, b"a retry of the same part").unwrap();
+    let err = f
+        .landing
+        .name_by_content(ProjectId(1), part.clone())
+        .await
+        .unwrap_err();
+    assert!(matches!(err, StorageError::Io { .. }), "{err}");
+    assert_eq!(std::fs::read(&photo.path).unwrap(), b"first bytes");
 }

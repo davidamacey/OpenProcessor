@@ -192,10 +192,15 @@ mod tests {
     #[test]
     fn a_landing_key_resolves_to_its_file() {
         let f = fixture();
-        let key = StorageKey::landing(ProjectId(2), &ContentHash([9; 32]));
+        let upload = uuid::Uuid::from_u128(5);
+        let key = StorageKey::landing(ProjectId(2), &ContentHash([9; 32]), upload, 1);
         let dir = f.roots.landing.join("2");
         fs::create_dir(&dir).unwrap();
-        fs::write(dir.join(ContentHash([9; 32]).to_string()), b"x").unwrap();
+        fs::write(
+            dir.join(format!("{}.{upload}.1", ContentHash([9; 32]))),
+            b"x",
+        )
+        .unwrap();
         assert!(f.roots.resolve(&key).unwrap().starts_with(&f.roots.landing));
     }
 

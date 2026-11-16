@@ -388,7 +388,7 @@ R1s-1, the local half (R1u starts from it):
 | `keys` | `ProjectId(i64)`, `ContentHash([u8; 32])` (hex display), `StorageKey` (validated with `object_store::path::Path::parse`); constructors `original(ProjectId, &ContentHash)`, `derived(ProjectId, DerivedKind, photo_key: i64, name)`, `source(rel)`, the roots of 18 section 4.3; `parse(&str) -> Result<StorageKey, KeyError>` |
 | `hash` | `Sha256Stream` (update with each chunk, `finish() -> ContentHash`) over `sha2` 0.11.1 |
 | `local` | `LocalRoots { landing, sources }` from settings; `resolve(&StorageKey) -> Result<PathBuf, KeyError>` for landing and source keys with the canonical-prefix check of 18 section 4.4 |
-| `landing` | `Landing::begin_part(upload_id: Uuid, index: u32) -> PartWriter`; `PartWriter::write(&mut self, chunk: &Bytes)` (async file write, hash update), `finish(self) -> LandedPart { path, size, sha256 }`, `discard(self)`; `Landing::name_by_content(&self, ProjectId, LandedPart) -> LandedPhoto { key, path, size, sha256 }` (a rename within the landing root); `Landing::remove(&LandedPhoto)`; `Landing::free_ratio()` for the disk guard |
+| `landing` | `Landing::begin_part(upload_id: Uuid, index: u32) -> PartWriter`; `PartWriter::write(&mut self, chunk: &Bytes)` (async file write, hash update), `finish(self) -> LandedPart { upload_id, index, path, size, sha256 }`, `discard(self)`; `Landing::name_by_content(&self, ProjectId, LandedPart) -> LandedPhoto { key, path, size, sha256 }` (a move within the landing root that never replaces: the name is `landing/<project_id>/<sha256>.<upload_id>.<index>`, so a landing file has one owner); `Landing::remove(&LandedPhoto)`; `Landing::free_ratio()` for the disk guard |
 
 R1s-2, the durable half:
 
@@ -409,7 +409,7 @@ their last importers.
 **Tests.** Unit, red first: key constructors and `parse` (refuses `..`, empty segments, control
 characters, unknown roots); the property test (generated keys never resolve outside their root, a
 symlink leaving a root is refused); `PartWriter` hash equals a one-shot SHA-256; an unfinished part is
-never visible under a content name; `make_durable` on `object_store::memory::InMemory` and on
+never visible under its landing name; two parts with equal bytes get two files and removing one leaves the other; `make_durable` on `object_store::memory::InMemory` and on
 `LocalFileSystem` in a temporary directory: create, `AlreadyExists` with equal size accepted, unequal
 size refused; a local same-filesystem move keeps the inode (no copy); erase twice is a no-op;
 cache eviction at the cap.

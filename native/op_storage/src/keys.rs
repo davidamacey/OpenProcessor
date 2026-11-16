@@ -8,6 +8,7 @@
 use std::fmt;
 
 use object_store::path::Path;
+use uuid::Uuid;
 
 use crate::error::KeyError;
 
@@ -192,6 +193,31 @@ impl StorageKey {
         ))
     }
 
+    /// The prefix of every original of a project: `projects/<project>/originals`.
+    #[must_use]
+    pub fn originals_prefix(project: ProjectId) -> Self {
+        Self::from_safe_parts(
+            Root::Projects,
+            [project.to_string(), "originals".to_owned()],
+        )
+    }
+
+    /// The prefix of every derived file of one kind of one photo:
+    /// `projects/<project>/derived/<kind>/<photo_key>`. Delete by prefix covers whole path
+    /// segments, so photo 4 never covers photo 42.
+    #[must_use]
+    pub fn derived_prefix(project: ProjectId, kind: DerivedKind, photo_key: i64) -> Self {
+        Self::from_safe_parts(
+            Root::Projects,
+            [
+                project.to_string(),
+                "derived".to_owned(),
+                kind.as_str().to_owned(),
+                photo_key.to_string(),
+            ],
+        )
+    }
+
     /// A file under a source root, read in place: `source/<rel>`.
     ///
     /// # Errors
@@ -201,10 +227,14 @@ impl StorageKey {
         Self::parse(&format!("source/{rel}"))
     }
 
-    /// A photo in the landing zone, named by its content: `landing/<project>/<sha256>`.
+    /// A photo in the landing zone: `landing/<project>/<sha256>.<upload_id>.<index>`. The name
+    /// carries the content and the part it came from, so no two parts ever share a landing file.
     #[must_use]
-    pub fn landing(project: ProjectId, hash: &ContentHash) -> Self {
-        Self::from_safe_parts(Root::Landing, [project.to_string(), hash.to_string()])
+    pub fn landing(project: ProjectId, hash: &ContentHash, upload_id: Uuid, index: u32) -> Self {
+        Self::from_safe_parts(
+            Root::Landing,
+            [project.to_string(), format!("{hash}.{upload_id}.{index}")],
+        )
     }
 
     fn from_safe_parts(root: Root, parts: impl IntoIterator<Item = String>) -> Self {
@@ -265,10 +295,12 @@ mod tests {
     }
 
     #[test]
-    fn the_landing_key_is_by_project_id_and_content() {
-        let key = StorageKey::landing(ProjectId(7), &hash());
-        assert_eq!(key.as_str(), format!("landing/7/{}", hash()));
+    fn the_landing_key_names_project_content_and_the_part() {
+        let upload = Uuid::from_u128(0xabc);
+        let key = StorageKey::landing(ProjectId(7), &hash(), upload, 3);
+        assert_eq!(key.as_str(), format!("landing/7/{}.{upload}.3", hash()));
         assert_eq!(key.root(), Root::Landing);
+        assert_eq!(StorageKey::parse(key.as_str()).unwrap(), key);
     }
 
     #[test]
@@ -281,6 +313,14 @@ mod tests {
         assert_eq!(s.as_str(), "source/trip/IMG_1.jpg");
         assert_eq!(s.root(), Root::Source);
         assert_eq!(s.segments().collect::<Vec<_>>(), ["trip", "IMG_1.jpg"]);
+    }
+
+    #[test]
+    fn the_derived_prefix_is_the_folder_of_one_photo_and_kind() {
+        let p = StorageKey::derived_prefix(ProjectId(3), DerivedKind::Thumbs, 42);
+        assert_eq!(p.as_str(), "projects/3/derived/thumbs/42");
+        let d = StorageKey::derived(ProjectId(3), DerivedKind::Thumbs, 42, "256.jpg").unwrap();
+        assert!(d.as_str().starts_with(&format!("{p}/")));
     }
 
     #[test]
