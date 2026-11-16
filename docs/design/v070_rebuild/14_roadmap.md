@@ -170,10 +170,15 @@ revision 1 rests on it).
 
 **Next, in order.**
 
-1. Plan 16 (the cluster, label and train loop), revision 1, rewritten for the Rust backend from
-   the labelling measurement M16-0: [16](16_label_train_loop_plan.md),
-   [16a](16a_label_train_loop_slices.md) (gaps G1, G6). Its numeric library (L16-1) can start now;
-   its measurements M16-1 to M16-3 come before 18b R8, which it refines into R8a and R8b.
+1. Plan 16 (the cluster, label and train loop), revision 2, for the Rust backend:
+   [16](16_label_train_loop_plan.md), [16a](16a_label_train_loop_slices.md),
+   [16b](16b_label_train_loop_schema.md); evidence in
+   [labelling_decisions_m16_0.md](../../research/labelling_decisions_m16_0.md) (gaps G1, G6).
+   Part A moves today's loop to the record and Rust with the same behaviour for the person (18b R8
+   split into R8-1 and R8-2, the label-act precondition added to R5); its numeric library (L16-1)
+   can start now and M12 is its only entry measurement. Part B (a random check sample, a group-count
+   rule, label scopes, a classifier on the person's labels, growth without constant refits) waits
+   for M16-1, M16-2, M16-3, M16-6 and M16-7, each with its bar.
 2. Storage round 3 written up; its numbers are the entries of R1b, R4, R5 and R6b.
 3. Gate B round 2 at 10 million real crop vectors, with one shared build of 100,000 and 1,000,000
    crop vectors for M12, M13 and M14 (18 section 8).
@@ -254,7 +259,8 @@ and never folds a person's decision; it takes work through a claim loop on the s
 | M6 core routes; M7 read routes; M8 static facts; M9 region worker | measurement | R2a; order of stages B and C; R1a; R7 |
 | M11 NAS rates | measurement | the first scale run |
 | M12 k-means at scale; M13 exact top-k | measurement | R8; R6b, R10, R2b (decision D5) |
-| The labelling measurement (plan 16's M16-0) | measurement | plan 16's rewrite, R8 |
+| The labelling measurement (plan 16's M16-0) | measurement, done 2026-11-16 | plan 16 revision 2 |
+| Plan 16's M16-1 (the owner reviews 60 pages), M16-2, M16-3, M16-6, M16-7 | measurement (M16-1 with the owner) | plan 16's Part B items, each behind its bar; Part A needs only M12 |
 | Storage round 3 (15b M1 to M10) | measurement | R1b, R4, R5, R6b, R8 entries |
 | Gate B round 2 at 10 million vectors | measurement | R6a |
 | Gates A and B together | measurement | D4, so R2b and whether OpenSearch leaves |
