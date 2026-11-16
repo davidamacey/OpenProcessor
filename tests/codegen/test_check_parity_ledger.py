@@ -122,6 +122,9 @@ def test_a_commit_with_no_head_yet_passes(scratch_repo: ScratchRepo) -> None:
         'tests/test_old.py::test_a\tcontract: contracts/openapi/none.json nothing here',
         'tests/test_old.py::test_a\tdiff: nofamily/some_operation_id',
         'tests/test_old.py::test_a\tdiff: projects/matches_no_operation_*',
+        'tests/test_old.py::test_a\tpython: tests/test_other.py::test_not_there',
+        'tests/test_old.py::test_a\tpython: tests/test_missing.py::test_z',
+        'tests/test_old.py::test_a\tpython: tests/test_other.py',
     ],
 )
 def test_a_malformed_or_unverifiable_row_fails(scratch_repo: ScratchRepo, row: str) -> None:
@@ -157,6 +160,20 @@ def test_rows_that_point_at_something_real_pass(scratch_repo: ScratchRepo) -> No
         'tests/test_old.py::TestK::test_m\tgone: removed with the route\n',
     )
 
+    assert run(scratch_repo) == 0
+
+
+def test_a_renamed_test_passes_with_a_row_naming_the_python_test_it_became(
+    scratch_repo: ScratchRepo,
+) -> None:
+    committed(scratch_repo, {'tests/test_old.py': 'def test_a():\n    pass\n'})
+    scratch_repo.write('tests/test_old.py', 'def test_a_by_name():\n    pass\n')
+    git(scratch_repo, 'add', 'tests/test_old.py')
+    assert run(scratch_repo) == 1
+
+    scratch_repo.write(
+        LEDGER, 'tests/test_old.py::test_a\tpython: tests/test_old.py::test_a_by_name\n'
+    )
     assert run(scratch_repo) == 0
 
 

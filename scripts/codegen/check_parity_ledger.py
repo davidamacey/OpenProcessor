@@ -5,13 +5,15 @@ The Rust port deletes Python tests with the Python routes they covered (docs/des
 18a_backend_rust_port_slices.md, section 3.2). Each deleted test id needs one row in
 ``tests/parity/ledger/<slice>.tsv``: ``<test id><TAB><replacement>``. The id is
 ``<path>::<function>`` or ``<path>::<Class>::<function>`` (a parametrized test is one row).
-The replacement says what now proves the behaviour, in one of four forms:
+The replacement says what now proves the behaviour, in one of five forms:
 
 * ``rust: <path>::<name>``  a Rust test; the file must exist and contain ``fn <name>``
 * ``diff: <family>/<glob>``  differential cases: a family of ``tests/differential/families.toml``
   and a glob that matches at least one operation id of ``contracts/openapi/*.json``
 * ``contract: <file> <what is checked>``  a check against a committed contract file
 * ``gone: <reason>``  a behaviour removed on purpose, with the reason
+* ``python: <test id>``  a Python test that exists: the test was renamed, or another test took
+  its assertions over (the id must name a test function that is in the tree)
 
 Which tests were deleted comes from git: the staged change by default, or two commits
 (``--between A B``, for a sweep over a merged range). A test counts as deleted when its
@@ -35,7 +37,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LEDGER_DIR = 'tests/parity/ledger'
 TEST_FILE = re.compile(r'^tests/(?:.*/)?(?:test_[^/]*|[^/]*_test)\.py$')
-FORMS = ('rust:', 'diff:', 'contract:', 'gone:')
+FORMS = ('rust:', 'diff:', 'contract:', 'gone:', 'python:')
 
 
 @dataclass(frozen=True)
@@ -166,6 +168,8 @@ def check_replacement(root: Path, row: Row) -> str | None:
             return f'{row.where}: {body.split()[0]} is not a contract file in the tree'
     elif form == 'diff':
         return check_diff(root, row, body)
+    elif form == 'python' and not defined(root, body):
+        return f'{row.where}: no Python test {body} in the tree (want <path>::<name>)'
     return None
 
 

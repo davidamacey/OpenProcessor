@@ -153,7 +153,8 @@ of acts over HTTP (3.6). For each family, before its Python handlers are deleted
 3. **Live tier.** The family's live and browser tests pass against the Rust stack.
 4. **Ledger.** `tests/parity/ledger/<slice>.tsv` has one row per deleted Python test id: `<test id>
    <tab> <replacement>`, where the replacement is a Rust test path and name, a differential case id
-   pattern, a contract check, or `gone: <reason>` (a behaviour removed on purpose, named in the slice).
+   pattern, a contract check, `gone: <reason>` (a behaviour removed on purpose, named in the slice), or
+   `python: <test id>` (a Python test that exists: a rename, or the test that took the assertions over).
    `scripts/codegen/check_parity_ledger.py` (R0d), run by a hook on commits that delete files or test
    functions under `tests/`, fails when a deleted id has no row.
 5. **Ground truth** where an output changes on purpose (R2a: the engine's preprocessing replaces the

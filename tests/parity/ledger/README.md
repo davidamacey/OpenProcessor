@@ -25,6 +25,7 @@ The test id is what pytest prints from the repository root, without parameters:
 | `diff: <family>/<glob>` | differential cases of `tests/differential/` | the family is in `families.toml` and the glob matches at least one operation id of `contracts/openapi/*.json` |
 | `contract: <file> <what is checked>` | a check against a committed contract file | the file exists |
 | `gone: <reason>` | a behaviour removed on purpose, named in the slice | the reason is not empty |
+| `python: <test id>` | a Python test that exists: the test was renamed, or another test took its assertions over | the id names a test function in the tree |
 
 ## The check
 
