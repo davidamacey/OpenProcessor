@@ -1,2 +1,7 @@
 # https://doc.rust-lang.org/clippy/lint_configuration.html
 allow-unwrap-in-tests = true
+# Complexity thresholds, matched to the Python gate (ruff mccabe 15, max-branches 15,
+# max-statements 60, max-args 10): https://doc.rust-lang.org/clippy/lint_configuration.html
+cognitive-complexity-threshold = 15
+too-many-lines-threshold = 100
+too-many-arguments-threshold = 7

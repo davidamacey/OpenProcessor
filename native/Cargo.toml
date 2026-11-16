@@ -35,6 +35,9 @@ turbojpeg = { version = "=1.5.1", default-features = false }
 unsafe_op_in_unsafe_fn = "deny"
 
 [workspace.lints.clippy]
+# Complexity: thresholds in clippy.toml, matched to the Python gate (plan 17 section 3.1).
+cognitive_complexity = "deny"
+too_many_lines = "deny"
 undocumented_unsafe_blocks = "deny"
 unwrap_used = "deny"
 

@@ -131,53 +131,7 @@ impl Settings {
     ) -> Result<Self, SettingsError> {
         let env = Env(lookup);
         let d = Self::with_lanes(default_lanes);
-        if env.raw("OP_FRAME_ENGINE_SWITCH_INTERVAL_MS").is_some() {
-            return refuse(
-                "OP_FRAME_ENGINE_SWITCH_INTERVAL_MS is set: it tunes Python's interpreter lock \
-                 and means nothing to the native engine; unset it"
-                    .into(),
-            );
-        }
-        let transport = env.raw("OP_FRAME_ENGINE_TRANSPORT");
-        match transport.as_deref() {
-            None | Some("cuda") => {}
-            Some("body") => {
-                return refuse(
-                    "OP_FRAME_ENGINE_TRANSPORT='body' is not built in this engine yet (plan 17 N1a)"
-                        .into(),
-                );
-            }
-            Some(other) => {
-                return refuse(format!(
-                    "OP_FRAME_ENGINE_TRANSPORT={}: one of cuda, body",
-                    repr_str(other)
-                ));
-            }
-        }
-        let instance = env.raw("OP_FRAME_ENGINE_INSTANCE").unwrap_or(d.instance);
-        let stripped: String = instance.replace('-', "");
-        if stripped.is_empty() || !stripped.chars().all(char::is_alphanumeric) {
-            return refuse(format!(
-                "OP_FRAME_ENGINE_INSTANCE={}: letters, digits and dashes only",
-                repr_str(&instance)
-            ));
-        }
-        let expect_bus_id = env.raw("OP_FRAME_ENGINE_EXPECT_BUS_ID");
-        if let Some(text) = &expect_bus_id
-            && parse_bus_id(text).is_none()
-        {
-            return refuse(format!(
-                "OP_FRAME_ENGINE_EXPECT_BUS_ID={}: a PCI bus id such as 0000:65:00.0",
-                repr_str(text)
-            ));
-        }
-        let crop_max_side: u32 = env.int("OP_FRAME_ENGINE_CROP_MAX_SIDE", 0, 0, 65_535)?;
-        if crop_max_side != 0 {
-            return refuse(
-                "OP_FRAME_ENGINE_CROP_MAX_SIDE above 0 is not built in this engine yet (plan 17 N1)"
-                    .into(),
-            );
-        }
+        let (instance, expect_bus_id) = Self::read_identity(&env, d.instance.clone())?;
         let s = Self {
             triton_url: env
                 .raw("OP_FRAME_ENGINE_TRITON_URL")
@@ -264,6 +218,71 @@ impl Settings {
             )?,
             expect_bus_id,
         };
+        s.check_relations()?;
+        Ok(s)
+    }
+
+    /// The settings that name something rather than size it, and the ones this engine refuses
+    /// because a feature is not built: the instance name and the expected bus id.
+    fn read_identity(
+        env: &Env<'_>,
+        default_instance: String,
+    ) -> Result<(String, Option<String>), SettingsError> {
+        if env.raw("OP_FRAME_ENGINE_SWITCH_INTERVAL_MS").is_some() {
+            return refuse(
+                "OP_FRAME_ENGINE_SWITCH_INTERVAL_MS is set: it tunes Python's interpreter lock \
+                 and means nothing to the native engine; unset it"
+                    .into(),
+            );
+        }
+        let transport = env.raw("OP_FRAME_ENGINE_TRANSPORT");
+        match transport.as_deref() {
+            None | Some("cuda") => {}
+            Some("body") => {
+                return refuse(
+                    "OP_FRAME_ENGINE_TRANSPORT='body' is not built in this engine yet (plan 17 N1a)"
+                        .into(),
+                );
+            }
+            Some(other) => {
+                return refuse(format!(
+                    "OP_FRAME_ENGINE_TRANSPORT={}: one of cuda, body",
+                    repr_str(other)
+                ));
+            }
+        }
+        let instance = env
+            .raw("OP_FRAME_ENGINE_INSTANCE")
+            .unwrap_or(default_instance);
+        let stripped: String = instance.replace('-', "");
+        if stripped.is_empty() || !stripped.chars().all(char::is_alphanumeric) {
+            return refuse(format!(
+                "OP_FRAME_ENGINE_INSTANCE={}: letters, digits and dashes only",
+                repr_str(&instance)
+            ));
+        }
+        let expect_bus_id = env.raw("OP_FRAME_ENGINE_EXPECT_BUS_ID");
+        if let Some(text) = &expect_bus_id
+            && parse_bus_id(text).is_none()
+        {
+            return refuse(format!(
+                "OP_FRAME_ENGINE_EXPECT_BUS_ID={}: a PCI bus id such as 0000:65:00.0",
+                repr_str(text)
+            ));
+        }
+        let crop_max_side: u32 = env.int("OP_FRAME_ENGINE_CROP_MAX_SIDE", 0, 0, 65_535)?;
+        if crop_max_side != 0 {
+            return refuse(
+                "OP_FRAME_ENGINE_CROP_MAX_SIDE above 0 is not built in this engine yet (plan 17 N1)"
+                    .into(),
+            );
+        }
+        Ok((instance, expect_bus_id))
+    }
+
+    /// Settings that must agree with each other.
+    fn check_relations(&self) -> Result<(), SettingsError> {
+        let s = self;
         if s.budget_mib > s.pool_mib {
             return refuse(format!(
                 "OP_FRAME_ENGINE_BUDGET_MIB {} exceeds OP_FRAME_ENGINE_POOL_MIB {}",
@@ -278,7 +297,7 @@ impl Settings {
                 format_g(s.request_deadline_seconds)
             ));
         }
-        Ok(s)
+        Ok(())
     }
 }
 

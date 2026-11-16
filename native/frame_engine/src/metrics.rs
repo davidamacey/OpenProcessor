@@ -95,6 +95,118 @@ fn register(
     registry.register(name, help.trim_end_matches('.'), metric);
 }
 
+/// The series of the work inside the engine: stages, in flight, the region and the frame budget.
+fn register_work_series(registry: &mut Registry, m: &Metrics) {
+    register(
+        registry,
+        "op_frame_engine_stage_seconds",
+        "Wall seconds the worker thread spent in a frame engine stage; a model call in \
+             flight counts only while the worker waits for its answer (crop_jpeg: host-thread \
+             encode seconds summed over the crops).",
+        m.stage_seconds.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_stage_observations",
+        "Images that ran a frame engine stage.",
+        m.stage_observations.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_in_flight",
+        "Requests admitted and not yet answered.",
+        m.in_flight.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_slab_in_use_bytes",
+        "Bytes of the region handed out.",
+        m.slab_in_use.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_slab_peak_bytes",
+        "Most bytes of the region handed out.",
+        m.slab_peak.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_slab_waits",
+        "Requests that waited for room in the region.",
+        m.slab_waits.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_budget_in_use_bytes",
+        "Bytes of the decoded-frame budget held by requests.",
+        m.budget_in_use.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_budget_waits",
+        "Requests that waited for device memory, by outcome (admitted or timeout).",
+        m.budget_waits.clone(),
+    );
+}
+
+/// The series of the requests and their failures: the model server, deadlines, outcomes, overloads, colour.
+fn register_request_series(registry: &mut Registry, m: &Metrics) {
+    register(
+        registry,
+        "op_frame_engine_region_registrations",
+        "Shared-memory region registrations with the model server, by cause.",
+        m.registrations.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_triton_call_errors",
+        "Failed model-server calls, by model, gRPC status and reason (deadline: no answer \
+             in time; unavailable: the channel or server went away; client: the client library \
+             failed the call; rejected: the server answered an error).",
+        m.triton_errors.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_request_deadlines",
+        "Requests answered DEADLINE_EXCEEDED at the request deadline, by the stage they \
+             were last in.",
+        m.deadlines.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_images",
+        "Images answered, by status (ok or the reason) and decode route.",
+        m.outcomes.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_context_lost",
+        "CUDA contexts lost to a sticky CUDA error, by cudaError code; the process then \
+             exits for a restart (a dying process may not be scraped: changes() over \
+             process_start_time_seconds counts the restarts).",
+        m.context_lost.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_overloads",
+        "Requests answered with the overload status, by cause.",
+        m.overloads.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_colour",
+        "Decoded frames by what the embedded colour profile asked: srgb (untagged or sRGB, \
+             untouched), converted (to sRGB on the GPU) or ignored (not an RGB profile).",
+        m.colour.clone(),
+    );
+    register(
+        registry,
+        "op_frame_engine_colour_table_bytes",
+        "Device bytes held by the cached profile-to-sRGB tables.",
+        m.colour_table_bytes.clone(),
+    );
+}
+
 impl Metrics {
     pub fn new() -> Arc<Self> {
         let mut registry = Registry::default();
@@ -117,110 +229,8 @@ impl Metrics {
             colour_table_bytes: Gauge::default(),
             registry: Registry::default(),
         };
-        register(
-            &mut registry,
-            "op_frame_engine_stage_seconds",
-            "Wall seconds the worker thread spent in a frame engine stage; a model call in \
-             flight counts only while the worker waits for its answer (crop_jpeg: host-thread \
-             encode seconds summed over the crops).",
-            m.stage_seconds.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_stage_observations",
-            "Images that ran a frame engine stage.",
-            m.stage_observations.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_in_flight",
-            "Requests admitted and not yet answered.",
-            m.in_flight.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_slab_in_use_bytes",
-            "Bytes of the region handed out.",
-            m.slab_in_use.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_slab_peak_bytes",
-            "Most bytes of the region handed out.",
-            m.slab_peak.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_slab_waits",
-            "Requests that waited for room in the region.",
-            m.slab_waits.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_budget_in_use_bytes",
-            "Bytes of the decoded-frame budget held by requests.",
-            m.budget_in_use.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_budget_waits",
-            "Requests that waited for device memory, by outcome (admitted or timeout).",
-            m.budget_waits.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_region_registrations",
-            "Shared-memory region registrations with the model server, by cause.",
-            m.registrations.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_triton_call_errors",
-            "Failed model-server calls, by model, gRPC status and reason (deadline: no answer \
-             in time; unavailable: the channel or server went away; client: the client library \
-             failed the call; rejected: the server answered an error).",
-            m.triton_errors.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_request_deadlines",
-            "Requests answered DEADLINE_EXCEEDED at the request deadline, by the stage they \
-             were last in.",
-            m.deadlines.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_images",
-            "Images answered, by status (ok or the reason) and decode route.",
-            m.outcomes.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_context_lost",
-            "CUDA contexts lost to a sticky CUDA error, by cudaError code; the process then \
-             exits for a restart (a dying process may not be scraped: changes() over \
-             process_start_time_seconds counts the restarts).",
-            m.context_lost.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_overloads",
-            "Requests answered with the overload status, by cause.",
-            m.overloads.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_colour",
-            "Decoded frames by what the embedded colour profile asked: srgb (untagged or sRGB, \
-             untouched), converted (to sRGB on the GPU) or ignored (not an RGB profile).",
-            m.colour.clone(),
-        );
-        register(
-            &mut registry,
-            "op_frame_engine_colour_table_bytes",
-            "Device bytes held by the cached profile-to-sRGB tables.",
-            m.colour_table_bytes.clone(),
-        );
+        register_work_series(&mut registry, &m);
+        register_request_series(&mut registry, &m);
         registry.register_collector(Box::new(ProcessSeries));
         Arc::new(Self { registry, ..m })
     }

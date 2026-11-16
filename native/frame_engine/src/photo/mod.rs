@@ -29,26 +29,25 @@ pub mod budget;
 pub mod calls;
 pub mod clock;
 pub mod device;
+mod rounds;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use self::calls::{Answer, CallId, PhotoCalls};
-use self::clock::{
-    BLUR, BUDGET, CROP_COPY, CROP_JPEG, DECODE, DETECT, EMBED_CROPS, EMBED_FRAME, EMBED_PE,
-    LETTERBOX, QUEUE, StageClock,
-};
-use self::device::{DecodeJob, Decoded, Device, LaunchJob, Write};
+use self::calls::PhotoCalls;
+use self::clock::{BUDGET, DECODE, QUEUE, StageClock};
+use self::device::{DecodeJob, Decoded, Device, Write};
+use self::rounds::{Round2, Work};
 use crate::admission::FrameBudget;
-use crate::branches::{BUILT, detect, embed};
+use crate::branches::BUILT;
 use crate::fault::{GpuFault, job_failed};
-use crate::jpeg_header::{Decoder, oriented_size, route};
+use crate::jpeg_header::{Decoder, JpegHeader, oriented_size, route};
 use crate::metrics::{ByImage, ByOutcome, Metrics};
 use crate::pipeline::{Photo, PhotoAnswer, PipelineError, Tensor};
 use crate::wire::EnginePlan;
 use crate::wire::branch_status::{
-    BranchState, DEPENDENCY_FAILED, IMAGE_FAILED, MODEL_ERROR, UNSUPPORTED_BRANCH,
+    BranchState, DEPENDENCY_FAILED, IMAGE_FAILED, UNSUPPORTED_BRANCH,
 };
 use crate::wire::plan::Crops;
 
@@ -191,6 +190,20 @@ impl Answers {
     fn running(&self, name: &str) -> bool {
         !self.stopped.contains(&name)
     }
+
+    /// Every built branch the plan runs that did not stop ends `ok`.
+    fn mark_built(&mut self, runs: &Runs) {
+        for name in BUILT {
+            let built = match name {
+                "detect" => runs.detect,
+                "embed_frame" => runs.embed_frame,
+                _ => runs.embed_crops,
+            };
+            if built && self.running(name) {
+                self.states.insert(name.to_owned(), BranchState::Ok);
+            }
+        }
+    }
 }
 
 impl<D: Device, B: FrameBudget> PhotoFlow<D, B>
@@ -217,20 +230,15 @@ where
         Ok(answer)
     }
 
-    async fn run(&self, clock: &mut StageClock, photo: Photo) -> Result<PhotoAnswer, Stop> {
+    /// The route and the reservation of one photo: its header and the permit that holds its frame
+    /// budget, or the status that refuses it.
+    async fn admit(
+        &self,
+        clock: &mut StageClock,
+        photo: &Photo,
+        runs: &Runs,
+    ) -> Result<(JpegHeader, B::Permit), Stop> {
         let s = &self.settings;
-        if self.device.lost() {
-            return Err(Stop::Fail(PipelineError::ContextLost(
-                "the CUDA context of this engine is lost; it is restarting".into(),
-            )));
-        }
-        if photo.boxes.is_some() {
-            return Err(engine(
-                "stored boxes are not built in this engine yet (plan 17 N1a)",
-            ));
-        }
-        let plan = &photo.plan;
-        let runs = Runs::of(plan);
         let decided = clock.time(DECODE, || {
             route(&photo.image, s.min_megapixels, s.max_megapixels)
         });
@@ -243,7 +251,7 @@ where
         if budget::need_bytes(&header) > s.budget_bytes {
             return Err(Stop::Status("over_budget"));
         }
-        let reserve = budget::reserve_bytes(&header, &runs.widths(plan)).min(s.budget_bytes);
+        let reserve = budget::reserve_bytes(&header, &runs.widths(&photo.plan)).min(s.budget_bytes);
         let permit = clock
             .wait(
                 BUDGET,
@@ -262,285 +270,123 @@ where
             })
             .inc();
         let permit = permit.map_err(|o| Stop::Fail(PipelineError::Overload(o)))?;
+        Ok((header, permit))
+    }
 
-        let (w, h) = oriented_size(&header);
-        let request = Arc::clone(&photo.request);
-        let cancel = request.cancel_token().clone();
-        let deadline = tokio::time::Instant::from_std(request.clock.deadline);
-        let mut calls = PhotoCalls::new(
-            Arc::clone(&self.device),
-            Arc::clone(&self.metrics),
-            s.window,
-            s.slab_wait,
-            deadline,
-        );
-        let mut answers = Answers {
-            states: unsupported(plan),
-            stopped: Vec::new(),
-            out: Vec::new(),
-        };
-
-        // round 1: the inputs cut from the frame alone, written by the decode job
-        let mut writes = Vec::new();
-        let mut round1 = Vec::new();
-        let mut canvas = None;
-        if let (true, Some(spec)) = (runs.detect, &plan.detector) {
-            let c = detect::canvas(spec, w, h).map_err(engine)?;
-            let slice = calls.stage(clock, c.input.bytes(), LETTERBOX).await?;
-            writes.push(Write {
-                input: slice,
-                fill: Some(c.fill),
-                resamples: vec![c.resample],
-                stage: LETTERBOX,
-            });
-            round1.push((
-                "detect",
-                DETECT,
-                spec.model.as_str(),
-                c.input.clone(),
-                detect::OUTPUT,
-            ));
-            canvas = Some(c);
-        }
-        if let (true, Some(spec)) = (runs.embed_frame, &plan.embed) {
-            let (input, r) = embed::frame_square(spec, w, h).map_err(engine)?;
-            let slice = calls.stage(clock, input.bytes(), EMBED_FRAME).await?;
-            writes.push(Write {
-                input: slice,
-                fill: None,
-                resamples: vec![r],
-                stage: EMBED_FRAME,
-            });
-            round1.push((
-                "embed_frame",
-                EMBED_PE,
-                spec.model.as_str(),
-                input,
-                embed::OUTPUT,
-            ));
-        }
+    /// The decode job on a lane: the frame and the slices of the round-1 writes.
+    async fn decode(
+        &self,
+        work: &mut Work<'_, D>,
+        photo: &Photo,
+        header: &JpegHeader,
+        permit: B::Permit,
+        writes: Vec<Write<D::Input>>,
+    ) -> Result<(Arc<D::Frame>, Vec<D::Input>), Stop> {
         let job = DecodeJob {
             image: photo.image.slice(..header.end.min(photo.image.len())),
             orientation: header.orientation,
-            size: (w, h),
+            size: work.size,
             writes,
             hold: Box::new(permit),
-            request: Arc::clone(&request),
+            request: Arc::clone(&work.request),
         };
-        clock.enter(DECODE);
+        work.clock.enter(DECODE);
         let started = Instant::now();
         let handle = self
             .device
-            .decode(job, &cancel)
+            .decode(job, &work.cancel)
             .map_err(|e| Stop::Fail(job_failed(DECODE, &e)))?;
         let decoded = handle
             .wait()
             .await
             .map_err(|e| Stop::Fail(job_failed(DECODE, &e)))?;
         let lane_wait = started.elapsed().as_secs_f64();
-        let (frame, inputs) = match decoded? {
+        match decoded? {
             Decoded::Refused { status, stages } => {
-                settle_job_time(clock, lane_wait, stages);
-                return Err(Stop::Status(status));
+                settle_job_time(work.clock, lane_wait, stages);
+                Err(Stop::Status(status))
             }
             Decoded::Frame {
                 frame,
                 inputs,
                 stages,
             } => {
-                settle_job_time(clock, lane_wait, stages);
-                (frame, inputs)
+                settle_job_time(work.clock, lane_wait, stages);
+                Ok((frame, inputs))
             }
-        };
-        let mut sent: Vec<(&'static str, CallId)> = Vec::new();
-        for ((owner, stage, model, input, output), slice) in round1.into_iter().zip(inputs) {
-            sent.push((
-                owner,
-                calls.send(owner, stage, model, input, slice, vec![output]),
+        }
+    }
+
+    async fn run(&self, clock: &mut StageClock, photo: Photo) -> Result<PhotoAnswer, Stop> {
+        let s = &self.settings;
+        if self.device.lost() {
+            return Err(Stop::Fail(PipelineError::ContextLost(
+                "the CUDA context of this engine is lost; it is restarting".into(),
+            )));
+        }
+        if photo.boxes.is_some() {
+            return Err(engine(
+                "stored boxes are not built in this engine yet (plan 17 N1a)",
             ));
         }
+        let plan = &photo.plan;
+        let runs = Runs::of(plan);
+        let (header, permit) = self.admit(clock, &photo, &runs).await?;
+        let size = oriented_size(&header);
+        let request = Arc::clone(&photo.request);
+        let calls = PhotoCalls::new(
+            Arc::clone(&self.device),
+            Arc::clone(&self.metrics),
+            s.window,
+            s.slab_wait,
+            tokio::time::Instant::from_std(request.clock.deadline),
+        );
+        let mut work = Work {
+            clock,
+            calls,
+            answers: Answers {
+                states: unsupported(plan),
+                stopped: Vec::new(),
+                out: Vec::new(),
+            },
+            device: Arc::clone(&self.device),
+            cancel: request.cancel_token().clone(),
+            request,
+            size,
+        };
+
+        let round1 = work.stage_round1(plan, &runs).await?;
+        let (frame, inputs) = self
+            .decode(&mut work, &photo, &header, permit, round1.writes)
+            .await?;
+        let sent = work.send_round1(round1.calls, inputs);
         let call_of = |owner: &str| sent.iter().find(|(o, _)| *o == owner).map(|(_, id)| *id);
 
-        // settle: the detector's answer
-        let mut found = None;
-        if let (Some(id), Some(c)) = (call_of("detect"), &canvas) {
-            match calls.result(clock, id).await? {
-                Answer::Outputs(out) => {
-                    let d = clock
-                        .time(DETECT, || detect::settle(&out, &c.letterbox, w, h))
-                        .map_err(engine)?;
-                    answers.out.extend(detect::outputs(&d));
-                    found = Some(d);
-                }
-                Answer::Rejected(why) => {
-                    tracing::warn!("detect: model call failed: {why}");
-                    answers.stop(&mut calls, "detect", BranchState::Error(MODEL_ERROR));
-                }
-            }
-        }
+        let found = work
+            .settle_detect(call_of("detect"), round1.canvas.as_ref())
+            .await?;
         if found.is_none() && runs.embed_crops {
-            answers.stop(
-                &mut calls,
-                "embed_crops",
-                BranchState::Error(DEPENDENCY_FAILED),
-            );
+            work.stop_crops_without_boxes();
         }
-
-        // round 2: crop squares and blur sums on the launch pool, crop JPEGs on the finish pool
-        let mut crop_calls = Vec::new();
-        let mut picked = Vec::new();
-        let mut blur = None;
-        let mut jpegs = Vec::new();
-        if let Some(d) = &found {
-            let (summed, clamped) = detect::blur_rects(d, w, h);
-            let mut chunks = Vec::new();
-            if let (true, Some(spec)) = (answers.running("embed_crops"), &plan.crop_embed) {
-                let cut = embed::crop_plan(
-                    spec,
-                    plan.embed_classes.as_ref(),
-                    &d.rects,
-                    Some(&d.classes),
-                )
-                .map_err(engine)?;
-                picked = cut.picked;
-                chunks = cut.chunks;
-            }
-            let model = plan.crop_embed.as_ref().map_or("", |c| c.model.as_str());
-            let mut chunks = chunks.into_iter().peekable();
-            let mut pending_blur = Some(summed);
-            while chunks.peek().is_some() || pending_blur.is_some() {
-                let mut batch = Vec::new();
-                let mut staged = Vec::new();
-                while let Some(next) = chunks.peek() {
-                    let bytes = next.input.bytes();
-                    if !batch.is_empty() && !calls.within_window(bytes) {
-                        break;
-                    }
-                    let slice = calls.stage(clock, bytes, EMBED_CROPS).await?;
-                    if let Some(chunk) = chunks.next() {
-                        staged.push(Write {
-                            input: slice,
-                            fill: Some(chunk.fill),
-                            resamples: chunk.resamples.clone(),
-                            stage: EMBED_CROPS,
-                        });
-                        batch.push(chunk);
-                    }
-                }
-                let job = LaunchJob {
-                    frame: Arc::clone(&frame),
-                    writes: staged,
-                    blur: pending_blur.take().unwrap_or_default(),
-                    request: Arc::clone(&request),
-                };
-                let first = blur.is_none();
-                clock.enter(if batch.is_empty() { BLUR } else { EMBED_CROPS });
-                let started = Instant::now();
-                let launched = self
-                    .device
-                    .launch(job, &cancel)
-                    .map_err(|e| Stop::Fail(job_failed(EMBED_CROPS, &e)))?
-                    .wait()
-                    .await
-                    .map_err(|e| Stop::Fail(job_failed(EMBED_CROPS, &e)))??;
-                settle_job_time(clock, started.elapsed().as_secs_f64(), launched.stages);
-                if first {
-                    blur = Some(detect::blur_sums(w, h, &clamped, &launched.blur).map_err(engine)?);
-                }
-                for (chunk, slice) in batch.into_iter().zip(launched.inputs) {
-                    crop_calls.push(calls.send(
-                        "embed_crops",
-                        EMBED_PE,
-                        model,
-                        chunk.input,
-                        slice,
-                        vec![embed::OUTPUT],
-                    ));
-                }
-                if first && runs.crops {
-                    for rect in &d.rects {
-                        jpegs.push(
-                            self.device
-                                .crop_jpeg(Arc::clone(&frame), *rect, &cancel)
-                                .map_err(|e| Stop::Fail(job_failed(CROP_COPY, &e)))?,
-                        );
-                    }
-                }
-            }
-        }
+        let round2 = match &found {
+            Some(d) => work.round2(plan, &runs, d, &frame).await?,
+            None => Round2 {
+                crop_calls: Vec::new(),
+                picked: Vec::new(),
+                blur: None,
+                jpegs: Vec::new(),
+            },
+        };
         // the photo's own hold on the frame ends here; jobs still running keep it to their wait
         drop(frame);
 
-        // finish
-        if let Some(sums) = blur {
-            answers.out.push(("blur_sums", sums));
-        }
-        if let Some(id) = call_of("embed_frame") {
-            match calls.result(clock, id).await? {
-                Answer::Outputs(out) => {
-                    answers.out.push((
-                        "whole_embedding",
-                        embed::whole_embedding(&out).map_err(engine)?,
-                    ));
-                }
-                Answer::Rejected(why) => {
-                    tracing::warn!("embed_frame: model call failed: {why}");
-                    answers.stop(&mut calls, "embed_frame", BranchState::Error(MODEL_ERROR));
-                }
-            }
-        }
-        if found.is_some() && answers.running("embed_crops") && runs.embed_crops {
-            let mut vectors = Vec::with_capacity(crop_calls.len());
-            for id in crop_calls {
-                match calls.result(clock, id).await? {
-                    Answer::Outputs(out) => vectors.push(out),
-                    Answer::Rejected(why) => {
-                        tracing::warn!("embed_crops: model call failed: {why}");
-                        answers.stop(&mut calls, "embed_crops", BranchState::Error(MODEL_ERROR));
-                        break;
-                    }
-                }
-            }
-            if answers.running("embed_crops") {
-                answers
-                    .out
-                    .extend(embed::crop_outputs(&picked, &vectors).map_err(engine)?);
-            }
-        }
-        if found.is_some() && runs.crops {
-            let (mut copy, mut encode) = (0.0, 0.0);
-            let mut data = Vec::with_capacity(jpegs.len());
-            for job in jpegs {
-                let crop = job
-                    .wait()
-                    .await
-                    .map_err(|e| Stop::Fail(job_failed(CROP_JPEG, &e)))??;
-                copy += crop.copy_seconds;
-                encode += crop.encode_seconds;
-                data.push(crop.data);
-            }
-            clock.add(CROP_COPY, copy);
-            if !data.is_empty() {
-                clock.add(CROP_JPEG, encode);
-            }
-            answers.out.push(("crop_jpegs", Tensor::Bytes(data)));
-        }
-
-        for name in BUILT {
-            let built = match name {
-                "detect" => runs.detect,
-                "embed_frame" => runs.embed_frame,
-                _ => runs.embed_crops,
-            };
-            if built && answers.running(name) {
-                answers.states.insert(name.to_owned(), BranchState::Ok);
-            }
-        }
+        work.finish(&runs, found.is_some(), round2, call_of("embed_frame"))
+            .await?;
         Ok(PhotoAnswer {
             status: "ok".into(),
             decode_route: "gpu".into(),
-            branches: answers.states,
-            outputs: ordered(plan, (w, h), answers.out),
+            branches: work.answers.states,
+            outputs: ordered(plan, size, work.answers.out),
         })
     }
 }
