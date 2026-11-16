@@ -24,7 +24,7 @@ class AllIndexStatsResponse(BaseModel):
     error: str | None = Field(default=None, description='Error message if failed')
 
 
-class ImageMetadata(BaseModel):
+class StoredImageMetadata(BaseModel):
     """Stored image metadata."""
 
     image_id: str = Field(..., description='Image identifier')
@@ -54,7 +54,7 @@ class ImageQueryResponse(BaseModel):
     image_id: str = Field(..., description='Queried image ID')
 
     # Metadata
-    metadata: ImageMetadata | None = Field(default=None, description='Image metadata')
+    metadata: StoredImageMetadata | None = Field(default=None, description='Image metadata')
 
     # What indexes contain this image
     indexed_in: list[str] = Field(default_factory=list, description='Indexes containing this image')
