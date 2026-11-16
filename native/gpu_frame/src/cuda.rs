@@ -309,6 +309,29 @@ impl Stream {
         })
     }
 
+    /// Every byte of `src` copied into a new host buffer, in stream order (after the work queued
+    /// before it), the stream waited for before this returns (the body transport's copy of a
+    /// written input).
+    ///
+    /// # Errors
+    ///
+    /// [`CudaError::Driver`] when the copy or the wait fails.
+    pub fn read_to_host(&self, src: &dyn DeviceRange) -> Result<Vec<u8>, CudaError> {
+        let len = src.byte_len();
+        let addr = src.checked_addr(0, len)?;
+        let mut out = vec![0u8; len];
+        self.ctx.bind()?;
+        // SAFETY: the source range is inside a live device allocation (`checked_addr`); `out` is a
+        // live host buffer of exactly `len` bytes, not read until the stream wait below.
+        let rc = unsafe {
+            sys::cuMemcpyDtoHAsync_v2(out.as_mut_ptr().cast::<c_void>(), addr, len, self.raw)
+                .result()
+        };
+        self.ctx.check("cuMemcpyDtoHAsync", rc)?;
+        self.synchronize()?;
+        Ok(out)
+    }
+
     /// Copy `dst.len()` bytes of `src` from `offset` into pinned host memory. The bytes are
     /// readable through the returned guard once the stream was waited for.
     ///

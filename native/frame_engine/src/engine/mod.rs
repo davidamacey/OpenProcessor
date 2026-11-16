@@ -21,7 +21,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use gpu_frame::model_server::RegistrationCause;
-use gpu_frame::{Context, DeviceCap, FramePool, ModelServer, ModelServerConfig, Region};
+use gpu_frame::{Context, DeviceCap, FramePool, InputMode, ModelServer, ModelServerConfig, Region};
 use tokio::sync::Notify;
 
 pub use self::gpu::{Frame, Gpu, GpuConfig};
@@ -29,7 +29,7 @@ use crate::metrics::{ByCause, ByCode, Metrics};
 use crate::photo::budget::GpuBudget;
 use crate::photo::{PhotoFlow, PhotoSettings};
 use crate::pipeline::{Photo, PhotoAnswer, Pipeline, PipelineError};
-use crate::settings::{Settings, parse_bus_id};
+use crate::settings::{Settings, Transport, parse_bus_id};
 
 const MIB: u64 = 1 << 20;
 /// Region names start with this, then the card and the instance (`transport.REGION_PREFIX`).
@@ -120,7 +120,15 @@ impl GpuPipeline {
             DeviceCap::new(usize::try_from(u64::from(s.pool_mib) * MIB).unwrap_or(usize::MAX));
         let frames = step("frame pool", || FramePool::new(&ctx, cap))?;
         let region_bytes = usize::try_from(u64::from(s.region_mib) * MIB).unwrap_or(usize::MAX);
-        let region = step("region", || Region::new(&ctx, region_bytes))?;
+        let body = s.transport == Transport::Body;
+        // the body transport never lets the model server import the region: it is not exported
+        let region = step("region", || {
+            if body {
+                Region::local(&ctx, region_bytes)
+            } else {
+                Region::new(&ctx, region_bytes)
+            }
+        })?;
         let prefix = region_prefix(&bus, &s.instance);
         let server = step("model-server channels", || {
             ModelServer::new(
@@ -131,6 +139,11 @@ impl GpuPipeline {
                     region_name: format!("{prefix}{}", process_identity()),
                     region_prefix: prefix.clone(),
                     device_id: i64::from(s.triton_device_id),
+                    inputs: if body {
+                        InputMode::Body
+                    } else {
+                        InputMode::SharedMemory
+                    },
                 },
                 region,
             )
@@ -141,6 +154,7 @@ impl GpuPipeline {
             finish_threads: s.encode_threads as usize,
             jpeg_quality: s.jpeg_quality,
             stage_sync: s.stage_sync,
+            body,
         };
         let gpu = Arc::new(step("lanes, kernels and pools", || {
             Gpu::start(&ctx, frames, server, &cfg)

@@ -74,6 +74,23 @@ impl Drop for WaitOnDrop {
     }
 }
 
+/// One model input: its slice of the region and, with the body transport, the slice's bytes
+/// copied to the host by the job that wrote it, after that job's stream wait (`with_body`).
+pub struct Input {
+    slice: gpu_frame::Slice,
+    body: Option<bytes::Bytes>,
+}
+
+impl DeviceRange for Input {
+    fn device_addr(&self) -> u64 {
+        self.slice.device_addr()
+    }
+
+    fn byte_len(&self) -> usize {
+        self.slice.byte_len()
+    }
+}
+
 /// What every pool thread reads.
 struct Shared {
     frames: FramePool,
@@ -81,6 +98,28 @@ struct Shared {
     /// One cache per lane, locked only by that lane's thread (lanes own their state in gpu_frame).
     lane_weights: Vec<Mutex<WeightCache<DeviceBuf>>>,
     stage_sync: bool,
+    /// `OP_FRAME_ENGINE_TRANSPORT=body`: written inputs are copied to the host.
+    body: bool,
+}
+
+/// The written inputs handed back by a job whose stream was waited for; with the body transport
+/// each is copied to the host on that same stream (the thread that owns it, plan 17 section
+/// 2.1), so the network runtime never touches the card.
+fn with_body(
+    shared: &Shared,
+    stream: &Stream,
+    writes: Vec<Write<Input>>,
+) -> Result<Vec<Input>, GpuFault> {
+    writes
+        .into_iter()
+        .map(|w| {
+            let mut input = w.input;
+            if shared.body {
+                input.body = Some(bytes::Bytes::from(stream.read_to_host(&input.slice)?));
+            }
+            Ok(input)
+        })
+        .collect()
 }
 
 struct LaunchThread {
@@ -108,6 +147,8 @@ pub struct GpuConfig {
     pub jpeg_quality: u32,
     /// Whether each GPU stage synchronises its stream before returning, so stage timings are exact.
     pub stage_sync: bool,
+    /// Whether the inputs travel in the request body (`OP_FRAME_ENGINE_TRANSPORT=body`).
+    pub body: bool,
 }
 
 /// The card's decode lanes, kernels, launch and finish pools and the model-server connection; the device side of the photo flow.
@@ -148,6 +189,7 @@ impl Gpu {
                 .map(|_| Mutex::new(WeightCache::new(WEIGHT_CACHE_BYTES)))
                 .collect(),
             stage_sync: cfg.stage_sync,
+            body: cfg.body,
         });
         let launch = {
             let ctx = Arc::clone(ctx);
@@ -338,8 +380,8 @@ fn host_frame(
 fn decode_on_lane(
     shared: &Shared,
     lane: &mut Lane,
-    job: DecodeJob<gpu_frame::Slice>,
-) -> Result<Decoded<Frame, gpu_frame::Slice>, GpuFault> {
+    job: DecodeJob<Input>,
+) -> Result<Decoded<Frame, Input>, GpuFault> {
     let DecodeJob {
         image,
         origin,
@@ -388,7 +430,7 @@ fn decode_on_lane(
     })?;
     Ok(Decoded::Frame {
         frame: Arc::new(frame),
-        inputs: writes.into_iter().map(|w| w.input).collect(),
+        inputs: with_body(shared, &stream, writes)?,
         stages: clock.stages,
     })
 }
@@ -396,8 +438,8 @@ fn decode_on_lane(
 fn launch_on_thread(
     shared: &Shared,
     t: &mut LaunchThread,
-    job: LaunchJob<Frame, gpu_frame::Slice>,
-) -> Result<Launched<gpu_frame::Slice>, GpuFault> {
+    job: LaunchJob<Frame, Input>,
+) -> Result<Launched<Input>, GpuFault> {
     let LaunchJob {
         frame,
         writes,
@@ -420,7 +462,7 @@ fn launch_on_thread(
         })?
     };
     Ok(Launched {
-        inputs: writes.into_iter().map(|w| w.input).collect(),
+        inputs: with_body(shared, &t.stream, writes)?,
         blur: sums,
         stages: clock.stages,
     })
@@ -470,21 +512,22 @@ fn crop_on_thread(
 
 impl Device for Gpu {
     type Frame = Frame;
-    type Input = gpu_frame::Slice;
+    type Input = Input;
 
     fn lost(&self) -> bool {
         self.ctx.is_lost()
     }
 
-    async fn slice(&self, bytes: usize, wait: Duration) -> Result<gpu_frame::Slice, SliceError> {
-        self.server.region().slice(bytes, wait).await
+    async fn slice(&self, bytes: usize, wait: Duration) -> Result<Input, SliceError> {
+        let slice = self.server.region().slice(bytes, wait).await?;
+        Ok(Input { slice, body: None })
     }
 
     fn decode(
         &self,
-        job: DecodeJob<gpu_frame::Slice>,
+        job: DecodeJob<Input>,
         cancel: &CancelToken,
-    ) -> JobResult<Decoded<Frame, gpu_frame::Slice>> {
+    ) -> JobResult<Decoded<Frame, Input>> {
         let shared = Arc::clone(&self.shared);
         self.lanes
             .run(cancel, move |lane| decode_on_lane(&shared, lane, job))
@@ -492,9 +535,9 @@ impl Device for Gpu {
 
     fn launch(
         &self,
-        job: LaunchJob<Frame, gpu_frame::Slice>,
+        job: LaunchJob<Frame, Input>,
         cancel: &CancelToken,
-    ) -> JobResult<Launched<gpu_frame::Slice>> {
+    ) -> JobResult<Launched<Input>> {
         let shared = Arc::clone(&self.shared);
         self.launch.submit(cancel, move |t: &mut LaunchThread| {
             launch_on_thread(&shared, t, job)
@@ -514,8 +557,8 @@ impl Device for Gpu {
 
     async fn infer(
         self: Arc<Self>,
-        call: ModelCall<gpu_frame::Slice>,
-    ) -> (Result<Vec<OutputTensor>, CallError>, gpu_frame::Slice) {
+        call: ModelCall<Input>,
+    ) -> (Result<Vec<OutputTensor>, CallError>, Input) {
         let ModelCall {
             model,
             input,
@@ -528,7 +571,8 @@ impl Device for Gpu {
                 name: input.name,
                 datatype: InputSpec::DATATYPE,
                 shape: &input.shape,
-                slice: &slice,
+                slice: &slice.slice,
+                body: slice.body.as_ref(),
             }];
             self.server
                 .infer(InferCall {

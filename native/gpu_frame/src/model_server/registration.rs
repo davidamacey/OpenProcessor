@@ -10,6 +10,7 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 use tonic::Status;
 
+use super::InputMode;
 use crate::region::IPC_HANDLE_BYTES;
 
 /// The calls the registration makes.
@@ -67,7 +68,8 @@ impl RegistrationCause {
 pub struct Health {
     /// Whether the server answered its readiness probe.
     pub server_ready: bool,
-    /// Whether this engine's region is registered on the server.
+    /// Whether this engine's region is registered on the server; with the inputs in the request
+    /// body ([`InputMode::Body`]) nothing needs registering and this follows `server_ready`.
     pub registered: bool,
     /// Leftover regions of this prefix unregistered by this check.
     pub purged: usize,
@@ -107,6 +109,7 @@ pub(crate) struct Identity {
 pub(crate) struct Registrar<A> {
     api: A,
     id: Identity,
+    mode: InputMode,
     timeout: Duration,
     /// The server may hold an import (the region's own flag): set before a register is sent,
     /// cleared only by a successful unregister, so the memory is never freed under an import.
@@ -123,12 +126,14 @@ impl<A: ServerApi> Registrar<A> {
     pub(crate) fn new(
         api: A,
         id: Identity,
+        mode: InputMode,
         timeout: Duration,
         may_import: Arc<AtomicBool>,
     ) -> Self {
         Registrar {
             api,
             id,
+            mode,
             timeout,
             may_import,
             registered: AtomicBool::new(false),
@@ -160,9 +165,19 @@ impl<A: ServerApi> Registrar<A> {
         self.counts[cause.index()].load(Ordering::Relaxed)
     }
 
+    /// The health tick. With the inputs in the body it asks readiness only: no status, purge,
+    /// register or unregister call is sent (the Python `BodyTransport.check`).
     pub(crate) async fn check(&self) -> Health {
         let ready = matches!(self.api.server_ready(self.timeout).await, Ok(true));
         self.server_ready.store(ready, Ordering::Release);
+        if self.mode == InputMode::Body {
+            self.registered.store(ready, Ordering::Release);
+            return Health {
+                server_ready: ready,
+                registered: ready,
+                purged: 0,
+            };
+        }
         if !ready {
             self.registered.store(false, Ordering::Release);
             return Health {
@@ -315,6 +330,7 @@ mod tests {
 
         async fn region_names(&self, _t: Duration) -> Result<Vec<String>, Status> {
             self.gone()?;
+            self.note("status".into());
             Ok(self.regions.lock().unwrap().clone())
         }
 
@@ -353,6 +369,13 @@ mod tests {
     const NAME: &str = "op-fe-card0-fe0-host-42";
 
     fn registrar(server: &FakeServer) -> (Registrar<&FakeServer>, Arc<AtomicBool>) {
+        registrar_in(server, InputMode::SharedMemory)
+    }
+
+    fn registrar_in(
+        server: &FakeServer,
+        mode: InputMode,
+    ) -> (Registrar<&FakeServer>, Arc<AtomicBool>) {
         let flag = Arc::new(AtomicBool::new(false));
         let id = Identity {
             prefix: PREFIX.into(),
@@ -361,7 +384,7 @@ mod tests {
             bytes: 1 << 20,
             device_id: 0,
         };
-        let r = Registrar::new(server, id, Duration::from_secs(1), flag.clone());
+        let r = Registrar::new(server, id, mode, Duration::from_secs(1), flag.clone());
         (r, flag)
     }
 
@@ -378,6 +401,29 @@ mod tests {
         .to_vec();
         assert_eq!(stale_regions(&names, PREFIX), ["op-fe-card0-fe0-old-1"]);
         assert!(stale_regions(&names, "").is_empty());
+    }
+
+    #[tokio::test]
+    async fn with_the_inputs_in_the_body_nothing_is_registered_or_purged() {
+        let server = FakeServer::with(&["op-fe-card0-fe0-dead-7"]);
+        let (r, flag) = registrar_in(&server, InputMode::Body);
+        assert_eq!(
+            r.check().await,
+            Health {
+                server_ready: true,
+                registered: true,
+                purged: 0
+            }
+        );
+        assert!(r.is_ready() && !flag.load(Ordering::SeqCst));
+        server.down.store(true, Ordering::SeqCst);
+        assert!(!r.check().await.ready() && !r.is_ready());
+        server.down.store(false, Ordering::SeqCst);
+        assert!(r.check().await.ready());
+        assert!(r.close().await, "no import to release");
+        assert_eq!(*server.log.lock().unwrap(), Vec::<String>::new());
+        assert_eq!(*server.regions.lock().unwrap(), ["op-fe-card0-fe0-dead-7"]);
+        assert_eq!(r.registrations(RegistrationCause::Start), 0);
     }
 
     #[tokio::test]

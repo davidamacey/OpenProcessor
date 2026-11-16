@@ -36,7 +36,7 @@ pub use cuda::{Context, CudaError, DeviceRange, Fault, PinnedBuf, Stream, device
 pub use frame_pool::{AllocError, DeviceBuf, FramePool};
 pub use kernels::{Kernel, KernelArg, KernelError, Kernels, LaunchConfig, Module};
 pub use model_calls::{CallError, InferCall, InputTensor, ModelCalls, OutputTensor};
-pub use model_server::{ModelServer, ModelServerConfig};
+pub use model_server::{InputMode, ModelServer, ModelServerConfig};
 pub use nvjpeg::{Backend, DecodeError, Decoded, DeviceFrame, Lane, Lanes};
 pub use pool::{CancelToken, JobError, JobHandle, PoolError, WorkerPool};
 pub use region::{Region, Slice};

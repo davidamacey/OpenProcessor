@@ -2,6 +2,15 @@
 //! extension: tonic channels, the region's registration and its rules, and the infer call
 //! (plan 17 sections 1.3, 2.2, 2.4 and 7; the Python engine's `transport.py`).
 //!
+//! The inputs travel one of two ways, chosen once at start ([`InputMode`],
+//! `OP_FRAME_ENGINE_TRANSPORT`): as slices of the registered region (`cuda`), or copied to the
+//! host and sent in the request's `raw_input_contents` (`body`, the Python `BodyTransport`, for a
+//! server that cannot import the region). In body mode the region is still allocated and every
+//! input is still a slice of it (the slab bounds the bytes in flight), but it is not exported
+//! (`Region::local`) and nothing is registered, purged or unregistered: the health tick asks
+//! readiness only. Each host copy belongs to its slice's call, so the host bytes in flight are
+//! bounded by the region. The outputs come back in `raw_output_contents` in both modes.
+//!
 //! Region rules, all kept:
 //! * at start every region the server holds under this engine's prefix is unregistered first: a
 //!   killed predecessor leaves its region registered and its memory pinned in the server;
@@ -31,6 +40,7 @@ use std::future::Future;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
+use bytes::Bytes;
 use tokio::time::Instant;
 use tonic::transport::{Channel, Endpoint};
 use tonic::{Code, Status};
@@ -59,6 +69,15 @@ use proto::model_infer_request::{InferInputTensor, InferRequestedOutputTensor};
 /// The message limit both ways (the Python engine's 512 MiB).
 pub const MAX_MESSAGE_BYTES: usize = 512 << 20;
 
+/// How the model inputs reach the server, fixed at start.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputMode {
+    /// Slices of the registered region (Triton's CUDA shared-memory extension).
+    SharedMemory,
+    /// Copied to the host and sent in the request body; the region is never registered.
+    Body,
+}
+
 /// How the engine reaches its model server.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModelServerConfig {
@@ -74,6 +93,8 @@ pub struct ModelServerConfig {
     pub region_name: String,
     /// The card as the model server numbers it.
     pub device_id: i64,
+    /// How the inputs travel.
+    pub inputs: InputMode,
 }
 
 /// A configuration refused before any connection.
@@ -223,6 +244,7 @@ pub struct ModelServer {
     registrar: Registrar<TritonApi>,
     region: Region,
     call_timeout: Duration,
+    inputs: InputMode,
 }
 
 impl fmt::Debug for ModelServer {
@@ -274,11 +296,18 @@ impl ModelServer {
             bytes: region.len() as u64,
             device_id: cfg.device_id,
         };
-        let registrar = Registrar::new(api, id, cfg.call_timeout, region.registration_flag());
+        let registrar = Registrar::new(
+            api,
+            id,
+            cfg.inputs,
+            cfg.call_timeout,
+            region.registration_flag(),
+        );
         Ok(ModelServer {
             registrar,
             region,
             call_timeout: cfg.call_timeout,
+            inputs: cfg.inputs,
         })
     }
 
@@ -320,12 +349,9 @@ impl ModelServer {
         let Some(timeout) = call_timeout(self.call_timeout, call.deadline, Instant::now()) else {
             return Err(Status::deadline_exceeded("the request deadline passed"));
         };
-        let request = infer_request(
-            self.registrar.name(),
-            call.model,
-            &shm_inputs(call),
-            call.outputs,
-        );
+        let inputs = request_inputs(call, self.inputs)
+            .map_err(|m| Status::invalid_argument(format!("body transport: {m}")))?;
+        let request = infer_request(self.registrar.name(), call.model, inputs, call.outputs);
         let mut client = self.registrar.api().any();
         bounded(timeout, client.model_infer(timed(request, timeout)))
             .await
@@ -367,7 +393,8 @@ impl ModelCalls for ModelServer {
         let answer = match self.send(&call).await {
             Ok(r) => Ok(r),
             Err(s)
-                if !call.inputs.is_empty()
+                if self.inputs == InputMode::SharedMemory
+                    && !call.inputs.is_empty()
                     && matches!(s.code(), Code::InvalidArgument | Code::NotFound) =>
             {
                 self.infer_once_more(&call, s).await
@@ -396,44 +423,47 @@ fn param(choice: ParameterChoice) -> proto::InferParameter {
     }
 }
 
-/// One input as the request names it: a byte range of the registered region.
-struct ShmInput<'a> {
+/// Where one input's bytes are: a byte range of the registered region, or in the body.
+enum Source {
+    Region { offset: usize, len: usize },
+    Body(Bytes),
+}
+
+/// One input as the request names it.
+struct RequestInput<'a> {
     name: &'a str,
     datatype: &'a str,
     shape: &'a [i64],
-    offset: usize,
-    len: usize,
+    source: Source,
 }
 
-/// The `ModelInfer` request reading every input from `region` (the extension's
-/// `shared_memory_region`, `shared_memory_byte_size`, `shared_memory_offset` parameters).
+/// The `ModelInfer` request: a region input carries the extension's `shared_memory_region`,
+/// `shared_memory_byte_size` and `shared_memory_offset` parameters; a body input's bytes go into
+/// `raw_input_contents` in input order (KServe v2: when that field is used, every input is in it).
 fn infer_request(
     region: &str,
     model: &str,
-    inputs: &[ShmInput<'_>],
+    inputs: Vec<RequestInput<'_>>,
     outputs: &[&str],
 ) -> proto::ModelInferRequest {
+    let mut raw = Vec::new();
     let inputs = inputs
-        .iter()
-        .map(|i| InferInputTensor {
-            name: i.name.to_string(),
-            datatype: i.datatype.to_string(),
-            shape: i.shape.to_vec(),
-            parameters: HashMap::from([
-                (
-                    "shared_memory_region".to_string(),
-                    param(ParameterChoice::StringParam(region.to_string())),
-                ),
-                (
-                    "shared_memory_byte_size".to_string(),
-                    param(ParameterChoice::Int64Param(i.len as i64)),
-                ),
-                (
-                    "shared_memory_offset".to_string(),
-                    param(ParameterChoice::Int64Param(i.offset as i64)),
-                ),
-            ]),
-            contents: None,
+        .into_iter()
+        .map(|i| {
+            let parameters = match i.source {
+                Source::Region { offset, len } => region_parameters(region, offset, len),
+                Source::Body(bytes) => {
+                    raw.push(bytes);
+                    HashMap::new()
+                }
+            };
+            InferInputTensor {
+                name: i.name.to_string(),
+                datatype: i.datatype.to_string(),
+                shape: i.shape.to_vec(),
+                parameters,
+                contents: None,
+            }
         })
         .collect();
     let outputs = outputs
@@ -447,19 +477,64 @@ fn infer_request(
         model_name: model.to_string(),
         inputs,
         outputs,
+        raw_input_contents: raw,
         ..Default::default()
     }
 }
 
-fn shm_inputs<'a>(call: &'a InferCall<'a>) -> Vec<ShmInput<'a>> {
+fn region_parameters(
+    region: &str,
+    offset: usize,
+    len: usize,
+) -> HashMap<String, proto::InferParameter> {
+    HashMap::from([
+        (
+            "shared_memory_region".to_string(),
+            param(ParameterChoice::StringParam(region.to_string())),
+        ),
+        (
+            "shared_memory_byte_size".to_string(),
+            param(ParameterChoice::Int64Param(len as i64)),
+        ),
+        (
+            "shared_memory_offset".to_string(),
+            param(ParameterChoice::Int64Param(offset as i64)),
+        ),
+    ])
+}
+
+/// The call's inputs as `mode` sends them; a body input must carry its slice's bytes.
+fn request_inputs<'a>(
+    call: &'a InferCall<'a>,
+    mode: InputMode,
+) -> Result<Vec<RequestInput<'a>>, String> {
     call.inputs
         .iter()
-        .map(|i| ShmInput {
-            name: i.name,
-            datatype: i.datatype,
-            shape: i.shape,
-            offset: i.slice.offset(),
-            len: i.slice.len(),
+        .map(|i| {
+            let source = match (mode, i.body) {
+                (InputMode::SharedMemory, _) => Source::Region {
+                    offset: i.slice.offset(),
+                    len: i.slice.len(),
+                },
+                (InputMode::Body, Some(b)) if b.len() == i.slice.len() => Source::Body(b.clone()),
+                (InputMode::Body, Some(b)) => {
+                    return Err(format!(
+                        "input {} carries {} bytes for a slice of {}",
+                        i.name,
+                        b.len(),
+                        i.slice.len()
+                    ));
+                }
+                (InputMode::Body, None) => {
+                    return Err(format!("input {} has no host copy", i.name));
+                }
+            };
+            Ok(RequestInput {
+                name: i.name,
+                datatype: i.datatype,
+                shape: i.shape,
+                source,
+            })
         })
         .collect()
 }
@@ -557,14 +632,16 @@ mod tests {
     #[test]
     fn inputs_are_named_as_slices_of_the_region() {
         let shape = [1i64, 3, 640, 640];
-        let inputs = [ShmInput {
+        let inputs = vec![RequestInput {
             name: "images",
             datatype: "UINT8",
             shape: &shape,
-            offset: 4096,
-            len: 1_228_800,
+            source: Source::Region {
+                offset: 4096,
+                len: 1_228_800,
+            },
         }];
-        let r = infer_request("op-fe-x-fe0-h-1", "detector", &inputs, &["output0"]);
+        let r = infer_request("op-fe-x-fe0-h-1", "detector", inputs, &["output0"]);
         assert_eq!(r.model_name, "detector");
         assert_eq!(
             r.outputs
@@ -596,6 +673,52 @@ mod tests {
             Some(ParameterChoice::Int64Param(4096))
         );
         assert_eq!(i.parameters.len(), 3);
+    }
+
+    #[test]
+    fn body_inputs_travel_in_raw_input_contents_with_the_same_names_and_shapes() {
+        let (shape_a, shape_b) = ([1i64, 3, 4, 4], [2i64, 3, 2, 2]);
+        let (a, b) = (Bytes::from(vec![7u8; 48]), Bytes::from(vec![9u8; 24]));
+        let inputs = vec![
+            RequestInput {
+                name: "images",
+                datatype: "UINT8",
+                shape: &shape_a,
+                source: Source::Body(a.clone()),
+            },
+            RequestInput {
+                name: "crops",
+                datatype: "UINT8",
+                shape: &shape_b,
+                source: Source::Body(b.clone()),
+            },
+        ];
+        let r = infer_request("op-fe-x-fe0-h-1", "m", inputs, &["out"]);
+        assert_eq!(r.raw_input_contents, [a.clone(), b]);
+        assert_eq!(
+            r.raw_input_contents[0].as_ptr(),
+            a.as_ptr(),
+            "moved, not copied"
+        );
+        assert!(
+            r.inputs
+                .iter()
+                .all(|i| i.parameters.is_empty() && i.contents.is_none())
+        );
+        assert_eq!(
+            r.inputs
+                .iter()
+                .map(|i| (i.name.as_str(), i.shape.clone()))
+                .collect::<Vec<_>>(),
+            [("images", shape_a.to_vec()), ("crops", shape_b.to_vec())]
+        );
+        assert_eq!(
+            r.outputs
+                .iter()
+                .map(|o| o.name.as_str())
+                .collect::<Vec<_>>(),
+            ["out"]
+        );
     }
 
     #[test]

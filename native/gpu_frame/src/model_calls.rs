@@ -26,6 +26,9 @@ pub struct InputTensor<'a> {
     pub shape: &'a [i64],
     /// The region bytes sent as this input; the slice stays borrowed for the call.
     pub slice: &'a Slice,
+    /// The slice's bytes copied to the host, sent in the request body when the inputs travel in
+    /// the body ([`crate::model_server::InputMode::Body`]); `None` over shared memory.
+    pub body: Option<&'a Bytes>,
 }
 
 /// One model call.
