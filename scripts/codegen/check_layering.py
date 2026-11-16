@@ -100,11 +100,13 @@ _ENGINE_MAY_IMPORT = ('src.domain', 'src.utils')
 # The files outside ``frame_engine/`` that import it. The live harness's engine stand-in runs the
 # engine's own gRPC front, so the wire handling it answers with is the engine's, not a copy that
 # drifts. The goldens generator runs the Python geometry and routing functions the native engine
-# ports, so the goldens are what they answer; it goes with the Python engine (plan 17 N3). Both
-# are development fixtures, never part of the API.
+# ports, so the goldens are what they answer; the host corpus generator records what the Python
+# engine answers for each corpus file; both go with the Python engine (plan 17 N3). All are
+# development fixtures, never part of the API.
 _ENGINE_STAND_INS = (
     'docker/test/fake_frame_engine.py',
     'scripts/codegen/frame_engine_goldens.py',
+    'scripts/codegen/frame_engine_host_corpus.py',
 )
 
 
