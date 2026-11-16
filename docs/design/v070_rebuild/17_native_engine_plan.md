@@ -4,10 +4,10 @@
 |---|---|
 | Status | plan, revision 1 (2026-11-15), reviewed. Inputs of this revision, kept untracked in the coordinator's speed-work notes: an independent review of revision 0 (2 blockers, 14 major and 15 minor findings, 10 silent decisions), the coordinator's binding decisions on it, and the two measurements of 2026-11-15 (a throwaway Rust pipeline on public photo sets, whose numbers are cited here; a run of the owner's Rust server as it is, described by mechanism only). Section 10 traces every finding and decision to its place here |
 | Code base read | `int/b4-stateless` at `7fb83e660` (the crop encoder of plan 13b lane C1 merged): `frame_engine/`, `src/clients/frame_engine.py`, `src/domain/frame_engine_wire.py`, `tests/frame_engine_tests/`, `tests/gpu/`, `docker/frame-engine/`, the compose files, `scripts/bench/gpu_prep_parity.py`, `scripts/datasets/` |
-| Reads with | [14](14_roadmap.md) section 4 (how a port is judged), [13](13_backend_speed_plan.md) D1 and the protocol, [13b](13b_crop_vectors_plan.md) sections 6 and 7 (the crop encoder), [the serving trade study](../../research/v060_serving_backend_trade_study.md) sections 5 and 10, [the desktop direction](../photo_library/50_desktop_direction.md) |
+| Reads with | [14](14_roadmap.md) section 3 (stage 2, how a port is judged), [13](13_backend_speed_plan.md) D1 and the protocol, [13b](13b_crop_vectors_plan.md) sections 6 and 7 (the crop encoder), [the serving trade study](../../research/v060_serving_backend_trade_study.md) sections 5 and 10, [the desktop direction](../photo_library/50_desktop_direction.md) |
 | Replaces | track T1 of plan 13 (raised to a build); plan 14 row 7's order ("after phase 3") is overridden by the owner: the native engine starts now |
 | Owner decisions in force | 2026-11-15: no further speed work goes into the Python engine; it is frozen as the reference for correct outputs and deleted at the switch (N3); two engines are never kept. Rust (C or C++ where a library needs it). No bias toward any one design: measure, then decide. The engine code is public. Nothing is tuned to this host: its CPU (two Xeon E5-2680 v3, 24 physical cores) is the baseline, thread counts derive from cores and card, and every result names the CPU |
-| Not in scope | the API is not in this plan (the owner expects the whole backend to end in Rust; the API port is decided after a running capacity measurement); jobs, storage and training are not either; the model server stays for N0 to N3 (section 4, decision 4.1) |
+| Not in scope | the API is not in this plan (the owner expects the whole backend to end in Rust; the API port is decided: plan 18); jobs, storage and training are not either; the model server stays for N0 to N3 (section 4, decision 4.1) |
 | Numbers | every number names its set and run. Rows marked "pipeline" are the throwaway Rust pipeline of 2026-11-15 (public sets: COCO 1,000 photos, 120 Commons photos at 18 to 24.5 MP), measured in the same exclusive holds as the Python engine path; other rows cite their plan. Set P (a private set of real-world 20 MP vehicle photos) is a normal part of every speed test; its numbers may be published (owner, 2026-11-15), its source, file names and images stay private |
 
 ## 0. The user's job and the measured truth
@@ -356,7 +356,7 @@ peak.
 ## 3. Building blocks
 
 Versions are the latest on 2026-11-15 and pinned exactly in `native/Cargo.lock`; licences are
-recorded at selection (plan 14 section 3) and checked by `cargo deny` (section 3.1).
+recorded at selection (plan 14 section 2) and checked by `cargo deny` (section 3.1).
 
 | Need | Choice | Why, and the alternative | Doc | Licence |
 |---|---|---|---|---|
@@ -626,7 +626,7 @@ docker compose -p op-n0 -f docker/frame-engine-native/compose.n0.yml down
 inside the native engine and no fix inside N0, when model inputs differ for a reason not found in the
 loader, the options or the geometry port, when the region cannot be registered or read, or when a
 kill leaves the model server restarted, not ready or above its baseline. A miss is reported with its
-number and its bound; a bar moves only in writing (plan 14 section 6).
+number and its bound; a bar moves only in writing (plan 14 section 11).
 
 **Thrown away after N0.** `compose.n0.yml`, the `decoder` answer for host-route photos, and the
 refusal of a non-zero crop side cap (both replaced in N1a). Everything else is product code.
@@ -683,7 +683,7 @@ sweep on the merged tree; speed rows recorded under the evidence clause.
   detailed developer page), `env.template`, `CHANGELOG.md`.
 - The sweep: full offline suite, `pytest -m native`, the GPU tier on the native engine, the four-way
   ingest rows, the 600 s soak of configuration D with failed 0, every number with host CPU per photo
-  per process (plan 14 section 4).
+  per process (plan 14 section 3).
 
 ### N3: the switch and the deletion
 
