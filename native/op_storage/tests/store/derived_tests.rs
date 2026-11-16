@@ -4,8 +4,9 @@ use std::time::{Duration, SystemTime};
 
 use bytes::Bytes;
 use object_store::memory::InMemory;
+use op_config::Env;
 use op_storage::cache::DiskCache;
-use op_storage::derived::Derived;
+use op_storage::derived::{CACHE_MAX_BYTES_KEY, CACHE_ROOT_KEY, Derived};
 use op_storage::durable::{Backend, Durable};
 use op_storage::error::StorageError;
 use op_storage::keys::{DerivedKind, ProjectId, StorageKey};
@@ -178,4 +179,34 @@ async fn the_cache_evicts_the_files_read_longest_ago_at_its_cap() {
     for kept in [&keys[0], &keys[2], &fourth] {
         assert!(cache_file(&w, kept).exists(), "{kept}");
     }
+}
+
+fn s3_durable(w: &World) -> Durable {
+    let env = Env::from_pairs([("OP_STORAGE_URL", "s3://photos")]);
+    Durable::from_settings(&env, &w.roots).unwrap()
+}
+
+#[test]
+fn an_s3_store_with_a_cache_needs_its_own_cache_root_and_creates_nothing_in_landing() {
+    let w = world();
+    let err = Derived::from_settings(&Env::from_pairs([("X", "1")]), s3_durable(&w))
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains(CACHE_ROOT_KEY), "{err}");
+
+    let root = w.base.join("derived_cache");
+    let env = Env::from_pairs([(CACHE_ROOT_KEY, root.to_str().unwrap())]);
+    Derived::from_settings(&env, s3_durable(&w)).unwrap();
+    assert!(root.is_dir());
+    assert_eq!(fs::read_dir(w.base.join("landing")).unwrap().count(), 0);
+}
+
+#[test]
+fn the_cache_root_is_ignored_for_a_local_store_or_a_zero_cap() {
+    let w = world();
+    let local = Durable::from_store(Arc::new(InMemory::new()), Backend::Streamed, false);
+    Derived::from_settings(&Env::from_pairs([("X", "1")]), local).unwrap();
+    let off = Env::from_pairs([(CACHE_MAX_BYTES_KEY, "0")]);
+    Derived::from_settings(&off, s3_durable(&w)).unwrap();
+    assert_eq!(fs::read_dir(w.base.join("landing")).unwrap().count(), 0);
 }
