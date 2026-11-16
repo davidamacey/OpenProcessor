@@ -48,6 +48,7 @@ pub enum RegistrationCause {
 }
 
 impl RegistrationCause {
+    /// The short name of the cause, used as a metric label.
     pub fn label(self) -> &'static str {
         match self {
             RegistrationCause::Start => "start",
@@ -64,13 +65,16 @@ impl RegistrationCause {
 /// The answer of one health check.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Health {
+    /// Whether the server answered its readiness probe.
     pub server_ready: bool,
+    /// Whether this engine's region is registered on the server.
     pub registered: bool,
     /// Leftover regions of this prefix unregistered by this check.
     pub purged: usize,
 }
 
 impl Health {
+    /// Whether the server is ready and holds the region, so calls may be sent.
     pub fn ready(&self) -> bool {
         self.server_ready && self.registered
     }

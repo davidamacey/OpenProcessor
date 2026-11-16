@@ -282,9 +282,13 @@ part) pinned to the toolchain in `native/rust-toolchain.toml`
 (plan: [docs/design/v070_rebuild/17_native_engine_plan.md](docs/design/v070_rebuild/17_native_engine_plan.md)).
 Build output goes to `native/target/` or wherever `CARGO_TARGET_DIR` points. Install `cargo-deny`
 once at the version CI uses: `cargo install --locked cargo-deny@0.20.2`. A commit that touches
-`native/` runs `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test` and `cargo deny check
-licenses bans sources` (hooks `cargo-fmt`, `cargo-clippy`, `cargo-test`, `cargo-deny`, each scoped to
-`^native/`); the RustSec advisories check (`cargo-deny-advisories`, needs the network) runs at push.
+`native/` runs `cargo fmt --check`, `cargo clippy -D warnings`, `cargo doc` with rustdoc warnings
+denied, `cargo test` and `cargo deny check licenses bans sources` (hooks `cargo-fmt`, `cargo-clippy`,
+`cargo-doc`, `cargo-test`, `cargo-deny`, each scoped to `^native/`). The workspace lints deny
+undocumented public items (say what it is for; add `# Errors` and `# Panics` where they apply),
+functions above cognitive complexity 15 or 100 lines (split them by concern; there is no baseline),
+and any `#[allow]` or an `#[expect]` without a `reason`; duplicated Rust is caught by the same jscpd
+ratchet as the Python (`check-duplication`, baseline only shrinks); the RustSec advisories check (`cargo-deny-advisories`, needs the network) runs at push.
 CI runs the same gates once in the job `native`, and the `pre-commit` job skips those hooks.
 `Cargo.lock` is committed and every command passes `--locked`. A new dependency's licence must be on
 the allow-list in `native/deny.toml` (each entry is compatible with this repository's

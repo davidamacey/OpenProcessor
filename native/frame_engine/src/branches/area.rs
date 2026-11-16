@@ -57,6 +57,11 @@ fn ratio(src: usize, dst: usize) -> (f64, i64, bool) {
 
 /// The `src_w x src_h` interleaved RGB pixels resized to `dst_w x dst_h` with OpenCV's area
 /// filter. Only shrinking is ported (both ratios at least 1), which is all the cap asks.
+///
+/// # Errors
+///
+/// A byte count that does not match the source size, an empty or larger destination, or a
+/// whole ratio whose blocks do not tile the source.
 pub fn resize_area(
     src: &[u8],
     (src_w, src_h): (usize, usize),

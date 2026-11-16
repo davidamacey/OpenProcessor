@@ -103,6 +103,11 @@ impl Exchange for Models {
     }
 }
 
+/// Replay the plan's model calls with resident inputs against the model server and print the row.
+///
+/// # Errors
+///
+/// Returns `Err` when `--stats-url` is missing, the crop counts or the region size are invalid, CUDA or the region cannot be set up, or the model server cannot be reached or registered with.
 pub async fn run(a: ZArgs, argv: Vec<String>) -> Result<ExitCode, Failure> {
     let p = prepare(&a.common).await?;
     let url = a

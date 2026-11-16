@@ -26,8 +26,11 @@ use crate::wire::parse_plan;
 /// The models the plans name (the API's ingest plan, `ingest_gpu_decode.ingest_engine_plan`).
 #[derive(Debug, Clone)]
 pub struct Models {
+    /// Model name the detector check calls.
     pub detector: String,
+    /// Model name the frame-embedding check calls.
     pub frame_encoder: String,
+    /// Model name the crop-embedding check calls.
     pub crop_encoder: String,
 }
 
@@ -59,6 +62,10 @@ pub fn plans(m: &Models) -> [(&'static str, String); 2] {
 }
 
 /// The built-in photo: a 640 x 480 pattern of gradients and blocks, JPEG at quality 90.
+///
+/// # Errors
+///
+/// The built-in photo cannot be encoded.
 pub fn built_in_photo() -> Result<Bytes, String> {
     let (w, h) = (640usize, 480usize);
     let mut px = Vec::with_capacity(w * h * 3);
@@ -99,26 +106,9 @@ fn rows(answer: &[(String, Tensor)], name: &str) -> i64 {
     }
 }
 
-/// Runs the check; `true` when both plans answered `ok` with every branch `ok`.
-pub async fn run(
-    settings: &Settings,
-    models: &Models,
-    photo: Option<PathBuf>,
-    ready_wait: Duration,
-) -> bool {
-    let started = Instant::now();
-    let metrics = Metrics::new();
-    let pipeline = match GpuPipeline::start(settings, Arc::clone(&metrics)) {
-        Ok(p) => p,
-        Err(e) => {
-            println!("self-check step=start FAILED {e}");
-            return false;
-        }
-    };
-    println!(
-        "self-check step=start seconds={:.3}",
-        started.elapsed().as_secs_f64()
-    );
+/// Waits for the model server and the registered region; `false` after `ready_wait` or when the
+/// context is lost.
+async fn wait_ready(pipeline: &GpuPipeline, settings: &Settings, ready_wait: Duration) -> bool {
     let waiting = Instant::now();
     loop {
         pipeline.check().await;
@@ -140,81 +130,125 @@ pub async fn run(
         "self-check step=ready seconds={:.3}",
         waiting.elapsed().as_secs_f64()
     );
+    true
+}
+
+/// The photo the plans run on: the file given, or the built-in one.
+fn load_photo(photo: Option<PathBuf>) -> Option<Bytes> {
     let image = match photo {
         Some(path) => std::fs::read(&path)
             .map(Bytes::from)
             .map_err(|e| format!("{}: {e}", path.display())),
         None => built_in_photo(),
     };
-    let image = match image {
-        Ok(i) => i,
+    match image {
+        Ok(i) => Some(i),
         Err(e) => {
             println!("self-check step=photo FAILED {e}");
+            None
+        }
+    }
+}
+
+/// One plan on the photo, its stage seconds and its outcome printed; `true` when it answered `ok`
+/// with every branch `ok`.
+async fn run_plan(
+    pipeline: &GpuPipeline,
+    metrics: &Metrics,
+    settings: &Settings,
+    (name, text): (&str, String),
+    image: &Bytes,
+) -> bool {
+    let plan = match parse_plan(text.as_bytes(), false) {
+        Ok(p) => p,
+        Err(e) => {
+            println!("self-check plan={name} FAILED the plan: {e}");
             return false;
         }
     };
+    let before = stage_seconds(metrics);
+    let clock = RequestClock::start(Instant::now(), settings.request_deadline_seconds);
+    let request = Arc::new(RequestState::new(clock));
+    let photo = Photo {
+        image: image.clone(),
+        plan,
+        boxes: None,
+        request: Arc::clone(&request),
+    };
+    let t = Instant::now();
+    let answer = pipeline.process(photo).await;
+    let total = t.elapsed().as_secs_f64();
+    for (stage, (b, a)) in clock::ALL
+        .iter()
+        .zip(before.iter().zip(stage_seconds(metrics)))
+    {
+        if a > *b {
+            println!("self-check plan={name} stage={stage} seconds={:.6}", a - b);
+        }
+    }
+    match answer {
+        Ok(a) => {
+            let branches: Vec<String> = a
+                .branches
+                .iter()
+                .map(|(b, s)| format!("{b}:{s:?}"))
+                .collect();
+            let ok = a.status == "ok"
+                && a.branches
+                    .values()
+                    .all(|s| *s == crate::wire::branch_status::BranchState::Ok);
+            println!(
+                "self-check plan={name} {} status={} route={} detections={} crop_vectors={} \
+                 crop_jpegs={} branches={} seconds={total:.3}",
+                if ok { "ok" } else { "FAILED" },
+                a.status,
+                a.decode_route,
+                rows(&a.outputs, "det_boxes"),
+                rows(&a.outputs, "crop_embeddings"),
+                rows(&a.outputs, "crop_jpegs"),
+                branches.join(","),
+            );
+            ok
+        }
+        Err(e) => {
+            println!(
+                "self-check plan={name} FAILED in stage {}: {e:?} seconds={total:.3}",
+                request.stage()
+            );
+            false
+        }
+    }
+}
+
+/// Runs the check; `true` when both plans answered `ok` with every branch `ok`.
+pub async fn run(
+    settings: &Settings,
+    models: &Models,
+    photo: Option<PathBuf>,
+    ready_wait: Duration,
+) -> bool {
+    let started = Instant::now();
+    let metrics = Metrics::new();
+    let pipeline = match GpuPipeline::start(settings, Arc::clone(&metrics)) {
+        Ok(p) => p,
+        Err(e) => {
+            println!("self-check step=start FAILED {e}");
+            return false;
+        }
+    };
+    println!(
+        "self-check step=start seconds={:.3}",
+        started.elapsed().as_secs_f64()
+    );
+    if !wait_ready(&pipeline, settings, ready_wait).await {
+        return false;
+    }
+    let Some(image) = load_photo(photo) else {
+        return false;
+    };
     let mut passed = true;
-    for (name, text) in plans(models) {
-        let plan = match parse_plan(text.as_bytes(), false) {
-            Ok(p) => p,
-            Err(e) => {
-                println!("self-check plan={name} FAILED the plan: {e}");
-                passed = false;
-                continue;
-            }
-        };
-        let before = stage_seconds(&metrics);
-        let clock = RequestClock::start(Instant::now(), settings.request_deadline_seconds);
-        let request = Arc::new(RequestState::new(clock));
-        let photo = Photo {
-            image: image.clone(),
-            plan,
-            boxes: None,
-            request: Arc::clone(&request),
-        };
-        let t = Instant::now();
-        let answer = pipeline.process(photo).await;
-        let total = t.elapsed().as_secs_f64();
-        for (stage, (b, a)) in clock::ALL
-            .iter()
-            .zip(before.iter().zip(stage_seconds(&metrics)))
-        {
-            if a > *b {
-                println!("self-check plan={name} stage={stage} seconds={:.6}", a - b);
-            }
-        }
-        match answer {
-            Ok(a) => {
-                let branches: Vec<String> = a
-                    .branches
-                    .iter()
-                    .map(|(b, s)| format!("{b}:{s:?}"))
-                    .collect();
-                let ok = a.status == "ok"
-                    && a.branches
-                        .values()
-                        .all(|s| *s == crate::wire::branch_status::BranchState::Ok);
-                println!(
-                    "self-check plan={name} {} status={} route={} detections={} crop_vectors={} \
-                     crop_jpegs={} branches={} seconds={total:.3}",
-                    if ok { "ok" } else { "FAILED" },
-                    a.status,
-                    a.decode_route,
-                    rows(&a.outputs, "det_boxes"),
-                    rows(&a.outputs, "crop_embeddings"),
-                    rows(&a.outputs, "crop_jpegs"),
-                    branches.join(","),
-                );
-                passed &= ok;
-            }
-            Err(e) => {
-                println!(
-                    "self-check plan={name} FAILED in stage {}: {e:?} seconds={total:.3}",
-                    request.stage()
-                );
-                passed = false;
-            }
-        }
+    for plan in plans(models) {
+        passed &= run_plan(&pipeline, &metrics, settings, plan, &image).await;
     }
     pipeline.close().await;
     println!("self-check {}", if passed { "passed" } else { "FAILED" });

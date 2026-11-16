@@ -48,7 +48,9 @@ use crate::wire::request::parse_request;
 /// What the front reads from the settings.
 #[derive(Debug, Clone, Copy)]
 pub struct FrontConfig {
+    /// Photos admitted at once, `OP_FRAME_ENGINE_MAX_IN_FLIGHT`; more are answered `RESOURCE_EXHAUSTED`.
     pub max_in_flight: u32,
+    /// Seconds from arrival that a request may take, `OP_FRAME_ENGINE_REQUEST_DEADLINE_SECONDS`.
     pub request_deadline_seconds: f64,
 }
 
@@ -85,6 +87,7 @@ impl<P> Clone for FrontHandle<P> {
 }
 
 impl<P: Pipeline> Front<P> {
+    /// The service over `pipeline`, and the handle used to drain it and to watch its in-flight count.
     pub fn new(
         pipeline: Arc<P>,
         metrics: Arc<Metrics>,
@@ -114,10 +117,12 @@ impl<P: Pipeline> FrontHandle<P> {
             .store(true, std::sync::atomic::Ordering::Release);
     }
 
+    /// Completes when no photo is in flight; used during shutdown after `begin_drain`.
     pub async fn wait_idle(&self) {
         self.state.cap.wait_idle().await;
     }
 
+    /// Photos admitted and not yet answered.
     pub fn in_flight(&self) -> u32 {
         self.state.cap.current()
     }

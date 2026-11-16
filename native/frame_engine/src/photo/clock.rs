@@ -17,16 +17,27 @@ use std::time::Instant;
 use crate::metrics::Metrics;
 use crate::pipeline::RequestState;
 
+/// Wait from arrival to the start of work.
 pub const QUEUE: &str = "queue";
+/// Wait for the decoded-frame budget.
 pub const BUDGET: &str = "budget";
+/// Decode, orientation and size check on a lane.
 pub const DECODE: &str = "decode";
+/// Resample of the detector's letterboxed input.
 pub const LETTERBOX: &str = "letterbox";
+/// The detector call.
 pub const DETECT: &str = "detect";
+/// Resample and call of the whole-frame embedding.
 pub const EMBED_FRAME: &str = "embed_frame";
+/// Resample and calls of the crop embeddings.
 pub const EMBED_CROPS: &str = "embed_crops";
+/// The perception-encoder embedding call.
 pub const EMBED_PE: &str = "embed_pe";
+/// Copy of each crop rectangle out of the frame.
 pub const CROP_COPY: &str = "crop_copy";
+/// JPEG encode of each crop.
 pub const CROP_JPEG: &str = "crop_jpeg";
+/// Laplacian sums for the blur measure.
 pub const BLUR: &str = "blur";
 
 /// Every stage this engine records, in the contract's order.
@@ -56,6 +67,7 @@ pub struct StageClock {
 }
 
 impl StageClock {
+    /// A clock for `request` that publishes to `metrics` when dropped.
     pub fn new(request: Arc<RequestState>, metrics: Arc<Metrics>) -> Self {
         Self {
             request,
@@ -64,6 +76,7 @@ impl StageClock {
         }
     }
 
+    /// Adds `seconds` to `stage`'s total.
     pub fn add(&mut self, stage: &'static str, seconds: f64) {
         match self.seconds.iter_mut().find(|(s, _)| *s == stage) {
             Some((_, total)) => *total += seconds,
@@ -83,6 +96,7 @@ impl StageClock {
         self.request.enter(stage);
     }
 
+    /// Runs `f`, entering `stage` first and adding its wall time to the stage.
     pub fn time<T>(&mut self, stage: &'static str, f: impl FnOnce() -> T) -> T {
         self.enter(stage);
         let start = Instant::now();
@@ -91,6 +105,7 @@ impl StageClock {
         out
     }
 
+    /// Awaits `f`, entering `stage` first and adding its wall time to the stage.
     pub async fn wait<T>(&mut self, stage: &'static str, f: impl Future<Output = T>) -> T {
         self.enter(stage);
         let start = Instant::now();
@@ -115,10 +130,12 @@ impl Drop for StageClock {
 /// Stages measured on a pool thread, each entered on the request as it starts.
 pub struct JobClock {
     request: Arc<RequestState>,
+    /// Seconds per stage in the order the stages ran.
     pub stages: Vec<(&'static str, f64)>,
 }
 
 impl JobClock {
+    /// A clock for `request` with no stage yet.
     pub fn new(request: Arc<RequestState>) -> Self {
         Self {
             request,
@@ -126,6 +143,7 @@ impl JobClock {
         }
     }
 
+    /// Runs `f` on the pool thread, entering `stage` on the request first and recording its wall time.
     pub fn time<T>(&mut self, stage: &'static str, f: impl FnOnce() -> T) -> T {
         self.request.enter(stage);
         let start = Instant::now();

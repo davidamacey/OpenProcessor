@@ -177,7 +177,7 @@ async def test_stored_boxes_reach_the_engine_as_fp64_rows(
     text = plan_text(['embed_frame', 'embed_crops'])
     boxes = np.array([[0.1, 0.2, 0.3, 0.4], [0.2, 0.2, 0.9, 0.9], [0.0, 0.0, 1.0, 1.0]], np.float64)
     result = await triton(engine).infer(PHOTO, text, boxes=boxes)
-    assert result.as_numpy('crop_embeddings').shape == (3, 4)
+    assert result.as_numpy('crop_embeddings').shape == (3, 1024)
     assert list(result.as_numpy('crop_embedded')) == [True, True, True]
     zero = await triton(engine).infer(
         PHOTO, plan_text(['embed_frame'], crops='inline'), boxes=np.zeros((0, 4), np.float64)
@@ -626,7 +626,7 @@ async def test_the_api_client_gets_the_answer_of_an_ingest_plan(
     assert answer.ok
     assert answer.decode_route == 'gpu'
     assert list(answer.outputs[wire.SIZE]) == [96, 64]
-    assert [bytes(j) for j in answer.outputs[wire.CROP_JPEGS]] == [b'\xff\xd8a', b'\xff\xd8bc']
+    assert [bytes(j) for j in answer.outputs[wire.CROP_JPEGS]] == [b'\xff\xd80', b'\xff\xd81']
     refused = await client.process(await pool(engine), script(status='huge'), PLAN_OBJ)
     assert (refused.status, refused.ok, refused.outputs) == ('huge', False, {})
 

@@ -16,10 +16,18 @@ use tokio::time::Instant;
 pub enum Outcome {
     /// The engine answered `status` `ok` and no branch failed. `route` is the decode route it
     /// reported; `bytes` the size of the answer on the wire.
-    Ok { route: String, bytes: u64 },
+    Ok {
+        /// The decode route the engine reported.
+        route: String,
+        /// Size of the answer on the wire, in bytes.
+        bytes: u64,
+    },
     /// Anything else, under a key a reader can group by: `grpc:<CODE>`, `status:<photo status>`,
     /// `branch:<name>:<reason>`, `protocol:<what>`.
-    Failed { key: String },
+    Failed {
+        /// The failure's group key.
+        key: String,
+    },
 }
 
 /// One photo's round trip.
@@ -32,8 +40,11 @@ pub trait Exchange: Send + Sync + 'static {
 /// window that is.
 #[derive(Debug, Clone, Copy)]
 pub struct LoopConfig {
+    /// Photos outstanding at all times.
     pub in_flight: usize,
+    /// Length of the unmeasured warm-up.
     pub warmup: Duration,
+    /// Length of the measured window.
     pub window: Duration,
     /// How many photos the list holds: the loop walks it round robin.
     pub list_len: usize,
@@ -42,7 +53,9 @@ pub struct LoopConfig {
 /// Called at the two edges of the window, from the loop's own clock, so every counter a row
 /// reads (CPU, model server statistics, load) is read at the instants the rate is measured over.
 pub trait Probe: Send {
+    /// Called once, when the warm-up ends and the window starts.
     fn window_open(&mut self) -> impl Future<Output = ()> + Send;
+    /// Called once, when the window ends.
     fn window_close(&mut self) -> impl Future<Output = ()> + Send;
 }
 
@@ -57,17 +70,21 @@ pub struct LoopResult {
     pub warmup_failures: u64,
     /// Photos that completed after the window closed (not counted anywhere else).
     pub after_window: u64,
+    /// Photos that completed inside the window with `ok`, by the decode route the engine reported.
     pub routes: BTreeMap<String, u64>,
+    /// Bytes of the answers to those photos, summed.
     pub response_bytes: u64,
     /// The window's length on the loop's clock.
     pub window_seconds: f64,
 }
 
 impl LoopResult {
+    /// Photos that completed inside the window with `ok`.
     pub fn ok(&self) -> usize {
         self.latencies_ms.len()
     }
 
+    /// Photos that completed inside the window and failed, over every key.
     pub fn failed(&self) -> u64 {
         self.failures.values().sum()
     }
@@ -82,6 +99,10 @@ struct Done {
 /// Run the closed loop. Each of `in_flight` tasks sends a photo, waits for the answer and sends
 /// the next, so exactly `in_flight` are outstanding until the window closes. A photo counts in the
 /// window by when it completed.
+///
+/// # Panics
+///
+/// Panics when an exchange task itself panicked, so a defective instrument reports no rate.
 pub async fn run<E: Exchange, P: Probe>(
     exchange: Arc<E>,
     config: LoopConfig,

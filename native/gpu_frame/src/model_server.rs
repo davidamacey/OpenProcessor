@@ -12,7 +12,7 @@
 //!   is missing (single flight, by registration generation) and is sent once more from the same
 //!   slices by the same deadline. The extension specifies no error text and no lifetime across
 //!   restarts, so the text "Unable to find shared memory region" is never relied on
-//!   (https://github.com/triton-inference-server/server/blob/r26.10/docs/protocol/extension_shared_memory.md);
+//!   (<https://github.com/triton-inference-server/server/blob/r26.10/docs/protocol/extension_shared_memory.md>);
 //! * shutdown unregisters, then frees; the memory is freed only after a successful unregister
 //!   (the region type enforces it, `region.rs`);
 //! * an unregister request never carries an empty name: the extension unregisters every region
@@ -21,7 +21,7 @@
 //! Channel settings (plan 17 section 2.4, the Python engine's `CHANNEL_OPTIONS`): HTTP/2 keepalive
 //! every 30 s with a 10 s timeout, also while idle (Triton accepts pings 20 s apart), 512 MiB
 //! messages both ways, `OP_FRAME_ENGINE_TRITON_CHANNELS` connections each opened lazily, connect
-//! timeout = the call timeout (https://docs.rs/tonic/0.14.9/tonic/transport/channel/struct.Endpoint.html).
+//! timeout = the call timeout (<https://docs.rs/tonic/0.14.9/tonic/transport/channel/struct.Endpoint.html>).
 //! A call's bound is set both as its `grpc-timeout` (`tonic::Request::set_timeout`) and as a tokio
 //! timeout; dropping the call's future cancels its HTTP/2 stream.
 
@@ -31,7 +31,6 @@ use std::future::Future;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use tokio::sync::Notify;
 use tokio::time::Instant;
 use tonic::transport::{Channel, Endpoint};
 use tonic::{Code, Status};
@@ -43,8 +42,12 @@ mod registration;
 pub use registration::{Health, RegistrationCause, stale_regions};
 use registration::{Identity, Registrar, ServerApi};
 
-// Generated from Triton's protos by build.rs; its lints are the generator's, not this crate's.
-#[allow(clippy::all, clippy::pedantic, missing_docs)]
+#[expect(
+    clippy::all,
+    clippy::pedantic,
+    clippy::allow_attributes_without_reason,
+    reason = "generated from Triton's protos by build.rs; its lints are the generator's, not this crate's"
+)]
 pub(crate) mod proto {
     tonic::include_proto!("inference");
 }
@@ -59,7 +62,7 @@ pub const MAX_MESSAGE_BYTES: usize = 512 << 20;
 /// How the engine reaches its model server.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModelServerConfig {
-    /// `host:port` of the gRPC endpoint, or a full `http://host:port` URI.
+    /// `host:port` of the gRPC endpoint, or a full `<http://host:port`> URI.
     pub url: String,
     /// HTTP/2 connections, used round robin.
     pub channels: usize,
@@ -76,8 +79,11 @@ pub struct ModelServerConfig {
 /// A configuration refused before any connection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConfigError {
+    /// The server URL is not a valid endpoint; carries the parser's message.
     Url(String),
+    /// The region name or prefix breaks the rule that the name extends a non-empty prefix.
     RegionName(String),
+    /// Zero channels were asked for.
     Channels,
 }
 
@@ -93,7 +99,7 @@ impl fmt::Display for ConfigError {
 
 impl std::error::Error for ConfigError {}
 
-/// `host:port` as an `http://` URI; a URI with a scheme is kept.
+/// `host:port` as an `<http://`> URI; a URI with a scheme is kept.
 pub fn endpoint_uri(url: &str) -> String {
     if url.contains("://") {
         url.to_string()
@@ -217,7 +223,6 @@ pub struct ModelServer {
     registrar: Registrar<TritonApi>,
     region: Region,
     call_timeout: Duration,
-    suspect: Notify,
 }
 
 impl fmt::Debug for ModelServer {
@@ -233,6 +238,12 @@ impl ModelServer {
     /// Channels to the server (opened lazily, so the server may start after the engine) and the
     /// region they will register. Call inside a tokio runtime. Nothing is sent until
     /// [`ModelServer::check`].
+    ///
+    /// # Errors
+    ///
+    /// [`ConfigError::RegionName`] when the region name does not extend a non-empty prefix,
+    /// [`ConfigError::Channels`] when zero channels are asked for, [`ConfigError::Url`] when the
+    /// URL is not a valid endpoint.
     pub fn new(cfg: ModelServerConfig, region: Region) -> Result<ModelServer, ConfigError> {
         check_names(&cfg.region_prefix, &cfg.region_name)?;
         if cfg.channels == 0 {
@@ -268,7 +279,6 @@ impl ModelServer {
             registrar,
             region,
             call_timeout: cfg.call_timeout,
-            suspect: Notify::new(),
         })
     }
 
@@ -282,12 +292,6 @@ impl ModelServer {
     /// Ready as of the last check or registration (one atomic read).
     pub fn is_ready(&self) -> bool {
         self.registrar.is_ready()
-    }
-
-    /// Resolves when a call failed in a way that may mean the server is gone: the health task
-    /// probes at once, and readiness follows the probe, never one call.
-    pub async fn suspected(&self) {
-        self.suspect.notified().await;
     }
 
     /// The region the calls read from.
@@ -350,12 +354,6 @@ impl ModelServer {
             })?;
         self.send(call).await.map_err(|s| classify(&s))
     }
-
-    fn note(&self, error: &CallError) {
-        if error.suspects_server() {
-            self.suspect.notify_one();
-        }
-    }
 }
 
 impl ModelCalls for ModelServer {
@@ -376,11 +374,7 @@ impl ModelCalls for ModelServer {
             }
             Err(s) => Err(classify(&s)),
         };
-        let result = answer.and_then(|r| outputs_of(r, call.outputs));
-        if let Err(e) = &result {
-            self.note(e);
-        }
-        result
+        answer.and_then(|r| outputs_of(r, call.outputs))
     }
 }
 

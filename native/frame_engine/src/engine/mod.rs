@@ -60,6 +60,10 @@ pub fn launch_threads(physical_cores: usize) -> usize {
 }
 
 /// The card's name and bus id, refused when the expected card is another one.
+///
+/// # Errors
+///
+/// There is no CUDA device 0, or `expect` is set and names another PCI bus id.
 pub fn identify(expect: Option<&str>) -> Result<(String, String), String> {
     let (name, bus) = gpu_frame::device_identity(0).map_err(|e| format!("no CUDA device: {e}"))?;
     tracing::info!("device 0: {name}, PCI bus id {bus}");
@@ -105,6 +109,10 @@ fn step<T, E: std::fmt::Display>(
 impl GpuPipeline {
     /// Everything up to the first health check. Call inside the tokio runtime (the model-server
     /// channels are tonic's); it blocks while the kernels compile.
+    ///
+    /// # Errors
+    ///
+    /// Any start step fails (device identity, CUDA context, pools, region, model-server channels, kernels, registration); the text names the step.
     pub fn start(s: &Settings, metrics: Arc<Metrics>) -> Result<Self, String> {
         let (_, bus) = identify(s.expect_bus_id.as_deref())?;
         let ctx = step("context", || Context::new(0))?;
