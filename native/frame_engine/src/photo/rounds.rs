@@ -16,20 +16,28 @@ use super::clock::{
 use super::device::{Device, LaunchJob, Write};
 use super::{Answers, Runs, Stop, engine, job_failed, settle_job_time};
 use crate::branches::crops::CropJpeg;
-use crate::branches::{InputSpec, detect, embed};
+use crate::branches::{InputSpec, detect, embed, faces};
 use crate::fault::GpuFault;
 use crate::pipeline::{RequestState, Tensor};
 use crate::wire::EnginePlan;
 use crate::wire::branch_status::{BranchState, DEPENDENCY_FAILED, MODEL_ERROR};
 
-/// A round-1 call to send once its input is written: owner, stage, model, input, output name.
-pub(super) type Round1Call<'p> = (&'static str, &'static str, &'p str, InputSpec, &'static str);
+/// A round-1 call to send once its input is written: owner, stage, model, input, output names.
+pub(super) type Round1Call<'p> = (
+    &'static str,
+    &'static str,
+    &'p str,
+    InputSpec,
+    &'static [&'static str],
+);
 
-/// What round 1 staged: the writes of the decode job, the calls they feed, the detector canvas.
+/// What round 1 staged: the writes of the decode job, the calls they feed, the detector canvas
+/// and the face detector's calls (their passes, in the order of their round-1 calls).
 pub(super) struct Round1<'p, I> {
     pub writes: Vec<Write<I>>,
     pub calls: Vec<Round1Call<'p>>,
     pub canvas: Option<detect::Canvas>,
+    pub faces: Vec<faces::DetCall>,
 }
 
 /// What round 2 produced: the crop calls in flight, the detections picked for them, the blur
@@ -65,6 +73,7 @@ impl<D: Device> Work<'_, D> {
             writes: Vec::new(),
             calls: Vec::new(),
             canvas: None,
+            faces: Vec::new(),
         };
         if let (true, Some(spec)) = (runs.detect, &plan.detector) {
             let c = detect::canvas(spec, w, h).map_err(engine)?;
@@ -83,7 +92,7 @@ impl<D: Device> Work<'_, D> {
                 DETECT,
                 spec.model.as_str(),
                 c.input.clone(),
-                detect::OUTPUT,
+                &[detect::OUTPUT],
             ));
             round.canvas = Some(c);
         }
@@ -104,8 +113,11 @@ impl<D: Device> Work<'_, D> {
                 EMBED_PE,
                 spec.model.as_str(),
                 input,
-                embed::OUTPUT,
+                &[embed::OUTPUT],
             ));
+        }
+        if let (true, Some(spec)) = (runs.faces, &plan.faces) {
+            self.stage_faces(spec, &mut round).await?;
         }
         Ok(round)
     }
@@ -119,10 +131,10 @@ impl<D: Device> Work<'_, D> {
         calls
             .into_iter()
             .zip(inputs)
-            .map(|((owner, stage, model, input, output), slice)| {
+            .map(|((owner, stage, model, input, outputs), slice)| {
                 let id = self
                     .calls
-                    .send(owner, stage, model, input, slice, vec![output]);
+                    .send(owner, stage, model, input, slice, outputs.to_vec());
                 (owner, id)
             })
             .collect()
@@ -192,7 +204,9 @@ impl<D: Device> Work<'_, D> {
             let job = LaunchJob {
                 frame: Arc::clone(frame),
                 writes: staged,
+                warps: Vec::new(),
                 blur: pending_blur.take().unwrap_or_default(),
+                blur_stage: BLUR,
                 request: Arc::clone(&self.request),
             };
             let first = out.blur.is_none();

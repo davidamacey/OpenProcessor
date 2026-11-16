@@ -105,6 +105,7 @@ _ENGINE_MAY_IMPORT = ('src.domain', 'src.utils')
 _ENGINE_STAND_INS = (
     'docker/test/fake_frame_engine.py',
     'scripts/codegen/frame_engine_goldens.py',
+    'scripts/codegen/frame_engine_face_goldens.py',
     'scripts/codegen/frame_engine_text_goldens.py',
 )
 

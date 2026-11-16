@@ -480,8 +480,11 @@ def _dump(data: Any) -> str:
 
 def render() -> dict[str, str]:
     _setup()
+    from scripts.codegen import frame_engine_face_goldens
+
     sizes = _sizes()
     return {
+        'faces.json': _dump(frame_engine_face_goldens.render()),
         'geometry.json': _dump(_geometry(sizes)),
         'weights.jsonl': '\n'.join(_weights_lines(sizes)) + '\n',
         'jpeg_header.json': _dump(_jpeg_cases()),

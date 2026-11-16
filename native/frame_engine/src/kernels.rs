@@ -45,7 +45,9 @@ const ORIENT_THREADS: u32 = 256;
 /// Device bytes of weight sets one pool thread keeps (the Python engine's `ARENA_BYTES`).
 pub const WEIGHT_CACHE_BYTES: usize = 2 << 20;
 
-/// The filter of a resample (`resample_into`'s `antialias` and `lanczos`): the triangle widened
+/// The filter of a resample (`resample_into`'s `antialias` and `lanczos`). Every variant is matched
+/// by name, never by a catch-all arm, so a filter one site does not know fails to compile. The
+/// variants: the triangle widened
 /// with the downscale (Pillow `BILINEAR`), the plain triangle (OpenCV `INTER_LINEAR`, the OCR
 /// detector's input without `det_antialias`), Pillow's `LANCZOS` (the renditions).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
