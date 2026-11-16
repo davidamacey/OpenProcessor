@@ -1,8 +1,13 @@
 //! Reading `OP_*` settings from the environment into typed structs through one helper ([`Env`]),
-//! and the refusal of retired variables ([`retired`]).
+//! and the refusal of retired variables ([`retired`]). The crate also holds the one function that
+//! installs the process's TLS crypto provider ([`install_tls_provider`]), because it is the one
+//! dependency every crate that speaks TLS already has.
 #![forbid(unsafe_code)]
 
 pub mod retired;
+mod tls;
+
+pub use tls::install_tls_provider;
 
 use std::collections::HashMap;
 use std::error::Error;

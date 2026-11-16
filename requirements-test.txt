@@ -135,3 +135,7 @@ redis==8.1.0  # inside kombu 5.7.0's redis<9,>=6.4.0; the client for the Valkey 
 asgi-correlation-id==5.0.1
 # The `db` tier (pytest -m db): one throwaway PostgreSQL (and Valkey) per session; needs Docker
 testcontainers[postgres,redis]==4.15.0
+
+# tests/differential/: the OpenAPI-driven differential runner generates its requests with the
+# Schemathesis Python API (pytest -m differential; never part of the offline suite)
+schemathesis==4.33.4

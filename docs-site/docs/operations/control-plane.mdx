@@ -58,3 +58,13 @@ mean more connections (`OP_DB_API_CONNECTIONS_TOTAL`, `OP_API_REPLICAS`; the
 formulas are in `INSTALLATION.md`). For many replicas the opt-in overlay
 `docker-compose.pgbouncer.yml` puts PgBouncer in front of PostgreSQL. The
 database settings are the `OP_DB_*` variables.
+
+## Encrypted connections
+
+`OP_DB_SSLMODE` takes libpq's values: `prefer` (the default) encrypts when the
+server offers TLS and checks nothing; `verify-full` checks the certificate chain
+and the host name and is the mode for a managed service such as Amazon RDS. The
+Rust server also reads `OP_DB_SSLROOTCERT`, a PEM file of CA certificates that
+then is the only trust root; unset, the platform's roots are trusted. A setting
+it cannot honour stops it at startup, naming the variable. The details are in
+`INSTALLATION.md`.

@@ -5,7 +5,7 @@
 | Status | plan, revision 1 (2026-11-15): the independent review and the coordinator's decisions on it folded in; appendix A traces each finding. Companion of [15_storage_plan.md](15_storage_plan.md) section 12; its decisions are fixed here, not reopened |
 | Code base read | `lane/speed-plan` at `ca918ea2d` (integration code of `int/b4-stateless` plus plan 15); the storage inventory of 2026-11-13 (`artifacts_local/speed_1113/storage_inventory.md`, gitignored), re-checked in code where a design depends on it |
 | Conventions | [02a_postgres_schema.md](02a_postgres_schema.md) section 1 and [02d_research_seam_schema.md](02d_research_seam_schema.md) section 0.1 apply to every table here, except where section 1 below says why not |
-| Server | PostgreSQL 18 (`postgres:18.6-trixie`, [01_package_pins.md](01_package_pins.md)); pgvector 0.8.7, the newest release (not pinned in 01; the lane adds the pin, [pgvector README](https://github.com/pgvector/pgvector)) |
+| Server | PostgreSQL 18 with pgvector 0.8.7 (`pgvector/pgvector:0.8.7-pg18-trixie`, [01_package_pins.md](01_package_pins.md); [pgvector README](https://github.com/pgvector/pgvector)) |
 | Not here | the query map (15b), the lane specs (15c), what the models compute |
 | Data | wiped and re-ingested (owner, 2026-11-14): no migration of search-index documents |
 
@@ -235,6 +235,9 @@ CREATE TABLE items (                         -- identity of every item; stable a
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (project_id, crop_id)
 );                                           -- the counters are not indexed: their updates can be HOT
+-- 0011 adds sort_area real NOT NULL, sort_rank smallint NOT NULL: copies of item_state.area and rank,
+-- written by state.store_states only when they change (geometry, exclusion, attach), so the sort
+-- indexes X29 and X30 live where a label writes nothing (2.6; 15b section 7)
 CREATE TABLE detections (                    -- one detector box; replaced when the detector re-runs
   detection_key bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, PROJECT,
   photo_key bigint NOT NULL REFERENCES photos(photo_key) ON DELETE CASCADE,
@@ -400,9 +403,15 @@ CREATE TABLE item_state (                    -- one narrow row per item (plan 15
   region_status text NULL, region_validated boolean NOT NULL DEFAULT false, region_verifier text NULL, region_label_source text NULL,
   region_count smallint NOT NULL DEFAULT 0, region_rejected_count smallint NOT NULL DEFAULT 0, region_max_score real NULL,
   region_revision integer NOT NULL,          -- the editor's OCC token (expected_region_revision)
+  region_set_complete boolean NULL,          -- fold output (Q8): the closed set (4.3 layer 4); NULL while no box claim or machine set decides
+  region_seen_seq integer NOT NULL DEFAULT 0,   -- fold output (Q9): the machine-box generation the fold shows; the claim writer stores it as a claim's region_seq
+  geometry_pinned boolean NOT NULL DEFAULT false,   -- fold output (Q11): bbox is the box a person saw, exactly while today's is_locked_item holds
   moved_partition_id uuid NULL, moved_cluster_uid uuid NULL,   -- a live class_moved (layer 5): read only while that partition serves
-  created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL   -- updated_at moves only when the effective state changes
+  created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL   -- created_at: copy of items.created_at (15b section 7 sort path); updated_at: see the write rules below
 );  -- no UNIQUE (project_id, crop_id): items holds it, the copy here is for sort order only (m3)
+-- 0011 adds fold outputs that summary keys and review tabs count (15b 6.2), not indexed:
+--   detector_class_name text NULL, detector_confidence real NULL   (the detection used for machine geometry, 3.4 step 6)
+--   vlm_confidence text NULL, vlm_class_empty boolean NOT NULL DEFAULT false   (the live VLM opinion)
 CREATE INDEX ix_item_state_class_op ON item_state (class_op_id) WHERE class_op_id IS NOT NULL;
   -- shape 46 (M8): an operation's current count is one index range count; class_op_id changes only with the deciding claim
 ALTER TABLE item_state SET (autovacuum_vacuum_scale_factor = 0.01, autovacuum_vacuum_threshold = 1000,
@@ -425,7 +434,12 @@ ALTER TABLE claims SET (autovacuum_vacuum_insert_scale_factor = 0.01);   -- appe
 ```
 
 Write rules (M5): the fold writes `UPDATE ... WHERE item_key = :k AND (cols) IS DISTINCT FROM (new)`,
-so a no-op writes no tuple; `updated_at` changes only with another column. An update is HOT when "no
+so a no-op writes no tuple. `updated_at` moves only when a fact a person sees on the item changes
+(class, validation, exclusion, holdout, geometry, review dismissal, a person's region or box
+verdict), not for region-worker, VLM-opinion or count-only columns, so those writes touch no indexed
+column and can stay HOT, and machine churn does not reorder "Recently updated" (review of 15b m6;
+owner confirmation: 15b section 11 question 8). Every state write goes through
+`state.store_states`, which also emits the summary deltas (15b 6.2). An update is HOT when "no
 columns referenced by the table's indexes" change and the page has room
 ([HOT](https://www.postgresql.org/docs/18/storage-hot.html)): the target, checked in the gate A sweep
 from `pg_stat_user_tables.n_tup_hot_upd / n_tup_upd`, is at most 5 B-trees on `item_state` and a
@@ -531,37 +545,119 @@ Sizes: empty in phase 2; at 3 M photos `photo_state` ≈ 3 M x 130 / 8,168 = 0.5
 
 ### 2.6 From gate A: indexes, summary tables, fillfactors
 
-Not designed on paper (M5, M7). The gate A spike tuned and timed queries and indexes at 1 and 10
-million rows; a short pass copies its measured indexes, summary tables and fillfactors here, one per
-read below (storage inventory shape numbers), and re-computes index sizes. Rules for that pass: one
-composite index per read in the read's order (equality columns, sort column in its direction,
-tiebreak last); keyset pages use one row comparison `(sort, crop_id) < (:s, :c)` with both keys in
-one direction, since a row comparison has one direction
-([row comparisons](https://www.postgresql.org/docs/18/functions-comparisons.html)); the tiebreak is
-`crop_id`, as today (`list_cursor.py`); at most 5 B-trees on `item_state`; whole-project counts and
-aggregates cannot be index-only on a table every label rewrites, so they start as summary-table
-candidates.
+Filled 2026-11-15 from the gate A measurement, revised the same day by the review of 15b and 15c
+(appendix A, "Reads and slices review") (`artifacts_local/speed_1113/v2_read_shapes/`,
+`notes.md` section 3 for the spike's index set) and the read map
+[15b_storage_reads.md](15b_storage_reads.md), which gives the query each index serves (its section
+3, shape numbers of the storage inventory). Rules applied: one composite index per read in the
+read's order (equality columns, the sort column in its direction, the tiebreak last); keyset pages
+use one row comparison with the tiebreak in the sort's direction (15b section 4, M7, [row-wise
+comparison](https://www.postgresql.org/docs/18/functions-comparisons.html#ROW-WISE-COMPARISON)); the
+tiebreak is `crop_id` on `item_state` sorts, `photo_key` on photo sorts and `item_key`
+(`subject_key`) on sorts whose key lives in a result or membership table; at most 5 B-trees on
+`item_state` besides its key; whole-project counts and aggregates read summary tables kept by the
+writer (15b section 6). "Spike" names the gate A index the row comes from (`notes.md` section 3);
+"new" rows are to be measured in the first wave sweep after the slice that uses them (15b 1.3).
 
-| Read (inventory shape) | Table | Needs | Revision 0 candidate, replaced by the measured one |
+| # | Table | Columns in order (direction) | Partial predicate | Serves (shapes) | From | Size at 10 M (estimate) |
+|---|---|---|---|---|---|---|
+| X1 | `item_state` | `project_id, updated_at DESC, crop_id DESC` | | 1, 3-5, 37, 50 (default sort, locate, keyset walks) | spike `o_upd` | 10 M x 52 B / (8,192 x 0.9) ≈ 0.6 GB |
+| X2 | `item_state` | `project_id, class_id, class_validated, updated_at DESC, crop_id DESC` | | 1, 3-5 with a class filter (one range per class and validated value; several classes are `UNION ALL` branches, 15b P1), 53, 66 (merge walk) | spike `o_class_upd` (`s1a_deep` 1.3 / 2), validated key from `o_class_flags` (`s1c_deep` 1.4 / 2) | 0.7 GB |
+| X3 | `item_state` | `photo_key, rank, crop_id` | | 25, 29, 80 (a photo's items by rank) | spike `o_image` (`s7` 3.1 / 5) | 0.5 GB |
+| X4 | `item_state` | `project_id, class_confidence, crop_id` | `NOT class_validated AND NOT excluded AND review_dismissed_at IS NULL` (the rows that need review; it shrinks as the queue drains) | 2 (every queue's capped count and its sort path, `check_machine`), 1 (`confidence` sort on review-predicate lists) | spike `o_review_conf`, re-keyed: new | at most 7 M rows x 52 B ≈ 0.4 GB |
+| X5 | `item_state` | `class_op_id` | `class_op_id IS NOT NULL` | 46 (section 2.4, `0010`) | `0010`, kept | ≈ 0.1 GB |
+| X6 | `box_state` | `project_id, state, detector, item_key DESC` | | 6 (box rows, 15b section 9), 52 | new | 5 M x 60 B ≈ 0.3 GB |
+| X7 | `txt.item_box_text` (the owner-read search copy of the items' box texts, 15b section 8, revision 3.1) | GIN `(project_id, folds gin_trgm_ops)` (`btree_gin` for the uuid column), `fastupdate = on`, `gin_pending_list_limit = 512` | none (the copy holds only items with text) | fragment and open-alphabet fuzzy predicates of 2, 6 and 1, through `txt.fragment_items` and `txt.fuzzy_items` (row security keeps `LIKE` off an index on `box_state`; the copy's owner reads it without a policy) | round 3 M9 (108 MB on `box_state` at 10 M) | ≈ 0.1 GB, plus the copy ≈ 0.2 GB |
+| X8 | `detections` | `project_id, analyser_id, confidence DESC NULLS LAST, item_key DESC` | | `detector_confidence` sort, `to_label` default (15b section 7) | new | 10 M x 48 B ≈ 0.55 GB |
+| X9 | `photos` | `project_id, photo_key` | | 24 (`indexed_at` sorts as insert order), 51, 55, 58 and every photo walk (`analysers.photos_needing`) | new | 3 M x 36 B ≈ 0.15 GB |
+| X10 | `photos` | BRIN `created_at` | | 31d (ingest status, 14 days), 79 (new photos since) | new ([BRIN](https://www.postgresql.org/docs/18/brin-intro.html): insert-ordered time) | < 1 MB |
+| X11 | `photos` | `project_id, source_identifier` | `source_identifier IS NOT NULL` | 31a | 2.6 revision 0 candidate | small |
+| X12 | `photos` | `project_id, storage_key, photo_key` | | 31b, 31c, 24 (`file_name` sort) | new | 3 M x 100 B ≈ 0.4 GB |
+| X13 | `photo_capture` | `project_id, taken_local DESC NULLS LAST, photo_key DESC` | | 24 (`taken_at` sorts, today on `capture.taken_local`, `image_view.py:65`) | spike `i_taken` (`s7_deep` 3.7 / 6) | 0.15 GB |
+| X14 | `photo_capture` | GiST `point(lon, lat)` | `lat IS NOT NULL` | 30, 24 (geo filter) | spike `i_loc` (`s11_map` 18.0 / 171) | ≈ 0.05 GB |
+| X15 | `item_region_results` | `project_id, item_key` | `status IN ('pending_detection', 'pending_verification')` | 49 (worker poll) | new | transient, small |
+| X16 | `analysis_ledger` | `project_id, kind, photo_key` | `state <> 'done'` | 55, 79, failed and pending re-runs (P14); the full work list is `analysers.photos_needing` over X9 and the ledger key | new | small |
+| X17 | `class_opinions` | `op_id` | `op_id IS NOT NULL` | undo of an adoption or a propagation (3.5) | 2.6 revision 0 candidate | small |
+| X18 | `class_opinions` | `project_id, raw_label` | `raw_label IS NOT NULL` | 18 | 2.6 revision 0 candidate | ≈ 0.2 GB |
+| X19 | `class_opinions` | `project_id, proposed_class` | `outcome = 'new_class_pending'` | 17, 19 | new | small |
+| X20 | `item_scores` | `project_id, kind, score DESC, item_key DESC` | | `mistakenness_score`, `uniqueness_score` sorts | new | 20 M x 44 B ≈ 1.1 GB |
+| X21 | `probe_predictions` | `project_id, entropy, item_key` | | 2 (`disagreements` default), 56 | new | 0.5 GB |
+| X22 | `cluster_memberships` | `partition_id, cluster_uid, score DESC NULLS LAST, subject_key DESC` (one direction: a backward scan serves the ascending form, 15b P8) | | 1 cluster filter, 10 rebuild, 12, 13, 41, 77, 6 inside a box cluster; replaces 02d `ix_cluster_memberships_cluster` | spike `pl_cluster` (`pg_pl` pending) | per retained partition 10 M x 44 B ≈ 0.5 GB |
+| X23 | `cluster_memberships` | `partition_id, score, subject_key` | | 2 (cluster-fit sorts), 8 (`core_first`) | spike `pl_score` (`pg_pl` pending) | ≈ 0.45 GB per partition |
+| X24 | `photo_counts` | `project_id, unlabeled DESC, photo_key DESC` | | 24 (`unlabeled_count` sorts, `label_state` filter) | new | 0.15 GB |
+| X25 | `txt.item_line_text` (the owner-read search copy of the items' OCR tokens, 15b section 8, revision 3.1) | GIN `(project_id, words gin_trgm_ops)`, `fastupdate = on`, `gin_pending_list_limit = 512` | none (the copy holds only items with lines) | item text predicate of 1 and 2, through `txt.word_items` | new | small |
+| X26 | `box_state` | `project_id, state, item_key DESC` | | 6 with a state and no detector | new (review M6) | 0.25 GB |
+| X27 | `box_state` | `project_id, detector, item_key DESC` | | 6 with a detector and no state | new (review M6) | 0.25 GB |
+| X28 | `items` | `project_id, created_at DESC, crop_id DESC` | | `created_at` sorts | new (review M3) | 0.6 GB |
+| X29 | `items` | `project_id, sort_area, crop_id` | | `crop_area_norm` sorts | new (review M3) | 0.5 GB |
+| X30 | `items` | `project_id, sort_rank, crop_id` | | `crop_rank_in_image` sorts | new (review M3) | 0.45 GB |
+| X31 | `detections` | `project_id, analyser_id, blur_lap_ratio, item_key` | | `blur_lap_ratio` sorts | new (review M3) | 0.5 GB |
+| X32 | `detections` | `project_id, analyser_id, class_name, item_key` | | `detector_class_name` sorts; the detector-class filter and its capped count (`EXISTS` on `detections`, 15b P1) | new (review M3) | 0.55 GB |
+| X33 | `box_state` | `project_id, text_fold` | `text_fold IS NOT NULL` | exact, fuzzy (the distance-1 variant list) and same-text predicates of 2, 6 and 1 (15b section 8, revision 2; revision 3: X7 left `box_state`, so every equality form needs X33) | round 3 M9: equality on X7 under row security 64 to 170 ms for variant lists | 5 M x 40 B ≈ 0.2 GB |
+
+**`item_state` holds exactly five B-trees besides its key** (X1 to X5). Sort values a label never
+changes live on `items` and `detections` and are indexed there (X8, X28 to X32), where a label
+writes nothing (review of 15b M3; 15b section 7). The foreign-key index
+`ix_item_state_project_id` that `0010` created is dropped: X1 and X2 lead with `project_id` and are
+not partial, so they serve the lookup a project delete's cascade needs ("it is often a good idea to
+index the referencing columns", [foreign keys](https://www.postgresql.org/docs/18/ddl-constraints.html#DDL-CONSTRAINTS-FK)),
+and the schema test asserts the replacement instead of the plain index. No sixth index: the spike's
+`o_class_flags` is X2 with `class_validated` as a key (excluded and holdout checked on the heap; the
+end-game queue is the partial X4); the spike's
+`o_cluster_*` and `o_review` move to the membership table (X22, X23) with the placement; its
+`o_cluster_cov` and `o_cls_src` are replaced by the summary tables. `updated_at` is in X1 and X2, so
+every person-visible change of a state row is a non-HOT update and inserts one entry into each
+index ([HOT](https://www.postgresql.org/docs/18/storage-hot.html) needs "no indexed column
+modified"): the price of the default "Recently updated" order; machine-only changes do not move
+`updated_at` (2.4) and can stay HOT. Measured before `0011` is written (15b section 13 item M5).
+
+**Summary tables**: base rows, the insert-only delta log `sum_deltas`, the `_now` views, the
+compactor and the rebuild are in 15b section 6. `sum_items`, `sum_review`, `sum_region`, `sum_box`,
+`sum_photos`, `photo_counts`, `sum_deltas` and their views are created by `0011`; `sum_cluster`,
+`sum_cluster_class`, `sum_cluster_review`, `sum_cluster_dup`, the card rows `sum_cluster_card` (15b
+revision 2) with X22 and X23 by
+`0016_cluster_cutover`, because they need `cluster_memberships.subject_key` (section 2.3). Writers
+only insert delta rows, so no summary row and no advisory lock enters the lock order of section 7.
+
+**Planner statistics**: `CREATE STATISTICS st_item_state_class (dependencies, mcv) ON class_id,
+class_source, class_validated, excluded, holdout FROM item_state` (the flags follow the class source)
+and `ALTER TABLE item_state ALTER COLUMN class_id SET STATISTICS 1000` (a registry of up to 1,000
+classes in the most-common-values list) ([CREATE STATISTICS](https://www.postgresql.org/docs/18/sql-createstatistics.html),
+[ALTER TABLE](https://www.postgresql.org/docs/18/sql-altertable.html)).
+
+| Table | fillfactor | autovacuum | Reason |
 |---|---|---|---|
-| 1 object list, default sort and class filter; 3-5 locate | `item_state` | composite per sort and filter, keyset | `(project_id, updated_at DESC, item_key)`, `(project_id, class_id, class_validated)` |
-| 2 review tabs, sorts by cluster score, probe entropy, confidence; its total | `item_state` + score tables | partial index per tab and sort; total: summary candidate | `(project_id, class_source, class_validated)` partial |
-| 6, 15, 52 box rows, region counts, requeue | `box_state` | `(state, detector)` with the page order | `(project_id, state, detector)` |
-| 10, 11, 12, 13 cluster cards, representatives, facets | `cluster_memberships` joined to `item_state` | the join's index; summary candidate (10, 13) | 02d `ix_cluster_memberships_cluster` |
-| 15, 16, 47 dataset stats, class counts, census | `item_state` | summary candidates; class family filter (M16) | `(project_id, class_id, class_validated)` |
-| 18 raw-label aggregations | `class_opinions` | `raw_label` | `(project_id, raw_label)` partial |
-| 2 (wildcard), 70 text search | `box_state.text_fold`, `text_lines.text` | trigram GIN | `gin (text_fold gin_trgm_ops)`, `gin (lower(text) gin_trgm_ops)` |
-| 24, 31d image list by time and by ingest order | `photo_capture`, `photos` | sort keys | `(project_id, taken_utc, photo_key)`, `(project_id, created_at, photo_key)` |
-| 24, 30 map | `photo_capture` or `photo_state` | spatial form (the spike used GiST) | `(project_id, lat, lon)` partial |
-| 25, 29 photo card facts, photo detail | `item_state` | photo and rank | `(photo_key, rank)` |
-| 31a ingest lookups by source identifier | `photos` | `source_identifier` | `(project_id, source_identifier)` partial |
-| 42, 49 region drain, worker poll | `item_region_results` | `status` | `(project_id, status)` |
-| 46 label-op list, newest first | `label_operations` | creation order | none (the count is decided: section 2.4) |
-| audit report, holdout stats, history routes (38, 45) | `claims` | `(kind, at)` | `(project_id, kind, at)` |
-| undo of an adoption or a propagation (3.5) | `class_opinions` | `op_id` | `(op_id)` partial |
-| re-run work lists (49, 50, 79) | `analysis_ledger` | `(kind, analyser_id, state)` | `(project_id, kind, analyser_id, state)` |
-| gallery timeline, persons, albums; erasure by subject | `photo_state`, `entity_edges`, `membership_state` | timeline sort; subject direction | `(project_id, taken_utc DESC, photo_key)` partial; `(project_id, subject_kind, subject_key)` |
-| fillfactor | `item_state`, `box_state`, `items`, `class_opinions`, `item_region_results`, `analysis_ledger`, `entity_state`, `face_state`, `photo_state` | measured HOT ratio | 80-90 |
+| `item_state` | 90 (15b section 14.2: region-only updates 100 % HOT at 90, 6.2 % at 100, sparse updates; 80 if round 4 R4-7 shows under 90 % HOT beside labels; a dense region re-run under 90 % goes to the coordinator, 15b 14.2) | `0010`'s: scale factor 0.01, threshold 1,000, cost limit 2,000 | a person-visible change moves `updated_at` (X1, X2) and is never HOT; machine-only changes can be HOT (2.4) only with free space on the page, so the fillfactor is round 3 M5's (90), confirmed or lowered by R4-7 in the sparse and the dense regime; dead versions arrive at label rate, hence vacuum at 1 % with ten times the default work ([autovacuum](https://www.postgresql.org/docs/18/runtime-config-vacuum.html)) |
+| `box_state` | 90 | `0010`'s | a region re-run that moves a box or changes its score without a state, detector or text change touches no indexed column and can stay HOT |
+| `class_opinions`, `item_region_results`, `probe_predictions`, `item_scores`, `item_projections`, `assist_answers` | 90 | default | a re-run replaces values that no index holds (status leaves X15 only when pending ends) |
+| `analysis_ledger` | 90 | default | `updated_at`, `reason`, `analyser_id` change on re-runs; `state` leaves X16 when done |
+| `items` | 90 | default | `box_seq`, `geometry_seq`, `region_seq` are not indexed (section 2.3): HOT |
+| `sum_*` base tables | 50 | `autovacuum_vacuum_scale_factor = 0`, `autovacuum_vacuum_threshold = 2000` | small rows updated only by the compactor, counter not indexed: HOT needs room on the page (the spike's 50); a percentage of a tiny table would never trigger, so vacuum by count |
+| `sum_deltas` | 100 | scale factor 0, threshold = the compactor batch (15b 6.1, section 13 M3) | an insert-then-delete queue |
+| `photo_counts` | 90 | default | `unlabeled` is in X24, so a label is not HOT here; 90 keeps the new version on the page |
+| `claims`, `photos`, `detections`, `text_lines`, vector tables | 100 | `claims` insert scale factor 0.01 (`0010`) | insert-mostly |
+
+**Migration `0011_storage_indexes`** (slice S1a-i, 15c; Rust slice R1b): checks that `pg_trgm` is
+installed (the bootstrap installs it with `0010`, section 12); X1 to X6, X8 to X21, X24, X26 to X33;
+`op_bound_project_strict` and the tightened `op_scope_project` (an empty project id raises); under
+`SET ROLE op_text_owner`, schema `txt`'s search copies `item_box_text` and `item_line_text` with
+row security enabled and not forced, X7 and X25 on them, and the seven definer functions
+(`fragment_items`, `word_items`, `fuzzy_items`, `box_text_has`, `line_text_has`, `put_box_text`,
+`put_line_text`), all from the one file `src/db/sql/txt_search.sql` (15b section 8, revision 3.1; the
+role, the schema and the extensions come from the bootstrap, 02a 1.5); the drop of
+`ix_item_state_project_id`; the `items` and `item_state` columns of 2.3 and 2.4; the summary tables,
+`sum_deltas` and views above with RLS(02a); the statistics object and the column target; the
+fillfactor and autovacuum settings. The tables are empty when it runs (the
+data is wiped and re-ingested after the cut-over), so the indexes are built in the migration's
+transaction; an index added later on a filled table uses `CREATE INDEX CONCURRENTLY` in an
+autocommit block, which "cannot be executed inside a transaction block"
+([CREATE INDEX](https://www.postgresql.org/docs/18/sql-createindex.html)). With this revision the
+cut-over revision ids of section 9 move: `0012_ingest_cutover` (S1a-ii: `image_contents` keeps
+only the core API's rows, `project_id IS NULL`, fenced by a `CHECK`; the table goes with the core
+routes in phase 3), `0013_claims_cutover` (S2a), `0014_vector_cutover` (S3: the `embedding_spaces` change of 6.3),
+`0015_near_dup_cutover` (S5), `0016_cluster_cutover` (S6), `0017_import_cutover` (S7),
+`0018_reads_cutover` (S9: drops `project_indexes` and `search_projection_tasks`); 15c section 1
+owns that list.
 
 The vector reads (20-23, 59-65) are gate B's (section 6.4).
 
@@ -582,22 +678,32 @@ One list in `src/domain/claim_kinds.py`, equal to the `claim_kinds` rows by test
 | `item_drawn` | item | geometry | yes | yes | `POST /images/{image_id}/items` (`src/routers/curation/image_items.py:21`); an import creating an item (`dataset_import/item_labels.py:179`) |
 | `geometry_set` | item | geometry | yes | yes | `PATCH /crops/{crop_id}/geometry` (`crops_geometry.py:39`) |
 | `class_set` | item | class | yes | yes | `PUT /crops/{crop_id}/label` (`crops_write.py:39`), `PUT /crops/batch_label` (`:108`), `POST /label_ops/accept_machine` (`label_ops.py:151`), `POST /review/new_class_proposals/resolve` (`review_resolve.py:111`), validated import labels |
-| `class_cleared` | item | class | yes | no | `DELETE /crops/{crop_id}/label` with no human label on record, `POST /crops/{crop_id}/discard` with `clear_class` (`label_undo.py:109,:131`) |
+| `class_cleared` | item | class | no | no | `DELETE /crops/{crop_id}/label` with no human label on record, `POST /crops/{crop_id}/discard` with `clear_class` (`label_undo.py:109,:131`) |
 | `class_moved` | item | class | no | no | `POST /crops/move` (`crops_write.py:161`); also gives placement (layer 5) |
 | `holdout_frozen` | item | class | yes | yes | `POST /test_holdout/freeze` (`holdout_freeze.py:19`); import and combine freezes |
-| `excluded`, `restored` | item | flag | no | no | `POST /crops/batch_exclude`, `/crops/batch_unexclude` (`crops_exclude.py:29,:68`) |
+| `excluded`, `restored` | item | flag | `excluded` yes, `restored` no (Q11: the fold pins only a human delete, `not_an_object`) | no | `POST /crops/batch_exclude`, `/crops/batch_unexclude` (`crops_exclude.py:29,:68`) |
 | `review_dismissed`, `review_restored` | item | flag | no | no | `/review_dismiss` (`crops_exclude.py:95`), `/discard` with `dismiss_from_review`, `/review_undismiss` (`label_undo.py:228`) |
 | `vlm_dismissed`, `probe_dismissed`, `needs_new_class` | item | flag | no | no | `/vlm_dismiss` (`label_undo.py:180`), `/probe_dismiss` (`:197`), `POST /crops/flag_new_class` (`crops_write.py:216`) |
 | `audit_sampled`, `combine_conflict` | item | flag | no | no | `POST /audit/start` (`audit.py:23`); the combine job (`projects/combine/*`) |
-| `region_status_set` | item | region | no | no | only the empty-list verdict `no_region_visible` (B3): `PATCH /crops/{crop_id}/region_meta` (`regions_edit.py:118`), `POST /regions/batch_status` (`:272`); every other whole-set status is expanded into box claims (3.3) |
-| `box_created`, `box_moved`, `box_state_set`, `box_text_set` | box | box | no | yes | `PUT /crops/{crop_id}/regions` (`regions_boxes_edit.py:291`, as a diff), `PUT /crops/batch_regions` (`:335`), `PATCH /crops/{crop_id}/regions/{box_id}` (`:368`), `POST /regions/batch_box_state` (`:426`), the whole-set routes above; validated import boxes |
-| `box_deleted` | box | box | no | no | the same routes; never creates a box |
+| `region_status_set` | item | region | yes | no | only the verdict over an empty box list (B3, Q7): `no_region_visible`, or the status the person named (`verify_rejected`, `false_positive`) kept as said: `PATCH /crops/{crop_id}/region_meta` (`regions_edit.py:118`), `POST /regions/batch_status` (`:272`); every other whole-set status is expanded into box claims (3.3) |
+| `box_created`, `box_moved`, `box_state_set`, `box_text_set` | box | box | yes | yes | `PUT /crops/{crop_id}/regions` (`regions_boxes_edit.py:291`, as a diff), `PUT /crops/batch_regions` (`:335`), `PATCH /crops/{crop_id}/regions/{box_id}` (`:368`), `POST /regions/batch_box_state` (`:426`), the whole-set routes above; validated import boxes |
+| `box_deleted` | box | box | yes | no | the same routes; never creates a box |
 | `duplicate_verdict` | pair | pair | no | no | `POST /near_duplicates/decisions` (`near_duplicates.py:110`); the `DELETE` is a `withdraw` |
 | `withdraw` | claim | withdraw | no | no | every undo route: `/label/undo`, `/label/undo_batch`, `/label_ops/{op_id}/undo`, region, geometry, dismiss undos (`label_undo.py:62,:78`, `label_ops.py:49`, `crops_geometry.py:64`, `edit_undo.py:156,:175`), import undo, `forget_holdout_freeze` |
 | phase 5: `favourite_set`, `pick_set`, `hidden_set`, `archived_set`, `trashed`, `untrashed`, `stack_pick_set`, `exclusion_forced`, `exclusion_released` | photo | photo | no | no | the library routes of photo_library 00 section 7 and 20 section 6 |
 | phase 5: `capture_corrected`, `text_set` | media | photo | no | no | the same; a video subject uses `subject_video_key` |
 | phase 5: `entity_created`, `entity_named`, `entity_merged`, `entity_hidden`, `member_added`, `member_removed`, `memory_state_set`, `memory_timeline_set` | entity | entity | no | no | the same; `PUT /persons/{person_id}/name`, `POST /persons/merge` (`src/routers/persons.py`) for the core people |
 | phase 5: `face_confirmed`, `face_rejected` | face | face | no | no | the people routes of photo_library 15 section 3 |
+
+**What pins the item's box (Q11, `claim_kinds.pins_geometry`).** The pin kinds above say which
+claims *can* pin; the fold pins the item's box to the one the person saw exactly while today's
+`is_locked_item` (`occ_locks.py:137`) holds: a person's or validated-import class, a holdout, human
+or import geometry, a human delete (`excluded` with reason `not_an_object`, which today keeps the
+box so a re-detect cannot re-create it), any human-owned box inside the item, or a box set validated
+by a person or an import (`ItemState.geometry_pinned`). Not pinning, as today: a `class_cleared`, the
+dismissals, the flags, a `class_moved`, an `excluded` with another reason. A person's box was drawn
+against the crop they saw, so the item's box must not move under it. The truth table asserts
+`geometry_pinned` equals today's `is_locked_item` on every enumerated history.
 
 Class registry edits (create, rename, deprecate, merge, hotkeys) stay rows of `project_classes` with
 their revision (02a section 3): they are configuration, not a decision about an object. Adoption of
@@ -610,27 +716,32 @@ the detector's class and propagation are not claims: they write not-rebuildable 
 |---|---|---|
 | `item_drawn` | `{bbox, request_id?, standalone_region?: bool, origin?: {project, crop_id, image_id}}` | `subject_crop_id` = `drawn_crop_id(image_id, request_id)`; an import's item uses the detector-style `crop_id` |
 | `geometry_set` | `{bbox}` | `subject_machine_bbox` = the detector box at the time (today `detector_bbox_norm`) |
-| `class_set` | `{class_name, class_id_hint, label_source, via: 'single'\|'batch'\|'bulk_accept'\|'resolve'\|'import'\|'combine', labeler, profile}` | `label_source` is one of `HUMAN_LABEL_SOURCES`, `human_bulk_accept` or `import`; `labeler` and `profile` are the wire `class_labeler`, `class_detector`, `class_detector_version` at write time (`class_label.py:45`, M19) |
-| `class_cleared`, `excluded`, `restored`, `review_*`, `needs_new_class` | `{}`, `{reason}`, `{}`, `{}`, `{note?}` | `excluded.reason` `not_an_object` is a delete; `restored` is the one way back from `excluded` (M2) |
+| `class_set` | `{class_name, class_id_hint, label_source, via: 'single'\|'batch'\|'bulk_accept'\|'resolve'\|'import'\|'combine', labeler, profile: {detector?, detector_version?}}` | `label_source` is one of `HUMAN_LABEL_SOURCES`, `human_bulk_accept` or `import`; `labeler` and `profile` are the wire `class_labeler`, `class_detector`, `class_detector_version` at write time (`class_label.py:45`, M19) |
+| `class_cleared` | `{hidden: [{source, analyser_id}]}` | Q10: every machine opinion and detection present when the person cleared, as (source, analyser) pairs (`source` `detection` for a detection); an opinion is hidden iff its pair is in the list of a live clear, so a re-run of the same analysers leaves the item cleared and a newer model version shows |
+| `excluded`, `restored`, `review_*`, `needs_new_class` | `{reason}`, `{}`, `{}`, `{note?}` | `excluded.reason` `not_an_object` is a delete; `restored` is the one way back from `excluded` (M2) |
 | `class_moved` | `{partition_id, cluster_uid}` | |
 | `vlm_dismissed` | `{class_name?, class_id_hint?}` | the suggestion that was rejected |
 | `probe_dismissed` | `{class_name, probe_analyser_id}` | |
 | `holdout_frozen` | `{freeze_id, machine_class: {class_name, source, confidence} \| null}` | required; `null` = frozen as "no class" (M1): the machine class that would win at the freeze, or none (4.3 layer 2) |
 | `audit_sampled` | `{batch_id, label_name, label_source}` | |
-| `region_status_set` | `{status: 'no_region_visible', label_source, region_seq}` | |
-| `box_created` | `{bbox, state, text?, region_seq}` | `subject_box_id` minted from `items.box_seq` |
-| `box_moved`, `box_state_set`, `box_text_set`, `box_deleted` | `{bbox, bbox_correct?, region_seq}`, `{state, rejection_reason?, region_seq}`, `{text, region_seq}`, `{region_seq}` | an explicit empty text is a reading of "no text" (`region_boxes.py:277`); `subject_bbox` is the box as shown |
+| `region_status_set` | `{status: 'no_region_visible'\|'verify_rejected'\|'false_positive', label_source, region_seq, item_bbox}` | Q7: written over an empty box list only; the status is what the person said |
+| `box_created` | `{bbox, state, text?, region_seq, item_bbox}` | `subject_box_id` minted from `items.box_seq` |
+| `box_moved`, `box_state_set`, `box_text_set`, `box_deleted` | `{bbox, bbox_correct?, region_seq, item_bbox}`, `{state, rejection_reason?, region_seq, item_bbox}`, `{text, region_seq, item_bbox}`, `{region_seq, item_bbox}` | an explicit empty text is a reading of "no text" (`region_boxes.py:277`); `subject_bbox` is the box as shown; `item_bbox` is the item's own box at the write, which the pin (3.2) and matching (3.4 step 3) read |
 | `combine_conflict` | `{origins: [..], merged_origins: [..]}` | |
 | `duplicate_verdict` | `{level, decision: 'same'\|'different'}` | members in `subject_crop_id`/`photo_key` and `subject_pair_id` |
 | `withdraw` | `{}` | the target is `withdraws_claim_id` |
 | phase 5 | one model per kind, e.g. `capture_corrected {taken_local?, offset_minutes?, lat?, lon?, altitude_m?, location_source}`, `entity_named {name, parent_entity_id?}`, `stack_pick_set {group_id}`, `exclusion_forced {rule_id}` | the columns of the photo-library tables they replace |
 
-`region_seq` in every box and region claim is `items.region_seq` read under the item lock: the
-machine boxes the person saw (4.3 layer 4). A whole-set status other than `no_region_visible` is
-expanded at write time, in the same operation, into what `boxes_with_status` computes
-(`region_box_edits.py:254-295`): one `box_state_set` for every box of the resulting list, so a closed
-set is entirely claims; `no_region_visible` writes a `box_deleted` per box and one
-`region_status_set`. A partial per-box act writes claims for the boxes it changed only.
+`region_seq` in every box and region claim is `item_state.region_seen_seq` (Q9), the generation of
+machine boxes the fold showed the person, not `items.region_seq` (a re-run may have replaced the rows
+since; the fold would otherwise show the new rows as the ones the person saw, and a closed set
+would look open). The claim writer reads it from the stored fold output under the item lock. A
+whole-set status other than `no_region_visible` is expanded at write time, in the same operation,
+into what `boxes_with_status` computes (`region_box_edits.py:254-295`): one `box_state_set` for every
+box of the resulting list, so a closed set is entirely claims; over an empty list the verdict is one
+`region_status_set` carrying the named status (Q7), and `no_region_visible` also writes a
+`box_deleted` per box. A partial per-box act writes claims for the boxes it changed only, except
+that an edit which closes the set claims every box.
 
 Class in a claim: by name, with the registry id of that moment as a hint (M20). The hint is used only
 when `project_classes(project, hint).name_key = normalize_class_name(name)` or the hint's class is
@@ -648,8 +759,9 @@ found again by `src/domain/claim_match.py`, shared by the fold, re-detect and im
    `photos.frame` matches nothing, stays dormant and is reported `frame_mismatch` (fail closed).
 2. **Same id**: an item whose `crop_id` is the group's `subject_crop_id` takes the group.
 3. **Else** groups and new detections are matched greedily, best IoU first, ties by `crop_id`: the
-   detection box against the group's effective box (layer 1) or its newest `subject_machine_bbox`,
-   at least **0.5** (`LABEL_IOU_MATCH`, `proposal_merge.py:30`). A new matched item takes the group's
+   detection box against the group's effective box (layer 1), its newest `subject_machine_bbox`, or
+   the `item_bbox` its newest claim saw (Q5: a lone dismissal or delete has no other box to match
+   by), at least **0.5** (`LABEL_IOU_MATCH`, `proposal_merge.py:30`). A new matched item takes the group's
    `crop_id`, so a touched item keeps its wire id across detector versions (`reprocess_detect.py:1-11`).
 4. **No match**: a group with a live asserting claim (`claim_kinds.asserts_object`) creates an item
    from the claims, `geometry_source` `human` or `import`. A group of dormant kinds only (`excluded`
@@ -659,7 +771,11 @@ found again by `src/domain/claim_match.py`, shared by the fold, re-detect and im
    deletes the row and its dormant claims wait for step 2 or 3.
 6. **Machine geometry** with several detections: the newest `detector` analyser; `open_vocab` only
    without a detector row; `import` only without either.
-7. **Boxes**: the same inside the item, on `subject_box_id` then IoU ≥ 0.5. A split (one claimed
+7. **Boxes**: the same inside the item: a claim on a machine box matches on `subject_box_id`, then
+   IoU ≥ 0.5; a box a person created owns its minted id and matches on that id only, never by
+   overlap with an unrelated machine box (Q6). A claim group whose id a re-run replaced joins the
+   machine box another group took by id when it overlaps it at least 0.5: both name one box, so the
+   set never shows a person's old row twice. A split (one claimed
    box, two new boxes each below 0.5) leaves the claimed box and two machine boxes, as today.
 
 ### 3.5 Undo, operations, imports, retention
@@ -681,7 +797,9 @@ found again by `src/domain/claim_match.py`, shared by the fold, re-detect and im
 
   A step-back undo on one item withdraws every live claim of the person's newest live operation on
   it, so a discard (`class_cleared` + `review_dismissed`) or a region edit comes back whole; the walk
-  of `find_undo_snapshot` (`src/domain/history.py:219`) becomes one indexed read. A redo appends
+  of `find_undo_snapshot` (`src/domain/history.py:219`) becomes one indexed read. As today, the walk
+  steps back over label, batch label, move, resolve and discard operations and not over a bulk accept
+  (`HUMAN_LABEL_WRITERS`; Q4). A redo appends
   copies under a new operation; a `withdraw` is never withdrawn; two undos of one claim meet on
   `uq_claims_withdraws` (409 `already_undone`).
 - **Operations**: every human act writes one `label_operations` row (kinds in 2.2) and its claims
@@ -691,7 +809,10 @@ found again by `src/domain/claim_match.py`, shared by the fold, re-detect and im
 - **Import**: a validated label is a `class_set` with `actor_kind = 'import'`, `actor =
   'import:<id>'` and the import operation's `op_id` (naming `dataset_import_id`). It ranks below
   every live human claim (B2); where a person decides, the import reports `locked_conflict` as today
-  (`dataset_import/item_labels.py:30-40`), from `fold.conflicts`. A `label_trust: suggestion` label is
+  (`dataset_import/item_labels.py:30-40`), from `fold.conflicts`. On a held-out item an import or
+  combine class claim written after the freeze does not decide, unless it corrects the class the
+  import itself set (today it is refused, `item_labels.human_owned`; Q3); the writer still reports
+  the conflict. A `label_trust: suggestion` label is
   a `class_opinions` row (`import_suggestion`, `import_id`); its boxes and detections carry
   `import_id` under an `import` analyser. Import undo withdraws the operation's claims and deletes the
   rows with its `import_id`: items only the import created disappear, items a person claimed stay
@@ -760,8 +881,9 @@ the queries that choose which items each writer sees:
 Inside one source there is one row by key. One order is undefined today (whichever of propagation
 and an import suggestion wrote last): rank 3 over 4 here, because an import label is about this item
 and a propagated one is carried over from its cluster (plan 15 section 14, answer 5). The function
-skips every opinion and detection created before a live deciding `class_cleared` (layer 2), and an
-opinion row without a class never displaces one with a class (section 2.3, M17).
+skips every opinion and detection whose (source, analyser) pair a live deciding `class_cleared`
+lists in `hidden` (layer 2, Q10), and an opinion row without a class never displaces one with a class
+(section 2.3, M17).
 
 ### 4.3 The fold, layer by layer
 
@@ -770,31 +892,39 @@ opinion row without a class never displaces one with a class (section 2.3, M17).
 the items where an import or combine claim lost to a human one (`locked_conflict`,
 `combine_conflict`).
 
-1. **Geometry (R3 pin, B1)**: a deciding `item_drawn`/`geometry_set` gives the bbox and
-   `geometry_source` (`human`; `import` for an import or combine actor). Else, with a live pinning
-   claim (`class_set`, `class_cleared`, `holdout_frozen`), the deciding one's `subject_bbox`, the box
-   the person saw, `geometry_source` unchanged. Else the machine geometry (3.4 step 6). Later
+1. **Geometry (R3 pin, B1, Q11)**: a deciding `item_drawn`/`geometry_set` gives the bbox and
+   `geometry_source` (`human`; `import` for an import or combine actor). Else, exactly while today's
+   `is_locked_item` holds (3.2: a person's or validated-import class, holdout, human or import
+   geometry, a human delete, any human-owned box, a set validated by a person or import), the box the
+   person saw: the item's box as shown at the newest live claim that pins (its `subject_bbox`, or the
+   `item_bbox` of a box or region claim), whoever made it; `geometry_source` unchanged and `geometry_pinned` true. A clear, a
+   dismissal, a flag, a move to a cluster and an exclusion for another reason do not pin. Else the machine geometry (3.4 step 6). Later
    detections only add rows. `area`, `rank` (by area, `item_geometry.py:219`) follow.
 2. **Class**: the deciding claim among `class_set`, `class_cleared`, `class_moved`:
    - `class_set` → its class (3.3), `class_source` `human` (`external_label` for import or combine).
      An unresolvable name: `class_id` NULL, `class_unresolved`, same `class_source`, still locked (M17).
-   - `class_cleared` → the machine class of 4.2 over opinions and detections created after its `at`,
-     not validated: earlier class claims are dead, a later opinion shows (M17; `label_undo.py:109-121`).
+   - `class_cleared` → the machine class of 4.2 over the opinions and detections its `hidden` list
+     does not name, not validated: earlier class claims are dead, an opinion from an analyser the
+     person did not see shows (M17, Q10; `label_undo.py:109-121`).
    - `class_moved` → the machine class as a suggestion, not validated (`class_label.py:239-277`).
    - **Holdout (M1)**: while a live `holdout_frozen` exists, a withdraw written after the freeze of a
      class claim written before it is ignored; with no deciding claim the class is the payload's
      `machine_class`, none when `null`, and no opinion applies. A person's class claim newer than
      the freeze still decides (no route refuses it today, `crops_write.py:39`; section 11, question 1).
+     An import or combine class claim written after the freeze decides only when it corrects the
+     class the import itself set (Q3). The freeze payload records what a clear had left, never what
+     it hid.
    - Otherwise `machine_class` of 4.2.
    - `class_validated` = a resolved deciding `class_set` **and not excluded** (M2);
      `class_claim_id`, `class_op_id` (M8), `class_opinion_source`, `class_confidence` name the source.
 3. **Flags**: `excluded*` from the deciding `excluded`/`restored` (unexclude writes `restored`, undo
    withdraws; the same state, because validation is computed: M2); `review_dismissed_at` from
    `review_dismissed`/`review_restored`; `holdout` = a live `holdout_frozen`; `needs_new_class` = a
-   live flag or opinion outcome `new_class_pending` until a later `class_set`;
+   live flag or opinion outcome `new_class_pending` until a later human `class_set` (a plain label too, Q1);
    `vlm_suggestion_dismissed` = a live `vlm_dismissed` naming the current VLM suggestion
    (`class_sources.py:198`); `probe_dismissed_class` from `probe_dismissed`; `audit_*` from
-   `audit_sampled` and the first later `class_set` (`src/domain/audit_math.py`); `combine_conflict` =
+   `audit_sampled` and the latest human class verdict after it (`src/domain/audit_math.py`; today's
+   rule, Q2); `combine_conflict` =
    a live conflict claim with no later `class_set`; `import_ids` from live claims, not-rebuildable
    opinions and detections (M13).
 4. **Boxes (B3)**: per box the deciding claim of each aspect (geometry, state, text) wins over the
@@ -802,13 +932,17 @@ the items where an import or combine claim lost to a human one (`locked_conflict
    `human`/`import`; a human reject sets `REJECT_REASON_HUMAN`, a typed text `text_source = 'human'`;
    else the reader consensus of `box_texts` (`src/services/detection/region_text.py:400-455`, moved
    to `src/domain/`). **Closed set**: with C the newest live human or import box or region claim, the
-   set is closed when no box is `proposed` after folding the claims with the machine boxes of
-   `region_seq` ≤ C's; then later unclaimed machine boxes stay results, unfolded (today the locked
-   item is never written, `occ_locks.py:137-151`). A live `no_region_visible` newer than every box
-   claim folds no machine box. `region_status`: `no_region_visible` under that verdict; else, with a
+   set is closed when no box is `proposed` after folding the claims with the machine boxes of the
+   generation the person saw (the newest generation not newer than C's `region_seq`; the repository
+   keeps that generation when a re-run replaces the rows, Q9); then later unclaimed machine boxes
+   stay results, unfolded (today the locked item is never written, `occ_locks.py:137-151`). A live
+   `region_status_set` newer than every box claim folds no machine box. `region_status`: the
+   verdict's own status (`no_region_visible`, or the `verify_rejected` / `false_positive` the person
+   gave over an empty list, Q7); else, with a
    human or import box claim, `derive_status(boxes, empty_status=NO_REGION_VISIBLE)`
    (`region_writes.py:68-105`); else the machine status. `region_validated` = closed (today's rule,
-   `region_writes.py:100-102`); counts and max score as `boxes_write_fields`
+   `region_writes.py:100-102`); `region_set_complete` = closed, else the machine region's own
+   (Q8, an `item_state` column); counts and max score as `boxes_write_fields`
    (`region_boxes.py:329-382`); `region_verifier` from C's actor, else the machine's.
 5. **Placement (M6, M21)**: `moved_partition_id`, `moved_cluster_uid` from the deciding `class_moved`.
    Readers use them only while that partition serves, else the serving partition's membership, so an
@@ -836,8 +970,8 @@ change:
 | `is_human_deleted` (:90) | excluded, by human, `not_an_object` | live human `excluded` with that reason | layer 3; a dormant claim re-applies to a new matching detection (3.4) |
 | `has_human_geometry` (:102) | `geometry_source` human or deleted | live human `item_drawn`/`geometry_set`, or deleted | layer 1 reads claims before detections |
 | `has_import_geometry` (:109) | `import_ids` and validated `external_label` | live import `item_drawn` or `class_set` | layer 1 (pin) and 2 |
-| `is_locked_geometry` (:121) | the two above or holdout | the claims above, any pinning claim, or live `holdout_frozen` | layer 1 pins the box to the claim's `subject_bbox`; `claim_match` step 4 keeps the item |
-| `is_locked_item` (:137) | any of the above, or region validated by human/import verifier | any of the above, or a closed box set | layer 4: later unclaimed machine boxes stay out of a closed set |
+| `is_locked_geometry` (:121) | the two above or holdout | the claims above or live `holdout_frozen` | layer 1 pins the box to the claim's `subject_bbox` or the `item_bbox` it saw (Q11); `claim_match` step 4 keeps the item |
+| `is_locked_item` (:137) | any of the above, any human-owned box, or region validated by human/import verifier | any of the above, a live human box claim, or a closed box set; `geometry_pinned` is exactly this predicate (Q11) | layer 4: later unclaimed machine boxes stay out of a closed set; layer 1 keeps the item's box |
 | `is_human_owned_item` (:154) | human class, human geometry, curator holdout, human box, human-validated set | the item has a live claim with `actor_kind = 'human'` | used by import undo: the item survives the withdrawal |
 
 The wire flags `label_locked` and per-box `locked` (`wire.py:389`, `:525`) keep today's predicates,
@@ -863,7 +997,9 @@ tests marked (DB) (`tests/db/`), each named with the finding it closes (appendix
 | `test_excluded_never_validated` (M2) | no history yields `excluded` and `class_validated` together |
 | `test_resumed_chunk_no_duplicate` (M4, DB) | a re-run committed chunk inserts nothing; a later step-back undo clears the item |
 | `test_undo_outcomes_match_effect` (M12) | dry-pass counts equal the observed change per item; a step-back undo of a discard restores class and review state together |
-| `test_cleared_hides_only_older`, `test_empty_vlm_answer_keeps_class`, `test_unresolved_keeps_lock` (M17) | the three M17 rules |
+| `test_cleared_hides_only_the_analysers_it_saw`, `test_empty_vlm_answer_keeps_class`, `test_unresolved_keeps_lock` (M17, Q10) | the three M17 rules; a clear hides the (source, analyser) pairs it lists, a newer analyser's opinion shows |
+| `test_rerun_of_the_same_analysers_after_a_clear_leaves_it_cleared` (Q10) | emptying every result and re-running the same analysers restores a cleared item |
+| `test_what_locks_the_item_pins_its_box`, `test_clears_dismissals_flags_moves_and_other_exclusions_do_not_pin` (Q11), truth table `p_pinned` | the box is pinned iff today's `is_locked_item` holds, on every enumerated history |
 | `test_rerun_restores_state`, `test_rebuild_equals_incremental` (M11, DB) | emptying rebuildable results and re-running (detections jittered under IoU 0.5) restores every claimed item, revisions aside; a chunked rebuild during writes ends equal to incremental folding, revisions included |
 | `test_class_resolution` (M20) | follows `merged_into`, survives a rename; a foreign hint never selects a class; an unknown name gives `class_unresolved` |
 | `test_region_revision_increases`, `test_opinion_rank` | `region_revision` grows on every observable write; removing the top opinion yields the next rank |
@@ -1156,7 +1292,7 @@ writer that needs a lower rank rolls the chunk back and retries with it taken fi
 
 | Writer | First lock | Then | Zero rows |
 |---|---|---|---|
-| Ingest commit group (13a L4) | (3) imohash locks of the group's files, sorted (class creation runs before, 13a barrier B3) | probe `photos` by `image_id` (3.4); confirm by SHA-256 on a match, an id from SHA-256 on a collision (`content_key.py:8-13`); insert photos, items, detections, opinions, capture, ledger, vectors, state rows, events | n/a: new rows; a duplicate is reported as today |
+| Ingest commit group (13a L4) | (3) imohash locks of the group's files, sorted (class creation runs before, 13a barrier B3) | probe `photos` by `image_id` (3.4); confirm by SHA-256 on a match, an id from SHA-256 on a collision (`content_key.py:8-13`); insert photos, items, detections, opinions, capture, ledger, vectors, state rows with their deltas, events | n/a: new rows; a duplicate is reported as today |
 | Human act on existing items (label, discard, exclude, restore, dismiss, flag, move, resolve, accept machine, geometry, box edit, region verdict) | (1) its new op row | (6) items; box edit compares `region_revision` with `expected_region_revision` (409 `region_revision_conflict`) and bumps `box_seq`; insert claims, fold, update state, events | re-read by `crop_id`, else 404 |
 | Bulk human act (batch label, bulk accept, holdout freeze, audit start, batch box state) | (1) op row (`writing`) | chunks of 1,000: (6) items, claims `ON CONFLICT DO NOTHING` (M4), fold, one `UPDATE ... FROM (VALUES ...)`; op `written` or `failed` with the count | skip, count |
 | Undo of an operation (3.5) | (1) the undone op row, `FOR UPDATE`, set `undoing` | chunks: (6) items, withdraws, fold, in one transaction; `undone` after the last | withdraws still written; nothing to fold |
@@ -1170,22 +1306,28 @@ writer that needs a lower rank rolls the chunk back and retries with it taken fi
 | Near-duplicate run activation; duplicate verdict | the run row (OCC on `near_dup_runs`, 09d) | a verdict is one claim with no fold of items; a holdout closure is a bulk human act | n/a |
 | Cluster activation | the `cluster_activations` row (OCC: `revision = :expected`, 02d 2.2) | nothing: readers join the serving partition (M6) | 409 on a stale revision |
 | Class create, rename | (2) registry row | `project_classes` row | n/a |
-| Class merge (M16) | (2) registry row | `project_classes.merged_into`; commit. Lists and counts are right from this commit because readers filter `class_id = ANY(family)` and group by the merge root. Then a job: chunks of (6) items with the source class, `UPDATE item_state SET class_id = :target`; a fold racing it resolves through `merged_into` too. A source class with frozen holdout items is refused (409, `classes_merge.py:74`) | skip |
-| `fold.rebuild` (M11) | the job lease | chunks of (6) items in key order; upsert differing state rows, delete state rows without identity | skip |
+| Class merge (M16) | (2) registry row | `project_classes.merged_into`; commit. Lists and counts are right from this commit because readers filter `class_id = ANY(family)` and group by the merge root. Then a job: chunks of (6) items with the source class through `apply()` with no new input (the fold resolves `merged_into`; `store_states` emits the deltas, 15b 6.2); a fold racing it resolves the same way; at the end the family drops the source id (15b P1). A source class with frozen holdout items is refused (409, `classes_merge.py:74`) | skip |
+| `fold.rebuild` (M11) | the job lease | chunks of (6) items in key order; `state.store_states` writes differing state rows, deletes rows without identity and emits their deltas | skip |
+| Summary compactor (15b 6.5) | the job lease | one statement: `DELETE` a batch of `sum_deltas` (`FOR UPDATE SKIP LOCKED`) `RETURNING` it, upsert the sums into the base rows | locked deltas skipped |
+| Summary rebuild, partition or run fill (15b 6.6, 6.7) | the job lease (fill: after the `cluster_activations` OCC write) | one `REPEATABLE READ` snapshot; insert correcting deltas; no lock | n/a |
 | Photo or media claims (phase 5) | (1) op row | (5) the photo; claim; `fold_photo`; `photo_state` | 404 |
 | Entity and face claims (phase 5) | (1) op row | (4) entities, (7) faces; claims; `fold_entity`; `entity_state`, `membership_state`, `face_state` | 404 or skip |
-| Erasure (section 8) | (1) the `erasure_jobs` row | (4) entity, (5) photos `FOR UPDATE` in key order; catalogue deletes | already erased: skip |
+| Erasure (section 8), project delete | (1) the `erasure_jobs` row | (4) entity, (5) photos `FOR UPDATE` in key order, (6) their items; `state.store_states(delete_photos=...)` (deltas, 15b 6.2); catalogue deletes | already erased: skip |
 | Single-label op pruning (3.5) | none | `DELETE` of old `label_operations` rows; claims untouched | n/a |
 
 No path locks `items` and then a `photos` row, and no path writes `item_state` or `box_state` rows
-without first holding the matching `items` lock, so the order is total.
+without first holding the matching `items` lock, so the order is total. Summary upkeep adds no
+rank: writers only insert `sum_deltas` rows with fresh keys, which wait on nothing (15b 6.3), and
+the compactor is the only writer of base summary rows.
 
 ## 8. Erasure
 
 The one path that deletes claims (plan 15 R3, section 14 answer 4; B5). `src/services/erasure/` runs
 one job per subject: a **photo** (also emptying the trash), a **person** ("forget this person",
 photo_library 15 section 2.1), a **project** (today's `project_delete`, 02a 1.2). It inserts an
-`erasure_jobs` row, sets the transaction-local guard `op.erasure_job` in each chunk, deletes through
+`erasure_jobs` row, sets the transaction-local guard `op.erasure_job` in each chunk, removes the
+chunk's counted rows through `state.store_states(delete_photos=...)` so every summary loses them in
+the same transaction (15b 6.2; a cascade alone would leave the summaries high), deletes through
 the catalogue, deletes the files, writes a counts-only `privacy_purges` row, and at `done` nulls the
 subject columns.
 
@@ -1210,7 +1352,7 @@ CREATE TABLE erasure_jobs (
 |---|---|
 | `photos` | the root delete |
 | `photo_provenance`, `analysis_ledger`, `photo_capture`, `items`, `detections`, `text_lines`, `faces`, `claims` (`photo_key`), `photo_state`, `photo_files`, `photo_derivatives`, `photo_signals`, `photo_places` | `ON DELETE CASCADE` on `photo_key` |
-| `class_opinions`, `item_region_results`, `region_boxes`, `box_texts`, `probe_predictions`, `item_scores`, `item_projections`, `assist_answers`, `item_notes`, `item_state`, `box_state`, `face_state` | cascade through `items` / `faces` |
+| `class_opinions`, `item_region_results`, `region_boxes`, `box_texts`, `probe_predictions`, `item_scores`, `item_projections`, `assist_answers`, `item_notes`, `item_state`, `box_state`, `face_state`, `txt.item_box_text`, `txt.item_line_text` (the search copies, 15b section 8: foreign keys `ON DELETE CASCADE` to `items` and to `projects`, same transaction as the `items` rows; erased text stays in dead tuples and the GIN pending list until vacuum, as in any table, and the erasure record says so) | cascade through `items` / `faces` |
 | vector tables (`embedding_spaces.vector_table`), by `target` | `DELETE ... WHERE subject_key = ANY(photo, item, box and face keys)`, before the photo delete |
 | `vector_gaps`, `cluster_memberships`, `near_dup_members`, `near_dup_edges`, `holdout_near_dup_moves`, `entity_edges`, `membership_state` | explicit delete by subject key (no foreign key by design) |
 | `claims` that name the photo without `photo_key` (`subject_pair_id`, or `subject_crop_id` of a pair) | explicit delete by wire id |
@@ -1223,11 +1365,11 @@ A **person**: its `entities` row and what cascades from it (`entity_state`, `ent
 `membership_state`, claims by `subject_entity_key`), the faces assigned or merged to it with their
 vectors, `face_state` and claims (`subject_face_id`), exclusion rules and memories about it, cached
 face crops; the photos stay. A **project**: today's batched delete plus `DROP TABLE` of its `vec`
-tables. **Tests**: `test_erasure_catalogue_complete` fails when a table with a column named
+tables. **Tests**: `test_erasure_catalogue_complete` scans every schema of the database that holds application tables (`public` and `txt`) and fails when a table with a column named
 `photo_key`, `item_key`, `box_key`, `face_key`, `entity_key`, `subject_key`, `subject_*_id`,
 `image_id`, `crop_id`, `face_id` or `member_id`, or a vector table named by `embedding_spaces`, is
 missing from the catalogue; `test_erasure_leaves_nothing` erases a seeded photo and person and finds
-no row, no file and no nearest-neighbour hit on a deleted vector (photo_library 15 exit criterion).
+no row (the two search copies included), no file, no hit from `txt.fragment_items` or `txt.word_items` and no nearest-neighbour hit on a deleted vector (photo_library 15 exit criterion).
 
 ## 9. Migration
 
@@ -1237,7 +1379,7 @@ section 0).
 
 | Revision | Lane (plan 15 section 10) | Creates or changes |
 |---|---|---|
-| `0010_storage_record` | step 1 | `CREATE EXTENSION IF NOT EXISTS vector` and `pg_trgm` (m5: the image is a custom build on `postgres:18.6-trixie` with pgvector 0.8.7 pinned; `pg_trgm` is a trusted contrib module, [pg_trgm](https://www.postgresql.org/docs/18/pgtrgm.html); a test runs both statements as `op_owner` on the real image, and if pgvector needs more, `db-migrate`'s bootstrap step creates it as `op_super`); schema `vec` with `CREATE` for `op_vector` only; every table of sections 2 and 8 with its keys, foreign-key indexes, policies and triggers (`claims_append_only`, `analysers_immutable`, the erasure guard `op_erasure_allows`); the `claim_kinds` rows; the `label_operations` changes; `dataset_imports.dataset_name`; the `embedding_spaces`, `cluster_memberships`, `near_dup_*`, `holdout_near_dup_moves`, `dataset_import_images` changes; grants to `op_app`. The role `op_vector` is created by `db-migrate`'s bootstrap with the other roles (02a 1.5), from its own secret file. Existing space rows are reset to `pending`, so the embedding-space job creates their tables (data is re-ingested). The indexes of section 2.6 come in the revision the physical-design pass writes |
+| `0010_storage_record` | step 1 | `CREATE EXTENSION IF NOT EXISTS vector`, `pg_trgm` and `btree_gin` (m5: the image is the pgvector project's `pgvector/pgvector:0.8.7-pg18-trixie`, pinned in 01 (decided in the database lane, round 3); `pg_trgm` is a trusted contrib module, [pg_trgm](https://www.postgresql.org/docs/18/pgtrgm.html); a test runs both statements as `op_owner` on the real image, and if pgvector needs more, `db-migrate`'s bootstrap step creates it as `op_super`); schema `vec` with `CREATE` for `op_vector` only; every table of sections 2 and 8 with its keys, foreign-key indexes, policies and triggers (`claims_append_only`, `analysers_immutable`, the erasure guard `op_erasure_allows`); the `claim_kinds` rows; the `label_operations` changes; `dataset_imports.dataset_name`; the `embedding_spaces`, `cluster_memberships`, `near_dup_*`, `holdout_near_dup_moves`, `dataset_import_images` changes; grants to `op_app`. The role `op_vector` is created by `db-migrate`'s bootstrap with the other roles (02a 1.5), from its own secret file. Existing space rows are reset to `pending`, so the embedding-space job creates their tables (data is re-ingested). The indexes of section 2.6 come in the revision the physical-design pass writes |
 | `0011_ingest_cutover` | step 2 | drops `image_contents` |
 | `0012_claims_cutover` | step 3 | drops `label_operation_members`, `near_dup_decisions` |
 | `0013_results_cutover` | step 4 | drops `search_projection_tasks` |
@@ -1290,6 +1432,11 @@ machine-class order (4.2), identity apart from state (4.1). New:
 3. **Trained weights after erasure** are not erased (section 8); the owner decides whether such a
    model must be retrained or deleted (plan 15 section 13).
 
+Answers (coordinator decisions 2026-11-15, applied by the fold lane; the rows are in appendix A,
+"Fold lane decisions"): question 1 stands as written (a person's newer claim decides a frozen
+item; an import or combine claim after the freeze does not, Q3); question 2 stands, now exact: the
+generation the person saw stays and a re-run's boxes stay results (Q9).
+
 ## Appendix A. Review trace
 
 One row per finding of the independent review (2026-11-15) and the section that now answers it.
@@ -1329,3 +1476,69 @@ One row per finding of the independent review (2026-11-15) and the section that 
 | m5 pgvector in the image | section 9, `0010` row |
 | m6 provenance key with a nullable job id | 2.1 `uq_photo_provenance_source` |
 | m7 two work lists | 2.3 `analysis_ledger` is the only work list; `vector_gaps` explains only |
+
+### Fold lane decisions
+
+Decisions of the coordinator on 2026-11-15 after the fold lane's differential run against today's
+code (`tests/domain/test_fold_differential.py`); each is applied in `src/domain/` and in the
+allow-list `tests/domain/world_allowed.py`.
+
+| Decision | Rule now | Answered in |
+|---|---|---|
+| Q1 `needs_new_class` | a later human `class_set`, a plain label too, clears the flag (today only resolve does) | 4.3 layer 3; test `test_a_plain_label_clears_needs_new_class_q1` |
+| Q2 audit outcome | the latest human class verdict after `audit_sampled`, as today | 4.3 layer 3 |
+| Q3 import on a held-out item | an import or combine class claim after the freeze does not decide, unless it corrects the import's own class; the writer still reports the conflict | 3.5 Import; 4.3 layer 2 |
+| Q4 step-back undo | does not step back over a bulk accept, as today | 3.5 Undo |
+| Q5 dormant claim group | step 3 of matching also tries the `item_bbox` the group's newest claim saw | 3.3, 3.4 step 3; test `test_claim_match` |
+| Q6 person-made box id | a created box owns its minted id and matches on it only; claims on machine boxes match on id, then IoU | 3.4 step 7 |
+| Q7 whole-set verdict over no box | keeps the status given (`verify_rejected`, `false_positive`); `no_region_visible` only when given | 3.2, 3.3, 4.3 layer 4; test `test_a_verdict_over_no_box_keeps_the_status_the_person_gave_q7` |
+| Q8 `region_set_complete` | a fold output and an `item_state` column | 2.4; 4.3 layer 4 |
+| Q9 `region_seen_seq` | a fold output the repository stores; a claim's `region_seq` is the generation the person saw | 2.4; 3.3; 4.3 layer 4 |
+| Q10 the clear | a `class_cleared` payload lists the hidden (source, analyser) pairs; an opinion is hidden iff its pair is in a live clear's list | 3.3; 4.2; 4.3 layer 2; tests in 4.5 |
+| Q11 what pins the box | exactly while today's `is_locked_item` holds; a clear, dismissals, flags, a move and another exclusion reason do not pin | 3.2; 4.3 layer 1; 4.4; tests in 4.5 |
+| Q12 text consensus | the fold takes the resolved reader consensus (`MachineText`) as input; the wiring lane moves `region_text.py` consensus into `src/domain/` | 4.3 layer 4 |
+| Q13 class profile | `profile` is `{detector?, detector_version?}` | 3.3 |
+| Q14 phase-5 kinds | not in the catalog until the gallery lane adds them | 3.2 |
+
+### Database lane decisions
+
+Decisions of the database fix lane on 2026-11-15, after the first server run of `0010_storage_record`
+failed at `CREATE SCHEMA vec` (`permission denied for database`).
+
+| Decision | Rule now | Answered in |
+|---|---|---|
+| Placement of the privileged steps | the owner role has no `CREATE` on the database, so the superuser bootstrap (`src/db/roles.py`: `ensure_roles`, `prepare_database`) creates the role `op_vector` (secret `OP_DB_VECTOR_PASSWORD_FILE`), installs `pg_trgm`, `btree_gin` and, when the image offers it, `vector`, and creates the schema `vec` owned by `op_owner`; `apply_grants` (as the owner) gives `op_vector` `USAGE, CREATE` on `vec` and `REFERENCES (id)` on `projects`; the migration creates none of them, checks them, and fails naming the bootstrap step. Revision 3 of 15b adds to the same bootstrap the role `op_text_owner` (no login, no attribute), the schema `txt` owned by it and `op_owner`'s membership in it `WITH SET`, and revision 3.1 the extension `btree_gin` (15b section 8); on a managed service the bootstrap runs as the master user, and no step needs a superuser (02a 1.5) | 6.1; 12 `0010_storage_record` step 1; 02a 1.5 |
+| `vec` outlives a downgrade | the schema belongs to the bootstrap, so `downgrade()` no longer drops it | 6.1 |
+
+### Reads and slices review
+
+The review of 15b and 15c (2026-11-15) with the coordinator's decisions; one row per finding.
+
+| Finding | Answered in |
+|---|---|
+| B1 `image_contents` used by core ingest | 2.6 migration paragraph (`0012` fences it, no drop); 15c S1a-ii, section 8 |
+| B2 exclusive rebuild lock | 2.6 summary paragraph; section 7 (rebuild and fill rows, no lock); 15b 6.6, 6.7 |
+| B3 summary rows held to commit | 2.6 summary paragraph (no rank 8); section 7 closing paragraph; 15b 6.3 |
+| M1 class family on X2 | 2.6 X2; 15b P1 |
+| M2 drained queue | 2.6 X2 (`class_validated` key), X4 (review partial index); 15b section 5 |
+| M3 index per sort | 2.3 `items.sort_area`, `sort_rank`; 2.6 X28 to X32; 15b section 7 |
+| M4 drift | 2.4 write rules; section 7 class merge, `fold.rebuild`, erasure rows; section 8; 15b 6.2 |
+| M5 capped counts as guards | 15b section 5 |
+| M6 box rows | 2.6 X26, X27; 15b section 9 |
+| M7 dropped reader behaviours | 2.6 X13 on `taken_local`; 15b P1, P15, sections 7 and 8 |
+| M8 attach owner | 15c S1a-ii |
+| M9 deletion order | 15c section 8 |
+| M10 red by file | 15c section 9 |
+| M11 slice size | 15c sections 1 and 3 |
+| M12 round trips per label | 15b 6.9, section 13 M1 |
+| m1 P6 short page | 15b P6 |
+| m2 X22 direction | 2.6 X22 |
+| m3 upsert order | 15b 6.5 |
+| m4 advisory key space | section 7 (no tally lock remains) |
+| m5 P4 heap fetches | 15b section 5 rule 8 |
+| m6 machine churn | 2.4 `updated_at` rule; 2.6 HOT paragraph |
+| m7 GIN `fastupdate` | 15b section 8; 15c S4, S5 |
+| m8 one filter file | 15b P1 |
+| m9 `photo_counts` per photo | 15b 6.1, 6.2 |
+| m10 mixed-direction sorts | 15b sections 4 and 7 |
+| m11 capped-total classification | 15b section 5 |

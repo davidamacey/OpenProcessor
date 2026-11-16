@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | roadmap, revision 3, 2026-11-16. State as of the ledger entry of 2026-11-16 00:44 and `int/native` at `e28fe4ea6` |
+| Status | roadmap, revision 3, 2026-11-16. State as of the ledger entry of 2026-11-16 00:44 and `int/native` at `e28fe4ea6`; stage 2 (section 3) as of `int/native` at `631abb042` (ledger entry of 2026-11-16 03:28) |
 | Revision note | revision 3 follows the owner's binding order of 2026-11-15 (engine, backend in Rust, gallery frontend, database and clustering, cloud). Revision 2's track table, gap list and phase names are replaced; every gap of revision 2 is carried into section 9. Git holds revision 2 |
 | What this file is | what is done, what is being built, what comes next and why, stage by stage. Task detail lives in the plans. Where this file and a plan disagree on order, this file wins; on task content, the plan wins |
 | Branches | `int/native`: the Rust integration branch (engine and server share the workspace `native/`). `int/b4-stateless`: the Python product, pushed after green sweeps, the reference and parity partner until each family moves to Rust; fixes only. `int/storage`: storage step 1, frozen as the oracle the Rust fold must pass, and the storage measurements. `lane/plan16`: plan 16, waiting for its rewrite |
@@ -86,35 +86,45 @@ upload path, cloud benchmark), [18a](18a_backend_rust_port_slices.md) (workspace
 the slices that start now), [18b](18b_backend_rust_port_later_slices.md) (later slices, the mapping
 of the storage slices, traceability).
 
-**Done.** Plan 18 revision 1 merged into `int/native` (`64016c4e5`) with its 13 decisions and five
-answers. Workspace preparation (R0w) merged at `e28fe4ea6`: ten server crate stubs, the settings
-helper, the crate layering rule.
+**Done (2026-11-16, `int/native` at `631abb042`).** Plan 18 revision 1 with its 13 decisions and five
+answers, and decisions 14 to 20 of 2026-11-16 (contract-first, one owner per landing file, one TLS
+stack, the derived-file cache, the API capacity rows closed). Merged and tested: workspace
+preparation (R0w); the storage layer (R1s: local and S3-compatible, never half written, with the
+cache); capture reading and content hashing (R1x); the job runner core, proven on PostgreSQL 18
+(R1j, with TLS to the database); the engine client (R1e); the upload receiver up to the landing zone
+(R1u, not yet mounted); the upload load generator (R0g); the core contract baseline (R0c: 118
+operations); the differential runner, parity ledger and pending list (R0d). The contract spike (R0s,
+measurement M15) is done and was not merged; its result is contract-first. The fold oracle export
+(R0x) is done on its own branch for R1b. Not merged: seeding over HTTP (R0e), which waits for the
+owner's answer (section 8).
 
-**In progress (2026-11-16 00:44), each lane in its own worktree.** The storage layer (R1s); the
-server front without its contract part (R1a); the job runner core (R1j); the ExifTool pool and
-content hashing (R1x); the upload load generator (R0g); the contract spike (R0s, measurement M15,
-never merged); the fold oracle export (R0x, on `int/storage`).
+**In progress.** The server front (R1a), in its fix pass after an independent review; it is the one
+stage 0 lane not yet merged. Plans 18, 18a and 18b were brought in step with the above on this date.
 
 **Next, in order** (18 section 3.1; 18a section 5; 18b sections 1 and 4).
 
-1. Rest of stage 0: the engine client (R1e, ready now that R0w is merged); the upload receiver up
-   to the landing zone (R1u, after R1s's first merge); the core contract baseline (R0c), the
-   differential runner and ledger (R0d), seeding over HTTP (R0e), these three after the owner hears
-   they are test tooling (section 5).
-2. Stage A: periodic ticks in Rust and the Python claim loop, Celery leaves (R3a); live events from
-   Rust, Valkey leaves (R3b); the record and the fold in Rust (R1b, passing the oracle's cases);
-   projects on the record (R11a); **Rust ingest switches on**, uploads and folders, S3 storage
-   (R1c, after N3); inference routes on the engine (R2a, after N3).
+1. One sweep of the merged tree once R1a is merged: the database-tier tests, the S3-compatible
+   server test of the storage layer, the server image (with ExifTool, Perl and `setpriv`), the live
+   and browser tiers through the front, the differential dry run and same-stack read run, the upload
+   load generator's loopback row, and the full pre-commit and pre-push hooks (18a section 5 lists what
+   each slice owes). The rest of stage 0 after that: seeding over HTTP (R0e) once the owner answers.
+2. Stage A: the record slice R1b after measurement round 4's first part (the part needed before R1b,
+   plan 15b section 15); periodic ticks in Rust and the Python claim loop, Celery leaves (R3a, which
+   also decides the claim for a one-kind runner behind a large backlog); live events from Rust,
+   Valkey leaves (R3b); projects on the record (R11a); **Rust ingest switches on**, uploads and
+   folders, S3 storage (R1c, after N3); inference routes on the engine (R2a, after N3).
 3. Stage B: gallery reads (R4); labelling acts, review and counts (R5); erasure (R5e);
    configuration, settings and models (R11).
 4. Stage D, after stage 4's slices: the Python API removed and the schema out of Alembic (R12). This
    closes the owner's step 2.
 
-**Owed before.** R1c: where the API's CPU goes (M1), the 30-process and 1-process grids (M2), real
-objects per photo (M4), ExifTool's own cost (M5), today's upload route as the baseline (M10), storage
-write cost and SHA-256 (M18); the Rust capture reader (M16) is optional. R3b: `NOTIFY` at ingest
-commit rate (M17). R2a: core route profile (M6). R1a's contract part: the spike (M15). The priority
-of reading by key: the path-mode spike (M3).
+**Owed before.** R1c: real objects per photo (M4), ExifTool's own cost (M5), today's upload route as
+the baseline (M10), storage write cost and SHA-256 (M18); the Rust capture reader (M16) is optional.
+M1 (API CPU profile) and M2 (30-process and 1-process grids) are not run: the capacity grid closed at
+27 of 33 rows and the missing rows measure the Python API the Rust server replaces, so the process
+count stays at the compose default. R3b: `NOTIFY` at ingest commit rate (M17). R2a: core route
+profile (M6), and a decided response shape for each core route the contract leaves open (R2a, R2b and
+R11 name them). The priority of reading by key: the path-mode spike (M3).
 
 **Exit.** R1c's go bar (API host CPU per photo at most 0.5x Python's, 18b R1c) with stage A green;
 the step closes at R12 with the pending list empty and every parity ledger closed.
@@ -165,14 +175,20 @@ for pgvector at a 0.26% filter, p50 2.8 ms (15 section 1). Cluster partitions an
 photos built in the Python product.
 
 **In progress (2026-11-16 00:44).** The labelling measurement (plan 16's M16-0) and storage
-measurement round 3 (15b M1 to M10), both running.
+measurement round 3 (15b M1 to M10), both running. M16-0 finished later on 2026-11-16 (plan 16
+revision 1 rests on it).
 
 **Next, in order.**
 
-1. The labelling measurement's results, then plan 16 (the cluster, label and train loop) rewritten
-   for the Rust backend. Plan 16 is on `lane/plan16`, written before the Rust decision; its review
-   found that the cluster rule's earlier gain does not hold on car models (0.885 against 0.884
-   decisions per object), so the rule waits for this measurement (gaps G1, G6).
+1. Plan 16 (the cluster, label and train loop), revision 2, for the Rust backend:
+   [16](16_label_train_loop_plan.md), [16a](16a_label_train_loop_slices.md),
+   [16b](16b_label_train_loop_schema.md); evidence in
+   [labelling_decisions_m16_0.md](../../research/labelling_decisions_m16_0.md) (gaps G1, G6).
+   Part A moves today's loop to the record and Rust with the same behaviour for the person (18b R8
+   split into R8-1 and R8-2, the label-act precondition added to R5); its numeric library (L16-1)
+   can start now and M12 is its only entry measurement. Part B (a random check sample, a group-count
+   rule, label scopes, a classifier on the person's labels, growth without constant refits) waits
+   for M16-1, M16-2, M16-3, M16-6 and M16-7, each with its bar.
 2. Storage round 3 written up; its numbers are the entries of R1b, R4, R5 and R6b.
 3. Gate B round 2 at 10 million real crop vectors, with one shared build of 100,000 and 1,000,000
    crop vectors for M12, M13 and M14 (18 section 8).
@@ -197,7 +213,8 @@ for a fee, or for small businesses to run", from the same images as the local ap
 eleven multi-user seams as non-goals (18 sections 6, 6.1); the local compose stack, installer and
 GPU profiles.
 
-**In progress.** The upload load generator (R0g, stage 2).
+**In progress.** Nothing: the upload load generator (R0g, stage 2) is merged; its 600 MB/s loopback row
+and M10 are owed to the sweep.
 
 **Next, in order.** A deploy plan (the rest of G14: compose overlay for S3 and a remote landing host,
 managed PostgreSQL with pgvector, TLS, backups, secrets); the benchmark runs at 2,000, 100,000 and
@@ -223,7 +240,8 @@ parameter.
 | `probe`, `train`, `model_export`, `bakeoff`, `promote` | Ultralytics, PyTorch, TensorRT and ModelOpt, ONNX Runtime and `onnx` have no Rust equivalent |
 | `embedding_viz` (the 2-D map, UMAP) | no maintained exact Rust port; M14 measures map quality so the owner can decide |
 | The segmenter and vLLM servers | their own images |
-| `cluster_run`, `item_scores`, `near_dup_score`, `near_dup_core_group`, `persons_cluster` | Rust if M12 or M13 passes on real crop vectors, else Python reading and writing its own result tables; decided before R6 and R8 start |
+| `cluster_run` | Rust, CPU or GPU as M12 decides; no Python fallback (plan 16a) |
+| `item_scores`, `near_dup_score`, `near_dup_core_group`, `persons_cluster` | Rust; M13 on real crop vectors decides CPU or GPU inside Rust. No Python fallback: a kind that misses its bar on both goes to the owner as a question (plan 18 section 2.3) |
 
 Everything else is Rust. A Python job reads and writes only the job tables and its own result tables
 and never folds a person's decision; it takes work through a claim loop on the same `jobs` table.
@@ -233,7 +251,7 @@ and never folds a person's decision; it takes work through a claim loop on the s
 | Item | Decides | Blocks |
 |---|---|---|
 | Eight formats the Rust engine refuses (answers `decoder`) where the Python path opened them: PPM, TGA, ICO, PCX, QOI, JPEG 2000, SGI, palette TIFF | owner | N3 (the accepted set must equal today's unless the owner drops them) |
-| Seeding over HTTP (R0e), with the core contract baseline (R0c) and the differential runner (R0d): Python or Rust tooling | owner | R0e, R0c, R0d, so R1c's parity |
+| Seeding over HTTP (R0e): Python or Rust tooling (the core contract baseline R0c and the differential runner R0d are merged as Python tooling) | owner | R0e, so R1c's parity |
 | NAS backup of two private map files | owner | no stage; a data-safety step |
 | A faster content hash, only if M18 breaks the B1 budget at 20 MP | owner | R1c |
 | The 2-D map method after M14 | owner | `embedding_viz` in R10 |
@@ -246,14 +264,15 @@ and never folds a person's decision; it takes work through a claim loop on the s
 | nvJPEG device bytes per megapixel | measurement | N2's lane counts |
 | Two-card row | measurement | the card budget |
 | Hardware JPEG decode on the L4 | measurement | the cloud runs |
-| M1, M2, M4, M5, M10, M18 (API CPU parts, process grids, objects per photo, ExifTool, upload baseline, storage write cost) | measurement | R1c; M5 and M16 settle D2 |
+| M4, M5, M10, M18 (objects per photo, ExifTool, upload baseline, storage write cost); M1 and M2 are not run (18 section 8) | measurement | R1c; M5 and M16 settle D2 |
 | M3 path-mode spike | measurement | priority of reading by key |
-| M15 contract spike (running as R0s) | measurement | R1a's contract part, decision D6 |
+| M15 contract spike (R0s) | measurement, done 2026-11-16: D6 is contract-first | nothing |
 | M17 `NOTIFY` at commit rate | measurement | R3b (Valkey leaves) |
 | M6 core routes; M7 read routes; M8 static facts; M9 region worker | measurement | R2a; order of stages B and C; R1a; R7 |
 | M11 NAS rates | measurement | the first scale run |
 | M12 k-means at scale; M13 exact top-k | measurement | R8; R6b, R10, R2b (decision D5) |
-| The labelling measurement (plan 16's M16-0) | measurement | plan 16's rewrite, R8 |
+| The labelling measurement (plan 16's M16-0) | measurement, done 2026-11-16 | plan 16 revision 2 |
+| Plan 16's M16-1 (the owner reviews 60 pages), M16-2, M16-3, M16-6, M16-7 | measurement (M16-1 with the owner) | plan 16's Part B items, each behind its bar; Part A needs only M12 |
 | Storage round 3 (15b M1 to M10) | measurement | R1b, R4, R5, R6b, R8 entries |
 | Gate B round 2 at 10 million vectors | measurement | R6a |
 | Gates A and B together | measurement | D4, so R2b and whether OpenSearch leaves |

@@ -10,7 +10,6 @@
 use std::time::Duration;
 
 use tokio::task::JoinHandle;
-use tokio_postgres::NoTls;
 
 use crate::error::DbError;
 use crate::settings::DbSettings;
@@ -45,7 +44,7 @@ impl SessionLock {
     ) -> Result<Option<Self>, DbError> {
         let config = settings.pg_config(application_name, true, false)?;
         let (client, connection) = config
-            .connect(NoTls)
+            .connect(settings.tls_connector()?)
             .await
             .map_err(|e| DbError::call("lock.connect", e))?;
         let driver = tokio::spawn(async move {

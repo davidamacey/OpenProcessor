@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | plan, revision 1 (2026-11-15), companion of [18](18_backend_rust_port_plan.md) (decisions, order, windows, storage design, measurements, cloud benchmark) and [18b](18b_backend_rust_port_later_slices.md) (the slices after the record exists, the plan 15c mapping, traceability) |
+| Status | plan, revision 1 (2026-11-15), brought in step on 2026-11-16 with decisions 14 to 20 and what stage 0 built (the "Built" lines of section 5), companion of [18](18_backend_rust_port_plan.md) (decisions, order, windows, storage design, measurements, cloud benchmark) and [18b](18b_backend_rust_port_later_slices.md) (the slices after the record exists, the plan 15c mapping, traceability) |
 | What a lane takes from here | section 1 (the template and lane rules), section 2 (the workspace, its crates and who owns each shared file), section 3 (tests and parity), section 4 (fail-closed rules), and its own slice in section 5, plus the gates of 18 section 7 |
 | Reads with | [17](17_native_engine_plan.md) sections 1.1 and 3.1 (the engine protocol and the Rust gates); plan 15c on `int/storage` (the storage design each record slice builds) |
 
@@ -55,34 +55,44 @@ protocol, two gate setups, and a second copy of the protos or a cross-workspace 
 
 ### 2.2 The crates
 
-The engine crates stay plan 17's: `gpu_frame`, `frame_engine`, `frame_engine_loadgen`. The server
-crates, with the lane that creates each (R0w creates the stubs of the early ones so no two lanes ever
+The engine crates stay plan 17's: `gpu_frame`, `frame_engine`, `frame_engine_loadgen`. One dependency
+runs from an engine crate to a server crate: `frame_engine_loadgen` uses `op_engine_client`'s tensor
+codec (18 Q5, built in R1e); `frame_engine` is a dev-dependency of `op_engine_client` and nothing
+else. The server crates, with the lane that creates each (R0w creates the stubs of the early ones so no two lanes ever
 create the same crate) and the lane that fills it:
 
 | Crate | Holds | Stub created by | Filled by | May depend on (server crates) |
 |---|---|---|---|---|
-| `op_config` | reading `OP_*` settings from the environment into typed structs (one helper), the retired-variable refusal | R0w | R0w (helper), R1a (retired variables) | none |
+| `op_config` | reading `OP_*` settings from the environment into typed structs (one helper), the retired-variable refusal, and the one function that installs the process-wide TLS provider (`install_tls_provider`, rustls with ring, `native/op_config/src/tls.rs`; 18 section 2.2), which every crate that makes a TLS connection calls | R0w | R0w (helper), R1a (retired variables) | none |
 | `op_storage` | key layout, landing zone, local read paths, streaming SHA-256, durable object store (`object_store`), mover, derived files and cache, delete and erase primitives, reconcile listing | R0w | R1s | `op_config` |
 | `op_media` | imohash port, ExifTool `-stay_open` pool by path, capture field mapping; later the fast path (M16) | R0w | R1x | `op_config` |
-| `op_engine_client` | the engine protocol v1 client: BYTES codec, plan builder, answer parser, channel pool, readiness; the model server's readiness and load calls | R0w | R1e | `op_config` |
+| `op_engine_client` | the engine protocol v1 client: BYTES codec, plan builder, answer parser, channel pool, readiness; the model server's readiness and load calls | R0w | R1e | `op_config`; `frame_engine` as a dev-dependency only (the in-process stub pipeline of its round-trip tests) |
 | `op_db` | the pool, `ProjectTx`, the statement registry, the `LISTEN` connection, the test harness that loads the schema dump | R0w | R1j | `op_config` |
 | `op_jobs` | the job runner, claim, lease, heartbeat, fencing, terminal states, exclusive groups, the periodic framework and later every Rust kind's registration | R0w | R1j; kinds by their slices | `op_db`, `op_config` |
-| `op_ingest` | the upload receiver (R1u); the ingest pipeline and commit (R1c) | R0w | R1u, R1c | `op_storage`, `op_media`, `op_engine_client`, `op_jobs`; `op_store` from R1c |
+| `op_ingest` | the upload receiver (R1u); the ingest pipeline and commit (R1c) | R0w | R1u, R1c | `op_config`; `op_storage`, `op_media`, `op_engine_client`, `op_jobs`; `op_store` from R1c; `op_upload_loadgen` as a dev-dependency only (R1u's tests build their browser-shaped request bodies with its multipart writer) |
 | `op_api` | router assembly, middleware, error shapes, health, metrics, the forwarder; one module per route family added by its slice | R0w | R1a; families by their slices | `op_config`, `op_db`, `op_storage`, `op_ingest`, `op_jobs`, `op_store` |
 | `op_server` | the binary `op-server` and its roles | R0w | R1a (`api`), R3a (`worker`, `periodic`), R12 (`migrate`) | every server crate |
 | `op_upload_loadgen` | the binary `op-upload-loadgen` (18 section 5.2) | R0w | R0g | `frame_engine_loadgen` (its `cgroup` and `arith` modules, no server crate) |
-| `op_contracts` | the contract printer, if M15 chooses code-first | R1a (only then) | R1a | `op_api` |
 | `op_domain` | pure ports: fold, claim matching, tallies, review tabs, geometry, filter grammar, cursor codec | R1b | R1b, then families | none (no input or output) |
-| `op_store` | record repositories (photos, items, results, state, vectors, analysers, events, claims) | R1b | R1b, then families | `op_db`, `op_domain` |
+| `op_store` | record repositories (photos, items, results, state, vectors, analysers, events, claims) | R1b | R1b, then families | `op_db`, `op_domain`, `op_numeric` |
+| `op_numeric` | the numeric kernels of the labelling loop: row blocks, spherical k-means behind a whole-fit interface (CPU first), top-two assignment, member-overlap carry-over, the group-count rules; no database, no input or output (plan 16a section 2; a GPU backend only if 16a's L16-2 is built) | L16-1 (plan 16a) | L16-1 | none; `gpu_frame` only under the feature `gpu` (L16-2) |
 
 `op_domain` and `op_store` are not stubbed early: only R1b creates them, months after stage 0 starts,
-so no empty crate waits. `check_layering.py` enforces the right-hand column (18 section 7).
+so no empty crate waits; `op_numeric` is created by its own library slice (L16-1 of plan 16a). There
+is no `op_contracts` crate: the contract is kept contract-first (decision 14, 18 section 2.4).
+`scripts/codegen/check_layering.py` (`CRATE_DEPENDENCIES`) enforces the right-hand column (18
+section 7) and holds the same table as this one for every crate that exists today, dev-dependencies
+included: the rows for `frame_engine_loadgen`, `frame_engine` and `op_engine_client` are the
+engine-side facts above. Its remaining entries for `op_contracts` (a row, and a member of
+`op_server`'s set) are stale and are removed by the first slice that edits the script; the rows of
+`op_domain` and `op_store` are already there, and the slice that creates `op_numeric` adds its row
+and `op_store`'s dependency on it.
 
 ### 2.3 Shared files and their owners
 
 | File | Owner | Rule for others |
 |---|---|---|
-| `native/Cargo.toml` `members` | R0w writes every early member at once | later crates (`op_domain`, `op_store`, `op_contracts`) add one line each in their creating slice |
+| `native/Cargo.toml` `members` | R0w writes every early member at once | later crates (`op_domain`, `op_store`, `op_numeric`) add one line each in their creating slice |
 | `native/Cargo.toml` `[workspace.dependencies]` | each lane for its own dependencies | one entry per line, alphabetical (the file's existing rule), never edit another lane's line; a version change goes through the coordinator |
 | `native/Cargo.lock` | the coordinator at merge | rule 2.4 |
 | `native/deny.toml` | the coordinator | a lane that needs a licence outside the allow list stops and asks |
@@ -210,7 +220,7 @@ its last caller (R12 at the latest).
 ## 5. The slices that start now (decision 11)
 
 Order of merges in stage 0: R0w first (hours); then any of the others as they finish, except R1u
-after R1s's first merge and R1a's contract part after M15 and R0c. None needs the engine switch (N3)
+after R1s's first merge and R1a's contract part after R0c and the front (M15 is done: decision 14). None needs the engine switch (N3)
 or the record (R1b).
 
 | Slice | Plain name | Measurement needed | Can start |
@@ -224,7 +234,7 @@ or the record (R1b).
 | R0g | upload load generator | none | after R0w |
 | R0x | fold oracle export (on `int/storage`) | none | now |
 | R1s | storage layer | none (M18 is its sweep row) | after R0w; in two merges |
-| R1a | server skeleton and front | none; its contract part needs M15 | after R0w |
+| R1a | server skeleton and front | none (M15 is done: contract-first) | after R0w |
 | R1j | job runner core | none | after R0w |
 | R1e | engine client | none | after R0w |
 | R1x | ExifTool pool and hashing | none | after R0w |
@@ -274,6 +284,13 @@ describes it; `scripts/docs/check_docs_vs_code.py` accepts routes found in eithe
 route of the app and no curation route; it is stable across two runs.
 **Selective checks.** That test file, the contract hooks, the docs check.
 **Owed.** Nothing. **Go bar.** `make contracts-check` green. **Deletes.** Nothing.
+**Built (merged, `contracts/openapi/core.json`).** 112 paths, 118 operations, 141 components. Facts a
+port needs: six operations declare no response shape (`GET /`, `/connection_pool_info`, `/health`,
+`/health/pe_text`, `/metrics`, `/ready`); `POST /ingest`'s 200 answer (duplicate) has no body shape; 13
+schemas hold free-form objects (17 places with `additionalProperties: true`, among them `JobView`,
+`SearchResult`, `FaceVerifyResponse`, `TestInferenceResponse`). A Rust type cannot be held to a
+schema that says nothing, so a decided shape for each is owed before its route is ported (the
+entries of R2a and R2b in 18b say so).
 
 ### R0s. Contract spike (M15)
 
@@ -288,6 +305,9 @@ compares each result with the committed schema by the normalised diff of 18 sect
 **Output.** `artifacts_local/speed_1113/plan18_contract_spike/` (gitignored): per schema, equal or
 the diff; for code-first, the custom `ToSchema` impls needed; the hook times. The coordinator records
 D6 in 18 section 3.5. **Deletes.** The worktree's branch after the decision.
+**Built (done, never merged).** M15 ran; its output is `artifacts_local/speed_1113/plan18_contract_spike/results.md`
+(source kept beside it). D6 is B, contract-first (decision 14, 18 section 2.4): code-first fails the
+pass rule of 18 section 2.4. No lane builds anything from this slice any more.
 
 ### R0d. Differential runner, ledger and pending list
 
@@ -311,6 +331,18 @@ the pending hook (a listed test that passes fails the run).
 **Owed.** One differential run with both URLs pointing at the same reference stack: empty diff on
 every operation (proves determinism and the normaliser), in the first sweep after merge.
 **Go bar.** That run empty. **Deletes.** Nothing.
+**Built (merged).** `tests/differential/` (runner, parsed-JSON compare, reviewed normalisation list
+`normalise/_defaults.toml`, `families.toml`, a fixtures provider with projects as the example; the
+runs are `test_stacks.py`, selected by `OP_DIFF_*` variables), `tests/parity/ledger/` with
+`scripts/codegen/check_parity_ledger.py` and its hook, `tests/pending_rust.txt` with the strict
+expected-failure hooks, `schemathesis==4.33.4` in `requirements-test.txt`. The runner's
+`--check-schema` also checks the candidate's answers against the committed OpenAPI file: that is
+the response-conformance check of decision 14 (b), so a family's slice uses it and builds no second
+one. Hypothesis draws from literals of loaded local modules, so the runner empties that pool while
+it draws (`cases.without_local_constants`); without it one seed gave different cases. Owed to the
+sweep: the dry run over every operation (5,040 cases for the 388 curation operations) and the
+same-stack read run (`--methods get,head,options --seed 0`, no schema check when both URLs are the
+reference). Writes are compared only across two separately seeded stacks.
 
 ### R0e. Seeding over HTTP
 
@@ -350,6 +382,9 @@ stamps.
 **Selective checks.** cargo gates. **Owed.** M10's rows (coordinator). **Go bar.** It sends at least
 600 MB/s of 20 MP photos to a sink on loopback (estimate of the need with margin), measured in the
 sweep. **Deletes.** Nothing.
+**Built (merged).** `native/op_upload_loadgen`, with unit tests and in-process tests against an axum
+server. It speaks plain `http` only; a run against a TLS front needs the generator to gain TLS first. Owed to the sweep: the 600 MB/s loopback row
+against a sink the coordinator provides, and M10.
 
 ### R0x. Fold oracle export (on `int/storage`)
 
@@ -388,20 +423,25 @@ R1s-1, the local half (R1u starts from it):
 | `keys` | `ProjectId(i64)`, `ContentHash([u8; 32])` (hex display), `StorageKey` (validated with `object_store::path::Path::parse`); constructors `original(ProjectId, &ContentHash)`, `derived(ProjectId, DerivedKind, photo_key: i64, name)`, `source(rel)`, the roots of 18 section 4.3; `parse(&str) -> Result<StorageKey, KeyError>` |
 | `hash` | `Sha256Stream` (update with each chunk, `finish() -> ContentHash`) over `sha2` 0.11.1 |
 | `local` | `LocalRoots { landing, sources }` from settings; `resolve(&StorageKey) -> Result<PathBuf, KeyError>` for landing and source keys with the canonical-prefix check of 18 section 4.4 |
-| `landing` | `Landing::begin_part(upload_id: Uuid, index: u32) -> PartWriter`; `PartWriter::write(&mut self, chunk: &Bytes)` (async file write, hash update), `finish(self) -> LandedPart { upload_id, index, path, size, sha256 }`, `discard(self)`; `Landing::name_by_content(&self, ProjectId, LandedPart) -> LandedPhoto { key, path, size, sha256 }` (a move within the landing root that never replaces: the name is `landing/<project_id>/<sha256>.<upload_id>.<index>`, so a landing file has one owner); `Landing::remove(&LandedPhoto)`; `Landing::free_ratio()` for the disk guard |
+| `landing` | `Landing::begin_part(upload_id: Uuid, index: u32) -> PartWriter`; `PartWriter::write(&mut self, chunk: &Bytes)` (async file write, hash update), `finish(self) -> LandedPart { upload_id, index, path, size, sha256 }`, `discard(self)`; `Landing::name_by_content(&self, ProjectId, LandedPart) -> LandedPhoto { project, key, path, size, sha256 }` (a move within the landing root that never replaces: the name is `landing/<project_id>/<sha256>.<upload_id>.<index>`, so a landing file has one owner); `Landing::remove(&LandedPhoto)`; `Landing::free_ratio()` for the disk guard |
 
 R1s-2, the durable half:
 
 | Module | Public interface |
 |---|---|
-| `durable` | `Durable::from_settings` builds `Arc<dyn ObjectStore>`: `LocalFileSystem::new_with_prefix` for `file://` or `AmazonS3Builder` for `s3://` (endpoint, allow-HTTP, checksum algorithm SHA-256, conditional put from settings); `make_durable(&self, &LandedPhoto) -> Result<DurableObject, StorageError>`: `PutMode::Create`; same-filesystem local store: `rename_opts` within one store when the landing root is the store's `landing/` prefix, else `put_multipart_opts` streaming from the file; `AlreadyExists` checks the stored size, never overwrites; `exists(&StorageKey)` (head) |
-| `derived` | `put`, `get`, `delete_prefix` for kinds `crops`, `thumbs`, `exports`, `training`, `snapshots`; a local cache tier with a byte cap (least recently read evicted) in front of a remote store |
+| `durable` | `Durable::from_settings` builds `Arc<dyn ObjectStore>`: `LocalFileSystem::new_with_prefix` for `file://` or `AmazonS3Builder` for `s3://` (endpoint, allow-HTTP, checksum algorithm SHA-256, conditional put from settings; TLS by rustls with the ring provider and the platform's roots, no system OpenSSL and no aws-lc: decision 18, the provider installed by `op_config::install_tls_provider`); `make_durable(&self, &LandedPhoto) -> Result<DurableObject, StorageError>`: `PutMode::Create`; same-filesystem local store: `rename_opts` within one store when the landing root is the store's `landing/` prefix, else `put_multipart_opts` streaming from the file; `AlreadyExists` checks the stored size, never overwrites; `exists(&StorageKey)` (head) |
+| `derived` | `put`, `get`, `delete_prefix` for kinds `crops`, `thumbs`, `exports`, `training`, `snapshots`; a local cache tier in front of a remote store only (a local store is already local disk): its own directory, a byte cap (least recently read evicted) and a maximum age per entry; `delete_prefix` removes the subtree on disk too |
 | `erase` | `delete(&StorageKey)` and `delete_prefix(prefix)` through `delete_stream`, both idempotent; the reference check and locking belong to the erasure job (R5e) |
 | `reconcile` | `list_originals(ProjectId)` streaming keys and ages, for the unreferenced-object part of the `upload_sweep` tick (R3a ports the tick, R1c adds this part) |
 
 Settings (new `OP_*` variables, read through `op_config::Env`): `OP_STORAGE_URL`,
-`OP_STORAGE_S3_ENDPOINT`, `OP_STORAGE_S3_ALLOW_HTTP`, `OP_STORAGE_CACHE_MAX_BYTES`, `OP_LANDING_ROOT`;
-source roots come from the existing `OP_SOURCE_ROOT`. Credentials come from the standard AWS
+`OP_STORAGE_S3_ENDPOINT`, `OP_STORAGE_S3_ALLOW_HTTP`, `OP_STORAGE_CACHE_MAX_BYTES` (default 1 GiB, 0 =
+no cache), `OP_STORAGE_CACHE_ROOT` (the cache directory: required with an S3 store and a cap above
+0, ignored otherwise, never inside the landing root), `OP_STORAGE_CACHE_MAX_AGE_S` (default 86,400,
+above 0), `OP_LANDING_ROOT`; source roots come from the existing `OP_SOURCE_ROOT`. The cache is
+shared by the server processes of one host and its layout mirrors the key (decision 19). The erase
+guarantee that follows: no process serves an erased file; this host's cached copy is removed at
+once; another host's copy is gone within `OP_STORAGE_CACHE_MAX_AGE_S`. Credentials come from the standard AWS
 environment variables `AmazonS3Builder::from_env` reads; none is logged.
 **Replaces.** Nothing yet: `src/clients/storage/` and `persist_uploaded_bytes` are deleted by R1c with
 their last importers.
@@ -417,12 +457,21 @@ cache eviction at the cap.
 **Owed.** An S3-compatible server on loopback in the sweep: `make_durable` through `put_multipart_opts`
 with the checksum; M18's rows. **Go bar.** Owed tests green; M18 recorded (its number is a budget
 line, not a pass or fail). **Deletes.** Nothing.
+**Built (both merges done).** `native/op_storage` as above, with a local same-filesystem move that
+names a part by `link(2)` so it never replaces another file, and `make_durable` that `fsync`s the
+file and the directories it touched. Owed to the sweep: the two tests in
+`native/op_storage/tests/store/s3_tests.rs`, marked `#[ignore]`, which need an S3-compatible server
+and an existing bucket that supports conditional put (the command is in the file's header: the
+variables `OP_TEST_S3_ENDPOINT` and `OP_TEST_S3_BUCKET`, then `cargo test -p op_storage --test store
+s3_ -- --ignored`), and M18's rows. `tests/test_env_surface.py` reads `native/**/*.rs`: a variable
+read through `op_config::Env` counts as read by code (decision 16), so a lane documents each new
+variable in `env.template` and adds no allowlist line.
 
 ### R1a. Server skeleton and the Rust front
 
 **Goal.** The Rust server answers on port 4603 and passes every path it does not yet own to the Python
 API, unchanged for the person.
-**Measurement.** Needs none for the front; the contract part needs M15 (D6). **Entry.** R0w merged;
+**Measurement.** Needs none (M15 is done: D6 is contract-first, decision 14). **Entry.** R0w merged;
 the contract part also R0c merged.
 **Crate and files.** `op_config` (adds `retired`: the refusal from `contracts/json/retired_env.json`,
 written by the new generator `scripts/codegen/retired_env_contract.py` from `src/config/retired_env.py`
@@ -438,17 +487,27 @@ today); `op_server` (`api` role). Compose: service `api` runs `op-server api`; t
 `api-py` on internal port 4613, not published; Prometheus scrapes `api-py` directly for the Python
 metrics. `docker/op-server/Dockerfile`: multi-stage, `-slim` base, non-root user, ExifTool and Perl
 installed. The CLI, `scripts/lib/*.sh` health probes, `tests/compose/` and `tests/installer/` follow
-the service change. Contract part (after D6): code-first: `op_contracts` and the merge in
-`export_api_contracts.py`; contract-first: the check of Rust types against the file. Either way the
-oasdiff hook, the normalised diff tool `scripts/codegen/contract_normalised_diff.py` and the
-intended-change file `scripts/codegen/contract_intended_changes.txt`.
+the service change. Contract part (decision 14: D6 is contract-first, so there is no `op_contracts` crate and no printer;
+the committed `contracts/openapi/*.json` stay the source of truth): the check of Rust wire types
+against the committed file, written once here for the first family and copied by every later one.
+The types are hand-written natural serde types; each family's Rust tests validate serialised
+samples and negative cases against the committed schema with the `jsonschema` crate (a
+dev-dependency; its licence, MIT-0, is added to `native/deny.toml` by the coordinator when the first
+lane needs it); the sweep's Schemathesis response-conformance run (R0d's `--check-schema`) covers
+every operation of the family against the Rust server. Each family's slice also stops
+`export_api_contracts.py` from writing that family once Rust owns it. Of the older tools the
+`oasdiff` hook and the intended-change file `scripts/codegen/contract_intended_changes.txt` remain
+(they judge a hand edit of a frozen file against the integration head); the normalised diff tool
+`contract_normalised_diff.py` is not built, because no second generated document exists to diff
+against. Open, settled before R12: how a new route enters the contract once FastAPI is gone (a hand
+edit of the OpenAPI file with `oasdiff` and the frontend type generation, or code-first revisited).
 **Replaces.** uvicorn as the process on port 4603 (FastAPI keeps serving behind the front).
 **Contract.** Unchanged.
 **Tests.** Router tests with `tower::ServiceExt::oneshot`, red first: method, body, headers and an
 event stream forwarded to a stub upstream; error shapes; load shedding at the limit; the
 retired-variable refusal (one test per variable from the generated file); the compose and installer
-tests for the renamed service; the normalised diff tool on fixtures (a title change passes, a
-`prefixItems` change fails).
+tests for the renamed service; the contract part's check on fixtures (a serialised sample that
+breaks the schema, a missing required field and an extra field each fail).
 **Selective checks.** cargo gates; `tests/compose/`, `tests/installer/`, the codegen tests touched.
 **Owed.** The whole live and browser tiers through the front (they prove the forwarder); forwarded p99
 at 8 clients against direct to `api-py`; the image's Trivy scan. **Go bar.** Tiers green; forwarded
@@ -486,6 +545,27 @@ exclusive refusal; the listener reconnects and the poll covers a lost wake-up.
 **Owed.** The `db` feature tests on the schema dump: the conformance scenarios; two runners racing for
 100 rows claim each once; lease expiry with a killed runner; `NOTIFY` to claim latency; the
 statement-prepare test. **Go bar.** Owed green. **Deletes.** Nothing.
+**Built (merged, and proven on PostgreSQL 18 on the merged tree).**
+`native/op_db/schema/head.sql` (from `scripts/codegen/dump_schema.py`, with a fixed `pg_dump` restrict
+key so the dump is reproducible) holds the schema at revision `0009_ingest_retry_at`; the harness
+loads it into a PostgreSQL 18 container (`testcontainers`, started by image tag, not by digest). The
+database-tier tests of `op_jobs` (`db_tier.rs`: nine; `db_proofs.rs`: seven) and the harness's own
+passed with `cargo test -p op_db -p op_jobs --features db -- --test-threads=1`; the proofs include
+2,000 jobs claimed exactly once, many runners, a cut connection, and cancel and pause. The claim
+orders by `queued_at` alone, the order of the partial index `ix_jobs_queued`: ordered by
+`(queued_at, id)` the planner chose a sort over a sequential scan (149 ms and about 100,000 pages per
+poll at 100,000 queued rows, and a bulk start gives every row the same `queued_at`); by `queued_at`
+alone it takes 3 ms and about 260 pages. Rows with equal `queued_at` are taken in no fixed order. TLS to PostgreSQL (decision 18): `OP_DB_SSLMODE` (`disable`, `allow` and
+`prefer` (`allow` behaves as `prefer`), `require`, `verify-ca`, `verify-full`; default `prefer`) with
+libpq's meanings, except that `prefer` does not retry in plain text after a failed handshake, and
+`OP_DB_SSLROOTCERT` (a PEM file that is then the only trust root; refused with `disable`, `allow` or
+`prefer`), through `tokio-postgres-rustls` 0.14.0 with ring; the pool, the `LISTEN` connection and
+the session lock were checked under `verify-full` against a container with `ssl=on`, and a wrong
+authority was refused. **Open finding, decided with R3a (18b):** a runner of one kind behind a large
+backlog of queued rows of other kinds reads about 80,500 pages per poll, and no index tried is used
+by the planner. B5-2 of plan 16 adds one more behaviour here: a handler may return "requeue", and
+the runner then inserts the follow-up row in the same transaction as the terminal state (16b
+section 3.3).
 
 ### R1e. Engine client
 
@@ -516,6 +596,16 @@ codec move.
 **Owed.** One run against the native engine on a card in the first GPU hold after N3: the four-way
 ingest rows' answers equal the Python client's on `coco2k` (parsed fields). **Go bar.** Equal answers.
 **Deletes.** The codec functions in `frame_engine_loadgen/src/client.rs` (moved, not copied).
+**Built (merged).** `native/op_engine_client` with the modules named above plus `retry` (the policy of
+`src/clients/frame_engine.py`: an overload is retried until the photo's 120 s deadline, an
+unavailable engine 3 times, nothing else; the engine's own failure text is never retried),
+`observer` and `settings` (`OP_FRAME_ENGINE_URL` and the pool sizes); the plan text is byte-equal
+to the Python builder on `contracts/json/frame_engine_plan_build_cases.json` (generator
+`scripts/codegen/frame_engine_plan_build_cases.py`), the answer vocabularies are closed, and the
+codec move is done (`frame_engine_loadgen/src/client.rs` imports `pack_bytes` and `unpack_bytes`
+from this crate, so the engine crate `frame_engine_loadgen` depends on a server crate: section 2.2).
+`frame_engine` is a dev-dependency only, for the in-process round trips. Owed to the sweep and the
+first GPU hold: the run against the native engine on a card (the go bar above).
 
 ### R1x. ExifTool pool and hashing
 
@@ -543,6 +633,21 @@ spread over the pool.
 **Selective checks.** cargo gates; the generators' drift.
 **Owed.** The pool against real ExifTool in the `op-server` image over `coco2k` and `setp200`: values
 equal to the Python reader on every file. **Go bar.** Equal values. **Deletes.** Nothing.
+**Built (merged).** `native/op_media`: `imohash` (bit-identical to Python on the goldens
+`tests/goldens/imohash.json` over 89 images), `capture` (equal to the Python mapping
+on the recorded tag sets and the location-policy cases of `contracts/json/capture_cases.json`),
+`exiftool` (the pool, 20 tests on a fake ExifTool; one run against the real binary passed on the
+host). Settings: `OP_EXIFTOOL_BIN`, `OP_EXIFTOOL_POOL_SIZE`, `OP_EXIFTOOL_MAX_WAITING`,
+`OP_EXIFTOOL_QUEUE_WAIT_S`, `OP_EXIFTOOL_READ_TIMEOUT_S`. The pool starts each child through
+`setpriv --pdeathsig TERM --` (util-linux, `native/op_media/src/exiftool/child.rs`), so the
+`op-server` image needs `util-linux` as well as ExifTool and Perl (R1a's Dockerfile). Deviations from the Python reader, accepted (decision 17): a path that could
+inject ExifTool arguments (empty, a line break or NUL byte, or a first character `-` or `#`) is
+refused (`ExifToolError::InvalidPath`); the Python client's `-echo4` is not used; an empty answer is
+its own error (`EmptyOutput`) and does not kill a healthy child; a capture time whose UTC falls
+outside years 1 to 9999 keeps the local time with UTC unset (the Python reader crashes the ingest
+there). Owed to the
+sweep: the pool against the real ExifTool in that image over `coco2k` and `setp200`, values equal to
+the Python reader on every file (the go bar above).
 
 ### R1u. Upload receiver up to the landing zone
 
@@ -573,3 +678,18 @@ disk guard refuses below its threshold; a client that disconnects leaves no land
 **Selective checks.** cargo gates.
 **Owed.** Nothing alone; R1c's sweep runs it through the stack. **Go bar.** Its tests green.
 **Deletes.** Nothing.
+**Built (merged, not mounted).** `native/op_ingest` (`upload/`, `admission.rs`, `disk_space.rs`,
+`settings.rs`) with in-process tests; its request-edge cases are generated from the Python route
+(`contracts/json/upload_validation_cases.json`, generator
+`scripts/codegen/upload_validation_cases.py`). The seam to the pipeline is the trait `PartSink`
+(`upload/sink.rs`): `accept` once per photo, in photo order, as soon as it has landed; `finish` once
+at the end of a request that passed every check, with the late form fields (`source`, `run_id`),
+returning one result per accepted photo; `abort` once instead of `finish` when the request is
+refused or its client is gone. The permit rule: the `WorkPermit` in each part is the photo's share
+of the admission bounds, and the sink drops it when its work on the photo is done, not when the
+request ends. Landing-file ownership: the receiver owns a photo's file until `accept` takes it;
+from then the sink owns and removes it, and the receiver still removes the files of an aborted
+request. R1c implements `PartSink` and mounts the route. Settings: `OP_UPLOAD_MAX_IMAGES_PER_REQUEST`,
+`OP_UPLOAD_MAX_BYTES_PER_REQUEST`, `OP_UPLOAD_ACCEPTED_EXTENSIONS`, `OP_UPLOAD_PHOTOS_IN_WORK`,
+`OP_UPLOAD_BYTES_IN_FLIGHT`, `OP_UPLOAD_ADMISSION_WAIT_S`, `OP_UPLOAD_BODY_IDLE_TIMEOUT_S`,
+`OP_UPLOAD_HANDOFF_QUEUE`, `OP_DISK_LOW_PCT`, `OP_DISK_CRITICAL_PCT`.

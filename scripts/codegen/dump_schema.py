@@ -41,6 +41,9 @@ DEFAULT_OUT = REPO_ROOT / 'native' / 'op_db' / 'schema' / 'head.sql'
 REVISION_PREFIX = '-- alembic revision: '
 DUMP_TIMEOUT_S = 300
 REVISION_TIMEOUT_S = 30
+# pg_dump 18 brackets a dump in `\restrict <key>` / `\unrestrict <key>` with a random key; a fixed
+# (alphanumeric) one keeps two dumps of one schema byte-equal, which `--check` compares.
+RESTRICT_KEY = 'opschemahead'
 
 
 class DumpError(RuntimeError):
@@ -62,7 +65,20 @@ def _run(argv: Sequence[str], timeout_s: int) -> str:
 
 
 def _exec(project: str, service: str, *command: str) -> list[str]:
-    return ['docker', 'compose', '-p', project, 'exec', '-T', service, *command]
+    # The statement timeout rides in PGOPTIONS: a `SET ...; SELECT ...` in one `-c` makes psql
+    # print the `SET` command tag as a second line of output.
+    return [
+        'docker',
+        'compose',
+        '-p',
+        project,
+        'exec',
+        '-T',
+        '-e',
+        'PGOPTIONS=-c statement_timeout=5s',
+        service,
+        *command,
+    ]
 
 
 def read_revision(
@@ -82,7 +98,7 @@ def read_revision(
             '-d',
             args.database,
             '-c',
-            "SET statement_timeout='5s'; SELECT version_num FROM alembic_version",
+            'SELECT version_num FROM alembic_version',
         ),
         REVISION_TIMEOUT_S,
     )
@@ -106,6 +122,7 @@ def render(run: Callable[[Sequence[str], int], str], args: argparse.Namespace) -
             '--schema-only',
             '--no-owner',
             '--no-privileges',
+            f'--restrict-key={RESTRICT_KEY}',
             '-U',
             args.user,
             '-d',
@@ -115,7 +132,7 @@ def render(run: Callable[[Sequence[str], int], str], args: argparse.Namespace) -
     )
     if 'CREATE TABLE public.jobs' not in dump:
         raise DumpError('the dump has no jobs table; is this the OpenProcessor database?')
-    return f'{REVISION_PREFIX}{revision}\n{dump}'
+    return f'{REVISION_PREFIX}{revision}\n{dump.rstrip()}\n'
 
 
 def parse_args(argv: Sequence[str] | None) -> argparse.Namespace:

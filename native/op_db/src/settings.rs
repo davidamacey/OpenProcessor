@@ -1,5 +1,8 @@
 //! The database settings, read from the same `OP_DB_*` variables as `src/config/database.py`.
 //!
+//! `OP_DB_SSLMODE` and `OP_DB_SSLROOTCERT` choose TLS and its trust roots; `tls.rs` holds the
+//! connector.
+//!
 //! The password is never an environment value: it is read from the file `OP_DB_APP_PASSWORD_FILE`
 //! names, only when a connection is built, and never stored in [`DbSettings`] or printed.
 
@@ -7,6 +10,9 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use op_config::{Env, EnvError};
+use tokio_postgres_rustls::MakeRustlsConnect;
+
+use crate::tls;
 
 /// Seconds a new connection may take to be established (`CONNECT_TIMEOUT_S` of the Python side).
 pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -42,14 +48,26 @@ pub enum SettingsError {
     },
 }
 
-/// How the client wants TLS. `require`, `verify-ca` and `verify-full` are refused: this build has
-/// no TLS connector for the database yet (see [`DbSettings::from_env`]).
+/// How the client wants TLS, with libpq's meaning
+/// (<https://www.postgresql.org/docs/18/libpq-ssl.html>). What each mode verifies is in
+/// `tls.rs`. `allow` is [`SslMode::Prefer`]: libpq tries plain text first and TLS only when
+/// the server refuses it, the driver cannot retry that way, and offering TLS first protects at
+/// least as much.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SslMode {
-    /// `disable` and `allow`: a plain connection.
-    Plain,
-    /// `prefer`: TLS is attempted when a connector exists; without one the connection is plain.
+    /// `disable`: plain text, never an `SSLRequest`.
+    Disable,
+    /// `prefer` and `allow`: TLS when the server offers it, plain text when it does not; the
+    /// certificate is not verified. A handshake that starts and then fails fails the connection
+    /// (libpq would retry in plain text; refusing is the stricter answer).
     Prefer,
+    /// `require`: TLS or no connection. The certificate chain is verified when
+    /// `OP_DB_SSLROOTCERT` is set (libpq does when a root file exists), the host name never.
+    Require,
+    /// `verify-ca`: TLS, the certificate chain is verified, the host name is not.
+    VerifyCa,
+    /// `verify-full`: TLS, the chain and the host name are verified.
+    VerifyFull,
 }
 
 /// What stands between the process and PostgreSQL.
@@ -79,6 +97,9 @@ pub struct DbSettings {
     pub app_password_file: PathBuf,
     /// `OP_DB_SSLMODE`.
     pub ssl_mode: SslMode,
+    /// `OP_DB_SSLROOTCERT`: a PEM file of CA certificates that is then the only trust root of
+    /// `require`, `verify-ca` and `verify-full`; unset, the platform's roots are trusted.
+    pub ssl_root_cert: Option<PathBuf>,
     /// `OP_DB_POOLER`.
     pub pooler: Pooler,
     /// `OP_DB_API_CONNECTIONS_TOTAL`: the connections the API may hold across all replicas.
@@ -131,47 +152,57 @@ fn at_least_one(key: &'static str, value: usize) -> Result<usize, SettingsError>
     }
 }
 
+fn tls_settings(env: &Env) -> Result<(SslMode, Option<PathBuf>), SettingsError> {
+    let text = env
+        .get("OP_DB_SSLMODE", "prefer".to_owned())?
+        .to_lowercase();
+    let ssl_mode = match text.as_str() {
+        "disable" => SslMode::Disable,
+        "allow" | "prefer" => SslMode::Prefer,
+        "require" => SslMode::Require,
+        "verify-ca" => SslMode::VerifyCa,
+        "verify-full" => SslMode::VerifyFull,
+        other => {
+            return Err(SettingsError::Invalid {
+                key: "OP_DB_SSLMODE",
+                reason: format!(
+                    "unknown value {other:?}; use one of disable, allow, prefer, require, \
+                     verify-ca, verify-full"
+                ),
+            });
+        }
+    };
+    let root: String = env.get(tls::ROOT_CERT_KEY, String::new())?;
+    let ssl_root_cert = (!root.is_empty()).then(|| PathBuf::from(root));
+    if ssl_root_cert.is_some() && matches!(ssl_mode, SslMode::Disable | SslMode::Prefer) {
+        return Err(SettingsError::Invalid {
+            key: tls::ROOT_CERT_KEY,
+            reason: format!(
+                "is used only with OP_DB_SSLMODE require, verify-ca or verify-full, not {text:?}"
+            ),
+        });
+    }
+    // Build the connector once so that an unreadable roots file is refused at startup.
+    tls::connector(ssl_mode, ssl_root_cert.as_deref())?;
+    Ok((ssl_mode, ssl_root_cert))
+}
+
 impl DbSettings {
     /// Read the settings; every default is the Python side's.
     ///
     /// # Errors
     ///
     /// A [`SettingsError`] naming the variable when a value does not parse or is not allowed.
-    /// `OP_DB_SSLMODE` of `require`, `verify-ca` or `verify-full` is refused: this build links no
-    /// TLS connector for tokio-postgres, so it cannot honour them, and a silent downgrade to a
-    /// plain connection would be wrong.
+    /// `OP_DB_SSLMODE` is one of libpq's six values; `OP_DB_SSLROOTCERT` is refused with `disable`
+    /// and `prefer`/`allow` (it would be silently unused, and a connection nobody verifies must
+    /// not look verified), when the file cannot be read, or when it holds no usable certificate.
     pub fn from_env(env: &Env) -> Result<Self, SettingsError> {
         let host_value = host("OP_DB_HOST", env.get("OP_DB_HOST", "postgres".to_owned())?)?;
         let direct_host = host(
             "OP_DB_DIRECT_HOST",
             env.get("OP_DB_DIRECT_HOST", host_value.clone())?,
         )?;
-        let ssl_mode = match env
-            .get("OP_DB_SSLMODE", "prefer".to_owned())?
-            .to_lowercase()
-            .as_str()
-        {
-            "disable" | "allow" => SslMode::Plain,
-            "prefer" => SslMode::Prefer,
-            mode @ ("require" | "verify-ca" | "verify-full") => {
-                return Err(SettingsError::Invalid {
-                    key: "OP_DB_SSLMODE",
-                    reason: format!(
-                        "{mode:?} needs TLS to the database, which this build does not have yet; \
-                         use disable, allow or prefer on a trusted network"
-                    ),
-                });
-            }
-            other => {
-                return Err(SettingsError::Invalid {
-                    key: "OP_DB_SSLMODE",
-                    reason: format!(
-                        "unknown value {other:?}; use one of disable, allow, prefer, require, \
-                         verify-ca, verify-full"
-                    ),
-                });
-            }
-        };
+        let (ssl_mode, ssl_root_cert) = tls_settings(env)?;
         let pooler = match env
             .get("OP_DB_POOLER", "none".to_owned())?
             .to_lowercase()
@@ -210,6 +241,7 @@ impl DbSettings {
                 "/run/secrets/op_pg/app_password".to_owned(),
             )?),
             ssl_mode,
+            ssl_root_cert,
             pooler,
             api_connections_total: at_least_one(
                 "OP_DB_API_CONNECTIONS_TOTAL",
@@ -246,6 +278,16 @@ impl DbSettings {
         Ok(trimmed.to_owned())
     }
 
+    /// The TLS connector for [`Self::pg_config`]'s connections: every connection this crate makes
+    /// is made with it, whatever the mode (`disable` never uses it).
+    ///
+    /// # Errors
+    ///
+    /// [`SettingsError::Invalid`] when the roots file or the platform's roots cannot be loaded.
+    pub fn tls_connector(&self) -> Result<MakeRustlsConnect, SettingsError> {
+        tls::connector(self.ssl_mode, self.ssl_root_cert.as_deref())
+    }
+
     /// The driver configuration of one connection.
     ///
     /// `direct` connects to `OP_DB_DIRECT_HOST` (advisory locks and `LISTEN` never meet a pooler).
@@ -276,8 +318,11 @@ impl DbSettings {
             .password(self.password()?)
             .application_name(application_name)
             .ssl_mode(match self.ssl_mode {
-                SslMode::Plain => tokio_postgres::config::SslMode::Disable,
+                SslMode::Disable => tokio_postgres::config::SslMode::Disable,
                 SslMode::Prefer => tokio_postgres::config::SslMode::Prefer,
+                SslMode::Require | SslMode::VerifyCa | SslMode::VerifyFull => {
+                    tokio_postgres::config::SslMode::Require
+                }
             })
             .connect_timeout(CONNECT_TIMEOUT)
             .keepalives(true)
@@ -333,6 +378,7 @@ mod tests {
             ("OP_DB_APP_USER", "1op"),
             ("OP_DB_POOLER", "pgcat"),
             ("OP_DB_SSLMODE", "sometimes"),
+            ("OP_DB_SSLMODE", "verify_full"),
             ("OP_API_REPLICAS", "0"),
             ("OP_DB_API_CONNECTIONS_TOTAL", "0"),
         ] {
@@ -342,13 +388,101 @@ mod tests {
     }
 
     #[test]
-    fn tls_modes_this_build_cannot_honour_are_refused_not_downgraded() {
-        for mode in ["require", "verify-ca", "verify-full"] {
-            let err = DbSettings::from_env(&env(&[("OP_DB_SSLMODE", mode)])).unwrap_err();
-            assert!(err.to_string().contains("OP_DB_SSLMODE"), "{err}");
+    fn every_ssl_mode_maps_to_what_libpq_means_by_it() {
+        for (text, mode) in [
+            ("disable", SslMode::Disable),
+            ("allow", SslMode::Prefer),
+            ("prefer", SslMode::Prefer),
+            ("PREFER", SslMode::Prefer),
+            ("require", SslMode::Require),
+            ("verify-ca", SslMode::VerifyCa),
+            ("verify-full", SslMode::VerifyFull),
+        ] {
+            let s = DbSettings::from_env(&env(&[("OP_DB_SSLMODE", text)])).unwrap();
+            assert_eq!(s.ssl_mode, mode, "{text}");
+            assert_eq!(s.ssl_root_cert, None);
         }
-        for mode in ["disable", "allow", "prefer", "PREFER"] {
-            DbSettings::from_env(&env(&[("OP_DB_SSLMODE", mode)])).unwrap();
+    }
+
+    #[test]
+    fn the_driver_mode_is_plain_prefer_or_require() {
+        use tokio_postgres::config::SslMode as Driver;
+        let path = password_file("sslmap", Some("pw"));
+        let file = path.to_str().unwrap();
+        for (text, driver) in [
+            ("disable", Driver::Disable),
+            ("allow", Driver::Prefer),
+            ("prefer", Driver::Prefer),
+            ("require", Driver::Require),
+            ("verify-ca", Driver::Require),
+            ("verify-full", Driver::Require),
+        ] {
+            let s = DbSettings::from_env(&env(&[
+                ("OP_DB_SSLMODE", text),
+                ("OP_DB_APP_PASSWORD_FILE", file),
+            ]))
+            .unwrap();
+            let config = s.pg_config("a", false, false).unwrap();
+            assert_eq!(config.get_ssl_mode(), driver, "{text}");
+        }
+    }
+
+    fn ca_file(name: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!("op_db_ca_{}_{name}", std::process::id()));
+        let ca = rcgen::generate_simple_self_signed(vec!["ca.test".to_owned()]).unwrap();
+        std::fs::write(&path, ca.cert.pem()).unwrap();
+        path
+    }
+
+    #[test]
+    fn a_roots_file_is_read_only_by_the_modes_that_verify() {
+        let ca = ca_file("modes");
+        let file = ca.to_str().unwrap();
+        for mode in ["require", "verify-ca", "verify-full"] {
+            let s = DbSettings::from_env(&env(&[
+                ("OP_DB_SSLMODE", mode),
+                ("OP_DB_SSLROOTCERT", file),
+            ]))
+            .unwrap();
+            assert_eq!(s.ssl_root_cert.as_deref(), Some(ca.as_path()), "{mode}");
+        }
+        for mode in ["disable", "allow", "prefer"] {
+            let err = DbSettings::from_env(&env(&[
+                ("OP_DB_SSLMODE", mode),
+                ("OP_DB_SSLROOTCERT", file),
+            ]))
+            .unwrap_err()
+            .to_string();
+            assert!(
+                err.contains("OP_DB_SSLROOTCERT") && err.contains(mode),
+                "{mode}: {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_roots_file_that_is_missing_or_holds_no_certificate_is_refused_naming_the_variable() {
+        let missing = password_file("rootgone", None);
+        let empty = password_file("rootempty", Some("no certificate here\n"));
+        let garbled = password_file(
+            "rootgarbled",
+            Some("-----BEGIN CERTIFICATE-----\n!!!\n-----END CERTIFICATE-----\n"),
+        );
+        for (path, why) in [
+            (&missing, "cannot be read"),
+            (&empty, "no usable CA certificate"),
+            (&garbled, "PEM"),
+        ] {
+            let err = DbSettings::from_env(&env(&[
+                ("OP_DB_SSLMODE", "verify-full"),
+                ("OP_DB_SSLROOTCERT", path.to_str().unwrap()),
+            ]))
+            .unwrap_err()
+            .to_string();
+            assert!(
+                err.contains("OP_DB_SSLROOTCERT") && err.contains(why),
+                "{why}: {err}"
+            );
         }
     }
 

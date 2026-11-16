@@ -7,6 +7,10 @@
 //! writes the owner and the lease, and inserts the `job_attempts` row, all in the one statement and
 //! the one transaction that also writes the `job.state` events.
 //!
+//! The rows are taken oldest first by `queued_at` alone, the order of the partial index `ix_jobs_queued`;
+//! a second sort key (`id`) made PostgreSQL sort the whole queue when a bulk start gave every row the
+//! same `queued_at`.
+//!
 //! A job that can never run is failed instead of claimed: its project was archived or deleted while
 //! it waited (`project_unavailable`), or its retry budget is spent (`attempts_exhausted`). A row with
 //! a cancel request is never claimed.
@@ -44,7 +48,7 @@ pub(crate) const CLAIM: Statement = Statement::new(
     "jobs.claim",
     "WITH picked AS (SELECT id FROM jobs WHERE status = 'queued' AND kind = ANY($1::text[]) \
            AND cancel_requested_at IS NULL AND retry_count < max_attempts \
-           ORDER BY queued_at NULLS LAST, id LIMIT $2 FOR UPDATE SKIP LOCKED), \
+           ORDER BY queued_at LIMIT $2 FOR UPDATE SKIP LOCKED), \
          claimed AS (UPDATE jobs j SET status = 'running', attempt = j.attempt + 1, \
            fencing_token = j.fencing_token + 1, owner = $3, heartbeat_at = now(), \
            lease_expires_at = now() + make_interval(secs => $4::double precision), \

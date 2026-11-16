@@ -172,6 +172,14 @@ repos:
         pass_filenames: false
         always_run: true
 
+      - id: check-parity-ledger
+        name: A deleted Python test has a row in the parity ledger
+        entry: python3 scripts/codegen/check_parity_ledger.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        # Reads the staged change; it exits at once when no test under tests/ was deleted.
+
       - id: check-vulture
         name: No new unused code (vulture)
         entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/codegen/check_vulture.py'
@@ -409,6 +417,16 @@ repos:
         language: system
         pass_filenames: false
         files: ^(src/config/(retired_env|env)\.py|contracts/json/retired_env\.json|scripts/codegen/(retired_env_contract|_contract_runtime)\.py)$
+
+      # The Rust upload receiver (native/op_ingest) is held to the Python route's statuses, bodies and
+      # messages by cases the generator takes from the route itself (it imports the app, so it runs
+      # under the project venv when one exists).
+      - id: upload-cases-drift
+        name: upload receiver cases for the Rust route are in sync with the Python route
+        entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/codegen/upload_validation_cases.py --check'
+        language: system
+        pass_filenames: false
+        files: ^(contracts/json/upload_validation_cases\.json|scripts/codegen/upload_validation_cases\.py|src/(routers/curation/(ingest|ingest_upload|_common_models)|core/(upload_limits|disk_space)|services/curation/upload_ingest|config/(curation|settings))\.py)$
 
   # Commit message linting (conventional commits). Scope stays optional.
   - repo: https://github.com/compilerla/conventional-pre-commit

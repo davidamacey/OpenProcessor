@@ -28,6 +28,34 @@ use crate::{Handlers, PgJobStore, lease};
 
 const OWNER_RESET: &str = "TRUNCATE jobs CASCADE";
 
+/// The project `alias` (its slug), created through the owner's connection when it is not there.
+pub(crate) async fn seed_project(owner: &RawClient, alias: &str) -> ProjectId {
+    let found = owner
+        .query_opt("SELECT id FROM projects WHERE slug = $1", &[&alias])
+        .await
+        .unwrap();
+    if let Some(row) = found {
+        return ProjectId::new(row.get::<_, Uuid>(0));
+    }
+    owner
+        .execute(
+            "INSERT INTO project_slugs (slug) VALUES ($1) ON CONFLICT DO NOTHING",
+            &[&alias],
+        )
+        .await
+        .unwrap();
+    let row = owner
+        .query_one(
+            "INSERT INTO projects (slug, display_name, status, index_prefix, storage_prefix, \
+             model_prefix, mlflow_experiment, created_by) VALUES ($1, $1, 'active', \
+             'op_' || $1, $1, 'm_' || $1, 'e_' || $1, 'test') RETURNING id",
+            &[&alias],
+        )
+        .await
+        .unwrap();
+    ProjectId::new(row.get::<_, Uuid>(0))
+}
+
 struct PgWorld {
     pool: Pool,
     store: PgJobStore,
@@ -53,32 +81,7 @@ impl PgWorld {
     }
 
     async fn project(&self, alias: &str) -> ProjectId {
-        let found = self
-            .owner
-            .query_opt("SELECT id FROM projects WHERE slug = $1", &[&alias])
-            .await
-            .unwrap();
-        if let Some(row) = found {
-            return ProjectId::new(row.get::<_, Uuid>(0));
-        }
-        self.owner
-            .execute(
-                "INSERT INTO project_slugs (slug) VALUES ($1) ON CONFLICT DO NOTHING",
-                &[&alias],
-            )
-            .await
-            .unwrap();
-        let row = self
-            .owner
-            .query_one(
-                "INSERT INTO projects (slug, display_name, status, index_prefix, storage_prefix, \
-                 model_prefix, mlflow_experiment) VALUES ($1, $1, 'active', 'op_' || $1, $1, \
-                 'm_' || $1, 'e_' || $1) RETURNING id",
-                &[&alias],
-            )
-            .await
-            .unwrap();
-        ProjectId::new(row.get::<_, Uuid>(0))
+        seed_project(&self.owner, alias).await
     }
 
     fn id(&self, alias: &str) -> JobId {
@@ -278,11 +281,11 @@ impl World for PgWorld {
     }
 }
 
-fn noop_job() -> NewJob {
+pub(crate) fn noop_job() -> NewJob {
     NewJob::for_kind("noop", None, json!({}), None, "test").unwrap()
 }
 
-async fn insert_noops(pool: &Pool, count: usize) {
+pub(crate) async fn insert_noops(pool: &Pool, count: usize) {
     for _ in 0..count {
         let mut tx = deployment_tx(pool, "test seed").await.unwrap();
         exclusive::insert_queued(&mut tx, &noop_job())
@@ -292,7 +295,7 @@ async fn insert_noops(pool: &Pool, count: usize) {
     }
 }
 
-fn claim_request(owner: &str, limit: usize) -> ClaimRequest {
+pub(crate) fn claim_request(owner: &str, limit: usize) -> ClaimRequest {
     ClaimRequest {
         kinds: vec!["noop".into()],
         limit,
@@ -497,7 +500,7 @@ async fn a_killed_runner_loses_its_job_after_the_lease_and_its_late_write_is_ref
     assert_eq!((row.get::<_, i64>(2), row.get::<_, i32>(3)), (2, 1));
 }
 
-fn claim_request_kind(kind: &str, owner: &str, limit: usize) -> ClaimRequest {
+pub(crate) fn claim_request_kind(kind: &str, owner: &str, limit: usize) -> ClaimRequest {
     ClaimRequest {
         kinds: vec![kind.into()],
         limit,
