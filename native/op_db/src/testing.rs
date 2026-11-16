@@ -94,6 +94,22 @@ fn newer_migrations(revision: &str) -> Vec<(String, String)> {
         .collect()
 }
 
+/// What the server said, not the bare `db error` that `tokio_postgres::Error` displays.
+fn describe(e: &tokio_postgres::Error) -> String {
+    e.as_db_error().map_or_else(
+        || e.to_string(),
+        |d| {
+            format!(
+                "{}: {} (detail: {:?}, where: {:?})",
+                d.code().code(),
+                d.message(),
+                d.detail(),
+                d.where_()
+            )
+        },
+    )
+}
+
 async fn connect(port: u16, user: &str, password: &str) -> RawClient {
     let mut config = tokio_postgres::Config::new();
     config
@@ -158,22 +174,29 @@ impl TestDatabase {
         superuser
             .batch_execute(&roles_sql())
             .await
-            .unwrap_or_else(|e| panic!("cannot create the roles: {e}"));
+            .unwrap_or_else(|e| panic!("cannot create the roles: {}", describe(&e)));
         let owner = connect(port, "op_owner", ROLE_PASSWORD).await;
         owner
             .batch_execute(&sql_of_dump(&dump))
             .await
-            .unwrap_or_else(|e| panic!("{} does not load: {e}", head.display()));
+            .unwrap_or_else(|e| panic!("{} does not load: {}", head.display(), describe(&e)));
+        // pg_dump ends its preamble with `set_config('search_path', '', false)`, a session setting.
+        owner
+            .batch_execute("RESET search_path")
+            .await
+            .unwrap_or_else(|e| panic!("cannot reset the search path: {}", describe(&e)));
         for (name, text) in newer_migrations(&revision) {
             owner
                 .batch_execute(&text)
                 .await
-                .unwrap_or_else(|e| panic!("migration {name} does not load: {e}"));
+                .unwrap_or_else(|e| panic!("migration {name} does not load: {}", describe(&e)));
         }
-        owner
-            .batch_execute(GRANTS_SQL)
-            .await
-            .unwrap_or_else(|e| panic!("cannot grant the application role its rights: {e}"));
+        owner.batch_execute(GRANTS_SQL).await.unwrap_or_else(|e| {
+            panic!(
+                "cannot grant the application role its rights: {}",
+                describe(&e)
+            )
+        });
 
         static NEXT: AtomicU32 = AtomicU32::new(0);
         let password_file = std::env::temp_dir().join(format!(
@@ -233,6 +256,12 @@ impl TestDatabase {
         connect(self.port, "op_owner", ROLE_PASSWORD).await
     }
 
+    /// A connection as the superuser: for what only it may do (closing other sessions with
+    /// `pg_terminate_backend`, switching a role's `LOGIN` off to hold an outage open).
+    pub async fn superuser(&self) -> RawClient {
+        connect(self.port, "postgres", SUPER_PASSWORD).await
+    }
+
     /// Prepare every statement against the loaded schema, as the application role.
     ///
     /// # Panics
@@ -242,7 +271,11 @@ impl TestDatabase {
         let client = connect(self.port, "op_app", ROLE_PASSWORD).await;
         for statement in statements {
             if let Err(e) = client.prepare(statement.sql).await {
-                panic!("statement `{}` does not prepare: {e}", statement.name);
+                panic!(
+                    "statement `{}` does not prepare: {}",
+                    statement.name,
+                    describe(&e)
+                );
             }
         }
     }
