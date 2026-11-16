@@ -8,9 +8,14 @@ and warps on the GPU and calls its uint8 builds. For a face reduced to 112 pixel
 averages ``n x n`` bilinear taps per output pixel (an area filter; the reference samples once and
 aliases), so its oracle there is the same warp at ``n x 112`` reduced by ``INTER_AREA``.
 
+The engine under test is either engine (the native one through ``OP_TEST_FRAME_ENGINE_GRPC``);
+the last test also asks the Python engine (``OP_TEST_PY_FRAME_ENGINE_GRPC``) the same photos under
+a tiled plan (coarse square and tiles) and holds the two answers to each other.
+
 Run (needs the engine, its model server with the uint8 builds, and the served FP32 models):
 
     OP_TEST_TRITON_GRPC=127.0.0.1:4731 OP_TEST_FRAME_ENGINE_GRPC=127.0.0.1:4744 \\
+    OP_TEST_PY_FRAME_ENGINE_GRPC=127.0.0.1:4745 \\
     OP_TEST_FACE_DETECTOR=<uint8 SCRFD> OP_TEST_FACE_RECOGNISER=<uint8 ArcFace> \\
     OP_TEST_FACE_IMAGES=<dir of public JPEGs with faces> \\
         .venv/bin/python -m pytest tests/gpu/test_gpu_faces.py -q --no-cov -m gpu
@@ -58,7 +63,7 @@ def clients() -> tuple[Any, Any]:
     )
 
 
-def _faces_plan() -> str:
+def _faces_plan(**extra: int) -> str:
     faces = {
         'detector': _env('OP_TEST_FACE_DETECTOR'),
         'input_size': 640,
@@ -67,16 +72,17 @@ def _faces_plan() -> str:
         'score_min': 0.5,
         'nms': 0.4,
         'max_faces': 128,
+        **extra,
     }
     return json.dumps({'version': 1, 'branches': ['faces', 'face_embed'], 'crops': 'none',
                        'faces': faces})  # fmt: skip
 
 
-def _engine(client: Any, data: bytes) -> dict[str, Any]:
+def _engine(client: Any, data: bytes, plan: str | None = None) -> dict[str, Any]:
     import tritonclient.grpc as grpcclient
 
     inputs = []
-    for name, value in ((wire.IMAGE, data), (wire.PLAN, _faces_plan().encode())):
+    for name, value in ((wire.IMAGE, data), (wire.PLAN, (plan or _faces_plan()).encode())):
         inp = grpcclient.InferInput(name, [1], 'BYTES')
         inp.set_data_from_numpy(np.array([value], dtype=np.object_))
         inputs.append(inp)
@@ -161,4 +167,36 @@ def test_faces_and_vectors_agree_with_the_reference(clients: tuple[Any, Any]) ->
             assert np.abs(eb[k] - b).max() <= BOX_ATOL_PX, f'{f.name}: {eb[k]} vs {b}'
             cosines.append(float(ev[k] @ v))
     assert faces >= 10, f'only {faces} reference faces in {len(files)} photos'
+    assert np.percentile(cosines, 1) >= COSINE_P01_MIN, sorted(cosines)[:5]
+
+
+#: Every pass kind: the whole frame, a coarse square and, above 1920 pixels, tiles.
+TILED = {'coarse': 320, 'tile_side': 1920, 'overlap': 64}
+
+
+def test_the_engine_answers_as_the_python_engine_with_tiles() -> None:
+    """The engine under test and the Python engine on the same photos under a tiled plan: the same
+    faces (count, boxes and landmarks within ``BOX_ATOL_PX``), the same overflow and embedded
+    flags, and vectors whose cosine first percentile clears ``COSINE_P01_MIN``. Catches a tile grid,
+    an edge drop, a per-axis scale, an NMS order or a warp that is not the Python engine's."""
+    import tritonclient.grpc as grpcclient
+
+    engine = grpcclient.InferenceServerClient(_env('OP_TEST_FRAME_ENGINE_GRPC'))
+    python = grpcclient.InferenceServerClient(_env('OP_TEST_PY_FRAME_ENGINE_GRPC'))
+    files = sorted(Path(_env('OP_TEST_FACE_IMAGES')).rglob('*.jpg'))[:N_IMAGES]
+    assert files, 'OP_TEST_FACE_IMAGES has no JPEG'
+    plan = _faces_plan(**TILED)
+    cosines: list[float] = []
+    for f in files:
+        data = f.read_bytes()
+        got, want = _engine(engine, data, plan), _engine(python, data, plan)
+        assert got[wire.FACE_BOXES].shape == want[wire.FACE_BOXES].shape, f.name
+        for name in (wire.FACE_BOXES, wire.FACE_LANDMARKS):
+            diff = np.abs(got[name] - want[name]).max(initial=0.0)
+            assert diff <= BOX_ATOL_PX, f'{f.name}: {name} {diff}'
+        assert got[wire.FACE_OVERFLOW].tolist() == want[wire.FACE_OVERFLOW].tolist(), f.name
+        assert got[wire.FACE_EMBEDDED].tolist() == want[wire.FACE_EMBEDDED].tolist(), f.name
+        rows = (got[wire.FACE_EMBEDDINGS] * want[wire.FACE_EMBEDDINGS]).sum(axis=1)
+        cosines.extend(float(c) for c in rows)
+    assert len(cosines) >= 10, f'only {len(cosines)} faces in {len(files)} photos'
     assert np.percentile(cosines, 1) >= COSINE_P01_MIN, sorted(cosines)[:5]
