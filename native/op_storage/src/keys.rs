@@ -8,6 +8,7 @@
 use std::fmt;
 
 use object_store::path::Path;
+use uuid::Uuid;
 
 use crate::error::KeyError;
 
@@ -201,10 +202,14 @@ impl StorageKey {
         Self::parse(&format!("source/{rel}"))
     }
 
-    /// A photo in the landing zone, named by its content: `landing/<project>/<sha256>`.
+    /// A photo in the landing zone: `landing/<project>/<sha256>.<upload_id>.<index>`. The name
+    /// carries the content and the part it came from, so no two parts ever share a landing file.
     #[must_use]
-    pub fn landing(project: ProjectId, hash: &ContentHash) -> Self {
-        Self::from_safe_parts(Root::Landing, [project.to_string(), hash.to_string()])
+    pub fn landing(project: ProjectId, hash: &ContentHash, upload_id: Uuid, index: u32) -> Self {
+        Self::from_safe_parts(
+            Root::Landing,
+            [project.to_string(), format!("{hash}.{upload_id}.{index}")],
+        )
     }
 
     fn from_safe_parts(root: Root, parts: impl IntoIterator<Item = String>) -> Self {
@@ -265,10 +270,12 @@ mod tests {
     }
 
     #[test]
-    fn the_landing_key_is_by_project_id_and_content() {
-        let key = StorageKey::landing(ProjectId(7), &hash());
-        assert_eq!(key.as_str(), format!("landing/7/{}", hash()));
+    fn the_landing_key_names_project_content_and_the_part() {
+        let upload = Uuid::from_u128(0xabc);
+        let key = StorageKey::landing(ProjectId(7), &hash(), upload, 3);
+        assert_eq!(key.as_str(), format!("landing/7/{}.{upload}.3", hash()));
         assert_eq!(key.root(), Root::Landing);
+        assert_eq!(StorageKey::parse(key.as_str()).unwrap(), key);
     }
 
     #[test]

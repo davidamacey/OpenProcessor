@@ -2,8 +2,11 @@
 //!
 //! A part is written to `<landing>/<upload_id>/<index>.part` while its SHA-256 is computed over the
 //! same bytes. Only [`PartWriter::finish`] makes it a [`LandedPart`], and only
-//! [`Landing::name_by_content`] gives it the content name `landing/<project>/<sha256>` with one
-//! rename inside the landing root, so a half written part is never visible under a content name.
+//! [`Landing::name_by_content`] gives it the name `landing/<project>/<sha256>.<upload_id>.<index>`,
+//! so a half written part is never visible under a name that carries its hash. The name carries
+//! the part it came from, so a landing file has exactly one owner: two parts with equal bytes get
+//! two files and [`Landing::remove`] only ever deletes its caller's file. Equal bytes meet only in
+//! the content-addressed object store and in the database's content claim.
 //! A part whose upload is dropped half way stays under its upload folder until the reconcile tick
 //! removes stale landing files.
 //!
@@ -37,6 +40,10 @@ pub struct Landing {
 /// A part that is completely written and flushed, and not yet named by its content.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LandedPart {
+    /// The upload the part belongs to.
+    pub upload_id: Uuid,
+    /// The part's index in that upload.
+    pub index: u32,
     /// Where the part is, inside the landing root.
     pub path: PathBuf,
     /// Its size in bytes.
@@ -45,7 +52,7 @@ pub struct LandedPart {
     pub sha256: ContentHash,
 }
 
-/// A photo under its content name, `landing/<project>/<sha256>`.
+/// A photo under its own landing name, `landing/<project>/<sha256>.<upload_id>.<index>`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LandedPhoto {
     /// The landing key.
@@ -79,6 +86,8 @@ impl Landing {
     #[must_use]
     pub fn begin_part(&self, upload_id: Uuid, index: u32) -> PartWriter {
         PartWriter {
+            upload_id,
+            index,
             path: self
                 .root
                 .join(upload_id.to_string())
@@ -88,30 +97,36 @@ impl Landing {
         }
     }
 
-    /// Give a finished part its content name with one rename inside the landing root. Two parts
-    /// of one project with the same bytes get the same path: the file is replaced by identical
-    /// bytes, so a caller that lands the same content twice must not [`Landing::remove`] it
-    /// while the other is still in use.
+    /// Give a finished part its name `<sha256>.<upload_id>.<index>` under its project, moving it
+    /// inside the landing root without replacing anything: the new name is made with `link(2)`,
+    /// which fails with `EEXIST` rather than overwrite (<https://man7.org/linux/man-pages/man2/link.2.html>),
+    /// and the part's own name is then removed, so the inode is kept. A name that is already taken
+    /// is an error, never a silent overwrite. `object_store`'s local `PutMode::Create` links
+    /// the same way, so the landing volume needs hard links like the store does.
     ///
     /// # Errors
     ///
     /// [`StorageError::OutsideRoot`] when the part is not inside the landing root,
-    /// [`StorageError::Io`] when the folder cannot be made or the rename fails.
+    /// [`StorageError::Io`] when the folder cannot be made, the name is taken or the move fails.
     pub async fn name_by_content(
         &self,
         project: ProjectId,
         part: LandedPart,
     ) -> Result<LandedPhoto, StorageError> {
         self.check_inside(&part.path)?;
-        let key = StorageKey::landing(project, &part.sha256);
+        let key = StorageKey::landing(project, &part.sha256, part.upload_id, part.index);
         let dir = self.root.join(project.to_string());
-        let path = dir.join(part.sha256.to_string());
+        let path = dir.join(format!("{}.{}.{}", part.sha256, part.upload_id, part.index));
         tokio::fs::create_dir_all(&dir)
             .await
             .map_err(|e| StorageError::io("create folder", &dir, e))?;
-        tokio::fs::rename(&part.path, &path)
+        tokio::fs::hard_link(&part.path, &path)
             .await
-            .map_err(|e| StorageError::io("rename", &part.path, e))?;
+            .map_err(|e| StorageError::io("link", &path, e))?;
+        if let Err(e) = tokio::fs::remove_file(&part.path).await {
+            let _ = tokio::fs::remove_file(&path).await;
+            return Err(StorageError::io("remove", &part.path, e));
+        }
         Ok(LandedPhoto {
             key,
             path,
@@ -120,7 +135,8 @@ impl Landing {
         })
     }
 
-    /// Delete a landed photo. A file that is already gone is not an error.
+    /// Delete a landed photo: its caller's own file, which no other task shares. A file that is
+    /// already gone is not an error.
     ///
     /// # Errors
     ///
@@ -180,6 +196,8 @@ impl Landing {
 /// is unusable: call [`PartWriter::discard`].
 #[derive(Debug)]
 pub struct PartWriter {
+    upload_id: Uuid,
+    index: u32,
     path: PathBuf,
     file: Option<BufWriter<File>>,
     hash: Sha256Stream,
@@ -213,6 +231,8 @@ impl PartWriter {
             .await
             .map_err(|e| StorageError::io("flush", &path, e))?;
         Ok(LandedPart {
+            upload_id: self.upload_id,
+            index: self.index,
             path,
             size: self.hash.len(),
             sha256: self.hash.finish(),

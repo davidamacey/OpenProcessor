@@ -343,8 +343,10 @@ free space is low.
    `RequestBodyTimeoutLayer` (deadline reset per frame). `DISK_GUARD`'s thresholds apply to the
    landing volume before a part is accepted.
 2. **Part complete.** The file is flushed; `imohash` is read from it (three 16 KiB reads); the file is
-   renamed inside the landing zone to its content name `landing/<project_id>/<sha256>` (same
-   filesystem, so a rename). The finished part goes to a spawned task through a bounded channel (its
+   moved inside the landing zone, without replacing anything, to its own name
+   `landing/<project_id>/<sha256>.<upload_id>.<index>` (same filesystem; the name carries the part,
+   so a landing file has one owner and equal bytes meet only in the object store and the content
+   claim). The finished part goes to a spawned task through a bounded channel (its
    capacity is the photos-in-work bound); the receiver reads the next part meanwhile.
 3. **Work, in parallel.** The content claim (duplicate check, record); the engine call (bytes read once
    from the landing file today; the landing key once plan 17 adds reading by key, section 12);
