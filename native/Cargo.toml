@@ -29,25 +29,39 @@ publish = false
 # Exact pins (plan 17 section 3); features are chosen by each member. One entry per line,
 # alphabetical, so the two crates' additions merge cleanly.
 [workspace.dependencies]
+axum = { version = "=0.8.9", default-features = false }
 bytes = "=1.12.1"
+clap = { version = "=4.6.7", default-features = false }
 crossbeam-channel = "=0.5.17"
 crc32fast = "=1.5.5"
 cudarc = { version = "=0.19.10", default-features = false, features = ["std", "driver", "nvrtc", "cuda-13020", "dynamic-loading"] }
+http = "=1.5.0"
+http-body-util = "=0.1.5"
+hyper = { version = "=1.12.0", default-features = false }
+hyper-util = { version = "=0.1.21", default-features = false }
 image = { version = "=0.25.10", default-features = false }
 libloading = "=0.9.1"
+libtest-mimic = "=0.8.2"
 nvml-wrapper = "=0.13.0"
 png = "=0.18.1"
+prometheus-client = "=0.26.0"
 prost = "=0.14.6"
 protox = "=0.10.0"
+regex = "=1.13.1"
 # The one place serde_json's features are set: `float_roundtrip` on (floats parse correctly rounded,
 # as Python's json.loads does), `arbitrary_precision` and `preserve_order` never (they change how
 # other crates' wire models read); `op_config/tests/workspace_features.rs` guards both.
 serde_json = { version = "=1.0.154", features = ["float_roundtrip"] }
 tiff = "=0.11.3"
 tokio = { version = "=1.54.1", default-features = false }
+tokio-stream = "=0.1.19"
 tonic = { version = "=0.14.9", default-features = false }
 tonic-prost = "=0.14.9"
 tonic-prost-build = "=0.14.9"
+tower = { version = "=0.5.3", default-features = false }
+tower-http = { version = "=0.7.1", default-features = false }
+tracing = "=0.1.44"
+tracing-subscriber = { version = "=0.3.23", default-features = false }
 turbojpeg = { version = "=1.5.1", default-features = false }
 turbojpeg-sys = { version = "=1.2.0", default-features = false }
 

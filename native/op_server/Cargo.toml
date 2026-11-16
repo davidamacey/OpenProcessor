@@ -12,5 +12,21 @@ publish.workspace = true
 name = "op-server"
 path = "src/main.rs"
 
+[dependencies]
+clap = { workspace = true, features = ["derive", "error-context", "help", "std", "usage"] }
+op_api = { path = "../op_api" }
+op_config = { path = "../op_config" }
+tokio = { workspace = true, features = ["net", "rt-multi-thread"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["fmt", "json", "std"] }
+
+[dev-dependencies]
+libtest-mimic = { workspace = true }
+serde_json = { workspace = true }
+
+[[test]]
+name = "process"
+harness = false
+
 [lints]
 workspace = true
