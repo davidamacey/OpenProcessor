@@ -30,6 +30,7 @@ pub mod calls;
 pub mod clock;
 pub mod cut;
 pub mod device;
+pub mod late;
 mod rounds;
 
 use std::collections::BTreeMap;
@@ -38,7 +39,7 @@ use std::time::{Duration, Instant};
 
 use gpu_frame::CancelToken;
 
-use self::calls::PhotoCalls;
+use self::calls::{CallId, PhotoCalls};
 use self::clock::{BUDGET, DECODE, QUEUE, StageClock};
 use self::cut::Cut;
 use self::device::{DecodeJob, Decoded, Device, Write};
@@ -188,15 +189,10 @@ impl Answers {
         name: &'static str,
         state: BranchState,
     ) {
-        let dependents: &[&'static str] = if name == "detect" {
-            &["embed_crops"]
-        } else {
-            &[]
-        };
         for (branch, st) in std::iter::once((name, state)).chain(
-            dependents
-                .iter()
-                .map(|d| (*d, BranchState::Error(DEPENDENCY_FAILED))),
+            late::dependents(name)
+                .into_iter()
+                .map(|d| (d, BranchState::Error(DEPENDENCY_FAILED))),
         ) {
             if self.stopped.contains(&branch) {
                 continue;
@@ -388,7 +384,8 @@ where
         };
 
         let colour = self.colour_of(&header).await?;
-        let round1 = work.stage_round1(plan, &runs).await?;
+        let late = late::late(plan, &BUILT);
+        let round1 = work.stage_round1(plan, &runs, &late).await?;
         let table = match &colour {
             Colour::Convert(t) => Some(Arc::clone(t)),
             Colour::Srgb | Colour::Ignored => None,
@@ -402,20 +399,31 @@ where
                 outcome: colour.label().into(),
             })
             .inc();
-        let sent = work.send_round1(round1.calls, inputs);
-        let call_of = |owner: &str| sent.iter().find(|(o, _)| *o == owner).map(|(_, id)| *id);
+        let mut sent = work.send_round1(round1.calls, inputs);
+        let call_of = |sent: &[(&str, CallId)], owner: &str| {
+            sent.iter().find(|(o, _)| *o == owner).map(|(_, id)| *id)
+        };
 
         // settle: the detector's rectangles, or the stored boxes in their place
         let cut = match &photo.boxes {
             Some(boxes) => Some(Cut::stored(boxes, size)?),
             None => work
-                .settle_detect(call_of("detect"), round1.canvas.as_ref())
+                .settle_detect(call_of(&sent, "detect"), round1.canvas.as_ref())
                 .await?
                 .map(|d| Cut::detected(&d, size)),
         };
         if cut.is_none() && runs.embed_crops {
             work.stop_crops_without_boxes();
         }
+        // late round 1: the conditional branches whose classes were found, before round 2
+        let classes = cut.as_ref().and_then(|c| c.classes.as_deref());
+        let running = work.check_conditions(plan, &late, classes);
+        let late_calls = round1
+            .late
+            .into_iter()
+            .filter(|l| running.contains(&l.call.0))
+            .collect();
+        sent.extend(work.late_round1(&frame, late_calls).await?);
         let round2 = match &cut {
             Some(cut) => work.round2(plan, &runs, cut, &frame).await?,
             None => Round2 {
@@ -428,7 +436,7 @@ where
         // the photo's own hold on the frame ends here; jobs still running keep it to their wait
         drop(frame);
 
-        work.finish(&runs, cut.is_some(), round2, call_of("embed_frame"))
+        work.finish(&runs, cut.is_some(), round2, call_of(&sent, "embed_frame"))
             .await?;
         Ok(PhotoAnswer {
             status: "ok".into(),

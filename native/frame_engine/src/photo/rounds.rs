@@ -15,6 +15,7 @@ use super::clock::{
 };
 use super::cut::Cut;
 use super::device::{Device, LaunchJob, Write};
+use super::late::LateCall;
 use super::{Answers, Runs, Stop, engine, job_failed, settle_job_time};
 use crate::branches::crops::CropJpeg;
 use crate::branches::{InputSpec, detect, embed};
@@ -31,6 +32,8 @@ pub(super) struct Round1<'p, I> {
     pub writes: Vec<Write<I>>,
     pub calls: Vec<Round1Call<'p>>,
     pub canvas: Option<detect::Canvas>,
+    /// The round-1 calls of late branches, sent after the conditions are checked.
+    pub late: Vec<LateCall<'p>>,
 }
 
 /// What round 2 produced: the crop calls in flight, the detections picked for them, the blur
@@ -60,53 +63,62 @@ impl<D: Device> Work<'_, D> {
         &mut self,
         plan: &'p EnginePlan,
         runs: &Runs,
+        late: &[&'static str],
     ) -> Result<Round1<'p, D::Input>, Stop> {
         let (w, h) = self.size;
         let mut round = Round1 {
             writes: Vec::new(),
             calls: Vec::new(),
             canvas: None,
+            late: Vec::new(),
         };
+        let mut entries = Vec::new();
         if let (true, Some(spec)) = (runs.detect, &plan.detector) {
             let c = detect::canvas(spec, w, h).map_err(engine)?;
-            let slice = self
-                .calls
-                .stage(self.clock, c.input.bytes(), LETTERBOX)
-                .await?;
-            round.writes.push(Write {
-                input: slice,
+            entries.push(LateCall {
+                call: (
+                    "detect",
+                    DETECT,
+                    spec.model.as_str(),
+                    c.input.clone(),
+                    detect::OUTPUT,
+                ),
                 fill: Some(c.fill),
                 resamples: vec![c.resample],
                 stage: LETTERBOX,
             });
-            round.calls.push((
-                "detect",
-                DETECT,
-                spec.model.as_str(),
-                c.input.clone(),
-                detect::OUTPUT,
-            ));
             round.canvas = Some(c);
         }
         if let (true, Some(spec)) = (runs.embed_frame, &plan.embed) {
             let (input, r) = embed::frame_square(spec, w, h).map_err(engine)?;
-            let slice = self
-                .calls
-                .stage(self.clock, input.bytes(), EMBED_FRAME)
-                .await?;
-            round.writes.push(Write {
-                input: slice,
+            entries.push(LateCall {
+                call: (
+                    "embed_frame",
+                    EMBED_PE,
+                    spec.model.as_str(),
+                    input,
+                    embed::OUTPUT,
+                ),
                 fill: None,
                 resamples: vec![r],
                 stage: EMBED_FRAME,
             });
-            round.calls.push((
-                "embed_frame",
-                EMBED_PE,
-                spec.model.as_str(),
-                input,
-                embed::OUTPUT,
-            ));
+        }
+        for entry in entries {
+            // a late branch's inputs wait for its condition (`late.rs`)
+            if late.contains(&entry.call.0) {
+                round.late.push(entry);
+                continue;
+            }
+            let bytes = entry.call.3.bytes();
+            let slice = self.calls.stage(self.clock, bytes, entry.stage).await?;
+            round.writes.push(Write {
+                input: slice,
+                fill: entry.fill,
+                resamples: entry.resamples,
+                stage: entry.stage,
+            });
+            round.calls.push(entry.call);
         }
         Ok(round)
     }

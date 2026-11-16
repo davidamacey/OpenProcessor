@@ -122,6 +122,15 @@ impl Fake {
         })
     }
 
+    /// A decoded frame with no budget behind it, counted like a decoded one.
+    pub fn frame(&self) -> Arc<Frame> {
+        self.frames.fetch_add(1, Ordering::SeqCst);
+        Arc::new(Frame {
+            alive: Arc::clone(&self.frames),
+            _hold: Box::new(()),
+        })
+    }
+
     pub fn set(&self, f: impl FnOnce(&mut Script)) {
         f(&mut self.script.lock().expect("script"));
     }
