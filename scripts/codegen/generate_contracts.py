@@ -8,7 +8,8 @@ Runs, in order:
   ``contracts/ts/itemWire.ts``, ``contracts/ts/classSources.ts``,
   ``contracts/openapi/curation.json``, ``contracts/openapi/core.json``,
   ``contracts/json/frame_engine_v1.json``,
-  ``contracts/json/frame_engine_plan_cases.json``
+  ``contracts/json/frame_engine_plan_cases.json``,
+  ``contracts/json/frame_engine_source_cases.json``
 
 Usage:
 

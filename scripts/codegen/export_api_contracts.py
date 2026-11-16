@@ -15,7 +15,8 @@ Writes, under ``contracts/`` (or ``--out-dir``):
 * ``openapi/core.json`` — the other operations of ``app.openapi()`` (every path
   outside that prefix, ``/v1`` twins included) plus only the components they
   reference; the baseline the native core routes are held to.
-* ``json/frame_engine_v1.json`` and ``json/frame_engine_plan_cases.json`` — the frame engine's
+* ``json/frame_engine_v1.json``, ``json/frame_engine_plan_cases.json`` and
+  ``json/frame_engine_source_cases.json`` — the frame engine's
   protocol version 1 and every plan text with the answer of ``parse_plan``
   (``frame_engine_contract.py``); the native engine is held to both.
 * ``json/job_kinds.json`` — the job kind table, the job state machine and the lease timing the
@@ -69,6 +70,7 @@ CORE_OPENAPI_JSON = Path('openapi/core.json')
 KEYMAP_ACTIONS_JSON = Path('json/keymap_actions.json')
 FRAME_ENGINE_JSON = Path('json/frame_engine_v1.json')
 FRAME_ENGINE_CASES_JSON = Path('json/frame_engine_plan_cases.json')
+FRAME_ENGINE_SOURCE_CASES_JSON = Path('json/frame_engine_source_cases.json')
 JOB_KINDS_JSON = Path('json/job_kinds.json')
 
 
@@ -435,6 +437,7 @@ GENERATORS: dict[str, Callable[[], dict[Path, str]]] = {
     'frame-engine': lambda: {
         FRAME_ENGINE_JSON: frame_engine_contract.render_protocol_json(),
         FRAME_ENGINE_CASES_JSON: frame_engine_contract.render_plan_cases_json(),
+        FRAME_ENGINE_SOURCE_CASES_JSON: frame_engine_contract.render_source_cases_json(),
     },
     'job-kinds': lambda: {JOB_KINDS_JSON: job_kinds_contract.render_job_kinds_json()},
 }

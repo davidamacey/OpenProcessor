@@ -3035,6 +3035,7 @@
     "src/domain/decode_route.py",
     "src/clients/frame_engine.py",
     "frame_engine/front.py",
-    "scripts/codegen/frame_engine_plan_cases.py"
+    "scripts/codegen/frame_engine_plan_cases.py",
+    "scripts/codegen/frame_engine_source_cases.py"
   ]
 }
