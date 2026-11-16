@@ -67,8 +67,9 @@ against the previous output.
    million photos.
 6. **The engine we own** (T1, raised from a measured track to a build): a Rust engine behind
    protocol version 1 with decode, GPU kernels and TensorRT execution in one process and no model
-   server between prep and inference, built on the owner's existing Rust serving code. It
-   replaces the Python engine when it holds parity and wins the headline row; the protocol, the
+   server between prep and inference, built on the owner's existing Rust serving code
+   (superseded by plan 17 sections 3 and 4.1: the model server stays; the engine has its own
+   crates under `native/`). It replaces the Python engine when it holds parity and wins the headline row; the protocol, the
    parity harness and the branch designs carry over unchanged.
 
 Open questions this order has to answer early, by measurement: what share of a photo's time is
@@ -406,7 +407,7 @@ spike before code.
 
 | ID | Track | Question | Decision rule |
 |---|---|---|---|
-| T1 | Rust engine behind protocol version 1 | Does an engine with decode, prep and inference in one process beat the chosen arm? | Compared per plan (detect-only, faces-only, full) on throughput by image size, p50 and p99, GPU busy, memory, image size, start time and parity. A port is recommended only where it wins by more than the spread on a plan that matters; a full port is an owner decision. |
+| T1 (superseded by plan 17: model server stays, own crates under `native/`) | Rust engine behind protocol version 1 | Does an engine with decode, prep and inference in one process beat the chosen arm? | Compared per plan (detect-only, faces-only, full) on throughput by image size, p50 and p99, GPU busy, memory, image size, start time and parity. A port is recommended only where it wins by more than the spread on a plan that matters; a full port is an owner decision. |
 | T2 | Slim Triton | What do a TensorRT-only image and the removal of PyTorch save? | Built with Triton's `compose.py` ([compose](https://github.com/triton-inference-server/server/blob/main/docs/customization_guide/compose.md)); adopted if every model loads and the parity tier passes. |
 | T3 | Encoder cost | Can the crop encoder cost less at equal cluster quality (INT8 mixed precision; a smaller encoder for crops)? | Section 8 gates; cluster quality on labelled vehicle and fine-grained sets, real photos only. |
 | T4 | VLM serving | Which vLLM settings and which model label mini-clusters fastest at equal accuracy? | Label agreement at least 0.97 against today's answers on 1,000 public crops; crops per second. |
