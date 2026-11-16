@@ -19,6 +19,7 @@ futures-util = { version = "=0.3.34", default-features = false, features = ["all
 gpu_frame = { path = "../gpu_frame" }
 nvml-wrapper = { workspace = true }
 op_engine_client = { path = "../op_engine_client" }
+op_local_file = { path = "../op_local_file" }
 prost = { workspace = true }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { workspace = true }

@@ -980,6 +980,7 @@ dependencies = [
  "lcms2",
  "memchr",
  "nalgebra",
+ "op_local_file",
  "png",
  "procfs",
  "prometheus-client",
@@ -989,6 +990,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "tempfile",
  "tiff",
  "tokio",
  "tokio-stream",
@@ -1012,6 +1014,7 @@ dependencies = [
  "gpu_frame",
  "nvml-wrapper",
  "op_engine_client",
+ "op_local_file",
  "prost",
  "protox",
  "serde",
@@ -2321,11 +2324,13 @@ dependencies = [
  "fastrand",
  "frame_engine",
  "op_config",
+ "op_local_file",
  "prost",
  "protox",
  "serde",
  "serde_json",
  "sha2",
+ "tempfile",
  "tokio",
  "tokio-stream",
  "tonic",
@@ -2372,11 +2377,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "op_media"
+name = "op_local_file"
 version = "0.1.0"
 dependencies = [
  "murmur3",
+ "tempfile",
+]
+
+[[package]]
+name = "op_media"
+version = "0.1.0"
+dependencies = [
  "op_config",
+ "op_local_file",
  "serde_json",
  "tempfile",
  "tokio",
@@ -2396,6 +2409,7 @@ dependencies = [
  "futures-util",
  "object_store",
  "op_config",
+ "op_local_file",
  "proptest",
  "reqwest",
  "rustix",

@@ -1,0 +1,18 @@
+[package]
+name = "op_local_file"
+description = "What the server and the frame engine agree on about a photo file on local disk: the key rule, the canonical-prefix resolve under a root, and the content claim (size and imohash)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+murmur3 = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

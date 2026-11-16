@@ -11,6 +11,7 @@ members = [
     "op_engine_client",
     "op_ingest",
     "op_jobs",
+    "op_local_file",
     "op_media",
     "op_server",
     "op_storage",
