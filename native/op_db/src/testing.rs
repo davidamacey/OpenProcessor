@@ -256,6 +256,12 @@ impl TestDatabase {
         connect(self.port, "op_owner", ROLE_PASSWORD).await
     }
 
+    /// A connection as the superuser: for what only it may do (closing other sessions with
+    /// `pg_terminate_backend`, switching a role's `LOGIN` off to hold an outage open).
+    pub async fn superuser(&self) -> RawClient {
+        connect(self.port, "postgres", SUPER_PASSWORD).await
+    }
+
     /// Prepare every statement against the loaded schema, as the application role.
     ///
     /// # Panics

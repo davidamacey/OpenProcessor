@@ -29,6 +29,9 @@ mod watch;
 mod conformance;
 #[cfg(test)]
 #[cfg(feature = "db")]
+mod db_proofs;
+#[cfg(test)]
+#[cfg(feature = "db")]
 mod db_tier;
 #[cfg(test)]
 mod fake;
