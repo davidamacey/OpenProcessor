@@ -40,6 +40,7 @@ hyper = { version = "=1.12.0", default-features = false }
 hyper-util = { version = "=0.1.21", default-features = false }
 image = { version = "=0.25.10", default-features = false }
 libloading = "=0.9.1"
+murmur3 = "=0.5.2"
 nvml-wrapper = "=0.13.0"
 object_store = { version = "=0.14.2", default-features = false }
 png = "=0.18.1"
@@ -58,8 +59,10 @@ tokio = { version = "=1.54.1", default-features = false }
 tonic = { version = "=0.14.9", default-features = false }
 tonic-prost = "=0.14.9"
 tonic-prost-build = "=0.14.9"
+tracing = "=0.1.44"
 turbojpeg = { version = "=1.5.1", default-features = false }
 turbojpeg-sys = { version = "=1.2.0", default-features = false }
+unicode-general-category = "=1.1.0"
 uuid = { version = "=1.29.2", default-features = false }
 
 # Lint levels for every member (`[lints] workspace = true`); the clippy names are in
