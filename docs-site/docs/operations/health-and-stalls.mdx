@@ -120,7 +120,7 @@ An item's region status is derived from its boxes (see
 - Any path can end in `detection_failed` (for example
   `reason=image_unavailable` when the worker can't read the source image;
   check that the detection worker mounts the same source directory as
-  `api`).
+  `api-py`).
 - A human can set a box to `false_positive`, which keeps it as a hard
   negative for training.
 
@@ -161,11 +161,11 @@ curl -s -X POST "$API/curation/projects/$P/reprocess" -H 'content-type: applicat
   `POST .../crops/{crop_id}/reprocess` are the one-target forms.
 
 `scripts/curation/requeue_regions.py` is a client of this route (dry run by
-default). It ships in the `api` image, so run it there (add `-p <project>` to
+default). It ships in the Python API image (service `api-py`), so run it there (add `-p <project>` to
 `docker compose` if your stack has a custom compose project name):
 
 ```bash
-R="docker compose exec -T api python scripts/curation/requeue_regions.py"
+R="docker compose exec -T api-py python scripts/curation/requeue_regions.py"
 $R --project $P --status detection_failed
 $R --project $P --status detection_failed --apply
 # filters: --reason, --detector, --missing-provenance, --to pending_verification

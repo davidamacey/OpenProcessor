@@ -10,10 +10,10 @@
 #     -f docker/test/compose.s3.yml --profile s3test rm -sfv minio
 #   docker volume rm <name>_s3test_data
 #
-# S3TEST_PORT (default 5392) and S3TEST_BUCKET (default op-s3-test, the api
+# S3TEST_PORT (default 5392) and S3TEST_BUCKET (default op-s3-test, the api-py
 # allow-list) are read by compose only. Teardown steps: the ingest sources guide.
 #
-# * MinIO joins the stack network (triton_net), so the api reaches it as
+# * MinIO joins the stack network (triton_net), so api-py (the Python API, which reads S3) reaches it as
 #   http://minio:9000 and MinIO reaches the webhook at http://api:8000.
 # * The only published port is on 127.0.0.1.
 # * Credentials are NOT in this file: both services read
@@ -21,7 +21,7 @@
 #   MINIO_ROOT_PASSWORD, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY). Create it
 #   with random values before the first start.
 # * The data lives in the named volume s3test_data (removed by the line above).
-# * Only the api container learns the endpoint and the allow-list, as
+# * Only the api-py container learns the endpoint and the allow-list, as
 #   OP_S3_* literals here (no .env edit). The allow-list is the one test bucket.
 # =============================================================================
 services:
@@ -43,7 +43,7 @@ services:
       timeout: 3s
       retries: 12
 
-  api:
+  api-py:
     env_file:
       - artifacts_local/minio-live.env
     environment:

@@ -1,5 +1,6 @@
-"""`openprocessor status` lists the frame engine, Postgres, Valkey and the control plane's Celery
-services (none has a host port, so their line comes from compose's health)."""
+"""`openprocessor status` lists the Python API behind the front, the frame engine, Postgres, Valkey
+and the control plane's Celery services (none has a host port, so their line comes from compose's
+health)."""
 
 from __future__ import annotations
 
@@ -17,7 +18,7 @@ if TYPE_CHECKING:
 
 inst = test_cli_project.inst
 
-ALL = 'opensearch\ntriton-server\nframe-engine\napi\npostgres\nvalkey\ndb-migrate\njobs-worker\nperiodic-worker\nopen-vocab-worker\njobs-beat\n'
+ALL = 'opensearch\ntriton-server\nframe-engine\napi\napi-py\npostgres\nvalkey\ndb-migrate\njobs-worker\nperiodic-worker\nopen-vocab-worker\njobs-beat\n'
 
 
 def _plain(text: str) -> str:
@@ -28,6 +29,7 @@ def test_status_reports_each_new_service(shimmed: Shimmed, inst: Path) -> None:
     shimmed.flag('services', ALL)
     shimmed.flag(
         'compose_ps',
+        'api-py|running|healthy|0\n'
         'frame-engine|running|healthy|0\n'
         'postgres|running|healthy|0\n'
         'valkey|running|healthy|0\n'
@@ -39,6 +41,7 @@ def test_status_reports_each_new_service(shimmed: Shimmed, inst: Path) -> None:
     done = cli(shimmed, inst, 'status')
     assert done.returncode == 0, done.stderr
     out = _plain(done.stdout)
+    assert re.search(r'api-py:\s+healthy', out)
     assert re.search(r'frame-engine:\s+healthy', out)
     assert re.search(r'postgres:\s+healthy', out)
     assert re.search(r'valkey:\s+healthy', out)

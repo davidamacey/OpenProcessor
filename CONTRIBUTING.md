@@ -115,13 +115,13 @@ mkdir -p test_results
 ```
 
 **Docker-only path.** The production `api` image installs only `requirements.txt` (no `pytest`), so a bare
-`docker compose exec api pytest ...` fails. To run the suite in the container, install the test deps first
+`docker compose exec api-py pytest ...` fails. To run the suite in the container, install the test deps first
 (not persisted across a recreate):
 
 ```bash
 docker compose -p openprocessor cp requirements-test.txt api:/tmp/requirements-test.txt
-docker compose -p openprocessor exec api pip install -r /tmp/requirements-test.txt
-docker compose -p openprocessor exec api python -m pytest tests/ -q --ignore=tests/live
+docker compose -p openprocessor exec api-py pip install -r /tmp/requirements-test.txt
+docker compose -p openprocessor exec api-py python -m pytest tests/ -q --ignore=tests/live
 ```
 
 ## The local gate
@@ -198,7 +198,10 @@ Two production Dockerfiles at the repo root: `Dockerfile` (the FastAPI `api`
 image, with `export` and `evaluator` targets; base `python:3.13-slim-trixie`) and
 `Dockerfile.triton` (Triton; base `nvcr.io/nvidia/tritonserver:26.10-py3`). The `api` image
 stays on Python 3.13 because `faiss-gpu-cu12` requires Python below 3.14; the trainer image is on 3.14.
-`scripts/docker-build-push.sh` builds, scans and pushes them:
+`scripts/docker-build-push.sh` builds, scans and pushes these two. It does not know the other
+release images (the Rust front `openprocessor-server`, `export`, `evaluator`, the segmenter, the
+frame engine, the trainer, Cropwright): a release is cut with `scripts/release/build_and_publish.sh`,
+which builds all of them.
 
 ```bash
 ./scripts/docker-build-push.sh all      # build and push to Docker Hub (also: api, triton)

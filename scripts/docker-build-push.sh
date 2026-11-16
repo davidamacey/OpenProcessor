@@ -308,7 +308,9 @@ show_usage() {
     cat << EOF
 Usage: $0 [OPTION]
 
-Build and push Docker images to Docker Hub for OpenProcessor
+Build and push the API (Python) and Triton images to Docker Hub for OpenProcessor.
+The other release images, the Rust front (openprocessor-server) included, are built by
+scripts/release/build_and_publish.sh; a release is cut with that script, not this one.
 
 Options:
     api         Build and push only API image (api/FastAPI)

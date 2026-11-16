@@ -1,9 +1,10 @@
-//! Reading `OP_*` settings from the environment into typed structs through one helper, and the
-//! refusal of retired variables. Only the helper ([`Env`]) exists so far; the crate also holds the
-//! one function that installs the process's TLS crypto provider ([`install_tls_provider`]),
-//! because it is the one dependency every crate that speaks TLS already has.
+//! Reading `OP_*` settings from the environment into typed structs through one helper ([`Env`]),
+//! and the refusal of retired variables ([`retired`]). The crate also holds the one function that
+//! installs the process's TLS crypto provider ([`install_tls_provider`]), because it is the one
+//! dependency every crate that speaks TLS already has.
 #![forbid(unsafe_code)]
 
+pub mod retired;
 mod tls;
 
 pub use tls::install_tls_provider;
@@ -116,6 +117,12 @@ impl Env {
             Some(raw) => parse(key, raw),
             None => Err(EnvError::Missing { key: key.into() }),
         }
+    }
+
+    /// Whether `key` exists in the snapshot, even when blank or not valid Unicode.
+    #[must_use]
+    pub fn is_set(&self, key: &str) -> bool {
+        self.vars.contains_key(key)
     }
 
     fn raw(&self, key: &str) -> Result<Option<&str>, EnvError> {

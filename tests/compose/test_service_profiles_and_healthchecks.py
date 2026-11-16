@@ -190,7 +190,7 @@ def test_api_waits_for_a_healthy_opensearch() -> None:
     """Found live: the API boots, fails to create the core kNN indexes
     because OpenSearch is not up yet, and never retries them -- so the first
     /ingest creates them with dynamic mappings."""
-    depends_on = _services()['api'].get('depends_on')
+    depends_on = _services()['api-py'].get('depends_on')
     assert isinstance(depends_on, dict), depends_on
     assert (depends_on.get('opensearch') or {}).get('condition') == 'service_healthy'
 
@@ -199,6 +199,7 @@ def test_api_has_a_healthcheck() -> None:
     """A `service_healthy` dependency on api is meaningless without one."""
     services = _services()
     assert services['api'].get('healthcheck'), 'api needs a healthcheck'
+    assert services['api-py'].get('healthcheck'), 'api-py needs a healthcheck'
 
 
 def test_curation_mlflow_has_a_healthcheck() -> None:

@@ -65,13 +65,13 @@ at port 4603.
 | `src/domain/` | Pure rules and field vocabularies shared by clients and services (`region_boxes`, `history`, `embedding_state`, `item_text`, `audit_math`, `ingest_class_sources`); imports only `config` and `utils` |
 | `src/schemas/` | Wire models (`curation/`, `bakeoff/`, `embed`, `ingest`, ...); routers and services import them, they import neither |
 | `native/` | Rust workspace of the native frame engine: `gpu_frame` (general GPU parts), `frame_engine` (product part); `frame_engine/kernels/*.cu` is the one copy of the CUDA kernel sources, read by this Rust engine and by the Python `frame_engine/`. Gates: `cargo fmt/clippy/test/deny` hooks scoped to `^native/`, CI job `native` |
-| `native/` server crates | The backend in Rust (plan `docs/design/v070_rebuild/18a_backend_rust_port_slices.md`), stubs until their slice lands: `op_config` (the `Env` settings helper), `op_local_file` (the key rule, the canonical-prefix resolve and the content claim the server and the frame engine share), `op_storage`, `op_media`, `op_engine_client`, `op_db`, `op_jobs`, `op_ingest`, `op_api`, `op_server` (binary `op-server`), `op_upload_loadgen`. Allowed dependencies between crates: `CRATE_DEPENDENCIES` in `scripts/codegen/check_layering.py` (`--crates`) |
+| `native/` server crates | The backend in Rust (plan `docs/design/v070_rebuild/18a_backend_rust_port_slices.md`), built slice by slice: `op_config` (the `Env` settings helper, `retired`: the refusal of the variables in `contracts/json/retired_env.json`, the TLS provider install), `op_local_file` (the key rule, the canonical-prefix resolve and the content claim the server and the frame engine share), `op_storage` (the object store over local disk and S3, the derived-file cache), `op_media` (the ExifTool reader), `op_engine_client` (calls to the frame engine and the model server), `op_db` (the PostgreSQL client), `op_jobs` (the job runner on PostgreSQL), `op_ingest` (the upload receiver, not mounted in the front yet), `op_api` (the front on the API port: owned routes in `routes.rs`, `middleware`, `cors`, `errors`, `health`, `metrics`, `forward` to the Python API, `serve`), `op_server` (binary `op-server`: roles `api` and `health`), `op_upload_loadgen`. Allowed dependencies between crates: `CRATE_DEPENDENCIES` in `scripts/codegen/check_layering.py` (`--crates`) |
 | `scripts/curation/` | Worker entry points, ingest walkers, import client, backfills, `bakeoff/` |
 | `scripts/` | `setup.sh`, `lib/` (shell libraries, VLM catalog reader), `release/`, `codegen/`, `datasets/`, `docs/`, `examples/`, `bench/`, `research/`, `validation/` |
 | `openprocessor`, `setup-openprocessor.sh` | Management CLI and the one-line installer (both bash) |
 | `models/` | Triton model repository (`config.pbtxt` per model; `.plan` engines are built, not committed) |
 | `export/` | Model export scripts, see [export/README.md](export/README.md) |
-| `docker/` | Side-car images: `segmenter/`, `trainer/`, `test/` (live harness), `hardened/`, plus `bench/` and `buildlib/`; `Dockerfile.triton` at the root builds the Triton image; the root `Dockerfile` holds the `api`, `export` and `evaluator` targets |
+| `docker/` | Side-car images: `segmenter/`, `trainer/`, `test/` (live harness), `hardened/`, plus `bench/` and `buildlib/`; `Dockerfile.triton` at the root builds the Triton image; the root `Dockerfile` holds the `api`, `export` and `evaluator` targets; `op-server/` builds the Rust server image (service `api`) |
 | `contracts/` | Generated OpenAPI and TypeScript/JSON wire contracts. Do not hand-edit |
 | `examples/` | Region profiles, prompt packs, bake-off profiles, the VLM catalog (`vlm/catalog.tsv`) |
 | `tests/` | Offline pytest suite; `tests/live/` needs the live harness |
@@ -92,7 +92,8 @@ connection pooler for PostgreSQL.
 |---|---|---|---|
 | `triton-server` | none | 4600 HTTP, 4601 gRPC, 4602 metrics | TensorRT models, explicit model control |
 | `frame-engine` | none | 4613 metrics (gRPC internal) | Decodes each photo once on the GPU and runs every model branch from that frame, calling the Triton models as a client (`frame_engine/`); must share Triton's card (`FRAME_ENGINE_GPU_ID`); ingest answers 503 `engine_unavailable` while it is down |
-| `api` | none | 4603 | FastAPI, all routes |
+| `api` | none | 4603 | The Rust front (`op-server api`): answers the routes ported to Rust (`/live`, its own metrics on `/metrics/front`; `/metrics` is the Python API's and is forwarded), forwards every other request, bodies and event streams included, to `api-py` |
+| `api-py` | none | | The Python FastAPI app behind the front, port 4613 inside the compose network, not published; `docker compose exec`, the CLI's Python commands and the dev source mounts address this service |
 | `opensearch` | none | 4607 | k-NN store for items, images and vectors (control data is in PostgreSQL) |
 | `postgres`, `valkey` | none | | PostgreSQL 18 (projects, classes, configs, jobs, events, spaces, partitions) and the Valkey 9 task broker; internal only, passwords from `secrets/` |
 | `db-migrate` | none | | One-shot: Alembic upgrade and OpenSearch index migration; `api` and every worker wait for it |
@@ -121,8 +122,8 @@ act on a live stack with the default name.
 make up                  # core stack (Triton + API + OpenSearch)
 make up-monitoring       # core plus monitoring
 make down
-make logs-api            # also logs-triton, logs-opensearch
-make restart-api         # route/endpoint changes need an API restart
+make logs-api            # the front and the Python API; also logs-triton, logs-opensearch
+make restart-api         # restarts api-py; route/endpoint changes need it
 make status              # health of all services
 make curation-up         # start the curation workers
 make test                # pytest suite
@@ -144,8 +145,8 @@ and `setup` need a checkout. Benchmarks run through the `make bench-*`
 targets and Triton's `perf_analyzer`. Details:
 [INSTALLATION.md](INSTALLATION.md#the-openprocessor-cli).
 
-Python source is mounted into `api` in a checkout, so most edits are live;
-restart `api` after route changes. Rebuild images only when a Dockerfile or
+Python source is mounted into `api-py` in a checkout, so most edits are live;
+restart `api-py` after route changes. Rebuild images only when a Dockerfile or
 `requirements.txt` changes.
 
 ## Core API shape

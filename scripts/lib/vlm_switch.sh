@@ -121,7 +121,7 @@ _vlm_own_mib() {
 # (the database is reachable there; the host holds no credentials): lock-check, pause-create,
 # pause-remove (scripts/db/vlm_pause.py)
 _vlm_in_api() {
-    dc exec -T api python -m scripts.db.vlm_pause "$1"
+    dc exec -T api-py python -m scripts.db.vlm_pause "$1"
 }
 
 # _vlm_hf_ok REPO -- a gated entry needs an HF_TOKEN that can see the repo
@@ -173,7 +173,7 @@ _vlm_recreate_targets() {
     echo vlm
     [[ "$clients" == 1 ]] || return 0
     running="$(dc ps --services --status running 2>/dev/null || true)"
-    for svc in api curation-detection-worker curation-vlm-worker curation-auto-label-worker curation-assist-loop-worker; do
+    for svc in api-py curation-detection-worker curation-vlm-worker curation-auto-label-worker curation-assist-loop-worker; do
         [[ $'\n'"$running"$'\n' == *$'\n'"$svc"$'\n'* ]] && echo "$svc"
     done
     return 0
@@ -337,7 +337,7 @@ _vlm_switch() {
     local created_pause=0 paused
     paused="$(_vlm_in_api pause-create 2>/dev/null || true)"
     if [[ "$paused" != created && "$paused" != present ]]; then
-        log_error "cannot reach the api container to pause the workers; is the stack running?"
+        log_error "cannot reach the api-py container to pause the workers; is the stack running?"
         return 1
     fi
     [[ "$paused" == created ]] && created_pause=1

@@ -417,6 +417,16 @@ repos:
         pass_filenames: false
         files: ^(native/op_engine_client/tests/goldens/answers\.json|frame_engine/front\.py|src/clients/frame_engine\.py|src/domain/frame_engine_wire\.py|scripts/codegen/(frame_engine_answer_goldens|frame_engine_goldens)\.py)$
 
+      # The list of environment variables every role of the Rust server refuses to start with
+      # (native/op_config, module retired). It re-runs itself under the project interpreter like
+      # the hook above, so a bare python3 starts it.
+      - id: retired-env-contract-drift
+        name: Retired environment variable contract is in sync
+        entry: python3 scripts/codegen/retired_env_contract.py --check
+        language: system
+        pass_filenames: false
+        files: ^(src/config/(retired_env|env)\.py|contracts/json/retired_env\.json|scripts/codegen/(retired_env_contract|_contract_runtime)\.py)$
+
       # The Rust upload receiver (native/op_ingest) is held to the Python route's statuses, bodies and
       # messages by cases the generator takes from the route itself (it imports the app, so it runs
       # under the project venv when one exists).
@@ -426,6 +436,13 @@ repos:
         language: system
         pass_filenames: false
         files: ^(contracts/json/upload_validation_cases\.json|scripts/codegen/upload_validation_cases\.py|src/(routers/curation/(ingest|ingest_upload|_common_models)|core/(upload_limits|disk_space)|services/curation/upload_ingest|config/(curation|settings))\.py)$
+
+      - id: cors-cases-drift
+        name: CORS cases for the Rust front are in sync with Starlette's CORSMiddleware
+        entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/codegen/cors_cases.py --check'
+        language: system
+        pass_filenames: false
+        files: ^(contracts/json/cors_cases\.json|scripts/codegen/cors_cases\.py|src/core/cors\.py|requirements(-test)?\.txt)$
 
   # Commit message linting (conventional commits). Scope stays optional.
   - repo: https://github.com/compilerla/conventional-pre-commit

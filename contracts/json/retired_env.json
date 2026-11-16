@@ -1,0 +1,286 @@
+{
+  "generated_by": "scripts/codegen/retired_env_contract.py",
+  "retired": [
+    {
+      "name": "EXPORT_TASK_DIR",
+      "was": "removed: model-export tasks are job rows; read them at GET /models/export/{task_id}"
+    },
+    {
+      "name": "GEMMA_CROP_CACHE_DIR",
+      "was": "renamed to OP_CROP_CACHE_DIR"
+    },
+    {
+      "name": "GEMMA_HTTPX_KEEPALIVE",
+      "was": "renamed to OP_VLM_HTTPX_KEEPALIVE"
+    },
+    {
+      "name": "GEMMA_HTTPX_MAX_CONNECTIONS",
+      "was": "renamed to OP_VLM_HTTPX_MAX_CONNECTIONS"
+    },
+    {
+      "name": "GEMMA_IMAGES_PER_CALL",
+      "was": "renamed to OP_VLM_OPEN_IMAGES_PER_CALL"
+    },
+    {
+      "name": "GEMMA_URL",
+      "was": "renamed to OP_VLM_URL"
+    },
+    {
+      "name": "GPU_IMAGE_PREP_MODEL",
+      "was": "removed: the GPU decode is the frame-engine service; the API finds it at OP_FRAME_ENGINE_URL"
+    },
+    {
+      "name": "OPENWEBUI_API_KEY",
+      "was": "renamed to OP_VLM_API_KEY"
+    },
+    {
+      "name": "OPENWEBUI_BASE_URL",
+      "was": "renamed to OP_VLM_URL"
+    },
+    {
+      "name": "OPENWEBUI_MODEL",
+      "was": "renamed to OP_VLM_MODEL"
+    },
+    {
+      "name": "OP_ASSIST_JOBS_DIR",
+      "was": "removed: the run is a jobs row; there is no job directory"
+    },
+    {
+      "name": "OP_ASSIST_LOOP_JOBS_DIR",
+      "was": "removed: the run is a jobs row; there is no job directory"
+    },
+    {
+      "name": "OP_AUTO_LABEL_STATE_DIR",
+      "was": "removed: auto-label state is the jobs table; a clustering run is a partition row"
+    },
+    {
+      "name": "OP_BACKBONE_EMBEDDING_DIM",
+      "was": "removed: the backbone_embedding field no longer exists"
+    },
+    {
+      "name": "OP_BAKEOFF_JOBS_DIR",
+      "was": "removed: bake-offs are bakeoff jobs; there is no job directory"
+    },
+    {
+      "name": "OP_BAKEOFF_PROFILE_TARGET_CLASS_ID",
+      "was": "removed: bake-offs score every class; restrict with OP_BAKEOFF_PROFILE_CLASS_FILTER"
+    },
+    {
+      "name": "OP_BAKEOFF_PROFILE_TARGET_CLASS_NAME",
+      "was": "removed: bake-offs score every class; restrict with OP_BAKEOFF_PROFILE_CLASS_FILTER"
+    },
+    {
+      "name": "OP_BULK_INGEST_DIR",
+      "was": "removed: runs are bulk_ingest_run jobs and queues are PostgreSQL rows"
+    },
+    {
+      "name": "OP_CLUSTER_REFRESH_AUTO_LABEL",
+      "was": "removed: the periodic refresh starts a cluster_run, never the auto-label job"
+    },
+    {
+      "name": "OP_CLUSTER_REFRESH_GROWTH_THRESHOLD",
+      "was": "removed: the growth rule is the cluster profile refresh.growth_threshold"
+    },
+    {
+      "name": "OP_CLUSTER_REFRESH_MAX_DEFERRAL_S",
+      "was": "removed: the deferral bound is the cluster profile refresh.max_deferral_s"
+    },
+    {
+      "name": "OP_CLUSTER_REFRESH_RETRY_BACKOFF_S",
+      "was": "removed: the retry backoff is the cluster profile refresh.retry_backoff_s"
+    },
+    {
+      "name": "OP_COMBINE_JOBS_DIR",
+      "was": "removed: a combine is a row in jobs; there is no job directory"
+    },
+    {
+      "name": "OP_CROP_DUP_THRESHOLD",
+      "was": "removed: the bucketed near-duplicate scorer is gone; near duplicates are run-scoped groups configured by a near_dup_profile"
+    },
+    {
+      "name": "OP_DATASET_IMPORTS_DIR",
+      "was": "removed: an import is rows in PostgreSQL, not a directory"
+    },
+    {
+      "name": "OP_EVENT_BUS",
+      "was": "removed: events are rows in PostgreSQL; there is no file bus"
+    },
+    {
+      "name": "OP_EVENT_LOG_MAX_BYTES",
+      "was": "removed: events are rows in PostgreSQL, trimmed after 24 hours"
+    },
+    {
+      "name": "OP_GLOBAL_CONFIGS_INDEX",
+      "was": "removed: the endpoint registry is stored in PostgreSQL"
+    },
+    {
+      "name": "OP_GPU_ARBITER_TRAINER_CONTAINER",
+      "was": "removed: the API finds the trainer as a consumer of the gpu_train queue"
+    },
+    {
+      "name": "OP_INGEST_GPU_MIN_MEGAPIXELS",
+      "was": "removed: the frame engine decodes every image; OP_FRAME_ENGINE_MIN_MEGAPIXELS sets where its nvJPEG route starts"
+    },
+    {
+      "name": "OP_INGEST_PRIMARY_FEATURE_OUTPUT",
+      "was": "removed: the profile feature_output field was removed"
+    },
+    {
+      "name": "OP_INGEST_SECONDARY_FEATURE_OUTPUT",
+      "was": "removed: the profile feature_output field was removed"
+    },
+    {
+      "name": "OP_IVF_RETRAIN_CHECK_S",
+      "was": "removed: the IVF retrain is a cluster_run started by the periodic cluster refresh"
+    },
+    {
+      "name": "OP_IVF_RETRAIN_GROWTH",
+      "was": "removed: the retrain rule is the cluster profile refresh.growth_threshold"
+    },
+    {
+      "name": "OP_IVF_RETRAIN_MIN_INTERVAL_S",
+      "was": "removed: the retrain interval is the cluster profile refresh.retry_backoff_s"
+    },
+    {
+      "name": "OP_MAX_REFINE_MEMBERS",
+      "was": "removed: the per-cluster AHC refine is gone; the assist loop splits a node itself"
+    },
+    {
+      "name": "OP_OPEN_VOCAB_STALE_S",
+      "was": "removed: one exclusive open_vocab_drain job takes every pending image"
+    },
+    {
+      "name": "OP_PAUSE_SENTINEL",
+      "was": "removed: the VLM workers read the GPU claim from the database"
+    },
+    {
+      "name": "OP_PAUSE_SENTINEL_TTL_S",
+      "was": "removed: a stale `vlm use` pause expires inside the database record"
+    },
+    {
+      "name": "OP_PE_TEXT_BACKEND",
+      "was": "removed: the PE text tower runs on Triton only; OP_PE_TEXT_TRITON_MODEL names the model"
+    },
+    {
+      "name": "OP_PE_TEXT_ONNX_PATH",
+      "was": "removed: the PE text tower runs on Triton only; there is no in-process ONNX backend"
+    },
+    {
+      "name": "OP_PE_TEXT_ORT_THREADS",
+      "was": "removed: the in-process ONNX Runtime session is gone; Triton sizes its own instances"
+    },
+    {
+      "name": "OP_PROBE_JOBS_DIR",
+      "was": "removed: the run is a jobs row; there is no job directory"
+    },
+    {
+      "name": "OP_PROJECTS_INDEX",
+      "was": "removed: projects are rows in PostgreSQL; there is no projects index"
+    },
+    {
+      "name": "OP_REGION_DETECTION_FEATURE_OUTPUT",
+      "was": "removed: the profile feature_output field was removed"
+    },
+    {
+      "name": "OP_REGION_DETECTION_SAM_TEXT_PROMPT",
+      "was": "renamed to OP_REGION_DETECTION_SEGMENTER_TEXT_PROMPT"
+    },
+    {
+      "name": "OP_REGION_DRAIN_STATE_DIR",
+      "was": "removed: the drain streak is the region_drain row of project_state"
+    },
+    {
+      "name": "OP_REPROCESS_JOBS_DIR",
+      "was": "removed: the run is a jobs row; there is no job directory"
+    },
+    {
+      "name": "OP_RESIDUAL_EMBEDDING_FIELD",
+      "was": "removed: the vector field is the primary space of the project embedding registry"
+    },
+    {
+      "name": "OP_SCORES_STATE_DIR",
+      "was": "removed: the run is a jobs row; there is no job directory"
+    },
+    {
+      "name": "OP_SELECT_JOBS_DIR",
+      "was": "removed: the run is a jobs row; there is no job directory"
+    },
+    {
+      "name": "OP_TRAIN_JOBS_DIR",
+      "was": "removed: a training run is a training_runs row; there is no job directory"
+    },
+    {
+      "name": "OP_TRITON_URL",
+      "was": "renamed to TRITON_URL"
+    },
+    {
+      "name": "OP_VIZ_JOBS_DIR",
+      "was": "removed: the run is a jobs row; there is no job directory"
+    },
+    {
+      "name": "OP_WORKER_PAUSE_SENTINEL",
+      "was": "removed: the detection worker reads the GPU claim from the database"
+    },
+    {
+      "name": "SAM3_HTTPX_KEEPALIVE",
+      "was": "renamed to OP_SEGMENTER_HTTPX_KEEPALIVE"
+    },
+    {
+      "name": "SAM3_HTTPX_MAX_CONNECTIONS",
+      "was": "renamed to OP_SEGMENTER_HTTPX_MAX_CONNECTIONS"
+    },
+    {
+      "name": "SAM3_SKIP_GEMMA_VERIFY_SCORE",
+      "was": "renamed to OP_SEGMENTER_SKIP_VERIFY_SCORE"
+    },
+    {
+      "name": "SAM3_SKIP_VLM_VERIFY_SCORE",
+      "was": "renamed to OP_SEGMENTER_SKIP_VERIFY_SCORE"
+    },
+    {
+      "name": "SAM3_URL",
+      "was": "renamed to OP_SEGMENTER_URL"
+    },
+    {
+      "name": "SAM3_URLS",
+      "was": "renamed to OP_SEGMENTER_URLS"
+    },
+    {
+      "name": "SAM_WORKER_GEMMA_CONCURRENCY",
+      "was": "renamed to OP_REGION_WORKER_VLM_CONCURRENCY"
+    },
+    {
+      "name": "SAM_WORKER_GEMMA_VISIBLE_CONCURRENCY",
+      "was": "renamed to OP_REGION_WORKER_VLM_VISIBLE_CONCURRENCY"
+    },
+    {
+      "name": "SAM_WORKER_METRICS_PORT",
+      "was": "renamed to OP_REGION_WORKER_METRICS_PORT"
+    },
+    {
+      "name": "SAM_WORKER_VLM_CONCURRENCY",
+      "was": "renamed to OP_REGION_WORKER_VLM_CONCURRENCY"
+    },
+    {
+      "name": "SAM_WORKER_VLM_VISIBLE_CONCURRENCY",
+      "was": "renamed to OP_REGION_WORKER_VLM_VISIBLE_CONCURRENCY"
+    },
+    {
+      "name": "VLM_HTTPX_KEEPALIVE",
+      "was": "renamed to OP_VLM_HTTPX_KEEPALIVE"
+    },
+    {
+      "name": "VLM_HTTPX_MAX_CONNECTIONS",
+      "was": "renamed to OP_VLM_HTTPX_MAX_CONNECTIONS"
+    },
+    {
+      "name": "VLM_IMAGES_PER_CALL",
+      "was": "renamed to OP_VLM_OPEN_IMAGES_PER_CALL"
+    },
+    {
+      "name": "VLM_URL",
+      "was": "renamed to OP_VLM_URL"
+    }
+  ],
+  "source": "src/config/retired_env.py"
+}

@@ -212,7 +212,7 @@ its last caller (R12 at the latest).
 | The project guard on OpenSearch (`src/services/projects/guard*.py`) | never ported for curation (the record replaces the indexes); R2b deletes it with the core indexes, or, if D4 keeps OpenSearch, a guarded client type built only from a bound project | deleted with OpenSearch, or its 24 test files' cases as Rust tests |
 | The lock rule (a machine writer never overwrites a human or import decision) | claims are inserted only through `op_store::human` (module privacy); machine writers live in other modules and crates with no claim function; the fold decides state | the oracle cases (R0x), the fold property test, the lock-rule cases of 15a section 6 |
 | Unbound or unknown project | 404 as today, from the project extractor | differential cases |
-| Retired environment variables | start refusal from a generated `contracts/json/retired_env.json` (source `src/config/retired_env.py` until R12) in every role | one test per variable: the role exits non-zero naming it |
+| Retired environment variables | start refusal from a generated `contracts/json/retired_env.json` (source `src/config/retired_env.py` until R12) in every serving role (`health` is a probe of a running front and reads only the listen address) | one test per variable: the role exits non-zero naming it |
 | The vector DDL role `op_vector` only in the embedding-space job | a separate pool used only by that job | the database test of plan 15c's S1a-ii design, in Rust |
 | Upload and batch limits (`src/core/upload_limits.py`, `CurationConfig`) | the same served limits; tower-http body limit at the byte cap; the idle-body limit | request-edge tests |
 | Low disk (`DISK_GUARD`) | the same thresholds on the landing volume (R1u) and on the core ingest upload routes (R2b) | request-edge tests |
@@ -480,7 +480,7 @@ with a drift hook); `op_api`: `routes.rs` (one line per family, alphabetical), `
 (tower-http request id on `x-request-id`, CORS from the settings `src/core/cors.py` reads, the HTTP
 metric names and labels of `src/app/factory.py`, tracing JSON logs with `request_id`, a concurrency
 limit with load shedding at today's 512 answering 503, keep-alive 75 s, graceful shutdown 30 s),
-`errors` (the error shapes of 18 section 2.4), `health` (`/live`; `/metrics` with the Rust registry),
+`errors` (the error shapes of 18 section 2.4), `health` (`/live`; the Rust registry on `/metrics/front`, because `/metrics` stays the Python API's and is forwarded until it is gone),
 `forward` (an axum `fallback` that forwards to `OP_PY_API_URL` over hyper-util's client with
 streaming bodies both ways, server-sent events included, forwarding `x-request-id`,
 `x-forwarded-for`, `x-forwarded-proto` and `host` so `src/core/request_origin.py` sees what it sees

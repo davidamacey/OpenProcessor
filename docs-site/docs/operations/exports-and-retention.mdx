@@ -84,12 +84,12 @@ Exports, training runs and caches would otherwise grow without bound.
 | Crop cache | Pruned back toward 90% of the cap once exceeded (checked every ~256 ingest writes) | `OP_CROP_CACHE_MAX_BYTES` |
 | Events | Rows older than 24 hours are deleted by the reaper | none (fixed) |
 
-Both scripts live in `scripts/curation/` and ship in the `api` image. Run them there:
+Both scripts live in `scripts/curation/` and ship in the Python API image (service `api-py`). Run them there:
 
 ```bash
-docker compose exec -T api python scripts/curation/prune_exports.py --project $P           # dry run
-docker compose exec -T api python scripts/curation/prune_exports.py --project $P --apply
-docker compose exec -T api python scripts/curation/prune_training_runs.py --project $P --keep-last 10
+docker compose exec -T api-py python scripts/curation/prune_exports.py --project $P           # dry run
+docker compose exec -T api-py python scripts/curation/prune_exports.py --project $P --apply
+docker compose exec -T api-py python scripts/curation/prune_training_runs.py --project $P --keep-last 10
 ```
 
 The dry runs of both scripts were run in the `api` container against a public

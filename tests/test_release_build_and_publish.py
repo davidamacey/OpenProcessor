@@ -34,6 +34,7 @@ def sandbox(tmp_path: Path) -> Path:
     repo = tmp_path / 'repo'
     (repo / 'docker' / 'segmenter').mkdir(parents=True)
     (repo / 'docker' / 'frame-engine').mkdir(parents=True)
+    (repo / 'docker' / 'op-server').mkdir(parents=True)
     (repo / 'docker' / 'trainer').mkdir(parents=True)
     (repo / 'frontend').mkdir()
     for df in [
@@ -41,6 +42,7 @@ def sandbox(tmp_path: Path) -> Path:
         'Dockerfile.triton',
         'docker/segmenter/Dockerfile',
         'docker/frame-engine/Dockerfile',
+        'docker/op-server/Dockerfile',
         'docker/trainer/Dockerfile',
         'frontend/Dockerfile',
     ]:
@@ -537,10 +539,13 @@ def test_one_dockerfile_builds_three_targets_in_cache_friendly_order(
         'openprocessor-export:1.2.3',
         'openprocessor-evaluator:1.2.3',
     ]
-    # single-stage Dockerfiles are built without --target: triton, segmenter, frame engine,
-    # trainer and cropwright
+    # single-stage Dockerfiles are built without --target: server, triton, segmenter, frame
+    # engine, trainer and cropwright
     others = [b for b in _builds(fake_bin) if '--target' not in b]
-    assert len(others) == 5
+    assert len(others) == 6
+    server = next(b for b in others if 'docker/op-server/Dockerfile' in b)
+    assert '--build-context contracts_json=' in server
+    assert server.endswith('/.')
 
 
 def test_only_accepts_export_and_lock_records_it(sandbox: Path, fake_bin: Path) -> None:

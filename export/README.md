@@ -456,7 +456,7 @@ make download-models
 The build card also holds loaded Triton engines. Free it, or rebuild with the small target
 (`./openprocessor models repair --build-target small`). Check GPU memory:
 ```bash
-docker compose exec api nvidia-smi
+docker compose exec api-py nvidia-smi
 ```
 
 ### Triton fails to load model

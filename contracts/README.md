@@ -14,6 +14,7 @@ not edit by hand: change the Python source and regenerate.
 | `json/frame_engine_v1.json` | The frame engine's protocol version 1 for the native engine: tensors, datatypes and shapes, the order of the front's checks and their statuses, request rules, statuses and decode routes, branch outputs, plan faults and JSON rules, the ping policy | `src/domain/frame_engine_wire.py`, `src/domain/decode_route.py`, `frame_engine/front.py`, `src/clients/frame_engine.py` (rendered by `scripts/codegen/frame_engine_contract.py`) |
 | `json/frame_engine_plan_cases.json` | Every plan text of `scripts/codegen/frame_engine_plan_cases.py` with what `parse_plan` answers (the parsed plan, or the fault and its message, which is the status details; a `bad_json` case carries no message); the native parser must give the same on each case | `parse_plan` in `src/domain/frame_engine_wire.py` |
 | `json/frame_engine_source_cases.json` | Every `source` document of `scripts/codegen/frame_engine_source_cases.py` (the native engine's optional input that names a file to read: key, size and imohash) with the answer the engine's parser gives (the parsed reference, or the fault and its message) and, for a valid one, the text the client's builder writes; the engine's parser and the client's builder are both held to it | the case table itself: the Python engine does not have the input (`read_by_key` in `json/frame_engine_v1.json`) |
+| `json/retired_env.json` | The environment variables a process refuses to start with, each with the words of the refusal (`renamed to <new name>` or `removed: <what to use instead>`); every role of the Rust server reads it | `RETIRED_ENV` in `src/config/retired_env.py` (rendered by `scripts/codegen/retired_env_contract.py`) |
 | `json/capture_cases.json` | Tag sets of one ExifTool read (hand-written and recorded from the committed test images, `native/op_media/tests/fixtures/exiftool/recorded.json`) with what `parse_capture` answers, and what `apply_location_policy` answers under each policy; the Rust capture mapping (`native/op_media`) must give the same on each case | `parse_capture` in `src/domain/capture_metadata.py`, `apply_location_policy` in `src/domain/location_policy.py` |
 | `json/job_kinds.json` | The job kind table (every field of `JobKind` and which runtime registers the handler), the job state machine (statuses, terminal and active sets, allowed transitions), the lease timing, the pause reasons and attempt outcomes, the advisory-lock classes and the wrapper constants, read by the Rust job runner (`native/op_jobs`) | `src/config/job_kinds/`, `src/domain/job_states.py`, `src/domain/job_timing.py`, `src/config/advisory_locks.py`, `src/db/models/jobs.py`, `src/db/repos/jobs.py` (rendered by `scripts/codegen/job_kinds_contract.py`) |
 | `openapi/curation.json` | `app.openapi()` filtered to paths under the curation API prefix (default `/curation`) plus only the components those paths reference. Keys are sorted, and the app version is left out, so diffs show real contract changes only | the FastAPI app (`src/main.py`) |
@@ -37,14 +38,16 @@ Individual generators (each supports `--check`):
 python3 scripts/codegen/export_region_status_to_ts.py [--check]
 python3 scripts/codegen/export_api_contracts.py [--check] [--only item-wire|class-sources|keymap-actions|openapi|core-openapi|frame-engine|job-kinds]
 .venv/bin/python scripts/codegen/capture_cases.py [--check] [--record]   # --record needs exiftool
+python3 scripts/codegen/retired_env_contract.py [--check]
 ```
 
 `export_api_contracts.py` imports the app. It re-runs itself under the
 project venv (`.venv/bin/python`, including the main checkout's venv when
 run from a git worktree), or under `$CONTRACTS_PYTHON` if that is set.
 
-Three pre-commit hooks reject a commit that leaves a contract stale:
-`region-status-ts-drift`, `api-contracts-drift` and `capture-cases-drift`. When a change to the
+Four pre-commit hooks reject a commit that leaves a contract stale:
+`region-status-ts-drift`, `api-contracts-drift`, `capture-cases-drift` and
+`retired-env-contract-drift`. When a change to the
 API or wire format moves a contract, regenerate and commit the output in
 the same commit.
 

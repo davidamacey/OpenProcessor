@@ -1770,7 +1770,7 @@ verify_image_digests() {
     else
         local img
         TRITON_DIGEST=""
-        for img in openprocessor openprocessor-export openprocessor-triton openprocessor-frame-engine; do
+        for img in openprocessor openprocessor-server openprocessor-export openprocessor-triton openprocessor-frame-engine; do
             ref="${OP_IMAGE_REPO}/${img}:${OP_IMAGE_TAG}"
             digest="$(docker image inspect --format '{{.Id}}' "$ref" 2>/dev/null || true)"
             [[ -n "$digest" ]] && IMAGE_DIGESTS+=("${ref}=${digest}")
@@ -1977,15 +1977,15 @@ run_health() {
         # Without its models (--skip-models) /health is 503 by design; its body still shows OpenSearch is up.
         wait_http "http://${h}:${p}/health" 240 '"opensearch":{"ok":true' -sS \
             && log_warn "API is up but not ready (expected without Triton models: --skip-models)" \
-            || fails+=("API /health not ready: ./openprocessor logs api")
+            || fails+=("API /health not ready: ./openprocessor logs api-py")
     elif ! wait_http "http://${h}:${p}/health" 240 '"status":"ready"'; then
-        fails+=("API /health not ready: ./openprocessor logs api")
+        fails+=("API /health not ready: ./openprocessor logs api-py")
     else
         local cur=0 vlm_on=0 faces_on=1
         _has_tier curation && cur=1; model_setup_faces_enabled || faces_on=0
         { _has_tier vlm || [[ -n "${OP_VLM_URL:-}" ]]; } && vlm_on=1
-        if ! dc exec -T api python -c "$_API_PROBE_PY" "$cur" "$vlm_on" "$faces_on"; then
-            fails+=("API functional probes failed: ./openprocessor logs api")
+        if ! dc exec -T api-py python -c "$_API_PROBE_PY" "$cur" "$vlm_on" "$faces_on"; then
+            fails+=("API functional probes failed: ./openprocessor logs api-py")
         fi
     fi
     if _has_tier segmenter; then

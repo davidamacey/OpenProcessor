@@ -216,7 +216,7 @@ build_docker_images() {
     # Fall back to building from Dockerfiles if pull fails (e.g., first release,
     # no internet, or user wants a custom build).
     log_step "Pulling pre-built images from Docker Hub..."
-    if dc pull api triton-server 2>/dev/null; then
+    if dc pull api api-py triton-server 2>/dev/null; then
         log_success "Pre-built images pulled from Docker Hub"
         return 0
     else
@@ -226,10 +226,18 @@ build_docker_images() {
     fi
 
     # Build from Dockerfiles
-    log_step "Building api image..."
+    log_step "Building api-py image..."
+    if ! dc build api-py; then
+        log_error "Failed to build api-py image"
+        log_info "Check your internet connection and disk space (need ~5GB free)"
+        return 1
+    fi
+    log_success "api-py image ready"
+
+    log_step "Building api image (the Rust front)..."
     if ! dc build api; then
         log_error "Failed to build api image"
-        log_info "Check your internet connection and disk space (need ~5GB free)"
+        log_info "Check your internet connection and disk space (need ~2GB free)"
         return 1
     fi
     log_success "api image ready"

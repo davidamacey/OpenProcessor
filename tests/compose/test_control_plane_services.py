@@ -34,7 +34,7 @@ CELERY_WORKERS = (
 )
 # Python services that run the application image (db-migrate is the one that migrates).
 PYTHON_SERVICES = (
-    'api',
+    'api-py',
     'jobs-worker',
     'periodic-worker',
     'open-vocab-worker',
@@ -138,7 +138,7 @@ def test_jobs_worker_recycles_children_on_memory_and_count() -> None:
 
 
 def test_no_worker_shares_the_api_prometheus_multiproc_dir() -> None:
-    api_dir = _env('api')['PROMETHEUS_MULTIPROC_DIR']
+    api_dir = _env('api-py')['PROMETHEUS_MULTIPROC_DIR']
     for name in (*CELERY_WORKERS, 'jobs-beat'):
         theirs = _env(name).get('PROMETHEUS_MULTIPROC_DIR')
         assert theirs != api_dir, name
@@ -168,7 +168,7 @@ def test_db_migrate_waits_on_postgres_and_opensearch_and_runs_once() -> None:
 
 
 def test_api_replicas_come_from_one_env_knob() -> None:
-    assert _svc('api')['deploy']['replicas'] == '${OP_API_REPLICAS:-1}'
+    assert _svc('api-py')['deploy']['replicas'] == '${OP_API_REPLICAS:-1}'
 
 
 @pytest.mark.parametrize(

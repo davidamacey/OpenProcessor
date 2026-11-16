@@ -11,12 +11,12 @@ from compose._helpers import REPO_ROOT, _services
 
 
 def _api_env() -> dict[str, str]:
-    env = _services()['api']['environment']
+    env = _services()['api-py']['environment']
     return {e.split('=', 1)[0]: e.split('=', 1)[1] for e in env if '=' in e}
 
 
 def test_api_command_has_no_workers_flag() -> None:
-    command = [str(a) for a in _services()['api']['command']]
+    command = [str(a) for a in _services()['api-py']['command']]
     assert not [a for a in command if a.startswith('--workers')], command
 
 

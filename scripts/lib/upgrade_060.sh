@@ -23,7 +23,7 @@ upgrade_060_applies() {
 # the calling user so the bundle is not root-owned.
 _upgrade_060_module() {
     dc run --rm --no-deps -T -w /app --user "$(id -u):$(id -g)" \
-        -v "${OP_DIR}/.install:/install" -e OP_INSTALL_DIR=/install api python -m "$@"
+        -v "${OP_DIR}/.install:/install" -e OP_INSTALL_DIR=/install api-py python -m "$@"
 }
 
 _upgrade_060_newest_bundle() {

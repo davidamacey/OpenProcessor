@@ -22,9 +22,12 @@ from scripts.bench.suite_lib import (
     triton_wire_bytes,
 )
 from scripts.bench.suite_probes import (
+    FRONT,
+    PYTHON_API,
     Gauges,
-    cgroup_cpu_s,
+    api_cpu_fields,
     chunks,
+    container_cpu_s,
     scrape,
     stage_table,
     triton_configs,
@@ -236,7 +239,7 @@ def ingest_rep(
         batches = chunks(files, args.batch_size)
         before_t = triton_snapshot(client, args.triton_url)
         before_m = scrape(client, f'{args.api_url}/metrics')
-        cpu0 = {c: cgroup_cpu_s(f'{args.project}-{c}') for c in ('api', 'triton')}
+        cpu0 = container_cpu_s(args.project)
         started = time.monotonic()
         with (
             getattr(args, 'gauges_cls', Gauges)(args.project, args.gpu) as gauges,
@@ -248,7 +251,7 @@ def ingest_rep(
                 )
             )
         wall = time.monotonic() - started
-        cpu = {c: cgroup_cpu_s(f'{args.project}-{c}') - cpu0[c] for c in cpu0}
+        cpu = {c: v - cpu0[c] for c, v in container_cpu_s(args.project).items()}
         after_t = triton_snapshot(client, args.triton_url)
         after_m = scrape(client, f'{args.api_url}/metrics')
         if warmup:
@@ -284,12 +287,13 @@ def ingest_rep(
         'items_per_image': sum(s['crops_indexed'] for s, _ in results) / max(ok, 1),
         'request_p50_s': statistics.median(lat),
         'request_p95_s': percentile(lat, 95),
-        'api_cpu_s_per_image': cpu['api'] / max(ok, 1),
+        **api_cpu_fields(cpu, ok),
         'triton_cpu_s_per_image': cpu['triton'] / max(ok, 1),
         'client_sent_bytes_per_image': wire.sent / max(ok, 1),
         'client_received_bytes_per_image': wire.received / max(ok, 1),
         'cluster_train_wall_s': cluster['wall_s'],
-        'idle_api_cores_before': idle['cores']['api'],
+        'idle_api_cores_before': idle['cores'][PYTHON_API],
+        'idle_front_cores_before': idle['cores'][FRONT],
         'bytes_per_image': summary['bytes_per_image'],
         'bytes_per_vector': summary['bytes_per_vector'],
     }

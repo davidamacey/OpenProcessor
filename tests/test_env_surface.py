@@ -108,6 +108,7 @@ _TEMPLATE_SIDE_ALLOWLIST = {
     # docker-compose.yml's own ${VAR:-default} interpolation, not Python
     # code.
     'OP_API_IMAGE',
+    'OP_SERVER_IMAGE',
     'OP_TRITON_IMAGE',
     'OP_EVALUATOR_IMAGE',
     'OP_EXPORT_IMAGE',

@@ -54,7 +54,7 @@ The bake-off evaluator (`curation-evaluator`, queue `gpu_eval`), the trainer
 of their own; `openprocessor curation up curation-evaluator` starts the
 evaluator on purpose.
 
-`api`, `curation-detection-worker`, `curation-auto-label-worker`,
+`api-py`, `curation-detection-worker`, `curation-auto-label-worker`,
 `curation-assist-loop-worker` and `jobs-worker` must mount the same source
 directory (`OP_SOURCE_ROOT_HOST` to `/data/source`, read-only), or that worker's
 reads fail with `detection_failed` / `image_unavailable`. After changing it, run

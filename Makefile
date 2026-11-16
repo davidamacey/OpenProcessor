@@ -25,7 +25,9 @@ V := .venv/bin
 # Prefer the project venv's interpreter when it exists; fall back to
 # system python3 for a fresh checkout that hasn't created .venv yet.
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
-API_SERVICE := api
+# The Python API container (shell, profiling, benchmarks, restart after a route change). The Rust
+# front in front of it is the service `api`; `make logs-api` follows both.
+API_SERVICE := api-py
 # One-shot export-image container: TensorRT, ModelOpt and the export scripts are not in the API image.
 EXPORT_RUN = $(COMPOSE) run --rm --no-deps -T model-export
 AUTO_LABEL_SERVICE := curation-auto-label-worker
@@ -146,7 +148,7 @@ dev-down: ## Stop the dev deployment started by 'make dev-up' (keeps volumes)
 
 .PHONY: dev-restart
 dev-restart: ## Restart the code-mounting containers (api + workers) after pulling/merging code; does not recreate or re-read .env
-	$(DEV_COMPOSE) restart api curation-detection-worker curation-vlm-worker curation-auto-label-worker curation-assist-loop-worker
+	$(DEV_COMPOSE) restart api-py curation-detection-worker curation-vlm-worker curation-auto-label-worker curation-assist-loop-worker
 
 .PHONY: dev-ps
 dev-ps: ## Show the dev deployment's containers
@@ -206,8 +208,8 @@ logs-triton: ## Follow Triton server logs
 	$(COMPOSE) logs -f $(TRITON_SERVICE)
 
 .PHONY: logs-api
-logs-api: ## Follow API service logs
-	$(COMPOSE) logs -f $(API_SERVICE)
+logs-api: ## Follow the API logs (the Rust front and the Python API)
+	$(COMPOSE) logs -f api $(API_SERVICE)
 
 .PHONY: logs-opensearch
 logs-opensearch: ## Follow OpenSearch logs

@@ -10,8 +10,6 @@ publish.workspace = true
 
 [dependencies]
 rustls = { workspace = true, features = ["ring", "std"] }
-
-[dev-dependencies]
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { workspace = true }
 

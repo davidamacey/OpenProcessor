@@ -41,7 +41,8 @@ and OpenSearch Dashboards run without authentication, like the API.
 | --- | --- | --- |
 | `triton` | `triton-server:8002` | Triton's `nv_*` series: per-model request, queue and compute time, batch execution, pending requests, GPU utilization and memory. |
 | `frame-engine` | `frame-engine:8002` | The frame engine's `op_frame_engine_*` series: stage timing, requests in flight, shared-memory region use, budget waits, overloads, region registrations, failed model calls and image outcomes ([Ingest stage timing](./ingest-stage-timing.mdx)). |
-| `api` | `api:8000` | The API's own `/metrics`. |
+| `api` | `api-py:4613` | The Python API's `/metrics`: `http_request_duration_seconds` of every request it answers, which is every request except the ones the Rust front answers itself. The same text is served on the API port at `/metrics` (the front forwards it), so a script that reads `http://localhost:4603/metrics` gets the Python series as before. |
+| `api-front` | `api:8000`, path `/metrics/front` | The Rust front's own registry: the same histogram for the routes it answers itself, `op_api_forward_failures_total` by `reason` (`connect` and `upstream`: the Python API could not answer; `client_aborted`: the client gave up on its upload, which is not a fault of the API) and `op_api_requests_shed_total` (503 at the concurrency limit). |
 | `node` | `node-exporter:9100` | Host CPU, memory, load. |
 | `dcgm` | `dcgm-exporter:9400` | Per-GPU `DCGM_FI_DEV_*` series. |
 | `loki` | `loki:3100` | Loki's own health. |
@@ -149,7 +150,7 @@ age means a queue's worker is down or saturated; see [Jobs](jobs.mdx).
 ## Logs with Loki
 
 Alloy (`monitoring/alloy-config.alloy`) discovers containers through the
-Docker socket, keeps this project's `triton-server` and `api` services plus
+Docker socket, keeps this project's `triton-server`, `api` and `api-py` services plus
 the detection, VLM and auto-label workers and the segmenter, labels each stream
 with `container`, `stream` and `job` (`triton`, `fastapi` or `worker`), and pushes
 it to Loki. In Grafana's **Explore** view, pick the Loki data source and

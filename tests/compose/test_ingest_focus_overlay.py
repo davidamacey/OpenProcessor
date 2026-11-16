@@ -50,7 +50,7 @@ def test_every_model_the_profile_preloads_is_in_the_default_load_list() -> None:
 
 @pytest.mark.parametrize(
     'service',
-    ['api', 'curation-detection-worker', 'curation-auto-label-worker', 'curation-evaluator'],
+    ['api-py', 'curation-detection-worker', 'curation-auto-label-worker', 'curation-evaluator'],
 )
 def test_the_callers_of_triton_are_told_to_load_on_demand(service: str) -> None:
     env = _load_yaml(OVERLAY)['services'][service]['environment']

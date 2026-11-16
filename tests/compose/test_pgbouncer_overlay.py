@@ -13,7 +13,7 @@ from compose._helpers import render
 
 OVERLAY = ('docker-compose.yml', 'docker-compose.pgbouncer.yml')
 POOLED = (
-    'api',
+    'api-py',
     'jobs-worker',
     'interactive-worker',
     'periodic-worker',
@@ -53,4 +53,4 @@ def test_the_pooler_runs_in_transaction_mode_without_a_password_value() -> None:
 def test_the_default_render_has_no_pooler() -> None:
     services = render({})
     assert 'pgbouncer' not in services
-    assert services['api']['environment'].get('OP_DB_POOLER') is None
+    assert services['api-py']['environment'].get('OP_DB_POOLER') is None

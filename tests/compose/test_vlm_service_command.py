@@ -184,12 +184,12 @@ def test_the_catalog_default_matches_the_compose_default() -> None:
 
 def test_the_api_and_workers_get_the_local_endpoint_and_the_read_only_secrets_mount() -> None:
     services = yaml.safe_load(COMPOSE.read_text())['services']
-    for name in ('api', 'curation-detection-worker'):
+    for name in ('api-py', 'curation-detection-worker'):
         env = ' '.join(services[name]['environment'])
         assert 'OP_LOCAL_VLM_ENDPOINT=${OP_LOCAL_VLM_ENDPOINT:-}' in env, name
         assert 'OP_LOCAL_VLM_GPU_TOTAL_MIB=${VLM_GPU_TOTAL_MIB:-}' in env, name
     for name in (
-        'api',
+        'api-py',
         'curation-detection-worker',
         'curation-auto-label-worker',
         'curation-assist-loop-worker',

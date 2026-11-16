@@ -2,14 +2,15 @@
 
 ``run`` wraps ``run_baseline.py`` with the protocol of the ship-track plan: three repetitions
 (fresh project each), the input page cache dropped before each, GPU sampled every 500 ms, the load
-average recorded at start and end, plus the API container's CPU seconds (cgroup) and the Triton
-container's CPU (``docker stats``) over the run. ``table`` renders the per-stage table of rows
+average recorded at start and end, plus the CPU seconds (cgroup) of the Python API container
+(``api-py``) and of the Rust front (``api``) and the Triton container's CPU (``docker stats``)
+over the run. ``table`` renders the per-stage table of rows
 already run. Raw JSON goes to ``OUT_ROOT/ROW/``; the table holds aggregates only.
 
     ingest_profile.py run setB MANIFEST --api-url http://127.0.0.1:5703 \\
         --triton-metrics-url http://127.0.0.1:5702/metrics \\
         --frame-engine-metrics-url http://127.0.0.1:5713/metrics --path-map HOST=CONTAINER \\
-        --api-container NAME --triton-container NAME --out-root artifacts_local/bench/v070/sp0
+        --api-container NAME --front-container NAME --triton-container NAME --out-root artifacts_local/bench/v070/sp0
     ingest_profile.py table setA=artifacts_local/bench/v070/sp0/setA setB=...
 """
 
@@ -48,27 +49,33 @@ def docker(*argv: str) -> str:
 
 
 class ContainerObserver:
-    """API CPU seconds (cgroup usage delta) and mean Triton CPU percent (100 = one core)."""
+    """CPU seconds (cgroup usage delta) of the Python API and of the front, and mean Triton CPU
+    percent (100 = one core)."""
 
     def __init__(
         self,
         api: str,
+        front: str,
         triton: str,
         runner: Callable[..., str] = docker,
         every: float = STATS_EVERY_S,
     ) -> None:
-        self._api, self._triton, self._run, self._every = api, triton, runner, every
-        self._cpu0 = 0.0
+        self._api, self._front, self._triton = api, front, triton
+        self._run, self._every = runner, every
+        self._cpu0 = (0.0, 0.0)
         self._cpu_pct: list[float] = []
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
-    def _usage_s(self) -> float:
-        text = self._run('exec', self._api, 'cat', CGROUP_CPU_STAT)
+    def _usage_s(self, container: str) -> float:
+        text = self._run('exec', container, 'cat', CGROUP_CPU_STAT)
         match = re.search(r'^usage_usec (\d+)$', text, re.M)
         if match is None:
-            raise ValueError(f'{self._api}: no usage_usec in {CGROUP_CPU_STAT}')
+            raise ValueError(f'{container}: no usage_usec in {CGROUP_CPU_STAT}')
         return int(match.group(1)) / 1e6
+
+    def _usage(self) -> tuple[float, float]:
+        return self._usage_s(self._api), self._usage_s(self._front)
 
     def sample_triton(self) -> None:
         out = self._run('stats', '--no-stream', '--format', '{{.CPUPerc}}', self._triton)
@@ -82,7 +89,7 @@ class ContainerObserver:
             self._stop.wait(self._every)
 
     def start(self) -> None:
-        self._cpu0 = self._usage_s()
+        self._cpu0 = self._usage()
         self._cpu_pct = []
         self._stop.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True)
@@ -92,7 +99,8 @@ class ContainerObserver:
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=35)
-        out = {'api_cpu_s': self._usage_s() - self._cpu0}
+        api, front = self._usage()
+        out = {'api_cpu_s': api - self._cpu0[0], 'front_cpu_s': front - self._cpu0[1]}
         if self._cpu_pct:
             out['triton_cpu_pct_mean'] = sum(self._cpu_pct) / len(self._cpu_pct)
             out['triton_cpu_samples'] = float(len(self._cpu_pct))
@@ -132,7 +140,8 @@ def _parser() -> argparse.ArgumentParser:
     run.add_argument('--api-url', required=True)
     run.add_argument('--triton-metrics-url')
     run.add_argument('--frame-engine-metrics-url')
-    run.add_argument('--api-container', required=True)
+    run.add_argument('--api-container', required=True, help='the Python API container (api-py)')
+    run.add_argument('--front-container', required=True, help='the Rust front container (api)')
     run.add_argument('--triton-container', required=True)
     run.add_argument('--path-map', action='append', default=[], metavar='HOST=CONTAINER')
     run.add_argument('--out-root', type=Path, required=True)
@@ -154,7 +163,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             name, _, directory = spec.rpartition('=')
             print(render_row(name, load_reps(Path(directory)), ns.gpu))
         return 0
-    observer = ContainerObserver(ns.api_container, ns.triton_container)
+    observer = ContainerObserver(ns.api_container, ns.front_container, ns.triton_container)
     rb.run_reps(build_run_args(ns), observer=observer)
     return 0
 

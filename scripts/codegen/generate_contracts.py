@@ -10,6 +10,7 @@ Runs, in order:
   ``contracts/json/frame_engine_v1.json``,
   ``contracts/json/frame_engine_plan_cases.json``,
   ``contracts/json/frame_engine_source_cases.json``
+* ``retired_env_contract.py``       -> ``contracts/json/retired_env.json``
 
 Usage:
 
@@ -50,10 +51,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     flag = ['--check'] if args.check else []
 
-    # Run both even if the first fails so one invocation reports all drift.
+    # Run every one even if an earlier one fails so one invocation reports all drift.
     region_rc = _load('export_region_status_to_ts').main(flag)
     api_rc = _load('export_api_contracts').main(flag)
-    return 1 if region_rc or api_rc else 0
+    retired_rc = _load('retired_env_contract').main(flag)
+    return 1 if region_rc or api_rc or retired_rc else 0
 
 
 if __name__ == '__main__':

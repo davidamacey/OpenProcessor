@@ -79,7 +79,7 @@ services:
     networks:
       - triton_net
 
-  api: *pooled
+  api-py: *pooled
   jobs-worker: *pooled
   interactive-worker: *pooled
   periodic-worker: *pooled

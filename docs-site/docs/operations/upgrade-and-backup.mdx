@@ -86,7 +86,7 @@ retired `models/gpu_image_prep/` directory from an installed model repository; i
 
 The model export toolchain moved out of the `openprocessor` image into the `openprocessor-export` image.
 The upgrade pulls and digest-verifies it and `OP_EXPORT_IMAGE` appears in `.env`.
-`docker compose exec api python /app/export/...` no longer works: use `./openprocessor models install|repair`,
+`docker compose exec api-py python /app/export/...` no longer works: use `./openprocessor models install|repair`,
 `./openprocessor export <model>` or `docker compose run --rm model-export python /app/export/...`.
 Engines built before stay valid (same TensorRT, same Triton image). The upgrade does not remove the old
 images; `docker image rm` the previous `openprocessor*` tags to reclaim the disk.
@@ -137,14 +137,15 @@ If the Triton image changed, rebuild the TensorRT engines:
 ### If the API will not start after an upgrade
 
 Retired environment variables are rejected at startup, on purpose, so a stale
-name cannot quietly do nothing. The API log names the replacement:
+name cannot quietly do nothing. Both API services (the front and the Python API behind it) refuse to start, and their logs name the replacement:
 
 ```bash
 ./openprocessor logs api
+./openprocessor logs api-py
 ```
 
 Rename the variable in `.env` (the log line says to what, and the list is in
-`src/config/retired_env.py`), then `./openprocessor restart api`.
+`src/config/retired_env.py`), then `./openprocessor restart`.
 
 ## Upgrade a git checkout
 

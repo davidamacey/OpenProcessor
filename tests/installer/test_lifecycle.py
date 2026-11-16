@@ -128,7 +128,7 @@ def test_install_performs_every_step_in_order(shimmed: Shimmed) -> None:
     preflight = index_of(m, 'python -m export.preflight')
     yolo = index_of(m, 'export/ultralytics_export.py')
     up = index_of(m, ' up -d --remove-orphans')
-    probes = index_of(m, ' exec -T api python -c')
+    probes = index_of(m, ' exec -T api-py python -c')
     assert pull < probe < triton < preflight < yolo < up < probes
     for line in m:
         if 'docker compose' in line:
@@ -182,6 +182,7 @@ def test_image_tag_mode_runs_local_images_without_pulling(shimmed: Shimmed) -> N
     images.mkdir()
     for name in (
         'openprocessor',
+        'openprocessor-server',
         'openprocessor-export',
         'openprocessor-triton',
         'openprocessor-frame-engine',
@@ -474,6 +475,7 @@ def test_local_release_dir_and_local_image_tags_install_end_to_end(shimmed: Shim
     images.mkdir()
     for name in (
         'openprocessor',
+        'openprocessor-server',
         'openprocessor-export',
         'openprocessor-triton',
         'openprocessor-frame-engine',
@@ -595,6 +597,7 @@ def test_third_party_images_are_pinned_and_verified(shimmed: Shimmed) -> None:
     images.mkdir()
     for key, name in (
         ('api', 'openprocessor'),
+        ('server', 'openprocessor-server'),
         ('export', 'openprocessor-export'),
         ('triton', 'openprocessor-triton'),
         ('frame_engine', 'openprocessor-frame-engine'),

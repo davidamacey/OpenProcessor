@@ -176,12 +176,13 @@ def test_ingest_tools_default_api_base_follows_prefix(
 
 @pytest.mark.parametrize(
     ('in_container', 'expected'),
-    [(False, 'http://localhost:4603/custom-mount'), (True, 'http://localhost:8000/custom-mount')],
+    [(False, 'http://localhost:4603/custom-mount'), (True, 'http://api:8000/custom-mount')],
 )
 def test_bulk_ingest_default_api_base_works_in_the_container_and_on_the_host(
     monkeypatch: pytest.MonkeyPatch, in_container: bool, expected: str
 ) -> None:
-    """Inside ``api`` the API listens on 8000; the published 4603 is the host's view (#288)."""
+    """Inside the Python API container nothing listens on 8000 (uvicorn is on 4613); the product's
+    API is the front, reached as ``api:8000``. The published 4603 is the host's view (#288)."""
     mod = importlib.import_module('scripts.curation.bulk_ingest')
     monkeypatch.setattr(mod, 'get_curation_config', _Cfg)
     monkeypatch.setattr(mod, '_in_container', lambda: in_container)

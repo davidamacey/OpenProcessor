@@ -11,7 +11,7 @@ too; for a one-time import of a mounted folder see
 [Ingest a large folder](./ingest-large-folder.mdx). Triggers apply to folder sources as well.
 
 Before you start: the stack is healthy, a detector is configured, the project exists and
-its [ingest policy](./ingest-policy.mdx) is set, and the `api` container can reach the
+its [ingest policy](./ingest-policy.mdx) is set, and the `api-py` container can reach the
 bucket.
 
 ## How it works
@@ -55,7 +55,7 @@ at creation and at each use, so narrowing the list takes effect at once.
 ## 2. Give the API credentials
 
 Credentials are never part of a request or a source, and the API never returns them.
-boto3 finds them in the **`api` container**:
+boto3 finds them in the **`api-py` container**:
 
 - `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` in `.env` (keep it out of version control);
 - or a mounted file: `AWS_SHARED_CREDENTIALS_FILE` plus a read-only mount;
@@ -72,7 +72,7 @@ services:
 ```
 
 Use a read-only key (`s3:ListBucket`, `s3:GetObject`) for the listed prefixes, then
-`./openprocessor restart api`. Wrong credentials do not stop the API; a scan records the
+`./openprocessor restart api-py`. Wrong credentials do not stop the API; a scan records the
 error and the source reports it.
 
 ## 3. Trial run
@@ -81,7 +81,7 @@ The quickest check of allow-list, credentials and endpoint (run inside the conta
 API listens on 8000 there):
 
 ```bash
-docker compose exec api python scripts/curation/bulk_ingest.py \
+docker compose exec api-py python scripts/curation/bulk_ingest.py \
   --s3 s3://my-bucket/incoming/ --project my-project
 ```
 
@@ -178,14 +178,14 @@ already in the bucket.
 
 ## Try it against a throwaway MinIO
 
-`docker/test/compose.s3.yml` adds a MinIO server (loopback port 5392) and points `api` at
+`docker/test/compose.s3.yml` adds a MinIO server (loopback port 5392) and points `api-py` (the Python API) at
 it. Use it only on a stack you may write to, under its own project name, with credentials
 in a gitignored file:
 
 ```bash
 C="docker compose -p <name> -f docker-compose.yml -f docker-compose.dev.yml -f docker/test/compose.s3.yml --profile s3test"
 $C up -d --no-deps minio
-$C up -d --no-deps api
+$C up -d --no-deps api-py
 ```
 
 Create a bucket and upload with the `mc` client, then add a source as in section 4.
@@ -239,5 +239,5 @@ costs a request per 1000 objects each pass; use the webhook there.
 | Everything `forbidden` | The key lacks `s3:GetObject` on the prefix, or endpoint and region do not match. |
 | Nothing on a schedule | The API was down at the fire, or `OP_INGEST_DISPATCH_S` is `0`. |
 
-`./openprocessor logs api -f` shows `ingest_source_poll_failed` and
+`./openprocessor logs api-py -f` shows `ingest_source_poll_failed` and
 `ingest_dispatch_failed` with the error.

@@ -4,9 +4,9 @@ Times, for each image, the operations `CurationIngestService` performs on the ev
 and that no stage timer covers or only partly covers: file read, SHA-256, PIL open plus EXIF
 transpose (the decode), the detector letterbox, the PE whole-frame preprocess, and for one
 central crop the crop-to-array, PE resize and normalize, and JPEG encode. Run it where the
-code runs (inside the API container, so the library versions match the stack):
+code runs (inside the Python API container, ``api-py``, so the library versions match the stack):
 
-    docker exec -i -w /app <api container> python3 - DIR_A DIR_B < scripts/bench/ingest_micro_profile.py
+    docker exec -i -w /app <api-py container> python3 - DIR_A DIR_B < scripts/bench/ingest_micro_profile.py
 
 Each argument is a directory of JPEGs; the output is one JSON line with the median
 milliseconds per operation for the first ``--limit`` images of each directory. Unlike the

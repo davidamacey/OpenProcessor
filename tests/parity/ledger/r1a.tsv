@@ -1,0 +1,3 @@
+# Slice R1a (the Rust front on the API port). The bench observer now measures the Python API and the
+# front by container name; the test kept its assertions and gained the front's.
+tests/bench/test_ingest_profile.py::test_observer_reports_api_cpu_delta_and_mean_triton_cpu	python: tests/bench/test_ingest_profile.py::test_observer_reports_each_api_container_by_name_and_mean_triton_cpu

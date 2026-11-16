@@ -11,7 +11,7 @@ from __future__ import annotations
 from src.config.env import env_str
 
 
-DEFAULT_LOOPBACK_URL = 'http://127.0.0.1:8000'
+DEFAULT_LOOPBACK_URL = 'http://api:8000'
 
 DEFAULT_BATCH_SIZE = 16
 DEFAULT_CONCURRENCY = 16
@@ -35,6 +35,6 @@ RATE_WINDOW_S = 30.0
 
 
 def loopback_url() -> str:
-    """Where a run sends its batches: the API's own address (``OP_API_LOOPBACK_URL``, the ``api``
-    service name in a worker container)."""
+    """Where a run sends its batches: the product's API, the front (``OP_API_LOOPBACK_URL``; the
+    ``api`` service name on the compose network)."""
     return env_str('OP_API_LOOPBACK_URL') or DEFAULT_LOOPBACK_URL

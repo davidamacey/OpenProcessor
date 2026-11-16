@@ -115,7 +115,7 @@
             "type": "prometheus",
             "uid": "${ds}"
           },
-          "expr": "avg(up{job=~\"triton|api|dcgm|node\"})",
+          "expr": "avg(up{job=~\"triton|api|api-front|dcgm|node\"})",
           "legendFormat": "",
           "refId": "A",
           "instant": false
@@ -507,7 +507,7 @@
             "type": "prometheus",
             "uid": "${ds}"
           },
-          "expr": "up{job=~\"triton|api|dcgm|node|loki\"}",
+          "expr": "up{job=~\"triton|api|api-front|dcgm|node|loki\"}",
           "legendFormat": "{{job}}",
           "refId": "A"
         }

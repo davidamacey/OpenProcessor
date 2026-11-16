@@ -119,7 +119,30 @@ def cgroup_cpu_s(container: str) -> float:
     return 0.0
 
 
-BACKGROUND = ('api', 'vlm-worker', 'opensearch', 'detection-worker', 'cluster-refresh')
+# The API port is served by the Rust front (service `api`); the Python API, where the pixel work
+# and the `op_*` stage series are, runs behind it as `api-py`.
+PYTHON_API = 'api-py'
+FRONT = 'api'
+API_CPU_CONTAINERS = (PYTHON_API, FRONT, 'triton')
+
+BACKGROUND = (PYTHON_API, FRONT, 'vlm-worker', 'opensearch', 'detection-worker', 'cluster-refresh')
+
+
+def container_cpu_s(project: str, services: Sequence[str] = API_CPU_CONTAINERS) -> dict[str, float]:
+    return {c: cgroup_cpu_s(f'{project}-{c}') for c in services}
+
+
+def api_cpu_fields(cpu: dict[str, float], images: int) -> dict[str, float]:
+    """CPU seconds per image of both API containers, each under its name.
+
+    ``api_cpu_s_per_image`` is the Python API's, what the key has meant in every earlier report;
+    ``front_cpu_s_per_image`` is the Rust front's.
+    """
+    n = max(images, 1)
+    return {
+        'api_cpu_s_per_image': cpu[PYTHON_API] / n,
+        'front_cpu_s_per_image': cpu[FRONT] / n,
+    }
 
 
 def background_cores(project: str, seconds: float = 10.0) -> dict[str, float]:
@@ -130,11 +153,11 @@ def background_cores(project: str, seconds: float = 10.0) -> dict[str, float]:
 
 
 def wait_idle(project: str, limit_s: float = 300.0, threshold: float = 0.3) -> dict[str, Any]:
-    """Block until the API and VLM worker are quiet (below ``threshold`` cores), or ``limit_s``."""
+    """Block until the Python API and VLM worker are quiet (below ``threshold`` cores), or ``limit_s``."""
     started = time.monotonic()
     while True:
         cores = background_cores(project)
-        quiet = cores['api'] < threshold and cores['vlm-worker'] < threshold
+        quiet = cores[PYTHON_API] < threshold and cores['vlm-worker'] < threshold
         if quiet or time.monotonic() - started > limit_s:
             return {'cores': cores, 'waited_s': time.monotonic() - started, 'quiet': quiet}
 

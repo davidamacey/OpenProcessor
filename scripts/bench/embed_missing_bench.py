@@ -9,7 +9,7 @@ foreign share is 0.
     embed_missing_bench.py --manifest scripts/datasets/manifests/coco_bench_2000.json \\
         --images data/samples/coco_bench_2000/images --out artifacts_local/bench/embed.json \\
         --project <compose project> --api-url http://127.0.0.1:<api> \\
-        --triton-url http://127.0.0.1:<triton> --source-map <host dir>=<dir in the API container> \\
+        --triton-url http://127.0.0.1:<triton> --source-map <host dir>=<dir in the Python API container> \\
         --gpu <index> --count 500 --reps 3
 """
 
@@ -34,7 +34,15 @@ if str(_REPO_ROOT) not in sys.path:
 
 from scripts.bench.suite_ingest import post_batch
 from scripts.bench.suite_lib import triton_stats_delta
-from scripts.bench.suite_probes import Gauges, cgroup_cpu_s, chunks, triton_snapshot
+from scripts.bench.suite_probes import (
+    FRONT,
+    PYTHON_API,
+    Gauges,
+    api_cpu_fields,
+    chunks,
+    container_cpu_s,
+    triton_snapshot,
+)
 from scripts.curation._project_worker_utils import curation_api_prefix, scoped_url
 from scripts.datasets.bench_set import load_pin
 from src.config.settings import TritonModelConfig
@@ -52,7 +60,7 @@ def embed_run(client: httpx.Client, base: str, triton_url: str, gpu: str, projec
         'dry_run': False,
     }
     before = triton_snapshot(client, triton_url)
-    cpu0 = cgroup_cpu_s(f'{project}-api')
+    cpu0 = container_cpu_s(project, (PYTHON_API, FRONT))
     with Gauges(project, gpu) as gauges:
         started = time.monotonic()
         reply = client.post(f'{base}/reprocess', json=body)
@@ -64,15 +72,16 @@ def embed_run(client: httpx.Client, base: str, triton_url: str, gpu: str, projec
             time.sleep(POLL_S)
             job = client.get(f'{base}/reprocess/jobs/{job["job_id"]}').raise_for_status().json()
         wall = time.monotonic() - started
-    api_cpu = cgroup_cpu_s(f'{project}-api') - cpu0
+    cpu = {c: v - cpu0[c] for c, v in container_cpu_s(project, (PYTHON_API, FRONT)).items()}
     delta = triton_stats_delta(before, triton_snapshot(client, triton_url))
     done = (job or {}).get('images_done') or sum(s['queued'] for s in resp['scopes'])
     return {
         'wall_s': wall,
         'images': done,
         'images_per_s': done / wall,
-        'api_cpu_s_per_image': api_cpu / max(done, 1),
-        'api_cores': api_cpu / wall,
+        **api_cpu_fields(cpu, done),
+        'api_cores': cpu[PYTHON_API] / wall,
+        'front_cores': cpu[FRONT] / wall,
         'status': (job or {}).get('status', 'inline'),
         'failed': (job or {}).get('images_failed', 0),
         'pe': delta.get(TritonModelConfig.PE_IMAGE_MODEL, {}),
