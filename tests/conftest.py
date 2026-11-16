@@ -63,6 +63,13 @@ pytest_plugins = [
 ]
 
 
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Tests listed in ``tests/pending_rust.txt`` are expected failures until their slice lands."""
+    import pending_rust
+
+    pending_rust.mark_pending(items, pending_rust.read_pending())
+
+
 @pytest.fixture
 def worker_app(queue_env: None) -> Any:
     """The Celery worker app with every task module imported."""
