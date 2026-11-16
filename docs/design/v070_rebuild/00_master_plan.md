@@ -26,7 +26,13 @@ questions and standards they consult.
 | 8 | [08_research_prototype_track.md](08_research_prototype_track.md) | short prototype runs during W2-W4 (about 10 GPU hours) |
 | 9a-9h | [09a embeddings](09a_research_embeddings_search.md), [09b clustering](09b_research_clustering.md), [09c clustering protocol](09c_research_clustering_protocol.md), [09d near-duplicates](09d_research_near_duplicates.md), [09e auto-label](09e_research_auto_label_assist.md), [09f spatial](09f_research_spatial_attributes.md), [09g GPU pipeline](09g_research_gpu_pipeline.md), [09h plate text](09h_research_plate_text.md) | the research designs behind the seams and lanes above |
 | 12 | [12_review_workflow_audit.md](12_review_workflow_audit.md), [12a interfaces](12a_workflow_interfaces.md), [12b wave 2](12b_wave2_lane_specs.md), [12c wave 3](12c_wave3_lane_specs.md), [12d wave 4](12d_wave4_lane_specs.md), [12e execution order and acceptance walk](12e_workflow_execution_order.md), [12f UX refinement](12f_ux_refinement_plan.md) | the Cropwright workflow rebuild (added 2026-11-09, runs after W4 on the same integration branch) |
-| 13-17 | [14_roadmap.md](14_roadmap.md) (the map of every track after and beside these waves: start there), [13 speed](13_backend_speed_plan.md), [13a ingest on the engine](13a_ingest_on_engine_plan.md), [13b crop vectors](13b_crop_vectors_plan.md), [15 storage](15_storage_plan.md), [15a storage schema](15a_storage_schema.md), [17 native engine](17_native_engine_plan.md); the storage reads (15b) and slices (15c) are on branch `int/storage` | the speed, storage and native-engine tracks (added 2026-11-13 to 2026-11-15); order and state in the roadmap |
+| 14 | [14_roadmap.md](14_roadmap.md), revision 3: the programme in the owner's order of 2026-11-15 (engine, backend in Rust, gallery frontend, database and clustering, cloud). **Start there** | every stage: what is done, in progress and next |
+| 17 | [17 native engine](17_native_engine_plan.md) | stage 1, the Rust image engine (N0 to N3) |
+| 18 | [18 backend in Rust](18_backend_rust_port_plan.md), [18a slices that start now](18a_backend_rust_port_slices.md), [18b later slices](18b_backend_rust_port_later_slices.md) | stage 2, and the slices of stages 3 to 5 |
+| 15 | [15 storage](15_storage_plan.md), [15a storage schema](15a_storage_schema.md); 15b (reads) and 15c (slices) on branch `int/storage` | the record's design, SQL and measurements, built in Rust by plan 18 (18b section 6) |
+| 13 | [13 speed](13_backend_speed_plan.md), [13a ingest on the engine](13a_ingest_on_engine_plan.md), [13b crop vectors](13b_crop_vectors_plan.md) | done on `int/b4-stateless`; 13's card-budget items are re-planned after N3 |
+| 16 | plan 16 (cluster, label and train loop) on branch `lane/plan16` | stage 4, rewritten for the Rust backend after the labelling measurement |
+| superseded | 15c's Python slices: by plan 18 (design and SQL kept). 13's Rust engine and search-index items: by plans 17 and 15. The Celery and Valkey parts of 02b and 03 to 03f: by plan 18 section 2.5 (jobs on PostgreSQL). Further speed work on the Python engine: by plan 17. W6's 0.6.0 upgrade row: by the owner's answer (no upgrade from 0.6.0); W6 itself runs only after the whole programme | kept as records, not executed |
 | 10 | [10_v080_platform_breadth.md](10_v080_platform_breadth.md) | after the tag: v0.8.0 |
 | 11 | [11_side_track_issue_42_small_gpu.md](11_side_track_issue_42_small_gpu.md) | side track #42 (GPU 1, never blocks) |
 | ref | [reference/](reference/): [decision_register](reference/decision_register.md), [owner_questions](reference/owner_questions.md), [traceability](reference/traceability.md), [review_1](reference/review_1_control_plane.md), [review_2](reference/review_2_research.md), [environment_and_setup](reference/environment_and_setup.md), [standards_and_libraries](reference/standards_and_libraries.md), [risks_cleanup_host](reference/risks_cleanup_host.md), [github_actions](reference/github_actions.md), [prior_plans_reconciliation](reference/prior_plans_reconciliation.md), [b0_close_out_done](reference/b0_close_out_done.md) | consulted by every wave |
@@ -62,7 +68,7 @@ Ultralytics version), B4 (stateless API), B5 (speed), R-final (release acceptanc
 
 ---
 
-## 1. Where things stand (2026-11-15)
+## 1. Where things stand (2026-11-16)
 
 The goal every remaining step serves is the user's job in
 [VISION_AND_GOALS.md](../../VISION_AND_GOALS.md) ("The user's job"): an existing detector finds the
@@ -75,12 +81,13 @@ The single map of all remaining work, with every track's state, order and open g
 - Done on the integration branch `int/b4-stateless`: the control plane (W2), one Ultralytics version
   (W3), the stateless API (W4), the workflow rebuild (files 12 to 12f), ingest on the engine and its
   reliability rerun (plan 13a; [13](13_backend_speed_plan.md) section 10), crop vectors (13b).
-- In progress on their own branches: the native Rust frame engine, `int/native`
-  ([17](17_native_engine_plan.md), phase N0 in part); the storage rebuild with PostgreSQL as the
-  record, `int/storage` ([15](15_storage_plan.md), step 1 built).
-- Order from here: the roadmap's section 2 (map) and section 3 (what must not start yet). The
-  owner's four answers of 2026-11-15 (roadmap section 9) set the release: no 0.7.0 tag until the
-  whole programme is done; no in-place upgrade from 0.6.0; no authentication for now.
+- In progress on `int/native`, the Rust integration branch: the Rust image engine
+  ([17](17_native_engine_plan.md): N0 and every N1 branch merged, not yet run on a GPU) and the
+  backend in Rust ([18](18_backend_rust_port_plan.md): stage 0 lanes). `int/storage` holds storage
+  step 1 as the oracle and the storage measurements ([15](15_storage_plan.md)).
+- Order from here: the roadmap's five stages in the owner's order. The owner's rules of 2026-11-15
+  set the release: no 0.7.0 tag until the whole programme is done; no in-place upgrade from 0.6.0;
+  no authentication for now; no new Python product code.
 - Versions: `VERSION`, `pyproject.toml` and `frontend/package.json` stay 0.6.0 until release prep
   (07 section 3). Nothing is on `main` yet.
 
