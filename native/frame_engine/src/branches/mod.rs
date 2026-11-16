@@ -6,6 +6,7 @@
 //! N0 builds `detect`, `embed_frame` and `embed_crops` with `crops: inline`; every other branch
 //! the protocol knows answers `unsupported_branch` (plan 17 section 5 N0, "Scope out").
 
+pub mod area;
 pub mod crops;
 pub mod detect;
 pub mod embed;

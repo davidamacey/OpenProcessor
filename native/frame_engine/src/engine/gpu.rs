@@ -92,6 +92,7 @@ struct FinishThread {
     stream: Arc<Stream>,
     staging: Staging,
     encoder: turbojpeg::Compressor,
+    max_side: u32,
 }
 
 /// How the pools are sized and what they do.
@@ -101,6 +102,8 @@ pub struct GpuConfig {
     pub launch_threads: usize,
     pub finish_threads: usize,
     pub jpeg_quality: u32,
+    /// `OP_FRAME_ENGINE_CROP_MAX_SIDE`: a crop's long side above it is shrunk before the encode.
+    pub crop_max_side: u32,
     pub stage_sync: bool,
 }
 
@@ -153,12 +156,14 @@ impl Gpu {
         let finish = {
             let ctx = Arc::clone(ctx);
             let quality = cfg.jpeg_quality;
+            let max_side = cfg.crop_max_side;
             WorkerPool::new("fe-finish", cfg.finish_threads, move |_| {
                 ctx.bind().map_err(|e| e.to_string())?;
                 Ok::<_, String>(FinishThread {
                     stream: Stream::new(&ctx).map_err(|e| e.to_string())?,
                     staging: Staging::new(&ctx),
                     encoder: crops::encoder(quality)?,
+                    max_side,
                 })
             })
             .map_err(|e| pool_failed("finish pool", e))?
@@ -397,6 +402,7 @@ fn crop_on_thread(
         stream,
         staging,
         encoder,
+        max_side,
     } = t;
     let started = Instant::now();
     let pinned = staging.at_least(width * height * 3)?;
@@ -414,7 +420,8 @@ fn crop_on_thread(
     // the copy was waited for: the frame may go
     drop(frame);
     let started = Instant::now();
-    let jpeg = crops::encode(encoder, pixels, width, height).map_err(GpuFault::Failed)?;
+    let jpeg = crops::encode_capped(encoder, pixels, (width, height), *max_side)
+        .map_err(GpuFault::Failed)?;
     Ok(CropJpeg {
         data: bytes::Bytes::from(jpeg),
         copy_seconds: copied,

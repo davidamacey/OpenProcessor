@@ -132,6 +132,7 @@ impl GpuPipeline {
             launch_threads: launch_threads(crate::cores::physical_cores()),
             finish_threads: s.encode_threads as usize,
             jpeg_quality: s.jpeg_quality,
+            crop_max_side: s.crop_max_side,
             stage_sync: s.stage_sync,
         };
         let gpu = Arc::new(step("lanes, kernels and pools", || {

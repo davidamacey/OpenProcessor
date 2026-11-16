@@ -233,6 +233,15 @@ used only for code, ids, hashes and paths.
 - **License:** IJG License, Modified (3-clause) BSD License and zlib License, as the library's
   `LICENSE.md` sets out; the binary carries the library unmodified
 
+### OpenCV area resize (crop side cap of `native/frame_engine`)
+- **File:** `native/frame_engine/src/branches/area.rs`
+- **Source:** the 8-bit `INTER_AREA` paths of `modules/imgproc/src/resize.cpp` in OpenCV 5.0.0
+  (https://github.com/opencv/opencv, tag `5.0.0`): `computeResizeAreaTab`, `resizeAreaFast_`,
+  `ResizeAreaFastVec`, `ResizeArea_Invoker` and the `inter_area` helpers
+- **License:** Apache License 2.0
+- **Taken:** the arithmetic and its order, ported to Rust for 3-channel input and shrinking only,
+  so a capped crop is byte-equal to the Python engine's `cv2.resize`
+
 ---
 
 ## ICC colour profiles (test fixtures)
