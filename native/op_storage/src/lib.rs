@@ -1,8 +1,9 @@
-//! Key layout, landing zone, local read paths and streaming SHA-256 of the storage layer. The
-//! durable object store, derived files and cache, delete and erase primitives and the reconcile
-//! listing come with the second half of the slice.
+//! The storage layer: key layout, landing zone, local read paths, streaming SHA-256, the durable
+//! object store (a local directory or S3 through one `object_store` interface), derived files with
+//! a local cache, delete and erase primitives, and the reconcile listing.
 #![forbid(unsafe_code)]
 
+pub mod durable;
 pub mod error;
 pub mod hash;
 pub mod keys;

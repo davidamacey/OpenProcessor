@@ -55,6 +55,8 @@ pub struct LandedPart {
 /// A photo under its own landing name, `landing/<project>/<sha256>.<upload_id>.<index>`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LandedPhoto {
+    /// The project the photo belongs to.
+    pub project: ProjectId,
     /// The landing key.
     pub key: StorageKey,
     /// Where the file is, inside the landing root.
@@ -128,6 +130,7 @@ impl Landing {
             return Err(StorageError::io("remove", &part.path, e));
         }
         Ok(LandedPhoto {
+            project,
             key,
             path,
             size: part.size,
