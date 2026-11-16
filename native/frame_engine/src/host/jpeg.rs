@@ -15,7 +15,7 @@
 //!   `Image.convert('RGB')` does.
 //!
 //! TurboJPEG documents `TJPARAM_STOPONWARNING` and `tj3Decompress8` in
-//! https://libjpeg-turbo.org/Documentation/Documentation (TurboJPEG C API); the handle is one per
+//! <https://libjpeg-turbo.org/Documentation/Documentation> (TurboJPEG C API); the handle is one per
 //! call, so nothing is shared between threads.
 
 use std::ffi::CStr;

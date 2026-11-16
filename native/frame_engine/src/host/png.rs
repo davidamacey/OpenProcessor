@@ -1,7 +1,7 @@
 //! PNG on the host route, read as Pillow 13.0.0's `PngImagePlugin` reads it.
 //!
 //! The pixels come from the `png` crate 0.18.1 (`Transformations::EXPAND`: palettes to RGB,
-//! grey below 8 bits scaled to 8, `tRNS` to alpha; https://docs.rs/png/0.18.1). Pillow's rules
+//! grey below 8 bits scaled to 8, `tRNS` to alpha; <https://docs.rs/png/0.18.1>). Pillow's rules
 //! around them are kept here:
 //!
 //! * Checksums: Pillow checks the CRC of every chunk before the first `IDAT` ("broken PNG file")

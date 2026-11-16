@@ -45,7 +45,9 @@ struct Pixels {
 pub struct HostFrame {
     /// Interleaved RGB, `width * height * 3` bytes.
     pub rgb: Vec<u8>,
+    /// Columns of the upright frame.
     pub width: u32,
+    /// Rows of the upright frame.
     pub height: u32,
     /// The embedded profile of an `RGB` or `RGBA` image, for the colour step.
     pub icc: Option<Vec<u8>>,
@@ -56,6 +58,7 @@ pub struct HostFrame {
 pub struct Admitted {
     /// `(width, height)` of the upright frame.
     pub size: (u32, u32),
+    /// Bytes of the frame against the budget (`prep_budget.host_need_bytes`).
     pub need: u64,
 }
 
@@ -112,7 +115,11 @@ fn probe(data: &[u8]) -> Result<(u32, u32, u32), String> {
     }
 }
 
-/// Step 1: the status of a refused photo, or its upright size and need.
+/// Step 1: the upright size and need of an admitted photo.
+///
+/// # Errors
+///
+/// The photo's status: `decoder` when no decoder here opens it, `huge` past the gates.
 pub fn admit(data: &[u8], max_megapixels: f64) -> Result<Admitted, &'static str> {
     let (w, h, tag) = probe(data).map_err(|e| {
         tracing::debug!("host probe failed: {e}");
@@ -135,7 +142,11 @@ pub fn admit(data: &[u8], max_megapixels: f64) -> Result<Admitted, &'static str>
     })
 }
 
-/// `host_decode.decode`: the upright frame, or why there is none.
+/// `host_decode.decode`: the upright frame.
+///
+/// # Errors
+///
+/// Why there is none: the decoder's message (a damaged file, an unsupported format or mode).
 pub fn decode(data: &[u8]) -> Result<HostFrame, String> {
     let (_, _, tag) = probe(data)?;
     let p = if is_jpeg(data) {
@@ -166,7 +177,11 @@ pub fn decode(data: &[u8]) -> Result<HostFrame, String> {
     })
 }
 
-/// Step 2: the frame, or `decoder` when it does not decode or disagrees with the header.
+/// Step 2: the frame decoded on the lane.
+///
+/// # Errors
+///
+/// `decoder` when it does not decode or its size disagrees with the probe's.
 pub fn decode_checked(data: &[u8], size: (u32, u32)) -> Result<HostFrame, &'static str> {
     let frame = decode(data).map_err(|e| {
         tracing::debug!("host decode failed: {e}");

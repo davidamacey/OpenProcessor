@@ -26,7 +26,11 @@ const ORIENTATION: u16 = 0x0112;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BadExif;
 
-/// The orientation tag of an EXIF block: `Ok(None)` when it has none, `Err` when Pillow raises.
+/// The orientation tag of an EXIF block: `Ok(None)` when it has none.
+///
+/// # Errors
+///
+/// [`BadExif`] when the block does not start with a TIFF header (Pillow raises).
 pub fn exif_orientation(block: &[u8]) -> Result<Option<u32>, BadExif> {
     let tiff = block.strip_prefix(b"Exif\0\0").unwrap_or(block);
     if tiff.is_empty() {
@@ -89,6 +93,10 @@ pub fn xmp_orientation(xmp: &[u8]) -> Option<u32> {
 }
 
 /// The orientation the API applies: the EXIF tag, else the XMP one, else 1.
+///
+/// # Errors
+///
+/// [`BadExif`] for an EXIF block Pillow refuses to load.
 pub fn orientation(exif: Option<&[u8]>, xmp: Option<&[u8]>) -> Result<u32, BadExif> {
     let tagged = match exif {
         Some(block) => exif_orientation(block)?,

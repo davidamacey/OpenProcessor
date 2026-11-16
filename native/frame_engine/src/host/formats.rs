@@ -2,7 +2,7 @@
 //! mode conversion (`modes`) and orientation rule (`orientation`).
 //!
 //! Pillow identifies a file by its content, not its name, and so does
-//! `ImageReader::with_guessed_format` (https://docs.rs/image/0.25.10/image/struct.ImageReader.html).
+//! `ImageReader::with_guessed_format` (<https://docs.rs/image/0.25.10/image/struct.ImageReader.html>).
 //! Only the formats in [`ACCEPTED`] are decoded: each one equals Pillow 13.0.0's pixels on the
 //! corpus (`tests/golden_host.rs`). The size gate is the engine's own (`OP_FRAME_ENGINE_MAX_MEGAPIXELS`
 //! and Pillow's bomb limit), so the crate's allocation limits are lifted.
@@ -97,7 +97,7 @@ pub fn decode(data: &[u8]) -> Result<Pixels, String> {
 }
 
 /// A CMYK TIFF: the `image` crate converts CMYK by its own rounding, so the ink samples are read
-/// through the `tiff` crate it wraps (https://docs.rs/tiff/0.11.3) and converted as Pillow does
+/// through the `tiff` crate it wraps (<https://docs.rs/tiff/0.11.3>) and converted as Pillow does
 /// (16-bit samples by their high byte, raw mode `CMYK;16B`).
 fn tiff_cmyk(data: &[u8]) -> Result<Pixels, String> {
     use tiff::decoder::{Decoder, DecodingResult, Limits};
