@@ -6,6 +6,7 @@
 use std::collections::BTreeMap;
 use std::convert::Infallible;
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -37,6 +38,8 @@ pub struct StubControl {
     pub hold: Arc<Semaphore>,
     /// How many requests `/hold` has received.
     pub held: Arc<Semaphore>,
+    /// How many requests of any path the stub has received.
+    pub requests: Arc<AtomicUsize>,
 }
 
 #[derive(Clone)]
@@ -44,6 +47,7 @@ struct StubState {
     events: Arc<Mutex<Option<EventReceiver>>>,
     hold: Arc<Semaphore>,
     held: Arc<Semaphore>,
+    requests: Arc<AtomicUsize>,
 }
 
 /// What `/echo` saw of a request.
@@ -88,7 +92,20 @@ fn stub_router(state: StubState) -> Router {
         .route("/headers-out", get(headers_out))
         .route("/cors-upstream", get(cors_upstream))
         .route("/status/{code}", any(status))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            count_request,
+        ))
         .with_state(state)
+}
+
+async fn count_request(
+    State(state): State<StubState>,
+    request: Request,
+    next: axum::middleware::Next,
+) -> Response {
+    state.requests.fetch_add(1, Ordering::SeqCst);
+    next.run(request).await
 }
 
 /// Answers with the request body as it arrives, frame by frame.
@@ -151,10 +168,12 @@ pub async fn start_stub() -> (SocketAddr, StubControl) {
     let (events_tx, events_rx) = mpsc::channel(8);
     let hold = Arc::new(Semaphore::new(0));
     let held = Arc::new(Semaphore::new(0));
+    let requests = Arc::new(AtomicUsize::new(0));
     let state = StubState {
         events: Arc::new(Mutex::new(Some(events_rx))),
         hold: Arc::clone(&hold),
         held: Arc::clone(&held),
+        requests: Arc::clone(&requests),
     };
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -165,6 +184,7 @@ pub async fn start_stub() -> (SocketAddr, StubControl) {
             events: events_tx,
             hold,
             held,
+            requests,
         },
     )
 }

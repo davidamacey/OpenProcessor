@@ -1,30 +1,37 @@
-//! CORS with the rule of `src/core/cors.py`: a browser on `localhost`, `127.0.0.1`,
-//! `host.docker.internal` or a private-network address (RFC 1918) may call the API with
-//! credentials, from any port.
+//! CORS with the rule and the answers of Starlette's `CORSMiddleware` as `src/core/cors.py`
+//! configures it: a browser on `localhost`, `127.0.0.1`, `host.docker.internal` or a
+//! private-network address (RFC 1918) may call the API with credentials, from any port.
 //!
 //! Two places apply it, never both to one answer:
 //!
-//! - The routes Rust owns get tower-http's [`layer`], which also answers their preflight requests.
+//! - The routes Rust owns get [`on_owned_routes`]: it answers their preflight requests and adds
+//!   the simple-response headers to their answers.
 //! - An answer the front builds itself (the 503 for an upstream that is down or a shed request,
 //!   the 502, the 400, the 500 of a panic) gets [`on_front_answers`]: Starlette's middleware
 //!   wraps every answer of the Python app, errors included, and a browser that cannot read the
 //!   status and `Retry-After` of such an answer cannot back off as the frontend does.
 //!
-//! An answer forwarded from the Python API is left alone: it carries its own headers, and two
-//! `Access-Control-Allow-Origin` headers make a browser refuse the response.
+//! An answer forwarded from the Python API is left alone, and so is a preflight request for one of
+//! its routes: the Python API answers it, and two `Access-Control-Allow-Origin` headers make a
+//! browser refuse the response.
+//!
+//! tower-http's `CorsLayer` is not used: it treats every `OPTIONS` request as a preflight, where
+//! Starlette (and so FastAPI's 405 for a plain `OPTIONS /live`) does so only with an `Origin` and
+//! an `Access-Control-Request-Method`, and its answers differ in the details a browser console
+//! shows (the method list, `Vary`, the 400 text).
 
-use std::time::Duration;
-
+use axum::body::Body;
 use axum::extract::{Request, State};
 use axum::middleware::Next;
 use axum::response::Response;
-use http::HeaderMap;
 use http::header::{
-    ACCESS_CONTROL_ALLOW_CREDENTIALS, ACCESS_CONTROL_ALLOW_ORIGIN, ACCESS_CONTROL_EXPOSE_HEADERS,
-    HeaderName, HeaderValue, ORIGIN, VARY,
+    ACCESS_CONTROL_ALLOW_CREDENTIALS, ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS,
+    ACCESS_CONTROL_ALLOW_ORIGIN, ACCESS_CONTROL_EXPOSE_HEADERS, ACCESS_CONTROL_MAX_AGE,
+    ACCESS_CONTROL_REQUEST_HEADERS, ACCESS_CONTROL_REQUEST_METHOD, CONTENT_TYPE, HeaderValue,
+    ORIGIN, VARY,
 };
+use http::{HeaderMap, Method, StatusCode};
 use regex::Regex;
-use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
 
 use crate::errors::FrontAnswer;
 
@@ -37,14 +44,19 @@ const ORIGIN_PATTERN: &str = concat!(
     r")(:\d+)?$"
 );
 
+/// What `allow_methods=['*']` stands for in Starlette 1.7 (`ALL_METHODS`).
+const ALL_METHODS: [&str; 8] = [
+    "DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT", "QUERY",
+];
+
 /// Seconds a browser may keep a preflight answer (Starlette's default).
-const PREFLIGHT_MAX_AGE_S: u64 = 600;
+const PREFLIGHT_MAX_AGE: &str = "600";
 
-/// The headers a browser script may read (`expose_headers` of `src/core/cors.py`).
-const EXPOSED: [&str; 2] = ["x-request-id", "x-process-time"];
+/// `Vary` of a preflight answer, as Starlette writes it.
+const PREFLIGHT_VARY: &str = "Origin, Access-Control-Request-Method, Access-Control-Request-Headers, Access-Control-Request-Private-Network";
 
-/// `EXPOSED` as Starlette writes it into `Access-Control-Expose-Headers`.
-const EXPOSED_LIST: &str = "X-Request-ID, X-Process-Time";
+/// `expose_headers` of `src/core/cors.py`, as Starlette joins them.
+const EXPOSED: &str = "X-Request-ID, X-Process-Time";
 
 /// The compiled origin rule.
 ///
@@ -55,27 +67,77 @@ pub fn origin_pattern() -> Result<Regex, regex::Error> {
     Regex::new(ORIGIN_PATTERN)
 }
 
-/// The CORS layer for the routes Rust owns.
-///
-/// Methods and requested headers are echoed back, which is what Starlette does for
-/// `allow_methods=['*']` and `allow_headers=['*']` with credentials (the wildcard is not allowed
-/// with credentials, and tower-http refuses to build that combination).
-pub fn layer(pattern: Regex) -> CorsLayer {
-    CorsLayer::new()
-        .allow_origin(AllowOrigin::predicate(move |origin: &HeaderValue, _| {
-            origin.to_str().is_ok_and(|o| pattern.is_match(o))
-        }))
-        .allow_credentials(true)
-        .allow_methods(AllowMethods::mirror_request())
-        .allow_headers(AllowHeaders::mirror_request())
-        .expose_headers(EXPOSED.map(HeaderName::from_static))
-        .max_age(Duration::from_secs(PREFLIGHT_MAX_AGE_S))
+fn allowed(pattern: &Regex, origin: &HeaderValue) -> bool {
+    origin.to_str().is_ok_and(|o| pattern.is_match(o))
+}
+
+/// CORS for the routes Rust owns: a preflight request (`OPTIONS` with `Origin` and
+/// `Access-Control-Request-Method`) is answered here, any other request goes on and its answer
+/// gets the simple-response headers.
+pub async fn on_owned_routes(
+    State(pattern): State<Regex>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let origin = request.headers().get(ORIGIN).cloned();
+    if let Some(origin) = &origin
+        && request.method() == Method::OPTIONS
+        && request
+            .headers()
+            .contains_key(ACCESS_CONTROL_REQUEST_METHOD)
+    {
+        return preflight(&pattern, origin, request.headers());
+    }
+    let mut response = next.run(request).await;
+    if let Some(origin) = origin {
+        add_simple_headers(response.headers_mut(), &origin, &pattern);
+    }
+    response
+}
+
+fn preflight(pattern: &Regex, origin: &HeaderValue, request: &HeaderMap) -> Response {
+    let mut failures: Vec<&str> = Vec::new();
+    let mut builder = Response::builder()
+        .header(VARY, PREFLIGHT_VARY)
+        .header(ACCESS_CONTROL_ALLOW_METHODS, ALL_METHODS.join(", "))
+        .header(ACCESS_CONTROL_MAX_AGE, PREFLIGHT_MAX_AGE)
+        .header(ACCESS_CONTROL_ALLOW_CREDENTIALS, "true");
+    if allowed(pattern, origin) {
+        builder = builder.header(ACCESS_CONTROL_ALLOW_ORIGIN, origin);
+    } else {
+        failures.push("origin");
+    }
+    let method_ok = request
+        .get(ACCESS_CONTROL_REQUEST_METHOD)
+        .and_then(|m| m.to_str().ok())
+        .is_some_and(|m| ALL_METHODS.contains(&m));
+    if !method_ok {
+        failures.push("method");
+    }
+    if let Some(requested) = request.get(ACCESS_CONTROL_REQUEST_HEADERS) {
+        builder = builder.header(ACCESS_CONTROL_ALLOW_HEADERS, requested);
+    }
+    if request.contains_key("access-control-request-private-network") {
+        failures.push("private-network");
+    }
+    let (status, text) = if failures.is_empty() {
+        (StatusCode::OK, "OK".to_owned())
+    } else {
+        (
+            StatusCode::BAD_REQUEST,
+            format!("Disallowed CORS {}", failures.join(", ")),
+        )
+    };
+    builder
+        .status(status)
+        .header(CONTENT_TYPE, "text/plain; charset=utf-8")
+        .body(Body::from(text))
+        .unwrap_or_default()
 }
 
 /// Give an answer the front built itself the headers Starlette's `CORSMiddleware` gives a simple
-/// response of the Python app: with an `Origin` on the request, credentials and the exposed
-/// headers, and for an allowed origin that origin and `Vary: Origin`. An answer from the Python
-/// API, and one that already carries CORS headers, is returned as it is.
+/// response of the Python app. An answer from the Python API, and one that already carries CORS
+/// headers (a probe's), is returned as it is.
 pub async fn on_front_answers(
     State(pattern): State<Regex>,
     request: Request,
@@ -87,24 +149,27 @@ pub async fn on_front_answers(
         return response;
     };
     let built_here = response.extensions().get::<FrontAnswer>().is_some();
-    if !built_here || has_cors(response.headers()) {
-        return response;
+    if built_here && !has_cors(response.headers()) {
+        add_simple_headers(response.headers_mut(), &origin, &pattern);
     }
-    let allowed = origin.to_str().is_ok_and(|o| pattern.is_match(o));
-    let headers = response.headers_mut();
+    response
+}
+
+/// What Starlette adds to a response of a request with an `Origin`: credentials and the exposed
+/// headers always, the origin itself for an allowed one, and `Vary: Origin`.
+fn add_simple_headers(headers: &mut HeaderMap, origin: &HeaderValue, pattern: &Regex) {
     headers.insert(
         ACCESS_CONTROL_ALLOW_CREDENTIALS,
         HeaderValue::from_static("true"),
     );
     headers.insert(
         ACCESS_CONTROL_EXPOSE_HEADERS,
-        HeaderValue::from_static(EXPOSED_LIST),
+        HeaderValue::from_static(EXPOSED),
     );
-    if allowed {
-        headers.insert(ACCESS_CONTROL_ALLOW_ORIGIN, origin);
+    if allowed(pattern, origin) {
+        headers.insert(ACCESS_CONTROL_ALLOW_ORIGIN, origin.clone());
     }
     append_vary_origin(headers);
-    response
 }
 
 fn has_cors(headers: &HeaderMap) -> bool {

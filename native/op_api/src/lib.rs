@@ -31,7 +31,13 @@ use crate::state::AppState;
 pub fn build(settings: &ApiSettings) -> Result<Router, regex::Error> {
     let state = AppState::new(settings);
     let origins = cors::origin_pattern()?;
-    let probes = middleware::observe(routes::probes().layer(cors::layer(origins.clone())), &state);
+    let probes = middleware::observe(
+        routes::probes().layer(axum::middleware::from_fn_with_state(
+            origins.clone(),
+            cors::on_owned_routes,
+        )),
+        &state,
+    );
     let limited = middleware::limit(
         Router::new().fallback(forward::handler),
         &state,

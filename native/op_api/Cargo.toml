@@ -10,6 +10,7 @@ publish.workspace = true
 
 [dependencies]
 axum = { workspace = true, features = ["http1", "json", "matched-path", "tokio"] }
+futures-util = { workspace = true, features = ["std"] }
 http = { workspace = true }
 hyper = { workspace = true, features = ["http1", "server"] }
 hyper-util = { workspace = true, features = ["client-legacy", "http1", "server-graceful", "service", "tokio"] }
@@ -19,8 +20,9 @@ regex = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["net", "rt", "signal", "sync", "time"] }
 tower = { workspace = true, features = ["limit", "load-shed", "util"] }
-tower-http = { workspace = true, features = ["catch-panic", "cors", "request-id", "trace"] }
+tower-http = { workspace = true, features = ["trace"] }
 tracing = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
 
 [dev-dependencies]
 http-body-util = { workspace = true }

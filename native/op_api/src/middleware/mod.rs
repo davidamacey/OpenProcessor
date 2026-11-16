@@ -1,11 +1,11 @@
 //! The layers every request passes, in this order from the outside in:
 //!
-//! 1. [`request_id::drop_unsafe`] and tower-http's `SetRequestIdLayer`: the id of the request.
+//! 1. [`request_id::assign`]: the id of the request, on the request and on the response.
 //! 2. tower-http's `TraceLayer`: one JSON log line per request with its `request_id`.
-//! 3. tower-http's `PropagateRequestIdLayer`: the id on the response.
-//! 4. [`crate::cors::on_front_answers`]: CORS headers on the answers the front builds itself
+//! 3. [`crate::cors::on_front_answers`]: CORS headers on the answers the front builds itself
 //!    (the 503s, 502, 400 and the 500 below), so a browser on another origin can read them.
-//! 5. tower-http's `CatchPanicLayer`: a panic in a handler answers 500 and the process lives.
+//! 4. `catch_panic`: a panic in a handler answers 500 with the Python 500 body, request id
+//!    included, and the process lives.
 //! 6. tower's `LoadShedLayer` over a `GlobalConcurrencyLimitLayer`: the request over the limit is
 //!    answered 503 with `Retry-After` at once, not queued. The permit is held until the response
 //!    head is produced, so a long streamed body (a server-sent event stream, a big download) does
@@ -20,7 +20,7 @@
 pub mod record;
 pub mod request_id;
 
-use std::any::Any;
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 
 use axum::body::Body;
@@ -28,22 +28,20 @@ use axum::error_handling::HandleErrorLayer;
 use axum::extract::Request;
 use axum::response::{IntoResponse, Response};
 use axum::{BoxError, Extension, Router};
+use futures_util::FutureExt;
 use http::StatusCode;
 use regex::Regex;
 use tower::ServiceBuilder;
 use tower::limit::GlobalConcurrencyLimitLayer;
 use tower::load_shed::LoadShedLayer;
 use tower::load_shed::error::Overloaded;
-use tower_http::catch_panic::CatchPanicLayer;
-use tower_http::request_id::{
-    MakeRequestUuid, PropagateRequestIdLayer, RequestId, SetRequestIdLayer,
-};
 use tower_http::trace::{DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
 use crate::cors;
 use crate::errors::ApiError;
 use crate::metrics::Metrics;
+use crate::middleware::request_id::RequestId;
 use crate::state::AppState;
 
 /// Seconds the 503 of a shed request tells the client to wait.
@@ -53,11 +51,7 @@ const SHED_RETRY_AFTER_S: u32 = 1;
 pub fn common(router: Router, origins: &Regex) -> Router {
     router.layer(
         ServiceBuilder::new()
-            .layer(axum::middleware::from_fn(request_id::drop_unsafe))
-            .layer(SetRequestIdLayer::new(
-                request_id::X_REQUEST_ID,
-                MakeRequestUuid,
-            ))
+            .layer(axum::middleware::from_fn(request_id::assign))
             .layer(
                 TraceLayer::new_for_http()
                     .make_span_with(|request: &Request<Body>| {
@@ -70,12 +64,11 @@ pub fn common(router: Router, origins: &Regex) -> Router {
                     })
                     .on_response(DefaultOnResponse::new().level(Level::INFO)),
             )
-            .layer(PropagateRequestIdLayer::new(request_id::X_REQUEST_ID))
             .layer(axum::middleware::from_fn_with_state(
                 origins.clone(),
                 cors::on_front_answers,
             ))
-            .layer(CatchPanicLayer::custom(panic_response)),
+            .layer(axum::middleware::from_fn(catch_panic)),
     )
 }
 
@@ -132,20 +125,33 @@ fn overload_response(
     if status == StatusCode::SERVICE_UNAVAILABLE {
         answer = answer.with_retry_after(SHED_RETRY_AFTER_S);
     }
-    if let Some(Extension(id)) = id
-        && let Ok(id) = id.header_value().to_str()
-    {
+    if let Some(Extension(RequestId(id))) = id {
         answer = answer.with_request_id(id);
     }
     answer.into_response()
 }
 
-fn panic_response(payload: Box<dyn Any + Send + 'static>) -> Response {
-    let what = payload
-        .downcast_ref::<&str>()
-        .copied()
-        .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
-        .unwrap_or("not a string");
-    tracing::error!(panic = what, "a handler panicked");
-    ApiError::detail(StatusCode::INTERNAL_SERVER_ERROR, "Internal server error").into_response()
+/// Run the rest of the stack and answer 500 with the Python body (`{"detail": "Internal server
+/// error", "request_id": ...}`) if it panics. tower-http's `CatchPanicLayer` cannot do this: its
+/// handler sees the panic payload and not the request, so it cannot put the id in the body.
+async fn catch_panic(request: Request, next: axum::middleware::Next) -> Response {
+    let id = request.extensions().get::<RequestId>().cloned();
+    match AssertUnwindSafe(next.run(request)).catch_unwind().await {
+        Ok(response) => response,
+        Err(payload) => {
+            let what = payload
+                .downcast_ref::<&str>()
+                .copied()
+                .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+                .unwrap_or("not a string");
+            tracing::error!(panic = what, "a handler panicked");
+            let answer =
+                ApiError::detail(StatusCode::INTERNAL_SERVER_ERROR, "Internal server error");
+            match id {
+                Some(RequestId(id)) => answer.with_request_id(&id),
+                None => answer,
+            }
+            .into_response()
+        }
+    }
 }

@@ -2231,6 +2231,7 @@ name = "op_api"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "futures-util",
  "http",
  "http-body-util",
  "hyper",
@@ -2244,6 +2245,7 @@ dependencies = [
  "tower",
  "tower-http 0.7.1",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
@@ -3885,16 +3887,13 @@ checksum = "08a05a66a4fdd61cbbe0a1d755ffe0ca6aba159dd4820936a0ff8a8278245b9c"
 dependencies = [
  "bitflags",
  "bytes",
- "futures-util",
  "http",
  "http-body",
- "http-body-util",
  "percent-encoding",
  "pin-project-lite",
  "tower-layer",
  "tower-service",
  "tracing",
- "uuid",
 ]
 
 [[package]]

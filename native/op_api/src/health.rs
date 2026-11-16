@@ -15,7 +15,6 @@ use axum::Router;
 use axum::body::Body;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
 use http::header::CONTENT_TYPE;
 use http::{StatusCode, Uri};
 use hyper_util::client::legacy::Client;
@@ -24,6 +23,7 @@ use serde_json::json;
 
 use crate::errors::ApiError;
 use crate::metrics::CONTENT_TYPE as METRICS_CONTENT_TYPE;
+use crate::routes::get_only;
 use crate::state::AppState;
 
 /// Where the front's own series are served. Prometheus scrapes it as the job `api-front`.
@@ -32,8 +32,8 @@ pub const FRONT_METRICS_PATH: &str = "/metrics/front";
 /// The routes of this module, for [`crate::routes`].
 pub fn routes() -> Router<AppState> {
     Router::new()
-        .route("/live", get(live))
-        .route(FRONT_METRICS_PATH, get(metrics))
+        .route("/live", get_only(live))
+        .route(FRONT_METRICS_PATH, get_only(metrics))
 }
 
 async fn live() -> axum::Json<serde_json::Value> {
