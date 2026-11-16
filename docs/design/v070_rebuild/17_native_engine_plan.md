@@ -7,8 +7,8 @@
 | Reads with | [14](14_roadmap.md) section 4 (how a port is judged), [13](13_backend_speed_plan.md) D1 and the protocol, [13b](13b_crop_vectors_plan.md) sections 6 and 7 (the crop encoder), [the serving trade study](../../research/v060_serving_backend_trade_study.md) sections 5 and 10, [the desktop direction](../photo_library/50_desktop_direction.md) |
 | Replaces | track T1 of plan 13 (raised to a build); plan 14 row 7's order ("after phase 3") is overridden by the owner: the native engine starts now |
 | Owner decisions in force | 2026-11-15: no further speed work goes into the Python engine; it is frozen as the reference for correct outputs and deleted at the switch (N3); two engines are never kept. Rust (C or C++ where a library needs it). No bias toward any one design: measure, then decide. The engine code is public. Nothing is tuned to this host: its CPU (two Xeon E5-2680 v3, 24 physical cores) is the baseline, thread counts derive from cores and card, and every result names the CPU |
-| Not in scope | the API, jobs, storage and training stay Python; the model server stays for N0 to N3 (section 4, decision 4.1) |
-| Numbers | every number names its set and run. Rows marked "pipeline" are the throwaway Rust pipeline of 2026-11-15 (public sets: COCO 1,000 photos, 120 Commons photos at 18 to 24.5 MP), measured in the same exclusive holds as the Python engine path; other rows cite their plan. Set P is private: numbers only, never in a published table |
+| Not in scope | the API is not in this plan (the owner expects the whole backend to end in Rust; the API port is decided after a running capacity measurement); jobs, storage and training are not either; the model server stays for N0 to N3 (section 4, decision 4.1) |
+| Numbers | every number names its set and run. Rows marked "pipeline" are the throwaway Rust pipeline of 2026-11-15 (public sets: COCO 1,000 photos, 120 Commons photos at 18 to 24.5 MP), measured in the same exclusive holds as the Python engine path; other rows cite their plan. Set P (a private set of real-world 20 MP vehicle photos) is a normal part of every speed test; its numbers may be published (owner, 2026-11-15), its source, file names and images stay private |
 
 ## 0. The user's job and the measured truth
 
@@ -419,8 +419,8 @@ the card the coordinator names (GPU 2 for N0; GPUs 0 and 2 for N2's two-card row
 peer sessions' use of the card. A lane lists such runs as owed, never runs them.
 
 **Evidence for the paper (N0 and the exit of every phase).** Every speed claim is a table that names
-the public set (COCO, the Commons set, Open Images or Objects365; set P never appears in a published
-table), the hardware (card, PCIe generation, CPU model and physical cores, other load on the card and
+the set (the public ones: COCO, the Commons set, Open Images or Objects365; and set P, "a private set of
+real-world 20 MP vehicle photos", with its count and megapixels, no source), the hardware (card, PCIe generation, CPU model and physical cores, other load on the card and
 the host at start and end, the 1-minute load), the versions (engine commit, image digests,
 toolchain, CUDA libraries, model server, the SHA-256 of every `.plan`), the exact command, the bound
 that remains with its evidence, and the Python engine in the same hold. Raw files (JSON lines,
@@ -464,7 +464,7 @@ start, the default is 0), faces, OCR, renditions.
 | Python reference | the frozen engine at N0's second commit (the kernel move), whose parent carries lane C1; image built from `docker/frame-engine/Dockerfile` there; every row names that commit and the image digest. Arms: committed defaults (workers 16, lanes 16, encode threads 8, switch interval 0.1 ms, region 1,024 MiB, budget 2,048, pool 4,096), and one arm with lanes and workers at the physical cores (review M12); the better Python row is the reference |
 | COCO set | pin `scripts/datasets/manifests/coco_bench_2000.json`, fetched with `python scripts/datasets/fetch_coco_subset.py --out data/samples/coco_bench_2000 --bench-set 2000 --seed 20261009 --manifest scripts/datasets/manifests/coco_bench_2000.json` (`--verify-only` on later runs) |
 | 20 MP set | pin `scripts/datasets/manifests/commons_hires_500.json`, fetched with `python scripts/datasets/fetch_hires_set.py --out data/samples/hires_500 --n 500 --seed 20261010 --manifest scripts/datasets/manifests/commons_hires_500.json` |
-| Lists | new `scripts/bench/frame_engine_sets.py`, header reads only, the rule of the input-pipeline measurement: keep baseline or extended-sequential 8-bit 3-component JPEGs whose embedded profile, if any, is sRGB-class by `src/utils/icc_srgb.py`; COCO: up to 2 MP, `random.Random(1)` shuffle in pin row order, first 1,000; 20 MP: 18 to 24.5 MP, seed 3, 120; writes each list, its SHA-256 and the excluded counts by reason. Set P: the coordinator's 200, same rule, numbers only. The lists are not the pipeline's byte for byte, so no pipeline number is a reference: the Python engine is measured again in the same hold |
+| Lists | new `scripts/bench/frame_engine_sets.py`, header reads only, the rule of the input-pipeline measurement: keep baseline or extended-sequential 8-bit 3-component JPEGs whose embedded profile, if any, is sRGB-class by `src/utils/icc_srgb.py`; COCO: up to 2 MP, `random.Random(1)` shuffle in pin row order, first 1,000; 20 MP: 18 to 24.5 MP, seed 3, 120; writes each list, its SHA-256 and the excluded counts by reason. Set P: lists of 200 and 2,000, same rule. The comparison's main rows (H1 to H3) run on the standard benchmark set's lists: public COCO lists of 500 and 2,000 photos and set P lists of 200 and 2,000; the 120-photo public large-photo list is a secondary, reproducible row. The lists are not the pipeline's byte for byte, so no pipeline number is a reference: the Python engine is measured again in the same hold |
 | Model server | `openprocessor-triton` built from `Dockerfile.triton` at the N0 base commit (`FROM nvcr.io/nvidia/tritonserver:26.10-py3@sha256:b404f7de5dbeeefe0b17d7d149745a50d0989a25d0d831433b5ba63c716c2fcd`, TensorRT 11.4.0.106), tagged as the compose file names it at that commit; the flags of `docker-compose.yml`'s `triton-server` command plus a second `--model-repository=/stand_in` and the loads below |
 | Models | `yolov11_small_trt_end2end` (`make export-models`), `pe_image_encoder` and `pe_crop_encoder` (`make export-pe`), configs as committed; the SHA-256 of each `.plan` recorded |
 | Stand-in models | below; generated by new `scripts/bench/frame_engine_stand_ins.py` into an untracked directory mounted at `/stand_in` |
@@ -643,8 +643,8 @@ sweep on the merged tree; speed rows recorded under the evidence clause.
 
 **Entry.** N2's sweep green; G1 to G9 met on plans F and C on the merged tree, and plan A measured
 (G1 with Z_A, the replay of the Python engine's recorded calls for plan A). **Exit.** One engine in
-the tree and in the stack, a green sweep, a ledger entry, and the final table of plans F, C and A
-against the last Python measurement under the evidence clause (the paper's main table).
+the tree and in the stack, a green sweep, a ledger entry, the final table of plans F, C and A
+against the last Python measurement under the evidence clause (the paper's main table), and the general GPU crate (`gpu_frame`) moved into the owner's separate open-source Rust serving project when the owner publishes that project (owner decision 2026-11-15; until then it stays in this repository, with no engine, plan or wire type in its interface).
 
 In one change: the compose service keeps its name and image name (`openprocessor-frame-engine`) and
 points at the native build; `docker/frame-engine-native/` becomes `docker/frame-engine/`; the guard
