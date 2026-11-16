@@ -10,6 +10,9 @@
 //! the store answers `NotModified` without a body. So a file that was replaced or erased is never
 //! served from the cache, and an erase is not undone by a cache.
 
+use std::path::Path;
+use std::time::Duration;
+
 use bytes::Bytes;
 use object_store::{GetOptions, ObjectStore, PutMode, PutPayload};
 use op_config::Env;
@@ -19,13 +22,15 @@ use crate::durable::Durable;
 use crate::erase;
 use crate::error::StorageError;
 use crate::keys::{Root, StorageKey};
-use crate::local::LocalRoots;
 
 /// The setting for the byte cap of the derived-file cache (network stores only; 0 turns it off).
 pub const CACHE_MAX_BYTES_KEY: &str = "OP_STORAGE_CACHE_MAX_BYTES";
 const DEFAULT_CACHE_MAX_BYTES: u64 = 1024 * 1024 * 1024;
-/// The cache folder inside the landing root (a dot-folder: the stale-landing sweep skips it).
-pub const CACHE_FOLDER: &str = ".derived_cache";
+/// The setting for how long after it was written a cached file is kept at most, in seconds.
+pub const CACHE_MAX_AGE_KEY: &str = "OP_STORAGE_CACHE_MAX_AGE_S";
+const DEFAULT_CACHE_MAX_AGE_S: u64 = 86_400;
+/// The setting for the cache directory (required with an S3 store and a cap above 0, else ignored).
+pub const CACHE_ROOT_KEY: &str = "OP_STORAGE_CACHE_ROOT";
 
 /// Segments of an object key under the root: project, `derived`, kind, photo, name.
 const OBJECT_SEGMENTS: usize = 5;
@@ -48,23 +53,45 @@ impl Derived {
     }
 
     /// Derived files with the cache the settings ask for: `OP_STORAGE_CACHE_MAX_BYTES` (default
-    /// 1 GiB, 0 = off) in `<landing root>/.derived_cache`, and only for a network store (a local
-    /// store is already local disk).
+    /// 1 GiB, 0 = off) in the directory `OP_STORAGE_CACHE_ROOT`, and only for a network store (a
+    /// local store is already local disk), each file kept at most `OP_STORAGE_CACHE_MAX_AGE_S`
+    /// (default 86400, above 0) after it was written. The directory is required then and is never inside the
+    /// landing root; with a local store or a cap of 0 it is ignored.
     ///
     /// # Errors
     ///
-    /// [`StorageError::Setting`] for an unparsable cap, [`StorageError::Io`] when the cache folder
-    /// cannot be made.
-    pub fn from_settings(
-        env: &Env,
-        roots: &LocalRoots,
-        durable: Durable,
-    ) -> Result<Self, StorageError> {
+    /// [`StorageError::Setting`] for an unparsable cap or age, [`StorageError::Config`] naming
+    /// `OP_STORAGE_CACHE_ROOT` when it is needed and not set (or the age is 0), [`StorageError::Io`] when the cache
+    /// directory cannot be made.
+    pub fn from_settings(env: &Env, durable: Durable) -> Result<Self, StorageError> {
         let max: u64 = env
             .get(CACHE_MAX_BYTES_KEY, DEFAULT_CACHE_MAX_BYTES)
             .map_err(StorageError::Setting)?;
         let cache = if durable.is_remote() && max > 0 {
-            Some(DiskCache::new(&roots.landing.join(CACHE_FOLDER), max)?)
+            let root: String = env
+                .get(CACHE_ROOT_KEY, String::new())
+                .map_err(StorageError::Setting)?;
+            if root.is_empty() {
+                return Err(StorageError::Config {
+                    key: CACHE_ROOT_KEY,
+                    reason: "required with an S3 store and OP_STORAGE_CACHE_MAX_BYTES above 0"
+                        .to_owned(),
+                });
+            }
+            let max_age_s: u64 = env
+                .get(CACHE_MAX_AGE_KEY, DEFAULT_CACHE_MAX_AGE_S)
+                .map_err(StorageError::Setting)?;
+            if max_age_s == 0 {
+                return Err(StorageError::Config {
+                    key: CACHE_MAX_AGE_KEY,
+                    reason: "must be above 0 seconds".to_owned(),
+                });
+            }
+            Some(DiskCache::new(
+                Path::new(&root),
+                max,
+                Duration::from_secs(max_age_s),
+            )?)
         } else {
             None
         };
@@ -122,6 +149,10 @@ impl Derived {
                 source: object_store::Error::NotModified { .. },
                 ..
             }) => match cached {
+                Some(entry) if entry.expired => {
+                    cache.insert(key, &entry.etag, &entry.body).await;
+                    Ok(entry.body)
+                }
                 Some(entry) => {
                     cache.touch(key).await;
                     Ok(entry.body)
@@ -141,9 +172,11 @@ impl Derived {
 
     /// Delete every derived file under `prefix`, for example
     /// [`StorageKey::derived_prefix`] (one kind of one photo) or `projects/<id>/derived` (all of a
-    /// project's). Idempotent. Returns how many objects were deleted. The cache of this process is
-    /// emptied for the prefix; another process's cache copy is never served, because `get`
-    /// confirms with the store, and goes with its eviction.
+    /// project's). Idempotent. Returns how many objects were deleted. After erase, no process serves
+    /// the file; this host's cached copy is removed at once; another host's copy is removed within
+    /// `OP_STORAGE_CACHE_MAX_AGE_S`. (No process serves it because `get` confirms the etag with the
+    /// store; the cache directory is shared by this host's processes and laid out like the keys, so
+    /// removing the subtree empties it for all of them.)
     ///
     /// # Errors
     ///

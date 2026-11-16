@@ -12,12 +12,14 @@ publish.workspace = true
 bytes = { workspace = true }
 futures-util = { workspace = true }
 # S3 without aws-lc: `aws-base` + `reqwest` + `ring` instead of the crate's `aws` feature, TLS by
-# rustls with the ring provider (reqwest's `rustls-no-provider`; the provider is installed in
-# `durable`). aws-lc-sys carries the OpenSSL licence, which native/deny.toml does not allow.
+# rustls with the ring provider (reqwest's `rustls-no-provider`, roots from the platform verifier;
+# the provider is installed in `durable`). No system OpenSSL. aws-lc-sys carries the OpenSSL
+# licence, which native/deny.toml does not allow.
 object_store = { workspace = true, features = ["aws-base", "fs", "reqwest", "ring"] }
 op_config = { path = "../op_config" }
-reqwest = { workspace = true, features = ["native-tls"] }
+reqwest = { workspace = true, features = ["rustls-no-provider"] }
 rustix = { workspace = true, features = ["fs"] }
+rustls = { workspace = true, features = ["ring", "std"] }
 sha2 = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util", "rt"] }
 uuid = { workspace = true }
