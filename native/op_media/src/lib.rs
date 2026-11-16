@@ -3,5 +3,6 @@
 #![forbid(unsafe_code)]
 
 pub mod capture;
+pub mod exiftool;
 pub mod imohash;
 mod pytext;

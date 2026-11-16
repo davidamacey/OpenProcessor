@@ -12,7 +12,7 @@ publish.workspace = true
 murmur3 = { workspace = true }
 op_config = { path = "../op_config" }
 serde_json = { workspace = true }
-tokio = { workspace = true, features = ["io-util", "process", "rt", "sync", "time"] }
+tokio = { workspace = true, features = ["fs", "io-util", "process", "rt", "sync", "time"] }
 tracing = { workspace = true }
 unicode-general-category = { workspace = true }
 

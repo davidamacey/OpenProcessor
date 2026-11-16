@@ -12,8 +12,11 @@
 mod clock;
 mod location;
 
+use std::path::Path;
+
 use serde_json::{Map, Value};
 
+use crate::exiftool::{ExifToolError, ExifToolPool};
 use crate::pytext::{float_repr, is_printable, strip};
 
 pub use location::{LocationPolicy, UnknownLocationPolicy, apply_location_policy, coarse_location};
@@ -47,6 +50,17 @@ pub const EXIFTOOL_TAGS: [&str; 20] = [
 
 /// Set by ExifTool when it reports an error for the file itself (unreadable or corrupt).
 pub const FILE_ERROR_KEY: &str = "ExifTool:Error";
+
+/// Every tag a read asks ExifTool for: [`EXIFTOOL_TAGS`] and [`FILE_ERROR_KEY`], in that order.
+pub const READ_TAGS: [&str; 21] = {
+    let mut tags = [FILE_ERROR_KEY; 21];
+    let mut i = 0;
+    while i < EXIFTOOL_TAGS.len() {
+        tags[i] = EXIFTOOL_TAGS[i];
+        i += 1;
+    }
+    tags
+};
 
 /// The longest camera make, model or lens text kept, in characters.
 const TEXT_MAX: usize = 128;
@@ -252,4 +266,22 @@ pub fn parse_capture(tags: &Map<String, Value>) -> CaptureMetadata {
         location,
         ..empty(ExifStatus::Ok)
     }
+}
+
+/// The capture of the stored file at `path`, read through `pool`; `None` when there is no such
+/// file (what `read_capture_file` in `src/services/curation/capture_read.py` answers).
+///
+/// # Errors
+///
+/// The pool's [`ExifToolError`] on an ExifTool outage. The caller decides what an outage means:
+/// an ingest records [`unknown_capture`], a backfill stops instead of marking every file unknown.
+pub async fn read_capture_file(
+    pool: &ExifToolPool,
+    path: &Path,
+) -> Result<Option<CaptureMetadata>, ExifToolError> {
+    if !tokio::fs::metadata(path).await.is_ok_and(|m| m.is_file()) {
+        return Ok(None);
+    }
+    let tags = pool.read(path, &READ_TAGS).await?;
+    Ok(Some(parse_capture(&tags)))
 }
