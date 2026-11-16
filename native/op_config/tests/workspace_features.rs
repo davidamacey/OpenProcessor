@@ -52,3 +52,20 @@ fn a_flattened_struct_round_trips_integers_and_floats() {
     let text = serde_json::to_string(&value).unwrap();
     assert_eq!(serde_json::from_str::<Outer>(&text).unwrap(), value);
 }
+
+/// serde_json's default float parser can land one ULP from the correctly rounded value; the
+/// workspace turns on `float_roundtrip` (in `[workspace.dependencies]`) so every crate parses as
+/// Python's `json.loads` does. This number is the letterbox scale of a 3x7 photo at 640, from
+/// the golden geometry file: the default parser reads it one ULP off.
+#[test]
+fn floats_parse_correctly_rounded() {
+    let text = "91.42857142857143";
+    let want = 91.428_571_428_571_43_f64.to_bits();
+    let value: serde_json::Value = serde_json::from_str(text).unwrap();
+    assert_eq!(value.as_f64().unwrap().to_bits(), want, "as a Value");
+    assert_eq!(
+        serde_json::from_str::<f64>(text).unwrap().to_bits(),
+        want,
+        "as an f64"
+    );
+}

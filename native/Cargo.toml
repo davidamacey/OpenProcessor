@@ -39,6 +39,10 @@ nvml-wrapper = "=0.13.0"
 png = "=0.18.1"
 prost = "=0.14.6"
 protox = "=0.10.0"
+# The one place serde_json's features are set: `float_roundtrip` on (floats parse correctly rounded,
+# as Python's json.loads does), `arbitrary_precision` and `preserve_order` never (they change how
+# other crates' wire models read); `op_config/tests/workspace_features.rs` guards both.
+serde_json = { version = "=1.0.154", features = ["float_roundtrip"] }
 tiff = "=0.11.3"
 tokio = { version = "=1.54.1", default-features = false }
 tonic = { version = "=0.14.9", default-features = false }
