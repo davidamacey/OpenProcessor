@@ -4,7 +4,7 @@
 |---|---|
 | Status | plan, revision 1 (2026-11-15): the rules, the record model and the two measured gates, with the independent review folded in (section 15). The field-by-field schema, the query map and the lane specs are companion files written from this one (section 12) |
 | Code base read | `int/b4-stateless` at `4a6c8d788`, through a written inventory of every stored field, writer, query shape, table, human-decision path and file path |
-| Refines | [14_roadmap.md](14_roadmap.md) phase 2; [13_backend_speed_plan.md](13_backend_speed_plan.md) decisions on storage and its vector-store track; [02a_postgres_schema.md](02a_postgres_schema.md) (the tables that exist) |
+| Refines | [14_roadmap.md](14_roadmap.md) stage 4 (the database and the clustering features); [13_backend_speed_plan.md](13_backend_speed_plan.md) decisions on storage and its vector-store track; [02a_postgres_schema.md](02a_postgres_schema.md) (the tables that exist) |
 | Not in scope | what the models compute (phase 1b, phase 3); the gallery screens (phase 5). Their data shapes ARE in scope, so no later phase redesigns a table |
 | Data | may be wiped and re-ingested (owner, 2026-11-14). No migration of search-index documents is written |
 
