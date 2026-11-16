@@ -264,7 +264,7 @@ measured index set and summary tables into 15a section 2.6, then lanes.
 
 | Question | Settled by |
 |---|---|
-| Gate A outcome | the read-shape measurement at 1 and 10 million rows (running) |
+| Gate A outcome | PostgreSQL on the record, no search copy so far. Shown at 10 million rows (round 3, 2026-11-16, [15b](15b_storage_reads.md) section 14): list pages, several classes, capped counts, totals with pending deltas, the drained review queue, box pages, placement, facets and locate meet the bars. Owed (round 4, 15b section 15): the redesigned cluster cards, text search under row security, the sort band, cards under an item filter, and reads while labels are written |
 | Gate B default | the 10 million vector round, after the crop encoder is chosen |
 | Exact counts on very large filtered lists, or a capped count ("10,000+") | gate A's count numbers; a wire change if capped |
 | Whether a trained model whose training set held an erased photo must be retrained or deleted (erasure does not touch trained weights) | the owner |
