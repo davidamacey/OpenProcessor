@@ -11,26 +11,44 @@ use gpu_frame::{Admission, AdmitError, Permit};
 use prometheus_client::metrics::gauge::Gauge;
 
 use crate::admission::{FrameBudget, Overload};
+use crate::geometry::fit_size;
 use crate::jpeg_header::{JpegHeader, oriented_size};
 use crate::pyfmt::format_g;
 
-/// `prep_budget.need_bytes` without renditions: the decoded frame, twice while an EXIF tag other
-/// than 1 is applied (the oriented copy next to it). This decides `over_budget`, as in Python.
-pub fn need_bytes(h: &JpegHeader) -> u64 {
+/// Widths of the renditions of `sides` for an oriented frame of `w x h` (`fit_size`).
+pub fn rendition_widths(w: u32, h: u32, sides: &[u32]) -> Vec<u32> {
+    sides
+        .iter()
+        .map(|s| {
+            let (ow, _) = fit_size(i64::from(w), i64::from(h), i64::from(*s));
+            u32::try_from(ow).unwrap_or(u32::MAX)
+        })
+        .collect()
+}
+
+/// `rows x width x 12`: the float32 scratch of a resample's horizontal pass at the widest
+/// output, every source row of the oriented frame.
+fn scratch(h: &JpegHeader, widths: &[u32]) -> u64 {
+    let (_, rows) = oriented_size(h);
+    u64::from(rows) * u64::from(widths.iter().copied().max().unwrap_or(0)) * 12
+}
+
+/// `prep_budget.need_bytes(header, sides)`: the decoded frame, twice while an EXIF tag other than
+/// 1 is applied (the oriented copy next to it), or the frame and the largest rendition's resample
+/// scratch when that is more. This decides `over_budget`, as in Python.
+pub fn need_bytes(h: &JpegHeader, sides: &[u32]) -> u64 {
     let frame = u64::from(h.width) * u64::from(h.height) * 3;
-    if h.orientation != 1 { 2 * frame } else { frame }
+    let held = if h.orientation != 1 { 2 * frame } else { frame };
+    let (w, rows) = oriented_size(h);
+    held.max(frame + scratch(h, &rendition_widths(w, rows, sides)))
 }
 
 /// What is reserved: the need, or the frame and the largest resample scratch when that is more
-/// (plan 17 section 2.3: `rows x width x 12` bytes, a term the Python budget leaves out). The
-/// scratch holds the source rows one output reads, at most every row of the oriented frame, at
-/// the widest output written (`widths`).
-pub fn reserve_bytes(h: &JpegHeader, widths: &[u32]) -> u64 {
-    let (_, rows) = oriented_size(h);
-    let widest = widths.iter().copied().max().unwrap_or(0);
+/// (plan 17 section 2.3: `rows x width x 12` bytes, a term the Python budget leaves out for the
+/// model inputs). `widths` are the outputs the photo's resamples write, renditions included.
+pub fn reserve_bytes(h: &JpegHeader, sides: &[u32], widths: &[u32]) -> u64 {
     let frame = u64::from(h.width) * u64::from(h.height) * 3;
-    let scratch = u64::from(rows) * u64::from(widest) * 12;
-    need_bytes(h).max(frame + scratch)
+    need_bytes(h, sides).max(frame + scratch(h, widths))
 }
 
 /// The budget on `gpu_frame`'s admission, keeping the in-use gauge.

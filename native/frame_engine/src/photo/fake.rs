@@ -20,8 +20,10 @@ use super::device::{
     DecodeJob, Decoded, Device, JobResult, LaunchJob, Launched, ModelCall, WarpKind,
 };
 use crate::branches::crops::CropJpeg;
+use crate::branches::derivatives::{Rendered, RenditionJob};
 use crate::branches::faces::scrfd::{FPN_STRIDES, OUTPUT_NAMES};
 use crate::fault::GpuFault;
+use crate::photo::clock::{DERIVATIVE_JPEG, DERIVATIVE_RENDER};
 
 /// What the fake does, set by each test.
 #[derive(Default)]
@@ -34,6 +36,8 @@ pub struct Script {
     pub refuse: Option<&'static str>,
     pub decode_fault: Option<GpuFault>,
     pub launch_fault: Option<GpuFault>,
+    /// The rendition job fails with this fault (an encode that failed).
+    pub encode_fault: Option<GpuFault>,
     pub panic_in_decode: bool,
     /// Model calls answer after this long.
     pub call_hold: Option<Duration>,
@@ -55,6 +59,8 @@ pub enum Event {
         blur: usize,
     },
     Crop([i64; 4]),
+    /// A rendition job: the size and whether a resample makes it, per rendition.
+    Renditions(Vec<((u32, u32), bool)>),
     /// A launch's warps: the faces of each.
     Warps(Vec<usize>),
     Call {
@@ -299,6 +305,30 @@ impl Device for Fake {
                 data: Bytes::from(format!("jpeg {rect:?}")),
                 copy_seconds: 0.001,
                 encode_seconds: 0.002,
+            })
+        })
+    }
+
+    fn renditions(&self, job: RenditionJob<Frame>, cancel: &CancelToken) -> JobResult<Rendered> {
+        let fault = self.script.lock().expect("script").encode_fault.clone();
+        self.note(Event::Renditions(
+            job.renditions
+                .iter()
+                .map(|r| (r.size, r.resample.is_some()))
+                .collect(),
+        ));
+        self.submit(cancel, move || {
+            let _frame = job.frame;
+            if let Some(f) = fault {
+                return Err(f);
+            }
+            Ok(Rendered {
+                jpegs: job
+                    .renditions
+                    .iter()
+                    .map(|r| Bytes::from(format!("jpeg {:?} q{}", r.size, r.quality)))
+                    .collect(),
+                stages: vec![(DERIVATIVE_RENDER, 0.001), (DERIVATIVE_JPEG, 0.002)],
             })
         })
     }

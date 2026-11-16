@@ -41,7 +41,7 @@ use self::clock::{BUDGET, DECODE, QUEUE, StageClock};
 use self::device::{DecodeJob, Decoded, Device, Write};
 use self::rounds::{Round2, Work};
 use crate::admission::FrameBudget;
-use crate::branches::BUILT;
+use crate::branches::{BUILT, derivatives};
 use crate::fault::{GpuFault, job_failed};
 use crate::jpeg_header::{Decoder, JpegHeader, oriented_size, route};
 use crate::metrics::{ByImage, ByOutcome, Metrics};
@@ -273,10 +273,14 @@ where
             // the host route is N1a's: the API decodes such a photo itself
             Decoder::Cpu(_) => return Err(Stop::Status("decoder")),
         };
-        if budget::need_bytes(&header) > s.budget_bytes {
+        let sides = derivatives::sides(&photo.plan.derivatives);
+        if budget::need_bytes(&header, &sides) > s.budget_bytes {
             return Err(Stop::Status("over_budget"));
         }
-        let reserve = budget::reserve_bytes(&header, &runs.widths(&photo.plan)).min(s.budget_bytes);
+        let (w, h) = oriented_size(&header);
+        let mut widths = runs.widths(&photo.plan);
+        widths.extend(budget::rendition_widths(w, h, &sides));
+        let reserve = budget::reserve_bytes(&header, &sides, &widths).min(s.budget_bytes);
         let permit = clock
             .wait(
                 BUDGET,

@@ -7,6 +7,7 @@
 //! `face_embed` (N1b); every other branch the protocol knows answers `unsupported_branch`.
 
 pub mod crops;
+pub mod derivatives;
 pub mod detect;
 pub mod embed;
 pub mod faces;

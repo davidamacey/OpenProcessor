@@ -57,3 +57,42 @@ fn lanczos_weight_sets_equal_pythons_to_the_bit() {
         sets.len()
     );
 }
+
+#[test]
+fn the_frame_budget_with_renditions_equals_pythons_need_bytes() {
+    use frame_engine::jpeg_header::{JpegHeader, Kind};
+    use frame_engine::photo::budget::need_bytes;
+
+    let g: Value = serde_json::from_str(RENDITIONS).expect("JSON");
+    let rows = g["need_bytes"].as_array().expect("rows");
+    assert!(rows.len() > 100);
+    let mut scratch_won = 0;
+    for r in rows {
+        let r = r.as_array().expect("a row");
+        let header = JpegHeader {
+            kind: Kind::Jpeg,
+            width: int(&r[0]) as u32,
+            height: int(&r[1]) as u32,
+            components: 3,
+            precision: 8,
+            progressive: false,
+            orientation: int(&r[2]) as u32,
+            lossless: false,
+            end: 0,
+            icc: None,
+        };
+        let sides: Vec<u32> = r[3]
+            .as_array()
+            .expect("sides")
+            .iter()
+            .map(|s| int(s) as u32)
+            .collect();
+        let frame = u64::from(header.width) * u64::from(header.height) * 3;
+        let want = int(&r[4]) as u64;
+        if want > frame * if header.orientation == 1 { 1 } else { 2 } {
+            scratch_won += 1;
+        }
+        assert_eq!(need_bytes(&header, &sides), want, "{r:?}");
+    }
+    assert!(scratch_won > 10, "the rows exercise the rendition scratch");
+}

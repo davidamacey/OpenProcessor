@@ -384,7 +384,35 @@ def _renditions() -> dict[str, Any]:
                 wt = prep_kernels._weights(key[0], key[1], 0, key[1], True, True)
                 digest = hashlib.sha256(wt.blob.tobytes()).hexdigest()[:32]
                 sets.append([key[0], key[1], wt.n, wt.kmax, wt.lo, wt.hi, digest])
-    return {'fit_size': fits, 'lanczos': sets}
+    return {'fit_size': fits, 'lanczos': sets, 'need_bytes': _need_bytes(sorted(sizes))}
+
+
+def _need_bytes(sizes: list[tuple[int, int]]) -> list[list[Any]]:
+    """``prep_budget.need_bytes(header, sides)``: ``[w, h, orientation, sides, need]``."""
+    from frame_engine import prep_budget
+    from frame_engine.prep_geometry import JpegHeader
+
+    ladders = ((), (256,), (256, 1024), (2048, 160), (4096,), (16, 512, 333))
+    rows = []
+    for k, (w, h) in enumerate([*sizes[::7], (1, 1), (17, 4000), (8000, 6000)]):
+        for orientation in (1, 6, 3, 8):
+            sides = ladders[(k + orientation) % len(ladders)]
+            header = JpegHeader('baseline', w, h, 3, 8, False, orientation, False)
+            rows.append([w, h, orientation, list(sides), prep_budget.need_bytes(header, sides)])
+    return rows
+
+
+def _interleave() -> list[list[Any]]:
+    """``cp.ascontiguousarray(chw.transpose(1, 2, 0))`` of ``derivatives._render`` in NumPy:
+    ``[w, h, planar bytes, interleaved bytes]`` for small pictures of distinct bytes."""
+    import numpy as np
+
+    out = []
+    for w, h in ((1, 1), (5, 3), (3, 5), (7, 2), (16, 9)):
+        chw = (np.arange(3 * h * w, dtype=np.uint32) * 7 % 251).astype(np.uint8).reshape(3, h, w)
+        hwc = np.ascontiguousarray(chw.transpose(1, 2, 0))
+        out.append([w, h, chw.ravel().tolist(), hwc.ravel().tolist()])
+    return out
 
 
 # ---------------------------------------------------------------------------------- files
@@ -404,7 +432,7 @@ def render() -> dict[str, str]:
         ),
         'ocr_lines.json': _dump({**head, **_lines()}),
         'ocr_ctc.json': _dump({**head, **_ctc()}),
-        'renditions.json': _dump({**head, **_renditions()}),
+        'renditions.json': _dump({**head, **_renditions(), 'interleave': _interleave()}),
     }
 
 

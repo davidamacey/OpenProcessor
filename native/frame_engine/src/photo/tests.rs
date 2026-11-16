@@ -179,6 +179,7 @@ async fn the_hand_offs_come_in_the_python_order_and_each_stage_is_observed() {
             Event::Launch { .. } => "launch".into(),
             Event::Crop(_) => "crop".into(),
             Event::Warps(_) => "warps".into(),
+            Event::Renditions(_) => "renditions".into(),
             Event::Call { model, .. } => format!("call {model}"),
         })
         .collect();
@@ -206,8 +207,12 @@ async fn the_hand_offs_come_in_the_python_order_and_each_stage_is_observed() {
     // round 2: one launch for the crop squares and the blur sums of the frame and each box
     assert_eq!(events[3], Event::Launch { writes: 1, blur: 4 });
     let text = b.flow.metrics.render();
-    // the ingest plan runs no face branch
-    for stage in clock::ALL.iter().filter(|s| !s.starts_with("face_")) {
+    // the ingest plan runs no face, text or rendition branch
+    let other = ["face_", "ocr_", "derivative_"];
+    for stage in clock::ALL
+        .iter()
+        .filter(|s| !other.iter().any(|o| s.starts_with(o)))
+    {
         assert!(
             text.contains(&format!(
                 "op_frame_engine_stage_observations_total{{stage=\"{stage}\"}} 1"
