@@ -65,6 +65,7 @@ at port 4603.
 | `src/domain/` | Pure rules and field vocabularies shared by clients and services (`region_boxes`, `history`, `embedding_state`, `item_text`, `audit_math`, `ingest_class_sources`); imports only `config` and `utils` |
 | `src/schemas/` | Wire models (`curation/`, `bakeoff/`, `embed`, `ingest`, ...); routers and services import them, they import neither |
 | `native/` | Rust workspace of the native frame engine: `gpu_frame` (general GPU parts), `frame_engine` (product part); `frame_engine/kernels/*.cu` is the one copy of the CUDA kernel sources, read by this Rust engine and by the Python `frame_engine/`. Gates: `cargo fmt/clippy/test/deny` hooks scoped to `^native/`, CI job `native` |
+| `native/` server crates | The backend in Rust (plan `docs/design/v070_rebuild/18a_backend_rust_port_slices.md`), stubs until their slice lands: `op_config` (the `Env` settings helper), `op_storage`, `op_media`, `op_engine_client`, `op_db`, `op_jobs`, `op_ingest`, `op_api`, `op_server` (binary `op-server`), `op_upload_loadgen`. Allowed dependencies between crates: `CRATE_DEPENDENCIES` in `scripts/codegen/check_layering.py` (`--crates`) |
 | `scripts/curation/` | Worker entry points, ingest walkers, import client, backfills, `bakeoff/` |
 | `scripts/` | `setup.sh`, `lib/` (shell libraries, VLM catalog reader), `release/`, `codegen/`, `datasets/`, `docs/`, `examples/`, `bench/`, `research/`, `validation/` |
 | `openprocessor`, `setup-openprocessor.sh` | Management CLI and the one-line installer (both bash) |
