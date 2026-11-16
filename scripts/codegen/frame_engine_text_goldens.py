@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Goldens for the native frame engine's ``ocr`` branch (plan 17 section 5 N1, row N1c).
+"""Goldens for the native frame engine's ``ocr`` and ``derivatives`` branches (plan 17 section 5 N1,
+row N1c).
 
 Runs the Python engine's OCR functions (``frame_engine/ocr/``) and the OpenCV and pyclipper calls
 they make on inputs this script fixes, and writes what they answered under
@@ -15,7 +16,10 @@ they make on inputs this script fixes, and writes what they answered under
   pixels), ``plan_batches`` and ``sort_reading_order`` of random inputs;
 * ``ocr_ctc.json``: ``CtcDecoder`` over the recogniser's real dictionary
   (``models/paddleocr_rec_trt/ppocrv6_dict.txt``): rows with blanks, repeats, indices past the
-  dictionary and empty rows, the text and both scores.
+  dictionary and empty rows, the text and both scores;
+* ``renditions.json``: ``fit_size`` for every pin size (and its turn) at a ladder of sides, and
+  the first 128 bits of the SHA-256 of each Lanczos weight set (``prep_kernels._weights`` with
+  ``lanczos=True``, both axes) those renditions read, with ``n``, ``kmax``, ``lo``, ``hi``.
 
 Floats are written as their IEEE bit patterns, so equal goldens are equal bits. The data is
 committed; the Rust tests read it. This script is deleted with the Python engine at the switch
@@ -355,6 +359,34 @@ def _ctc() -> dict[str, Any]:
     return {'classes': n, 'rows': rows}
 
 
+# ---------------------------------------------------------------------------------- renditions
+
+
+def _renditions() -> dict[str, Any]:
+    import hashlib
+
+    from frame_engine import prep_geometry, prep_kernels
+
+    sizes: set[tuple[int, int]] = {(1, 1), (17, 4000), (4000, 17), (8000, 6000), (257, 256)}
+    for name in ('coco_bench_2000', 'commons_hires_500'):
+        path = ROOT / 'scripts' / 'datasets' / 'manifests' / f'{name}.json'
+        for image in json.loads(path.read_text(encoding='utf-8'))['images']:
+            sizes.update({(image['width'], image['height']), (image['height'], image['width'])})
+    fits, seen, sets = [], set(), []
+    for w, h in sorted(sizes):
+        for side in (16, 64, 160, 256, 333, 512, 1024, 2048, 4096):
+            ow, oh = prep_geometry.fit_size(w, h, side)
+            fits.append([w, h, side, ow, oh])
+            for key in ((w, ow), (h, oh)):
+                if key in seen or key[0] == key[1]:
+                    continue
+                seen.add(key)
+                wt = prep_kernels._weights(key[0], key[1], 0, key[1], True, True)
+                digest = hashlib.sha256(wt.blob.tobytes()).hexdigest()[:32]
+                sets.append([key[0], key[1], wt.n, wt.kmax, wt.lo, wt.hi, digest])
+    return {'fit_size': fits, 'lanczos': sets}
+
+
 # ---------------------------------------------------------------------------------- files
 
 
@@ -372,6 +404,7 @@ def render() -> dict[str, str]:
         ),
         'ocr_lines.json': _dump({**head, **_lines()}),
         'ocr_ctc.json': _dump({**head, **_ctc()}),
+        'renditions.json': _dump({**head, **_renditions()}),
     }
 
 

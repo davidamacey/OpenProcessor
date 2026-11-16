@@ -45,11 +45,12 @@ pub const WEIGHT_CACHE_BYTES: usize = 2 << 20;
 
 /// The filter of a resample (`resample_into`'s `antialias` and `lanczos`): the triangle widened
 /// with the downscale (Pillow `BILINEAR`), the plain triangle (OpenCV `INTER_LINEAR`, the OCR
-/// detector's input without `det_antialias`).
+/// detector's input without `det_antialias`), Pillow's `LANCZOS` (the renditions).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Filter {
     Antialias,
     Bilinear,
+    Lanczos,
 }
 
 /// One resample (`PrepKernels.resample_into`): `roi` of the frame scaled to `size`, of which
@@ -137,11 +138,12 @@ pub struct WeightKey {
 
 impl WeightKey {
     pub fn weights(&self) -> Result<geometry::Weights, GeometryError> {
-        let antialias = match self.filter {
-            Filter::Antialias => true,
-            Filter::Bilinear => false,
-        };
-        geometry::weights(self.n_in, self.n_out, self.left, self.take, antialias)
+        let (n_in, n_out, left, take) = (self.n_in, self.n_out, self.left, self.take);
+        match self.filter {
+            Filter::Antialias => geometry::weights(n_in, n_out, left, take, true),
+            Filter::Bilinear => geometry::weights(n_in, n_out, left, take, false),
+            Filter::Lanczos => geometry::lanczos_weights(n_in, n_out, left, take),
+        }
     }
 }
 
