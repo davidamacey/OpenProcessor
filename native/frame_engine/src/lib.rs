@@ -17,6 +17,7 @@ pub mod health;
 pub mod host;
 pub mod jpeg_header;
 pub mod kernels;
+pub mod lane_budget;
 pub mod metrics;
 pub mod photo;
 pub mod pipeline;

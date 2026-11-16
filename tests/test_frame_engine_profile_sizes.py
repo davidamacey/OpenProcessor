@@ -16,11 +16,16 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 from frame_engine.settings import EngineSettings
+
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'scripts' / 'codegen'))
+import frame_engine_lane_budget as lane_budget
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -144,3 +149,31 @@ def test_the_setup_mirror_equals_the_profile_file(name: str) -> None:
     assert tuple(int(v) for v in _sh(f'_frame_engine_sizes_for_profile {name}').split()) == (
         _sizes(name)
     )
+
+
+@pytest.mark.parametrize('name', NAMES)
+def test_each_profiles_lanes_are_what_the_lane_arithmetic_gives(name: str) -> None:
+    """One lane where the decode is off; else what fits on the profile's smallest card beside its
+    models (``frame_engine_lane_budget.profile_lanes``), at most the cap."""
+    profile = _profile(name)
+    floor_mib = int(_sh(f'_profile_min_free_gb {name}')) * 1024
+    want = lane_budget.profile_lanes(
+        profile['ingest_gpu_decode'],
+        floor_mib,
+        MODELS_MIB[name],
+        profile['frame_engine_region_mib'],
+        profile['frame_engine_pool_mib'],
+    )
+    assert profile['frame_engine_lanes'] == want
+
+
+def test_the_full_profiles_memory_does_not_lower_its_lanes() -> None:
+    free = (40 * 1024 - MODELS_MIB['full'] - lane_budget.CONTEXT_MIB - 1024) * lane_budget.MIB
+    fit = lane_budget.lanes_that_fit(free, 4096 * lane_budget.MIB, lane_budget.SIZED_FOR_MEGAPIXELS)
+    assert fit.fits
+    assert fit.lanes >= lane_budget.PROFILE_LANE_CAP
+
+
+def test_a_card_without_room_gets_the_minimum_and_says_so() -> None:
+    fit = lane_budget.lanes_that_fit(10 * lane_budget.MIB, 4096 * lane_budget.MIB, 26.0)
+    assert (fit.lanes, fit.fits) == (1, False)
