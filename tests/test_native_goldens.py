@@ -1,5 +1,6 @@
-"""The committed goldens of the native engine's geometry and routing ports are what the Python
-functions answer today (``scripts/codegen/frame_engine_goldens.py``)."""
+"""The committed goldens of the native engine's ports are what the Python functions answer today
+(``scripts/codegen/frame_engine_goldens.py`` for geometry, routing and faces,
+``scripts/codegen/frame_engine_text_goldens.py`` for text and renditions)."""
 
 from __future__ import annotations
 
@@ -12,17 +13,21 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 GOLDEN = ROOT / 'native' / 'frame_engine' / 'tests' / 'golden'
-SCRIPT = ROOT / 'scripts' / 'codegen' / 'frame_engine_goldens.py'
+SCRIPTS = ('frame_engine_goldens', 'frame_engine_text_goldens')
 
 
 @pytest.fixture(scope='module')
 def rendered() -> dict[str, str]:
-    spec = importlib.util.spec_from_file_location('frame_engine_goldens', SCRIPT)
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module.render()
+    out: dict[str, str] = {}
+    for name in SCRIPTS:
+        path = ROOT / 'scripts' / 'codegen' / f'{name}.py'
+        spec = importlib.util.spec_from_file_location(name, path)
+        assert spec is not None
+        assert spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        out.update(module.render())
+    return out
 
 
 def test_the_committed_files_are_what_the_generator_writes(rendered: dict[str, str]) -> None:
