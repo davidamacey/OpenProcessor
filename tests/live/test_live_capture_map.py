@@ -18,7 +18,6 @@ number is the magnitude). Order is load-bearing: the policy is switched ``store`
 
 from __future__ import annotations
 
-import time
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -27,7 +26,7 @@ import pytest
 from exiftool import ExifToolHelper
 from PIL import Image
 
-from .conftest import API_PREFIX, VERIFY_DATA_DIR, create_project, refresh, wait_until
+from .conftest import API_PREFIX, VERIFY_DATA_DIR, create_project, refresh, wait_job, wait_until
 
 
 if TYPE_CHECKING:
@@ -41,7 +40,6 @@ pytestmark = pytest.mark.live
 PROJECT = f'capmap{uuid.uuid4().hex[:6]}'
 PREFIX = f'{API_PREFIX}/projects/{PROJECT}'
 IMAGES = f'verify_prj_{PROJECT}__images'
-TERMINAL = ('completed', 'completed_with_errors', 'failed', 'cancelled', 'interrupted')
 
 GPS_ID, PLAIN_ID = 'cap_gps', 'cap_plain'
 LATITUDE, LONGITUDE = 40.689247, -74.044502
@@ -60,17 +58,7 @@ def _write_jpeg(path: Path, tags: dict[str, Any] | None) -> None:
 
 
 def _wait_job(api: Any, job_id: str, timeout: float = 120.0) -> dict[str, Any]:
-    def fetch() -> dict[str, Any]:
-        resp = api.get(f'{PREFIX}/jobs/{job_id}')
-        assert resp.status_code == 200, resp.text
-        return resp.json()
-
-    deadline = time.monotonic() + timeout
-    job = fetch()
-    while job['status'] not in TERMINAL and time.monotonic() < deadline:
-        time.sleep(1.0)
-        job = fetch()
-    return job
+    return wait_job(api, job_id, timeout=timeout, prefix=PREFIX)
 
 
 def _capture(opensearch: Any, image_id: str) -> dict[str, Any]:

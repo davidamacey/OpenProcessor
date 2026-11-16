@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from tests.live import _compose
+from tests.live._heal import heal_stack
 from tests.live._jobs import cancel_job_in_container
 from tests.live.conftest import INDEXES, JOB_TERMINAL, get_doc, refresh, search, wait_until
 
@@ -66,28 +67,12 @@ def _attempts(job_id: str) -> list[tuple[str, str]]:
     return [tuple(line.split('|'))[:2] for line in rows.splitlines() if line]  # type: ignore[misc]
 
 
-def _all_healthy() -> bool:
-    states = _compose.service_states()
-    return all(
-        states[s]['State'] == 'running' and states[s].get('Health') == 'healthy'
-        for s in ('api', 'jobs-worker', 'periodic-worker', 'jobs-beat')
-    )
-
-
 @pytest.fixture
 def worker_stack() -> Iterator[None]:
     """Healthy before and after: every service this file hurts is running and unfrozen."""
 
     def heal() -> None:
-        for service in ('opensearch', 'fake-vlm', 'jobs-worker'):
-            _compose.compose('unpause', service, check=False)
-        _compose.compose(
-            'up', '-d', '--no-deps', '--no-build',
-            'api', 'jobs-worker', 'periodic-worker', 'jobs-beat',
-            timeout=240,
-        )  # fmt: skip
-        # A thawed worker reports unhealthy until its next probe, so `up --wait` would refuse it.
-        assert wait_until(_all_healthy, timeout=120, interval=3.0), _compose.service_states()
+        heal_stack(unpause=('opensearch', 'fake-vlm', 'jobs-worker'))
         # A finished merge leaves an outbox row; the reaper turns it into a projection-sync job on
         # a later tick, in the same exclusive group. Wait for the row to be done as well as for the
         # jobs table to be idle, or a job can appear after the idle check and block the next merge.
