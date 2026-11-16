@@ -99,10 +99,16 @@ def _printable_body(body: tuple[str, Any]) -> Any:
 
 
 def _file_summary(item: Any) -> Any:
-    name, spec = item
-    content = spec[1] if isinstance(spec, tuple) and len(spec) > 1 else b''
-    raw = content.encode() if isinstance(content, str) else bytes(content)
-    return {'field': name, 'sha256': hashlib.sha256(raw).hexdigest()[:16], 'length': len(raw)}
+    """A file part of a multipart body, by name, size and hash; negative data may put anything in it."""
+    name, spec = item if isinstance(item, tuple | list) and len(item) == 2 else ('?', item)
+    content = spec[1] if isinstance(spec, tuple | list) and len(spec) > 1 else spec
+    if isinstance(content, str):
+        raw = content.encode(errors='surrogatepass')
+    elif isinstance(content, bytes | bytearray):
+        raw = bytes(content)
+    else:
+        raw = repr(content).encode()
+    return {'field': str(name), 'sha256': hashlib.sha256(raw).hexdigest()[:16], 'length': len(raw)}
 
 
 def load_schema(contract: Path) -> BaseSchema:

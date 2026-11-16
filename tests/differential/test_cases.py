@@ -193,3 +193,28 @@ def test_literals_of_other_local_modules_do_not_steer_generation(
         assert fingerprints('POST /curation/projects', n=30) == before
     finally:
         sys.modules.pop('zq_local_module', None)
+
+
+@pytest.mark.parametrize(
+    'part',
+    [
+        ('file', ('file', b'abc')),
+        ('file', ('name.png', 'text', 'image/png')),
+        ('file', ('file', -3)),
+        ('file', ('file', None)),
+        ('file', 7),
+        ('\ud800', ('f', '\ud800')),
+        'not a part',
+    ],
+)
+def test_a_file_part_of_any_shape_can_be_summarised(part: object) -> None:
+    summary = cases._file_summary(part)
+    json.dumps(summary)
+    assert summary['sha256']
+
+
+def test_the_multipart_upload_operation_generates_both_modes() -> None:
+    label = 'POST /curation/projects/{project}/ingest/upload'
+    generated = build(label)
+    assert {c.mode for c in generated.cases} == {'positive', 'negative'}
+    assert any(c.body is not None and c.body[0] == 'files' for c in generated.cases)
