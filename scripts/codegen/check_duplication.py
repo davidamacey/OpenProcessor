@@ -3,7 +3,7 @@
 
 Runs jscpd (https://github.com/kucherenko/jscpd, the maintained multi-language clone
 detector; the Python and the Svelte/TypeScript code are scanned in one pass) over
-``src scripts frontend/src`` and keys each clone group by its sorted file pair.
+``src scripts frame_engine native frontend/src`` and keys each clone group by its sorted file pair.
 The value is the duplicated line count of that pair, in ``baselines/duplication.txt``.
 A clone between two files that is not in the baseline, or a baselined pair whose
 duplicated lines grew, fails. Baselines can only shrink (see ``_baseline.py``).
@@ -29,8 +29,8 @@ import _baseline
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BASELINE = REPO_ROOT / 'scripts' / 'codegen' / 'baselines' / 'duplication.txt'
 JSCPD = Path('frontend') / 'node_modules' / '.bin' / 'jscpd'
-TARGETS = ('src', 'scripts', 'frame_engine', 'frontend/src')
-FORMATS = 'python,typescript,javascript,svelte'
+TARGETS = ('src', 'scripts', 'frame_engine', 'native', 'frontend/src')
+FORMATS = 'python,typescript,javascript,svelte,rust'
 MIN_LINES = '12'
 MIN_TOKENS = '100'
 IGNORE = ','.join(
@@ -40,6 +40,12 @@ IGNORE = ','.join(
         '**/*.test.ts',
         '**/*.spec.ts',
         '**/*.d.ts',
+        # Rust: build output, and test code (inline test modules live in their own files)
+        '**/target/**',
+        'native/**/tests.rs',
+        'native/**/*_tests.rs',
+        'native/**/tests/**',
+        'native/**/fake.rs',
     )
 )
 

@@ -338,6 +338,11 @@ jobs:
       - name: Clippy, warnings denied
         run: cargo clippy --manifest-path native/Cargo.toml --workspace --all-targets --locked -- -D warnings
 
+      - name: Documentation, rustdoc warnings denied
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --manifest-path native/Cargo.toml --workspace --no-deps --locked
+
       - name: Unit tests (no GPU, no network)
         run: cargo test --manifest-path native/Cargo.toml --workspace --locked
 
@@ -429,7 +434,7 @@ jobs:
       # The cargo hooks run once, in the `native` job.
       - name: Run all hooks
         env:
-          SKIP: cargo-fmt,cargo-clippy,cargo-test,cargo-deny,cargo-deny-advisories
+          SKIP: cargo-fmt,cargo-clippy,cargo-doc,cargo-test,cargo-deny,cargo-deny-advisories
         run: pre-commit run --all-files --show-diff-on-failure
 
   changelog:

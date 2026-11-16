@@ -7,7 +7,7 @@
 //! The channels carry the API's settings (`ENGINE_CHANNEL_OPTIONS`): HTTP/2 keepalive every 30 s
 //! with a 10 s timeout, also idle; 1 MiB stream and 2 MiB connection receive windows; no adaptive
 //! window; 512 MiB messages both ways
-//! (https://docs.rs/tonic/0.14.9/tonic/transport/channel/struct.Endpoint.html). No retry: a
+//! (<https://docs.rs/tonic/0.14.9/tonic/transport/channel/struct.Endpoint.html>). No retry: a
 //! refusal is a result, not something to hide behind a second try.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -25,6 +25,7 @@ use crate::proto::{
     ServerReadyRequest,
 };
 
+/// A gRPC client of one HTTP/2 connection to the engine or the model server; cloning it shares the connection.
 pub type Client = GrpcInferenceServiceClient<Channel>;
 
 /// The model name and version of protocol version 1.
@@ -33,7 +34,7 @@ const MIB: usize = 1 << 20;
 /// `ENGINE_CHANNEL_OPTIONS`' message limit, both ways.
 const MAX_MESSAGE_BYTES: usize = 512 * MIB;
 
-/// `host:port` as an `http://` URI; a URI with a scheme is kept.
+/// `host:port` as an `<http://`> URI; a URI with a scheme is kept.
 pub fn endpoint_uri(url: &str) -> String {
     if url.contains("://") {
         url.to_string()
@@ -43,6 +44,10 @@ pub fn endpoint_uri(url: &str) -> String {
 }
 
 /// Open `channels` connections to `url`, each its own HTTP/2 connection.
+///
+/// # Errors
+///
+/// Returns `Err` when `channels` is 0, the URL is not a valid URI, or a connection is not made within `timeout`.
 pub async fn connect(url: &str, channels: usize, timeout: Duration) -> Result<Vec<Client>, String> {
     if channels == 0 {
         return Err("at least one channel is needed".into());
@@ -186,6 +191,7 @@ pub struct EngineClient {
 }
 
 impl EngineClient {
+    /// An engine client that spreads photos over `clients` round robin, packing every photo and the `plan` text once; each exchange is bounded by `timeout`.
     pub fn new(clients: Vec<Client>, photos: &[Bytes], plan: &str, timeout: Duration) -> Self {
         EngineClient {
             clients,
@@ -221,6 +227,10 @@ impl Exchange for EngineClient {
 
 /// Whether the server answers `ServerReady` and `ModelReady` for `model` (`frame_engine` for an
 /// engine; a model's own name for the model server): the gate before any row.
+///
+/// # Errors
+///
+/// Returns `Err` when the `ServerReady` or `ModelReady` call fails (the server is unreachable or answers an error status); a server that answers not ready is `Ok(false)`.
 pub async fn is_ready(client: &mut Client, model: &str, timeout: Duration) -> Result<bool, String> {
     let mut server = tonic::Request::new(ServerReadyRequest {});
     server.set_timeout(timeout);
@@ -246,6 +256,10 @@ pub async fn is_ready(client: &mut Client, model: &str, timeout: Duration) -> Re
 
 /// The names of the CUDA shared-memory regions the model server holds, from its status call
 /// (the shared-memory extension: an empty name asks for every region).
+///
+/// # Errors
+///
+/// Returns `Err` when the `CudaSharedMemoryStatus` call fails.
 pub async fn cuda_regions(client: &mut Client, timeout: Duration) -> Result<Vec<String>, String> {
     let mut request = tonic::Request::new(CudaSharedMemoryStatusRequest::default());
     request.set_timeout(timeout);

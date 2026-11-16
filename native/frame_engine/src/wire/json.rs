@@ -18,15 +18,22 @@ use serde::de::{DeserializeSeed, Deserializer, Error as _, MapAccess, SeqAccess,
 
 use crate::pyfmt::{repr_float, repr_str};
 
+/// A parsed plan document; integers keep their digits so Python's `repr` can be reproduced.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Json {
+    /// JSON `null`.
     Null,
+    /// JSON `true` or `false`.
     Bool(bool),
     /// The integer's digits (a sign when negative), as Python's `repr` writes it.
     Int(String),
+    /// A JSON number written with a fraction or exponent.
     Float(f64),
+    /// A JSON string.
     Str(String),
+    /// A JSON array.
     List(Vec<Json>),
+    /// A JSON object as key and value pairs in document order; keys are unique.
     Object(Vec<(String, Json)>),
 }
 
@@ -93,6 +100,10 @@ impl fmt::Display for JsonError {
 }
 
 /// Reads the document in `bytes`.
+///
+/// # Errors
+///
+/// The bytes are not UTF-8, are not valid JSON, or an object repeats a key.
 pub fn parse(bytes: &[u8]) -> Result<Json, JsonError> {
     let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes);
     let text = std::str::from_utf8(bytes).map_err(|e| JsonError(e.to_string()))?;

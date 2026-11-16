@@ -7,7 +7,7 @@
 //! `OP_FRAME_ENGINE_JPEG_QUALITY`), which is libjpeg-turbo with libjpeg's defaults: 4:2:0
 //! subsampling, Huffman tables not optimised, the accurate integer DCT, baseline. The TurboJPEG
 //! API of the same library gives those settings by default with `TJPARAM_SUBSAMP` set to 4:2:0
-//! (https://libjpeg-turbo.org/Documentation/Documentation, TurboJPEG 3 API: `TJPARAM_QUALITY`,
+//! (<https://libjpeg-turbo.org/Documentation/Documentation>, TurboJPEG 3 API: `TJPARAM_QUALITY`,
 //! `TJPARAM_SUBSAMP`, `TJPARAM_FASTDCT` default 0, `TJPARAM_OPTIMIZE` default 0); RGB input is
 //! converted to YCbCr by the same arithmetic as OpenCV's BGR input. `OP_FRAME_ENGINE_CROP_MAX_SIDE`
 //! above 0 (OpenCV's area filter before the encode) is refused at start in N0.
@@ -17,12 +17,19 @@ use turbojpeg::{Compressor, Image, PixelFormat, Subsamp};
 /// One crop's JPEG and the seconds its copy and encode took on their finish thread.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CropJpeg {
+    /// The encoded JPEG file.
     pub data: bytes::Bytes,
+    /// Seconds the finish thread spent copying the rectangle out of the frame.
     pub copy_seconds: f64,
+    /// Seconds the finish thread spent in the JPEG encode.
     pub encode_seconds: f64,
 }
 
 /// A finish thread's encoder at the engine's quality.
+///
+/// # Errors
+///
+/// The TurboJPEG compressor cannot be created or `quality` is not accepted by it.
 pub fn encoder(quality: u32) -> Result<Compressor, String> {
     let mut c = Compressor::new().map_err(|e| e.to_string())?;
     c.set_quality(i32::try_from(quality).map_err(|e| e.to_string())?)
@@ -32,6 +39,10 @@ pub fn encoder(quality: u32) -> Result<Compressor, String> {
 }
 
 /// The JPEG of `width x height` interleaved RGB pixels, rows packed.
+///
+/// # Errors
+///
+/// The TurboJPEG encode fails.
 pub fn encode(
     c: &mut Compressor,
     pixels: &[u8],

@@ -45,13 +45,21 @@ pub enum Kind {
 /// What the decoder choice depends on, read from the markers without decoding.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JpegHeader {
+    /// What the start markers held: a readable frame, a corrupt file, or not a JPEG.
     pub kind: Kind,
+    /// Frame width in pixels before the EXIF orientation; 0 when no frame header was read.
     pub width: u32,
+    /// Frame height in pixels before the EXIF orientation; 0 when no frame header was read.
     pub height: u32,
+    /// Colour components of the frame (1 grey, 3 colour, 4 CMYK).
     pub components: u32,
+    /// Bits per sample.
     pub precision: u32,
+    /// Whether the frame is progressive (SOF2).
     pub progressive: bool,
+    /// EXIF orientation 1 to 8; 1 when absent or invalid.
     pub orientation: u32,
+    /// Whether the frame is lossless (SOF3 or the other lossless frame types).
     pub lossless: bool,
     /// Bytes of the image proper, end-of-image marker included (set by [`route`]).
     pub end: usize,
@@ -279,7 +287,9 @@ pub enum Decoder {
 /// A route and the header it was read from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Route {
+    /// Who decodes the photo, or why nobody does.
     pub decoder: Decoder,
+    /// The header the choice was made from.
     pub header: JpegHeader,
 }
 

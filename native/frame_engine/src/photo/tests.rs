@@ -14,6 +14,7 @@ use super::fake::{Event, Fake};
 use super::*;
 use crate::admission::RequestClock;
 use crate::pipeline::RequestState;
+use crate::wire::branch_status::MODEL_ERROR;
 use crate::wire::bytes_tensor::{pack, unpack};
 use crate::wire::parse_plan;
 

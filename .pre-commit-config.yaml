@@ -232,14 +232,14 @@ repos:
         language: system
         files: ^frontend/src/.*\.(js|ts|svelte)$
 
-      # jscpd clone detector over src, scripts, frame_engine and frontend/src (~1.5 s). Whole-project
+      # jscpd clone detector over src, scripts, frame_engine, native (Rust) and frontend/src (~1.5 s). Whole-project
       # because a clone is a pair of files, so it takes no filenames.
       - id: check-duplication
         name: No new duplicated code (jscpd ratchet)
         entry: python3 scripts/codegen/check_duplication.py
         language: system
         pass_filenames: false
-        files: ^(src|scripts|frame_engine)/.*\.py$|^frontend/(src/.*\.(js|ts|svelte)|eslint\.complexity\.config\.js|package(-lock)?\.json)$|^scripts/codegen/check_duplication\.py$|^scripts/codegen/baselines/duplication\.txt$
+        files: ^(src|scripts|frame_engine)/.*\.py$|^native/.*\.rs$|^frontend/(src/.*\.(js|ts|svelte)|eslint\.complexity\.config\.js|package(-lock)?\.json)$|^scripts/codegen/check_duplication\.py$|^scripts/codegen/baselines/duplication\.txt$
 
       # Whole-project type check, too slow (~30 s) for every commit: runs on git push.
       - id: frontend-svelte-check
@@ -283,6 +283,14 @@ repos:
       - id: cargo-clippy
         name: cargo clippy -D warnings (native/)
         entry: bash -c 'export PATH="$HOME/.cargo/bin:$PATH"; exec cargo clippy --manifest-path native/Cargo.toml --workspace --all-targets --locked -- -D warnings'
+        language: system
+        pass_filenames: false
+        files: ^native/
+      # rustdoc lints (broken links, bare URLs, bad HTML) are warnings; -D warnings makes them errors
+      # (https://doc.rust-lang.org/rustdoc/lints.html). The `missing_docs` check is in clippy above.
+      - id: cargo-doc
+        name: cargo doc, warnings denied (native/)
+        entry: bash -c 'export PATH="$HOME/.cargo/bin:$PATH"; RUSTDOCFLAGS="-D warnings" exec cargo doc --manifest-path native/Cargo.toml --workspace --no-deps --locked'
         language: system
         pass_filenames: false
         files: ^native/

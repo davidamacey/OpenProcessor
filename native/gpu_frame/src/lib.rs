@@ -12,7 +12,7 @@
 //!
 //! Under them: [`cuda`] (context, streams, copies, errors with their fault class), [`pool`]
 //! (OS-thread pools with panic isolation and cancellation at the hand-off) and [`slab`] (first fit,
-//! coalescing, the per-photo window). Every `unsafe` block is in `cuda.rs`, `nvjpeg/ffi.rs` or
+//! coalescing). Every `unsafe` block is in `cuda.rs`, `nvjpeg/ffi.rs` or
 //! `region.rs`.
 //!
 //! CUDA, NVRTC and nvJPEG are loaded at run time; nothing is linked at build time, so the crate
@@ -40,4 +40,4 @@ pub use model_server::{ModelServer, ModelServerConfig};
 pub use nvjpeg::{Backend, DecodeError, Decoded, DeviceFrame, Lane, Lanes};
 pub use pool::{CancelToken, JobError, JobHandle, PoolError, WorkerPool};
 pub use region::{Region, Slice};
-pub use slab::{PhotoWindow, SliceError};
+pub use slab::SliceError;

@@ -1,5 +1,5 @@
-//! Offsets inside the one registered region: first fit with coalescing, a bounded wait, and the
-//! per-photo window (plan 17 section 2.2; the Python engine's `slab.py` and `engine.py`).
+//! Offsets inside the one registered region: first fit with coalescing, and a bounded wait
+//! (plan 17 section 2.2; the Python engine's `slab.py`).
 //!
 //! Every model input of every photo in flight is a slice of the region, addressed by offset in
 //! the model call. A request that finds no room waits at most its bound and then answers
@@ -29,9 +29,17 @@ pub fn aligned(bytes: usize) -> Option<usize> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SliceError {
     /// No room within the wait: a retryable overload (`RESOURCE_EXHAUSTED`).
-    Overload { need: usize },
+    Overload {
+        /// Bytes asked for.
+        need: usize,
+    },
     /// Larger than the whole region: a size setting, never load (`over_budget`).
-    TooLarge { need: usize, region: usize },
+    TooLarge {
+        /// Bytes asked for.
+        need: usize,
+        /// The whole region's size in bytes.
+        region: usize,
+    },
 }
 
 impl fmt::Display for SliceError {
@@ -98,14 +106,17 @@ impl FirstFit {
         }
     }
 
+    /// The slab's total size in bytes.
     pub fn size(&self) -> usize {
         self.size
     }
 
+    /// Bytes handed out now, after rounding up to the alignment.
     pub fn in_use(&self) -> usize {
         self.in_use
     }
 
+    /// The highest `in_use` value reached since creation, in bytes.
     pub fn peak(&self) -> usize {
         self.peak
     }
@@ -113,57 +124,6 @@ impl FirstFit {
     /// The free blocks, for inspection.
     pub fn free_blocks(&self) -> &[(usize, usize)] {
         &self.free
-    }
-}
-
-/// Region bytes one photo may hold with calls in flight: its worker's fair share,
-/// `region / workers` (`engine.py`).
-pub fn window_bytes(region: usize, workers: usize) -> usize {
-    region / workers.max(1)
-}
-
-/// What one photo holds of the region against its window. A photo may always hold one call,
-/// even one larger than the window; beyond that it holds at most the window, and collects its own
-/// oldest call before staging the next (plan 17 section 2.2, "Region slices").
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PhotoWindow {
-    limit: usize,
-    held: usize,
-}
-
-impl PhotoWindow {
-    pub fn new(limit: usize) -> PhotoWindow {
-        PhotoWindow { limit, held: 0 }
-    }
-
-    /// Whether `bytes` more may be held now.
-    pub fn fits(&self, bytes: usize) -> bool {
-        let n = aligned(bytes).unwrap_or(usize::MAX);
-        self.held == 0 || self.held.saturating_add(n) <= self.limit
-    }
-
-    /// Count `bytes` as held, if they fit.
-    pub fn hold(&mut self, bytes: usize) -> bool {
-        if !self.fits(bytes) {
-            return false;
-        }
-        self.held += aligned(bytes).unwrap_or(usize::MAX);
-        true
-    }
-
-    /// Count `bytes` as given back.
-    pub fn release(&mut self, bytes: usize) {
-        self.held = self
-            .held
-            .saturating_sub(aligned(bytes).unwrap_or(usize::MAX));
-    }
-
-    pub fn held(&self) -> usize {
-        self.held
-    }
-
-    pub fn limit(&self) -> usize {
-        self.limit
     }
 }
 
@@ -179,14 +139,18 @@ pub struct Slab {
 /// What the slab holds now, for metrics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SlabUsage {
+    /// The slab's total size in bytes.
     pub size: usize,
+    /// Bytes handed out now.
     pub in_use: usize,
+    /// The highest bytes handed out at once since creation.
     pub peak: usize,
     /// Requests that had to wait at least once.
     pub waits: u64,
 }
 
 impl Slab {
+    /// A slab of `size` bytes, or `None` when `size` is not a positive multiple of [`ALIGN`].
     pub fn new(size: usize) -> Option<Slab> {
         Some(Slab {
             list: Mutex::new(FirstFit::new(size)?),
@@ -214,6 +178,11 @@ impl Slab {
     }
 
     /// The offset of `bytes` (rounded up to [`ALIGN`]), waiting at most `wait`; for async callers.
+    ///
+    /// # Errors
+    ///
+    /// [`SliceError::TooLarge`] when the rounded size is larger than the slab;
+    /// [`SliceError::Overload`] when no block was free within `wait`.
     pub async fn take(&self, bytes: usize, wait: Duration) -> Result<usize, SliceError> {
         let n = self.need(bytes)?;
         let deadline = tokio::time::Instant::now() + wait;
@@ -237,6 +206,11 @@ impl Slab {
     }
 
     /// The same for a pool thread: blocks the calling thread at most `wait`.
+    ///
+    /// # Errors
+    ///
+    /// [`SliceError::TooLarge`] when the rounded size is larger than the slab;
+    /// [`SliceError::Overload`] when no block was free within `wait`.
     pub fn take_blocking(&self, bytes: usize, wait: Duration) -> Result<usize, SliceError> {
         let n = self.need(bytes)?;
         let deadline = std::time::Instant::now() + wait;
@@ -271,6 +245,7 @@ impl Slab {
         self.notify.notify_waiters();
     }
 
+    /// A snapshot of the slab's size, use, peak and wait count.
     pub fn usage(&self) -> SlabUsage {
         let list = self.lock();
         SlabUsage {
@@ -330,19 +305,6 @@ mod tests {
         assert_eq!(s.free_blocks(), &[(0, 4096)]);
         assert_eq!(s.take(4096), Some(0), "the whole region is one block again");
         assert_eq!(s.peak(), 4096);
-    }
-
-    #[test]
-    fn the_window_holds_one_call_or_its_share() {
-        assert_eq!(window_bytes(1024 << 20, 16), 64 << 20);
-        let mut w = PhotoWindow::new(1000);
-        assert!(w.hold(5000), "one call larger than the window is allowed");
-        assert!(!w.fits(1), "nothing more while the large call is held");
-        w.release(5000);
-        assert!(w.hold(512));
-        assert!(w.hold(256));
-        assert!(!w.hold(256), "512 + 256 + 256 passes 1000");
-        assert_eq!(w.held(), 768);
     }
 
     #[test]

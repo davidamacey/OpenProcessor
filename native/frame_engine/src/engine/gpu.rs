@@ -97,13 +97,19 @@ struct FinishThread {
 /// How the pools are sized and what they do.
 #[derive(Debug, Clone)]
 pub struct GpuConfig {
+    /// Decode lanes (nvJPEG decoders with their frame slabs) on the card.
     pub lanes: usize,
+    /// Threads that stage inputs and launch the resample kernels, each with its own CUDA stream.
     pub launch_threads: usize,
+    /// Threads that run the blur sums and the crop copy and JPEG encode, each with its own stream.
     pub finish_threads: usize,
+    /// JPEG quality (1 to 100) of the encoded crops, `OP_FRAME_ENGINE_JPEG_QUALITY`.
     pub jpeg_quality: u32,
+    /// Whether each GPU stage synchronises its stream before returning, so stage timings are exact.
     pub stage_sync: bool,
 }
 
+/// The card's decode lanes, kernels, launch and finish pools and the model-server connection; the device side of the photo flow.
 pub struct Gpu {
     ctx: Arc<Context>,
     shared: Arc<Shared>,
@@ -120,6 +126,10 @@ fn pool_failed<E: std::fmt::Display>(what: &str, e: E) -> GpuFault {
 
 impl Gpu {
     /// The lanes, the pools and the kernels of the context's card; `server` holds the region.
+    ///
+    /// # Errors
+    ///
+    /// A pool, lane or kernel set cannot be created on the card.
     pub fn start(
         ctx: &Arc<Context>,
         frames: FramePool,
@@ -174,14 +184,17 @@ impl Gpu {
         })
     }
 
+    /// The CUDA context of the card all work runs on.
     pub fn context(&self) -> &Arc<Context> {
         &self.ctx
     }
 
+    /// Number of decode lanes, which bounds the photos decoding at once.
     pub fn lane_count(&self) -> usize {
         self.lanes.count()
     }
 
+    /// The nvJPEG library version as `(major, minor, patch)`.
     pub fn nvjpeg_version(&self) -> (i32, i32, i32) {
         self.lanes.library_version()
     }

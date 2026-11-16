@@ -13,6 +13,7 @@ pub fn parse_load1(text: &str) -> Option<f64> {
     text.split_whitespace().next()?.parse().ok()
 }
 
+/// The 1-minute load average now; `None` when `/proc/loadavg` cannot be read or parsed.
 pub fn load1() -> Option<f64> {
     parse_load1(&fs::read_to_string("/proc/loadavg").ok()?)
 }
@@ -20,7 +21,9 @@ pub fn load1() -> Option<f64> {
 /// The CPU the host has.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct CpuInfo {
+    /// The CPU model name of the first logical CPU.
     pub model: String,
+    /// Logical CPUs (hardware threads) the host has.
     pub logical_cpus: usize,
     /// Distinct (package, core) pairs: what the plan calls the physical cores.
     pub physical_cores: usize,
@@ -61,10 +64,12 @@ pub fn parse_cpuinfo(text: &str) -> CpuInfo {
     }
 }
 
+/// The host's CPU, read from `/proc/cpuinfo`; empty fields when it cannot be read.
 pub fn cpuinfo() -> CpuInfo {
     parse_cpuinfo(&fs::read_to_string("/proc/cpuinfo").unwrap_or_default())
 }
 
+/// The host name; empty when it cannot be read.
 pub fn hostname() -> String {
     fs::read_to_string("/proc/sys/kernel/hostname")
         .map(|s| s.trim().to_string())
@@ -79,7 +84,7 @@ pub fn unix_ms() -> u64 {
 }
 
 /// `2026-11-15T13:04:05.123Z` for a Unix time in milliseconds (the civil-from-days algorithm of
-/// https://howardhinnant.github.io/date_algorithms.html, valid for all dates after 1970).
+/// <https://howardhinnant.github.io/date_algorithms.html>, valid for all dates after 1970).
 pub fn iso_utc(ms: u64) -> String {
     let secs = ms / 1000;
     let days = i64::try_from(secs / 86_400).unwrap_or(0);

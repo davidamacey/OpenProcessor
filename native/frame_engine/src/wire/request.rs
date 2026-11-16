@@ -36,8 +36,11 @@ impl From<PlanError> for RequestError {
 /// request carries the `boxes` input, even with zero rows (a reprocess sends `(0, 4)`).
 #[derive(Debug)]
 pub struct ParsedRequest {
+    /// The encoded image, a slice of the request message.
     pub image: Bytes,
+    /// The validated plan.
     pub plan: EnginePlan,
+    /// Stored boxes as float64 `x1, y1, x2, y2` rows, as the request sent them.
     pub boxes: Option<Vec<[f64; 4]>>,
 }
 
@@ -87,6 +90,14 @@ fn stored_boxes(tensor: &InferInputTensor, raw: &Bytes) -> Result<Vec<[f64; 4]>,
 }
 
 /// The image, the plan and the stored boxes of `request`.
+///
+/// # Errors
+///
+/// An input is unknown or missing, the raw contents do not match the inputs, a tensor has the wrong datatype or shape, or the plan is invalid.
+///
+/// # Panics
+///
+/// Never in practice: both lookups follow a check that the two required inputs are present.
 pub fn parse_request(request: &ModelInferRequest) -> Result<ParsedRequest, RequestError> {
     let c = contract();
     if request.raw_input_contents.len() != request.inputs.len() {

@@ -48,6 +48,10 @@ pub struct ServeConfig {
 /// Serves `front` on `listener` until `shutdown` completes, then drains: readiness turns false,
 /// photos in flight get `drain` to finish, then the connections are closed gracefully (tonic's
 /// `serve_with_incoming_shutdown`: GOAWAY, then the open streams finish) and the call returns.
+///
+/// # Errors
+///
+/// The gRPC server fails while serving; a late drain is not an error.
 pub async fn serve<P: Pipeline>(
     listener: TcpListener,
     front: Front<P>,

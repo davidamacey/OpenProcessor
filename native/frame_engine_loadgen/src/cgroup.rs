@@ -1,7 +1,7 @@
 //! The measured engine's CPU from its cgroup (version 2): `cpu.stat` read at the window's two
 //! edges. The path is given on the command line (the container's cgroup directory on the host,
 //! for example `/sys/fs/cgroup/system.slice/docker-<id>.scope/cpu.stat`), so the row names
-//! exactly which process tree was charged (https://docs.kernel.org/admin-guide/cgroup-v2.html,
+//! exactly which process tree was charged (<https://docs.kernel.org/admin-guide/cgroup-v2.html>,
 //! "cpu.stat": `usage_usec`, `user_usec`, `system_usec` always; the throttling fields only with
 //! the cpu controller; every duration in microseconds).
 
@@ -14,10 +14,15 @@ use serde::Serialize;
 /// One read of `cpu.stat`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct CpuStat {
+    /// Total CPU time charged to the cgroup, in microseconds, since it was created.
     pub usage_usec: u64,
+    /// Part of `usage_usec` spent in user mode, in microseconds.
     pub user_usec: u64,
+    /// Part of `usage_usec` spent in the kernel, in microseconds.
     pub system_usec: u64,
+    /// Periods in which the cgroup was throttled by its CPU quota; 0 when the cpu controller is off.
     pub nr_throttled: u64,
+    /// Time the cgroup spent throttled, in microseconds; 0 when the cpu controller is off.
     pub throttled_usec: u64,
 }
 
@@ -35,6 +40,10 @@ impl std::error::Error for StatError {}
 
 /// Parse the flat `key value` lines; unknown keys are ignored, the throttling keys default to 0
 /// when the cpu controller is off.
+///
+/// # Errors
+///
+/// Returns `Err` when a line's value is not an unsigned integer, or when `usage_usec`, `user_usec` or `system_usec` is absent.
 pub fn parse(text: &str) -> Result<CpuStat, StatError> {
     let mut stat = CpuStat::default();
     let mut seen = [false; 3];
@@ -69,9 +78,13 @@ pub fn parse(text: &str) -> Result<CpuStat, StatError> {
 /// The CPU an engine used inside a window.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct CpuWindow {
+    /// CPU time charged inside the window, in microseconds.
     pub usage_usec: u64,
+    /// Part of `usage_usec` spent in user mode, in microseconds.
     pub user_usec: u64,
+    /// Part of `usage_usec` spent in the kernel, in microseconds.
     pub system_usec: u64,
+    /// Periods throttled by the CPU quota inside the window.
     pub nr_throttled: u64,
     /// Cores busy on average: CPU time over the window's wall time.
     pub cores_busy: f64,
@@ -114,24 +127,34 @@ pub struct Cgroup {
 /// since the cgroup was created, so the hold records a fresh container per hold or says so.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct MemoryRead {
+    /// `memory.current` at the window's end, in bytes; null when the file is missing or unreadable.
     pub current_bytes: Option<u64>,
+    /// `memory.peak` since the cgroup was created, in bytes; null when the file is missing or unreadable.
     pub peak_bytes: Option<u64>,
 }
 
 impl Cgroup {
+    /// A handle on the cgroup whose `cpu.stat` file is at `cpu_stat`.
     pub fn new(cpu_stat: PathBuf) -> Cgroup {
         Cgroup { cpu_stat }
     }
 
+    /// The `cpu.stat` path this handle reads, as given on the command line.
     pub fn path(&self) -> &Path {
         &self.cpu_stat
     }
 
+    /// Read and parse `cpu.stat` now.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` when the file cannot be read, or its text does not parse as a cgroup v2 `cpu.stat`.
     pub fn read_cpu(&self) -> io::Result<CpuStat> {
         parse(&fs::read_to_string(&self.cpu_stat)?)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
     }
 
+    /// Read `memory.current` and `memory.peak` from the directory of the `cpu.stat` file; a file that cannot be read or parsed leaves its field `None`.
     pub fn read_memory(&self) -> MemoryRead {
         let beside = |name: &str| {
             let dir = self.cpu_stat.parent()?;
