@@ -27,10 +27,20 @@ pub fn need_bytes(h: &JpegHeader) -> u64 {
 /// the widest output written (`widths`).
 pub fn reserve_bytes(h: &JpegHeader, widths: &[u32]) -> u64 {
     let (_, rows) = oriented_size(h);
-    let widest = widths.iter().copied().max().unwrap_or(0);
     let frame = u64::from(h.width) * u64::from(h.height) * 3;
-    let scratch = u64::from(rows) * u64::from(widest) * 12;
-    need_bytes(h).max(frame + scratch)
+    need_bytes(h).max(frame + scratch_bytes(rows, widths))
+}
+
+/// The same for a host-route frame of `(width, height)`: it arrives upright, so its need is the
+/// one frame (`prep_budget.host_need_bytes`) and the reserve adds the scratch.
+pub fn host_reserve_bytes((width, height): (u32, u32), widths: &[u32]) -> u64 {
+    u64::from(width) * u64::from(height) * 3 + scratch_bytes(height, widths)
+}
+
+/// The resample scratch: every row of the frame at the widest output, 12 bytes each.
+fn scratch_bytes(rows: u32, widths: &[u32]) -> u64 {
+    let widest = widths.iter().copied().max().unwrap_or(0);
+    u64::from(rows) * u64::from(widest) * 12
 }
 
 /// The budget on `gpu_frame`'s admission, keeping the in-use gauge.

@@ -17,6 +17,7 @@ use gpu_frame::{
 use tokio::time::Instant;
 
 use super::device::{DecodeJob, Decoded, Device, JobResult, LaunchJob, Launched, ModelCall};
+use super::source::Origin;
 use crate::branches::crops::CropJpeg;
 use crate::fault::GpuFault;
 
@@ -199,6 +200,12 @@ impl Device for Fake {
             let mut stages = vec![("decode", 0.001)];
             stages.extend(job.writes.iter().map(|w| (w.stage, 0.001)));
             if let Some(status) = refuse {
+                return Ok(Decoded::Refused { status, stages });
+            }
+            // the host route's decode is CPU work: run it, as the lane does
+            if job.origin == Origin::Host
+                && let Err(status) = crate::host::decode_checked(&job.image, job.size)
+            {
                 return Ok(Decoded::Refused { status, stages });
             }
             alive.fetch_add(1, Ordering::SeqCst);

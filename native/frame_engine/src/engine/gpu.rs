@@ -31,6 +31,7 @@ use crate::photo::clock::{DECODE, JobClock, SYNCED};
 use crate::photo::device::{
     DecodeJob, Decoded, Device, JobResult, LaunchJob, Launched, ModelCall, Write,
 };
+use crate::photo::source::Origin;
 
 /// A decoded, oriented frame: interleaved RGB on the card, and the budget it holds.
 pub struct Frame {
@@ -282,6 +283,58 @@ fn weight_sets<I>(
         .collect()
 }
 
+/// A decoded frame on the card, or the photo's status.
+type LaneFrame = Result<(DeviceBuf, u32, u32), &'static str>;
+
+/// nvJPEG, then the EXIF tag applied by `orient.cu`; a frame of another size is `decoder`.
+fn nvjpeg_frame(
+    shared: &Shared,
+    lane: &mut Lane,
+    image: bytes::Bytes,
+    orientation: u32,
+    size: (u32, u32),
+) -> Result<LaneFrame, GpuFault> {
+    let stream = Arc::clone(lane.stream());
+    let d = match lane.decode(image) {
+        Ok(d) => d,
+        Err(e) => return decode_refusal(e).map(Err),
+    };
+    let (w, h) = (d.frame.width(), d.frame.height());
+    let frame = match shared.kernels.orient(
+        &shared.frames,
+        &stream,
+        d.frame.buffer(),
+        (w, h),
+        orientation,
+    )? {
+        Some(oriented) => oriented,
+        None => (d.frame.into_buffer(), w, h),
+    };
+    if (frame.1, frame.2) != size {
+        return Ok(Err("decoder"));
+    }
+    Ok(Ok(frame))
+}
+
+/// The host route (`FrameEngine._decode_host`): the upright frame decoded on this lane's CPU,
+/// then copied into a frame-pool buffer on the lane's stream. The copy is from pageable memory,
+/// which the driver stages before the call returns, so the host frame may drop at once; the
+/// buffer is read only after the lane's stream wait.
+fn host_frame(
+    shared: &Shared,
+    stream: &Arc<Stream>,
+    image: &[u8],
+    size: (u32, u32),
+) -> Result<LaneFrame, GpuFault> {
+    let host = match crate::host::decode_checked(image, size) {
+        Ok(f) => f,
+        Err(status) => return Ok(Err(status)),
+    };
+    let buf = shared.frames.alloc(host.rgb.len(), stream)?;
+    stream.copy_from_host(&buf, 0, &host.rgb)?;
+    Ok(Ok((buf, host.width, host.height)))
+}
+
 fn decode_on_lane(
     shared: &Shared,
     lane: &mut Lane,
@@ -289,7 +342,7 @@ fn decode_on_lane(
 ) -> Result<Decoded<Frame, gpu_frame::Slice>, GpuFault> {
     let DecodeJob {
         image,
-        orientation,
+        origin,
         size,
         writes,
         hold,
@@ -305,30 +358,10 @@ fn decode_on_lane(
             .unwrap_or_else(PoisonError::into_inner);
         weight_sets(shared, &mut cache, &stream, &writes)?
     };
-    let decoded = clock.time(
-        DECODE,
-        || -> Result<Result<(DeviceBuf, u32, u32), &'static str>, GpuFault> {
-            let d = match lane.decode(image) {
-                Ok(d) => d,
-                Err(e) => return decode_refusal(e).map(Err),
-            };
-            let (w, h) = (d.frame.width(), d.frame.height());
-            let frame = match shared.kernels.orient(
-                &shared.frames,
-                &stream,
-                d.frame.buffer(),
-                (w, h),
-                orientation,
-            )? {
-                Some(oriented) => oriented,
-                None => (d.frame.into_buffer(), w, h),
-            };
-            if (frame.1, frame.2) != size {
-                return Ok(Err("decoder"));
-            }
-            Ok(Ok(frame))
-        },
-    )?;
+    let decoded = clock.time(DECODE, || match origin {
+        Origin::Gpu { orientation } => nvjpeg_frame(shared, lane, image, orientation, size),
+        Origin::Host => host_frame(shared, &stream, &image, size),
+    })?;
     let (buf, width, height) = match decoded {
         Ok(frame) => frame,
         Err(status) => {
