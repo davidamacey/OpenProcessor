@@ -61,6 +61,9 @@ const ROWS: [[f32; 6]; 3] = [
     [600.0, 500.0, 700.0, 600.0, 0.25, 16.0],
 ];
 
+/// The fake recogniser's classes: blank, `a` to `e`, then the space.
+const DICTIONARY: &str = "a\nb\nc\nd\ne\n";
+
 struct Bed {
     fake: Arc<Fake>,
     flow: PhotoFlow<Fake, GpuBudget>,
@@ -82,6 +85,7 @@ fn bed_with(region: usize, window: usize, budget: u64, workers: u32) -> Bed {
         },
         metrics: Metrics::new(),
         colour: ColourStep::new(2, Gauge::default()),
+        dictionary: Arc::new(CtcDecoder::from_text(DICTIONARY)),
     };
     Bed { fake, flow }
 }
@@ -183,6 +187,7 @@ async fn the_hand_offs_come_in_the_python_order_and_each_stage_is_observed() {
             Event::Warps(_) => "warps".into(),
             Event::ColourTable(_) => "colour table".into(),
             Event::Gather => "gather".into(),
+            Event::Renditions(_) => "renditions".into(),
             Event::Call { model, .. } => format!("call {model}"),
         })
         .collect();
@@ -210,8 +215,12 @@ async fn the_hand_offs_come_in_the_python_order_and_each_stage_is_observed() {
     // round 2: one launch for the crop squares and the blur sums of the frame and each box
     assert_eq!(events[3], Event::Launch { writes: 1, blur: 4 });
     let text = b.flow.metrics.render();
-    // the ingest plan runs no face branch
-    for stage in clock::ALL.iter().filter(|s| !s.starts_with("face_")) {
+    // the ingest plan runs no face, text or rendition branch
+    let other = ["face_", "ocr_", "derivative_"];
+    for stage in clock::ALL
+        .iter()
+        .filter(|s| !other.iter().any(|o| s.starts_with(o)))
+    {
         assert!(
             text.contains(&format!(
                 "op_frame_engine_stage_observations_total{{stage=\"{stage}\"}} 1"
@@ -695,17 +704,20 @@ async fn photos_no_decoder_takes_answer_without_a_decode() {
     assert_eq!(b.fake.events(), []);
 }
 
-#[tokio::test]
-async fn unbuilt_branches_answer_unsupported_branch() {
-    let b = bed();
-    let ocr = r#"{"version": 1, "branches": ["detect", "ocr"], "crops": "none", "detector": {"model": "det", "input_size": 640, "letterbox_fill": 114}, "ocr": {"detector": "ocr_det", "recogniser": "ocr_rec", "batch": 16, "max_lines": 50, "det_side": 960}}"#;
-    let answer = b.flow.process(photo(ocr)).await.expect("answer");
-    assert_eq!(
-        answer.branches["ocr"],
-        BranchState::Error(UNSUPPORTED_BRANCH)
-    );
-    assert_eq!(answer.branches["detect"], BranchState::Ok);
-    assert!(answer.outputs.iter().all(|(n, _)| !n.starts_with("ocr")));
+#[test]
+fn every_branch_the_contract_builds_is_built_here() {
+    let text = include_str!("../../../../contracts/json/frame_engine_v1.json");
+    let c: serde_json::Value = serde_json::from_str(text).expect("the contract");
+    let mut want: Vec<&str> = c["built_branches"]
+        .as_array()
+        .expect("built_branches")
+        .iter()
+        .map(|b| b.as_str().expect("a name"))
+        .collect();
+    let mut built = crate::branches::BUILT.to_vec();
+    want.sort_unstable();
+    built.sort_unstable();
+    assert_eq!(built, want);
 }
 
 #[tokio::test]
@@ -731,6 +743,8 @@ async fn the_crop_jpegs_are_packed_as_bytes_elements() {
     );
 }
 
+#[path = "tests_combined.rs"]
+mod combined;
 #[path = "faces_tests.rs"]
 mod faces;
 #[path = "host_tests.rs"]
@@ -739,3 +753,5 @@ mod host;
 mod late_round;
 #[path = "tests_sources.rs"]
 mod sources;
+#[path = "text_tests.rs"]
+mod text;

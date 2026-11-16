@@ -94,6 +94,9 @@ RUN apt-get update && apt-get upgrade -y \
 
 COPY --from=wheels /cuda-libs /opt/nvidia/lib
 COPY --from=build /out/op-frame-engine /usr/local/bin/op-frame-engine
+# The recogniser's dictionary belongs to the model build; the engine reads it at start
+# (`ocr::ctc::DICTIONARY_PATH`) and refuses to start without it.
+COPY models/paddleocr_rec_trt/ppocrv6_dict.txt /app/ocr/ppocrv6_dict.txt
 
 # The engine opens NVRTC, the CUDA runtime and nvJPEG by name at run time.
 ENV LD_LIBRARY_PATH=/opt/nvidia/lib \

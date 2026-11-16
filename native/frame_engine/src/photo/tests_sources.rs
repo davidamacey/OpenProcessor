@@ -109,12 +109,13 @@ async fn a_stored_box_that_is_not_a_number_fails_the_photo_as_pythons_round_does
     assert_released(&b).await;
 }
 
-const P3: &[u8] = include_bytes!("../../../../tests/fixtures/icc/DisplayP3-v4.icc");
+pub(super) const P3: &[u8] = include_bytes!("../../../../tests/fixtures/icc/DisplayP3-v4.icc");
 const SRGB: &[u8] = include_bytes!("../../../../tests/fixtures/icc/colord-sRGB.icc");
-const PROGRESSIVE: &[u8] = include_bytes!("../../tests/golden/host/jpeg_progressive.jpg");
+pub(super) const PROGRESSIVE: &[u8] =
+    include_bytes!("../../tests/golden/host/jpeg_progressive.jpg");
 
 /// `plain` with an ICC profile in one APP2 chunk after the start marker.
-fn with_icc(plain: &[u8], icc: &[u8]) -> Bytes {
+pub(super) fn with_icc(plain: &[u8], icc: &[u8]) -> Bytes {
     let mut payload = b"ICC_PROFILE\0\x01\x01".to_vec();
     payload.extend_from_slice(icc);
     let mut b = plain[..2].to_vec();

@@ -15,6 +15,7 @@
 //! with other lanes, nothing may still write it) and the wait's answer tells a lost context from
 //! the photo's own failure, as the Python engine's `_check_context` does.
 
+pub mod encoder;
 mod ffi;
 pub mod status;
 
@@ -28,6 +29,7 @@ use crate::budget::ByteCount;
 use crate::cuda::{CudaError, DeviceRange, Fault, Stream};
 use crate::frame_pool::{AllocError, DeviceBuf, FramePool};
 use crate::pool::{CancelToken, JobError, JobHandle, PoolError, WorkerPool};
+pub use encoder::{EncodeError, Encoder, Encoders};
 use ffi::{LaneObjects, Shared, StreamInfo};
 pub use status::{Backend, NvjpegFailure, NvjpegStatus};
 
@@ -261,6 +263,7 @@ impl Drop for Lane {
 pub struct Lanes {
     pool: WorkerPool<Lane>,
     version: (i32, i32, i32),
+    encoders: Encoders,
 }
 
 impl fmt::Debug for Lanes {
@@ -296,6 +299,7 @@ impl Lanes {
                 .map_err(DecodeError::Library)?,
         );
         let version = shared.version();
+        let encoders = Encoders::new(Arc::clone(&shared));
         let frames = frames.clone();
         let pool = WorkerPool::new("gpu-frame-lane", count, move |index| {
             ctx.bind().map_err(DecodeError::Cuda)?;
@@ -318,7 +322,11 @@ impl Lanes {
                 DecodeError::Library(format!("a lane thread could not start: {e}"))
             }
         })?;
-        Ok(Lanes { pool, version })
+        Ok(Lanes {
+            pool,
+            version,
+            encoders,
+        })
     }
 
     /// Decode `data` on the next free lane and wait for its stream.
@@ -357,6 +365,11 @@ impl Lanes {
     /// The number of lanes.
     pub fn count(&self) -> usize {
         self.pool.threads()
+    }
+
+    /// What makes an encoder on another thread, from the lanes' library and handle.
+    pub fn encoders(&self) -> Encoders {
+        self.encoders.clone()
     }
 
     /// nvJPEG's version (major, minor, patch).

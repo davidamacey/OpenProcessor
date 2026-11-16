@@ -10,19 +10,23 @@
 //! 2. Reserve the frame (`budget`): a worker slot and the frame's bytes, first come first served,
 //!    bounded by `OP_FRAME_ENGINE_BUDGET_WAIT_SECONDS`, then an overload.
 //! 3. Round 1: the slices of the inputs that need only the frame (`letterbox`, `embed_frame`,
-//!    the face detector's passes), except those of the branches the plan makes late (`late`),
-//!    then one job on a decode lane: nvJPEG and the orientation (or the host decode and its
-//!    upload), the size check, the colour step's gather, the fills and resamples into those
-//!    slices, one wait for the lane's stream. Every round-1 call goes out.
+//!    the face detector's passes, the text detector's input), except those of the branches the
+//!    plan makes late (`late`), then one job on a decode lane: nvJPEG and the orientation (or the
+//!    host decode and its upload), the size check, the colour step's gather, the fills and
+//!    resamples into those slices, one wait for the lane's stream. Every round-1 call goes out.
 //! 4. Settle: the detector's boxes as frame rectangles, or the request's stored boxes in their
-//!    place (`cut`); the faces (anchor decode and NMS on the finish pool) unless they are late.
+//!    place (`cut`); the faces (anchor decode and NMS) and the text boxes (the DB post-process),
+//!    both on the finish pool, unless they are late.
 //! 5. The late round: each late branch's condition against the detector's classes; those that
 //!    hold write their round-1 inputs from the frame by launch jobs and send their calls.
-//! 6. Round 2: the crop squares in chunks of the plan's batch, staged within the photo's window
-//!    (collecting its own oldest call when the next chunk would pass it), written with the blur
-//!    sums by one job on the launch pool; their calls go out; the crop JPEGs start on the finish
-//!    pool. Then the late branches' settle, and the face warps into recogniser batches.
-//! 7. Finish: collect, outputs in the wire's order.
+//! 6. Round 2 of the early branches: the crop squares in chunks of the plan's batch, staged
+//!    within the photo's window (collecting its own oldest call when the next chunk would pass
+//!    it), written with the blur sums by one job on the launch pool, their calls out and the crop
+//!    JPEGs started on the finish pool; the face warps and the text-line warps into recogniser
+//!    batches (`faces`, `text`). Then the renditions go to the launch pool (`renditions`), then
+//!    the late branches' settle and round 2 (`phases`).
+//! 7. Finish: collect (faces, text, renditions, then the detector's branches), outputs in the
+//!    wire's order.
 //!
 //! A model error fails its branch (`model_error`) and what needs it (`dependency_failed`), and the
 //! photo goes on; a model server that is gone, a deadline or a lost region fail the photo
@@ -38,8 +42,11 @@ pub mod cut;
 pub mod device;
 mod faces;
 pub mod late;
+mod phases;
+mod renditions;
 mod rounds;
 pub mod source;
+mod text;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -53,7 +60,8 @@ use self::device::{DecodeJob, Decoded, Device, Write};
 use self::rounds::Work;
 use self::source::Source;
 use crate::admission::FrameBudget;
-use crate::branches::BUILT;
+use crate::branches::ocr::{self, ctc::CtcDecoder};
+use crate::branches::{BUILT, derivatives};
 use crate::colour::{Colour, ColourError, ColourStep, Table, Upload};
 use crate::fault::{GpuFault, job_failed, note_memory_failure};
 use crate::jpeg_header::route;
@@ -120,6 +128,8 @@ pub struct PhotoFlow<D, B> {
     pub metrics: Arc<Metrics>,
     /// The colour step's profile kinds and tables, shared by every photo.
     pub colour: ColourStep,
+    /// The recogniser's dictionary, read at start.
+    pub dictionary: Arc<CtcDecoder>,
 }
 
 /// The answer of a photo that decoded nothing: every reported branch `image_failed`, unbuilt ones
@@ -156,6 +166,8 @@ struct Runs {
     crops: bool,
     faces: bool,
     face_embed: bool,
+    ocr: bool,
+    derivatives: bool,
 }
 
 impl Runs {
@@ -167,11 +179,14 @@ impl Runs {
             crops: plan.crops == Crops::Inline,
             faces: plan.runs("faces") && plan.faces.is_some(),
             face_embed: plan.runs("face_embed") && plan.faces.is_some(),
+            ocr: plan.runs("ocr") && plan.ocr.is_some(),
+            derivatives: !plan.derivatives.is_empty(),
         }
     }
 
-    /// Output widths the round-1 and round-2 resamples write, for the scratch they reserve.
-    fn widths(&self, plan: &EnginePlan) -> Vec<u32> {
+    /// Output widths the round-1 and round-2 resamples of a `w x h` frame write, for the scratch
+    /// they reserve.
+    fn widths(&self, plan: &EnginePlan, (w, h): (u32, u32)) -> Vec<u32> {
         let mut out = Vec::new();
         if let (true, Some(d)) = (self.detect, &plan.detector) {
             out.push(d.input_size);
@@ -184,6 +199,11 @@ impl Runs {
         }
         if let (true, Some(f)) = (self.faces, &plan.faces) {
             out.push(f.input_size);
+        }
+        if let (true, Some(o)) = (self.ocr, &plan.ocr)
+            && let Ok((input, _)) = ocr::det_canvas(o, w, h)
+        {
+            out.push(u32::try_from(input.shape[3]).unwrap_or(u32::MAX));
         }
         out
     }
@@ -231,6 +251,8 @@ impl Answers {
                 "embed_crops" => runs.embed_crops,
                 "faces" => runs.faces,
                 "face_embed" => runs.face_embed,
+                "ocr" => runs.ocr,
+                "derivatives" => runs.derivatives,
                 _ => false,
             };
             if built && self.running(name) {
@@ -289,7 +311,8 @@ where
                     &photo.image,
                     decided,
                     s.max_megapixels,
-                    &runs.widths(&photo.plan),
+                    &derivatives::sides(&photo.plan.derivatives),
+                    |size| runs.widths(&photo.plan, size),
                 )
             })
             .map_err(Stop::Status)?;
@@ -421,14 +444,10 @@ where
             .inc();
         let calls = std::mem::take(&mut round1.calls);
         let sent = work.send_round1(calls, inputs);
-        let after = work
+        let later = work
             .after_round1(&photo, &runs, round1, sent, &late, frame)
             .await?;
-        if let Some(r) = after.faces {
-            work.finish_faces(&runs, r).await?;
-        }
-        work.finish(&runs, after.cut, after.round2, after.embed_frame)
-            .await?;
+        later.finish(&mut work, &runs, &self.dictionary).await?;
         Ok(PhotoAnswer {
             status: "ok".into(),
             decode_route: source.decode_route,

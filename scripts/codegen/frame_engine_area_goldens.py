@@ -95,11 +95,16 @@ def goldens() -> dict[str, Any]:
     }
 
 
+def render() -> dict[str, str]:
+    """The file this script writes, by name in the golden directory."""
+    return {OUT.name: json.dumps(goldens(), indent=1) + '\n'}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--check', action='store_true', help='compare with the committed file')
     args = parser.parse_args()
-    text = json.dumps(goldens(), indent=1) + '\n'
+    text = render()[OUT.name]
     if args.check:
         same = OUT.read_text() == text
         print('area goldens up to date' if same else f'{OUT} is stale')

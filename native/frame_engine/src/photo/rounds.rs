@@ -15,13 +15,12 @@ use super::clock::{
 };
 use super::cut::Cut;
 use super::device::{Device, LaunchJob, Launched, Write};
-use super::faces::FaceRound2;
 use super::late::LateCall;
 use super::{Answers, Runs, Stop, engine, job_failed, settle_job_time};
 use crate::branches::crops::CropJpeg;
 use crate::branches::{InputSpec, detect, embed, faces};
 use crate::fault::GpuFault;
-use crate::pipeline::{Photo, RequestState, Tensor};
+use crate::pipeline::{RequestState, Tensor};
 use crate::wire::EnginePlan;
 use crate::wire::branch_status::{BranchState, DEPENDENCY_FAILED, MODEL_ERROR};
 
@@ -52,28 +51,6 @@ pub(super) struct Round2 {
     pub picked: Vec<bool>,
     pub blur: Option<Tensor>,
     pub jpegs: Vec<JobHandle<Result<CropJpeg, GpuFault>>>,
-}
-
-/// What the steps after round 1 hand to the finish.
-pub(super) struct AfterRound1 {
-    /// Whether there were rectangles to cut (detected or stored).
-    pub cut: bool,
-    pub round2: Round2,
-    pub faces: Option<FaceRound2>,
-    pub embed_frame: Option<CallId>,
-}
-
-/// The id of `owner`'s call among those sent.
-fn call_of(sent: &[(&str, CallId)], owner: &str) -> Option<CallId> {
-    sent.iter().find(|(o, _)| *o == owner).map(|(_, id)| *id)
-}
-
-/// The ids of every call of `owner` among those sent, in order.
-fn calls_of(sent: &[(&str, CallId)], owner: &str) -> Vec<CallId> {
-    sent.iter()
-        .filter(|(o, _)| *o == owner)
-        .map(|(_, id)| *id)
-        .collect()
 }
 
 /// One photo's shared state while its rounds run.
@@ -141,6 +118,9 @@ impl<D: Device> Work<'_, D> {
             entries.extend(calls);
             round.faces = detector;
         }
+        if let (true, Some(spec)) = (runs.ocr, &plan.ocr) {
+            entries.push(self.ocr_entry(spec)?);
+        }
         for entry in entries {
             // a late branch's inputs wait for its condition (`late.rs`)
             if late.contains(&entry.call.0) {
@@ -202,78 +182,6 @@ impl<D: Device> Work<'_, D> {
                 (owner, id)
             })
             .collect()
-    }
-
-    /// Everything after round 1 went out, in `_Rounds` order: the settle of the early branches
-    /// (the detector's rectangles, or the stored boxes in their place; the faces unless late),
-    /// the conditions and the late round 1, round 2 of the early branches, then the settle and
-    /// round 2 of the late ones. The photo's own hold on `frame` ends here.
-    ///
-    /// # Errors
-    ///
-    /// A stop of any of those steps.
-    pub async fn after_round1<'p>(
-        &mut self,
-        photo: &'p Photo,
-        runs: &Runs,
-        mut round1: Round1<'p, D::Input>,
-        mut sent: Vec<(&'static str, CallId)>,
-        late: &[&'static str],
-        frame: Arc<D::Frame>,
-    ) -> Result<AfterRound1, Stop> {
-        let plan = &photo.plan;
-        let cut = match &photo.boxes {
-            Some(boxes) => Some(Cut::stored(boxes, self.size)?),
-            None => self
-                .settle_detect(call_of(&sent, "detect"), round1.canvas.as_ref())
-                .await?
-                .map(|d| Cut::detected(&d, self.size)),
-        };
-        if cut.is_none() && runs.embed_crops {
-            self.stop_crops_without_boxes();
-        }
-        let faces_late = late.contains(&"faces");
-        let mut faces = None;
-        if !faces_late {
-            let detector = std::mem::take(&mut round1.faces);
-            faces = self
-                .settle_faces(plan, detector, calls_of(&sent, "faces"))
-                .await?;
-        }
-        let classes = cut.as_ref().and_then(|c| c.classes.as_deref());
-        let running = self.check_conditions(plan, late, classes);
-        let late_calls = round1
-            .late
-            .into_iter()
-            .filter(|l| running.contains(&l.call.0))
-            .collect();
-        sent.extend(self.late_round1(&frame, late_calls).await?);
-        let round2 = match &cut {
-            Some(cut) => self.round2(plan, runs, cut, &frame).await?,
-            None => Round2 {
-                crop_calls: Vec::new(),
-                picked: Vec::new(),
-                blur: None,
-                jpegs: Vec::new(),
-            },
-        };
-        if faces_late {
-            faces = self
-                .settle_faces(plan, round1.faces, calls_of(&sent, "faces"))
-                .await?;
-        }
-        let face_round = match &faces {
-            Some(f) => Some(self.round2_faces(plan, runs, f, &frame).await?),
-            None => None,
-        };
-        // jobs still running keep the frame to their wait
-        drop(frame);
-        Ok(AfterRound1 {
-            cut: cut.is_some(),
-            round2,
-            faces: face_round,
-            embed_frame: call_of(&sent, "embed_frame"),
-        })
     }
 
     /// Settle: the detector's answer as frame rectangles; a rejected call fails the branch.

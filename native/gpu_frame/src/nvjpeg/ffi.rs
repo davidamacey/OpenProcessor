@@ -47,21 +47,23 @@ use crate::budget::ByteCount;
 use crate::cuda::{Context, MemPool};
 use crate::nvjpeg::status::{Backend, NvjpegFailure, NvjpegStatus, check};
 
-type Status = c_int;
-type Handle = *mut c_void;
+pub(super) type Status = c_int;
+pub(super) type Handle = *mut c_void;
 type Decoder = *mut c_void;
 type State = *mut c_void;
 type JpegStream = *mut c_void;
 type DecodeParams = *mut c_void;
 type BufferPinned = *mut c_void;
 type BufferDevice = *mut c_void;
-type CudaStream = *mut c_void;
+pub(super) type CudaStream = *mut c_void;
+pub(super) type EncoderState = *mut c_void;
+pub(super) type EncoderParams = *mut c_void;
 
 /// `nvjpegImage_t`.
 #[repr(C)]
-struct NvjpegImage {
-    channel: [*mut u8; 4],
-    pitch: [usize; 4],
+pub(super) struct NvjpegImage {
+    pub(super) channel: [*mut u8; 4],
+    pub(super) pitch: [usize; 4],
 }
 
 type DevMalloc = unsafe extern "C" fn(*mut c_void, *mut *mut c_void, usize, CudaStream) -> c_int;
@@ -93,10 +95,10 @@ pub const NVJPEG_SONAME: &str = "libnvjpeg.so.13";
 /// Declares a table of C entry points and a loader that resolves every one of them or names the
 /// first that is missing.
 macro_rules! fn_table {
-    ($table:ident { $($name:ident : fn($($arg:ty),*) -> $ret:ty;)* }) => {
+    ($vis:vis $table:ident { $($name:ident : fn($($arg:ty),*) -> $ret:ty;)* }) => {
         #[expect(non_snake_case, reason = "the fields are the C entry points, named as nvJPEG names them")]
-        struct $table {
-            $($name: unsafe extern "C" fn($($arg),*) -> $ret,)*
+        $vis struct $table {
+            $($vis $name: unsafe extern "C" fn($($arg),*) -> $ret,)*
         }
 
         impl $table {
@@ -139,6 +141,22 @@ fn_table!(Fns {
     nvjpegDecodeJpegHost: fn(Handle, Decoder, State, DecodeParams, JpegStream) -> Status;
     nvjpegDecodeJpegTransferToDevice: fn(Handle, Decoder, State, JpegStream, CudaStream) -> Status;
     nvjpegDecodeJpegDevice: fn(Handle, Decoder, State, *mut NvjpegImage, CudaStream) -> Status;
+});
+
+// The encoder's entry points (nvJPEG documentation 2.3.5, "JPEG Encoding"), a table of their own
+// so a test can record the calls without filling the decoder's entries; loaded from the same
+// library handle as `Fns`.
+fn_table!(pub(super) EncFns {
+    nvjpegEncoderStateCreate: fn(Handle, *mut EncoderState, CudaStream) -> Status;
+    nvjpegEncoderStateDestroy: fn(EncoderState) -> Status;
+    nvjpegEncoderParamsCreate: fn(Handle, *mut EncoderParams, CudaStream) -> Status;
+    nvjpegEncoderParamsDestroy: fn(EncoderParams) -> Status;
+    nvjpegEncoderParamsSetQuality: fn(EncoderParams, c_int, CudaStream) -> Status;
+    nvjpegEncoderParamsSetEncoding: fn(EncoderParams, c_int, CudaStream) -> Status;
+    nvjpegEncoderParamsSetOptimizedHuffman: fn(EncoderParams, c_int, CudaStream) -> Status;
+    nvjpegEncoderParamsSetSamplingFactors: fn(EncoderParams, c_int, CudaStream) -> Status;
+    nvjpegEncodeImage: fn(Handle, EncoderState, EncoderParams, *const NvjpegImage, c_int, c_int, c_int, CudaStream) -> Status;
+    nvjpegEncodeRetrieveBitstream: fn(Handle, EncoderState, *mut u8, *mut usize, CudaStream) -> Status;
 });
 
 /// Load `soname` from `dir` when given and present there, else from the loader path. The handle
@@ -314,6 +332,7 @@ unsafe extern "C" fn pinned_free(
 /// documented guarantee; plan 17 section 2.1).
 pub(crate) struct Shared {
     fns: Fns,
+    enc: EncFns,
     handle: Handle,
     decoders: [(Backend, Decoder); 2],
     version: (i32, i32, i32),
@@ -341,13 +360,16 @@ impl Shared {
     ) -> Result<Shared, String> {
         let lib = open(NVJPEG_SONAME, dir)?;
         let version = version_of(lib)?;
-        // SAFETY: the library is leaked; the signatures are those of the shipped header.
-        let fns = unsafe { Fns::load(lib) }.map_err(|missing| {
+        let lacks = |missing: &str| {
             format!(
-                "{NVJPEG_SONAME} version {}.{}.{} lacks {missing} (the engine needs the V2 allocator API)",
+                "{NVJPEG_SONAME} version {}.{}.{} lacks {missing} (the engine needs the V2 allocator and encoder API)",
                 version.0, version.1, version.2
             )
-        })?;
+        };
+        // SAFETY: the library is leaked; the signatures are those of the shipped header.
+        let fns = unsafe { Fns::load(lib) }.map_err(lacks)?;
+        // SAFETY: as above.
+        let enc = unsafe { EncFns::load(lib) }.map_err(lacks)?;
         let counters = Arc::new(Counters {
             ctx: ctx.clone(),
             pool: pool.clone(),
@@ -384,6 +406,7 @@ impl Shared {
         .map_err(|e| e.to_string())?;
         let mut shared = Shared {
             fns,
+            enc,
             handle,
             decoders: [
                 (Backend::GpuHybrid, ptr::null_mut()),
@@ -410,6 +433,11 @@ impl Shared {
 
     pub(crate) fn version(&self) -> (i32, i32, i32) {
         self.version
+    }
+
+    /// The encoder's entry points and the handle they take.
+    pub(super) fn encoder(&self) -> (&EncFns, Handle) {
+        (&self.enc, self.handle)
     }
 
     fn decoder(&self, backend: Backend) -> Decoder {

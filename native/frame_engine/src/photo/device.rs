@@ -19,7 +19,9 @@ use tokio::time::Instant;
 
 use crate::branches::InputSpec;
 use crate::branches::crops::CropJpeg;
+use crate::branches::derivatives::{Rendered, RenditionJob};
 use crate::branches::faces::warp::FaceWarps;
+use crate::branches::ocr::LineWarp;
 use crate::fault::GpuFault;
 use crate::kernels::Resample;
 use crate::photo::source::Origin;
@@ -118,6 +120,8 @@ pub struct Launched<I> {
 pub enum WarpKind {
     /// `faces_warp.cu`: aligned face crops for the recogniser.
     Faces(FaceWarps),
+    /// `ocr_warp.cu`: text lines for the recogniser.
+    Text(LineWarp),
 }
 
 /// What a warp kernel writes into one region slice (the whole slice), timed as `stage`.
@@ -198,6 +202,17 @@ pub trait Device: Send + Sync + 'static {
         rect: [i64; 4],
         cancel: &CancelToken,
     ) -> JobResult<CropJpeg>;
+
+    /// The renditions of the frame, rendered and JPEG-encoded on the launch pool.
+    ///
+    /// # Errors
+    ///
+    /// The pool is shut down, or the job is cancelled, panics or, inside the handle, a resample or encode fails.
+    fn renditions(
+        &self,
+        job: RenditionJob<Self::Frame>,
+        cancel: &CancelToken,
+    ) -> JobResult<Rendered>;
 
     /// Runs `f` on the finish pool: CPU post-processing of one photo (anchor decode and NMS, CTC,
     /// box geometry), never a blocking wait and never work that feeds the card. The job waits in

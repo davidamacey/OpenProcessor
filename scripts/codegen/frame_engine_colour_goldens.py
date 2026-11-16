@@ -193,6 +193,11 @@ def corpus(directory: Path) -> dict[str, Any]:
     }
 
 
+def render() -> dict[str, str]:
+    """The file this script writes, by name in the golden directory."""
+    return {OUT.name: json.dumps(goldens(), indent=1) + '\n'}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--check', action='store_true', help='compare with the committed file')
@@ -205,7 +210,7 @@ def main() -> int:
         args.out.write_text(json.dumps(corpus(args.corpus), indent=1) + '\n')
         print(f'wrote {args.out}')
         return 0
-    text = json.dumps(goldens(), indent=1) + '\n'
+    text = render()[OUT.name]
     if args.check:
         same = OUT.read_text() == text
         print('colour goldens up to date' if same else f'{OUT} is stale')

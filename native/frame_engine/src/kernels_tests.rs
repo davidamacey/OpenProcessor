@@ -132,6 +132,32 @@ fn the_written_window_must_lie_inside_its_slice() {
 }
 
 #[test]
+fn reversed_planes_write_below_their_offset_and_stay_inside_the_slice() {
+    // the OCR detector's BGR input of 64 x 32: red written into the last plane
+    let plane = 64 * 32;
+    let r = Resample {
+        roi: [0, 0, 640, 320],
+        size: [64, 32],
+        window: [0, 0, 64, 32],
+        dst_offset: 2 * plane as usize,
+        plane: -plane,
+        row_stride: 64,
+        filter: Filter::Bilinear,
+    };
+    assert_eq!((r.first_byte(), r.extent()), (0, Some(3 * plane as usize)));
+    let early = Resample {
+        dst_offset: plane as usize,
+        ..r
+    };
+    assert_eq!(
+        early.extent(),
+        None,
+        "the blue plane would start before the slice"
+    );
+    assert_eq!(letterbox().first_byte(), 80 * 640);
+}
+
+#[test]
 fn the_filter_keys_follow_each_axis() {
     let r = Resample {
         roi: [0, 0, 1000, 750],

@@ -108,6 +108,7 @@ _ENGINE_STAND_INS = (
     'scripts/codegen/frame_engine_goldens.py',
     'scripts/codegen/frame_engine_face_goldens.py',
     'scripts/codegen/frame_engine_host_corpus.py',
+    'scripts/codegen/frame_engine_text_goldens.py',
 )
 
 

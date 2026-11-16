@@ -251,6 +251,8 @@ pub struct LaunchConfig {
 /// ([`crate::cuda::DeviceRange::checked_addr`]).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum KernelArg {
+    /// An unsigned 8-bit value (an `unsigned char` parameter).
+    U8(u8),
     /// A signed 32-bit value.
     I32(i32),
     /// An unsigned 32-bit value.
@@ -268,6 +270,7 @@ pub enum KernelArg {
 impl KernelArg {
     pub(crate) fn as_param(&mut self) -> *mut c_void {
         match self {
+            KernelArg::U8(v) => (v as *mut u8).cast(),
             KernelArg::I32(v) => (v as *mut i32).cast(),
             KernelArg::U32(v) => (v as *mut u32).cast(),
             KernelArg::I64(v) => (v as *mut i64).cast(),

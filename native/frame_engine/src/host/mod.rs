@@ -6,7 +6,8 @@
 //!    alone (`host_decode.probe`); past twice Pillow's `MAX_IMAGE_PIXELS` it is `huge` (Pillow's
 //!    `DecompressionBombError`), a file no decoder here opens is `decoder`, and past
 //!    `OP_FRAME_ENGINE_MAX_MEGAPIXELS` it is `huge`. The frame's need is
-//!    [`host_need_bytes`]: the frame arrives upright, so no oriented copy is held next to it.
+//!    `photo::budget::host_need_bytes`: the frame arrives upright, so no oriented copy is held
+//!    next to it.
 //! 2. [`decode_checked`], on the decode lane (`FrameEngine._decode_host`): the upright frame;
 //!    a failed decode, or a pixel count other than the header's, is `decoder`.
 //!
@@ -56,15 +57,10 @@ pub struct HostFrame {
 pub struct Admitted {
     /// `(width, height)` of the upright frame.
     pub size: (u32, u32),
-    /// Bytes of the frame against the budget (`prep_budget.host_need_bytes`).
-    pub need: u64,
+    /// `(width, height)` as stored, what `prep_budget.host_need_bytes` measures.
+    pub stored: (u32, u32),
     /// The embedded profile of an `RGB` or `RGBA` image, for the colour step.
     pub icc: Option<Vec<u8>>,
-}
-
-/// `prep_budget.host_need_bytes` without renditions: the one upright frame.
-pub fn host_need_bytes(width: u32, height: u32) -> u64 {
-    u64::from(width) * u64::from(height) * 3
 }
 
 /// Pillow's JPEG plugin takes a file that starts `FF D8 FF`.
@@ -154,7 +150,7 @@ pub fn admit(data: &[u8], max_megapixels: f64) -> Result<Admitted, &'static str>
     }
     Ok(Admitted {
         size: oriented_dims(w, h, tag),
-        need: host_need_bytes(w, h),
+        stored: (w, h),
         icc: profile(data).map_err(failed)?,
     })
 }

@@ -49,9 +49,25 @@ pub const FACE_ALIGN: &str = "face_align";
 pub const FACE_EMBED: &str = "face_embed";
 /// Laplacian sums of the face boxes.
 pub const FACE_BLUR: &str = "face_blur";
+/// The text detector's input: the frame resized into its slice (BGR).
+pub const OCR_PREP: &str = "ocr_prep";
+/// The text detector's call.
+pub const OCR_DETECT: &str = "ocr_detect";
+/// The host post-process of the probability map: contours, unclip, reading order, batches.
+pub const OCR_BOXES: &str = "ocr_boxes";
+/// The line warp of each recogniser batch (and the wait for room).
+pub const OCR_CROPS: &str = "ocr_crops";
+/// The recogniser's calls.
+pub const OCR_REC: &str = "ocr_rec";
+/// The CTC collapse of the recogniser's answers.
+pub const OCR_DECODE: &str = "ocr_decode";
+/// The renditions' resamples.
+pub const DERIVATIVE_RENDER: &str = "derivative_render";
+/// The renditions' JPEG encodes.
+pub const DERIVATIVE_JPEG: &str = "derivative_jpeg";
 
 /// Every stage this engine records, in the contract's order.
-pub const ALL: [&str; 16] = [
+pub const ALL: [&str; 24] = [
     QUEUE,
     BUDGET,
     DECODE,
@@ -68,11 +84,19 @@ pub const ALL: [&str; 16] = [
     FACE_ALIGN,
     FACE_EMBED,
     FACE_BLUR,
+    OCR_PREP,
+    OCR_DETECT,
+    OCR_BOXES,
+    OCR_CROPS,
+    OCR_REC,
+    OCR_DECODE,
+    DERIVATIVE_RENDER,
+    DERIVATIVE_JPEG,
 ];
 
 /// The kernel stages whose end waits for the stream under `OP_FRAME_ENGINE_STAGE_SYNC`
 /// (`stage_metrics.ASYNC_STAGES`, the ones of the branches built here).
-pub const SYNCED: [&str; 7] = [
+pub const SYNCED: [&str; 9] = [
     LETTERBOX,
     EMBED_FRAME,
     EMBED_CROPS,
@@ -80,6 +104,8 @@ pub const SYNCED: [&str; 7] = [
     FACE_LETTERBOX,
     FACE_ALIGN,
     FACE_BLUR,
+    OCR_PREP,
+    OCR_CROPS,
 ];
 
 /// One photo's seconds per stage, published to the metrics when dropped.

@@ -167,9 +167,43 @@ pub fn blur_rect(bbox: [f64; 4], w: i64, h: i64) -> Option<[i64; 4]> {
     (x2 > x1 && y2 > y1).then_some([x1, y1, x2, y2])
 }
 
-/// numpy's `@TYPE@_pairwise_sum` as `ndarray.sum(axis=-1)` uses it on a contiguous row, in the
-/// row's own type (`DOUBLE`, `FLOAT`): eight running sums for 8 to 128 values, halves (a multiple
-/// of 8 apart) above that.
+/// `_round_aspect`: the floor or the ceiling of `number`, whichever `key` ranks lower (the floor
+/// on a tie, as Python's `min` keeps the first), at least 1.
+fn round_aspect(number: f64, key: impl Fn(f64) -> f64) -> i64 {
+    let (lo, hi) = (number.floor(), number.ceil());
+    let pick = if key(hi) < key(lo) { hi } else { lo };
+    (pick as i64).max(1)
+}
+
+/// `fit_size`: `Image.thumbnail((side, side))`'s output size for a `width x height` image (the
+/// long side fits `side`, the aspect is kept, never enlarged).
+pub fn fit_size(width: i64, height: i64, side: i64) -> (i64, i64) {
+    if width <= side && height <= side {
+        return (width, height);
+    }
+    let aspect = width as f64 / height as f64;
+    let s = side as f64;
+    if aspect >= 1.0 {
+        let key = |n: f64| {
+            if n == 0.0 {
+                0.0
+            } else {
+                (aspect - s / n).abs()
+            }
+        };
+        (side, round_aspect(s / aspect, key))
+    } else {
+        (
+            round_aspect(s * aspect, |n: f64| (aspect - n / s).abs()),
+            side,
+        )
+    }
+}
+
+/// numpy's `@TYPE@_pairwise_sum` as `ndarray.sum(axis=-1)` uses it on a contiguous row, for
+/// float64 (`DOUBLE`, the weights' row sums) and float32 (`FLOAT`, the OCR line's mean
+/// probability): eight running sums for 8 to 128 values, halves (a multiple of 8 apart) above
+/// that, in the element type throughout.
 pub fn pairwise_sum<T>(a: &[T]) -> T
 where
     T: Copy + Default + std::ops::Add<Output = T> + std::ops::AddAssign,
@@ -229,13 +263,50 @@ pub fn filter_weights(
     out_size: i64,
     antialias: bool,
 ) -> Result<FilterWeights, GeometryError> {
+    let scale = in_size as f64 / out_size as f64;
+    let stretch = if antialias { scale.max(1.0) } else { 1.0 };
+    weights_of(in_size, out_size, stretch, 1.0, |u| {
+        (1.0 - u.abs()).max(0.0)
+    })
+}
+
+/// `np.sinc`: `sin(pi y) / (pi y)` with `y` replaced by `1e-20` at 0, as numpy computes it.
+fn sinc(x: f64) -> f64 {
+    let y = std::f64::consts::PI * if x == 0.0 { 1.0e-20 } else { x };
+    y.sin() / y
+}
+
+/// `filter_weights(in_size, out_size, lanczos=True)`: Pillow's `LANCZOS` (`a = 3`), antialiased,
+/// the weight `sinc(u) * sinc(u / 3)` inside the radius (the renditions' filter).
+///
+/// # Errors
+/// An output size that is not positive.
+pub fn lanczos_filter_weights(in_size: i64, out_size: i64) -> Result<FilterWeights, GeometryError> {
+    let stretch = (in_size as f64 / out_size as f64).max(1.0);
+    weights_of(in_size, out_size, stretch, 3.0, |u| {
+        if u.abs() < 3.0 {
+            sinc(u) * sinc(u / 3.0)
+        } else {
+            0.0
+        }
+    })
+}
+
+/// The body of `filter_weights`: taps within `radius * stretch` of each output centre, the kernel
+/// at `(x - centre + 0.5) / stretch`, normalised by numpy's pairwise row sum, cast to float32.
+fn weights_of(
+    in_size: i64,
+    out_size: i64,
+    stretch: f64,
+    radius: f64,
+    kernel: impl Fn(f64) -> f64,
+) -> Result<FilterWeights, GeometryError> {
     let n = usize::try_from(out_size).map_err(|_| GeometryError::EmptyWindow)?;
     if n == 0 {
         return Err(GeometryError::EmptyWindow);
     }
     let scale = in_size as f64 / out_size as f64;
-    let stretch = if antialias { scale.max(1.0) } else { 1.0 };
-    let support = stretch;
+    let support = radius * stretch;
     let centers: Vec<f64> = (0..n).map(|i| (i as f64 + 0.5) * scale).collect();
     let first: Vec<i64> = centers
         .iter()
@@ -256,7 +327,7 @@ pub fn filter_weights(
             *slot = if (k as i64) >= count[i] {
                 0.0
             } else {
-                (1.0 - u.abs()).max(0.0)
+                kernel(u)
             };
         }
         let total = pairwise_sum(row);
@@ -301,7 +372,24 @@ pub fn weights(
     take: i64,
     antialias: bool,
 ) -> Result<Weights, GeometryError> {
-    let all = filter_weights(n_in, n_out, antialias)?;
+    pack(&filter_weights(n_in, n_out, antialias)?, left, take)
+}
+
+/// `_weights(n_in, n_out, left, take, antialias=True, lanczos=True)`.
+///
+/// # Errors
+/// An output size that is not positive, or a window holding no output.
+pub fn lanczos_weights(
+    n_in: i64,
+    n_out: i64,
+    left: i64,
+    take: i64,
+) -> Result<Weights, GeometryError> {
+    pack(&lanczos_filter_weights(n_in, n_out)?, left, take)
+}
+
+/// The `take` outputs from `left` of `all`, packed.
+fn pack(all: &FilterWeights, left: i64, take: i64) -> Result<Weights, GeometryError> {
     let total = all.first.len();
     let a = usize::try_from(left).unwrap_or(usize::MAX).min(total);
     let b = usize::try_from(left.saturating_add(take))
