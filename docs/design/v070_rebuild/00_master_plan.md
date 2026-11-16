@@ -62,30 +62,27 @@ Ultralytics version), B4 (stateless API), B5 (speed), R-final (release acceptanc
 
 ---
 
-## 1. Where things stand (2026-11-12)
+## 1. Where things stand (2026-11-15)
 
 The goal every remaining step serves is the user's job in
 [VISION_AND_GOALS.md](../../VISION_AND_GOALS.md) ("The user's job"): an existing detector finds the
 objects, the user labels them in their own classes cluster by cluster (optionally with the assist
-loop's VLM), then trains a model on those classes. Nothing is pushed: `main` is unchanged since the
-plan set, and everything below is on the local integration branch `int/b4-stateless`.
+loop's VLM), then trains a model on those classes; a gallery sits on the same record.
 
-| Item | State |
-|---|---|
-| B2 control plane (W2.1-W2.4), B3 one Ultralytics version (W3), B4 stateless API (W4) | done and swept green on `int/b4-stateless` |
-| B5 speed | W5a baseline recorded on the GPU stack; the GPU bundle (decode geometry, crops) merged; W5b-W5d and the processing plans (06d, #67) move to the dedicated speed-research session; W5e plate-text jobs held for the plate-text research numbers |
-| Workflow rebuild (files 12-12e) | waves 1-4 merged and swept; the live acceptance walk of 12e is still to run on the final head |
-| UX wave (owner UI review, 2026-11-12) | wave 1 merged (backend read paths, detector class as a machine label, crop preview, cohort summary, the design system and Lucide icons); wave 2 (Workspace and Review, page layouts) coding |
-| Versions | `VERSION`, `pyproject.toml` and `frontend/package.json` stay 0.6.0 until release prep (07 section 3) |
+The single map of all remaining work, with every track's state, order and open gaps, is
+[14_roadmap.md](14_roadmap.md); where it and this file disagree on order, it wins. In short:
 
-The remaining order (one merge and one sweep per step; reds go back to one fix lane):
-
-1. Merge UX wave 2 and its fix lane; one confirmation sweep on the merged head; build the images once.
-2. Refresh the live GPU stack on those images and run the 12e acceptance walk (checks 1-19), with
-   screenshots at 1600 and 430 px, including every item of the owner's UI review.
-3. The user's job end to end on a real vehicle photo set (12e check 19).
-4. The speed-research session (B5 rest: #40, #67, #220, the processing plans), from that green head.
-5. R-final (07) and the tag, on the owner's word; then the PRs to `main`.
+- Done on the integration branch `int/b4-stateless`: the control plane (W2), one Ultralytics version
+  (W3), the stateless API (W4), the workflow rebuild (files 12 to 12f), ingest on the engine and its
+  reliability rerun (plan 13a; [13](13_backend_speed_plan.md) section 10), crop vectors (13b).
+- In progress on their own branches: the native Rust frame engine, `int/native`
+  ([17](17_native_engine_plan.md), phase N0 in part); the storage rebuild with PostgreSQL as the
+  record, `int/storage` ([15](15_storage_plan.md), step 1 built).
+- Order from here: the roadmap's section 2 (map) and section 3 (what must not start yet). The
+  owner's four answers of 2026-11-15 (roadmap section 9) set the release: no 0.7.0 tag until the
+  whole programme is done; no in-place upgrade from 0.6.0; no authentication for now.
+- Versions: `VERSION`, `pyproject.toml` and `frontend/package.json` stay 0.6.0 until release prep
+  (07 section 3). Nothing is on `main` yet.
 
 ## 2. The waves in one table
 
