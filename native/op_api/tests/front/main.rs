@@ -9,6 +9,8 @@ mod abort;
 #[cfg(test)]
 mod cors;
 #[cfg(test)]
+mod cors_cases;
+#[cfg(test)]
 mod edges;
 #[cfg(test)]
 mod forwarding;

@@ -73,7 +73,7 @@ fn allowed(pattern: &Regex, origin: &HeaderValue) -> bool {
 
 /// CORS for the routes Rust owns: a preflight request (`OPTIONS` with `Origin` and
 /// `Access-Control-Request-Method`) is answered here, any other request goes on and its answer
-/// gets the simple-response headers.
+/// gets the simple-response headers (`Vary: Origin` also without an `Origin`, as Starlette does).
 pub async fn on_owned_routes(
     State(pattern): State<Regex>,
     request: Request,
@@ -86,12 +86,12 @@ pub async fn on_owned_routes(
             .headers()
             .contains_key(ACCESS_CONTROL_REQUEST_METHOD)
     {
-        return preflight(&pattern, origin, request.headers());
+        let mut answer = preflight(&pattern, origin, request.headers());
+        answer.extensions_mut().insert(Applied);
+        return answer;
     }
     let mut response = next.run(request).await;
-    if let Some(origin) = origin {
-        add_simple_headers(response.headers_mut(), &origin, &pattern);
-    }
+    add_simple_headers(&mut response, origin.as_ref(), &pattern);
     response
 }
 
@@ -137,7 +137,7 @@ fn preflight(pattern: &Regex, origin: &HeaderValue, request: &HeaderMap) -> Resp
 
 /// Give an answer the front built itself the headers Starlette's `CORSMiddleware` gives a simple
 /// response of the Python app. An answer from the Python API, and one that already carries CORS
-/// headers (a probe's), is returned as it is.
+/// headers from [`on_owned_routes`], is returned as it is.
 pub async fn on_front_answers(
     State(pattern): State<Regex>,
     request: Request,
@@ -145,36 +145,36 @@ pub async fn on_front_answers(
 ) -> Response {
     let origin = request.headers().get(ORIGIN).cloned();
     let mut response = next.run(request).await;
-    let Some(origin) = origin else {
-        return response;
-    };
     let built_here = response.extensions().get::<FrontAnswer>().is_some();
-    if built_here && !has_cors(response.headers()) {
-        add_simple_headers(response.headers_mut(), &origin, &pattern);
+    if built_here && response.extensions().get::<Applied>().is_none() {
+        add_simple_headers(&mut response, origin.as_ref(), &pattern);
     }
     response
 }
 
-/// What Starlette adds to a response of a request with an `Origin`: credentials and the exposed
-/// headers always, the origin itself for an allowed one, and `Vary: Origin`.
-fn add_simple_headers(headers: &mut HeaderMap, origin: &HeaderValue, pattern: &Regex) {
-    headers.insert(
-        ACCESS_CONTROL_ALLOW_CREDENTIALS,
-        HeaderValue::from_static("true"),
-    );
-    headers.insert(
-        ACCESS_CONTROL_EXPOSE_HEADERS,
-        HeaderValue::from_static(EXPOSED),
-    );
-    if allowed(pattern, origin) {
-        headers.insert(ACCESS_CONTROL_ALLOW_ORIGIN, origin.clone());
+/// Marks an answer that has had its CORS headers, so the second layer does not add them again.
+#[derive(Clone, Copy)]
+struct Applied;
+
+/// What Starlette adds to every response: `Vary: Origin`, and with an `Origin` also credentials
+/// and the exposed headers, and the origin itself when it is allowed.
+fn add_simple_headers(response: &mut Response, origin: Option<&HeaderValue>, pattern: &Regex) {
+    response.extensions_mut().insert(Applied);
+    let headers = response.headers_mut();
+    if let Some(origin) = origin {
+        headers.insert(
+            ACCESS_CONTROL_ALLOW_CREDENTIALS,
+            HeaderValue::from_static("true"),
+        );
+        headers.insert(
+            ACCESS_CONTROL_EXPOSE_HEADERS,
+            HeaderValue::from_static(EXPOSED),
+        );
+        if allowed(pattern, origin) {
+            headers.insert(ACCESS_CONTROL_ALLOW_ORIGIN, origin.clone());
+        }
     }
     append_vary_origin(headers);
-}
-
-fn has_cors(headers: &HeaderMap) -> bool {
-    headers.contains_key(ACCESS_CONTROL_ALLOW_ORIGIN)
-        || headers.contains_key(ACCESS_CONTROL_EXPOSE_HEADERS)
 }
 
 fn append_vary_origin(headers: &mut HeaderMap) {

@@ -199,9 +199,9 @@ async fn an_answer_the_python_api_gave_keeps_its_own_cors_headers_once() {
 }
 
 #[tokio::test]
-async fn a_request_without_an_origin_gets_no_cors_headers_on_a_front_built_answer() {
+async fn a_request_without_an_origin_gets_only_vary_origin_on_a_front_built_answer() {
     bounded(
-        "a_request_without_an_origin_gets_no_cors_headers_on_a_front_built_answer",
+        "a_request_without_an_origin_gets_only_vary_origin_on_a_front_built_answer",
         async {
             let closed = TcpListener::bind("127.0.0.1:0").await.unwrap();
             let nobody_home = closed.local_addr().unwrap();
@@ -210,6 +210,7 @@ async fn a_request_without_an_origin_gets_no_cors_headers_on_a_front_built_answe
             let answer = get_path(&front, "/echo").await;
             assert_eq!(answer.status, StatusCode::SERVICE_UNAVAILABLE);
             assert_closed_to(&answer);
+            assert_eq!(answer.headers["vary"], "Origin");
             front.stop().await;
         },
     )
