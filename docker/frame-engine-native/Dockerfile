@@ -23,6 +23,14 @@
 #   runtime  Debian slim, a non-root user, the engine binary and the CUDA libraries. The driver
 #            (libcuda, libnvidia-ml) is mounted by the NVIDIA container toolkit.
 
+# Scanning: Trivy reads the Rust crates (Cargo.lock) and Debian packages, but not the C code built
+# into the binary or the CUDA libraries copied from wheels. Trivy's documentation names no way to
+# embed a bill of materials in an image, so those are listed in vendored-c-libraries.cdx.json and
+# scanned beside the image:
+#   trivy image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 <image>
+#   trivy sbom --severity HIGH,CRITICAL --exit-code 1 docker/frame-engine-native/vendored-c-libraries.cdx.json
+# A version bump below changes that file in the same commit.
+
 # -- Stage 1: the CUDA libraries ---------------------------------------------------------------
 FROM python:3.13-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90 AS wheels
 

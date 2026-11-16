@@ -49,6 +49,17 @@ pool and outside the frame budget). The idle engine holds none.
 ([Ingest load profile and GPU memory](../operations/ingest-load-profile.mdx)). You can still set `GPU_PROFILE=full` by hand; `./openprocessor gpu plan`
 warns when the card cannot hold it.
 
+**Decode lanes and memory.** Each decode lane keeps nvJPEG buffers that grow to the largest photo it
+has decoded, outside `OP_FRAME_ENGINE_POOL_MIB`. Measured on an RTX A6000 with 24 lanes and a largest
+photo of 26 MP: 211 MiB per lane, 8.1 MiB per megapixel. The native engine therefore starts with the
+fewer of the CPU cores and the lanes that fit in the card's free memory after its region and pool cap,
+less 10 percent; it logs both numbers and warns when not even one lane fits. For example, a card with
+5.6 GB free after the engine's region and pool fits 28 lanes of 26 MP photos, 18 of 40 MP photos (the
+40 MP figure is arithmetic, not measured). Photos of COCO and 20 MP size are not measured yet. A value
+in `OP_FRAME_ENGINE_LANES` is used as it is. The `full` profile writes 16 lanes; the others write 1
+because their decode is off (`tests/test_frame_engine_profile_sizes.py` keeps the files equal to the
+arithmetic).
+
 The frame engine's text branch adds two small models, `paddleocr_det_trt_uint8` and `paddleocr_rec_trt_uint8`:
 2.4 GB in Triton at their two instances each, 1.2 GB at one instance each (measured on an RTX A6000; their
 profiles are one detector image of up to 1920 pixels and 16 text lines of up to 2048 pixels per call). On a 12 GB
