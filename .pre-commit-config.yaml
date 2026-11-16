@@ -172,6 +172,14 @@ repos:
         pass_filenames: false
         always_run: true
 
+      - id: check-parity-ledger
+        name: A deleted Python test has a row in the parity ledger
+        entry: python3 scripts/codegen/check_parity_ledger.py
+        language: system
+        pass_filenames: false
+        always_run: true
+        # Reads the staged change; it exits at once when no test under tests/ was deleted.
+
       - id: check-vulture
         name: No new unused code (vulture)
         entry: bash -c 'py=python3; [ -x .venv/bin/python ] && py=.venv/bin/python; exec "$py" scripts/codegen/check_vulture.py'
