@@ -3,7 +3,7 @@
 //!
 //! * It is one synchronous `cuMemAlloc`, never pool memory: memory from a stream-ordered pool
 //!   cannot be exported with `cuIpcGetMemHandle`, which needs the base of a `cuMemAlloc`
-//!   allocation (https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__MEM.html,
+//!   allocation (<https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__MEM.html>,
 //!   `cuIpcGetMemHandle`). cudarc's `result::malloc_sync` is that call.
 //! * Its 64-byte IPC handle is what the model server's `CudaSharedMemoryRegister` takes as
 //!   `raw_handle` over gRPC.
@@ -71,6 +71,11 @@ impl fmt::Debug for Region {
 
 impl Region {
     /// Allocate `bytes` (a positive multiple of 256) and export it.
+    ///
+    /// # Errors
+    ///
+    /// [`CudaError::Invalid`] when `bytes` is not a positive multiple of the alignment;
+    /// [`CudaError::Driver`] when the allocation or its export fails.
     pub fn new(ctx: &Arc<Context>, bytes: usize) -> Result<Region, CudaError> {
         let slab = Slab::new(bytes).ok_or_else(|| {
             CudaError::invalid(format!(
@@ -123,6 +128,11 @@ impl Region {
     }
 
     /// A slice of `bytes`, waiting at most `wait` for room; for async callers.
+    ///
+    /// # Errors
+    ///
+    /// [`SliceError::TooLarge`] when `bytes` is larger than the whole region;
+    /// [`SliceError::Overload`] when no room freed within `wait`.
     pub async fn slice(&self, bytes: usize, wait: Duration) -> Result<Slice, SliceError> {
         let offset = self.mem.slab.take(bytes, wait).await?;
         Ok(Slice {
@@ -133,6 +143,11 @@ impl Region {
     }
 
     /// The same for a pool thread.
+    ///
+    /// # Errors
+    ///
+    /// [`SliceError::TooLarge`] when `bytes` is larger than the whole region;
+    /// [`SliceError::Overload`] when no room freed within `wait`.
     pub fn slice_blocking(&self, bytes: usize, wait: Duration) -> Result<Slice, SliceError> {
         let offset = self.mem.slab.take_blocking(bytes, wait)?;
         Ok(Slice {
@@ -190,6 +205,7 @@ impl Slice {
         self.len
     }
 
+    /// Whether the slice has zero bytes.
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }

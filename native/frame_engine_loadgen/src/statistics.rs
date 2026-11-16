@@ -32,6 +32,10 @@ pub fn counters_of(response: &ModelStatisticsResponse) -> BTreeMap<String, Count
 }
 
 /// Read every model's counters from the server.
+///
+/// # Errors
+///
+/// Returns `Err` when the `ModelStatistics` call fails or is not answered within `timeout`.
 pub async fn fetch(
     client: &mut Client,
     timeout: Duration,

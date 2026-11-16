@@ -1,7 +1,7 @@
 //! `cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)` of OpenCV 5.0.0, the call
 //! the Python engine's DB post-process makes (`frame_engine/ocr/db_boxes.py`), ported from
 //! `modules/imgproc/src/contours_new.cpp` and `contours_common.hpp` at the tag `5.0.0`
-//! (https://github.com/opencv/opencv/tree/5.0.0/modules/imgproc/src).
+//! (<https://github.com/opencv/opencv/tree/5.0.0/modules/imgproc/src>).
 //!
 //! The Python binding always asks for the hierarchy, so the call takes the Suzuki border
 //! following path, not the hierarchy-free fast path the same function has for `RETR_LIST`. What

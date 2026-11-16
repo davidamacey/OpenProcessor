@@ -187,7 +187,7 @@ fn the_unclipped_rectangle_equals_pyclippers_after_the_union() {
 }
 
 #[test]
-fn detector_sizes_crop_maps_batches_and_reading_order_equal_python() {
+fn detector_sizes_equal_python() {
     let g = json(LINES);
     for row in arr(&g["det_size"]) {
         let r = arr(row);
@@ -200,6 +200,11 @@ fn detector_sizes_crop_maps_batches_and_reading_order_equal_python() {
         );
         assert_eq!(got, Some((int(&r[5]), int(&r[6]))), "{row}");
     }
+}
+
+#[test]
+fn crop_dims_ratios_maps_and_taps_equal_python() {
+    let g = json(LINES);
     let mut maps = 0;
     for (k, row) in arr(&g["quads"]).iter().enumerate() {
         let q: Vec<[i32; 2]> = arr(&row["quad"])
@@ -238,6 +243,11 @@ fn detector_sizes_crop_maps_batches_and_reading_order_equal_python() {
         }
     }
     assert!(maps > 1000, "{maps} maps");
+}
+
+#[test]
+fn batches_and_reading_order_equal_python() {
+    let g = json(LINES);
     for case in arr(&g["batches"]) {
         let ratios: Vec<f64> = arr(&case["ratios"]).iter().map(bits64).collect();
         let got: Vec<(Vec<usize>, i64)> = plan_batches(&ratios, int(&case["batch"]) as usize, 2048)

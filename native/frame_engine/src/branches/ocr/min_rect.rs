@@ -3,7 +3,7 @@
 //! `get_mini_boxes`). Ported from `modules/geometry/src/convhull.cpp` (`convexHull`, Sklansky's
 //! scan), `rotcalipers.cpp` (`rotatingCalipers`, `minAreaRect`) and `modules/core/src/types.cpp`
 //! (`RotatedRect::points`) at the tag `5.0.0`
-//! (https://github.com/opencv/opencv/tree/5.0.0/modules/geometry/src).
+//! (<https://github.com/opencv/opencv/tree/5.0.0/modules/geometry/src>).
 //!
 //! The arithmetic is OpenCV's type for type: the hull in integers, the calipers in `float` with
 //! the few `double` steps the source has, and the hull's start chosen by the input indices as
@@ -15,8 +15,11 @@ use super::contours::Point;
 /// `cv::RotatedRect` as `minAreaRect` answers it.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RotatedRect {
+    /// The centre, in input pixels.
     pub center: [f32; 2],
+    /// Width and height as OpenCV orders them.
     pub size: [f32; 2],
+    /// Degrees, in `[-90, 0)`.
     pub angle: f32,
 }
 

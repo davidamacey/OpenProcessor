@@ -19,11 +19,14 @@ pub const BUILT: [&str; 3] = ["detect", "embed_frame", "embed_crops"];
 /// One model call's input tensor as the model server is told it: a uint8 CHW batch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InputSpec {
+    /// The model's input tensor name.
     pub name: &'static str,
+    /// The input shape as `[batch, channels, height, width]`.
     pub shape: [i64; 4],
 }
 
 impl InputSpec {
+    /// Triton datatype of every input the engine sends.
     pub const DATATYPE: &'static str = "UINT8";
 
     /// Its bytes (uint8, so the element count).
@@ -65,6 +68,10 @@ fn output_words<'a>(
 }
 
 /// The named output of a call as float32 values, with its shape.
+///
+/// # Errors
+///
+/// The output is missing, is not FP32, or its byte length does not match its shape.
 pub fn fp32_output<'a>(
     outputs: &'a [OutputTensor],
     name: &str,
@@ -77,6 +84,10 @@ pub fn fp32_output<'a>(
 }
 
 /// The named output of a call as int32 values, with its shape (the OCR recogniser's `indices`).
+///
+/// # Errors
+///
+/// The output is missing, is not INT32, or its byte length does not match its shape.
 pub fn int32_output<'a>(
     outputs: &'a [OutputTensor],
     name: &str,

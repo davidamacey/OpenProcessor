@@ -3,8 +3,8 @@
 //!
 //! CPU-bound and blocking work runs here, never on the network runtime; its result returns
 //! through a tokio oneshot channel, as tokio's documentation advises for CPU-bound work
-//! (https://docs.rs/tokio/1.54.1/tokio/index.html, "CPU-bound tasks and blocking code"). The
-//! queue is crossbeam's multi-consumer channel (https://docs.rs/crossbeam-channel/0.5.17); it is
+//! (<https://docs.rs/tokio/1.54.1/tokio/index.html>, "CPU-bound tasks and blocking code"). The
+//! queue is crossbeam's multi-consumer channel (<https://docs.rs/crossbeam-channel/0.5.17>); it is
 //! unbounded because the photos that can reach it are bounded upstream by admission.
 //!
 //! Two rules of the plan live here, once:
@@ -30,14 +30,17 @@ use tokio::sync::oneshot;
 pub struct CancelToken(Arc<AtomicBool>);
 
 impl CancelToken {
+    /// A token that is not cancelled.
     pub fn new() -> CancelToken {
         CancelToken::default()
     }
 
+    /// Cancel every job submitted with this token (or a clone) that has not started.
     pub fn cancel(&self) {
         self.0.store(true, Ordering::Release);
     }
 
+    /// Whether [`CancelToken::cancel`] was called on this token or a clone.
     pub fn is_cancelled(&self) -> bool {
         self.0.load(Ordering::Acquire)
     }
@@ -98,10 +101,20 @@ pub struct JobHandle<T> {
 }
 
 impl<T> JobHandle<T> {
+    /// Wait for the job's value from async code.
+    ///
+    /// # Errors
+    ///
+    /// [`JobError`] when the job was cancelled, panicked, or the pool shut down before it answered.
     pub async fn wait(self) -> Result<T, JobError> {
         self.rx.await.unwrap_or(Err(JobError::Closed))
     }
 
+    /// Wait for the job's value on a thread that may block (not inside an async task).
+    ///
+    /// # Errors
+    ///
+    /// [`JobError`] when the job was cancelled, panicked, or the pool shut down before it answered.
     pub fn wait_blocking(self) -> Result<T, JobError> {
         self.rx.blocking_recv().unwrap_or(Err(JobError::Closed))
     }
@@ -137,6 +150,11 @@ impl<S: 'static> WorkerPool<S> {
     /// Start `count` threads named `{name}-{i}`; each builds its state with `init(i)` on itself
     /// (nvJPEG states and CUDA bindings are per thread). Returns once every state is built, or
     /// the first failure after stopping the threads already started.
+    ///
+    /// # Errors
+    ///
+    /// [`PoolError`] carrying the `init` error of the first thread whose state could not be built,
+    /// or the failure to start a thread.
     pub fn new<E, F>(name: &str, count: usize, init: F) -> Result<WorkerPool<S>, PoolError<E>>
     where
         E: Send + 'static,
@@ -172,6 +190,10 @@ impl<S: 'static> WorkerPool<S> {
 
     /// Queue `job` for the next free thread. It runs only if `cancel` is not set and the handle
     /// is still held when a thread takes it.
+    ///
+    /// # Errors
+    ///
+    /// [`JobError::Closed`] when the pool is shut down.
     pub fn submit<T, F>(&self, cancel: &CancelToken, job: F) -> Result<JobHandle<T>, JobError>
     where
         T: Send + 'static,

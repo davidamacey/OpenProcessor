@@ -15,8 +15,11 @@ const MAX_CANDIDATES: usize = 3000;
 /// The DB post-process's settings (`DbParams`; `use_dilation` is off, as the engine runs it).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DbParams {
+    /// The map level a pixel must exceed to be text.
     pub thresh: f64,
+    /// The mean map level a box needs inside it.
     pub box_thresh: f64,
+    /// How far a box grows (area times ratio over perimeter).
     pub unclip_ratio: f64,
 }
 
@@ -24,7 +27,9 @@ pub struct DbParams {
 /// detector score.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TextBox {
+    /// The corners, top-left, top-right, bottom-right, bottom-left, in frame pixels.
     pub quad: [[i32; 2]; 4],
+    /// The mean map level inside the box before its unclip.
     pub score: f32,
 }
 

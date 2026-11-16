@@ -3,7 +3,7 @@
 //! `cv2.mean` with that mask.
 //!
 //! `fillPoly` is ported from `modules/imgproc/src/drawing.cpp` at the tag `5.0.0`
-//! (https://github.com/opencv/opencv/blob/5.0.0/modules/imgproc/src/drawing.cpp): every edge
+//! (<https://github.com/opencv/opencv/blob/5.0.0/modules/imgproc/src/drawing.cpp>): every edge
 //! drawn as an 8-connected line (`Line` over `LineIterator`, clipped by `clipLine`), then the
 //! scanline fill of `FillEdgeCollection` in 16.16 fixed point with its active edge list and
 //! bubble sort. `cv2.mean` sums the masked pixels in `double` in raster order and multiplies by

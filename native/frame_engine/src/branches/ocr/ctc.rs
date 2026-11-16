@@ -2,9 +2,11 @@
 //! (`frame_engine/ocr/ctc.py`, PaddleOCR's `CTCLabelDecode`): a line is the characters of the
 //! steps whose index is not the blank (0), not the previous step's and inside the dictionary;
 //! its confidence is the mean of those steps' probabilities (numpy's float32 mean: the pairwise
-//! sum, divided in float32), `char_min` the lowest.
+//! sum in float32, `geometry::pairwise_sum`, divided in float32), `char_min` the lowest.
 
 use std::path::Path;
+
+use crate::geometry::pairwise_sum;
 
 /// Where the image puts the recogniser's dictionary (`frame_engine/settings.py`
 /// `ocr_dictionary`; `docker/frame-engine-native/Dockerfile` copies
@@ -14,8 +16,11 @@ pub const DICTIONARY_PATH: &str = "/app/ocr/ppocrv6_dict.txt";
 /// One decoded line: its text, mean and lowest probability (both 0 for an empty line).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Line {
+    /// The line's characters.
     pub text: String,
+    /// The mean probability of the kept steps.
     pub mean: f32,
+    /// The lowest probability of the kept steps.
     pub lowest: f32,
 }
 
@@ -43,6 +48,9 @@ impl CtcDecoder {
     }
 
     /// Read at start; a missing or unreadable file refuses the start with its path.
+    ///
+    /// # Errors
+    /// The file's path and the reason when it cannot be read.
     pub fn from_file(path: &Path) -> Result<Self, String> {
         std::fs::read_to_string(path)
             .map(|t| Self::from_text(&t))
@@ -62,6 +70,9 @@ impl CtcDecoder {
     /// The line of one recogniser row: `indices` and `scores` of its steps. An index past the
     /// classes is dropped; a negative one picks from the end as a Python list does, and one past
     /// even that is a fault of the answer.
+    ///
+    /// # Errors
+    /// A negative index past the start of the classes (the Python list would raise).
     pub fn decode(&self, indices: &[i32], scores: &[f32]) -> Result<Line, String> {
         let n = self.characters.len() as i64;
         let mut text = String::new();
@@ -92,36 +103,9 @@ impl CtcDecoder {
         }
         Ok(Line {
             text,
-            mean: pairwise_sum_f32(&kept) / kept.len() as f32,
+            mean: pairwise_sum(&kept) / kept.len() as f32,
             lowest: kept.iter().copied().fold(f32::INFINITY, f32::min),
         })
-    }
-}
-
-/// numpy's `FLOAT_pairwise_sum` (the float32 twin of `geometry::pairwise_sum`).
-fn pairwise_sum_f32(a: &[f32]) -> f32 {
-    let n = a.len();
-    if n < 8 {
-        a.iter().fold(0.0, |r, x| r + x)
-    } else if n <= 128 {
-        let mut r = [0f32; 8];
-        r.copy_from_slice(&a[..8]);
-        let mut i = 8;
-        while i < n - (n % 8) {
-            for (acc, x) in r.iter_mut().zip(&a[i..i + 8]) {
-                *acc += x;
-            }
-            i += 8;
-        }
-        let mut res = ((r[0] + r[1]) + (r[2] + r[3])) + ((r[4] + r[5]) + (r[6] + r[7]));
-        for x in &a[i..] {
-            res += x;
-        }
-        res
-    } else {
-        let mut half = n / 2;
-        half -= half % 8;
-        pairwise_sum_f32(&a[..half]) + pairwise_sum_f32(&a[half..])
     }
 }
 

@@ -39,6 +39,7 @@ from frame_engine.messages import EngineRequest, EngineResult
 from frame_engine.stage_metrics import EngineMetrics
 from frame_engine.transport import OverloadError, TritonUnavailableError
 from src.domain import frame_engine_wire as wire
+from src.domain.image_geometry import letterbox_geometry, undo_letterbox
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -91,26 +92,82 @@ def free_ports(n: int) -> list[int]:
 # ----------------------------------------------------------------------------- what the stub answers
 
 
+STUB_SIZE = (96, 64)
+ENCODER_DIM = 1024
+FACE_DIM = 512
+_FRAME_BOXES = [(0.1, 0.1, 0.5, 0.6), (0.5, 0.3, 0.9, 0.9)]
+_FACE_BOXES = [(8.0, 8.0, 40.0, 40.0), (48.0, 16.0, 88.0, 56.0)]
+
+
+def _vectors(rows: int, dim: int) -> np.ndarray:
+    """The stub's vectors: row ``r``, column ``c`` is +1 when ``c + r`` is even, else -1."""
+    return np.where(
+        (np.arange(dim)[None, :] + np.arange(rows)[:, None]) % 2 == 0, 1.0, -1.0
+    ).astype(np.float32)
+
+
+def _landmarks(x1: float, y1: float, x2: float, y2: float) -> list[float]:
+    """Five landmarks around the centre of a face box, as ``face_tensor`` in ``stub.rs`` places them."""
+    cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+    return [cx - 4, cy - 4, cx + 4, cy - 4, cx, cy, cx - 3, cy + 6, cx + 3, cy + 6]
+
+
+def _sums_row(pixels: int) -> list[int]:
+    return [pixels, 8 * pixels, 100 * pixels]
+
+
+def _detect_tensors(input_size: int) -> dict[str, Any]:
+    """``detections`` of the stub: the boxes in letterboxed canvas pixels, the letterbox, and the
+    blur rows of the frame and of each box's rectangle, as ``geometry.rs`` and ``detect.rs`` do."""
+    w, h = STUB_SIZE
+    lb = letterbox_geometry(w, h, input_size)
+    scale, pad_w, pad_h = lb.scale, lb.pad_w, lb.pad_h
+    boxes = np.array(
+        [
+            [
+                x1 * w * scale + pad_w,
+                y1 * h * scale + pad_h,
+                x2 * w * scale + pad_w,
+                y2 * h * scale + pad_h,
+            ]
+            for x1, y1, x2, y2 in _FRAME_BOXES
+        ],
+        np.float32,
+    )
+    rows = [_sums_row(w * h)]
+    for box in boxes:
+        bx1, by1, bx2, by2 = (float(v) for v in box)
+        x1, y1, x2, y2 = undo_letterbox((bx1, by1, bx2, by2), scale, (pad_w, pad_h))
+        rx1, rx2 = (min(max(round(v), 0), w) for v in (x1, x2))
+        ry1, ry2 = (min(max(round(v), 0), h) for v in (y1, y2))
+        rows.append(_sums_row((rx2 - rx1) * (ry2 - ry1)) if rx2 > rx1 and ry2 > ry1 else [0, 0, 0])
+    return {
+        wire.DET_BOXES: boxes,
+        wire.LETTERBOX: np.array([scale, pad_w, pad_h], np.float64),
+        wire.BLUR_SUMS: np.array(rows, np.int64),
+    }
+
+
 def stub_outputs(plan: wire.EnginePlan, rows: int) -> dict[str, Any]:
     """The tensors the stub gives for ``plan`` (``native/frame_engine/src/stub.rs``): ``rows`` is the
     number of stored boxes, or the two detections; arrays, and lists of bytes for BYTES."""
     n, d = rows, DETECTIONS
+    detect = _detect_tensors(plan.detector.input_size) if plan.detector is not None else {}
     every: dict[str, Any] = {
-        wire.DET_BOXES: np.ones((d, 4), np.float32),
         wire.DET_SCORES: np.full(d, 0.9, np.float32),
         wire.DET_CLASSES: np.array([1, 2], np.int32),
-        wire.LETTERBOX: np.array([6.6, 0.0, 106.0], np.float64),
-        wire.BLUR_SUMS: np.zeros((d + 1, 3), np.int64),
-        wire.WHOLE_EMBEDDING: np.arange(4, dtype=np.float32),
-        wire.CROP_EMBEDDINGS: np.ones((n, 4), np.float32),
+        wire.WHOLE_EMBEDDING: _vectors(1, ENCODER_DIM)[0],
+        wire.CROP_EMBEDDINGS: _vectors(n, ENCODER_DIM),
         wire.CROP_EMBEDDED: np.ones(n, np.bool_),
-        wire.CROP_JPEGS: [b'\xff\xd8a', b'\xff\xd8bc'][:n],
-        wire.FACE_BOXES: np.ones((d, 4), np.float32),
+        wire.CROP_JPEGS: [b'\xff\xd8' + str(r).encode() for r in range(n)],
+        wire.FACE_BOXES: np.array(_FACE_BOXES, np.float32),
         wire.FACE_SCORES: np.full(d, 0.9, np.float32),
-        wire.FACE_LANDMARKS: np.zeros((d, 10), np.float32),
-        wire.FACE_BLUR_SUMS: np.zeros((d, 3), np.int64),
+        wire.FACE_LANDMARKS: np.array([_landmarks(*b) for b in _FACE_BOXES], np.float32),
+        wire.FACE_BLUR_SUMS: np.array(
+            [_sums_row(int((x2 - x1) * (y2 - y1))) for x1, y1, x2, y2 in _FACE_BOXES], np.int64
+        ),
         wire.FACE_OVERFLOW: np.zeros(1, np.int32),
-        wire.FACE_EMBEDDINGS: np.ones((d, 4), np.float32),
+        wire.FACE_EMBEDDINGS: _vectors(d, FACE_DIM),
         wire.FACE_EMBEDDED: np.ones(d, np.bool_),
         wire.OCR_QUADS: np.zeros((d, 8), np.float32),
         wire.OCR_TEXTS: [b'STOP', 'caf\u00e9'.encode()],
@@ -120,7 +177,8 @@ def stub_outputs(plan: wire.EnginePlan, rows: int) -> dict[str, Any]:
         wire.OCR_OVERFLOW: np.zeros(1, np.int32),
         wire.DERIVATIVE_JPEGS: [b'\xff\xd8' + r.name.encode() for r in plan.derivatives],
     }
-    out: dict[str, Any] = {wire.SIZE: np.array([96, 64], np.int32)}
+    every.update(detect)
+    out: dict[str, Any] = {wire.SIZE: np.array(STUB_SIZE, np.int32)}
     out.update({name: every[name] for name in wire.expected_outputs(plan)})
     return out
 

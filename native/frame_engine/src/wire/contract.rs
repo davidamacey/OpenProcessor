@@ -11,87 +11,141 @@ const TEXT: &str = include_str!(concat!(
     "/../../contracts/json/frame_engine_v1.json"
 ));
 
+/// The contract as `frame_engine_v1.json` states it: the tensor table, vocabularies, plan rules, request messages and metric families both sides must agree on.
 #[derive(Debug, Deserialize)]
 pub struct Contract {
+    /// Identity of the model the API calls.
     pub model: Model,
+    /// The request inputs in order: `image`, `plan`, then the optional `boxes`.
     pub inputs: Vec<InputTensor>,
+    /// Every output tensor the engine can answer, with its datatype and shape.
     pub outputs: Vec<Tensor>,
+    /// Outputs every answer carries whatever the plan: `status`, `decode_route`, `branch_status`.
     pub always_present_outputs: Vec<String>,
+    /// Name of the output holding the photo's `[width, height]`.
     pub size_output: String,
+    /// Branch names a plan may list.
     pub branches: Vec<String>,
+    /// For each branch, the output tensors it answers.
     pub branch_outputs: BTreeMap<String, Vec<String>>,
+    /// Outputs added by `crops: inline`.
     pub crops_inline_outputs: Vec<String>,
+    /// The rendition (`derivatives`) field name, output and limits.
     pub derivatives: Derivatives,
+    /// Request faults with their message text; `{name}` stands for the tensor name.
     pub request_rules: Vec<RequestRule>,
+    /// Which model versions `ModelReady` accepts.
     pub model_ready: ModelReady,
+    /// The values of the `decode_route` output.
     pub decode_routes: Vec<String>,
+    /// The values of the `status` output.
     pub photo_statuses: Vec<String>,
+    /// Limits and vocabularies the plan parser enforces.
     pub plan: PlanRules,
+    /// The stage names of the stage metrics, in order.
     pub stages: Vec<String>,
+    /// The metric families the engine serves.
     pub metrics: Vec<MetricFamily>,
 }
 
 /// One series family of the metrics endpoint.
 #[derive(Debug, Deserialize)]
 pub struct MetricFamily {
+    /// Prometheus series name.
     pub name: String,
+    /// Series kind, `counter` or `gauge`.
     #[serde(rename = "type")]
     pub kind: String,
+    /// Label names of the series.
     pub labels: Vec<String>,
 }
 
+/// The model's identity as the API addresses it.
 #[derive(Debug, Deserialize)]
 pub struct Model {
+    /// Model name in requests.
     pub name: String,
+    /// Model version in requests and metadata.
     pub version: String,
+    /// Platform string in the metadata answer.
     pub platform: String,
+    /// Version of the plan protocol; a plan's `version` must equal it.
     pub protocol_version: i64,
+    /// Prefix of the details of an `INTERNAL` answer.
     pub engine_error_prefix: String,
 }
 
+/// An output tensor in the metadata.
 #[derive(Debug, Deserialize)]
 pub struct Tensor {
+    /// Tensor name.
     pub name: String,
+    /// KServe datatype name.
     pub datatype: String,
+    /// Dimensions; `-1` is a variable size.
     pub shape: Vec<i64>,
 }
 
+/// A request input in the metadata.
 #[derive(Debug, Deserialize)]
 pub struct InputTensor {
+    /// Tensor name.
     pub name: String,
+    /// KServe datatype name.
     pub datatype: String,
+    /// Dimensions; `-1` is a variable size.
     pub shape: Vec<i64>,
+    /// Whether a request without it is refused.
     pub required: bool,
 }
 
+/// How image renditions are asked for and returned.
 #[derive(Debug, Deserialize)]
 pub struct Derivatives {
+    /// Name of the plan field that lists the renditions.
     pub field: String,
+    /// Name of the output tensor holding the encoded renditions.
     pub output: String,
+    /// Accepted rendition formats.
     pub formats: Vec<String>,
+    /// Smallest and largest rendition side, pixels.
     pub side_range: [i64; 2],
+    /// JPEG quality (1 to 100) when a rendition names none.
     pub default_quality: i64,
 }
 
+/// A way a request is refused, with its message.
 #[derive(Debug, Deserialize)]
 pub struct RequestRule {
+    /// Rule id, for example `unknown_input`.
     pub id: String,
+    /// Message text; `{name}` is replaced by the tensor name.
     pub message: String,
 }
 
+/// What `ModelReady` accepts.
 #[derive(Debug, Deserialize)]
 pub struct ModelReady {
+    /// Version strings that mean this model; the empty string means the latest.
     pub versions_accepted: Vec<String>,
 }
 
+/// The limits and vocabularies of a plan.
 #[derive(Debug, Deserialize)]
 pub struct PlanRules {
+    /// Letterbox fill, 0 to 255, when the crop encoder names none.
     pub crop_fill_default: i64,
+    /// Accepted `crop_recipe` values.
     pub crop_recipes: Vec<String>,
+    /// Accepted `crops` values.
     pub crops_modes: Vec<String>,
+    /// Accepted `frame_recipe` values.
     pub frame_recipes: Vec<String>,
+    /// Accepted OCR `det_limit` values.
     pub ocr_det_limits: Vec<String>,
+    /// Largest OCR `batch`.
     pub ocr_max_batch: i64,
+    /// Largest OCR `det_side`, pixels.
     pub ocr_max_det_side: i64,
     /// Branches an `if_detected` condition may name.
     pub conditional_branches: Vec<String>,

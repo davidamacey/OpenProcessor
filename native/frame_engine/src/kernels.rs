@@ -30,7 +30,9 @@ use gpu_frame::{
 use crate::fault::GpuFault;
 use crate::geometry::{self, GeometryError};
 
+/// CUDA source of the resample and Laplacian-sum kernels, compiled at start.
 pub const PREP_SOURCE: &str = include_str!("../kernels/prep.cu");
+/// CUDA source of the EXIF re-orientation kernel, compiled at start.
 pub const ORIENT_SOURCE: &str = include_str!("../kernels/orient.cu");
 
 /// Threads per block of both resample passes (`prep_kernels.py`).
@@ -48,8 +50,11 @@ pub const WEIGHT_CACHE_BYTES: usize = 2 << 20;
 /// detector's input without `det_antialias`), Pillow's `LANCZOS` (the renditions).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Filter {
+    /// The triangle widened with the downscale (Pillow `BILINEAR`).
     Antialias,
+    /// The plain triangle (OpenCV `INTER_LINEAR`).
     Bilinear,
+    /// Pillow's `LANCZOS`, `a = 3`, antialiased.
     Lanczos,
 }
 
@@ -68,7 +73,9 @@ pub struct Resample {
     /// Bytes from one plane to the next (negative writes the planes in reverse order, as the
     /// OCR detector's BGR input), and from one row to the next.
     pub plane: i64,
+    /// Bytes from one row to the next.
     pub row_stride: i64,
+    /// Which filter the weights are.
     pub filter: Filter,
 }
 
@@ -129,14 +136,24 @@ impl Resample {
 /// is larger than the input).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct WeightKey {
+    /// Source pixels along the axis (the rectangle's width or height).
     pub n_in: i64,
+    /// Output pixels along the axis after scaling.
     pub n_out: i64,
+    /// First output index written.
     pub left: i64,
+    /// Number of output indexes written from `left`.
     pub take: i64,
+    /// Which filter the weights are.
     pub filter: Filter,
 }
 
 impl WeightKey {
+    /// The packed filter for this key.
+    ///
+    /// # Errors
+    ///
+    /// The window `left .. left + take` holds no output index, or `n_out` is not positive.
     pub fn weights(&self) -> Result<geometry::Weights, GeometryError> {
         let (n_in, n_out, left, take) = (self.n_in, self.n_out, self.left, self.take);
         match self.filter {
@@ -151,11 +168,17 @@ impl WeightKey {
 /// float32[n * kmax]` from the buffer's start, and the source rows `lo..hi` it reads.
 #[derive(Debug)]
 pub struct WeightSet<B> {
+    /// Output indexes in the set.
     pub n: usize,
+    /// Weights per output index.
     pub kmax: usize,
+    /// First source row (or column) any output of the set reads.
     pub lo: i64,
+    /// One past the last source row (or column) any output of the set reads.
     pub hi: i64,
+    /// Bytes the set occupies in `buf`, counted against the cache's capacity.
     pub bytes: usize,
+    /// The buffer holding the packed set; freed when the last `Arc` of the set is dropped.
     pub buf: B,
 }
 
@@ -174,6 +197,7 @@ pub struct WeightCache<B> {
 }
 
 impl<B> WeightCache<B> {
+    /// An empty cache that keeps at most `cap` bytes of weight sets.
     pub fn new(cap: usize) -> Self {
         Self {
             cap,
@@ -185,6 +209,10 @@ impl<B> WeightCache<B> {
 
     /// The set of `key`, made and stored with `upload` (the packed blob in, its buffer out) when
     /// it is not cached.
+    ///
+    /// # Errors
+    ///
+    /// The weights cannot be made for the key or `upload` fails.
     pub fn get<E: From<GeometryError>>(
         &mut self,
         key: WeightKey,
@@ -235,10 +263,12 @@ impl<B> WeightCache<B> {
         self.held
     }
 
+    /// Number of cached sets.
     pub fn len(&self) -> usize {
         self.slots.len()
     }
 
+    /// Whether no set is cached.
     pub fn is_empty(&self) -> bool {
         self.slots.is_empty()
     }
@@ -259,14 +289,22 @@ fn grid(v: i64, what: &str) -> Result<u32, GpuFault> {
 /// The scratch rows and the two launches of one resample, from its vertical filter's rows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ResampleShape {
+    /// Scratch rows the horizontal pass writes and the vertical pass reads.
     pub rows: i64,
+    /// Device bytes of that scratch (`rows` times the window width times 3 floats).
     pub scratch_bytes: usize,
+    /// Launch of the horizontal pass.
     pub h: LaunchConfig,
+    /// Launch of the vertical pass.
     pub v: LaunchConfig,
 }
 
 /// `resample_into`'s launches: `rows = max(1, hi - lo)` scratch rows of `window w x 3` floats;
 /// grids of `ceil(w / 128)` by the scratch rows, then by the window's height; 128 threads.
+///
+/// # Errors
+///
+/// The window has no positive size or the scratch size overflows.
 pub fn resample_shape(r: &Resample, y_lo: i64, y_hi: i64) -> Result<ResampleShape, GpuFault> {
     let (ww, wh) = (r.window[2], r.window[3]);
     let rows = (y_hi - y_lo).max(1);
@@ -299,9 +337,13 @@ pub fn resample_shape(r: &Resample, y_lo: i64, y_hi: i64) -> Result<ResampleShap
 /// Where one weight set is: its device address and its shape.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SetAt {
+    /// Device address of the packed set.
     pub addr: u64,
+    /// Output indexes in the set.
     pub n: usize,
+    /// Weights per output index.
     pub kmax: usize,
+    /// First source row (or column) the set reads.
     pub lo: i64,
 }
 
@@ -317,6 +359,10 @@ impl<B: DeviceRange> From<&WeightSet<B>> for SetAt {
 }
 
 /// `resample_h`'s arguments: `src, H, W, x0, y0 + lo, rows, xmin, xcnt, wx, kmax, out_w, tmp`.
+///
+/// # Errors
+///
+/// A value does not fit the kernel's 32-bit argument.
 pub fn resample_h_args(
     frame: (u64, u32, u32),
     r: &Resample,
@@ -345,6 +391,10 @@ pub fn resample_h_args(
 
 /// `resample_v`'s arguments: `tmp, out_w, ymin, ycnt, wy, kmax, out_h, ybase, dst, plane,
 /// row_stride` (the scratch starts at source row `lo`).
+///
+/// # Errors
+///
+/// A value does not fit the kernel's 32-bit argument.
 pub fn resample_v_args(
     tmp: u64,
     r: &Resample,
@@ -368,6 +418,10 @@ pub fn resample_v_args(
 }
 
 /// `lap_sums` over `n` rectangles: 64 blocks of 256 threads per rectangle.
+///
+/// # Errors
+///
+/// `n` is zero or too large for a launch dimension.
 pub fn lap_launch(n: usize) -> Result<LaunchConfig, GpuFault> {
     Ok(LaunchConfig {
         grid: (LAP_BLOCKS, grid(n as i64, "rectangles")?, 1),
@@ -377,6 +431,10 @@ pub fn lap_launch(n: usize) -> Result<LaunchConfig, GpuFault> {
 }
 
 /// The rectangles as the kernel reads them: `int32 [n, 4]`, little endian.
+///
+/// # Errors
+///
+/// A coordinate does not fit 32 bits.
 pub fn rect_blob(rects: &[[i64; 4]]) -> Result<Vec<u8>, GpuFault> {
     let mut out = Vec::with_capacity(rects.len() * 16);
     for v in rects.iter().flatten() {
@@ -450,6 +508,10 @@ pub fn orient_host(src: &[u8], w: u32, h: u32, orientation: u32) -> (Vec<u8>, u3
 }
 
 /// `orient`'s launch: 256 threads per block across an output row, a block row per output row.
+///
+/// # Errors
+///
+/// The output width or height is zero or too large for a launch dimension.
 pub fn orient_launch(out_w: u32, out_h: u32) -> Result<LaunchConfig, GpuFault> {
     Ok(LaunchConfig {
         grid: (
@@ -469,6 +531,7 @@ pub struct Staging {
 }
 
 impl Staging {
+    /// An empty buffer on `ctx`'s card; the pinned memory is allocated on first use.
     pub fn new(ctx: &Arc<Context>) -> Self {
         Self {
             ctx: Arc::clone(ctx),
@@ -477,6 +540,10 @@ impl Staging {
     }
 
     /// At least `len` bytes (reallocated only to grow).
+    ///
+    /// # Errors
+    ///
+    /// The pinned allocation fails.
     pub fn at_least(&mut self, len: usize) -> Result<&mut PinnedBuf, GpuFault> {
         if self.buf.as_ref().is_none_or(|b| b.len() < len) {
             self.buf = None;
@@ -490,7 +557,9 @@ impl Staging {
 
 /// A frame on the card as the kernels read it: interleaved RGB, `width x 3` bytes per row.
 pub trait FrameRef: DeviceRange {
+    /// Width in pixels.
     fn width(&self) -> u32;
+    /// Height in pixels.
     fn height(&self) -> u32;
 }
 
@@ -503,6 +572,11 @@ pub struct PrepKernels {
 }
 
 impl PrepKernels {
+    /// Compiles the kernel sources and looks up the entry points.
+    ///
+    /// # Errors
+    ///
+    /// A source does not compile or an entry point is missing.
     pub fn load(kernels: &Kernels) -> Result<Self, GpuFault> {
         let prep = kernels.load("prep.cu", PREP_SOURCE)?;
         let orient = kernels.load("orient.cu", ORIENT_SOURCE)?;
@@ -515,6 +589,10 @@ impl PrepKernels {
     }
 
     /// The two weight sets of `r` from this thread's cache, uploaded on `stream` when missing.
+    ///
+    /// # Errors
+    ///
+    /// A weight set cannot be made or uploaded.
     pub fn weights(
         &self,
         cache: &mut WeightCache<DeviceBuf>,
@@ -528,6 +606,10 @@ impl PrepKernels {
 
     /// Queue `r` on `stream`: frame to `dst` (a region slice), through a scratch freed in order
     /// on the same stream. The destination window is checked to lie inside `dst`.
+    ///
+    /// # Errors
+    ///
+    /// The window is empty, `dst` does not hold it, or an allocation or launch fails.
     pub fn resample(
         &self,
         pool: &FramePool,
@@ -554,6 +636,10 @@ impl PrepKernels {
     }
 
     /// The Laplacian sums of each rectangle (`x1, y1, x2, y2`, clamped and not empty), waited for.
+    ///
+    /// # Errors
+    ///
+    /// A rectangle does not fit 32 bits, or an allocation, copy or launch fails.
     pub fn lap_sums(
         &self,
         pool: &FramePool,
@@ -587,6 +673,10 @@ impl PrepKernels {
 
     /// The frame `src` (`w x h`) re-oriented by `orientation` into a new buffer, queued on
     /// `stream`; `None` when the tag moves no pixel.
+    ///
+    /// # Errors
+    ///
+    /// The buffer does not hold the frame, a size does not fit 32 bits, or an allocation or launch fails.
     pub fn orient(
         &self,
         pool: &FramePool,

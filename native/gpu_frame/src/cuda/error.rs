@@ -52,17 +52,31 @@ pub fn fault_of(code: CUresult) -> Fault {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CudaError {
     /// A shared library could not be loaded (no driver, no NVRTC on the library path).
-    LibraryMissing { library: &'static str },
+    LibraryMissing {
+        /// The library that failed to load, named for the log.
+        library: &'static str,
+    },
     /// A driver API call answered a code other than `CUDA_SUCCESS`.
-    Driver { call: &'static str, code: CUresult },
+    Driver {
+        /// The driver function that failed, as the CUDA driver API names it.
+        call: &'static str,
+        /// The `CUresult` it answered.
+        code: CUresult,
+    },
     /// NVRTC refused a program; `log` is the compiler's log.
     Nvrtc {
+        /// The NVRTC function that failed.
         call: &'static str,
+        /// The `nvrtcResult` it answered.
         code: i32,
+        /// The compiler's log; empty when the call gave none.
         log: String,
     },
     /// A request this crate refuses before any call (a range outside its buffer, a bad name).
-    Invalid { what: String },
+    Invalid {
+        /// What was refused, in words for the log.
+        what: String,
+    },
 }
 
 impl CudaError {

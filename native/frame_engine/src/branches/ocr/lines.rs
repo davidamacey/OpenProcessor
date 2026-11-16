@@ -158,7 +158,9 @@ fn inverse(m: &M3) -> Option<M3> {
 /// One line's sampling: the float32 map the kernel reads and its taps per axis.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LineMap {
+    /// Recogniser pixel `(u, v, 1)` to frame `(x, y, w)`, row-major float32.
     pub map: [f32; 9],
+    /// Samples per axis inside one recogniser pixel.
     pub taps: [i32; 2],
 }
 
@@ -221,7 +223,9 @@ fn taps(g: &M3, width: i64, cap: u32) -> [i32; 2] {
 /// common width.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Batch {
+    /// Indices into the caller's lines, narrowest first.
     pub indices: Vec<usize>,
+    /// The width every line of the call is padded to.
     pub width: i64,
 }
 

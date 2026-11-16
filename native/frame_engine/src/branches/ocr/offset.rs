@@ -4,7 +4,7 @@
 //! `arcLength` of the float corners.
 //!
 //! Ported from Clipper 6.4.2's `clipper.cpp` as pyclipper 1.4.0 ships it
-//! (https://github.com/fonttools/pyclipper, `src/clipper.cpp`; Clipper by Angus Johnson, Boost
+//! (<https://github.com/fonttools/pyclipper>, `src/clipper.cpp`; Clipper by Angus Johnson, Boost
 //! Software License 1.0, recorded in `ATTRIBUTION.md`): `ClipperOffset::AddPath` (duplicates
 //! dropped), `FixOrientations`, `DoOffset`, `OffsetPoint` and `DoRound`, with pyclipper's
 //! conversion of a float corner to an integer (truncation toward zero).

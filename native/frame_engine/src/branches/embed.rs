@@ -18,7 +18,9 @@ use crate::kernels::{Filter, Resample};
 use crate::pipeline::Tensor;
 use crate::wire::plan::{CropEmbedSpec, EmbedSpec};
 
+/// Name of the embedding model's input tensor.
 pub const INPUT: &str = "images";
+/// Name of the embedding model's output tensor, `[rows, dim]` float32.
 pub const OUTPUT: &str = "image_embeddings";
 
 fn usize_of(v: i64) -> Result<usize, GeometryError> {
@@ -26,6 +28,10 @@ fn usize_of(v: i64) -> Result<usize, GeometryError> {
 }
 
 /// The frame encoder's input for a frame of `w x h`: one square, one resample.
+///
+/// # Errors
+///
+/// The frame has a degenerate size or the square window is empty.
 pub fn frame_square(
     spec: &EmbedSpec,
     w: u32,
@@ -53,20 +59,29 @@ pub fn frame_square(
 /// One crop encoder call: its rectangles' squares in one input, on the fill.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Chunk {
+    /// The encoder input tensor for this chunk: name and `[n, 3, size, size]` shape.
     pub input: InputSpec,
+    /// Letterbox padding value, 0 to 255.
     pub fill: u8,
+    /// One resample per rectangle, each writing into its own square of the input.
     pub resamples: Vec<Resample>,
 }
 
 /// What `embed_crops` sends: which detections are picked, and the calls of their squares.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CropPlan {
+    /// One flag per detection: whether its crop is sent to the encoder.
     pub picked: Vec<bool>,
+    /// The encoder calls, in detection order, each at most the plan's batch in size.
     pub chunks: Vec<Chunk>,
 }
 
 /// `EmbedCrops.round2`'s cut: the picked rectangles (every one, or those whose detector class
 /// is in `embed_classes`), in chunks of the plan's batch.
+///
+/// # Errors
+///
+/// A picked rectangle has a degenerate size, or the square size does not fit the address range.
 pub fn crop_plan(
     spec: &CropEmbedSpec,
     embed_classes: Option<&BTreeSet<u32>>,
@@ -117,6 +132,10 @@ pub fn crop_plan(
 }
 
 /// The vectors of one encoder answer: `[rows, dim]` float32.
+///
+/// # Errors
+///
+/// The output is missing, is not FP32, or is not `[rows, dim]`.
 pub fn vectors(outputs: &[OutputTensor]) -> Result<(usize, usize, Vec<f32>), String> {
     let (shape, values) = fp32_output(outputs, OUTPUT)?;
     match shape {
@@ -130,6 +149,10 @@ pub fn vectors(outputs: &[OutputTensor]) -> Result<(usize, usize, Vec<f32>), Str
 }
 
 /// `whole_embedding`: the first (only) row of the frame encoder's answer.
+///
+/// # Errors
+///
+/// The output is invalid (see `vectors`) or has no row.
 pub fn whole_embedding(outputs: &[OutputTensor]) -> Result<Tensor, String> {
     let (rows, dim, mut data) = vectors(outputs)?;
     if rows == 0 {
@@ -144,6 +167,10 @@ pub fn whole_embedding(outputs: &[OutputTensor]) -> Result<Tensor, String> {
 
 /// `crop_embeddings` (`[picked, dim]`, `(0, 0)` when nothing was picked: no row tells the crop
 /// encoder's width) and `crop_embedded`, one flag per detection.
+///
+/// # Errors
+///
+/// An answer's output is invalid (see `vectors`) or two answers have different widths.
 pub fn crop_outputs(
     picked: &[bool],
     answers: &[Vec<OutputTensor>],

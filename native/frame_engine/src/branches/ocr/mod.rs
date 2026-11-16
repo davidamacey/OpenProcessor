@@ -34,10 +34,15 @@ use crate::kernels::{Filter, Resample};
 use crate::pipeline::Tensor;
 use crate::wire::plan::OcrSpec;
 
+/// The text detector's input tensor.
 pub const DET_INPUT: &str = "x";
+/// The text detector's probability map.
 pub const DET_OUTPUT: &str = "fetch_name_0";
+/// The recogniser's input tensor.
 pub const REC_INPUT: &str = "x";
+/// The recogniser's best class per step (INT32 `[B, T]`).
 pub const REC_INDICES: &str = "indices";
+/// The recogniser's probability of that class (FP32 `[B, T]`).
 pub const REC_SCORES: &str = "scores";
 /// The widest recogniser input of the build's optimisation profile (`export_paddleocr_rec.py`).
 pub const REC_MAX_WIDTH: i64 = 2048;
@@ -46,6 +51,9 @@ pub const PAD_VALUE: u8 = 128;
 
 /// The detector's input for a frame of `w x h`: one resample into BGR planes, so the first
 /// plane written (red) is the last of the tensor.
+///
+/// # Errors
+/// An unknown `det_limit`, or a size past the address range.
 pub fn det_canvas(spec: &OcrSpec, w: u32, h: u32) -> Result<(InputSpec, Resample), String> {
     let (rh, rw) = det_size(
         i64::from(h),
@@ -81,11 +89,16 @@ pub fn det_canvas(spec: &OcrSpec, w: u32, h: u32) -> Result<(InputSpec, Resample
 /// The lines the photo keeps, in reading order.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Settled {
+    /// The kept lines.
     pub boxes: Vec<TextBox>,
+    /// Lines dropped past `max_lines` (`ocr_overflow`).
     pub overflow: i32,
 }
 
 /// `Ocr.settle`: the boxes of the detector's answer for a frame of `w x h`.
+///
+/// # Errors
+/// A detector answer without the map or of another shape than `[1, 1, H, W]`.
 pub fn settle(answer: &[OutputTensor], spec: &OcrSpec, w: u32, h: u32) -> Result<Settled, String> {
     let (shape, pred) = fp32_output(answer, DET_OUTPUT)?;
     let [_, _, mh, mw] = *shape else {
@@ -132,10 +145,15 @@ pub fn settle(answer: &[OutputTensor], spec: &OcrSpec, w: u32, h: u32) -> Result
 /// row of `maps` (9 floats), `widths` and `taps` (2) per line, into a `[n, 3, 48, width]` slice.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LineWarp {
+    /// One float32 row of 9 per line (`line_map`).
     pub maps: Vec<f32>,
+    /// Each line's resized width.
     pub widths: Vec<i32>,
+    /// Each line's samples per axis (2 per line).
     pub taps: Vec<i32>,
+    /// The call's padded width.
     pub batch_width: i64,
+    /// Written right of each line's width.
     pub pad: u8,
 }
 
@@ -149,12 +167,18 @@ impl LineWarp {
 /// One recogniser call: the lines it reads (indices into the settled lines) and their warp.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LineBatch {
+    /// Indices into the settled lines.
     pub indices: Vec<usize>,
+    /// The recogniser input of the call.
     pub input: InputSpec,
+    /// What the warp kernel writes into it.
     pub warp: LineWarp,
 }
 
 /// `Ocr.round2`'s batches for the settled lines.
+///
+/// # Errors
+/// A line whose perspective map is singular.
 pub fn line_batches(settled: &Settled, spec: &OcrSpec) -> Result<Vec<LineBatch>, String> {
     let ratios: Vec<f64> = settled
         .boxes
@@ -195,6 +219,10 @@ pub fn line_batches(settled: &Settled, spec: &OcrSpec) -> Result<Vec<LineBatch>,
 }
 
 /// `Ocr.finish`: the lines of every call decoded, the six outputs in the wire's names.
+///
+/// # Errors
+/// A recogniser answer without its outputs, of a shape that does not match its lines, or an
+/// index outside the dictionary.
 pub fn outputs(
     settled: &Settled,
     batches: &[(Vec<usize>, Vec<OutputTensor>)],

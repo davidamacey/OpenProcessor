@@ -19,18 +19,27 @@ use crate::kernels::{Filter, Resample};
 use crate::pipeline::Tensor;
 use crate::wire::plan::DetectorSpec;
 
+/// Name of the detector's input tensor.
 pub const INPUT: &str = "images";
+/// Name of the detector's output tensor, `[batch, rows, 6]` of `x1, y1, x2, y2, score, class`.
 pub const OUTPUT: &str = "output0";
 
 /// The detector's input for a frame of `w x h`: the canvas, its fill and the one resample.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Canvas {
+    /// The detector input tensor: name and `[1, 3, net, net]` shape.
     pub input: InputSpec,
+    /// Letterbox padding value, 0 to 255.
     pub fill: u8,
+    /// The single resample that writes the scaled frame into the canvas.
     pub resample: Resample,
+    /// Where the frame sits on the canvas and the scale to undo it.
     pub letterbox: Letterbox,
 }
 
+/// # Errors
+///
+/// The frame has a degenerate size or the letterbox window is empty.
 pub fn canvas(spec: &DetectorSpec, w: u32, h: u32) -> Result<Canvas, GeometryError> {
     let net = i64::from(spec.input_size);
     let lb = letterbox_geometry(i64::from(w), i64::from(h), net)?;
@@ -59,10 +68,13 @@ pub fn canvas(spec: &DetectorSpec, w: u32, h: u32) -> Result<Canvas, GeometryErr
 pub struct Detections {
     /// Letterboxed input pixels, one row per detection.
     pub boxes: Vec<[f32; 4]>,
+    /// Score of each detection, parallel to `boxes`.
     pub scores: Vec<f32>,
+    /// Class index of each detection, parallel to `boxes`.
     pub classes: Vec<i32>,
     /// Each detection's rectangle in frame pixels (`x1, y1, x2, y2`, exclusive ends).
     pub rects: Vec<[i64; 4]>,
+    /// The letterbox the boxes were produced under, kept to map them back to the frame.
     pub letterbox: Letterbox,
 }
 
@@ -71,6 +83,10 @@ fn frame_box(b: &[f32; 4], lb: &Letterbox) -> [f64; 4] {
 }
 
 /// `Detect.settle`: the rows of the first batch whose score is above 0.
+///
+/// # Errors
+///
+/// The output tensor is missing, is not FP32, or is not `[batch, rows, 6]`.
 pub fn settle(
     outputs: &[OutputTensor],
     lb: &Letterbox,
@@ -124,6 +140,10 @@ pub fn blur_rects(d: &Detections, w: u32, h: u32) -> (Vec<[i64; 4]>, Vec<Option<
 /// `blur_sums`, `int64 [1 + detections, 3]`: (pixels, sum, sum of squares) of the frame, then
 /// of each detection, `(0, 0, 0)` for one whose rectangle is empty. `sums` holds one pair per
 /// summed rectangle, in [`blur_rects`] order.
+///
+/// # Errors
+///
+/// The number of sums is not one per rectangle that `blur_rects` returned.
 pub fn blur_sums(
     w: u32,
     h: u32,
