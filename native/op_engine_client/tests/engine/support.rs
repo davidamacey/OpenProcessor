@@ -15,3 +15,7 @@ pub fn repo_file(path: &str) -> String {
 pub fn repo_json(path: &str) -> Value {
     serde_json::from_str(&repo_file(path)).expect("the file is JSON")
 }
+
+pub fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}

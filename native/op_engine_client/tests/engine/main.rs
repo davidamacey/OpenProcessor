@@ -5,5 +5,7 @@
     reason = "the helpers of the suites are test code, outside #[test] functions"
 )]
 
+mod answers;
+mod contract_answer;
 mod plans;
 mod support;

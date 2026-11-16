@@ -1164,11 +1164,17 @@ version = "0.1.0"
 name = "op_engine_client"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "bytes",
  "op_config",
+ "prost",
+ "protox",
  "serde",
  "serde_json",
  "sha2",
+ "tonic",
+ "tonic-prost",
+ "tonic-prost-build",
 ]
 
 [[package]]
