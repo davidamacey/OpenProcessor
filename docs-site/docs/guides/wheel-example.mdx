@@ -30,7 +30,7 @@ or the detector's own label); a raw class index is never used.
 - The segmenter service running (`OP_SEGMENTER_URL`).
 - A VLM endpoint registered and activated for the project, unless you accept unverified
   segmenter boxes ([VLM selection](./vlm-selection.mdx)).
-- The image folder mounted read-only at the same path in `api` and the detection worker
+- The image folder mounted read-only at the same path in `api-py` and the detection worker
   (`OP_SOURCE_ROOT_HOST` at `/data/source`). If only the API has it, ingest succeeds but every
   later worker read fails.
 

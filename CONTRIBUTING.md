@@ -115,13 +115,13 @@ mkdir -p test_results
 ```
 
 **Docker-only path.** The production `api` image installs only `requirements.txt` (no `pytest`), so a bare
-`docker compose exec api pytest ...` fails. To run the suite in the container, install the test deps first
+`docker compose exec api-py pytest ...` fails. To run the suite in the container, install the test deps first
 (not persisted across a recreate):
 
 ```bash
 docker compose -p openprocessor cp requirements-test.txt api:/tmp/requirements-test.txt
-docker compose -p openprocessor exec api pip install -r /tmp/requirements-test.txt
-docker compose -p openprocessor exec api python -m pytest tests/ -q --ignore=tests/live
+docker compose -p openprocessor exec api-py pip install -r /tmp/requirements-test.txt
+docker compose -p openprocessor exec api-py python -m pytest tests/ -q --ignore=tests/live
 ```
 
 ## The local gate

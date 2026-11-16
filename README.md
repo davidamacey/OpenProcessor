@@ -242,7 +242,7 @@ OP_SOURCE_ROOT_HOST=./data/samples
 EOF
 make up && make curation-up
 # 3. --folder is a container path under the /data/source mount:
-docker compose -p openprocessor exec api python scripts/curation/bulk_ingest.py \
+docker compose -p openprocessor exec api-py python scripts/curation/bulk_ingest.py \
   --folder /data/source/coco_va_readme/images --project cars
 ```
 
@@ -401,7 +401,7 @@ default detector (`YOLO_MODEL`) and uploading your own checkpoint:
 
 ## Architecture
 
-A FastAPI `api` service (port 4603) calls Triton for GPU inference and
+A Rust front (`api`, port 4603) forwards what it does not answer itself to the FastAPI `api-py` service, which calls Triton for GPU inference and
 OpenSearch for k-NN search and the curation datastore; optional curation
 workers run the region cascade, VLM loop, auto-label driver and clustering
 refresh. Services, compose profiles and ports:

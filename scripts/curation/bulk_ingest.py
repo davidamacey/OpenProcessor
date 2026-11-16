@@ -27,19 +27,19 @@ for it to stop.
 
 Usage (the default ``--api-base`` is ``localhost:8000`` inside the ``api`` container, where
 the API listens, and ``localhost:4603`` on the host, where compose publishes it):
-    docker compose exec api python scripts/curation/bulk_ingest.py \\
+    docker compose exec api-py python scripts/curation/bulk_ingest.py \\
         --folder /data/source/my_dataset --project cars
 
-    docker compose exec api python scripts/curation/bulk_ingest.py \\
+    docker compose exec api-py python scripts/curation/bulk_ingest.py \\
         --manifest /data/source/list.txt --batch-size 16 --concurrency 8 \\
         --source census --project cars
 
-    docker compose exec api python scripts/curation/bulk_ingest.py \\
+    docker compose exec api-py python scripts/curation/bulk_ingest.py \\
         --s3 s3://my-bucket/incoming/ --project cars
 
-    docker compose exec api python scripts/curation/bulk_ingest.py --project cars \\
+    docker compose exec api-py python scripts/curation/bulk_ingest.py --project cars \\
         --status bulk_20261011T120000_ab12cd34
-    docker compose exec api python scripts/curation/bulk_ingest.py --project cars \\
+    docker compose exec api-py python scripts/curation/bulk_ingest.py --project cars \\
         --cancel bulk_20261011T120000_ab12cd34
 
 ``--preview`` with any source walks it read-only and prints the file count, bytes,

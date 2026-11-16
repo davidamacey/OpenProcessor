@@ -283,7 +283,7 @@ FROM runtime-base AS api
 COPY --from=builder --chown=appuser:appuser /build/clip-tokenizer /opt/clip-tokenizer
 COPY --chown=appuser:appuser src/ ./src/
 # Only what runs inside the container: the curation workers and the CLIs operators run with
-# `docker compose exec api python -m scripts.curation...`, the public COCO sample fetcher, and
+# `docker compose exec api-py python -m scripts.curation...`, the public COCO sample fetcher, and
 # the shell libraries the API container sources (config.sh and what it sources, download.sh).
 # tests/test_dockerfile_hygiene.py checks this set against the imports.
 COPY --chown=appuser:appuser scripts/curation/ ./scripts/curation/

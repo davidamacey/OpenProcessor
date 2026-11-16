@@ -240,7 +240,7 @@ you set. The table, the shard budget and the kernel setting are in
 
 ### API worker count
 
-`API_WORKERS` in `.env` is the one knob. Compose passes it to the `api` service as `WEB_CONCURRENCY`, which uvicorn
+`API_WORKERS` in `.env` is the one knob. Compose passes it to the `api-py` service (the Python API behind the Rust front on the API port) as `WEB_CONCURRENCY`, which uvicorn
 reads for its worker count ([uvicorn settings](https://www.uvicorn.org/settings/)); the image itself runs one worker
 when `WEB_CONCURRENCY` is unset. The installer writes `min(nproc, 32)` once, keeps a value you set, and adds it on
 `upgrade` when missing; without it compose falls back to 8.

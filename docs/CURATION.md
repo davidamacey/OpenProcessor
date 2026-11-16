@@ -238,7 +238,7 @@ engine's answer to its write, and the database work runs in at most three commit
 inside the `api` container, which listens on port 8000 there:
 
 ```bash
-docker compose -p <project> exec api python scripts/curation/bulk_ingest.py \
+docker compose -p <project> exec api-py python scripts/curation/bulk_ingest.py \
   --project <slug> --folder /data/source/<dir>
 ```
 

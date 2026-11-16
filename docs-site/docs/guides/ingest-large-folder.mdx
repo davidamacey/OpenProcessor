@@ -92,7 +92,7 @@ extensions, image-size sample, skipped directories and symlinks, and an estimate
 and index size. In Cropwright press **Preview** next to **Start bulk ingest**.
 
 ```bash
-docker compose -p <project> exec api python scripts/curation/bulk_ingest.py \
+docker compose -p <project> exec api-py python scripts/curation/bulk_ingest.py \
   --project nas-photos --folder /data/source/2024-03-sat \
   --api-base http://localhost:8000/curation --preview
 ```
@@ -106,7 +106,7 @@ Then run a slice: a sub-folder, or a manifest (text file, one container path per
 or JSON Lines with `path`). **The manifest itself must lie under a source root.**
 
 ```bash
-docker compose -p <project> exec api python scripts/curation/bulk_ingest.py \
+docker compose -p <project> exec api-py python scripts/curation/bulk_ingest.py \
   --project nas-photos --manifest /data/source/trial.txt --source nas-trial
 ```
 
@@ -131,7 +131,7 @@ over, since a policy change does not rewrite stored items.
 ## 4. Full run
 
 ```bash
-docker compose -p <project> exec api python scripts/curation/bulk_ingest.py \
+docker compose -p <project> exec api-py python scripts/curation/bulk_ingest.py \
   --project nas-photos --folder /data/source
 ```
 

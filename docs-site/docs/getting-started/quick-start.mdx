@@ -247,7 +247,7 @@ the path from step 3.
 SRC=/data/source/samples/coco_va_readme/images   # installed directory
 # SRC=/data/source/coco_va_readme/images         # source checkout
 
-docker compose -p openprocessor exec api python scripts/curation/bulk_ingest.py \
+docker compose -p openprocessor exec api-py python scripts/curation/bulk_ingest.py \
   --project $P --folder $SRC
 ```
 
@@ -337,7 +337,7 @@ import can be resumed or undone:
 
 ```bash
 make sample-coco-import        # public COCO fixture, four layouts under data/samples/import_fixture
-docker compose -p openprocessor exec api python scripts/curation/import_labeled_dataset.py \
+docker compose -p openprocessor exec api-py python scripts/curation/import_labeled_dataset.py \
   --project $P --dataset /data/source/import_fixture/yolo \
   --accept-suggestions --dry-run
 ```

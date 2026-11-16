@@ -34,6 +34,7 @@ ordinary `pytest tests/` never touches any of this.
 |---|---|---|
 | `opensearch` | 14702 | OpenSearch 3.9, single node, 512 MB heap |
 | `api` | 14701 | this repo's API image, `--workers=1` |
+| `front` (overlay `compose.front.yml`) | 14707 | the Rust front (`op-server api`) in front of `api`, which is how a run proves the forwarder; see "Through the front" |
 | `fake-vlm` | 14704 | ~200-line stdlib OpenAI-compatible chat endpoint |
 | `fake-triton` | — | answers Triton's liveness and readiness (the API refuses to start without a live Triton), lists its models in the repository index, and serves deterministic models over gRPC (KServe v2 protocol, tensor names and shapes from `models/<name>/config.pbtxt`): the fused detector `yolov11_small_trt_end2end` (one box per picture), `pe_image_encoder` and `pe_crop_encoder` (a vector from the picture's coarse colour layout), `pe_text_encoder` (a vector from the token ids), `scrfd_10g_bnkps` (one face with five landmarks), `arcface_w600k_r50` (a 512-d vector from the aligned crop), `mobileclip2_s2_image_encoder` and `mobileclip2_s2_text_encoder` (512-d) and `ocr_pipeline` (one fixed line, `FAKE-PLATE-0042`). A model a promote wrote under `verify-data/triton_models` is listed once loaded and answers like the detector, over gRPC and the HTTP infer call of the promote warm-up. Every other model call is unimplemented (`docker/test/fake_triton.py`) |
 | `fake-frame-engine` | — | the frame engine every photo of an ingest goes to (plan 13a), as a CPU process on the engine's real gRPC front (`frame_engine/front.py`), with the API's `OP_FRAME_ENGINE_URL` pointing at it. It decodes with Pillow and answers the detections, frame vector, crop vectors and crop JPEGs that `fake-triton` gives the host path. A test makes it refuse (`not_ready`, `unavailable`, `overloaded`) and recover with `tests/live/_engine.py` (`engine_refuses`). It proves the protocol, the 503 `engine_unavailable` mapping, the retries and waits of a bulk run, the whole-photo writes, a restart and the write path into PostgreSQL and OpenSearch; it does not prove nvJPEG decode, pixels on a GPU, real vectors or the engine's memory budget: those are the GPU tier (`docker/test/fake_frame_engine.py`) |
@@ -61,6 +62,20 @@ Design choices that are not arbitrary:
   is git-ignored). The registry, exports, job files and state dir are all
   readable from the test process, so assertions check the bytes that were
   actually written rather than the response envelope.
+
+## Through the front
+
+The production API port is served by the Rust front (service `api` of the root compose file), which
+forwards what it does not answer itself to the Python API. The harness keeps testing the Python API
+directly by default. To run the live tier through the front, add the overlay and point the tests at it:
+
+```bash
+docker compose -p op-live-verify -f docker/test/compose.yml -f docker/test/compose.front.yml up -d --wait
+VERIFY_API_URL=http://localhost:14707 .venv/bin/python -m pytest tests/live -m live -q --no-cov
+```
+
+`VERIFY_FRONT_PORT` moves the port. Every request then crosses the forwarder (streamed bodies, server-sent
+events, `x-request-id`), so a live test that passes directly and fails here names a forwarding fault.
 
 ## The fake VLM
 
