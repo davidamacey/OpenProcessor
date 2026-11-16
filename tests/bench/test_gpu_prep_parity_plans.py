@@ -85,6 +85,13 @@ def test_the_plan_subcommand_writes_the_text_the_capture_sends(tmp_path: Path) -
     )
 
 
+def test_the_plan_subcommand_creates_the_directory_of_its_output(tmp_path: Path) -> None:
+    # The hold script asks for `<out>.d/plans/<name>.json` before anything else wrote there.
+    out = tmp_path / 'hold.jsonl.d' / 'plans' / 'frame_real.json'
+    assert par.main(['plan', '--plan', 'frame', '--models', 'real', '--out', str(out)]) == 0
+    assert out.is_file()
+
+
 # ------------------------------------------------------------------ the rows of section 1.2
 
 

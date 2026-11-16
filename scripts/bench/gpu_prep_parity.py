@@ -532,6 +532,7 @@ def main(argv: list[str] | None = None) -> int:
     inp.add_argument('dir_b', type=Path)
     args = ap.parse_args(argv)
     if args.cmd == 'plan':
+        args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(_plan_of(args))
         print(f'plan written to {args.out}')
         return 0
