@@ -165,14 +165,15 @@ for pgvector at a 0.26% filter, p50 2.8 ms (15 section 1). Cluster partitions an
 photos built in the Python product.
 
 **In progress (2026-11-16 00:44).** The labelling measurement (plan 16's M16-0) and storage
-measurement round 3 (15b M1 to M10), both running.
+measurement round 3 (15b M1 to M10), both running. M16-0 finished later on 2026-11-16 (plan 16
+revision 1 rests on it).
 
 **Next, in order.**
 
-1. The labelling measurement's results, then plan 16 (the cluster, label and train loop) rewritten
-   for the Rust backend. Plan 16 is on `lane/plan16`, written before the Rust decision; its review
-   found that the cluster rule's earlier gain does not hold on car models (0.885 against 0.884
-   decisions per object), so the rule waits for this measurement (gaps G1, G6).
+1. Plan 16 (the cluster, label and train loop), revision 1, rewritten for the Rust backend from
+   the labelling measurement M16-0: [16](16_label_train_loop_plan.md),
+   [16a](16a_label_train_loop_slices.md) (gaps G1, G6). Its numeric library (L16-1) can start now;
+   its measurements M16-1 to M16-3 come before 18b R8, which it refines into R8a and R8b.
 2. Storage round 3 written up; its numbers are the entries of R1b, R4, R5 and R6b.
 3. Gate B round 2 at 10 million real crop vectors, with one shared build of 100,000 and 1,000,000
    crop vectors for M12, M13 and M14 (18 section 8).
