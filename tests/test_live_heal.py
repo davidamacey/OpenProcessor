@@ -70,7 +70,9 @@ def test_the_error_names_every_failed_step() -> None:
     assert 'ps: TimeoutExpired' in text
 
 
-def test_the_guard_exits_with_code_4_and_the_service_table() -> None:
+def test_the_guard_exits_with_code_4_and_the_service_table(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The offline suite itself runs under xdist; the guard's serial path is the one under test.
+    monkeypatch.delenv('PYTEST_XDIST_WORKER', raising=False)
     down = _healthy()
     down['jobs-worker'] = _row('exited', '', 137)
     clock = Clock()
@@ -86,6 +88,25 @@ def test_the_guard_exits_with_code_4_and_the_service_table() -> None:
     assert exit_info.value.returncode == 4
     assert 'jobs-worker: State=exited Health=- ExitCode=137' in str(exit_info.value)
     assert 'after test_x' in str(exit_info.value)
+
+
+def test_in_an_xdist_worker_the_guard_fails_the_test_instead_of_ending_the_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv('PYTEST_XDIST_WORKER', 'gw0')
+    down = _healthy()
+    down['jobs-worker'] = _row('exited', '', 137)
+    clock = Clock()
+    with pytest.raises(pytest.fail.Exception) as failed:
+        _heal.require_healthy_stack(
+            run=lambda *a, **k: None,
+            states=lambda: down,
+            budget_s=30,
+            clock=clock,
+            sleep=clock.sleep,
+            where='after test_x',
+        )
+    assert 'jobs-worker: State=exited Health=- ExitCode=137' in str(failed.value)
 
 
 def test_the_guard_is_silent_when_the_stack_is_healthy() -> None:
