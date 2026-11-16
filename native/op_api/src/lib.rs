@@ -30,9 +30,15 @@ use crate::state::AppState;
 /// The regex error when the CORS origin pattern does not compile, which a test rules out.
 pub fn build(settings: &ApiSettings) -> Result<Router, regex::Error> {
     let state = AppState::new(settings);
+    let origins = cors::origin_pattern()?;
     let app = routes::owned()
-        .layer(cors::layer()?)
+        .layer(cors::layer(origins.clone()))
         .fallback(forward::handler)
         .with_state(state.clone());
-    Ok(middleware::apply(app, &state, settings.concurrency_limit))
+    Ok(middleware::apply(
+        app,
+        &state,
+        settings.concurrency_limit,
+        &origins,
+    ))
 }

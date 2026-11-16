@@ -16,6 +16,12 @@ use http::StatusCode;
 use http::header::{HeaderValue, RETRY_AFTER};
 use serde_json::{Map, Value, json};
 
+/// Set on every response the front builds itself, as opposed to one the Python API gave and the
+/// front forwards. Layers that must treat the two differently (CORS: the Python API's answers
+/// already carry their headers) read it.
+#[derive(Debug, Clone, Copy)]
+pub struct FrontAnswer;
+
 /// One segment of the `loc` of a validation issue: a field name or a list index.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Loc {
@@ -125,6 +131,7 @@ impl ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let mut response = (self.status, Json(Value::Object(self.body))).into_response();
+        response.extensions_mut().insert(FrontAnswer);
         if let Some(seconds) = self.retry_after {
             response
                 .headers_mut()

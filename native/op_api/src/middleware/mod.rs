@@ -3,13 +3,15 @@
 //! 1. [`request_id::drop_unsafe`] and tower-http's `SetRequestIdLayer`: the id of the request.
 //! 2. tower-http's `TraceLayer`: one JSON log line per request with its `request_id`.
 //! 3. tower-http's `PropagateRequestIdLayer`: the id on the response.
-//! 4. tower-http's `CatchPanicLayer`: a panic in a handler answers 500 and the process lives.
-//! 5. tower's `LoadShedLayer` over a `GlobalConcurrencyLimitLayer`: the request over the limit is
+//! 4. [`crate::cors::on_front_answers`]: CORS headers on the answers the front builds itself
+//!    (the 503s, 502, 400 and the 500 below), so a browser on another origin can read them.
+//! 5. tower-http's `CatchPanicLayer`: a panic in a handler answers 500 and the process lives.
+//! 6. tower's `LoadShedLayer` over a `GlobalConcurrencyLimitLayer`: the request over the limit is
 //!    answered 503 with `Retry-After` at once, not queued (uvicorn's `--limit-concurrency`). The
 //!    permit is held until the response head is produced, so a long streamed body (a server-sent
 //!    event stream, a big download) does not hold one; the open connections are bounded apart, by
 //!    [`crate::serve`].
-//! 6. [`record::record`]: latency of the routes Rust owns.
+//! 7. [`record::record`]: latency of the routes Rust owns.
 //!
 //! Pages: <https://docs.rs/tower-http/0.7.1/tower_http/>, <https://docs.rs/tower/0.5.3/tower/>,
 //! <https://docs.rs/axum/0.8.9/axum/middleware/index.html> (the order of `Router::layer`).
@@ -26,6 +28,7 @@ use axum::extract::Request;
 use axum::response::{IntoResponse, Response};
 use axum::{BoxError, Extension, Router};
 use http::StatusCode;
+use regex::Regex;
 use tower::ServiceBuilder;
 use tower::limit::GlobalConcurrencyLimitLayer;
 use tower::load_shed::LoadShedLayer;
@@ -37,6 +40,7 @@ use tower_http::request_id::{
 use tower_http::trace::{DefaultOnResponse, TraceLayer};
 use tracing::Level;
 
+use crate::cors;
 use crate::errors::ApiError;
 use crate::metrics::Metrics;
 use crate::state::AppState;
@@ -44,8 +48,14 @@ use crate::state::AppState;
 /// Seconds the 503 of a shed request tells the client to wait.
 const SHED_RETRY_AFTER_S: u32 = 1;
 
-/// Wrap `router` in the layers above, allowing `concurrency_limit` requests at once.
-pub fn apply(router: Router, state: &AppState, concurrency_limit: usize) -> Router {
+/// Wrap `router` in the layers above, allowing `concurrency_limit` requests at once. `origins` is
+/// the CORS origin rule ([`crate::cors::origin_pattern`]).
+pub fn apply(
+    router: Router,
+    state: &AppState,
+    concurrency_limit: usize,
+    origins: &Regex,
+) -> Router {
     let shed_metrics = Arc::clone(&state.metrics);
     router.layer(
         ServiceBuilder::new()
@@ -67,6 +77,10 @@ pub fn apply(router: Router, state: &AppState, concurrency_limit: usize) -> Rout
                     .on_response(DefaultOnResponse::new().level(Level::INFO)),
             )
             .layer(PropagateRequestIdLayer::new(request_id::X_REQUEST_ID))
+            .layer(axum::middleware::from_fn_with_state(
+                origins.clone(),
+                cors::on_front_answers,
+            ))
             .layer(CatchPanicLayer::custom(panic_response))
             .layer(HandleErrorLayer::new(
                 move |id: Option<Extension<RequestId>>, error: BoxError| {

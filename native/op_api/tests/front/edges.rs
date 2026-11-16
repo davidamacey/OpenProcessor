@@ -267,6 +267,7 @@ async fn a_handler_that_panics_is_a_500_with_the_error_body_and_the_server_goes_
             .with_state(state.clone()),
         &state,
         settings.concurrency_limit,
+        &op_api::cors::origin_pattern().unwrap(),
     );
     let front = start_front_with(settings, Some(router)).await;
     let broken = get_path(&front, "/boom").await;

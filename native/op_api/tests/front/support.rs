@@ -86,6 +86,7 @@ fn stub_router(state: StubState) -> Router {
         .route("/events", get(events))
         .route("/hold", get(hold))
         .route("/headers-out", get(headers_out))
+        .route("/cors-upstream", get(cors_upstream))
         .route("/status/{code}", any(status))
         .with_state(state)
 }
@@ -126,6 +127,18 @@ async fn headers_out() -> Response {
     headers.insert("keep-alive", "timeout=5".parse().unwrap());
     headers.append("set-cookie", "a=1".parse().unwrap());
     headers.append("set-cookie", "b=2".parse().unwrap());
+    response
+}
+
+/// An answer that carries the CORS headers the Python API's middleware would add.
+async fn cors_upstream() -> Response {
+    let mut response = "cors".into_response();
+    let headers = response.headers_mut();
+    headers.insert(
+        "access-control-allow-origin",
+        "http://upstream.test".parse().unwrap(),
+    );
+    headers.insert("access-control-allow-credentials", "true".parse().unwrap());
     response
 }
 
