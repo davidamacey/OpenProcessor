@@ -22,8 +22,8 @@ use axum::Router;
 use crate::settings::ApiSettings;
 use crate::state::AppState;
 
-/// The front's router: the routes Rust owns with their CORS rule, the forwarder for everything
-/// else, and the layers every request passes ([`middleware`]).
+/// The front's router: the probes with their CORS rule, the forwarder for everything else behind
+/// the concurrency limit, and the layers every request passes ([`middleware`]).
 ///
 /// # Errors
 ///
@@ -31,14 +31,12 @@ use crate::state::AppState;
 pub fn build(settings: &ApiSettings) -> Result<Router, regex::Error> {
     let state = AppState::new(settings);
     let origins = cors::origin_pattern()?;
-    let app = routes::owned()
-        .layer(cors::layer(origins.clone()))
-        .fallback(forward::handler)
-        .with_state(state.clone());
-    Ok(middleware::apply(
-        app,
+    let probes = middleware::observe(routes::probes().layer(cors::layer(origins.clone())), &state);
+    let limited = middleware::limit(
+        Router::new().fallback(forward::handler),
         &state,
         settings.concurrency_limit,
-        &origins,
-    ))
+    );
+    let app = probes.merge(limited).with_state(state);
+    Ok(middleware::common(app, &origins))
 }

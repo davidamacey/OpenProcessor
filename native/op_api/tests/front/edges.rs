@@ -235,7 +235,7 @@ async fn the_request_over_the_limit_is_a_503_at_once_and_the_one_in_flight_finis
         tokio::spawn(send(request))
     };
     control.held.acquire().await.unwrap().forget();
-    let shed = get_path(&front, "/live").await;
+    let shed = get_path(&front, "/echo").await;
     assert_eq!(shed.status, StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(shed.headers["retry-after"], "1");
     assert_eq!(
@@ -251,6 +251,29 @@ async fn the_request_over_the_limit_is_a_503_at_once_and_the_one_in_flight_finis
     front.stop().await;
 }
 
+#[tokio::test]
+async fn a_saturated_front_still_answers_its_health_probe_and_its_metrics() {
+    let (stub, control) = start_stub().await;
+    let front = start_front(stub, &[("OP_API_CONCURRENCY_LIMIT", "1")]).await;
+    let first = tokio::spawn(send(
+        request(&front, "GET", "/hold").body(Body::empty()).unwrap(),
+    ));
+    control.held.acquire().await.unwrap().forget();
+    assert_eq!(
+        get_path(&front, "/echo").await.status,
+        StatusCode::SERVICE_UNAVAILABLE,
+        "the limit is reached"
+    );
+    assert_eq!(get_path(&front, "/live").await.status, StatusCode::OK);
+    assert_eq!(
+        get_path(&front, "/metrics/front").await.status,
+        StatusCode::OK
+    );
+    control.hold.add_permits(1);
+    first.await.unwrap();
+    front.stop().await;
+}
+
 async fn boom() -> &'static str {
     panic!("handler bug")
 }
@@ -260,13 +283,11 @@ async fn a_handler_that_panics_is_a_500_with_the_error_body_and_the_server_goes_
     let (stub, _control) = start_stub().await;
     let settings = settings(stub, &[]);
     let state = AppState::new(&settings);
-    let router = middleware::apply(
+    let router = middleware::common(
         Router::new()
             .route("/boom", get(boom))
             .route("/fine", get(|| async { "fine" }))
             .with_state(state.clone()),
-        &state,
-        settings.concurrency_limit,
         &op_api::cors::origin_pattern().unwrap(),
     );
     let front = start_front_with(settings, Some(router)).await;

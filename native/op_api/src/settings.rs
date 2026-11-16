@@ -1,8 +1,12 @@
 //! The front's settings, read once at start from the environment snapshot ([`Env`]).
 //!
-//! Every value that bounds work has a default that equals what uvicorn ran with in
-//! `docker-compose.yml` (`--limit-concurrency=512`, `--timeout-keep-alive=75`,
-//! `--timeout-graceful-shutdown=30`) and a refusal for zero, so a typo cannot switch a bound off.
+//! Every value that bounds work has a default and a refusal for zero, so a typo cannot switch a
+//! bound off. The keep-alive and the shutdown grace equal what uvicorn ran with in
+//! `docker-compose.yml` (`--timeout-keep-alive=75`, `--timeout-graceful-shutdown=30`). The
+//! concurrency limit does not: uvicorn's `--limit-concurrency=512` is per worker process and the
+//! product ran many, so one limit of 512 for the whole front would shed load the product took.
+//! The front's default is its connection bound; each Python worker keeps its own limit and its
+//! 503 passes through the front.
 
 use std::error::Error;
 use std::fmt;
@@ -18,7 +22,8 @@ use op_config::{Env, EnvError};
 pub const PY_API_URL: &str = "OP_PY_API_URL";
 /// The address the front binds (`host:port`).
 pub const LISTEN: &str = "OP_API_LISTEN";
-/// Requests in flight at once; one more is answered 503 at once.
+/// Requests in flight at once; one more is answered 503 at once. `/live` and the front's metrics
+/// path are not counted.
 pub const CONCURRENCY_LIMIT: &str = "OP_API_CONCURRENCY_LIMIT";
 /// Open client connections; past it the front stops accepting until one closes.
 pub const MAX_CONNECTIONS: &str = "OP_API_MAX_CONNECTIONS";
@@ -77,7 +82,7 @@ pub struct ApiSettings {
     pub upstream: Upstream,
     /// The address the front binds.
     pub listen: SocketAddr,
-    /// Requests in flight at once before the 503.
+    /// Requests in flight at once before the 503 (the probes are exempt).
     pub concurrency_limit: usize,
     /// Open client connections at most.
     pub max_connections: usize,
@@ -94,6 +99,11 @@ impl ApiSettings {
     /// container's port that compose publishes as the API port).
     pub const DEFAULT_LISTEN: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 8000);
 
+    /// The default of both the connection bound and the concurrency limit: with the same number, a
+    /// connection that is open can always be answered, and the Python workers' own limits are what
+    /// shed.
+    pub const DEFAULT_MAX_CONNECTIONS: u64 = 4096;
+
     /// Read the settings.
     ///
     /// # Errors
@@ -107,8 +117,8 @@ impl ApiSettings {
         Ok(Self {
             upstream,
             listen,
-            concurrency_limit: count(env, CONCURRENCY_LIMIT, 512)?,
-            max_connections: count(env, MAX_CONNECTIONS, 4096)?,
+            concurrency_limit: count(env, CONCURRENCY_LIMIT, Self::DEFAULT_MAX_CONNECTIONS)?,
+            max_connections: count(env, MAX_CONNECTIONS, Self::DEFAULT_MAX_CONNECTIONS)?,
             keep_alive: seconds(env, KEEP_ALIVE_S, 75)?,
             shutdown_grace: seconds(env, SHUTDOWN_GRACE_S, 30)?,
             upstream_connect_timeout: seconds(env, UPSTREAM_CONNECT_TIMEOUT_S, 5)?,
@@ -172,11 +182,11 @@ mod tests {
     }
 
     #[test]
-    fn the_defaults_are_what_uvicorn_ran_with() {
+    fn the_defaults_are_what_the_product_ran_with() {
         let s = ApiSettings::from_env(&env(&[])).unwrap();
         assert_eq!(s.upstream.authority.as_str(), "api-py:4613");
         assert_eq!(s.listen, ApiSettings::DEFAULT_LISTEN);
-        assert_eq!(s.concurrency_limit, 512);
+        assert_eq!(s.concurrency_limit, 4096);
         assert_eq!(s.keep_alive, Duration::from_secs(75));
         assert_eq!(s.shutdown_grace, Duration::from_secs(30));
     }

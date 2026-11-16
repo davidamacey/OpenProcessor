@@ -130,12 +130,10 @@ async fn the_500_of_a_panicking_handler_is_readable_by_an_allowed_origin() {
     let (stub, _control) = start_stub().await;
     let settings = settings(stub, &[]);
     let state = AppState::new(&settings);
-    let router = middleware::apply(
+    let router = middleware::common(
         Router::new()
             .route("/boom", get(boom))
             .with_state(state.clone()),
-        &state,
-        settings.concurrency_limit,
         &op_api::cors::origin_pattern().unwrap(),
     );
     let front = start_front_with(settings, Some(router)).await;

@@ -45,7 +45,10 @@ def test_the_front_starts_after_the_python_api_is_healthy() -> None:
 
 def test_the_front_is_healthy_when_the_python_api_answers_through_it() -> None:
     check = _services()['api']['healthcheck']
-    assert check['test'] == ['CMD', 'op-server', 'health', '--path', '/health']
+    # `/health` probes Triton and OpenSearch and is slow under load: the old Python check ran
+    # under the 10 s compose timeout, so the probe waits 9 s, not the binary's default of 5.
+    assert check['test'] == ['CMD', 'op-server', 'health', '--path', '/health', '--timeout-s', '9']
+    assert check['timeout'] == '10s'
 
 
 def test_every_caller_inside_the_network_reaches_the_front_on_the_old_address() -> None:

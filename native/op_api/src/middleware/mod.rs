@@ -7,10 +7,11 @@
 //!    (the 503s, 502, 400 and the 500 below), so a browser on another origin can read them.
 //! 5. tower-http's `CatchPanicLayer`: a panic in a handler answers 500 and the process lives.
 //! 6. tower's `LoadShedLayer` over a `GlobalConcurrencyLimitLayer`: the request over the limit is
-//!    answered 503 with `Retry-After` at once, not queued (uvicorn's `--limit-concurrency`). The
-//!    permit is held until the response head is produced, so a long streamed body (a server-sent
-//!    event stream, a big download) does not hold one; the open connections are bounded apart, by
-//!    [`crate::serve`].
+//!    answered 503 with `Retry-After` at once, not queued. The permit is held until the response
+//!    head is produced, so a long streamed body (a server-sent event stream, a big download) does
+//!    not hold one; the open connections are bounded apart, by [`crate::serve`]. Layers 6 and 7
+//!    wrap what is forwarded ([`limit`]); `/live` and the front's metrics path ([`observe`]) are
+//!    outside layer 6, so a front at its limit still answers its health probe.
 //! 7. [`record::record`]: latency of the routes Rust owns.
 //!
 //! Pages: <https://docs.rs/tower-http/0.7.1/tower_http/>, <https://docs.rs/tower/0.5.3/tower/>,
@@ -48,15 +49,8 @@ use crate::state::AppState;
 /// Seconds the 503 of a shed request tells the client to wait.
 const SHED_RETRY_AFTER_S: u32 = 1;
 
-/// Wrap `router` in the layers above, allowing `concurrency_limit` requests at once. `origins` is
-/// the CORS origin rule ([`crate::cors::origin_pattern`]).
-pub fn apply(
-    router: Router,
-    state: &AppState,
-    concurrency_limit: usize,
-    origins: &Regex,
-) -> Router {
-    let shed_metrics = Arc::clone(&state.metrics);
+/// The layers every request passes, around the whole front: 1 to 5 above.
+pub fn common(router: Router, origins: &Regex) -> Router {
     router.layer(
         ServiceBuilder::new()
             .layer(axum::middleware::from_fn(request_id::drop_unsafe))
@@ -81,7 +75,21 @@ pub fn apply(
                 origins.clone(),
                 cors::on_front_answers,
             ))
-            .layer(CatchPanicLayer::custom(panic_response))
+            .layer(CatchPanicLayer::custom(panic_response)),
+    )
+}
+
+/// Answer 503 at once to the request that finds `concurrency_limit` requests in flight (layer 6),
+/// then record latency (layer 7). Only what the Python API answers goes through here; the probes
+/// do not, so a front at its limit still answers its health check.
+pub fn limit(
+    router: Router<AppState>,
+    state: &AppState,
+    concurrency_limit: usize,
+) -> Router<AppState> {
+    let shed_metrics = Arc::clone(&state.metrics);
+    router.layer(
+        ServiceBuilder::new()
             .layer(HandleErrorLayer::new(
                 move |id: Option<Extension<RequestId>>, error: BoxError| {
                     let metrics = Arc::clone(&shed_metrics);
@@ -95,6 +103,14 @@ pub fn apply(
                 record::record,
             )),
     )
+}
+
+/// Record latency of the routes in `router` (layer 7) without limiting them.
+pub fn observe(router: Router<AppState>, state: &AppState) -> Router<AppState> {
+    router.layer(axum::middleware::from_fn_with_state(
+        Arc::clone(&state.metrics),
+        record::record,
+    ))
 }
 
 fn overload_response(

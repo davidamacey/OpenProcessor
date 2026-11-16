@@ -239,7 +239,9 @@ services:
     read_only: true
     healthcheck:
       # Asks through the front: healthy means the front is up and the Python API answers /health.
-      test: ["CMD", "op-server", "health", "--path", "/health"]
+      # The probe waits 9 s, inside the 10 s timeout: /health asks Triton and OpenSearch and is slow
+      # under load (the check this replaces ran under the same 10 s).
+      test: ["CMD", "op-server", "health", "--path", "/health", "--timeout-s", "9"]
       interval: 30s
       timeout: 10s
       start_period: 60s
