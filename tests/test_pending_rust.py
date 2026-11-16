@@ -196,7 +196,14 @@ class _Item:
 def test_the_tests_conftest_applies_the_committed_list(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import conftest
+    import importlib.util
+
+    # by path: the name `conftest` is whichever conftest.py pytest imported under it first
+    spec = importlib.util.spec_from_file_location('tests_conftest', TESTS_DIR / 'conftest.py')
+    assert spec is not None
+    assert spec.loader is not None
+    conftest = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(conftest)
 
     listed = tmp_path / 'pending.txt'
     listed.write_text('tests/test_probe.py::test_red R1c\n', encoding='utf-8')
