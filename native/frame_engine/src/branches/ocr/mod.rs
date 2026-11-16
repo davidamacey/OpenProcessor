@@ -22,6 +22,7 @@ pub mod fill;
 pub mod lines;
 pub mod min_rect;
 pub mod offset;
+pub mod warp;
 
 use bytes::Bytes;
 use gpu_frame::OutputTensor;

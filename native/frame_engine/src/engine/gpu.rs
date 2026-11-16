@@ -26,6 +26,7 @@ use tokio::sync::Notify;
 use crate::branches::InputSpec;
 use crate::branches::crops::{self, CropJpeg};
 use crate::branches::faces::warp::FaceWarpKernel;
+use crate::branches::ocr::warp::TextWarpKernel;
 use crate::fault::GpuFault;
 use crate::kernels::{FrameRef, PrepKernels, Staging, WEIGHT_CACHE_BYTES, WeightCache, WeightSet};
 use crate::photo::clock::{DECODE, JobClock, SYNCED};
@@ -79,6 +80,7 @@ struct Shared {
     frames: FramePool,
     kernels: PrepKernels,
     face_warp: FaceWarpKernel,
+    text_warp: TextWarpKernel,
     /// One cache per lane, locked only by that lane's thread (lanes own their state in gpu_frame).
     lane_weights: Vec<Mutex<WeightCache<DeviceBuf>>>,
     stage_sync: bool,
@@ -144,10 +146,12 @@ impl Gpu {
         let loader = gpu_frame::Kernels::new(ctx)?;
         let kernels = PrepKernels::load(&loader)?;
         let face_warp = FaceWarpKernel::load(&loader)?;
+        let text_warp = TextWarpKernel::load(&loader)?;
         let shared = Arc::new(Shared {
             frames: frames.clone(),
             kernels,
             face_warp,
+            text_warp,
             lane_weights: (0..lanes.count())
                 .map(|_| Mutex::new(WeightCache::new(WEIGHT_CACHE_BYTES)))
                 .collect(),
@@ -381,6 +385,11 @@ fn warp_inputs(
                     shared
                         .face_warp
                         .launch(&shared.frames, stream, frame, &w.input, f)?;
+                }
+                WarpKind::Text(t) => {
+                    shared
+                        .text_warp
+                        .launch(&shared.frames, stream, frame, &w.input, t)?;
                 }
             }
             if shared.stage_sync && SYNCED.contains(&w.stage) {

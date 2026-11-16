@@ -262,6 +262,7 @@ impl Device for Fake {
         if !job.warps.is_empty() {
             let faces = job.warps.iter().map(|w| match &w.kind {
                 WarpKind::Faces(f) => f.inv.len(),
+                WarpKind::Text(t) => t.lines(),
             });
             self.note(Event::Warps(faces.collect()));
         }

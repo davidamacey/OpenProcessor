@@ -20,6 +20,7 @@ use tokio::time::Instant;
 use crate::branches::InputSpec;
 use crate::branches::crops::CropJpeg;
 use crate::branches::faces::warp::FaceWarps;
+use crate::branches::ocr::LineWarp;
 use crate::fault::GpuFault;
 use crate::kernels::Resample;
 use crate::pipeline::RequestState;
@@ -114,6 +115,8 @@ pub struct Launched<I> {
 pub enum WarpKind {
     /// `faces_warp.cu`: aligned face crops for the recogniser.
     Faces(FaceWarps),
+    /// `ocr_warp.cu`: text lines for the recogniser.
+    Text(LineWarp),
 }
 
 /// What a warp kernel writes into one region slice (the whole slice), timed as `stage`.
