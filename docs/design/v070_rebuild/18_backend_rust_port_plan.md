@@ -402,8 +402,8 @@ column is nullable and unique per project); `imohash` stays the cheap duplicate 
 
 ### 4.4 Local read paths
 
-The engine and ExifTool need a file path. `op_storage` resolves two kinds of local key: landing keys
-and `source/` keys. Each is parsed with `object_store::path::Path::parse` (which refuses `.`, `..`,
+The engine and ExifTool need a file path. The rule that resolves a local key (landing keys and
+`source/` keys) is `op_local_file::resolve_under`, called by `op_storage` and by the engine. A key is parsed with `object_store::path::Path::parse` (which refuses `.`, `..`,
 empty segments and control characters), joined to its configured root, canonicalised, and refused
 unless the result is inside the canonical root (symlinks that leave a root are refused, since
 `LocalFileSystem` would follow them). A property test generates keys and asserts no resolved path
