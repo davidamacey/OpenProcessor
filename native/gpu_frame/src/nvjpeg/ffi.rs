@@ -94,7 +94,7 @@ pub const NVJPEG_SONAME: &str = "libnvjpeg.so.13";
 /// first that is missing.
 macro_rules! fn_table {
     ($table:ident { $($name:ident : fn($($arg:ty),*) -> $ret:ty;)* }) => {
-        #[allow(non_snake_case)]
+        #[expect(non_snake_case, reason = "the fields are the C entry points, named as nvJPEG names them")]
         struct $table {
             $($name: unsafe extern "C" fn($($arg),*) -> $ret,)*
         }

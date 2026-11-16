@@ -1,7 +1,7 @@
 //! The client against an in-process engine that answers protocol version 1 with canned tensors:
 //! what goes on the wire, how each kind of answer is classified, and a whole measured row.
 
-#![allow(
+#![expect(
     clippy::unwrap_used,
     reason = "the in-process engine's handlers and helpers are test code, outside #[test] functions"
 )]

@@ -42,8 +42,12 @@ mod registration;
 pub use registration::{Health, RegistrationCause, stale_regions};
 use registration::{Identity, Registrar, ServerApi};
 
-// Generated from Triton's protos by build.rs; its lints are the generator's, not this crate's.
-#[allow(clippy::all, clippy::pedantic, missing_docs)]
+#[expect(
+    clippy::all,
+    clippy::pedantic,
+    clippy::allow_attributes_without_reason,
+    reason = "generated from Triton's protos by build.rs; its lints are the generator's, not this crate's"
+)]
 pub(crate) mod proto {
     tonic::include_proto!("inference");
 }
