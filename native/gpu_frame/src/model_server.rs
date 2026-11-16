@@ -31,7 +31,6 @@ use std::future::Future;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
-use tokio::sync::Notify;
 use tokio::time::Instant;
 use tonic::transport::{Channel, Endpoint};
 use tonic::{Code, Status};
@@ -217,7 +216,6 @@ pub struct ModelServer {
     registrar: Registrar<TritonApi>,
     region: Region,
     call_timeout: Duration,
-    suspect: Notify,
 }
 
 impl fmt::Debug for ModelServer {
@@ -268,7 +266,6 @@ impl ModelServer {
             registrar,
             region,
             call_timeout: cfg.call_timeout,
-            suspect: Notify::new(),
         })
     }
 
@@ -282,12 +279,6 @@ impl ModelServer {
     /// Ready as of the last check or registration (one atomic read).
     pub fn is_ready(&self) -> bool {
         self.registrar.is_ready()
-    }
-
-    /// Resolves when a call failed in a way that may mean the server is gone: the health task
-    /// probes at once, and readiness follows the probe, never one call.
-    pub async fn suspected(&self) {
-        self.suspect.notified().await;
     }
 
     /// The region the calls read from.
@@ -350,12 +341,6 @@ impl ModelServer {
             })?;
         self.send(call).await.map_err(|s| classify(&s))
     }
-
-    fn note(&self, error: &CallError) {
-        if error.suspects_server() {
-            self.suspect.notify_one();
-        }
-    }
 }
 
 impl ModelCalls for ModelServer {
@@ -376,11 +361,7 @@ impl ModelCalls for ModelServer {
             }
             Err(s) => Err(classify(&s)),
         };
-        let result = answer.and_then(|r| outputs_of(r, call.outputs));
-        if let Err(e) = &result {
-            self.note(e);
-        }
-        result
+        answer.and_then(|r| outputs_of(r, call.outputs))
     }
 }
 

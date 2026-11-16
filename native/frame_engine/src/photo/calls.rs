@@ -150,11 +150,6 @@ impl<D: Device> PhotoCalls<D> {
         Ok(slice)
     }
 
-    /// A staged slice dropped without a call (its photo failed before sending it).
-    pub fn unstage(&mut self, bytes: usize) {
-        self.held = self.held.saturating_sub(bytes);
-    }
-
     /// Send one call reading `slice` (written, its stream waited for) without waiting for it.
     pub fn send(
         &mut self,
