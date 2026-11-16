@@ -36,6 +36,8 @@ prometheus-client = "=0.26.0"
 procfs = { version = "=0.18.0", default-features = false }
 op_local_file = { path = "../op_local_file" }
 prost = { workspace = true }
+# `OFlags::NONBLOCK` for opening a photo by key without blocking on a named pipe (`photo/read`).
+rustix = { workspace = true, features = ["fs"] }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = "=0.11.1"
