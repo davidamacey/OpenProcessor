@@ -1,18 +1,181 @@
 {
-  "packages": [
-    {"name": "gpu_frame", "dependencies": [{"name": "serde", "kind": null, "path": null}]},
-    {"name": "frame_engine", "dependencies": [{"name": "gpu_frame", "kind": null, "path": "/w/native/gpu_frame"}]},
-    {"name": "op_config", "dependencies": [{"name": "serde", "kind": "dev", "path": null}]},
-    {"name": "op_storage", "dependencies": [{"name": "op_config", "kind": null, "path": "/w/native/op_config"}]},
-    {"name": "op_db", "dependencies": [{"name": "op_config", "kind": null, "path": "/w/native/op_config"}]},
-    {"name": "op_jobs", "dependencies": [
-      {"name": "op_db", "kind": null, "path": "/w/native/op_db"},
-      {"name": "op_config", "kind": null, "path": "/w/native/op_config"},
-      {"name": "tokio", "kind": null, "path": null}
-    ]},
-    {"name": "op_upload_loadgen", "dependencies": [
-      {"name": "frame_engine_loadgen", "kind": null, "path": "/w/native/frame_engine_loadgen"}
-    ]},
-    {"name": "frame_engine_loadgen", "dependencies": [{"name": "gpu_frame", "kind": null, "path": "/w/native/gpu_frame"}]}
-  ]
+ "packages": [
+  {
+   "name": "gpu_frame",
+   "dependencies": []
+  },
+  {
+   "name": "frame_engine",
+   "dependencies": [
+    {
+     "name": "gpu_frame",
+     "kind": null,
+     "path": "/w/native/gpu_frame"
+    },
+    {
+     "name": "op_local_file",
+     "kind": null,
+     "path": "/w/native/op_local_file"
+    }
+   ]
+  },
+  {
+   "name": "op_local_file",
+   "dependencies": []
+  },
+  {
+   "name": "frame_engine_loadgen",
+   "dependencies": [
+    {
+     "name": "gpu_frame",
+     "kind": null,
+     "path": "/w/native/gpu_frame"
+    },
+    {
+     "name": "op_engine_client",
+     "kind": null,
+     "path": "/w/native/op_engine_client"
+    },
+    {
+     "name": "op_local_file",
+     "kind": null,
+     "path": "/w/native/op_local_file"
+    }
+   ]
+  },
+  {
+   "name": "op_engine_client",
+   "dependencies": [
+    {
+     "name": "op_config",
+     "kind": null,
+     "path": "/w/native/op_config"
+    },
+    {
+     "name": "op_local_file",
+     "kind": null,
+     "path": "/w/native/op_local_file"
+    },
+    {
+     "name": "frame_engine",
+     "kind": "dev",
+     "path": "/w/native/frame_engine"
+    }
+   ]
+  },
+  {
+   "name": "op_config",
+   "dependencies": []
+  },
+  {
+   "name": "op_api",
+   "dependencies": [
+    {
+     "name": "op_config",
+     "kind": null,
+     "path": "/w/native/op_config"
+    }
+   ]
+  },
+  {
+   "name": "op_db",
+   "dependencies": [
+    {
+     "name": "op_config",
+     "kind": null,
+     "path": "/w/native/op_config"
+    }
+   ]
+  },
+  {
+   "name": "op_ingest",
+   "dependencies": [
+    {
+     "name": "op_config",
+     "kind": null,
+     "path": "/w/native/op_config"
+    },
+    {
+     "name": "op_storage",
+     "kind": null,
+     "path": "/w/native/op_storage"
+    },
+    {
+     "name": "op_upload_loadgen",
+     "kind": "dev",
+     "path": "/w/native/op_upload_loadgen"
+    }
+   ]
+  },
+  {
+   "name": "op_storage",
+   "dependencies": [
+    {
+     "name": "op_config",
+     "kind": null,
+     "path": "/w/native/op_config"
+    },
+    {
+     "name": "op_local_file",
+     "kind": null,
+     "path": "/w/native/op_local_file"
+    }
+   ]
+  },
+  {
+   "name": "op_upload_loadgen",
+   "dependencies": [
+    {
+     "name": "frame_engine_loadgen",
+     "kind": null,
+     "path": "/w/native/frame_engine_loadgen"
+    }
+   ]
+  },
+  {
+   "name": "op_jobs",
+   "dependencies": [
+    {
+     "name": "op_config",
+     "kind": null,
+     "path": "/w/native/op_config"
+    },
+    {
+     "name": "op_db",
+     "kind": null,
+     "path": "/w/native/op_db"
+    }
+   ]
+  },
+  {
+   "name": "op_media",
+   "dependencies": [
+    {
+     "name": "op_config",
+     "kind": null,
+     "path": "/w/native/op_config"
+    },
+    {
+     "name": "op_local_file",
+     "kind": null,
+     "path": "/w/native/op_local_file"
+    }
+   ]
+  },
+  {
+   "name": "op_server",
+   "dependencies": [
+    {
+     "name": "op_api",
+     "kind": null,
+     "path": "/w/native/op_api"
+    },
+    {
+     "name": "op_config",
+     "kind": null,
+     "path": "/w/native/op_config"
+    }
+   ]
+  }
+ ]
 }

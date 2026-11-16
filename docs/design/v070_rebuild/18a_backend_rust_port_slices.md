@@ -64,9 +64,10 @@ create the same crate) and the lane that fills it:
 | Crate | Holds | Stub created by | Filled by | May depend on (server crates) |
 |---|---|---|---|---|
 | `op_config` | reading `OP_*` settings from the environment into typed structs (one helper), the retired-variable refusal, and the one function that installs the process-wide TLS provider (`install_tls_provider`, rustls with ring, `native/op_config/src/tls.rs`; 18 section 2.2), which every crate that makes a TLS connection calls | R0w | R0w (helper), R1a (retired variables) | none |
-| `op_storage` | key layout, landing zone, local read paths, streaming SHA-256, durable object store (`object_store`), mover, derived files and cache, delete and erase primitives, reconcile listing | R0w | R1s | `op_config` |
-| `op_media` | imohash port, ExifTool `-stay_open` pool by path, capture field mapping; later the fast path (M16) | R0w | R1x | `op_config` |
-| `op_engine_client` | the engine protocol v1 client: BYTES codec, plan builder, answer parser, channel pool, readiness; the model server's readiness and load calls | R0w | R1e | `op_config`; `frame_engine` as a dev-dependency only (the in-process stub pipeline of its round-trip tests) |
+| `op_local_file` | the local key rule (`resolve_under`: parse, join to the canonical root, refuse a path outside it), the content claim (size and imohash) and the `source` document's key types, shared by the server and the engine (plan 17 N2) | plan 17 N2 | plan 17 N2 | none (it has no dependency on a server crate, so the engine can use it) |
+| `op_storage` | key layout, landing zone, local read paths, streaming SHA-256, durable object store (`object_store`), mover, derived files and cache, delete and erase primitives, reconcile listing | R0w | R1s | `op_config`, `op_local_file` |
+| `op_media` | imohash port, ExifTool `-stay_open` pool by path, capture field mapping; later the fast path (M16) | R0w | R1x | `op_config`, `op_local_file` |
+| `op_engine_client` | the engine protocol v1 client: BYTES codec, plan builder, answer parser, channel pool, readiness; the model server's readiness and load calls | R0w | R1e | `op_config`, `op_local_file`; `frame_engine` as a dev-dependency only (the in-process stub pipeline of its round-trip tests) |
 | `op_db` | the pool, `ProjectTx`, the statement registry, the `LISTEN` connection, the test harness that loads the schema dump | R0w | R1j | `op_config` |
 | `op_jobs` | the job runner, claim, lease, heartbeat, fencing, terminal states, exclusive groups, the periodic framework and later every Rust kind's registration | R0w | R1j; kinds by their slices | `op_db`, `op_config` |
 | `op_ingest` | the upload receiver (R1u); the ingest pipeline and commit (R1c) | R0w | R1u, R1c | `op_config`; `op_storage`, `op_media`, `op_engine_client`, `op_jobs`; `op_store` from R1c; `op_upload_loadgen` as a dev-dependency only (R1u's tests build their browser-shaped request bodies with its multipart writer) |
@@ -83,9 +84,10 @@ is no `op_contracts` crate: the contract is kept contract-first (decision 14, 18
 `scripts/codegen/check_layering.py` (`CRATE_DEPENDENCIES`) enforces the right-hand column (18
 section 7) and holds the same table as this one for every crate that exists today, dev-dependencies
 included: the rows for `frame_engine_loadgen`, `frame_engine` and `op_engine_client` are the
-engine-side facts above. Its remaining entries for `op_contracts` (a row, and a member of
-`op_server`'s set) are stale and are removed by the first slice that edits the script; the rows of
-`op_domain` and `op_store` are already there, and the slice that creates `op_numeric` adds its row
+engine-side facts above. Its former entries for `op_contracts` (a row, and a member of
+`op_server`'s set) are removed, and the script now reports a row or an allowed-set member that
+names a crate absent from the workspace, except the planned `op_domain` and `op_store` (`PLANNED_CRATES`); the rows of
+those two are already there, and the slice that creates `op_numeric` adds its row
 and `op_store`'s dependency on it.
 
 ### 2.3 Shared files and their owners

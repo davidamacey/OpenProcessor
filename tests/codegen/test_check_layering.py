@@ -265,6 +265,24 @@ def test_a_workspace_crate_without_a_table_row_fails() -> None:
     ]
 
 
+def test_a_table_row_for_a_crate_that_is_not_in_the_workspace_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setitem(guard.CRATE_DEPENDENCIES, 'op_gone', frozenset())
+    assert guard.crate_violations(_metadata()) == [
+        'op_gone: a row in CRATE_DEPENDENCIES for a crate that is not in the workspace'
+    ]
+
+
+def test_a_crate_named_in_another_rows_set_must_exist_too(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setitem(guard.CRATE_DEPENDENCIES, 'op_config', frozenset({'op_gone'}))
+    assert guard.crate_violations(_metadata()) == [
+        'op_config -> op_gone: a crate in the allowed set that is not in the workspace'
+    ]
+
+
 def test_an_external_package_of_the_same_name_is_not_a_workspace_dependency() -> None:
     metadata = _metadata()
     package = next(p for p in metadata['packages'] if p['name'] == 'op_config')
