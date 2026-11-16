@@ -9,6 +9,7 @@ mod answers;
 mod contract_answer;
 mod contract_client;
 mod model_server;
+mod native_engine;
 mod plans;
 mod retries;
 mod stub_engine;
