@@ -12,5 +12,21 @@ publish.workspace = true
 name = "op-upload-loadgen"
 path = "src/main.rs"
 
+[dependencies]
+bytes = { workspace = true }
+clap = { version = "=4.6.7", default-features = false, features = ["derive", "error-context", "help", "std", "usage"] }
+frame_engine_loadgen = { path = "../frame_engine_loadgen" }
+futures-util = { version = "=0.3.34", default-features = false, features = ["alloc"] }
+http-body-util = { workspace = true }
+hyper = { workspace = true, features = ["client", "http1"] }
+hyper-util = { workspace = true, features = ["client-legacy", "http1", "tokio"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+
+[dev-dependencies]
+axum = { workspace = true, features = ["http1", "multipart", "tokio"] }
+tokio = { workspace = true, features = ["net", "test-util"] }
+
 [lints]
 workspace = true
