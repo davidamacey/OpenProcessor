@@ -1,6 +1,8 @@
-//! Reading `OP_*` settings from the environment into typed structs through one helper, and the
-//! refusal of retired variables. Only the helper ([`Env`]) exists so far.
+//! Reading `OP_*` settings from the environment into typed structs through one helper ([`Env`]),
+//! and the refusal of retired variables ([`retired`]).
 #![forbid(unsafe_code)]
+
+pub mod retired;
 
 use std::collections::HashMap;
 use std::error::Error;
@@ -110,6 +112,12 @@ impl Env {
             Some(raw) => parse(key, raw),
             None => Err(EnvError::Missing { key: key.into() }),
         }
+    }
+
+    /// Whether `key` exists in the snapshot, even when blank or not valid Unicode.
+    #[must_use]
+    pub fn is_set(&self, key: &str) -> bool {
+        self.vars.contains_key(key)
     }
 
     fn raw(&self, key: &str) -> Result<Option<&str>, EnvError> {

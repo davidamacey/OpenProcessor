@@ -48,6 +48,7 @@ docs/design/v070_rebuild/:storage\.googleapis\.com/openimages/v6/oidv6- # public
 # that IS the mechanism that makes a stale env var fail loudly instead
 # of silently doing nothing.
 src/config/retired_env.py # spells every retired env-var name on purpose (clean-break guard with no aliases); see src/app/lifespan.py's lifespan for where it is invoked
+contracts/json/retired_env.json # the generated copy of src/config/retired_env.py (scripts/codegen/retired_env_contract.py) that every Rust server role refuses to start from; it spells the same retired names on purpose
 tests/config/test_retired_env.py # exercises every retired env-var name in src/config/retired_env.py
 
 # docker/segmenter run examples use the retired SAM3_URL name nowhere; the
