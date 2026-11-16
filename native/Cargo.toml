@@ -33,16 +33,22 @@ bytes = "=1.12.1"
 crossbeam-channel = "=0.5.17"
 crc32fast = "=1.5.5"
 cudarc = { version = "=0.19.10", default-features = false, features = ["std", "driver", "nvrtc", "cuda-13020", "dynamic-loading"] }
+futures-util = { version = "=0.3.34", default-features = false }
 image = { version = "=0.25.10", default-features = false }
 libloading = "=0.9.1"
 nvml-wrapper = "=0.13.0"
+object_store = { version = "=0.14.2", default-features = false }
 png = "=0.18.1"
+proptest = { version = "=1.12.0", default-features = false, features = ["std"] }
 prost = "=0.14.6"
 protox = "=0.10.0"
+rustix = "=1.1.6"
 # The one place serde_json's features are set: `float_roundtrip` on (floats parse correctly rounded,
 # as Python's json.loads does), `arbitrary_precision` and `preserve_order` never (they change how
 # other crates' wire models read); `op_config/tests/workspace_features.rs` guards both.
 serde_json = { version = "=1.0.154", features = ["float_roundtrip"] }
+sha2 = "=0.11.1"
+tempfile = "=3.27.0"
 tiff = "=0.11.3"
 tokio = { version = "=1.54.1", default-features = false }
 tonic = { version = "=0.14.9", default-features = false }
@@ -50,6 +56,7 @@ tonic-prost = "=0.14.9"
 tonic-prost-build = "=0.14.9"
 turbojpeg = { version = "=1.5.1", default-features = false }
 turbojpeg-sys = { version = "=1.2.0", default-features = false }
+uuid = { version = "=1.29.2", default-features = false }
 
 # Lint levels for every member (`[lints] workspace = true`); the clippy names are in
 # https://rust-lang.github.io/rust-clippy/stable/index.html. `unwrap` stays allowed inside
