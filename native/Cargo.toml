@@ -48,6 +48,7 @@ proptest = { version = "=1.12.0", default-features = false, features = ["std"] }
 prost = "=0.14.6"
 protox = "=0.10.0"
 rustix = "=1.1.6"
+serde = "=1.0.229"
 # The one place serde_json's features are set: `float_roundtrip` on (floats parse correctly rounded,
 # as Python's json.loads does), `arbitrary_precision` and `preserve_order` never (they change how
 # other crates' wire models read); `op_config/tests/workspace_features.rs` guards both.
@@ -56,9 +57,12 @@ sha2 = "=0.11.1"
 tempfile = "=3.27.0"
 tiff = "=0.11.3"
 tokio = { version = "=1.54.1", default-features = false }
+tokio-util = { version = "=0.7.20", default-features = false }
 tonic = { version = "=0.14.9", default-features = false }
 tonic-prost = "=0.14.9"
 tonic-prost-build = "=0.14.9"
+tower = { version = "=0.5.3", default-features = false }
+tower-http = { version = "=0.7.1", default-features = false }
 tracing = "=0.1.44"
 turbojpeg = { version = "=1.5.1", default-features = false }
 turbojpeg-sys = { version = "=1.2.0", default-features = false }

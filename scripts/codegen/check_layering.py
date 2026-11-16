@@ -131,7 +131,19 @@ CRATE_DEPENDENCIES: dict[str, frozenset[str]] = {
     'op_engine_client': frozenset({'op_config'}),
     'op_db': frozenset({'op_config'}),
     'op_jobs': frozenset({'op_db', 'op_config'}),
-    'op_ingest': frozenset({'op_storage', 'op_media', 'op_engine_client', 'op_jobs', 'op_store'}),
+    # `op_config` for the settings (R1u reads its limits through `op_config::Env`); the load
+    # generator's multipart writer builds the browser-shaped request bodies of R1u's tests.
+    'op_ingest': frozenset(
+        {
+            'op_config',
+            'op_storage',
+            'op_media',
+            'op_engine_client',
+            'op_jobs',
+            'op_store',
+            'op_upload_loadgen',
+        }
+    ),
     'op_api': frozenset({'op_config', 'op_db', 'op_storage', 'op_ingest', 'op_jobs', 'op_store'}),
     'op_server': frozenset(
         {
