@@ -6,6 +6,7 @@
 )]
 
 mod answers;
+mod by_key;
 mod contract_answer;
 mod contract_client;
 mod model_server;

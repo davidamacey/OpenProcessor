@@ -30,7 +30,18 @@ fn the_photo_statuses_are_the_contracts() {
         .iter()
         .map(|(_, n)| (*n).to_owned())
         .collect();
-    assert_eq!(ours, strings(&contract["photo_statuses"]));
+    let mut want = strings(&contract["photo_statuses"]);
+    want.extend(
+        contract["read_by_key"]["photo_statuses"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|s| s["status"].as_str().unwrap().to_owned()),
+    );
+    assert_eq!(
+        ours, want,
+        "the protocol's statuses, then the read-by-key ones"
+    );
 }
 
 #[test]

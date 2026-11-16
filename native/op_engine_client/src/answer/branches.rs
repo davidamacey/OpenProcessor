@@ -22,17 +22,30 @@ pub enum PhotoStatus {
     GpuMemory,
     /// The decoder failed on the photo.
     Decoder,
+    /// Read by key: no file has the key under the engine's root.
+    Missing,
+    /// Read by key: the file is not the one the claim was made for (another size, or the same
+    /// size and another sampled hash).
+    Changed,
+    /// Read by key: the claimed size is above the engine's message limit; nothing was read.
+    TooLarge,
+    /// Read by key: the key resolves outside its root, names no regular file, or the read failed.
+    Unreadable,
 }
 
 impl PhotoStatus {
     /// Every status, with the name the engine writes.
-    pub const ALL: [(PhotoStatus, &'static str); 6] = [
+    pub const ALL: [(PhotoStatus, &'static str); 10] = [
         (PhotoStatus::Ok, "ok"),
         (PhotoStatus::Corrupt, "corrupt"),
         (PhotoStatus::Huge, "huge"),
         (PhotoStatus::OverBudget, "over_budget"),
         (PhotoStatus::GpuMemory, "gpu_memory"),
         (PhotoStatus::Decoder, "decoder"),
+        (PhotoStatus::Missing, "missing"),
+        (PhotoStatus::Changed, "changed"),
+        (PhotoStatus::TooLarge, "too_large"),
+        (PhotoStatus::Unreadable, "unreadable"),
     ];
 
     pub(super) fn parse(text: &str) -> Result<Self, AnswerError> {
@@ -50,6 +63,17 @@ impl PhotoStatus {
             .iter()
             .find(|(status, _)| *status == self)
             .map_or("", |(_, name)| *name)
+    }
+
+    /// Whether the status is about the file the engine was told to read, not about the engine or
+    /// its decode (the four of a read by key). Asking again does not change it: the caller fixes
+    /// its record or its disk, or sends the bytes.
+    #[must_use]
+    pub fn is_file_problem(self) -> bool {
+        matches!(
+            self,
+            Self::Missing | Self::Changed | Self::TooLarge | Self::Unreadable
+        )
     }
 
     /// Whether the status is the engine's load and not the file (`_TRANSIENT_REASONS`: the

@@ -1,8 +1,9 @@
 //! The engine as a client: a pool of channels, a cap on photos in flight, a deadline on every
 //! call, the retry policy of [`crate::retry`], the readiness verdict.
 //!
-//! One unary KServe v2 `ModelInfer` per photo to the model `frame_engine`: inputs `image` and
-//! `plan` (BYTES `[1]`), the optional `boxes` (FP64 `[n, 4]`), all in `raw_input_contents`, and no
+//! One unary KServe v2 `ModelInfer` per photo to the model `frame_engine`: inputs `image` (or,
+//! for the native engine, `source`: [`PhotoInput`]) and `plan` (BYTES `[1]`), the optional
+//! `boxes` (FP64 `[n, 4]`), all in `raw_input_contents`, and no
 //! `outputs` filter, so the answer is the whole answer (`src/domain/frame_engine_wire.py`,
 //! `contracts/json/frame_engine_v1.json`).
 //!
@@ -27,6 +28,7 @@ use crate::answer::Answer;
 use crate::channel::{Client, engine_channel};
 use crate::codec::pack_bytes;
 use crate::error::{ConfigError, EngineError};
+use crate::input::PhotoInput;
 use crate::model_server::ModelServer;
 use crate::observer::{CallObserver, ProbeOutcome};
 use crate::plan::{DetectorSpec, EnginePlan};
@@ -101,22 +103,27 @@ fn boxes_input(boxes: &[[f64; 4]]) -> (InferInputTensor, Bytes) {
     (tensor, raw.freeze())
 }
 
-/// The request for one photo: `image` and `plan`, and `boxes` when the caller has the detections
-/// (zero rows are allowed).
-fn infer_request(image: &[u8], plan: &str, boxes: Option<&[[f64; 4]]>) -> ModelInferRequest {
-    let mut inputs = vec![bytes_input("image"), bytes_input("plan")];
-    let mut raw = vec![pack_bytes(image), pack_bytes(plan.as_bytes())];
+/// The request for one photo: `image` or `source`, and `plan`, and `boxes` when the caller has
+/// the detections (zero rows are allowed).
+fn infer_request(
+    photo: PhotoInput<'_>,
+    plan: &str,
+    boxes: Option<&[[f64; 4]]>,
+) -> Result<ModelInferRequest, serde_json::Error> {
+    let (name, element) = photo.packed()?;
+    let mut inputs = vec![bytes_input(name), bytes_input("plan")];
+    let mut raw = vec![element, pack_bytes(plan.as_bytes())];
     if let Some(boxes) = boxes {
         let (tensor, bytes) = boxes_input(boxes);
         inputs.push(tensor);
         raw.push(bytes);
     }
-    ModelInferRequest {
+    Ok(ModelInferRequest {
         model_name: MODEL.to_owned(),
         inputs,
         raw_input_contents: raw,
         ..Default::default()
-    }
+    })
 }
 
 impl EngineClient {
@@ -187,8 +194,15 @@ impl EngineClient {
         }
     }
 
-    /// The engine's answer for the encoded photo `image` under `plan`; `boxes` (stored
-    /// `bbox_norm` rows) stand in for the detector.
+    /// The engine's answer for `photo` (its bytes, or the file the engine reads itself) under
+    /// `plan`; `boxes` (stored `bbox_norm` rows) stand in for the detector.
+    ///
+    /// A file the engine cannot use is an answer, not an error: [`crate::PhotoStatus::Missing`],
+    /// [`crate::PhotoStatus::Changed`], [`crate::PhotoStatus::TooLarge`] and [`crate::PhotoStatus::Unreadable`] are
+    /// about the file, which is the caller's to handle (its record, its disk), so none is sent
+    /// again. A key the engine refuses (`INVALID_ARGUMENT`: a bad key, a root it is not
+    /// configured for, a claim it cannot read) is [`EngineError::Rejected`], also never sent
+    /// again; an engine without the extension (the Python one) answers it the same way.
     ///
     /// An overloaded engine is asked again with a jittered backoff until the photo's deadline,
     /// an unavailable engine or a call lost in transit [`retry::RETRIES`] times, and nothing else
@@ -199,14 +213,14 @@ impl EngineClient {
     ///
     /// [`EngineError`]: the engine gave no answer for the photo, or its answer is not one this
     /// client reads.
-    pub async fn process(
+    pub async fn process<'a>(
         &self,
-        image: &[u8],
+        photo: impl Into<PhotoInput<'a>>,
         plan: &EnginePlan,
         boxes: Option<&[[f64; 4]]>,
     ) -> Result<Answer, EngineError> {
         let text = plan.to_json().map_err(EngineError::Plan)?;
-        let request = infer_request(image, &text, boxes);
+        let request = infer_request(photo.into(), &text, boxes).map_err(EngineError::Plan)?;
         let started = Instant::now();
         let mut attempt = 0u32;
         loop {
