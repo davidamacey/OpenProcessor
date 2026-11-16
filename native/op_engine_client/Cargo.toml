@@ -1,0 +1,12 @@
+[package]
+name = "op_engine_client"
+description = "The engine protocol v1 client: BYTES codec, plan builder, answer parser, channel pool and readiness, plus the model server readiness and load calls."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true

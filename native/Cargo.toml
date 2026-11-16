@@ -1,7 +1,21 @@
 # The native frame engine (docs/design/v070_rebuild/17_native_engine_plan.md).
 # Workspace layout and inheritance: https://doc.rust-lang.org/cargo/reference/workspaces.html
 [workspace]
-members = ["gpu_frame", "frame_engine", "frame_engine_loadgen"]
+members = [
+    "gpu_frame",
+    "frame_engine",
+    "frame_engine_loadgen",
+    "op_api",
+    "op_config",
+    "op_db",
+    "op_engine_client",
+    "op_ingest",
+    "op_jobs",
+    "op_media",
+    "op_server",
+    "op_storage",
+    "op_upload_loadgen",
+]
 resolver = "3"
 
 [workspace.package]

@@ -1,0 +1,16 @@
+[package]
+name = "op_server"
+description = "The `op-server` binary and its roles: `api`, `worker`, `periodic` and `migrate`."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "op-server"
+path = "src/main.rs"
+
+[lints]
+workspace = true
