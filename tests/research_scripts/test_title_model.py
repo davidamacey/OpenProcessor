@@ -3,6 +3,7 @@ the invented-fact check, the title checks and the timing summary, on hand-made i
 
 from __future__ import annotations
 
+import argparse
 import datetime as dt
 import json
 from typing import TYPE_CHECKING
@@ -21,6 +22,7 @@ from scripts.research.title_model import (
 
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from pathlib import Path
 
 VOCAB = mem.load_vocabulary()
@@ -393,6 +395,24 @@ def test_timing_summary_is_nearest_rank_p95_and_tests_the_bar() -> None:
     assert ok['bar_met'] is True
     assert score.timing_summary(secs, 0.3)['bar_met'] is False
     assert score.timing_summary(secs, 1.0, 2000.0, 1024.0)['bar_met'] is False
+
+
+def _timing_args(tmp_path: Path, payload: Mapping[str, object]) -> argparse.Namespace:
+    f = tmp_path / 'timing.json'
+    f.write_text(json.dumps(payload))
+    return argparse.Namespace(file=str(f))
+
+
+def test_cmd_timing_reports_a_saved_timing_file_from_its_summary(tmp_path: Path) -> None:
+    summary = {'n': 3, 'median_s': 0.2, 'p95_s': 0.3, 'rss_mb': None, 'bar_met': True}
+    saved = {'model': 'm', 'reps': [{'rep': 0, 'seconds': [0.1, 0.2, 0.3]}], 'summary': summary}
+    assert score.cmd_timing(_timing_args(tmp_path, saved)) == summary
+
+
+def test_cmd_timing_summarises_a_raw_timing_file(tmp_path: Path) -> None:
+    out = score.cmd_timing(_timing_args(tmp_path, {'seconds': [0.1, 0.2, 0.3], 'p95_bar_s': 0.5}))
+    assert out['n'] == 3
+    assert out['bar_met'] is True
 
 
 def test_wilson_interval_and_paired_bootstrap() -> None:

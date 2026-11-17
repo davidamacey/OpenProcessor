@@ -357,7 +357,10 @@ def cmd_scene_ratings(args: argparse.Namespace) -> dict[str, object]:
 
 
 def cmd_timing(args: argparse.Namespace) -> dict[str, object]:
+    """A saved timing file (it holds ``summary``) is reported as saved; a raw one is summarised."""
     data = json.loads(Path(args.file).read_text())
+    if 'summary' in data:
+        return data['summary']  # type: ignore[no-any-return]
     return timing_summary(
         data['seconds'], data['p95_bar_s'], data.get('rss_mb'), data.get('rss_bar_mb')
     )
