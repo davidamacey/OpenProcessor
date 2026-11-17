@@ -1,0 +1,363 @@
+# Memory titles without a large model: templates, scene words, a very small text model (run R8)
+
+Decision: titles are made from the template table (`scripts/research/title_model/title_templates.json`; it met every script check and beat the plain template by the registered margin in the blind rating); no text model is adopted and none ships even as an option from this run (SmolLM2-360M, SmolLM2-135M and LFM2-350M each missed the invented-fact bar); Mirage is not adopted (it missed the wrong-word bar in every variant and the time bar); scene words from the product's embeddings (MobileCLIP2-S2 and PE-Core-L14-336) met the wrong-word and cost lines but missed the registered coverage line, so by the run's own rule this run adopts NO scene-words step; whether embeddings give scene and event words is measured per meaning on labelled data by run R9.
+
+Details for the lanes that use this decision:
+
+- **Template table:** `scripts/research/title_model/title_templates.json` (part of the repository; no model, no download).
+- **Embeddings arm (not adopted, kept for R9):** thresholds per encoder are the `thresholds` key of
+  `arm_a_mobileclip2_s2.json` (61 words kept, 6 dropped) and `arm_a_pe_core_l14_336.json` (61 kept, 4
+  dropped) in the run's results folder (not tracked). Vocabulary: `scripts/research/title_model/scene_vocabulary.json`.
+  Licences as the header recorded them: MobileCLIP2-S2 weights `apple-amlr` (research licence, the user
+  downloads them); PE-Core-L14-336 Apache-2.0. The prompt and JSON schema stay above for the record.
+
+## What this means for the product
+
+Titles come from templates, not from a language model: the table beat the plain template by half a
+point on a five-point scale, and the three very small models invented facts in 15 to 58 percent of
+titles (bar: 1 percent). The embeddings the product already computes are an accurate and free source
+of scene words (2 wrong of the 17 and 15 memories that got a word, about 9 in 10 right) with modest coverage on this test. Mirage
+on a server CPU took about 2 seconds per photo and was less accurate. The next measurement is R9, which
+tests scene and event words per meaning on labelled data.
+
+Registered 17 November 2026, base commit `46cd9c3f2`. Hardware and load of every measured row are
+written beside it in the results sections.
+
+## Question
+
+1. **Scene words.** Which is the lightest way to get scene words for a memory ("beach", "snow",
+   "birthday cake") that are true to its pictures: (A) the embeddings the product already computes,
+   compared with text phrases; or (B) a 22 MB perception model that describes the picture?
+2. **Titles.** Does a text model of at most 400 million parameters write better titles from a fact
+   sheet than a filled template does?
+
+The owner asked for something very small: no large local model and no hosted model by default;
+nothing leaves the host. Design reference: on-device photo apps fill title templates from a few
+small models and find themes by comparing a photo's embedding with short text phrases. The words,
+phrases and thresholds of this run are our own.
+
+## Data (public only)
+
+| Set | Where | Count | Use |
+|---|---|---|---|
+| `coco_val2017` (register row of the same name) | pictures of COCO val2017 | 5,000 | all photos |
+| COCO instances val2017 | categories and supercategories | 80 categories, 12 supercategories | memories that share a subject; proof categories |
+| COCO captions val2017 | `captions_val2017.json` (extracted from the annotations archive) | 5 per photo | the written truth |
+
+Set P and the owner's library are not used. No picture, weight or private path is committed.
+
+- **Test memories:** 60 memories of 3 photos each, seed `20261117`. The 3 photos of a memory share
+  one COCO supercategory; supercategories are dealt round-robin from a seeded shuffle.
+- **Tuning set (arm A thresholds):** 1,000 other COCO val photos, same seed; no photo is in both sets
+  (a unit test checks it). Thresholds are fitted on the tuning set and scored on the test memories.
+- **Fact sheets:** 200, same seed. Date range from real calendar dates (2015 to 2025, one day to
+  three weeks), the place from 100 world cities and 30 landmarks held in `fact_sheets.py`, people
+  0 to 12 (with up to 3 first names when people are named), an event from a list of 28 (public holidays
+  of the US and the UK, "wedding", "concert", "hike", "beach day", ...) or none. The first 60 sheets
+  belong to the 60 memories, with their event emptied and the kept scene words added. The other 140
+  hold 0 to 2 random scene words.
+
+## Scene vocabulary
+
+`scripts/research/title_model/scene_vocabulary.json`: **61 scene words**, written for this run. Each
+has synonyms (found in a sentence as whole words), one or two text phrases ("a photo of ..."), and
+the COCO category names that count as proof. All 61 occur in COCO val captions (the least frequent,
+`concert`, in 14 captions; 44 words occur in 100 or more), so the stop condition "fewer than 40
+words occur" does not hold.
+
+**Truth.** A scene word is true for a photo when the word or a synonym is in one of its five
+captions (lower case, punctuation removed, whole-word match: "beachfront" is not "beach"), or one of
+its proof categories is among its COCO annotations.
+
+## Arms
+
+**Arm A (embeddings the product computes).** For each photo the image embedding, and for each phrase
+the text embedding, with each encoder the product serves: MobileCLIP2-S2 through `POST /embed/image`
+and `POST /embed/text` (`src/routers/embed.py`), and PE-Core-L14-336 through the product's Triton
+models `pe_image_encoder` and `pe_text_encoder` (the `/embed/*` routes serve MobileCLIP only; PE has
+no such route, so its two Triton models are called with the product's own preprocessing
+`src/utils/pe_preprocess.py` and the PE tokenizer of the pinned `perception_models`). A word scores
+the highest cosine of its phrases. A word's threshold is the lowest value with precision at least
+0.90 on the tuning set; a word that never reaches 0.90 is dropped for that encoder. Thresholds are
+stored per encoder name.
+
+**Arm B (Mirage).** `cactus.Mirage().describe(<file>)` per photo, CPU, `CACTUS_TELEMETRY=0`,
+`DO_NOT_TRACK=1`, `HF_HUB_OFFLINE=1` (the weights and engine are fetched once beforehand, the run
+itself cannot reach the network). The description is the text of every string in its answer (scene
+setting, lighting, object names and their attributes). A word is found when the word or a synonym is
+in it (lower case, punctuation removed, whole-word match). A second variant uses the documented
+option `sections=["scene"]` (scene description only); it is reported next to the default one and
+changes no bar.
+
+**Keep rule (both arms).** A memory keeps a word that is found for at least 2 of its 3 photos; at
+most 3 words, the highest-scoring first (arm A: mean cosine minus threshold; arm B: how many photos).
+
+**Titles, three ways on the same sheets.**
+- *The plain template* `"<place>, <month year>"` (no place: `"<month year>"`): the reference and the
+  fallback.
+- *The template table* `scripts/research/title_model/title_templates.json`: rows per scene word
+  family (hiking, beach, snow, dinner, concert, birthday and 11 more, plus "none"), each with the
+  variants plain, place, one named person, a group (2 or 3 named people). The row is picked by the
+  sheet's event if it has one, else by its first kept scene word; the variant by what the sheet holds.
+  A sheet with no event and no scene word gets the plain template.
+- *A text model* that gets the fact sheet as text and answers one JSON object.
+
+For every way the subtitle is the place (if any) and the date range, except a text model's own.
+
+### The prompt, the schema and the decode settings (fixed before anything is scored)
+
+System message:
+
+```
+You write short titles for photo memories. Use only the facts given. Never add a place, a name, a number, a date or an event that is not listed. Answer with one JSON object and nothing else.
+```
+
+User message (`{...}` is filled from the sheet; "none" when the sheet holds nothing):
+
+```
+Facts:
+Dates: {dates}
+Place: {place}
+People: {people}{named}
+Event: {event}
+Scene words: {scene_words}
+
+Write a title of at most 8 words and a subtitle of at most 12 words. Answer as {"title": "...", "subtitle": "..."}.
+```
+
+JSON schema (enforced as a grammar by `llama-cpp-python`, `response_format` of type `json_object`
+with this schema):
+
+```json
+{"type": "object",
+ "properties": {"title": {"type": "string", "maxLength": 50},
+                "subtitle": {"type": "string", "maxLength": 70}},
+ "required": ["title", "subtitle"], "additionalProperties": false}
+```
+
+Decode: temperature 0, seed 20261117, at most 48 new tokens, 4 threads, context 1024, one title at a
+time, no retry. A title that does not parse counts as invalid JSON.
+
+No picture leaves the host in any arm.
+
+## Candidates (licence lines as the pages stated them on 17 November 2026)
+
+Size limit for every model this run adds: at most 400 million parameters and at most 500 MB on disk
+as run.
+
+| Candidate | Arm | Size | Licence as stated | Page |
+|---|---|---|---|---|
+| MobileCLIP2-S2 (in the product) | A | 35.7M parameters | weights `apple-amlr` (Apple's research licence; the user downloads them) | `ATTRIBUTION.md` |
+| PE-Core-L14-336 (in the product) | A | in the product | Apache-2.0 | `ATTRIBUTION.md` |
+| Mirage (Cactus Compute) | B | 51.3M parameters (vendor), weights 22 MB on disk | model page: "Apache-2.0"; engine page: "License: apache-2.0", "Apache 2.0, including the prebuilt runtime binaries" (package metadata) | https://huggingface.co/Cactus-Compute/mirage, https://huggingface.co/Cactus-Compute/cactus |
+| SmolLM2-360M-Instruct | titles | "0.4B params" | "License: apache-2.0" | https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct |
+| SmolLM2-135M-Instruct | titles | "0.1B params" | "License: apache-2.0" | https://huggingface.co/HuggingFaceTB/SmolLM2-135M-Instruct |
+| LFM2-350M (Liquid AI) | titles | 354,483,968 parameters | "License: lfm1.0" (LFM Open License v1.0): rights to use the model commercially end if the company's annual revenue exceeds USD 10 million | https://huggingface.co/LiquidAI/LFM2-350M, https://www.liquid.ai/lfm-license |
+
+Looked at and not run:
+
+- **Desert Ant Labs** (https://desertant.com/blog/introducing-desert-ant-labs/): 18 small task
+  models (speech, audio clean-up, masking of personal data, language detection, video clips). None
+  writes a caption or a title, the page names no Linux server runtime and no licence for the
+  weights. Look again if they publish a caption model.
+- **Google's 270M instruction model of the third generation** (the 270M model page of Google on Hugging
+  Face): its licence is Google's own terms and the repository is gated. Not permissive; not run.
+  (Its short name is left out of this note because the repository's naming scan bans it.)
+- **Qwen3 0.6B / 1.7B, SmolLM3 3B, Phi-4-mini**: above the owner's size limit; not run.
+
+**Licence rule.** Every candidate is measured and its licence recorded next to its result. The
+`Decision:` line may name as the default only a model whose weights and runtime are under a
+permissive licence (Apache-2.0, MIT or equivalent). A model under other terms is named only as an
+option the user switches on and downloads themselves; its weights are never in an image and never
+downloaded by default.
+
+**Runtimes.** Text models on the CPU with `llama-cpp-python` 0.3.37 (llama.cpp, MIT; its vendored
+llama.cpp is commit `a956a852c9c8bc1fb07206364838ddef299178c0`) and a `Q8_0` GGUF. The GGUF is
+converted by the run from the authors' own `safetensors` with that commit's
+`convert_hf_to_gguf.py --outtype q8_0`. The card names the `HuggingFaceTB/SmolLM2-360M-Instruct-GGUF`
+file as the authors' own; its README says it was converted by a third party
+(`ngxson/SmolLM2-360M-Instruct-Q8_0-GGUF`, "GGUF-my-repo"), so it is not used: "never a third
+party's GGUF". Mirage runs with `cactus-compute` 4.2.3 (engine 4.1.1, wheels for Linux x86-64), CPU
+only. Packages live in the run's own venv (`venvs/R8` on the scratch drive, outside the repository); exact pins in
+`scripts/research/title_model/requirements.txt`.
+
+## Rubric and bars (registered; the bar is never moved)
+
+An arm or a model must meet every line of its part; a missed line closes it.
+
+Scene words (arm A per encoder, and arm B):
+
+| Check | Measured by | Bar |
+|---|---|---|
+| A kept word is true for its memory (true for at least 2 of the 3 photos) | the script, all 60; then one Haiku agent looks at the 3 photos of 30 memories | at most 3 of 60 memories with a wrong word (script); at most 2 of 30 (Haiku) |
+| A memory gets at least one word | the script | at least 70% of the 60 |
+| Cost per photo, CPU | arm A: the time of the cosine against all phrases, embeddings given (no model runs); arm B: the script, 4 threads, 3 repetitions, load average beside each row | arm A: at most 1 ms; arm B: 95th percentile at most 500 ms and resident memory at most 500 MB |
+| It runs on this host | arm B: `cactus-compute` installs in the run's venv, describes one photo, and sends nothing off the host | yes; otherwise the arm closes with the reason |
+
+Titles:
+
+| Check | Measured by | Bar |
+|---|---|---|
+| No invented fact (allowed: the sheet's place, numbers, event and scene words, words from its dates: month, year, season, weekday, "weekend", "week"; the list is `fact_sheets.invented_facts`) | the script, all 200 | at most 2 of 200 titles fail |
+| One valid JSON object with `title` and `subtitle` (text models) | the script, all 200 | at least 99% without a retry |
+| The place is in the title or subtitle when the sheet has one | the script | at least 95% |
+| At most 8 words, plain text, no emoji, no quotes | the script | at least 95% |
+| Specific and natural for a photo memory, 1 to 5 | one Haiku agent, 50 titles per way, blinded and shuffled | the template table: mean at least the plain template's plus 0.5. A text model: mean at least the template table's plus 0.5 |
+| Time per title, CPU (text models; 4 threads, one title at a time) | the script, 3 repetitions, load average beside each row | 95th percentile at most 2 s; resident memory at most 1 GB |
+
+Statistics: every rate carries its sample size and a 95% Wilson interval; a difference of mean
+ratings carries a paired bootstrap interval (10,000 resamples). A timing is 3 repetitions with the
+load average beside each row; it runs on a quiet host.
+
+Interpretation fixed with the registration (not a moved bar): words counted by the script for "at
+most 8 words" are space-separated tokens of the title; a fact sheet also holds up to 3 first names
+when people are named, because the template variants "one named person" and "a group" need them;
+the invented-fact check is applied to the title and the subtitle.
+
+## If a bar is missed
+
+Scene words missed by both arms: the template table is filled from calendar entries, holidays and
+places only, and no scene-words step is built. Text models missed: titles are filled templates, and a
+text model stays an option the user turns on. The note says which line each arm missed and by how
+much.
+
+## Registered additions (made before anything is scored, after the scripts ran on dry runs)
+
+These fix what the dry runs showed; none moves a bar.
+
+- **Mirage variants.** The published call `describe(photo)` returns, for about 1 photo in 5 in the dry
+  run (3 of 15), text that is not valid JSON: the engine writes `"score":-nan` in its text section.
+  `cactus-compute` 4.2.3 then raises `JSONDecodeError`. The script counts such a call as an error of
+  that photo (no description, no words) and reports the rate; it does not repair the output. Three
+  variants are run and reported: `default` (the published call), `objects`
+  (`sections=["scene","objects"]`, `fields=["bbox"]`: the documented options, no text section, no
+  masks) and `scene` (`sections=["scene"]`). Arm B passes if at least one variant meets every line of
+  its part; the `Decision:` line names the variant. Timing of every variant is measured.
+- **Scene words of the 60 title sheets.** The fact sheets of the 60 memories hold the words a perfect
+  scene-words step would keep (true for at least 2 of the 3 photos by the truth rule, at most 3), so
+  title quality is measured on its own and one title run serves every scene-words decision. Memories
+  with no true word get none.
+- **Row choice of the table.** The row is picked by the sheet's event when it has one (holidays: the
+  `holiday` family, which names the event; other events map to a family), else by its first kept scene
+  word. 40% of the 140 free sheets hold an event. The invented-fact check is the same strict list for
+  every way, with the sheet's own place, first names and event removed before scene words are looked
+  for (a place such as "Lake Louise" holds the scene word "lake").
+- **Text-model timing.** The first 20 sheets, 3 repetitions, after one unrecorded warm-up call; each
+  model in its own process, so its peak resident memory (`VmHWM`) is its own. Arm B timing: the first
+  20 test photos, 3 repetitions, one warm-up call, one process per variant. Arm A timing: the cosine of
+  one photo against all phrases, 180 photos, 3 repetitions.
+- **Weights as run** (all fetched once, then the run is offline): Mirage revision
+  `76c1e9e53381aca8fc3843c636216c96ff220122` (`mirage.cact`, SHA-256
+  `4249a0f7515272ff76b9414bec17d7e7daf84b15b66c7fb4f17fce1e66f9f237`), engine 4.1.1; SmolLM2-360M-Instruct
+  `a10cc1512eabd3dde888204e902eca88bddb4951`, SmolLM2-135M-Instruct
+  `12fd25f77366fa6b3b4b768ec3050bf629380bac`, LFM2-350M `f37d3f5c8c5484bc01dad379a595cf4c68c4e70e`.
+  `Q8_0` GGUFs converted from those revisions: 386,405,408, 144,811,520 and 379,214,560 bytes (each
+  under the 500 MB limit).
+- **Names the scan bans.** One candidate's short name is banned by the repository's naming scan, so
+  it appears here as "Google's 270M model" (see the list above).
+
+## Reproduce
+
+Environment of every command (set once; the run folder is outside the tree): `R8_COCO_IMAGES` (the
+5,000 val2017 pictures), `R8_ANNOTATIONS_DIR` (holds `annotations_trainval2017.zip` and its extracted
+copy), `R8_RUN_DIR` (outputs), `PYTHONPATH=.` from the repository root, and for Mirage
+`XDG_CACHE_HOME`, `HF_HOME` on the weights folder, `HF_HUB_OFFLINE=1`, `CACTUS_TELEMETRY=0`,
+`DO_NOT_TRACK=1`. The venv is made as `requirements.txt` says. Commands, one per line, as
+`python -m scripts.research.title_model.<module> <args>`:
+
+```
+scene_words_embed embed --encoder mobileclip2_s2 --api-url <api> --out $R8_RUN_DIR/vectors_mobileclip2_s2.npz
+scene_words_embed embed --encoder pe_core_l14_336 --triton-url <triton> --out $R8_RUN_DIR/vectors_pe_core_l14_336.npz
+scene_words_embed score --vectors <npz> --out <json>
+scene_words_embed timing --vectors <npz> --out <json>
+scene_words_mirage describe --variant default|objects|scene --out <jsonl>
+scene_words_mirage findings --descriptions <jsonl> --out <json>
+scene_words_mirage timing --variant <v> --photos 20 --reps 3 --out <json>
+run_titles generate --way plain|table --out <jsonl>
+run_titles generate --way model --model-path <gguf> --name <name> --out <jsonl>
+run_titles timing --model-path <gguf> --name <name> --sheets 20 --reps 3 --out <json>
+score checks <titles jsonl ...>
+score blind <titles jsonl ...> --items <json> --key <json>
+score ratings <json> --reference plain --candidate table
+```
+
+GGUF conversion: `convert_hf_to_gguf.py <weights folder> --outtype q8_0 --outfile <gguf>` from the
+llama.cpp commit named above.
+
+## Results
+
+Host: Intel Xeon E5-2680 v3, 48 hardware threads, CPU only for every row of arm B and the text
+models; the host was shared, so the 1-minute load average is written beside each timing. Raw files
+are in the run's results folder (not tracked); file names below are relative to it. Every rate is
+of the stated n with a 95% Wilson interval.
+
+### Scene words (60 test memories; commands: `scene_words_embed score`, `scene_words_mirage findings`)
+
+| Arm | Memories with a wrong word (bar at most 3 of 60) | Memories with a word (bar at least 70%) | Haiku look, wrong of 30 (bar at most 2) | Cost |
+|---|---|---|---|---|
+| A, MobileCLIP2-S2 | 2 of 60 (3%; 1% to 11%): met | 17 of 60 (28%; 19% to 41%): missed | 2: met | cosine p95 0.020 ms (bar 1 ms): met |
+| A, PE-Core-L14-336 | 2 of 60 (3%; 1% to 11%): met | 15 of 60 (25%; 16% to 37%): missed | 2: met | cosine p95 0.022 ms: met |
+| B, Mirage `default` | 9 of 60 (15%; 8% to 26%): missed | 18 of 60 (30%; 20% to 43%): missed | 2: met | p95 2.56 s (bar 0.5 s): missed; 246 MB; load 27.1, 15.5, 10.6 |
+| B, Mirage `objects` | 10 of 60 (17%; 9% to 28%): missed | 22 of 60 (37%; 26% to 49%): missed | 4: missed | p95 2.37 s: missed; load 8.5, 7.7, 8.1 |
+| B, Mirage `scene` | 10 of 60 (17%; 9% to 28%): missed | 17 of 60 (28%; 19% to 41%): missed | 2: met | p95 1.85 s: missed; load 7.7, 7.4, 7.5 |
+
+Cosine timing: 540 measurements per encoder (180 photos, 3 repetitions), load 7.4. Mirage timing: 60
+calls (20 photos, 3 repetitions). Mirage runs on this host and sends nothing off it. The published
+call (`default`) failed on 36 of 180 photos (20%) with the engine's invalid-JSON output described in
+the registered additions; those photos count as having no description. The other two variants had 0
+failed calls.
+
+**Lines missed.** Arm A missed only the coverage line: 28% (MobileCLIP2-S2) and 25% (PE-Core) against
+70%. Arm B missed the wrong-word line in every variant (9 to 10 of 60 against 3), the coverage line
+in every variant (28% to 37%), and the time line in every variant (1.85 to 2.56 s against 0.5 s).
+
+**Flaw of the test's design, found after scoring.** Only 33 of the 60 test memories have any
+vocabulary word that is true for at least two of their three photos (`memories.oracle_memory_words`
+on the truth of the 60 memories, the same words the title sheets hold). The photos of a memory share
+a COCO supercategory, not a scene, so for 27 memories no step could keep a true word. The registered
+coverage bar (at least 70% of the 60, that is 42 memories) could therefore not be met by any arm; the
+best possible is 33 of 60 (55%). The bar is NOT moved and is recorded as missed for every arm. Read
+against the 33 memories that could have a word, arm A kept a word for 17 and 15 (52% and 45%).
+
+### Titles (200 fact sheets; command: `score checks`)
+
+| Way | Invented facts (bar at most 2 of 200) | Valid JSON (bar 99%) | Place present (bar 95%) | Shape (bar 95%) |
+|---|---|---|---|---|
+| plain template | 0 of 200: met | not applicable (template) | 200 of 200: met | 200 of 200: met |
+| template table | 0 of 200: met | not applicable (template) | 200 of 200: met | 200 of 200: met |
+| SmolLM2-360M | 116 of 200: missed | 98.5%: missed | 90.5%: missed | 94.5%: missed |
+| SmolLM2-135M | 29 of 200: missed | 98.5%: missed | 66.0%: missed | 95.0%: met |
+| LFM2-350M | 90 of 200: missed | 100%: met | 66.0%: missed | 95.5%: met |
+
+The 95% intervals of the zero rows are 0% to 1.9%. Of every other rate they are in
+`title_checks.json`.
+
+### Blind rating (Haiku, 50 titles per way, 1 to 5; command: `score ratings`)
+
+| Way | Mean | Difference to the reference (paired bootstrap, 10,000 resamples) | Bar |
+|---|---|---|---|
+| plain template | 2.94 | reference | |
+| template table | 3.44 | +0.50 (0.32 to 0.68) against plain | at least +0.50: met |
+| SmolLM2-360M | 2.72 | -0.72 (-1.02 to -0.40) against the table | at least +0.50: missed |
+| SmolLM2-135M | 2.18 | -1.26 (-1.50 to -1.00) against the table | missed |
+| LFM2-350M | 1.46 | -1.98 (-2.22 to -1.72) against the table | missed |
+
+The table met the margin exactly at its point estimate (+0.50); the lower end of the interval is
+0.32. The bar is on the mean difference and is met; the margin is thin and should be read with its
+interval.
+
+### Text-model timing (first 20 sheets, 3 repetitions, 4 threads; the summary of each `timing_*.json`)
+
+| Model | Median | p95 (bar 2 s) | Resident memory (bar 1 GB) | Load average per repetition |
+|---|---|---|---|---|
+| SmolLM2-360M | 1.54 s | 2.58 s: missed | 509 MB | 10.6, 12.6, 16.2 |
+| SmolLM2-135M | 1.02 s | 1.81 s: met | 257 MB | 22.7, 19.8, 15.4 |
+| LFM2-350M | 1.38 s | 2.19 s: missed | 490 MB | 12.7, 18.2, 18.6 |
+
+The load was high for the text-model timings, so the times are an upper bound; no model passes the
+invented-fact bar whatever its speed, so the timing changes no decision.
+
+### Licences of the candidates that ran
+
+As recorded in the candidates table above. LFM2-350M (LFM Open License v1.0) would in any case have
+been only a user-chosen option under the licence rule; no text model is adopted.
