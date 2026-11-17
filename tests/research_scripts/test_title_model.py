@@ -437,3 +437,21 @@ def test_ratings_command_reads_the_key_and_the_ratings(
     out = json.loads(capsys.readouterr().out)
     assert out['bar_met'] is True
     assert out['means'] == {'plain': 2.0, 'table': 3.0}
+
+
+def test_blind_scenes_skip_empty_arms_hide_the_arm_and_sum_the_wrong(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv('R8_COCO_IMAGES', str(tmp_path))
+    memories = [[3 * i + 1, 3 * i + 2, 3 * i + 3] for i in range(60)]
+    kept = {'a': [['beach'] if i % 2 else [] for i in range(60)], 'b': [['dog']] * 60}
+    items, key = score.blind_scenes(kept, memories)
+    arms = [k['arm'] for k in key]
+    assert arms.count('b') == 30
+    assert 0 < arms.count('a') < 30
+    assert all('arm' not in item and len(item['photos']) == 3 for item in items)  # type: ignore[arg-type]
+    wrong = {int(str(k['item'])): ['dog'] for k in key if k['arm'] == 'b'}
+    summary = score.scene_check_summary(key, {i: w for i, w in wrong.items() if i % 2 == 0})
+    assert summary['a']['with_wrong_word'] == 0
+    assert summary['a']['bar_met'] is True
+    assert summary['b']['bar_met'] is False

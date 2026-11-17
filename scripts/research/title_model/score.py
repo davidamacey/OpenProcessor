@@ -242,6 +242,52 @@ def blind_titles(
     return items, key
 
 
+def blind_scenes(
+    kept_by_arm: dict[str, list[list[str]]],
+    memories: list[list[int]],
+    n_memories: int = 30,
+    seed: int = mem.SEED,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    """Blinded items for the picture check: 3 photo paths and the words an arm kept for them.
+
+    The same ``n_memories`` memories are looked at for every arm; an arm that kept no word for a
+    memory has nothing to check there and gets no item.
+    """
+    rng = random.Random(seed)
+    chosen = sorted(rng.sample(range(len(memories)), n_memories))
+    pairs = [(arm, i) for arm in kept_by_arm for i in chosen if kept_by_arm[arm][i]]
+    rng.shuffle(pairs)
+    items, key = [], []
+    for item_id, (arm, i) in enumerate(pairs):
+        photos = [str(mem.image_path(p)) for p in memories[i]]
+        items.append({'item': item_id, 'photos': photos, 'words': kept_by_arm[arm][i]})
+        key.append({'item': item_id, 'arm': arm, 'memory': i})
+    return items, key
+
+
+def scene_check_summary(
+    key: list[dict[str, object]],
+    wrong: dict[int, list[str]],
+    n_memories: int = 30,
+    max_wrong: int = 2,
+) -> dict[str, dict[str, object]]:
+    """Per arm: memories (of ``n_memories``) with a wrong word by the picture check, against the bar."""
+    counts: dict[str, int] = {}
+    for k in key:
+        arm = str(k['arm'])
+        counts.setdefault(arm, 0)
+        counts[arm] += bool(wrong.get(int(str(k['item'])), []))
+    return {
+        arm: {
+            'with_wrong_word': c,
+            'of': n_memories,
+            'ci95': wilson(c, n_memories),
+            'bar_met': c <= max_wrong,
+        }
+        for arm, c in counts.items()
+    }
+
+
 def describe_sheet(sheet: fs.FactSheet) -> str:
     parts = [f'{sheet.start.isoformat()} to {sheet.end.isoformat()}']
     parts.append(f'place: {sheet.place or "none"}')
@@ -293,6 +339,23 @@ def cmd_blind(args: argparse.Namespace) -> dict[str, object]:
     return {'items': len(items), 'ways': sorted(ways)}
 
 
+def cmd_blind_scenes(args: argparse.Namespace) -> dict[str, object]:
+    """Blinded picture-check files from the ``kept`` lists of the arm files (one file per arm)."""
+    coco = mem.load_coco()
+    memories = mem.build_split(coco.supers, coco.all_ids).memories
+    kept = {Path(p).stem: json.loads(Path(p).read_text())['kept'] for p in args.arms}
+    items, key = blind_scenes(kept, memories)
+    Path(args.items).write_text(json.dumps(items, indent=1))
+    Path(args.key).write_text(json.dumps(key, indent=1))
+    return {'items': len(items), 'arms': sorted(kept)}
+
+
+def cmd_scene_ratings(args: argparse.Namespace) -> dict[str, object]:
+    """``file``: ``key`` and ``wrong`` (item id -> the words the checker found wrong, possibly empty)."""
+    data = json.loads(Path(args.file).read_text())
+    return scene_check_summary(data['key'], {int(k): v for k, v in data['wrong'].items()})  # type: ignore[return-value]
+
+
 def cmd_timing(args: argparse.Namespace) -> dict[str, object]:
     data = json.loads(Path(args.file).read_text())
     return timing_summary(
@@ -320,6 +383,14 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument('--key', required=True)
     b.add_argument('--memory-words')
     b.set_defaults(func=cmd_blind)
+    bs = sub.add_parser('blind-scenes')
+    bs.add_argument('arms', nargs='+')
+    bs.add_argument('--items', required=True)
+    bs.add_argument('--key', required=True)
+    bs.set_defaults(func=cmd_blind_scenes)
+    sr = sub.add_parser('scene-ratings')
+    sr.add_argument('file')
+    sr.set_defaults(func=cmd_scene_ratings)
     t = sub.add_parser('timing')
     t.add_argument('file')
     t.set_defaults(func=cmd_timing)
