@@ -1,0 +1,24 @@
+# Run R8 (titles without a large model). Install into a venv outside the repo made with
+# python3.12 -m venv, called by its binaries:
+#   pip install --extra-index-url https://download.pytorch.org/whl/cpu -r scripts/research/title_model/requirements.txt
+# llama-cpp-python builds from source (cmake, a C++ compiler) on the CPU.
+# Arm B (Mirage)
+cactus-compute==4.2.3
+Pillow==13.0.0
+# Text models on the CPU (llama.cpp commit a956a852c9c8bc1fb07206364838ddef299178c0 is vendored)
+llama-cpp-python==0.3.37
+numpy==2.5.5
+# Arm A: product API, Triton, and the PE tokenizer
+requests==2.34.2
+tritonclient[http]==2.74.0
+perception_models @ git+https://github.com/facebookresearch/perception_models.git@3e352cca660658d4b5c90f42a7808b11469e4c66
+ftfy==6.3.1
+regex==2026.11.15
+torch==2.11.0
+# GGUF conversion of the authors' weights (llama.cpp requirements-convert_hf_to_gguf.txt at the commit above)
+gguf==0.19.0
+huggingface_hub==0.36.2
+protobuf==4.25.9
+safetensors==0.8.0
+sentencepiece==0.2.3
+transformers==4.57.6
