@@ -1,6 +1,24 @@
 # Memory titles without a large model: templates, scene words, a very small text model (run R8)
 
-Decision: pending. Nothing is scored yet; this header was committed first (run R8, 17 November 2026).
+Decision: titles are made from the template table (`scripts/research/title_model/title_templates.json`; it met every script check and beat the plain template by the registered margin in the blind rating); no text model is adopted and none ships even as an option from this run (SmolLM2-360M, SmolLM2-135M and LFM2-350M each missed the invented-fact bar); Mirage is not adopted (it missed the wrong-word bar in every variant and the time bar); scene words from the product's embeddings (MobileCLIP2-S2 and PE-Core-L14-336) met the wrong-word and cost lines but missed the registered coverage line, so by the run's own rule this run adopts NO scene-words step; whether embeddings give scene and event words is measured per meaning on labelled data by run R9.
+
+Details for the lanes that use this decision:
+
+- **Template table:** `scripts/research/title_model/title_templates.json` (part of the repository; no model, no download).
+- **Embeddings arm (not adopted, kept for R9):** thresholds per encoder are the `thresholds` key of
+  `arm_a_mobileclip2_s2.json` (61 words kept, 6 dropped) and `arm_a_pe_core_l14_336.json` (61 kept, 4
+  dropped) in the run's results folder (not tracked). Vocabulary: `scripts/research/title_model/scene_vocabulary.json`.
+  Licences as the header recorded them: MobileCLIP2-S2 weights `apple-amlr` (research licence, the user
+  downloads them); PE-Core-L14-336 Apache-2.0. The prompt and JSON schema stay above for the record.
+
+## What this means for the product
+
+Titles come from templates, not from a language model: the table beat the plain template by half a
+point on a five-point scale, and the three very small models invented facts in 15 to 58 percent of
+titles (bar: 1 percent). The embeddings the product already computes are an accurate and free source
+of scene words (2 wrong of the 17 and 15 memories that got a word, about 9 in 10 right) with modest coverage on this test. Mirage
+on a server CPU took about 2 seconds per photo and was less accurate. The next measurement is R9, which
+tests scene and event words per meaning on labelled data.
 
 Registered 17 November 2026, base commit `46cd9c3f2`. Hardware and load of every measured row are
 written beside it in the results sections.
@@ -268,4 +286,78 @@ llama.cpp commit named above.
 
 ## Results
 
-Not yet scored.
+Host: Intel Xeon E5-2680 v3, 48 hardware threads, CPU only for every row of arm B and the text
+models; the host was shared, so the 1-minute load average is written beside each timing. Raw files
+are in the run's results folder (not tracked); file names below are relative to it. Every rate is
+of the stated n with a 95% Wilson interval.
+
+### Scene words (60 test memories; commands: `scene_words_embed score`, `scene_words_mirage findings`)
+
+| Arm | Memories with a wrong word (bar at most 3 of 60) | Memories with a word (bar at least 70%) | Haiku look, wrong of 30 (bar at most 2) | Cost |
+|---|---|---|---|---|
+| A, MobileCLIP2-S2 | 2 of 60 (3%; 1% to 11%): met | 17 of 60 (28%; 19% to 41%): missed | 2: met | cosine p95 0.020 ms (bar 1 ms): met |
+| A, PE-Core-L14-336 | 2 of 60 (3%; 1% to 11%): met | 15 of 60 (25%; 16% to 37%): missed | 2: met | cosine p95 0.022 ms: met |
+| B, Mirage `default` | 9 of 60 (15%; 8% to 26%): missed | 18 of 60 (30%; 20% to 43%): missed | 2: met | p95 2.56 s (bar 0.5 s): missed; 246 MB; load 27.1, 15.5, 10.6 |
+| B, Mirage `objects` | 10 of 60 (17%; 9% to 28%): missed | 22 of 60 (37%; 26% to 49%): missed | 4: missed | p95 2.37 s: missed; load 8.5, 7.7, 8.1 |
+| B, Mirage `scene` | 10 of 60 (17%; 9% to 28%): missed | 17 of 60 (28%; 19% to 41%): missed | 2: met | p95 1.85 s: missed; load 7.7, 7.4, 7.5 |
+
+Cosine timing: 540 measurements per encoder (180 photos, 3 repetitions), load 7.4. Mirage timing: 60
+calls (20 photos, 3 repetitions). Mirage runs on this host and sends nothing off it. The published
+call (`default`) failed on 36 of 180 photos (20%) with the engine's invalid-JSON output described in
+the registered additions; those photos count as having no description. The other two variants had 0
+failed calls.
+
+**Lines missed.** Arm A missed only the coverage line: 28% (MobileCLIP2-S2) and 25% (PE-Core) against
+70%. Arm B missed the wrong-word line in every variant (9 to 10 of 60 against 3), the coverage line
+in every variant (28% to 37%), and the time line in every variant (1.85 to 2.56 s against 0.5 s).
+
+**Flaw of the test's design, found after scoring.** Only 33 of the 60 test memories have any
+vocabulary word that is true for at least two of their three photos (`memories.oracle_memory_words`
+on the truth of the 60 memories, the same words the title sheets hold). The photos of a memory share
+a COCO supercategory, not a scene, so for 27 memories no step could keep a true word. The registered
+coverage bar (at least 70% of the 60, that is 42 memories) could therefore not be met by any arm; the
+best possible is 33 of 60 (55%). The bar is NOT moved and is recorded as missed for every arm. Read
+against the 33 memories that could have a word, arm A kept a word for 17 and 15 (52% and 45%).
+
+### Titles (200 fact sheets; command: `score checks`)
+
+| Way | Invented facts (bar at most 2 of 200) | Valid JSON (bar 99%) | Place present (bar 95%) | Shape (bar 95%) |
+|---|---|---|---|---|
+| plain template | 0 of 200: met | not applicable (template) | 200 of 200: met | 200 of 200: met |
+| template table | 0 of 200: met | not applicable (template) | 200 of 200: met | 200 of 200: met |
+| SmolLM2-360M | 116 of 200: missed | 98.5%: missed | 90.5%: missed | 94.5%: missed |
+| SmolLM2-135M | 29 of 200: missed | 98.5%: missed | 66.0%: missed | 95.0%: met |
+| LFM2-350M | 90 of 200: missed | 100%: met | 66.0%: missed | 95.5%: met |
+
+The 95% intervals of the zero rows are 0% to 1.9%. Of every other rate they are in
+`title_checks.json`.
+
+### Blind rating (Haiku, 50 titles per way, 1 to 5; command: `score ratings`)
+
+| Way | Mean | Difference to the reference (paired bootstrap, 10,000 resamples) | Bar |
+|---|---|---|---|
+| plain template | 2.94 | reference | |
+| template table | 3.44 | +0.50 (0.32 to 0.68) against plain | at least +0.50: met |
+| SmolLM2-360M | 2.72 | -0.72 (-1.02 to -0.40) against the table | at least +0.50: missed |
+| SmolLM2-135M | 2.18 | -1.26 (-1.50 to -1.00) against the table | missed |
+| LFM2-350M | 1.46 | -1.98 (-2.22 to -1.72) against the table | missed |
+
+The table met the margin exactly at its point estimate (+0.50); the lower end of the interval is
+0.32. The bar is on the mean difference and is met; the margin is thin and should be read with its
+interval.
+
+### Text-model timing (first 20 sheets, 3 repetitions, 4 threads; the summary of each `timing_*.json`)
+
+| Model | Median | p95 (bar 2 s) | Resident memory (bar 1 GB) | Load average per repetition |
+|---|---|---|---|---|
+| SmolLM2-360M | 1.54 s | 2.58 s: missed | 509 MB | 10.6, 12.6, 16.2 |
+| SmolLM2-135M | 1.02 s | 1.81 s: met | 257 MB | 22.7, 19.8, 15.4 |
+| LFM2-350M | 1.38 s | 2.19 s: missed | 490 MB | 12.7, 18.2, 18.6 |
+
+The load was high for the text-model timings, so the times are an upper bound; no model passes the
+invented-fact bar whatever its speed, so the timing changes no decision.
+
+### Licences of the candidates that ran
+
+As recorded in the candidates table above. LFM2-350M (LFM Open License v1.0) would in any case have
+been only a user-chosen option under the licence rule; no text model is adopted.
