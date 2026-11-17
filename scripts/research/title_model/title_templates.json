@@ -1,0 +1,319 @@
+{
+  "version": 1,
+  "note": "Template table of run R8, our own wording. Placeholders: {place} {person} {people} {month} {year} {event}. Row picked by the sheet's event, else its first kept scene word; variant by the sheet: group (2 or 3 named people), person (1), place, plain. A sheet with no event and no scene word gets the plain template '<place>, <month year>' (the family 'none'). word_rows override a family's rows for one member word.",
+  "variant_fallback": {"group": ["person", "place", "plain"], "person": ["place", "plain"], "place": ["plain"], "plain": []},
+  "none": {"use": "plain_template"},
+  "events": {
+    "wedding": {"family": "wedding"}, "concert": {"family": "concert", "word": "concert"},
+    "festival": {"family": "concert"}, "hike": {"family": "hiking", "word": "hiking"},
+    "beach day": {"family": "beach", "word": "beach"}, "birthday": {"family": "birthday"},
+    "camping trip": {"family": "hiking", "word": "camping"}, "ski trip": {"family": "snow", "word": "skiing"},
+    "road trip": {"family": "transport"}, "graduation": {"family": "party"},
+    "anniversary": {"family": "party"}, "family reunion": {"family": "party"},
+    "picnic": {"family": "party"}, "barbecue": {"family": "party"}
+  },
+  "holiday_family": "holiday",
+  "families": {
+    "hiking": {
+      "members": ["hiking", "camping", "mountain", "forest"],
+      "rows": {
+        "plain": ["Fresh air and long views", "Out in the open air"],
+        "place": ["Out and about near {place}", "Open air around {place}"],
+        "person": ["Open air with {person}"],
+        "group": ["{people} out in the open"]
+      },
+      "word_rows": {
+        "hiking": {
+          "plain": ["Up the trail", "Boots on the trail"],
+          "place": ["Trails above {place}", "Hiking days near {place}"],
+          "person": ["On the trail with {person}"],
+          "group": ["{people} on the trail"]
+        },
+        "camping": {
+          "plain": ["Camp life, simple days"],
+          "place": ["Camping near {place}"],
+          "person": ["Camping with {person}"],
+          "group": ["{people} around the campfire"]
+        }
+      }
+    },
+    "beach": {
+      "members": ["beach", "ocean", "surfing"],
+      "rows": {
+        "plain": ["Salt air, bright days", "Sun, salt and spray"],
+        "place": ["Salt air in {place}", "Sun and salt in {place}"],
+        "person": ["Salt air with {person}"],
+        "group": ["{people} by the water"]
+      },
+      "word_rows": {
+        "beach": {
+          "plain": ["A day at the beach", "Sand between our toes"],
+          "place": ["The beach at {place}", "Beach days in {place}"],
+          "person": ["Beach day with {person}"],
+          "group": ["{people} on the sand"]
+        }
+      }
+    },
+    "snow": {
+      "members": ["snow", "skiing", "snowboarding"],
+      "rows": {
+        "plain": ["Cold air, bright days"],
+        "place": ["Cold days in {place}"],
+        "person": ["Cold air with {person}"],
+        "group": ["{people} in the cold"]
+      },
+      "word_rows": {
+        "snow": {
+          "plain": ["Cold air, fresh snow", "A snowy escape"],
+          "place": ["Snow days in {place}", "Fresh snow in {place}"],
+          "person": ["Fresh snow with {person}"],
+          "group": ["{people} in the snow"]
+        },
+        "skiing": {
+          "plain": ["Down the slopes"],
+          "place": ["Slopes near {place}"],
+          "person": ["On the slopes with {person}"],
+          "group": ["{people} on the slopes"]
+        }
+      }
+    },
+    "dinner": {
+      "members": ["dinner", "pizza", "fast food", "fruit", "dessert", "breakfast"],
+      "rows": {
+        "plain": ["Around the table", "Good food, good company"],
+        "place": ["Good food in {place}", "A table in {place}"],
+        "person": ["Around the table with {person}"],
+        "group": ["{people} around the table"]
+      },
+      "word_rows": {
+        "dinner": {
+          "plain": ["Dinner with good company"],
+          "place": ["Dinner in {place}"],
+          "person": ["Dinner with {person}"],
+          "group": ["Dinner with {people}"]
+        },
+        "breakfast": {
+          "plain": ["A slow breakfast"],
+          "place": ["Breakfast in {place}"],
+          "person": ["Breakfast with {person}"],
+          "group": ["Breakfast with {people}"]
+        }
+      }
+    },
+    "concert": {
+      "members": ["concert", "crowd"],
+      "rows": {
+        "plain": ["Loud and live", "Live and loud"],
+        "place": ["Live sound in {place}"],
+        "person": ["Live sound with {person}"],
+        "group": ["{people} at the front"]
+      },
+      "word_rows": {
+        "concert": {
+          "plain": ["Live at the concert"],
+          "place": ["A concert in {place}"],
+          "person": ["Concert with {person}"],
+          "group": ["{people} at the concert"]
+        }
+      }
+    },
+    "birthday": {
+      "members": ["birthday"],
+      "rows": {
+        "plain": ["Make a wish", "Another year older"],
+        "place": ["Make a wish in {place}"],
+        "person": ["Candles for {person}"],
+        "group": ["Candles for {people}"]
+      },
+      "word_rows": {}
+    },
+    "party": {
+      "members": ["party"],
+      "rows": {
+        "plain": ["Good company, good times"],
+        "place": ["Good times in {place}"],
+        "person": ["Good times with {person}"],
+        "group": ["Good times with {people}"]
+      },
+      "word_rows": {}
+    },
+    "wedding": {
+      "members": ["wedding"],
+      "rows": {
+        "plain": ["The big day"],
+        "place": ["The big day in {place}"],
+        "person": ["The big day, with {person}"],
+        "group": ["The big day with {people}"]
+      },
+      "word_rows": {}
+    },
+    "water": {
+      "members": ["lake", "boats", "pool"],
+      "rows": {
+        "plain": ["By the water", "Out on the water"],
+        "place": ["By the water at {place}"],
+        "person": ["By the water with {person}"],
+        "group": ["{people} by the water"]
+      },
+      "word_rows": {
+        "boats": {
+          "plain": ["Afloat"],
+          "place": ["Afloat near {place}"],
+          "person": ["Afloat with {person}"],
+          "group": ["{people} afloat"]
+        },
+        "pool": {
+          "plain": ["Pool days"],
+          "place": ["Pool days in {place}"],
+          "person": ["Pool time with {person}"],
+          "group": ["{people} at the pool"]
+        },
+        "lake": {
+          "plain": ["Quiet lake days"],
+          "place": ["Lake days near {place}"],
+          "person": ["Lake days with {person}"],
+          "group": ["{people} at the lake"]
+        }
+      }
+    },
+    "city": {
+      "members": ["street", "city", "bridge", "church", "tower", "market", "night"],
+      "rows": {
+        "plain": ["Exploring town", "Out and about in town"],
+        "place": ["Exploring {place}", "Wandering around {place}"],
+        "person": ["Exploring with {person}"],
+        "group": ["{people} exploring town"]
+      },
+      "word_rows": {
+        "market": {
+          "plain": ["Market day"],
+          "place": ["Market day in {place}"],
+          "person": ["Market day with {person}"],
+          "group": ["{people} at the market"]
+        },
+        "night": {
+          "plain": ["After dark"],
+          "place": ["After dark in {place}"],
+          "person": ["After dark with {person}"],
+          "group": ["{people} after dark"]
+        }
+      }
+    },
+    "transport": {
+      "members": ["airplane", "train", "bus", "travel", "motorcycle", "cycling"],
+      "rows": {
+        "plain": ["On the move", "Getting there"],
+        "place": ["On the way to {place}", "Heading for {place}"],
+        "person": ["On the move with {person}"],
+        "group": ["{people} on the move"]
+      },
+      "word_rows": {
+        "airplane": {
+          "plain": ["Up in the air"],
+          "place": ["Flying to {place}"],
+          "person": ["Flying with {person}"],
+          "group": ["{people} in the air"]
+        },
+        "train": {
+          "plain": ["All aboard"],
+          "place": ["By train to {place}"],
+          "person": ["On the train with {person}"],
+          "group": ["{people} on the train"]
+        },
+        "cycling": {
+          "plain": ["Wheels turning, free days"],
+          "place": ["Pedalling around {place}"],
+          "person": ["Pedalling with {person}"],
+          "group": ["{people} on wheels"]
+        }
+      }
+    },
+    "sport": {
+      "members": ["tennis", "baseball", "skateboarding", "kite"],
+      "rows": {
+        "plain": ["Game on", "Out to play"],
+        "place": ["Game on in {place}"],
+        "person": ["Playing with {person}"],
+        "group": ["{people} out to play"]
+      },
+      "word_rows": {
+        "tennis": {
+          "plain": ["Game, set, match"],
+          "place": ["Tennis in {place}"],
+          "person": ["Tennis with {person}"],
+          "group": ["{people} on court"]
+        }
+      }
+    },
+    "animals": {
+      "members": ["dog", "cat", "birds", "horses", "farm", "zoo", "wildlife"],
+      "rows": {
+        "plain": ["Animal friends", "Furry and feathered"],
+        "place": ["Animal friends in {place}"],
+        "person": ["Animal friends with {person}"],
+        "group": ["Animal friends with {people}"]
+      },
+      "word_rows": {
+        "dog": {
+          "plain": ["Dog days"],
+          "place": ["Dog days in {place}"],
+          "person": ["A dog and {person}"],
+          "group": ["The dog, with {people}"]
+        },
+        "zoo": {
+          "plain": ["A day at the zoo"],
+          "place": ["The zoo in {place}"],
+          "person": ["At the zoo with {person}"],
+          "group": ["{people} at the zoo"]
+        }
+      }
+    },
+    "home": {
+      "members": ["kitchen", "bathroom", "bedroom", "living room", "office"],
+      "rows": {
+        "plain": ["At home", "Close to home"],
+        "place": ["Settling in at {place}"],
+        "person": ["At home with {person}"],
+        "group": ["{people} at home"]
+      },
+      "word_rows": {}
+    },
+    "garden": {
+      "members": ["garden", "flowers", "park", "field"],
+      "rows": {
+        "plain": ["Green and growing", "Out in the green"],
+        "place": ["Out in the green near {place}"],
+        "person": ["Out in the green with {person}"],
+        "group": ["{people} out in the green"]
+      },
+      "word_rows": {}
+    },
+    "sky": {
+      "members": ["sky", "sunset", "rain", "desert"],
+      "rows": {
+        "plain": ["Big weather", "Looking up"],
+        "place": ["Weather watching in {place}"],
+        "person": ["Looking up with {person}"],
+        "group": ["{people} looking up"]
+      },
+      "word_rows": {
+        "sunset": {
+          "plain": ["Golden hour"],
+          "place": ["Golden hour in {place}"],
+          "person": ["Golden hour with {person}"],
+          "group": ["{people} at golden hour"]
+        }
+      }
+    },
+    "holiday": {
+      "members": [],
+      "rows": {
+        "plain": ["{event}, {year}", "{event} memories"],
+        "place": ["{event} in {place}"],
+        "person": ["{event} with {person}"],
+        "group": ["{event}, {people}"]
+      },
+      "word_rows": {}
+    }
+  }
+}
