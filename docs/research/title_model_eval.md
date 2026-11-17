@@ -203,6 +203,69 @@ places only, and no scene-words step is built. Text models missed: titles are fi
 text model stays an option the user turns on. The note says which line each arm missed and by how
 much.
 
+## Registered additions (made before anything is scored, after the scripts ran on dry runs)
+
+These fix what the dry runs showed; none moves a bar.
+
+- **Mirage variants.** The published call `describe(photo)` returns, for about 1 photo in 5 in the dry
+  run (3 of 15), text that is not valid JSON: the engine writes `"score":-nan` in its text section.
+  `cactus-compute` 4.2.3 then raises `JSONDecodeError`. The script counts such a call as an error of
+  that photo (no description, no words) and reports the rate; it does not repair the output. Three
+  variants are run and reported: `default` (the published call), `objects`
+  (`sections=["scene","objects"]`, `fields=["bbox"]`: the documented options, no text section, no
+  masks) and `scene` (`sections=["scene"]`). Arm B passes if at least one variant meets every line of
+  its part; the `Decision:` line names the variant. Timing of every variant is measured.
+- **Scene words of the 60 title sheets.** The fact sheets of the 60 memories hold the words a perfect
+  scene-words step would keep (true for at least 2 of the 3 photos by the truth rule, at most 3), so
+  title quality is measured on its own and one title run serves every scene-words decision. Memories
+  with no true word get none.
+- **Row choice of the table.** The row is picked by the sheet's event when it has one (holidays: the
+  `holiday` family, which names the event; other events map to a family), else by its first kept scene
+  word. 40% of the 140 free sheets hold an event. The invented-fact check is the same strict list for
+  every way, with the sheet's own place, first names and event removed before scene words are looked
+  for (a place such as "Lake Louise" holds the scene word "lake").
+- **Text-model timing.** The first 20 sheets, 3 repetitions, after one unrecorded warm-up call; each
+  model in its own process, so its peak resident memory (`VmHWM`) is its own. Arm B timing: the first
+  20 test photos, 3 repetitions, one warm-up call, one process per variant. Arm A timing: the cosine of
+  one photo against all phrases, 180 photos, 3 repetitions.
+- **Weights as run** (all fetched once, then the run is offline): Mirage revision
+  `76c1e9e53381aca8fc3843c636216c96ff220122` (`mirage.cact`, SHA-256
+  `4249a0f7515272ff76b9414bec17d7e7daf84b15b66c7fb4f17fce1e66f9f237`), engine 4.1.1; SmolLM2-360M-Instruct
+  `a10cc1512eabd3dde888204e902eca88bddb4951`, SmolLM2-135M-Instruct
+  `12fd25f77366fa6b3b4b768ec3050bf629380bac`, LFM2-350M `f37d3f5c8c5484bc01dad379a595cf4c68c4e70e`.
+  `Q8_0` GGUFs converted from those revisions: 386,405,408, 144,811,520 and 379,214,560 bytes (each
+  under the 500 MB limit).
+- **Names the scan bans.** One candidate's short name is banned by the repository's naming scan, so
+  it appears here as "Google's 270M model" (see the list above).
+
+## Reproduce
+
+Environment of every command (set once; the run folder is outside the tree): `R8_COCO_IMAGES` (the
+5,000 val2017 pictures), `R8_ANNOTATIONS_DIR` (holds `annotations_trainval2017.zip` and its extracted
+copy), `R8_RUN_DIR` (outputs), `PYTHONPATH=.` from the repository root, and for Mirage
+`XDG_CACHE_HOME`, `HF_HOME` on the weights folder, `HF_HUB_OFFLINE=1`, `CACTUS_TELEMETRY=0`,
+`DO_NOT_TRACK=1`. The venv is made as `requirements.txt` says. Commands, one per line, as
+`python -m scripts.research.title_model.<module> <args>`:
+
+```
+scene_words_embed embed --encoder mobileclip2_s2 --api-url <api> --out $R8_RUN_DIR/vectors_mobileclip2_s2.npz
+scene_words_embed embed --encoder pe_core_l14_336 --triton-url <triton> --out $R8_RUN_DIR/vectors_pe_core_l14_336.npz
+scene_words_embed score --vectors <npz> --out <json>
+scene_words_embed timing --vectors <npz> --out <json>
+scene_words_mirage describe --variant default|objects|scene --out <jsonl>
+scene_words_mirage findings --descriptions <jsonl> --out <json>
+scene_words_mirage timing --variant <v> --photos 20 --reps 3 --out <json>
+run_titles generate --way plain|table --out <jsonl>
+run_titles generate --way model --model-path <gguf> --name <name> --out <jsonl>
+run_titles timing --model-path <gguf> --name <name> --sheets 20 --reps 3 --out <json>
+score checks <titles jsonl ...>
+score blind <titles jsonl ...> --items <json> --key <json>
+score ratings <json> --reference plain --candidate table
+```
+
+GGUF conversion: `convert_hf_to_gguf.py <weights folder> --outtype q8_0 --outfile <gguf>` from the
+llama.cpp commit named above.
+
 ## Results
 
 Not yet scored.
